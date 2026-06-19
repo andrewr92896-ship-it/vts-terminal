@@ -1,0 +1,154 @@
+// Per-workspace themes, brand, and tabs — values taken verbatim from the
+// prototype so the look matches exactly.
+
+export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies';
+
+export interface Theme {
+  pageBg: string;
+  headerBg: string;
+  headerBorder: string; // prototype "hb"
+  navBg: string;
+  navBorder: string;
+  accent: string;
+  accent2: string;
+  accentText: string;
+}
+
+export const THEMES: Record<WorkspaceKey, Theme> = {
+  studies: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#241a3d 0%,#120d22 60%)',
+    headerBg: 'linear-gradient(90deg,#1c1436 0%,#2a1f4e 100%)',
+    headerBorder: '#3a2d63',
+    navBg: '#171029',
+    navBorder: '#2a1f4e',
+    accent: '#b69cff',
+    accent2: '#8a6fe0',
+    accentText: '#1a1030',
+  },
+  trading: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0d2150 0%,#060f24 55%)',
+    headerBg: 'linear-gradient(90deg,#0a1f4d 0%,#0c2768 100%)',
+    headerBorder: '#1c3a7a',
+    navBg: '#0a1834',
+    navBorder: '#16294f',
+    accent: '#EBCB74',
+    accent2: '#C9A24B',
+    accentText: '#0c2768',
+  },
+  kia: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1c1f25 0%,#0a0b0d 60%)',
+    headerBg: 'linear-gradient(90deg,#141518 0%,#202227 100%)',
+    headerBorder: '#2c2f36',
+    navBg: '#141518',
+    navBorder: '#26282e',
+    accent: '#BB162B',
+    accent2: '#8d0f20',
+    accentText: '#ffffff',
+  },
+  todo: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1b2c3b 0%,#0d1620 60%)',
+    headerBg: 'linear-gradient(90deg,#15212e 0%,#1d3344 100%)',
+    headerBorder: '#284158',
+    navBg: '#15212e',
+    navBorder: '#1d3344',
+    accent: '#46c2a8',
+    accent2: '#2f9e86',
+    accentText: '#06231d',
+  },
+};
+
+export function accentGradient(t: Theme): string {
+  return `linear-gradient(180deg,${t.accent},${t.accent2})`;
+}
+
+export interface BrandMeta {
+  name: (userName: string) => string;
+  sub: string;
+  color: string;
+  size: string;
+  letterSpacing: string;
+  // Trading uses the PNG wordmark; the others use a styled text brand.
+  useWordmark: boolean;
+}
+
+export const BRAND: Record<WorkspaceKey, BrandMeta> = {
+  trading: {
+    name: () => 'VITALIS',
+    sub: 'Trading Systems',
+    color: '#EBCB74',
+    size: '22px',
+    letterSpacing: '2px',
+    useWordmark: true,
+  },
+  studies: {
+    name: () => 'STUDIES',
+    sub: 'Study hub',
+    color: '#cdbcff',
+    size: '21px',
+    letterSpacing: '2px',
+    useWordmark: false,
+  },
+  kia: {
+    name: () => 'KIA',
+    sub: 'Kia of Streetsboro',
+    color: '#ffffff',
+    size: '26px',
+    letterSpacing: '5px',
+    useWordmark: false,
+  },
+  todo: {
+    name: (userName: string) => `${userName}'s To Do List`,
+    sub: 'Personal workspace',
+    color: '#bfeee2',
+    size: '19px',
+    letterSpacing: '0.5px',
+    useWordmark: false,
+  },
+};
+
+export interface TabDef {
+  key: string;
+  label: string;
+  dot?: string; // live/attention indicator color
+}
+
+// Tabs per workspace. The Trading Admin tab is appended only for Admins
+// (handled in the shell).
+export const TABS: Record<WorkspaceKey, TabDef[]> = {
+  studies: [
+    { key: 'st_home', label: 'Subjects' },
+    { key: 'st_quiz', label: 'Practice Quiz' },
+    { key: 'st_cards', label: 'Flashcards' },
+    { key: 'st_progress', label: 'Progress' },
+  ],
+  trading: [
+    { key: 'live', label: 'Live Wall', dot: '#35c47b' },
+    { key: 'log', label: 'Trade Log' },
+    { key: 'sessions', label: 'Strategy Sessions' },
+    { key: 'metrics', label: 'Account Metrics' },
+    { key: 'news', label: 'Market News', dot: '#ef5468' },
+    { key: 'history', label: 'History' },
+    { key: 'td_trading', label: 'To Do' },
+  ],
+  kia: [
+    { key: 'kia_dash', label: 'Dashboard' },
+    { key: 'kia_news', label: 'Kia News' },
+    { key: 'kia_know', label: 'Product Knowledge' },
+    { key: 'kia_todo', label: 'To Do' },
+  ],
+  todo: [{ key: 'td_all', label: 'All Tasks' }],
+};
+
+export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
+  trading: 'live',
+  kia: 'kia_dash',
+  todo: 'td_all',
+  studies: 'st_home',
+};
+
+export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
+  todo: 'To Do List',
+  kia: 'Kia Sales',
+  trading: 'Trading',
+  studies: 'Studies',
+};

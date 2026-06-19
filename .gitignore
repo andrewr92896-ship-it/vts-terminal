@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+apps/web/dist/
+apps/api/dist/
+
+# Environment and secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+
+# SQLite database files and backups
+apps/api/data/*.db
+apps/api/data/*.db-shm
+apps/api/data/*.db-wal
+apps/api/data/*.sqlite
+*.db
+*.sqlite
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+# Local Claude Code tooling config
+.claude/
