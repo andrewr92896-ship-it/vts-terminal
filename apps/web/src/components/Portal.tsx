@@ -15,6 +15,7 @@ import { useResponsive } from '../hooks/useMediaQuery';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { AskClaudePanel } from './AskClaudePanel';
+import { PageHelp } from './PageHelp';
 import { Screen } from '../workspaces/Screens';
 import { TodoAll } from '../workspaces/TodoAll';
 import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
@@ -205,6 +206,9 @@ export function Portal() {
       </footer>
 
       <AskClaudePanel open={aiOpen} theme={theme} onClose={() => setAiOpen(false)} />
+
+      {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
+      <PageHelp screen={screen} theme={theme} />
     </div>
   );
 }
