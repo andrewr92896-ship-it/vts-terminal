@@ -7,6 +7,10 @@ export type Role = (typeof ROLES)[number];
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   username: text('username').notNull().unique(),
+  // The username the account was created with. Never changes when the user
+  // renames themselves, so admins can always identify the account. Nullable
+  // for rows created before this column existed (backfilled in migration).
+  createdUsername: text('created_username'),
   displayName: text('display_name').notNull(),
   email: text('email'),
   passwordHash: text('password_hash').notNull(),

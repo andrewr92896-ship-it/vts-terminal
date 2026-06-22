@@ -1,4 +1,4 @@
-import type { BrokerStatus, KiaDashboard, TodoSection, User } from './types';
+import type { AdminUser, BrokerStatus, KiaDashboard, Role, TodoSection, User } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -56,6 +56,48 @@ export const api = {
   },
   logout(): Promise<{ ok: boolean }> {
     return request('/api/auth/logout', { method: 'POST' });
+  },
+  changePassword(currentPassword: string, newPassword: string): Promise<{ user: User }> {
+    return request('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+  updateProfile(patch: { username?: string; displayName?: string }): Promise<{ user: User }> {
+    return request('/api/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+  adminListUsers(): Promise<{ users: AdminUser[] }> {
+    return request('/api/admin/users');
+  },
+  adminCreateUser(input: {
+    username: string;
+    displayName: string;
+    password: string;
+    role: Role;
+    viewBrokerage?: boolean;
+  }): Promise<{ user: AdminUser }> {
+    return request('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  adminUpdateUser(
+    id: string,
+    patch: {
+      displayName?: string;
+      role?: Role;
+      active?: boolean;
+      viewBrokerage?: boolean;
+      password?: string;
+    },
+  ): Promise<{ user: AdminUser }> {
+    return request(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
   },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');

@@ -20,6 +20,21 @@ export interface User {
   };
 }
 
+// Admin user-management view (matches the backend AdminUserView). Includes
+// the original created username, which never changes when a user renames.
+export interface AdminUser {
+  id: string;
+  username: string;
+  createdUsername: string;
+  displayName: string;
+  email: string | null;
+  role: Role;
+  active: boolean;
+  viewBrokerage: boolean;
+  mustChangePassword: boolean;
+  createdAt: number;
+}
+
 export type TodoMarker = 'check' | 'dash' | 'dot';
 
 export interface TodoItem {

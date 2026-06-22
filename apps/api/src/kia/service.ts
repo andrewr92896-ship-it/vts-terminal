@@ -16,21 +16,6 @@ const BONUS_TIERS = [
   { units: 12, amount: 500 },
 ] as const;
 
-// Sample deals matching the prototype, seeded for a new user to demonstrate
-// the dashboard. These are placeholders to clear out and replace with real
-// sales. Dates are June 2026.
-const SEED_DEALS: Array<{ customer: string; model: string; type: 'New' | 'Used'; profit: number; day: number }> = [
-  { customer: 'Patel, R.', model: 'Telluride SX Prestige', type: 'New', profit: 3400, day: 17 },
-  { customer: 'Nguyen, T.', model: 'Sportage Hybrid EX', type: 'New', profit: 1900, day: 16 },
-  { customer: 'Brooks, D.', model: 'EV9 Land', type: 'New', profit: 4200, day: 15 },
-  { customer: 'Alvarez, M.', model: 'Sorento X-Line', type: 'New', profit: 2650, day: 14 },
-  { customer: 'Whitfield, J.', model: 'K5 GT', type: 'Used', profit: 2100, day: 13 },
-  { customer: 'Okafor, C.', model: 'Carnival SX', type: 'New', profit: 3100, day: 12 },
-  { customer: 'Reyes, L.', model: 'Sportage LX', type: 'New', profit: 1450, day: 10 },
-  { customer: 'Donovan, P.', model: 'K4 GT-Line', type: 'New', profit: 1200, day: 8 },
-  { customer: 'Schmidt, A.', model: 'Telluride EX', type: 'New', profit: 2900, day: 6 },
-];
-
 const dateLabelFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York',
   month: 'short',
@@ -105,6 +90,10 @@ export async function ensureKiaSeed(userId: string): Promise<void> {
   }
 }
 
+// Initialize a user's Kia tracker the first time they open it. New users
+// begin empty: a settings row with a default goal but zero deals and zero
+// reviews. Existing users are untouched (seeding only runs once, when no
+// settings row exists yet).
 async function seedUser(userId: string): Promise<void> {
   const existing = await db
     .select({ userId: kiaSettings.userId })
@@ -116,25 +105,11 @@ async function seedUser(userId: string): Promise<void> {
   const now = new Date();
   await db.insert(kiaSettings).values({
     userId,
-    goalUnits: 12,
-    reviewCount: 5,
+    goalUnits: 12, // a sensible starting monthly goal; the user can change it
+    reviewCount: 0,
     createdAt: now,
     updatedAt: now,
   });
-
-  const { year, month } = etNow();
-  for (const d of SEED_DEALS) {
-    await db.insert(kiaDeals).values({
-      id: crypto.randomUUID(),
-      userId,
-      customer: d.customer,
-      model: d.model,
-      type: d.type,
-      profit: d.profit,
-      soldAt: dayAtNoonUtc(year, month, d.day),
-      createdAt: now,
-    });
-  }
 }
 
 function computeMetrics(

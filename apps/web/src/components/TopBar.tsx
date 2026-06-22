@@ -24,6 +24,7 @@ interface TopBarProps {
   onSwitchWorkspace: (ws: WorkspaceKey) => void;
   onToggleSound: () => void;
   onOpenClaude: () => void;
+  onOpenAccount: () => void;
   onSetActingRole: (r: Role | null) => void;
   onLogout: () => void;
 }
@@ -57,6 +58,7 @@ export function TopBar(props: TopBarProps) {
     onSwitchWorkspace,
     onToggleSound,
     onOpenClaude,
+    onOpenAccount,
     onSetActingRole,
     onLogout,
   } = props;
@@ -413,6 +415,27 @@ export function TopBar(props: TopBarProps) {
             )}
 
             <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6, marginTop: 6 }}>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenAccount();
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#cfe0ff',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  padding: '8px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                Account settings
+              </button>
               <button
                 onClick={() => {
                   setMenuOpen(false);

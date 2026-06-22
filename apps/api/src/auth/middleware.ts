@@ -30,6 +30,20 @@ export const requireAuth: preHandlerHookHandler = async (
   }
 };
 
+// Reject unless the logged-in user is an Admin. Used for user management.
+export const requireAdmin: preHandlerHookHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const user = request.currentUser;
+  if (!user) {
+    return reply.code(401).send({ error: 'Not authenticated' });
+  }
+  if (user.role !== 'Admin') {
+    return reply.code(403).send({ error: 'Forbidden' });
+  }
+};
+
 // Reject unless the logged-in user can access the given workspace.
 export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {

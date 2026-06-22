@@ -24,6 +24,22 @@ export interface TemplateSection {
   items: TemplateItem[];
 }
 
+// Categories a brand-new user starts with: the same general structure, but
+// with zero tasks. New users begin empty (per product decision) while still
+// having sensible categories to add into — including the two Kia-tagged
+// sections the Kia To-Do tab reads from. The personalized starter list below
+// (TODO_TEMPLATE) is only kept for reference / the original owner account.
+export const STARTER_SECTIONS: TemplateSection[] = [
+  { n: 1, icon: '⭐', title: 'Priority', type: 'one', items: [] },
+  { n: 2, icon: '📋', title: 'Daily Routine', type: 'daily', items: [] },
+  { n: 3, icon: '📋', title: 'Weekly', type: 'routine', intervalDays: 7, items: [] },
+  { n: 4, icon: '📋', title: 'Monthly', type: 'routine', intervalDays: 30, items: [] },
+  { n: 5, icon: '🚗', title: 'Dealership / Sales', type: 'one', tag: 'kia', items: [] },
+  { n: 6, icon: '🤝', title: 'Working Deals', type: 'deals', tag: 'kia', items: [] },
+  { n: 7, icon: '💰', title: 'Finance', type: 'one', items: [] },
+  { n: 8, icon: '🏠', title: 'Personal / Home', type: 'one', items: [] },
+];
+
 export const TODO_TEMPLATE: TemplateSection[] = [
   {
     n: 1,

@@ -9,13 +9,16 @@ import {
   DEFAULT_SCREEN,
   type WorkspaceKey,
   type TabDef,
+  type Theme,
 } from '../theme/themes';
 import { workspacesFor } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { AskClaudePanel } from './AskClaudePanel';
+import { AccountSettings } from './AccountSettings';
 import { Screen } from '../workspaces/Screens';
+import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
 import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
 import { KiaNews } from '../workspaces/kia/KiaNews';
@@ -24,7 +27,7 @@ import { KiaTodo } from '../workspaces/kia/KiaTodo';
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder.
-function renderScreen(screen: string) {
+function renderScreen(screen: string, theme: Theme) {
   switch (screen) {
     case 'td_all':
       return <TodoAll />;
@@ -36,6 +39,8 @@ function renderScreen(screen: string) {
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
+    case 'admin':
+      return <AdminUsers theme={theme} />;
     default:
       return null;
   }
@@ -62,6 +67,7 @@ export function Portal() {
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [soundOn, setSoundOn] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
   const theme = THEMES[workspace];
@@ -160,6 +166,7 @@ export function Portal() {
         onSwitchWorkspace={switchWorkspace}
         onToggleSound={() => setSoundOn((v) => !v)}
         onOpenClaude={() => setAiOpen(true)}
+        onOpenAccount={() => setAccountOpen(true)}
         onSetActingRole={changeActingRole}
         onLogout={logout}
       />
@@ -174,7 +181,7 @@ export function Portal() {
           padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
         }}
       >
-        {renderScreen(screen) ?? <Screen screen={screen} theme={theme} />}
+        {renderScreen(screen, theme) ?? <Screen screen={screen} theme={theme} />}
       </main>
 
       <footer
@@ -205,6 +212,7 @@ export function Portal() {
       </footer>
 
       <AskClaudePanel open={aiOpen} theme={theme} onClose={() => setAiOpen(false)} />
+      <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
     </div>
   );
 }

@@ -22,6 +22,13 @@
       "when": 1781872491476,
       "tag": "0002_kia_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1781872491477,
+      "tag": "0003_account_username",
+      "breakpoints": true
     }
   ]
 }

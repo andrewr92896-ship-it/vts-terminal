@@ -7,7 +7,7 @@ import {
   type TodoItemRow,
   type TodoSectionRow,
 } from '../db/schema.js';
-import { TODO_TEMPLATE } from './template.js';
+import { STARTER_SECTIONS } from './template.js';
 
 const DAY = 86_400_000;
 
@@ -64,7 +64,9 @@ export async function ensureSeed(userId: string): Promise<void> {
   }
 }
 
-// Create the default list for a user the first time they open To Do.
+// Create the starter categories for a user the first time they open To Do.
+// New users begin with empty categories (zero tasks); existing users are
+// untouched because seeding only runs when a user has no sections yet.
 async function seedUser(userId: string): Promise<void> {
   const existing = await db
     .select({ id: todoSections.id })
@@ -76,8 +78,8 @@ async function seedUser(userId: string): Promise<void> {
   const today = etTodayMs();
   const now = new Date();
 
-  for (let s = 0; s < TODO_TEMPLATE.length; s++) {
-    const tpl = TODO_TEMPLATE[s];
+  for (let s = 0; s < STARTER_SECTIONS.length; s++) {
+    const tpl = STARTER_SECTIONS[s];
     const sectionId = crypto.randomUUID();
     await db.insert(todoSections).values({
       id: sectionId,
