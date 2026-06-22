@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../api/client';
+import { useResponsive } from '../hooks/useMediaQuery';
 import type { TodoItem, TodoSection } from '../api/types';
 
 const ACCENT = '#46c2a8';
@@ -7,6 +8,7 @@ const ACCENT2 = '#2f9e86';
 const OVERDUE = '#ef5468';
 
 export function TodoAll() {
+  const { isPhone } = useResponsive();
   const [sections, setSections] = useState<TodoSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -124,16 +126,23 @@ export function TodoAll() {
       )}
 
       {/* Add a task */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr',
+          gap: 14,
+          marginBottom: 18,
+        }}
+      >
         <div style={panelStyle}>
           <div style={panelLabelStyle}>Add a task</div>
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
             <select
               value={sectionId}
               onChange={(e) => setSectionId(e.target.value)}
               style={{
                 flex: 'none',
-                width: 168,
+                width: isPhone ? '100%' : 168,
                 background: '#0d1620',
                 border: '1px solid #284158',
                 borderRadius: 7,
@@ -225,8 +234,8 @@ export function TodoAll() {
         </div>
       </div>
 
-      {/* Sections — masonry columns */}
-      <div style={{ columnWidth: 360, columnGap: 16 }}>
+      {/* Sections — masonry columns (single column on phones) */}
+      <div style={isPhone ? { columnCount: 1, columnGap: 16 } : { columnWidth: 360, columnGap: 16 }}>
         {visible.map((sec) => (
           <SectionCard key={sec.id} section={sec} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={(id) => run(api.removeTodoItem(id))} />
         ))}

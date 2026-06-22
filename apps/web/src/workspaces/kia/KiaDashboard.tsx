@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useResponsive } from '../../hooks/useMediaQuery';
 import type { KiaDashboard as Dash } from '../../api/types';
 
 const RED = '#BB162B';
@@ -16,6 +17,7 @@ function etToday(): string {
 }
 
 export function KiaDashboard() {
+  const { isPhone } = useResponsive();
   const [dash, setDash] = useState<Dash | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -167,7 +169,7 @@ export function KiaDashboard() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1.6fr 1fr', gap: 16, alignItems: 'start' }}>
         {/* Recent deals */}
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
           <div style={{ padding: '15px 18px', borderBottom: '1px solid #25282e', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

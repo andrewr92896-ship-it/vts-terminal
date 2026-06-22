@@ -11,6 +11,7 @@ import {
   type TabDef,
 } from '../theme/themes';
 import { workspacesFor } from '../auth/access';
+import { useResponsive } from '../hooks/useMediaQuery';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { AskClaudePanel } from './AskClaudePanel';
@@ -47,6 +48,7 @@ function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
 
 export function Portal() {
   const { user, logout } = useAuth();
+  const { isPhone, isTablet } = useResponsive();
 
   // Admin-only "view as role" preview. Pure UI gating; the server still
   // enforces the real role on every request.
@@ -164,7 +166,14 @@ export function Portal() {
 
       <TabBar tabs={tabs} screen={screen} theme={theme} onSelect={setScreen} />
 
-      <main style={{ position: 'relative', zIndex: 1, flex: 1, padding: '22px 26px 40px' }}>
+      <main
+        style={{
+          position: 'relative',
+          zIndex: 1,
+          flex: 1,
+          padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
+        }}
+      >
         {renderScreen(screen) ?? <Screen screen={screen} theme={theme} />}
       </main>
 
@@ -172,11 +181,13 @@ export function Portal() {
         style={{
           position: 'relative',
           zIndex: 1,
-          padding: '16px 26px',
+          padding: isPhone ? '14px 14px' : '16px 26px',
           borderTop: `1px solid ${theme.navBorder}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 8,
         }}
       >
         <span style={{ fontSize: 10.5, color: '#5d72a0', letterSpacing: '0.3px' }}>

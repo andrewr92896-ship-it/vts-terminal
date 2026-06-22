@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useResponsive } from '../../hooks/useMediaQuery';
 import type { TodoItem, TodoSection } from '../../api/types';
 
 const RED = '#BB162B';
@@ -9,6 +10,7 @@ const RED2 = '#8d0f20';
 // kia-tagged sections (Dealership/Sales and Working Deals). It uses the same
 // todo endpoints, so changes here also show in the To Do List workspace.
 export function KiaTodo() {
+  const { isPhone } = useResponsive();
   const [sections, setSections] = useState<TodoSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -88,7 +90,7 @@ export function KiaTodo() {
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'start' }}>
         {kiaSections.map((sec) => (
           <div key={sec.id} style={{ background: '#15171b', border: '1px solid #2a2d33', borderRadius: 10, padding: '15px 16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
