@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, lt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   kiaDeals,
   kiaSettings,
+  kiaMonthSettings,
   type KiaDealRow,
 } from '../db/schema.js';
 
@@ -92,6 +93,45 @@ function monthContext(key: string): MonthContext {
   const now = etNow();
   const isCurrent = y === now.year && m === now.month;
   return { daysInMonth, dayOfMonth: isCurrent ? now.day : daysInMonth, isCurrent };
+}
+
+function resolveMonth(requested?: string): string {
+  return requested && /^\d{4}-\d{2}$/.test(requested) ? requested : currentMonthKey();
+}
+
+// Effective goal + review count for a month. Uses the month's own row if set,
+// otherwise carries the goal forward from the most recent prior month (then
+// the legacy global setting, then 12). Reviews are per-month, so they only
+// inherit from the legacy global row for the current month of pre-existing
+// accounts; other months start at zero until edited.
+async function monthSettings(
+  userId: string,
+  month: string,
+): Promise<{ goalUnits: number; reviewCount: number }> {
+  const row = (
+    await db
+      .select()
+      .from(kiaMonthSettings)
+      .where(and(eq(kiaMonthSettings.userId, userId), eq(kiaMonthSettings.month, month)))
+      .limit(1)
+  )[0];
+  if (row) return { goalUnits: row.goalUnits, reviewCount: row.reviewCount };
+
+  const prior = (
+    await db
+      .select()
+      .from(kiaMonthSettings)
+      .where(and(eq(kiaMonthSettings.userId, userId), lt(kiaMonthSettings.month, month)))
+      .orderBy(desc(kiaMonthSettings.month))
+      .limit(1)
+  )[0];
+  const legacy = (
+    await db.select().from(kiaSettings).where(eq(kiaSettings.userId, userId)).limit(1)
+  )[0];
+
+  const goalUnits = prior?.goalUnits ?? legacy?.goalUnits ?? 12;
+  const reviewCount = month === currentMonthKey() ? legacy?.reviewCount ?? 0 : 0;
+  return { goalUnits, reviewCount };
 }
 
 export interface KiaDeal {
@@ -246,12 +286,6 @@ export async function getDashboard(
 ): Promise<KiaDashboardData> {
   await ensureKiaSeed(userId);
 
-  const settingsRow = (
-    await db.select().from(kiaSettings).where(eq(kiaSettings.userId, userId)).limit(1)
-  )[0];
-  const goalUnits = settingsRow?.goalUnits ?? 12;
-  const reviewCount = settingsRow?.reviewCount ?? 0;
-
   const allRows = await db.select().from(kiaDeals).where(eq(kiaDeals.userId, userId));
 
   // Group every deal by its Eastern-Time month.
@@ -264,8 +298,8 @@ export async function getDashboard(
   }
 
   const current = currentMonthKey();
-  const valid = requestedMonth && /^\d{4}-\d{2}$/.test(requestedMonth);
-  const month = valid ? requestedMonth! : current;
+  const month = resolveMonth(requestedMonth);
+  const { goalUnits, reviewCount } = await monthSettings(userId, month);
 
   // Selectable months: the current month plus any month that has deals.
   const monthKeys = [...new Set([current, ...byMonth.keys()])].sort().reverse();
@@ -385,13 +419,24 @@ export async function removeDeal(userId: string, id: string): Promise<void> {
 
 export async function updateSettings(
   userId: string,
+  requestedMonth: string | undefined,
   input: { goalUnits?: number; reviewCount?: number },
 ): Promise<void> {
   await ensureKiaSeed(userId);
-  const patch: { goalUnits?: number; reviewCount?: number; updatedAt: Date } = {
-    updatedAt: new Date(),
-  };
-  if (input.goalUnits != null) patch.goalUnits = Math.max(1, Math.round(input.goalUnits));
-  if (input.reviewCount != null) patch.reviewCount = Math.max(0, Math.round(input.reviewCount));
-  await db.update(kiaSettings).set(patch).where(eq(kiaSettings.userId, userId));
+  const month = resolveMonth(requestedMonth);
+  // Start from the month's effective values so a partial update keeps the rest.
+  const cur = await monthSettings(userId, month);
+  const goalUnits =
+    input.goalUnits != null ? Math.max(1, Math.round(input.goalUnits)) : cur.goalUnits;
+  const reviewCount =
+    input.reviewCount != null ? Math.max(0, Math.round(input.reviewCount)) : cur.reviewCount;
+
+  const now = new Date();
+  await db
+    .insert(kiaMonthSettings)
+    .values({ userId, month, goalUnits, reviewCount, createdAt: now, updatedAt: now })
+    .onConflictDoUpdate({
+      target: [kiaMonthSettings.userId, kiaMonthSettings.month],
+      set: { goalUnits, reviewCount, updatedAt: now },
+    });
 }

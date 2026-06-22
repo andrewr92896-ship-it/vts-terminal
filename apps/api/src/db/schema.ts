@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
 
 // The four roles match the prototype's access matrix exactly.
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
@@ -97,6 +97,8 @@ export type TodoSectionRow = typeof todoSections.$inferSelect;
 export type TodoItemRow = typeof todoItems.$inferSelect;
 
 // ---- Kia Sales ----
+// Legacy global settings (one row per user). Superseded by per-month settings
+// below; kept as a fallback for the current month of pre-existing accounts.
 export const kiaSettings = sqliteTable('kia_settings', {
   userId: text('user_id')
     .primaryKey()
@@ -106,6 +108,22 @@ export const kiaSettings = sqliteTable('kia_settings', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
+
+// Per-month goal and review count, so each month's dashboard stands on its own.
+export const kiaMonthSettings = sqliteTable(
+  'kia_month_settings',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    month: text('month').notNull(), // 'YYYY-MM' (Eastern Time)
+    goalUnits: integer('goal_units').notNull().default(12),
+    reviewCount: integer('review_count').notNull().default(0),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.month] }) }),
+);
 
 export const kiaDeals = sqliteTable('kia_deals', {
   id: text('id').primaryKey(),
@@ -121,4 +139,5 @@ export const kiaDeals = sqliteTable('kia_deals', {
 });
 
 export type KiaSettingsRow = typeof kiaSettings.$inferSelect;
+export type KiaMonthSettingsRow = typeof kiaMonthSettings.$inferSelect;
 export type KiaDealRow = typeof kiaDeals.$inferSelect;

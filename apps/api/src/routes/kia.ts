@@ -89,7 +89,8 @@ export async function kiaRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Provide a goal or review count' });
     }
     const userId = request.currentUser!.id;
-    await updateSettings(userId, parsed.data);
-    return getDashboard(userId, monthOf(request));
+    const month = monthOf(request);
+    await updateSettings(userId, month, parsed.data);
+    return getDashboard(userId, month);
   });
 }

@@ -36,6 +36,13 @@
       "when": 1781872491478,
       "tag": "0004_user_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781872491479,
+      "tag": "0005_kia_month_settings",
+      "breakpoints": true
     }
   ]
 }
