@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
-import type { BrokerStatus, Role } from '../api/types';
+import type { BrokerStatus, RoleKey } from '../api/types';
 import {
   THEMES,
   BRAND,
@@ -11,7 +11,7 @@ import {
   type TabDef,
   type Theme,
 } from '../theme/themes';
-import { workspacesFor } from '../auth/access';
+import { workspacesForRoles, isAdmin } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
@@ -55,14 +55,18 @@ export function Portal() {
   const { user, logout } = useAuth();
   const { isPhone, isTablet } = useResponsive();
 
-  // Admin-only "view as role" preview. Pure UI gating; the server still
-  // enforces the real role on every request.
-  const [actingRole, setActingRole] = useState<Role | null>(null);
-  const effectiveRole: Role = actingRole ?? user!.role;
-  const allowed = useMemo(() => workspacesFor(effectiveRole), [effectiveRole]);
+  // Admin-only "view as role" preview: emulate someone who holds only the one
+  // selected role. Pure UI gating; the server still enforces real roles.
+  const [actingRole, setActingRole] = useState<RoleKey | null>(null);
+  const effectiveRoles: RoleKey[] = actingRole ? [actingRole] : user!.roles;
+  const allowed = useMemo(
+    () => workspacesForRoles(effectiveRoles),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [actingRole, user],
+  );
 
   const [workspace, setWorkspace] = useState<WorkspaceKey>(() =>
-    pickInitialWorkspace(workspacesFor(user!.role)),
+    pickInitialWorkspace(workspacesForRoles(user!.roles)),
   );
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [soundOn, setSoundOn] = useState(true);
@@ -73,14 +77,15 @@ export function Portal() {
   const theme = THEMES[workspace];
   const brand = BRAND[workspace];
 
-  // Trading tabs gain an Admin tab only for real Admins.
+  // Trading tabs gain an Admin tab only for Admins.
   const tabs: TabDef[] = useMemo(() => {
     const base = TABS[workspace];
-    if (workspace === 'trading' && user!.role === 'Admin') {
+    if (workspace === 'trading' && isAdmin(effectiveRoles)) {
       return [...base, { key: 'admin', label: 'Admin' }];
     }
     return base;
-  }, [workspace, user]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workspace, user, actingRole]);
 
   // Broker status drives the top-bar dots (Trading only).
   useEffect(() => {
@@ -102,10 +107,9 @@ export function Portal() {
     setScreen(DEFAULT_SCREEN[ws]);
   }
 
-  function changeActingRole(r: Role | null) {
+  function changeActingRole(r: RoleKey | null) {
     setActingRole(r);
-    const role = r ?? user!.role;
-    const nextAllowed = workspacesFor(role);
+    const nextAllowed = workspacesForRoles(r ? [r] : user!.roles);
     if (!nextAllowed.includes(workspace)) {
       const ws = pickInitialWorkspace(nextAllowed);
       setWorkspace(ws);
@@ -155,7 +159,7 @@ export function Portal() {
 
       <TopBar
         user={user!}
-        effectiveRole={effectiveRole}
+        effectiveRoles={effectiveRoles}
         actingRole={actingRole}
         workspace={workspace}
         workspaces={allowed}

@@ -14,7 +14,12 @@ export const users = sqliteTable('users', {
   displayName: text('display_name').notNull(),
   email: text('email'),
   passwordHash: text('password_hash').notNull(),
+  // Legacy single-role column. Superseded by `roles` (JSON array) below and no
+  // longer read by the app; kept with its default so old rows stay valid.
   role: text('role', { enum: ROLES }).notNull().default('Viewer'),
+  // Granular, admin-assigned roles as a JSON array of role keys
+  // (see auth/rbac.ts ROLE_KEYS), e.g. ["admin"] or ["sales","studies"].
+  roles: text('roles'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
   viewBrokerage: integer('view_brokerage', { mode: 'boolean' })

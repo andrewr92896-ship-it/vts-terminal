@@ -1,4 +1,4 @@
-import type { AdminUser, BrokerStatus, KiaDashboard, Role, TodoSection, User } from './types';
+import type { AdminUser, BrokerStatus, KiaDashboard, RoleKey, TodoSection, User } from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -76,7 +76,7 @@ export const api = {
     username: string;
     displayName: string;
     password: string;
-    role: Role;
+    roles: RoleKey[];
     viewBrokerage?: boolean;
   }): Promise<{ user: AdminUser }> {
     return request('/api/admin/users', {
@@ -88,7 +88,7 @@ export const api = {
     id: string,
     patch: {
       displayName?: string;
-      role?: Role;
+      roles?: RoleKey[];
       active?: boolean;
       viewBrokerage?: boolean;
       password?: string;

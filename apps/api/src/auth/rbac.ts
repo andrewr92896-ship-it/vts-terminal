@@ -1,58 +1,80 @@
-import type { Role, UserRow } from '../db/schema.js';
+import type { UserRow } from '../db/schema.js';
 
 export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies';
-export type ListScope = 'all' | 'trading' | 'kia' | 'none';
 
-interface AccessRule {
-  ws: { trading: boolean; kia: boolean; todo: boolean };
-  lists: ListScope;
-  readOnly: boolean;
-  label: string;
-}
+// Granular, admin-assigned roles. A user can hold any combination. `admin`
+// grants everything (including user management); `trading_viewer` is read-only
+// Trading access.
+export const ROLE_KEYS = [
+  'admin',
+  'trading',
+  'trading_viewer',
+  'sales',
+  'studies',
+  'todo',
+] as const;
+export type RoleKey = (typeof ROLE_KEYS)[number];
 
-// Mirrors the prototype's ACCESS matrix exactly. Studies is available to
-// every role, so it is not listed here (handled in workspacesFor).
-export const ACCESS: Record<Role, AccessRule> = {
-  Admin: {
-    ws: { trading: true, kia: true, todo: true },
-    lists: 'all',
-    readOnly: false,
-    label: 'Full access — every workspace and all to-do lists',
-  },
-  Trader: {
-    ws: { trading: true, kia: false, todo: true },
-    lists: 'trading',
-    readOnly: false,
-    label: 'Trading workspace + Trading and personal to-do lists',
-  },
-  Sales: {
-    ws: { trading: false, kia: true, todo: true },
-    lists: 'kia',
-    readOnly: false,
-    label: 'Kia workspace + Kia and personal to-do lists',
-  },
-  Viewer: {
-    ws: { trading: true, kia: false, todo: false },
-    lists: 'none',
-    readOnly: true,
-    label: 'Read-only Trading; no personal to-do lists',
-  },
+export const ROLE_LABELS: Record<RoleKey, string> = {
+  admin: 'Admin',
+  trading: 'Trading',
+  trading_viewer: 'Trading (View only)',
+  sales: 'Sales',
+  studies: 'Studies',
+  todo: 'To Do',
 };
 
-// Ordered as the top-bar switcher shows them: To Do, Kia, Trading, Studies.
-export function workspacesFor(role: Role): WorkspaceKey[] {
-  const a = ACCESS[role] ?? ACCESS.Viewer;
-  const out: WorkspaceKey[] = [];
-  if (a.ws.todo) out.push('todo');
-  if (a.ws.kia) out.push('kia');
-  if (a.ws.trading) out.push('trading');
-  out.push('studies'); // always available
-  return out;
+export function isRoleKey(v: unknown): v is RoleKey {
+  return typeof v === 'string' && (ROLE_KEYS as readonly string[]).includes(v);
 }
 
-export function canAccessWorkspace(role: Role, ws: WorkspaceKey): boolean {
-  if (ws === 'studies') return true;
-  return !!ACCESS[role]?.ws[ws];
+// Parse the stored JSON `roles` array into a clean, de-duplicated RoleKey list.
+export function parseRoles(u: Pick<UserRow, 'roles'>): RoleKey[] {
+  if (!u.roles) return [];
+  try {
+    const raw = JSON.parse(u.roles);
+    if (!Array.isArray(raw)) return [];
+    return [...new Set(raw.filter(isRoleKey))];
+  } catch {
+    return [];
+  }
+}
+
+export function isAdmin(roles: RoleKey[]): boolean {
+  return roles.includes('admin');
+}
+
+// Which role keys grant access to a given workspace (admin grants all).
+const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
+  trading: ['trading', 'trading_viewer'],
+  kia: ['sales'],
+  todo: ['todo'],
+  studies: ['studies'],
+};
+
+export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
+  if (isAdmin(roles)) return true;
+  return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
+}
+
+// Trading is read-only when the user only has the viewer role (and is not an
+// admin or full trader). No other workspace has a read-only variant.
+export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean {
+  if (ws !== 'trading') return false;
+  if (isAdmin(roles) || roles.includes('trading')) return false;
+  return roles.includes('trading_viewer');
+}
+
+// Ordered as the top-bar switcher shows them: To Do, Kia, Trading, Studies.
+export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
+  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'studies'];
+  return order.filter((ws) => canAccessWorkspace(roles, ws));
+}
+
+function accessLabel(roles: RoleKey[]): string {
+  if (isAdmin(roles)) return 'Administrator — full access';
+  if (roles.length === 0) return 'No roles assigned yet';
+  return roles.map((r) => ROLE_LABELS[r]).join(' · ');
 }
 
 // The shape of the user safe to send to the browser. No password hash,
@@ -62,32 +84,31 @@ export interface PublicUser {
   username: string;
   displayName: string;
   email: string | null;
-  role: Role;
-  readOnly: boolean;
+  roles: RoleKey[];
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   access: {
     label: string;
-    lists: ListScope;
     workspaces: WorkspaceKey[];
+    readOnlyWorkspaces: WorkspaceKey[];
   };
 }
 
 export function toPublicUser(u: UserRow): PublicUser {
-  const a = ACCESS[u.role] ?? ACCESS.Viewer;
+  const roles = parseRoles(u);
+  const workspaces = workspacesForRoles(roles);
   return {
     id: u.id,
     username: u.username,
     displayName: u.displayName,
     email: u.email,
-    role: u.role,
-    readOnly: a.readOnly,
+    roles,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
     access: {
-      label: a.label,
-      lists: a.lists,
-      workspaces: workspacesFor(u.role),
+      label: accessLabel(roles),
+      workspaces,
+      readOnlyWorkspaces: workspaces.filter((ws) => isWorkspaceReadOnly(roles, ws)),
     },
   };
 }

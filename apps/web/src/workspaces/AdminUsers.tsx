@@ -2,11 +2,10 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useResponsive } from '../hooks/useMediaQuery';
-import type { AdminUser, Role } from '../api/types';
+import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../auth/access';
+import type { AdminUser, RoleKey } from '../api/types';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
-
-const ROLES: Role[] = ['Admin', 'Trader', 'Sales', 'Viewer'];
 
 // Generate a readable temporary password the admin can hand to the new user.
 function genPassword(): string {
@@ -16,6 +15,10 @@ function genPassword(): string {
   crypto.getRandomValues(rnd);
   for (let i = 0; i < 12; i++) out += chars[rnd[i] % chars.length];
   return out;
+}
+
+function toggle(roles: RoleKey[], r: RoleKey): RoleKey[] {
+  return roles.includes(r) ? roles.filter((x) => x !== r) : [...roles, r];
 }
 
 export function AdminUsers({ theme }: { theme: Theme }) {
@@ -32,7 +35,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   // Create form
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
-  const [role, setRole] = useState<Role>('Sales');
+  const [roles, setRoles] = useState<RoleKey[]>(['todo']);
   const [password, setPassword] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -75,13 +78,13 @@ export function AdminUsers({ theme }: { theme: Theme }) {
       await api.adminCreateUser({
         displayName: displayName.trim(),
         username: username.trim(),
-        role,
+        roles,
         password,
       });
       setCreated({ username: username.trim().toLowerCase(), password });
       setDisplayName('');
       setUsername('');
-      setRole('Sales');
+      setRoles(['todo']);
       setPassword('');
       await refresh();
     } catch (e) {
@@ -122,8 +125,8 @@ export function AdminUsers({ theme }: { theme: Theme }) {
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>Users</h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc' }}>
-          Create and manage accounts. New users start with an empty To Do list and Kia tracker,
-          and set their own password on first sign-in.
+          Create accounts and assign roles. A user can hold several roles; only admins can change
+          them. New users start empty and set their own password on first sign-in.
         </p>
       </div>
 
@@ -146,14 +149,6 @@ export function AdminUsers({ theme }: { theme: Theme }) {
             <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="jsmith" autoCapitalize="none" autoCorrect="off" style={inputStyle} />
           </div>
           <div>
-            <label style={fieldLabel}>Role</label>
-            <select value={role} onChange={(e) => setRole(e.target.value as Role)} style={inputStyle}>
-              {ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-          <div>
             <label style={fieldLabel}>Temporary password</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" style={{ ...inputStyle, flex: 1 }} />
@@ -161,6 +156,21 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 Generate
               </button>
             </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <label style={fieldLabel}>Roles</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
+            {ALL_ROLES.map((r) => (
+              <RoleToggle
+                key={r}
+                role={r}
+                on={roles.includes(r)}
+                theme={theme}
+                onClick={() => setRoles((cur) => toggle(cur, r))}
+              />
+            ))}
           </div>
         </div>
 
@@ -201,7 +211,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 style={{
                   display: 'flex',
                   flexDirection: isPhone ? 'column' : 'row',
-                  alignItems: isPhone ? 'stretch' : 'center',
+                  alignItems: isPhone ? 'stretch' : 'flex-start',
                   justifyContent: 'space-between',
                   gap: 12,
                 }}
@@ -222,18 +232,6 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  <select
-                    value={u.role}
-                    disabled={busyId === u.id || (isSelf && u.role === 'Admin')}
-                    onChange={(e) => patch(u.id, { role: e.target.value as Role })}
-                    title={isSelf ? "You can't change your own role" : 'Change role'}
-                    style={{ ...inputStyle, width: 'auto', padding: '8px 10px', minHeight: 40 }}
-                  >
-                    {ROLES.map((r) => (
-                      <option key={r} value={r}>{r}</option>
-                    ))}
-                  </select>
-
                   <button
                     onClick={() => {
                       setResetFor(resetFor === u.id ? null : u.id);
@@ -254,6 +252,27 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                       {u.active ? 'Deactivate' : 'Reactivate'}
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Role assignment */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ ...fieldLabel, marginBottom: 8 }}>Roles</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {ALL_ROLES.map((r) => {
+                    // An admin can't remove their own admin role (lockout guard).
+                    const locked = isSelf && r === 'admin' && u.roles.includes('admin');
+                    return (
+                      <RoleToggle
+                        key={r}
+                        role={r}
+                        on={u.roles.includes(r)}
+                        theme={theme}
+                        disabled={busyId === u.id || locked}
+                        onClick={() => patch(u.id, { roles: toggle(u.roles, r) })}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 
@@ -282,6 +301,64 @@ export function AdminUsers({ theme }: { theme: Theme }) {
         })}
       </div>
     </div>
+  );
+}
+
+function RoleToggle({
+  role,
+  on,
+  theme,
+  disabled,
+  onClick,
+}: {
+  role: RoleKey;
+  on: boolean;
+  theme: Theme;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={ROLE_DESCRIPTIONS[role]}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 7,
+        fontSize: 12,
+        fontWeight: 600,
+        padding: '8px 12px',
+        borderRadius: 8,
+        cursor: disabled ? 'default' : 'pointer',
+        minHeight: 38,
+        border: `1px solid ${on ? theme.accent : '#2a4170'}`,
+        background: on ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.18)',
+        color: on ? '#eef3ff' : '#8ea3cc',
+        opacity: disabled ? 0.55 : 1,
+      }}
+    >
+      <span
+        style={{
+          width: 14,
+          height: 14,
+          borderRadius: 4,
+          border: `1.5px solid ${on ? theme.accent : '#3a5670'}`,
+          background: on ? theme.accent : 'transparent',
+          color: theme.accentText,
+          fontSize: 10,
+          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          lineHeight: 1,
+        }}
+      >
+        {on ? '✓' : ''}
+      </span>
+      {ROLE_LABELS[role]}
+    </button>
   );
 }
 

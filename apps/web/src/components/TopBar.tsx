@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { BrokerStatus, Role, User } from '../api/types';
+import type { BrokerStatus, RoleKey, User } from '../api/types';
 import {
   type Theme,
   type WorkspaceKey,
@@ -7,14 +7,14 @@ import {
   accentGradient,
   WORKSPACE_LABELS,
 } from '../theme/themes';
-import { ROLE_BADGE } from '../auth/access';
+import { ALL_ROLES, ROLE_LABELS, isAdmin, rolesSummary } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { Clock } from './Clock';
 
 interface TopBarProps {
   user: User;
-  effectiveRole: Role;
-  actingRole: Role | null;
+  effectiveRoles: RoleKey[];
+  actingRole: RoleKey | null;
   workspace: WorkspaceKey;
   workspaces: WorkspaceKey[];
   theme: Theme;
@@ -25,11 +25,9 @@ interface TopBarProps {
   onToggleSound: () => void;
   onOpenClaude: () => void;
   onOpenAccount: () => void;
-  onSetActingRole: (r: Role | null) => void;
+  onSetActingRole: (r: RoleKey | null) => void;
   onLogout: () => void;
 }
-
-const ROLES: Role[] = ['Admin', 'Trader', 'Sales', 'Viewer'];
 
 function brokerDotColor(status: BrokerStatus['status']): string {
   switch (status) {
@@ -47,7 +45,7 @@ function brokerDotColor(status: BrokerStatus['status']): string {
 export function TopBar(props: TopBarProps) {
   const {
     user,
-    effectiveRole,
+    effectiveRoles,
     actingRole,
     workspace,
     workspaces,
@@ -333,8 +331,8 @@ export function TopBar(props: TopBarProps) {
               textTransform: 'uppercase',
             }}
           >
-            {ROLE_BADGE[effectiveRole]}
-            {actingRole && actingRole !== user.role ? ' · preview' : ''}
+            {rolesSummary(effectiveRoles)}
+            {actingRole ? ' · preview' : ''}
           </div>
         </div>
       </button>
@@ -368,10 +366,10 @@ export function TopBar(props: TopBarProps) {
             >
               Signed in as <strong style={{ color: '#cfe0ff' }}>{user.username}</strong>
               <br />
-              Role: {ROLE_BADGE[user.role]}
+              Roles: {rolesSummary(user.roles)}
             </div>
 
-            {user.role === 'Admin' && (
+            {isAdmin(user.roles) && (
               <div style={{ borderTop: '1px solid #1d3560', paddingTop: 8, marginTop: 4 }}>
                 <div
                   style={{
@@ -384,13 +382,33 @@ export function TopBar(props: TopBarProps) {
                 >
                   View as role (preview)
                 </div>
-                {ROLES.map((r) => {
-                  const on = effectiveRole === r;
+                <button
+                  onClick={() => {
+                    onSetActingRole(null);
+                    setMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: !actingRole ? 'rgba(235,203,116,.1)' : 'transparent',
+                    border: 'none',
+                    color: !actingRole ? '#EBCB74' : '#cfe0ff',
+                    fontSize: 12.5,
+                    padding: '8px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  My access (all my roles)
+                </button>
+                {ALL_ROLES.map((r) => {
+                  const on = actingRole === r;
                   return (
                     <button
                       key={r}
                       onClick={() => {
-                        onSetActingRole(r === user.role ? null : r);
+                        onSetActingRole(on ? null : r);
                         setMenuOpen(false);
                       }}
                       style={{
@@ -406,8 +424,7 @@ export function TopBar(props: TopBarProps) {
                         cursor: 'pointer',
                       }}
                     >
-                      {ROLE_BADGE[r]}
-                      {r === user.role ? ' (your role)' : ''}
+                      {ROLE_LABELS[r]}
                     </button>
                   );
                 })}

@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users, ROLES, type Role } from '../db/schema.js';
+import { users } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
+import { isRoleKey, parseRoles, type RoleKey } from '../auth/rbac.js';
 
 // A user row as shown in the admin user-management screen. Never includes the
 // password hash. `createdUsername` is the username the account was created
@@ -15,7 +16,7 @@ export interface AdminUserView {
   createdUsername: string;
   displayName: string;
   email: string | null;
-  role: Role;
+  roles: RoleKey[];
   active: boolean;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
@@ -29,12 +30,17 @@ function toView(u: typeof users.$inferSelect): AdminUserView {
     createdUsername: u.createdUsername ?? u.username,
     displayName: u.displayName,
     email: u.email,
-    role: u.role,
+    roles: parseRoles(u),
     active: u.active,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
     createdAt: u.createdAt.getTime(),
   };
+}
+
+// Normalize an incoming roles array: keep only valid keys, de-duplicate.
+function cleanRoles(roles: string[]): RoleKey[] {
+  return [...new Set(roles.filter(isRoleKey))];
 }
 
 export async function listUsers(): Promise<AdminUserView[]> {
@@ -47,7 +53,7 @@ export interface CreateUserInput {
   username: string;
   displayName: string;
   password: string;
-  role: Role;
+  roles: string[];
   viewBrokerage?: boolean;
 }
 
@@ -58,10 +64,10 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
   const displayName = input.displayName.trim();
   if (!username) throw new AdminError('Username is required');
   if (!displayName) throw new AdminError('Display name is required');
-  if (!ROLES.includes(input.role)) throw new AdminError('Invalid role');
   if (input.password.length < 8) {
     throw new AdminError('Temporary password must be at least 8 characters');
   }
+  const roles = cleanRoles(input.roles);
 
   const existing = await db
     .select({ id: users.id })
@@ -78,7 +84,8 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     displayName,
     email: null,
     passwordHash: await hashPassword(input.password),
-    role: input.role,
+    role: 'Viewer' as const, // legacy column, unused; kept populated for type/back-compat
+    roles: JSON.stringify(roles),
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,
     // Admin sets a temporary password; force a change on first login.
@@ -92,7 +99,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
 
 export interface UpdateUserInput {
   displayName?: string;
-  role?: Role;
+  roles?: string[];
   active?: boolean;
   viewBrokerage?: boolean;
   // When provided, sets a new temporary password and forces a change at next
@@ -115,8 +122,8 @@ export async function updateUser(
   if (isSelf && input.active === false) {
     throw new AdminError('You cannot deactivate your own account');
   }
-  if (isSelf && input.role && input.role !== 'Admin') {
-    throw new AdminError('You cannot change your own role away from Admin');
+  if (isSelf && input.roles && !cleanRoles(input.roles).includes('admin')) {
+    throw new AdminError('You cannot remove the Admin role from your own account');
   }
 
   const patch: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
@@ -126,10 +133,7 @@ export async function updateUser(
     if (!dn) throw new AdminError('Display name cannot be empty');
     patch.displayName = dn;
   }
-  if (input.role != null) {
-    if (!ROLES.includes(input.role)) throw new AdminError('Invalid role');
-    patch.role = input.role;
-  }
+  if (input.roles != null) patch.roles = JSON.stringify(cleanRoles(input.roles));
   if (input.active != null) patch.active = input.active;
   if (input.viewBrokerage != null) patch.viewBrokerage = input.viewBrokerage;
 

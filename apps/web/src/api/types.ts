@@ -1,7 +1,14 @@
 import type { WorkspaceKey } from '../theme/themes';
 
-export type Role = 'Admin' | 'Trader' | 'Sales' | 'Viewer';
-export type ListScope = 'all' | 'trading' | 'kia' | 'none';
+// Granular, admin-assigned roles (mirror of backend auth/rbac.ts ROLE_KEYS).
+// A user can hold any combination.
+export type RoleKey =
+  | 'admin'
+  | 'trading'
+  | 'trading_viewer'
+  | 'sales'
+  | 'studies'
+  | 'todo';
 
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {
@@ -9,14 +16,13 @@ export interface User {
   username: string;
   displayName: string;
   email: string | null;
-  role: Role;
-  readOnly: boolean;
+  roles: RoleKey[];
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   access: {
     label: string;
-    lists: ListScope;
     workspaces: WorkspaceKey[];
+    readOnlyWorkspaces: WorkspaceKey[];
   };
 }
 
@@ -28,7 +34,7 @@ export interface AdminUser {
   createdUsername: string;
   displayName: string;
   email: string | null;
-  role: Role;
+  roles: RoleKey[];
   active: boolean;
   viewBrokerage: boolean;
   mustChangePassword: boolean;

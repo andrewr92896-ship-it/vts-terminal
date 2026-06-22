@@ -1,20 +1,20 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from '../auth/middleware.js';
-import { ROLES } from '../db/schema.js';
+import { ROLE_KEYS } from '../auth/rbac.js';
 import { AdminError, createUser, listUsers, updateUser } from '../admin/service.js';
 
 const createSchema = z.object({
   username: z.string().trim().min(1).max(64),
   displayName: z.string().trim().min(1).max(120),
   password: z.string().min(8).max(256),
-  role: z.enum(ROLES),
+  roles: z.array(z.enum(ROLE_KEYS)),
   viewBrokerage: z.boolean().optional(),
 });
 
 const updateSchema = z.object({
   displayName: z.string().trim().min(1).max(120).optional(),
-  role: z.enum(ROLES).optional(),
+  roles: z.array(z.enum(ROLE_KEYS)).optional(),
   active: z.boolean().optional(),
   viewBrokerage: z.boolean().optional(),
   password: z.string().min(8).max(256).optional(),
