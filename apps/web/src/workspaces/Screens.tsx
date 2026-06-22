@@ -1,4 +1,5 @@
 import type { Theme } from '../theme/themes';
+import { useResponsive } from '../hooks/useMediaQuery';
 
 // Stage 1 ships the full app shell with every screen reachable. Each screen
 // renders a branded placeholder describing what gets wired and when. Real
@@ -35,6 +36,7 @@ const SCREENS: Record<string, ScreenInfo> = {
 };
 
 export function Screen({ screen, theme }: { screen: string; theme: Theme }) {
+  const { isPhone } = useResponsive();
   const info = SCREENS[screen] ?? {
     title: 'Coming soon',
     blurb: 'This screen is part of a later stage.',
@@ -42,14 +44,14 @@ export function Screen({ screen, theme }: { screen: string; theme: Theme }) {
   };
 
   return (
-    <div style={{ maxWidth: 760, margin: '40px auto', animation: 'cardIn .35s ease' }}>
+    <div style={{ maxWidth: 760, margin: isPhone ? '16px auto' : '40px auto', animation: 'cardIn .35s ease' }}>
       <div
         style={{
           background: 'linear-gradient(180deg,rgba(13,31,68,.5),rgba(11,26,58,.6))',
           border: `1px solid ${theme.navBorder}`,
           borderLeft: `3px solid ${theme.accent}`,
           borderRadius: 14,
-          padding: '28px 30px',
+          padding: isPhone ? '20px 18px' : '28px 30px',
         }}
       >
         <div
