@@ -104,7 +104,23 @@ export interface KiaMetrics {
   onPace: boolean;
 }
 
+export interface KiaMonthOption {
+  key: string; // 'YYYY-MM'
+  label: string; // e.g. 'June 2026'
+}
+
+export interface KiaMonthSummary {
+  month: string;
+  label: string;
+  units: number;
+  totalProfit: number;
+  commission: number;
+}
+
 export interface KiaDashboard {
+  month: string; // the month currently shown, 'YYYY-MM'
+  months: KiaMonthOption[]; // selectable months, newest first
+  history: KiaMonthSummary[]; // per-month totals, newest first
   deals: KiaDeal[];
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };

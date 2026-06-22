@@ -117,22 +117,55 @@ export const api = {
   removeTodoItem(id: string): Promise<{ sections: TodoSection[] }> {
     return request(`/api/todo/items/${id}`, { method: 'DELETE' });
   },
-  kiaDashboard(): Promise<KiaDashboard> {
-    return request('/api/kia/dashboard');
+  kiaDashboard(month?: string): Promise<KiaDashboard> {
+    return request(`/api/kia/dashboard${monthQuery(month)}`);
   },
-  kiaAddDeal(deal: {
-    customer?: string;
-    model: string;
-    type: 'New' | 'Used';
-    profit: number;
-    soldAt?: string;
-  }): Promise<KiaDashboard> {
-    return request('/api/kia/deals', { method: 'POST', body: JSON.stringify(deal) });
+  kiaAddDeal(
+    deal: {
+      customer?: string;
+      model: string;
+      type: 'New' | 'Used';
+      profit: number;
+      soldAt?: string;
+    },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/deals${monthQuery(month)}`, {
+      method: 'POST',
+      body: JSON.stringify(deal),
+    });
   },
-  kiaRemoveDeal(id: string): Promise<KiaDashboard> {
-    return request(`/api/kia/deals/${id}`, { method: 'DELETE' });
+  kiaUpdateDeal(
+    id: string,
+    patch: {
+      customer?: string;
+      model?: string;
+      type?: 'New' | 'Used';
+      profit?: number;
+      soldAt?: string;
+    },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/deals/${id}${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
   },
-  kiaUpdateSettings(patch: { goalUnits?: number; reviewCount?: number }): Promise<KiaDashboard> {
-    return request('/api/kia/settings', { method: 'PATCH', body: JSON.stringify(patch) });
+  kiaRemoveDeal(id: string, month?: string): Promise<KiaDashboard> {
+    return request(`/api/kia/deals/${id}${monthQuery(month)}`, { method: 'DELETE' });
+  },
+  kiaUpdateSettings(
+    patch: { goalUnits?: number; reviewCount?: number },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/settings${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
   },
 };
+
+// Append ?month=YYYY-MM when a specific month is being viewed.
+function monthQuery(month?: string): string {
+  return month ? `?month=${encodeURIComponent(month)}` : '';
+}
