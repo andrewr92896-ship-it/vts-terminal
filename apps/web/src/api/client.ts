@@ -137,6 +137,9 @@ export const api = {
   askAi(messages: { role: 'user' | 'assistant'; content: string }[], workspace?: string): Promise<{ reply: string }> {
     return request('/api/ai/ask', { method: 'POST', body: JSON.stringify({ messages, workspace }) });
   },
+  askKia(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<{ reply: string }> {
+    return request('/api/ai/kia', { method: 'POST', body: JSON.stringify({ messages }) });
+  },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');
   },
