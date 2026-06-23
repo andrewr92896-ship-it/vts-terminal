@@ -271,16 +271,11 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
   kia_know: {
     title: 'Product Knowledge',
-    intro: 'A Claude-powered assistant for Kia specs, trims, incentives, and troubleshooting.',
+    intro: 'A Claude (Sonnet) assistant for Kia specs, trims, incentives, and troubleshooting — quick answers before you walk back to a customer.',
     steps: [
-      {
-        title: 'Pick a topic',
-        body: 'The chips at the top (towing, EV range, MPG, trims, etc.) are example questions the assistant will answer.',
-      },
-      {
-        title: 'Coming soon',
-        body: 'The chat connects in a later stage. The input is disabled until then.',
-      },
+      { title: 'Ask anything', body: 'Type a question about any Kia model — towing, payload, EV range and charging, MPG, trims, features, incentives, or troubleshooting — and press Enter.' },
+      { title: 'Topic shortcuts', body: 'Tap a chip at the top to send a common question instantly.' },
+      { title: 'Double-check exact numbers', body: 'Figures vary by model year and trim; the assistant will flag when a number is approximate. Confirm specifics on the window sticker or kia.com.' },
     ],
   },
   kia_todo: {
