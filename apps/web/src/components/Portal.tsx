@@ -12,8 +12,10 @@ import {
   type TabDef,
   type Theme,
 } from '../theme/themes';
-import { workspacesForRoles } from '../auth/access';
+import { canAccessWorkspace, workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
+import { AlertSoundProvider } from '../sound/alertSound';
+import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { InstallPrompt } from './InstallPrompt';
@@ -139,7 +141,6 @@ export function Portal() {
     pickInitialWorkspace(workspacesForRoles(user!.roles)),
   );
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
-  const [soundOn, setSoundOn] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -191,6 +192,10 @@ export function Portal() {
   return (
     <PrivacyProvider>
     <DealershipProvider>
+    <AlertSoundProvider>
+    {/* Trade-alert sound: only watch (and chime) for users who can see the
+        Trading workspace. Renders nothing. */}
+    {canAccessWorkspace(effectiveRoles, 'trading') && <AlertSoundWatcher />}
     <div
       style={{
         position: 'relative',
@@ -232,9 +237,7 @@ export function Portal() {
         theme={theme}
         brand={brand}
         brokers={brokers}
-        soundOn={soundOn}
         onSwitchWorkspace={switchWorkspace}
-        onToggleSound={() => setSoundOn((v) => !v)}
         onOpenClaude={() => setAiOpen(true)}
         onOpenAccount={() => setAccountOpen(true)}
         onOpenAdmin={() => setAdminOpen(true)}
@@ -348,6 +351,7 @@ export function Portal() {
       {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
       <PageHelp screen={screen} theme={theme} />
     </div>
+    </AlertSoundProvider>
     </DealershipProvider>
     </PrivacyProvider>
   );

@@ -9,7 +9,7 @@ import {
   restoreTrade,
   updateTrade,
 } from '../trading/trades.js';
-import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
+import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
@@ -301,6 +301,11 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.get('/api/trading/alerts', read, async (request) => {
     return getAlerts(request.currentUser!.id);
   });
+
+  // Lightweight desk-wide poll so trading clients can play an alert sound when a
+  // new TradingView alert arrives. Read access, so trading_viewer users (who own
+  // no alerts of their own) still receive the shared signal and hear the sound.
+  app.get('/api/trading/signals', read, async () => getAlertSignal());
 
   // Analyze an alert's pasted screenshot with Opus 4.8 and auto-create a trade.
   // Screenshots are sizeable, so this route allows a larger body.

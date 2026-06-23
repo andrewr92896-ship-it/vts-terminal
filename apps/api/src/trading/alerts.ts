@@ -137,6 +137,27 @@ export async function getAlerts(ownerId: string): Promise<AlertsData> {
   return { alerts: rows.map(toRecord), aiConfigured: aiConfigured() };
 }
 
+// A tiny desk-wide signal the trading clients poll so they can chime when a new
+// TradingView alert arrives. Every inbound alert is attributed to the single
+// owner, so the latest receivedAt across the whole table is the desk-wide
+// latest. That is why a trading_viewer (who owns no alerts of their own) still
+// gets a real signal and hears the sound.
+export interface AlertSignal {
+  lastAlertAt: number | null;
+  alertCount: number;
+}
+
+export async function getAlertSignal(): Promise<AlertSignal> {
+  const rows = await db
+    .select({ receivedAt: tradingAlerts.receivedAt })
+    .from(tradingAlerts)
+    .orderBy(desc(tradingAlerts.receivedAt));
+  return {
+    lastAlertAt: rows[0]?.receivedAt ? rows[0].receivedAt.getTime() : null,
+    alertCount: rows.length,
+  };
+}
+
 type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
 
 // Analyze an alert's screenshot with Opus 4.8, store the result, and auto-create

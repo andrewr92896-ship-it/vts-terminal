@@ -758,6 +758,13 @@ export interface AlertsData {
   aiConfigured: boolean;
 }
 
+// Desk-wide trading signal the client polls to chime on a new TradingView alert
+// (mirror of apps/api/src/trading/alerts.ts AlertSignal).
+export interface TradingSignals {
+  lastAlertAt: number | null;
+  alertCount: number;
+}
+
 // ---- Trading — History (mirror of apps/api/src/trading/history.ts) ----
 export interface HistoryRecord {
   id: string;

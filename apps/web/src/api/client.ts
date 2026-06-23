@@ -39,6 +39,7 @@ import type {
   TodoItemState,
   TodoCommandResult,
   TodoSection,
+  TradingSignals,
   User,
   WealthClientStatus,
   WealthClientsData,
@@ -247,6 +248,9 @@ export const api = {
   },
   tradingAlerts(): Promise<AlertsData> {
     return request('/api/trading/alerts');
+  },
+  tradingSignals(): Promise<TradingSignals> {
+    return request('/api/trading/signals');
   },
   analyzeAlert(id: string, image: { imageBase64: string; mediaType: string }): Promise<AlertsData> {
     return request(`/api/trading/alerts/${id}/analyze`, { method: 'POST', body: JSON.stringify(image) });
