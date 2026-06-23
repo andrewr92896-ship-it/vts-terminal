@@ -39,6 +39,7 @@ import { History } from '../workspaces/trading/History';
 import { AccountMetrics } from '../workspaces/trading/AccountMetrics';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
+import { MarketNews } from '../workspaces/trading/MarketNews';
 
 // The Studies screens bundle the 400-question Series 65 database, so they're
 // code-split into a lazy chunk that only loads when the Studies workspace is
@@ -69,6 +70,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <AccountMetrics />;
     case 'sessions':
       return <StrategySessions />;
+    case 'news':
+      return <MarketNews />;
     case 'td_trading':
       return <TradingTodo />;
     case 'td_all':

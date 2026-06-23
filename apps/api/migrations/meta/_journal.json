@@ -120,6 +120,13 @@
       "when": 1781872491490,
       "tag": "0016_trading_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1781872491491,
+      "tag": "0017_market_news",
+      "breakpoints": true
     }
   ]
 }

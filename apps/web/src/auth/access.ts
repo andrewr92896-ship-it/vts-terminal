@@ -57,6 +57,15 @@ export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean 
   return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
 }
 
+// Trading is read-only when the user only has the viewer role (mirror of the
+// backend auth/rbac.ts). Used to hide compose/edit controls for viewers; the
+// server still enforces it on every write.
+export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean {
+  if (ws !== 'trading') return false;
+  if (isAdmin(roles) || roles.includes('trading')) return false;
+  return roles.includes('trading_viewer');
+}
+
 // Ordered as the switcher shows them.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
   const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'wealth', 'finance', 'studies'];

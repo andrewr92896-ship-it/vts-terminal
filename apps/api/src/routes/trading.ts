@@ -13,14 +13,23 @@ import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
-import { SESSION_BIASES } from '../db/schema.js';
+import {
+  getMarketNews,
+  addNews,
+  updateNews,
+  removeNews,
+  addEvent,
+  updateEvent,
+  removeEvent,
+} from '../trading/news.js';
+import { SESSION_BIASES, NEWS_IMPACTS, NEWS_BIASES, NEWS_CATEGORIES } from '../db/schema.js';
 import {
   addConnection,
   listConnections,
   removeConnection,
   updateConnection,
 } from '../trading/connections.js';
-import { aiConfigured } from '../ai/claude.js';
+import { aiConfigured, askClaude } from '../ai/claude.js';
 import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
@@ -140,6 +149,77 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.delete('/api/trading/sessions/:id', write, async (request) => ({
     sessions: await removeSession(request.currentUser!.id, (request.params as { id: string }).id),
   }));
+
+  // ---- Market News (shared desk feed: headlines + economic calendar) ----
+  app.get('/api/trading/news', read, async () => getMarketNews());
+
+  app.post('/api/trading/news', write, async (request, reply) => {
+    const parsed = newsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A headline is required' });
+    try {
+      return await addNews(request.currentUser!.id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add headline' });
+    }
+  });
+  app.patch('/api/trading/news/:id', write, async (request, reply) => {
+    const parsed = editNewsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the headline details' });
+    try {
+      return await updateNews((request.params as { id: string }).id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update headline' });
+    }
+  });
+  app.delete('/api/trading/news/:id', write, async (request) =>
+    removeNews((request.params as { id: string }).id),
+  );
+
+  app.post('/api/trading/calendar', write, async (request, reply) => {
+    const parsed = eventSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'An event name and time are required' });
+    try {
+      return await addEvent(request.currentUser!.id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add event' });
+    }
+  });
+  app.patch('/api/trading/calendar/:id', write, async (request, reply) => {
+    const parsed = editEventSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the event details' });
+    try {
+      return await updateEvent((request.params as { id: string }).id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update event' });
+    }
+  });
+  app.delete('/api/trading/calendar/:id', write, async (request) =>
+    removeEvent((request.params as { id: string }).id),
+  );
+
+  // A quick Claude (Sonnet) desk brief over the current headlines. Read-only
+  // generation — no data is stored. Returns 503 if no API key is configured.
+  app.post('/api/trading/news/brief', read, async (_request, reply) => {
+    if (!aiConfigured()) {
+      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    }
+    const { headlines } = await getMarketNews();
+    if (headlines.length === 0) {
+      return { brief: 'No headlines posted yet — add a few and I’ll summarize the desk view.' };
+    }
+    const lines = headlines
+      .slice(0, 40)
+      .map((h) => `- [${h.category}/${h.impact}/${h.bias}] ${h.title}${h.source ? ` (${h.source})` : ''}`)
+      .join('\n');
+    const system =
+      'You are a trading-desk analyst. Given a list of market headlines with category, impact, and bias tags, write a brief, practical desk note: the overall risk tone, the few things that matter most today, and what to watch. Be concise (under 180 words), plain text, no markdown headers.';
+    try {
+      const brief = await askClaude(`Current headlines:\n${lines}`, system);
+      return { brief };
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
+    }
+  });
 
   app.post('/api/trading/trades', write, async (request, reply) => {
     const parsed = addSchema.safeParse(request.body);
@@ -325,4 +405,30 @@ const sessionFields = {
 const addSessionSchema = z.object({ name: z.string().trim().min(1).max(80), ...sessionFields });
 const editSessionSchema = z
   .object({ name: z.string().trim().min(1).max(80).optional(), ...sessionFields })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const newsFields = {
+  body: z.string().trim().max(4000).nullish(),
+  source: z.string().trim().max(80).nullish(),
+  url: z.string().trim().max(500).nullish(),
+  category: z.enum(NEWS_CATEGORIES).optional(),
+  impact: z.enum(NEWS_IMPACTS).optional(),
+  bias: z.enum(NEWS_BIASES).optional(),
+  publishedAt: ts.optional(),
+};
+const newsSchema = z.object({ title: z.string().trim().min(1).max(240), ...newsFields });
+const editNewsSchema = z
+  .object({ title: z.string().trim().min(1).max(240).optional(), ...newsFields })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const eventFields = {
+  country: z.string().trim().max(40).nullish(),
+  impact: z.enum(NEWS_IMPACTS).optional(),
+  forecast: z.string().trim().max(40).nullish(),
+  previous: z.string().trim().max(40).nullish(),
+  actual: z.string().trim().max(40).nullish(),
+};
+const eventSchema = z.object({ title: z.string().trim().min(1).max(160), eventTime: ts, ...eventFields });
+const editEventSchema = z
+  .object({ title: z.string().trim().min(1).max(160).optional(), eventTime: ts.optional(), ...eventFields })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });

@@ -14,6 +14,9 @@ import type {
   NetWorthKind,
   SessionInput,
   StrategySession,
+  MarketNewsData,
+  NewsInput,
+  EventInput,
   LiveWall,
   TradeInput,
   TradeLogData,
@@ -160,6 +163,30 @@ export const api = {
   },
   removeSession(id: string): Promise<{ sessions: StrategySession[] }> {
     return request(`/api/trading/sessions/${id}`, { method: 'DELETE' });
+  },
+  marketNews(): Promise<MarketNewsData> {
+    return request('/api/trading/news');
+  },
+  addNews(input: NewsInput): Promise<MarketNewsData> {
+    return request('/api/trading/news', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateNews(id: string, patch: NewsInput): Promise<MarketNewsData> {
+    return request(`/api/trading/news/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removeNews(id: string): Promise<MarketNewsData> {
+    return request(`/api/trading/news/${id}`, { method: 'DELETE' });
+  },
+  addCalendarEvent(input: EventInput): Promise<MarketNewsData> {
+    return request('/api/trading/calendar', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateCalendarEvent(id: string, patch: EventInput): Promise<MarketNewsData> {
+    return request(`/api/trading/calendar/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removeCalendarEvent(id: string): Promise<MarketNewsData> {
+    return request(`/api/trading/calendar/${id}`, { method: 'DELETE' });
+  },
+  newsBrief(): Promise<{ brief: string }> {
+    return request('/api/trading/news/brief', { method: 'POST', body: JSON.stringify({}) });
   },
   tradingChallenge(): Promise<ChallengeData> {
     return request('/api/trading/challenge');

@@ -150,6 +150,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  news: {
+    title: 'Market News',
+    intro: 'A shared desk feed — market and geopolitical headlines with impact and bias tags, plus an economic calendar in Eastern Time. Everyone on the trading desk sees the same feed.',
+    steps: [
+      {
+        title: 'Post a headline',
+        body: 'Click “+ Headline”, write the headline (and optional detail, source, and link), then tag it with a category, impact level, and market bias. Read-only viewers can see the feed but can’t post.',
+      },
+      {
+        title: 'Read the tags',
+        body: 'Each headline shows its category, impact (High/Med/Low — the colored left edge), bias (Bullish/Bearish/Neutral), and how long ago it was posted. Click “Source ↗” to open the original link.',
+      },
+      {
+        title: 'Economic calendar',
+        body: 'Click “+ Calendar event” to add a release (e.g. CPI, FOMC). Enter the time in your local zone and it’s shown to everyone in Eastern Time, grouped by day, with forecast/previous/actual figures and an impact dot.',
+      },
+      {
+        title: 'Claude desk brief',
+        body: 'Click “✨ Brief me” for a quick Claude (Sonnet) read on the current headlines — overall risk tone and what to watch. Nothing is stored; it just summarizes what’s on the board.',
+      },
+    ],
+  },
+
   history: {
     title: 'Trade History',
     intro: 'Closed trades, recorded automatically. When an open position on the Live Wall closes (the broker stops reporting it), it’s moved here with its last-seen exit price and P/L.',

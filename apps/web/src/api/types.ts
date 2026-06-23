@@ -405,6 +405,60 @@ export interface SessionInput {
   active?: boolean;
 }
 
+// ---- Trading — Market News (mirror of apps/api/src/trading/news.ts) ----
+export type NewsImpact = 'high' | 'medium' | 'low';
+export type NewsBias = 'bullish' | 'bearish' | 'neutral';
+export type NewsCategory = 'markets' | 'geopolitical' | 'economic' | 'crypto' | 'other';
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  body: string | null;
+  source: string | null;
+  url: string | null;
+  category: NewsCategory;
+  impact: NewsImpact;
+  bias: NewsBias;
+  publishedAt: number;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  country: string | null;
+  impact: NewsImpact;
+  eventTime: number;
+  forecast: string | null;
+  previous: string | null;
+  actual: string | null;
+}
+
+export interface MarketNewsData {
+  headlines: NewsItem[];
+  calendar: CalendarEvent[];
+}
+
+export interface NewsInput {
+  title?: string;
+  body?: string | null;
+  source?: string | null;
+  url?: string | null;
+  category?: NewsCategory;
+  impact?: NewsImpact;
+  bias?: NewsBias;
+  publishedAt?: number;
+}
+
+export interface EventInput {
+  title?: string;
+  country?: string | null;
+  impact?: NewsImpact;
+  eventTime?: number;
+  forecast?: string | null;
+  previous?: string | null;
+  actual?: string | null;
+}
+
 // ---- Trading — Trade Log (mirror of apps/api/src/trading/trades.ts) ----
 export type TradeStatus = 'open' | 'closed';
 
