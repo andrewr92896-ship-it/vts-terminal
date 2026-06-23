@@ -112,6 +112,17 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  sessions: {
+    title: 'Strategy Sessions',
+    intro: 'Your trading windows in Eastern Time — each with a bias and bull/bear playbooks per instrument. Cards regroup themselves as sessions open and close.',
+    steps: [
+      { title: 'Add a session', body: 'Click “+ New session”, name it (e.g. London Open), set the open/close times (ET) and instrument, pick a bias, and write your bull and bear plans.' },
+      { title: 'Live status', body: 'Sessions sort into Active now, Opening soon (within 30 minutes — with a countdown), and Idle, based on the current Eastern-Time clock. The view refreshes itself every minute.' },
+      { title: 'Playbooks', body: 'Each card shows your bull and bear plan side by side so you know exactly what you’re looking for when the window opens.' },
+      { title: 'Pause, edit, remove', body: 'Pause keeps a session but greys it out and stops it going active; Edit changes any field; × removes it.' },
+    ],
+  },
+
   metrics: {
     title: 'Account Metrics',
     intro: 'Your funded-account (prop) challenge dashboard — equity vs. profit target, plus daily and max drawdown limits. FTP has no API, so you keep equity current (or pull it from your Trade Log).',

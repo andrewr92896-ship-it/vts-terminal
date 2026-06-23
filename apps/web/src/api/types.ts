@@ -372,6 +372,39 @@ export interface NetWorthData {
   total: number;
 }
 
+// ---- Trading — Strategy Sessions (mirror of apps/api/src/trading/sessions.ts) ----
+export type SessionBias = 'bull' | 'bear' | 'both' | 'neutral';
+export type SessionStatus = 'active' | 'opening' | 'idle';
+
+export interface StrategySession {
+  id: string;
+  name: string;
+  instrument: string | null;
+  openTime: string;
+  closeTime: string;
+  timeframe: string | null;
+  bias: SessionBias;
+  bullPlan: string | null;
+  bearPlan: string | null;
+  notes: string | null;
+  active: boolean;
+  status: SessionStatus;
+  minsToOpen: number | null;
+}
+
+export interface SessionInput {
+  name?: string;
+  instrument?: string | null;
+  openTime?: string;
+  closeTime?: string;
+  timeframe?: string | null;
+  bias?: SessionBias;
+  bullPlan?: string | null;
+  bearPlan?: string | null;
+  notes?: string | null;
+  active?: boolean;
+}
+
 // ---- Trading — Trade Log (mirror of apps/api/src/trading/trades.ts) ----
 export type TradeStatus = 'open' | 'closed';
 
