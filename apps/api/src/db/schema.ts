@@ -375,3 +375,56 @@ export const tradingChallenges = sqliteTable('trading_challenges', {
 });
 
 export type TradingChallengeRow = typeof tradingChallenges.$inferSelect;
+
+// ---- Personal Finance ----
+// Per-user settings for how Funded Trading Plus (a simulation) earnings scale
+// into real take-home. Testing phase: simulated P/L ÷ divisor (18 by default).
+// Funded phase: P/L × payout (80% by default).
+export const FTP_PHASES = ['testing', 'funded'] as const;
+export type FtpPhase = (typeof FTP_PHASES)[number];
+
+export const financeSettings = sqliteTable('finance_settings', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  ftpPhase: text('ftp_phase', { enum: FTP_PHASES }).notNull().default('testing'),
+  ftpDivisor: real('ftp_divisor').notNull().default(18),
+  ftpPayoutBp: integer('ftp_payout_bp').notNull().default(8000), // 80%
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+// Recurring monthly expenses, each with the day of month it leaves the bank.
+export const financeExpenses = sqliteTable('finance_expenses', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  amount: real('amount').notNull().default(0),
+  dayOfMonth: integer('day_of_month').notNull().default(1), // 1–31
+  category: text('category'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+// Net-worth line items: assets (positive contribution) and liabilities.
+export const NET_WORTH_KINDS = ['asset', 'liability'] as const;
+export type NetWorthKind = (typeof NET_WORTH_KINDS)[number];
+
+export const financeNetWorth = sqliteTable('finance_net_worth', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  amount: real('amount').notNull().default(0), // stored positive; kind sets sign
+  kind: text('kind', { enum: NET_WORTH_KINDS }).notNull().default('asset'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type FinanceSettingsRow = typeof financeSettings.$inferSelect;
+export type FinanceExpenseRow = typeof financeExpenses.$inferSelect;
+export type FinanceNetWorthRow = typeof financeNetWorth.$inferSelect;

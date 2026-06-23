@@ -16,6 +16,47 @@ export interface Tutorial {
 }
 
 export const TUTORIALS: Record<string, Tutorial> = {
+  // ---- Personal Finance ----
+  fin_overview: {
+    title: 'Personal Finance',
+    intro: 'Your take-home this month across every job and business — car sales commission, real-broker trading, and Funded Trading Plus (scaled) — minus your bills.',
+    steps: [
+      {
+        title: 'Earnings this month',
+        body: 'The top card adds up your earnings (Kia commission + real broker trading P/L + scaled FTP), subtracts your expenses, and shows what’s left after bills, with a “bills covered” bar.',
+      },
+      {
+        title: 'FTP is scaled',
+        body: 'Funded Trading Plus is a simulation, so its P/L is scaled into real take-home. Use the Testing / Funded toggle: Testing divides P/L by 18; Funded pays out 80%. Both numbers are editable next to the toggle.',
+      },
+      {
+        title: 'Sources',
+        body: 'The Earnings sources panel breaks the total down. Car sales pulls from your Kia tracker; trading uses your closed trades this month.',
+      },
+      {
+        title: 'Expenses & Net Worth',
+        body: 'Add your bills on the Expenses tab (each with the day it leaves your bank), and list your accounts/debts on the Net Worth tab — both feed back into this overview.',
+      },
+    ],
+  },
+  fin_expenses: {
+    title: 'Expenses',
+    intro: 'Your recurring monthly bills. Each has the day of the month it comes out of your bank account.',
+    steps: [
+      { title: 'Add a bill', body: 'Enter a label, amount, and the bank day (1–31), plus an optional category, then click Add.' },
+      { title: 'Paid vs upcoming', body: 'Bills whose day has already passed this month show as “paid”; the rest are “upcoming”. The summary tracks how much has gone out so far.' },
+      { title: 'Pause or edit', body: 'Use Pause to keep a bill but exclude it from the totals (e.g. a cancelled subscription), or Edit to change details. × removes it.' },
+    ],
+  },
+  fin_networth: {
+    title: 'Net Worth',
+    intro: 'A running net-worth figure — your assets minus your liabilities.',
+    steps: [
+      { title: 'Add accounts & assets', body: 'List each account, asset, or debt with its current value, marking it Asset or Liability.' },
+      { title: 'Your total', body: 'The top shows assets minus liabilities. Liabilities are shown in parentheses and subtract from the total, which also appears on the Overview tab.' },
+    ],
+  },
+
   // ---- Trading ----
   live: {
     title: 'Using the Live Wall',

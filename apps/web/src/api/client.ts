@@ -6,7 +6,12 @@ import type {
   ChallengeData,
   ChallengeInput,
   ConnectionInput,
+  Expense,
+  FinanceOverview,
+  FtpPhase,
   HistoryData,
+  NetWorthData,
+  NetWorthKind,
   LiveWall,
   TradeInput,
   TradeLogData,
@@ -276,6 +281,37 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });
+  },
+  // ---- Personal Finance ----
+  financeOverview(): Promise<FinanceOverview> {
+    return request('/api/finance/overview');
+  },
+  financeUpdateSettings(patch: { ftpPhase?: FtpPhase; ftpDivisor?: number; ftpPayoutPct?: number }): Promise<FinanceOverview> {
+    return request('/api/finance/settings', { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  financeExpenses(): Promise<{ expenses: Expense[] }> {
+    return request('/api/finance/expenses');
+  },
+  financeAddExpense(input: { label: string; amount: number; dayOfMonth: number; category?: string | null }): Promise<{ expenses: Expense[] }> {
+    return request('/api/finance/expenses', { method: 'POST', body: JSON.stringify(input) });
+  },
+  financeUpdateExpense(id: string, patch: { label?: string; amount?: number; dayOfMonth?: number; category?: string | null; active?: boolean }): Promise<{ expenses: Expense[] }> {
+    return request(`/api/finance/expenses/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  financeRemoveExpense(id: string): Promise<{ expenses: Expense[] }> {
+    return request(`/api/finance/expenses/${id}`, { method: 'DELETE' });
+  },
+  financeNetWorth(): Promise<NetWorthData> {
+    return request('/api/finance/net-worth');
+  },
+  financeAddNetWorth(input: { label: string; amount: number; kind: NetWorthKind }): Promise<NetWorthData> {
+    return request('/api/finance/net-worth', { method: 'POST', body: JSON.stringify(input) });
+  },
+  financeUpdateNetWorth(id: string, patch: { label?: string; amount?: number; kind?: NetWorthKind }): Promise<NetWorthData> {
+    return request(`/api/finance/net-worth/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  financeRemoveNetWorth(id: string): Promise<NetWorthData> {
+    return request(`/api/finance/net-worth/${id}`, { method: 'DELETE' });
   },
   wealthClients(): Promise<WealthClientsData> {
     return request('/api/wealth/clients');

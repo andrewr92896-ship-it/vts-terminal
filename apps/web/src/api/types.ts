@@ -9,7 +9,8 @@ export type RoleKey =
   | 'sales'
   | 'studies'
   | 'todo'
-  | 'wealth';
+  | 'wealth'
+  | 'finance';
 
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {
@@ -330,6 +331,45 @@ export interface ChallengeInput {
   peakEquity?: number;
   dayStartEquity?: number;
   startedAt?: number;
+}
+
+// ---- Personal Finance (mirror of apps/api/src/finance/service.ts) ----
+export type FtpPhase = 'testing' | 'funded';
+export type NetWorthKind = 'asset' | 'liability';
+
+export interface FinanceOverview {
+  month: string;
+  monthLabel: string;
+  todayDay: number;
+  settings: { ftpPhase: FtpPhase; ftpDivisor: number; ftpPayoutPct: number };
+  earnings: { kiaCommission: number; tradingReal: number; ftpRaw: number; ftpScaled: number; total: number };
+  expenses: { total: number; paid: number; upcoming: number; count: number };
+  net: number;
+  billsCoveredPct: number;
+  netWorth: { assets: number; liabilities: number; total: number };
+}
+
+export interface Expense {
+  id: string;
+  label: string;
+  amount: number;
+  dayOfMonth: number;
+  category: string | null;
+  active: boolean;
+}
+
+export interface NetWorthItem {
+  id: string;
+  label: string;
+  amount: number;
+  kind: NetWorthKind;
+}
+
+export interface NetWorthData {
+  items: NetWorthItem[];
+  assets: number;
+  liabilities: number;
+  total: number;
 }
 
 // ---- Trading — Trade Log (mirror of apps/api/src/trading/trades.ts) ----
