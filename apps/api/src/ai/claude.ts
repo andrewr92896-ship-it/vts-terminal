@@ -154,3 +154,19 @@ export async function askClaude(prompt: string, system?: string): Promise<string
   });
   return textOf(message);
 }
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+// Sonnet 4.6 multi-turn chat — powers the global Ask Claude panel.
+export async function chatClaude(messages: ChatMessage[], system?: string): Promise<string> {
+  const message = await getClient().messages.create({
+    model: config.ANTHROPIC_MODEL_DEFAULT,
+    max_tokens: 4000,
+    ...(system ? { system } : {}),
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+  });
+  return textOf(message);
+}

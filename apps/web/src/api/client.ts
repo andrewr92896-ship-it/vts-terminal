@@ -132,6 +132,9 @@ export const api = {
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');
   },
+  askAi(messages: { role: 'user' | 'assistant'; content: string }[], workspace?: string): Promise<{ reply: string }> {
+    return request('/api/ai/ask', { method: 'POST', body: JSON.stringify({ messages, workspace }) });
+  },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');
   },

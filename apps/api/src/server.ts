@@ -18,6 +18,7 @@ import { tradingRoutes } from './routes/trading.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { tvWebhookRoutes } from './routes/tvWebhook.js';
 import { financeRoutes } from './routes/finance.js';
+import { aiRoutes } from './routes/ai.js';
 import { runMigrations } from './db/migrate.js';
 import { seedAdmin } from './seed.js';
 
@@ -73,6 +74,7 @@ export async function buildServer() {
   await app.register(kiaRoutes);
   await app.register(wealthRoutes);
   await app.register(financeRoutes);
+  await app.register(aiRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).
