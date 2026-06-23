@@ -211,6 +211,59 @@ export interface WealthClientsData {
   summary: WealthSummary;
 }
 
+// ---- Wealth — Model Portfolios (mirror of apps/api/src/wealth/portfolios.ts) ----
+export type PortfolioRisk =
+  | 'conservative'
+  | 'moderate_conservative'
+  | 'moderate'
+  | 'moderate_aggressive'
+  | 'aggressive';
+export type AssetClass =
+  | 'us_equity'
+  | 'intl_equity'
+  | 'fixed_income'
+  | 'real_assets'
+  | 'cash'
+  | 'alternative'
+  | 'other';
+
+export interface Allocation {
+  id: string;
+  name: string;
+  assetClass: AssetClass;
+  targetBp: number;
+  position: number;
+}
+export interface ClassWeight {
+  assetClass: AssetClass;
+  bp: number;
+}
+export interface Portfolio {
+  id: string;
+  name: string;
+  risk: PortfolioRisk;
+  notes: string | null;
+  allocations: Allocation[];
+  totalBp: number;
+  balanced: boolean;
+  byClass: ClassWeight[];
+  createdAt: number;
+  updatedAt: number;
+}
+export interface PortfoliosData {
+  portfolios: Portfolio[];
+}
+export interface PortfolioInput {
+  name?: string;
+  risk?: PortfolioRisk;
+  notes?: string | null;
+}
+export interface AllocationInput {
+  name?: string;
+  assetClass?: AssetClass;
+  targetBp?: number;
+}
+
 // ---- Wealth — Practice Overview (mirror of apps/api/src/wealth/service.ts) ----
 export interface PracticeStatusBreakdown {
   status: WealthClientStatus;

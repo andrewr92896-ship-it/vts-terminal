@@ -25,6 +25,9 @@ import type {
   RemovedKiaDeal,
   RemovedTodoItem,
   PracticeOverview,
+  PortfoliosData,
+  PortfolioInput,
+  AllocationInput,
   RemovedWealthClient,
   RoleKey,
   TodoItemState,
@@ -375,6 +378,27 @@ export const api = {
   },
   wealthOverview(): Promise<PracticeOverview> {
     return request('/api/wealth/overview');
+  },
+  wealthPortfolios(): Promise<PortfoliosData> {
+    return request('/api/wealth/portfolios');
+  },
+  wealthAddPortfolio(input: PortfolioInput): Promise<PortfoliosData> {
+    return request('/api/wealth/portfolios', { method: 'POST', body: JSON.stringify(input) });
+  },
+  wealthUpdatePortfolio(id: string, patch: PortfolioInput): Promise<PortfoliosData> {
+    return request(`/api/wealth/portfolios/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  wealthRemovePortfolio(id: string): Promise<PortfoliosData> {
+    return request(`/api/wealth/portfolios/${id}`, { method: 'DELETE' });
+  },
+  wealthAddAllocation(portfolioId: string, input: AllocationInput): Promise<PortfoliosData> {
+    return request(`/api/wealth/portfolios/${portfolioId}/allocations`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  wealthUpdateAllocation(id: string, patch: AllocationInput): Promise<PortfoliosData> {
+    return request(`/api/wealth/allocations/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  wealthRemoveAllocation(id: string): Promise<PortfoliosData> {
+    return request(`/api/wealth/allocations/${id}`, { method: 'DELETE' });
   },
   wealthClients(): Promise<WealthClientsData> {
     return request('/api/wealth/clients');
