@@ -158,6 +158,9 @@ export const api = {
   askAi(messages: { role: 'user' | 'assistant'; content: string }[], workspace?: string): Promise<{ reply: string }> {
     return request('/api/ai/ask', { method: 'POST', body: JSON.stringify({ messages, workspace }) });
   },
+  aiAct(workspace: string, message: string): Promise<{ reply: string; applied: string[]; skipped: string[] }> {
+    return request('/api/ai/act', { method: 'POST', body: JSON.stringify({ workspace, message }) });
+  },
   aiUsage(): Promise<AiUsage> {
     return request('/api/ai/usage');
   },

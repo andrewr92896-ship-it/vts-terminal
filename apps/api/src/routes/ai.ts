@@ -4,6 +4,11 @@ import { requireAuth, requireWorkspace } from '../auth/middleware.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
 import { generateQuiz } from '../ai/quiz.js';
+import { canAccessWorkspace, isWorkspaceReadOnly, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
+import { runFinanceCommand } from '../finance/parser.js';
+import { runWealthCommand } from '../wealth/parser.js';
+import { runKiaCommand } from '../kia/command.js';
+import { runTradeCommand } from '../trading/tradeParser.js';
 
 const schema = z.object({
   messages: z
@@ -81,6 +86,11 @@ const tutorSchema = z.object({
   ask: z.string().trim().min(1).max(500).optional(),
 }).refine((v) => v.explain || v.ask, { message: 'Provide a question to explain or ask' });
 
+const actSchema = z.object({
+  workspace: z.enum(['finance', 'wealth', 'kia', 'trading']),
+  message: z.string().trim().min(1).max(600),
+});
+
 const quizSchema = z.object({
   topic: z.string().trim().max(60).optional(),
   count: z.coerce.number().int().min(1).max(10).optional(),
@@ -147,6 +157,34 @@ export async function aiRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
+    }
+  });
+
+  // Let the global Ask Claude panel take actions: route an add/log message to
+  // the right workspace parser. Enforces the same per-workspace access and AI
+  // limits as that workspace's own command bar.
+  app.post('/api/ai/act', { preHandler: requireAuth }, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parsed = actSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Nothing to do' });
+    const user = request.currentUser!;
+    const ws = parsed.data.workspace as WorkspaceKey;
+    const roles = parseRoles(user);
+    if (!canAccessWorkspace(roles, ws)) return reply.code(403).send({ error: 'No access to that workspace' });
+    if (isWorkspaceReadOnly(roles, ws)) return reply.code(403).send({ error: 'You have read-only access here' });
+    const kind = { finance: 'finance_command', wealth: 'wealth_command', kia: 'kia_command', trading: 'trade_log' }[parsed.data.workspace];
+    try {
+      await enforceAiLimit(user.id, kind);
+      const msg = parsed.data.message;
+      const r =
+        parsed.data.workspace === 'finance' ? await runFinanceCommand(user.id, msg)
+        : parsed.data.workspace === 'wealth' ? await runWealthCommand(user.id, msg)
+        : parsed.data.workspace === 'kia' ? await runKiaCommand(user.id, msg)
+        : await runTradeCommand(user.id, msg, !!user.viewBrokerage);
+      return { reply: r.reply, applied: r.applied, skipped: r.skipped };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Action failed' });
     }
   });
 

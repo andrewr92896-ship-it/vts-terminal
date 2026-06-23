@@ -18,14 +18,19 @@ interface Msg {
 
 // Suggested prompts tailored to the current workspace.
 const SUGGESTIONS_BY_WS: Record<string, string[]> = {
-  trading: ['How is my FTP challenge scored?', 'What’s a healthy daily drawdown buffer?', 'How do I read slippage in my trade log?'],
-  kia: ['How is my commission calculated?', 'Tips to hit my unit goal this month', 'Telluride vs Sorento — quick pitch'],
-  finance: ['Tips for tracking monthly expenses', 'How does FTP payout scaling work?', 'Ways to improve my net worth'],
-  wealth: ['How should I structure model portfolios?', 'What goes in an IPS?', 'Key RIA compliance filings to track'],
+  trading: ['Log a EUR/USD long entry 1.0850 SL 1.0820 TP 1.0920', 'How is my FTP challenge scored?', 'How do I read slippage in my trade log?'],
+  kia: ['Sold a used Sportage, $1,800 front $700 back', 'How is my commission calculated?', 'Tips to hit my unit goal this month'],
+  finance: ['Add a $120 phone bill on the 15th', 'How does FTP payout scaling work?', 'Ways to improve my net worth'],
+  wealth: ['Add client Jane Doe, active, $250k', 'What goes in an IPS?', 'Key RIA compliance filings to track'],
   studies: ['Explain the brochure rule (Series 65)', 'Quiz me on fiduciary duty', 'Define a discretionary account'],
   todo: ['How do recurring tasks work?', 'What can the command bar do?', 'Help me plan my week'],
 };
 const DEFAULT_SUGGESTIONS = ['Summarize what this portal can do', 'What can you help me with here?'];
+
+// Workspaces whose Claude command bars the panel can drive directly.
+const ACTIONABLE = new Set(['finance', 'wealth', 'kia', 'trading']);
+// Heuristic: does this read like an instruction to add/log/change something?
+const ACTION_RE = /^\s*(add|log|set|create|new|record|put|update|switch|remove|delete|sold|sell|sale|bought|buy|long|short|enter|deduct)\b/i;
 
 export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose }: AskClaudePanelProps) {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -58,7 +63,23 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
     setBusy(true);
     setError(null);
     try {
-      const { reply } = await api.askAi(next, workspace);
+      // In an action-capable workspace, an add/log/set message is applied
+      // directly via that workspace's parser. If nothing was applied (it
+      // wasn't really an action), fall back to a normal chat answer.
+      let reply: string;
+      if (workspace && ACTIONABLE.has(workspace) && ACTION_RE.test(trimmed)) {
+        const r = await api.aiAct(workspace, trimmed);
+        if (r.applied.length > 0) {
+          const lines = [r.reply, r.applied.map((a) => `• ${a}`).join('\n'), r.skipped.length ? `Skipped: ${r.skipped.join('; ')}` : '']
+            .filter(Boolean)
+            .join('\n');
+          reply = `${lines}\n\n(Refresh the screen to see the update.)`;
+        } else {
+          reply = (await api.askAi(next, workspace)).reply;
+        }
+      } else {
+        reply = (await api.askAi(next, workspace)).reply;
+      }
       setMessages([...next, { role: 'assistant', content: reply }]);
       api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => { /* keep */ });
     } catch (e) {
@@ -127,7 +148,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.length === 0 && !busy && (
             <div style={{ color: '#aebcd8', fontSize: 13, lineHeight: 1.6 }}>
-              <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the portal.` : 'Ask anything about the portal, your workflow, trading, or finances.'} Powered by Claude Sonnet.</p>
+              <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the portal.` : 'Ask anything about the portal, your workflow, trading, or finances.'}{workspace && ACTIONABLE.has(workspace) ? ' I can also add things for you here — just say what to log.' : ''} Powered by Claude Sonnet.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
                 {suggestions.map((s) => (
                   <button key={s} onClick={() => void send(s)} style={chip(theme)}>{s}</button>
