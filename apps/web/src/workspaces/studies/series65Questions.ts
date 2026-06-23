@@ -1334,7 +1334,7 @@ export const SERIES65_QUESTIONS: Series65Question[] = [
         "text": "Average prime rate"
       }
     ],
-    "answer": "C"
+    "answer": "D"
   },
   {
     "id": 56,
@@ -4238,7 +4238,7 @@ export const SERIES65_QUESTIONS: Series65Question[] = [
         "text": "a Province of Ontario library construction bond"
       }
     ],
-    "answer": "A"
+    "answer": "C"
   },
   {
     "id": 177,
