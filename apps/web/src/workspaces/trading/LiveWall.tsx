@@ -1,0 +1,336 @@
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { api, ApiError } from '../../api/client';
+import { useResponsive } from '../../hooks/useMediaQuery';
+import { usePrivacy } from '../../privacy/privacy';
+import type { LiveTrade, LiveWall as LiveWallData } from '../../api/types';
+
+// Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
+// so the screen is self-contained, the same way Kia/Wealth screens own their
+// palette.
+const GOLD = '#EBCB74';
+const GREEN = '#35c47b';
+const AMBER = '#e0a23a';
+const RED = '#ef5468';
+const TEXT = '#eef3ff';
+const MUTED = '#9fb0d6';
+const FAINT = '#6f84b0';
+const CARD = 'rgba(13,31,68,.5)';
+const PANEL = 'rgba(11,26,58,.5)';
+const BORDER = '#16294f';
+const BORDER2 = '#1c3a7a';
+
+const REFRESH_MS = 30_000;
+
+const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US');
+
+// Prices span forex (1.08425), indices (38,958), and crypto (64,255). Show
+// thousands with separators and few decimals; sub-1000 prices keep precision.
+function fmtPrice(n: number | null): string {
+  if (n == null) return '—';
+  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return String(Number(n.toFixed(5)));
+}
+
+const ET = 'America/New_York';
+function etTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString('en-US', {
+    timeZone: ET,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+function etSince(ms: number | null): string {
+  if (ms == null) return '—';
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return m ? `${h}h ${m}m ago` : `${h}h ago`;
+}
+
+// Slippage is favorable when the fill beat the planned entry: a long filled
+// below plan, or a short filled above plan.
+function slippageFavorable(t: LiveTrade): boolean | null {
+  if (t.slippage == null) return null;
+  if (t.slippage === 0) return true;
+  return t.side === 'long' ? t.slippage < 0 : t.slippage > 0;
+}
+
+export function LiveWall() {
+  const { isPhone } = useResponsive();
+  const { privacy } = usePrivacy();
+  const [data, setData] = useState<LiveWallData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [hideMoney, setHideMoney] = useState(false);
+  const firstLoad = useRef(true);
+
+  const load = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const d = await api.liveWall();
+      setData(d);
+      setLoadError(null);
+    } catch (e) {
+      if (firstLoad.current) {
+        setLoadError(e instanceof ApiError ? e.message : 'Failed to load the Live Wall');
+      }
+    } finally {
+      firstLoad.current = false;
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    const id = window.setInterval(() => void load(), REFRESH_MS);
+    return () => window.clearInterval(id);
+  }, [load]);
+
+  if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
+  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the wall…</div>;
+
+  const showMoney = data.canSeeBalances && !privacy && !hideMoney;
+  const isSample = data.source === 'sample';
+
+  return (
+    <div style={{ maxWidth: 1280, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Live Wall</h2>
+            <span style={isSample ? sampledPill : livePill}>{isSample ? 'Sample data' : 'Live'}</span>
+          </div>
+          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
+            Open positions across your brokers — planned entry vs. actual fill, slippage, TP/SL, and open P/L.
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>
+            Updated {etTime(data.generatedAt)} ET
+          </span>
+          {data.canSeeBalances && (
+            <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>
+              {hideMoney ? 'Show $' : 'Hide $'}
+            </button>
+          )}
+          <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+      </div>
+
+      {/* Broker health strip */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+        {data.brokers.map((b) => {
+          const color = !b.configured ? FAINT : b.ok ? GREEN : RED;
+          const state = !b.configured ? 'unconfigured' : b.ok ? `${b.count} open` : 'error';
+          return (
+            <div key={b.broker} style={brokerChip} title={b.error ?? `${b.name} — ${b.platform}`}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flex: 'none' }} />
+              <span style={{ fontWeight: 600, color: TEXT }}>{b.name}</span>
+              <span style={{ color: MUTED }}>· {state}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {data.note && (
+        <div style={isSample ? infoBanner : warnBanner}>{data.note}</div>
+      )}
+
+      {/* Trade cards */}
+      {data.trades.length === 0 ? (
+        <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
+          No open positions right now. New fills appear here automatically.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>
+          {data.trades.map((t) => (
+            <TradeCard key={t.id} t={t} showMoney={showMoney} canSeeBalances={data.canSeeBalances} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TradeCard({
+  t,
+  showMoney,
+  canSeeBalances,
+}: {
+  t: LiveTrade;
+  showMoney: boolean;
+  canSeeBalances: boolean;
+}) {
+  const long = t.side === 'long';
+  const sideColor = long ? GREEN : RED;
+  const fav = slippageFavorable(t);
+  const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
+
+  let plNode: React.ReactNode;
+  if (!canSeeBalances) {
+    plNode = <span style={{ fontSize: 11, color: FAINT }}>P/L hidden</span>;
+  } else if (t.unrealizedPl == null) {
+    plNode = <span style={{ fontSize: 13, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>—</span>;
+  } else {
+    const up = t.unrealizedPl >= 0;
+    plNode = (
+      <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: up ? GREEN : RED }}>
+        {showMoney ? `${up ? '+' : ''}${usd(t.unrealizedPl)}` : '•••••'}
+      </span>
+    );
+  }
+
+  return (
+    <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${sideColor}` }}>
+      {/* Header row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px 9px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
+          <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
+        </div>
+        <span style={brokerTag}>{t.brokerName}</span>
+      </div>
+
+      {/* Entry: planned -> fill, with slippage */}
+      <div style={{ padding: '0 14px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <Field label="Planned" value={fmtPrice(t.plannedEntry)} />
+          <span style={{ color: FAINT, fontSize: 13 }}>→</span>
+          <Field label="Fill" value={fmtPrice(t.entryPrice)} strong />
+          {t.slippage != null && (
+            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: slipColor, fontFamily: "'IBM Plex Mono', monospace" }} title="Fill minus planned entry">
+              {t.slippage > 0 ? '+' : ''}
+              {fmtPrice(t.slippage)} slip
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* TP / SL / current */}
+      <div style={{ display: 'flex', gap: 14, padding: '0 14px 10px', flexWrap: 'wrap' }}>
+        <Field label="TP" value={fmtPrice(t.takeProfit)} color={GREEN} />
+        <Field label="SL" value={fmtPrice(t.stopLoss)} color={RED} />
+        {t.currentPrice != null && <Field label="Mark" value={fmtPrice(t.currentPrice)} />}
+        <Field label="Size" value={String(t.units)} />
+      </div>
+
+      {/* Strategy / timeframe */}
+      {(t.strategy || t.timeframe) && (
+        <div style={{ display: 'flex', gap: 6, padding: '0 14px 10px', flexWrap: 'wrap' }}>
+          {t.timeframe && <span style={metaChip}>{t.timeframe}</span>}
+          {t.strategy && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}>{t.strategy}</span>}
+        </div>
+      )}
+
+      {/* Footer: P/L + opened */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>Open P/L</span>
+          {plNode}
+        </div>
+        <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }} title={t.openedAt ? `${etTime(t.openedAt)} ET` : ''}>
+          {etSince(t.openedAt)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value, strong, color }: { label: string; value: string; strong?: boolean; color?: string }) {
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{label}</span>
+      <span style={{ fontSize: strong ? 14 : 12.5, fontWeight: strong ? 700 : 500, color: color ?? TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{value}</span>
+    </span>
+  );
+}
+
+const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12 };
+const ghostBtn: CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 600,
+  color: '#dfe7fa',
+  background: 'rgba(255,255,255,.05)',
+  border: `1px solid ${BORDER2}`,
+  padding: '7px 12px',
+  borderRadius: 7,
+  cursor: 'pointer',
+};
+const goldBtn: CSSProperties = {
+  border: 'none',
+  background: `linear-gradient(180deg,${GOLD},${'#C9A24B'})`,
+  color: '#0c2768',
+  fontWeight: 700,
+  fontSize: 11.5,
+  padding: '8px 14px',
+  borderRadius: 7,
+  cursor: 'pointer',
+};
+const sideBadge: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 800,
+  letterSpacing: '0.6px',
+  borderRadius: 4,
+  padding: '2px 6px',
+};
+const brokerTag: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  color: MUTED,
+  background: 'rgba(255,255,255,.04)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 5,
+  padding: '3px 7px',
+};
+const brokerChip: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  fontSize: 11.5,
+  background: PANEL,
+  border: `1px solid ${BORDER}`,
+  borderRadius: 8,
+  padding: '7px 11px',
+};
+const metaChip: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 600,
+  color: MUTED,
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 5,
+  padding: '3px 8px',
+};
+const livePill: CSSProperties = {
+  fontSize: 9.5,
+  fontWeight: 700,
+  letterSpacing: '0.6px',
+  textTransform: 'uppercase',
+  color: GREEN,
+  border: `1px solid ${GREEN}`,
+  borderRadius: 5,
+  padding: '2px 7px',
+};
+const sampledPill: CSSProperties = { ...livePill, color: GOLD, border: `1px solid ${GOLD}` };
+const infoBanner: CSSProperties = {
+  marginBottom: 14,
+  fontSize: 12.5,
+  color: '#f3e3b8',
+  background: 'rgba(235,203,116,.08)',
+  border: '1px solid rgba(235,203,116,.35)',
+  borderRadius: 8,
+  padding: '9px 12px',
+};
+const warnBanner: CSSProperties = {
+  marginBottom: 14,
+  fontSize: 12.5,
+  color: '#ffb4ab',
+  background: 'rgba(239,84,104,.1)',
+  border: '1px solid rgba(239,84,104,.4)',
+  borderRadius: 8,
+  padding: '9px 12px',
+};

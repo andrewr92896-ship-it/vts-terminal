@@ -217,3 +217,46 @@ export interface BrokerStatus {
   balance: string | null;
   lastSyncAt: string | null;
 }
+
+// ---- Trading — Live Wall (mirror of apps/api/src/trading/types.ts) ----
+export type TradeSide = 'long' | 'short';
+export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
+
+export interface LiveTrade {
+  id: string;
+  broker: BrokerKey;
+  brokerName: string;
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  plannedEntry: number | null;
+  entryPrice: number;
+  currentPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  slippage: number | null;
+  unrealizedPl: number | null; // null when balances are hidden
+  strategy: string | null;
+  timeframe: string | null;
+  openedAt: number | null;
+}
+
+export interface BrokerLiveResult {
+  broker: BrokerKey;
+  name: string;
+  platform: string;
+  kind: string;
+  configured: boolean;
+  ok: boolean;
+  error: string | null;
+  count: number;
+}
+
+export interface LiveWall {
+  source: 'live' | 'sample';
+  generatedAt: number;
+  canSeeBalances: boolean;
+  brokers: BrokerLiveResult[];
+  trades: LiveTrade[];
+  note: string | null;
+}

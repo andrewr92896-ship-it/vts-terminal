@@ -1,6 +1,7 @@
 import type {
   AdminUser,
   BrokerStatus,
+  LiveWall,
   KiaDashboard,
   RemovedKiaDeal,
   RemovedTodoItem,
@@ -116,6 +117,9 @@ export const api = {
   },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');
+  },
+  liveWall(): Promise<LiveWall> {
+    return request('/api/trading/live');
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');
