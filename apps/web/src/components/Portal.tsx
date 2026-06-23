@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import type { BrokerStatus, RoleKey } from '../api/types';
@@ -28,10 +28,22 @@ import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
 import { WealthClients } from '../workspaces/wealth/WealthClients';
-import { Flashcards } from '../workspaces/studies/Flashcards';
-import { Series65Quiz } from '../workspaces/studies/Series65Quiz';
-import { StudyHub } from '../workspaces/studies/StudyHub';
-import { StudyProgress } from '../workspaces/studies/StudyProgress';
+
+// The Studies screens bundle the 400-question Series 65 database, so they're
+// code-split into a lazy chunk that only loads when the Studies workspace is
+// opened — keeping the initial app load lean for everyone else.
+const Flashcards = lazy(() =>
+  import('../workspaces/studies/Flashcards').then((m) => ({ default: m.Flashcards })),
+);
+const Series65Quiz = lazy(() =>
+  import('../workspaces/studies/Series65Quiz').then((m) => ({ default: m.Series65Quiz })),
+);
+const StudyHub = lazy(() =>
+  import('../workspaces/studies/StudyHub').then((m) => ({ default: m.StudyHub })),
+);
+const StudyProgress = lazy(() =>
+  import('../workspaces/studies/StudyProgress').then((m) => ({ default: m.StudyProgress })),
+);
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder. `onNavigate` lets a screen jump to another tab.
@@ -198,7 +210,9 @@ export function Portal() {
           padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
         }}
       >
-        {renderScreen(screen, theme, setScreen) ?? <Screen screen={screen} theme={theme} />}
+        <Suspense fallback={<div style={{ padding: 24, color: '#8ea3cc', fontSize: 13 }}>Loading…</div>}>
+          {renderScreen(screen, theme, setScreen) ?? <Screen screen={screen} theme={theme} />}
+        </Suspense>
       </main>
 
       <footer
