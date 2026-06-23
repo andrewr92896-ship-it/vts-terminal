@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { api, ApiError } from '../../api/client';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -59,6 +60,10 @@ export function StudyGame({ theme }: { theme: Theme }) {
   const [outcome, setOutcome] = useState<boolean | null>(null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
+  // Claude tutor (per-question explanation)
+  const [tutorText, setTutorText] = useState<string | null>(null);
+  const [tutorBusy, setTutorBusy] = useState(false);
+  const [tutorError, setTutorError] = useState<string | null>(null);
 
   useEffect(() => {
     saveGame(storageKey, game);
@@ -82,6 +87,30 @@ export function StudyGame({ theme }: { theme: Theme }) {
     setOutcome(null);
     setScoreChange(null);
     setLevelEvent(null);
+    setTutorText(null);
+    setTutorError(null);
+  }
+
+  async function explainWithClaude() {
+    if (!current || tutorBusy) return;
+    setTutorBusy(true);
+    setTutorError(null);
+    try {
+      const { reply } = await api.studyTutor({
+        explain: { stem: current.q.stem, options: current.q.options, answer: current.q.answer, topic: current.topic },
+      });
+      setTutorText(reply);
+    } catch (e) {
+      setTutorError(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Could not reach the tutor',
+      );
+    } finally {
+      setTutorBusy(false);
+    }
   }
 
   // Load a question on mount and whenever the category mode changes.
@@ -333,9 +362,27 @@ export function StudyGame({ theme }: { theme: Theme }) {
                   {explanation}
                 </div>
               )}
-              <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
-                Next question ›
-              </button>
+              {tutorText && (
+                <div style={{ fontSize: 12.5, color: '#dfe7fa', lineHeight: 1.6, marginBottom: 12, padding: '11px 13px', background: 'rgba(255,255,255,.04)', border: `1px solid ${theme.navBorder}`, borderLeft: `3px solid ${theme.accent}`, borderRadius: 10, whiteSpace: 'pre-wrap' }}>
+                  <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, marginBottom: 5 }}>Claude tutor · Sonnet</div>
+                  {tutorText}
+                </div>
+              )}
+              {tutorError && (
+                <div onClick={() => setTutorError(null)} style={{ fontSize: 12, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '8px 11px', marginBottom: 12, cursor: 'pointer' }}>
+                  {tutorError} — click to dismiss.
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
+                  Next question ›
+                </button>
+                {!tutorText && (
+                  <button onClick={explainWithClaude} disabled={tutorBusy} style={{ ...ghostBtn(theme), opacity: tutorBusy ? 0.6 : 1 }}>
+                    {tutorBusy ? 'Asking Claude…' : '✦ Explain with Claude'}
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>

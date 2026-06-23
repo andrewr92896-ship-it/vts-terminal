@@ -62,6 +62,24 @@ function systemPrompt(workspaceKey: string | undefined, displayName: string): st
     .join(' ');
 }
 
+const TUTOR_SYSTEM = [
+  'You are a patient Series 65 (Uniform Investment Adviser Law Exam) tutor.',
+  'Explain clearly and concisely for an exam candidate: the key concept, why the correct answer is right and the tempting wrong ones are wrong, and a short memory hook when it helps.',
+  'Keep it under 160 words. Plain text, no markdown headers.',
+].join(' ');
+
+const tutorSchema = z.object({
+  explain: z
+    .object({
+      stem: z.string().trim().min(1).max(1500),
+      options: z.array(z.object({ label: z.string().max(2), text: z.string().max(600) })).max(8),
+      answer: z.string().trim().max(2),
+      topic: z.string().trim().max(60).optional(),
+    })
+    .optional(),
+  ask: z.string().trim().min(1).max(500).optional(),
+}).refine((v) => v.explain || v.ask, { message: 'Provide a question to explain or ask' });
+
 const KIA_SYSTEM = [
   'You are a Kia product expert helping a salesperson on the floor at a Kia dealership.',
   'Answer questions about Kia models, trims, specs, towing and payload, EV range and charging, MPG, key features, incentives, and basic troubleshooting — accurately and concisely, the way you would brief a salesperson before they walk back to a customer.',
@@ -88,6 +106,38 @@ export async function aiRoutes(app: FastifyInstance) {
       await enforceAiLimit(user.id, 'ask');
       const text = await chatClaude(parsed.data.messages, systemPrompt(parsed.data.workspace, user.displayName));
       return { reply: text };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
+    }
+  });
+
+  // Series 65 study tutor — explain a question or answer a study question.
+  app.post('/api/ai/tutor', { preHandler: requireWorkspace('studies') }, async (request, reply) => {
+    if (!aiConfigured()) {
+      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    }
+    const parsed = tutorSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Provide a question to explain or ask' });
+    }
+    let prompt: string;
+    if (parsed.data.explain) {
+      const e = parsed.data.explain;
+      const opts = e.options.map((o) => `${o.label}) ${o.text}`).join('\n');
+      prompt = [
+        e.topic ? `Topic: ${e.topic}.` : '',
+        `Question: ${e.stem}`,
+        `Options:\n${opts}`,
+        `The correct answer is ${e.answer}.`,
+        'Explain why that answer is correct and why the others are wrong.',
+      ].filter(Boolean).join('\n');
+    } else {
+      prompt = parsed.data.ask!;
+    }
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_tutor');
+      return { reply: await chatClaude([{ role: 'user', content: prompt }], TUTOR_SYSTEM) };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });

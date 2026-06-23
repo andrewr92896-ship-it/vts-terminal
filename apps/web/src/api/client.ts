@@ -158,6 +158,12 @@ export const api = {
   askKia(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<{ reply: string }> {
     return request('/api/ai/kia', { method: 'POST', body: JSON.stringify({ messages }) });
   },
+  studyTutor(body: {
+    explain?: { stem: string; options: { label: string; text: string }[]; answer: string; topic?: string };
+    ask?: string;
+  }): Promise<{ reply: string }> {
+    return request('/api/ai/tutor', { method: 'POST', body: JSON.stringify(body) });
+  },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');
   },
