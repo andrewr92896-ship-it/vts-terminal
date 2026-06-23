@@ -29,6 +29,7 @@ export function PayPlanEditor({
     commissionPct: number;
     commissionFrontPct: number;
     commissionBackPct: number;
+    miniAmount: number;
     reviewRequired: boolean;
     reviewReqPct: number;
     bonusTiers: { units: number; amount: number }[];
@@ -40,6 +41,7 @@ export function PayPlanEditor({
   const [commission, setCommission] = useState(String(+(plan.commissionRate * 100).toFixed(2)));
   const [frontPct, setFrontPct] = useState(String(+(plan.frontRate * 100).toFixed(2)));
   const [backPct, setBackPct] = useState(String(+(plan.backRate * 100).toFixed(2)));
+  const [mini, setMini] = useState(String(plan.miniAmount ?? 200));
   const [goal, setGoal] = useState(String(goalUnits));
   const [reviewRequired, setReviewRequired] = useState(plan.reviewRequired);
   const [reviewReqPct, setReviewReqPct] = useState(String(plan.reviewReqPct));
@@ -82,6 +84,7 @@ export function PayPlanEditor({
       commissionPct: Number.isFinite(c) && c >= 0 ? c : 0,
       commissionFrontPct: Number.isFinite(f) && f >= 0 ? f : 0,
       commissionBackPct: Number.isFinite(b) && b >= 0 ? b : 0,
+      miniAmount: Math.max(0, Math.round(Number(mini)) || 0),
       reviewRequired,
       reviewReqPct: Number(reviewReqPct) || 0,
       bonusTiers: cleanTiers,
@@ -160,6 +163,19 @@ export function PayPlanEditor({
                 </p>
               </div>
             )}
+          </div>
+
+          {/* Mini (minimum commission per deal) */}
+          <div>
+            <label style={label}>Mini (minimum per deal)</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: '#9aa0a8', fontSize: 13 }}>$</span>
+              <input value={mini} onChange={(e) => setMini(e.target.value)} type="number" min="0" step="25" style={{ ...input, width: 120 }} />
+              <span style={{ color: '#9aa0a8', fontSize: 13 }}>per deal</span>
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#7d828a' }}>
+              Every deal pays at least this much. When the commission on a thin deal comes out lower, you still earn the mini.
+            </p>
           </div>
 
           {/* Review requirement */}

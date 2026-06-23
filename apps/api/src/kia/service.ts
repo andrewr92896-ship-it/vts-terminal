@@ -24,6 +24,7 @@ export interface PayPlan {
   reviewRequired: boolean; // whether the bonus needs a minimum review %
   reviewReqPct: number; // that minimum, when required
   bonusTiers: BonusTier[]; // non-stacking; highest tier reached is earned
+  miniAmount: number; // minimum commission per deal (a "mini"), whole dollars
 }
 
 const DEFAULT_BONUS_TIERS: BonusTier[] = [
@@ -40,17 +41,22 @@ export const DEFAULT_PAY_PLAN: PayPlan = {
   reviewRequired: true,
   reviewReqPct: 50,
   bonusTiers: DEFAULT_BONUS_TIERS,
+  miniAmount: 200,
 };
 
 // Commission for one deal under the given plan. In split mode a deal without a
-// recorded front/back breakdown is treated as all front-end.
+// recorded front/back breakdown is treated as all front-end. Every deal pays at
+// least the plan's "mini" (minimum commission floor).
 function dealCommission(deal: Pick<KiaDealRow, 'profit' | 'frontProfit' | 'backProfit'>, plan: PayPlan): number {
+  let raw: number;
   if (plan.commissionMode === 'split') {
     const front = deal.frontProfit ?? deal.profit;
     const back = deal.backProfit ?? 0;
-    return front * plan.frontRate + back * plan.backRate;
+    raw = front * plan.frontRate + back * plan.backRate;
+  } else {
+    raw = deal.profit * plan.commissionRate;
   }
-  return deal.profit * plan.commissionRate;
+  return Math.max(plan.miniAmount, raw);
 }
 
 function commissionForDeals(deals: KiaDealRow[], plan: PayPlan): number {
@@ -88,6 +94,7 @@ function parsePayPlan(row: KiaSettingsRow | undefined): PayPlan {
     reviewRequired: row.reviewRequired ?? true,
     reviewReqPct: row.reviewReqPct ?? 50,
     bonusTiers: [...tiers].sort((a, b) => b.units - a.units),
+    miniAmount: row.miniAmount ?? 200,
   };
 }
 
@@ -455,11 +462,15 @@ export async function updatePayPlan(
     reviewRequired?: boolean;
     reviewReqPct?: number;
     bonusTiers?: BonusTier[];
+    miniAmount?: number;
   },
 ): Promise<void> {
   await ensureKiaSeed(userId);
   const patch: Partial<typeof kiaSettings.$inferInsert> = { updatedAt: new Date() };
   const toBp = (pct: number) => Math.round(Math.max(0, Math.min(100, pct)) * 100);
+  if (input.miniAmount != null) {
+    patch.miniAmount = Math.round(Math.max(0, Math.min(100000, input.miniAmount)));
+  }
 
   if (input.commissionMode != null) patch.commissionMode = input.commissionMode;
   if (input.commissionPct != null) patch.commissionBp = toBp(input.commissionPct);

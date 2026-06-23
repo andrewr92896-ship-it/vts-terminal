@@ -180,6 +180,7 @@ export interface KiaPayPlan {
   reviewRequired: boolean;
   reviewReqPct: number;
   bonusTiers: KiaBonusTier[];
+  miniAmount: number; // minimum commission per deal (a "mini"), whole dollars
 }
 
 export interface KiaDashboard {

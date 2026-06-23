@@ -115,6 +115,10 @@ export const kiaSettings = sqliteTable('kia_settings', {
   commissionBp: integer('commission_bp').notNull().default(1350),
   commissionFrontBp: integer('commission_front_bp').notNull().default(0),
   commissionBackBp: integer('commission_back_bp').notNull().default(0),
+  // Minimum commission per deal in whole US dollars (a "mini"): when the
+  // percentage on a thin deal comes out lower, the salesperson still earns
+  // this floor. Defaults to $200.
+  miniAmount: integer('mini_amount').notNull().default(200),
   // Whether the unit bonus requires a minimum review percentage at all.
   reviewRequired: integer('review_required', { mode: 'boolean' }).notNull().default(true),
   reviewReqPct: integer('review_req_pct').notNull().default(50),
