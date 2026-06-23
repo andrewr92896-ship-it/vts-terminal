@@ -6,7 +6,7 @@ import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy, maskName } from '../../privacy/privacy';
 import { PayPlanEditor } from './PayPlanEditor';
 import { useDealership } from './dealership';
-import type { KiaDashboard as Dash, RemovedKiaDeal } from '../../api/types';
+import type { KiaDashboard as Dash, RemovedKiaDeal, TodoItem } from '../../api/types';
 
 const RED = '#BB162B';
 const RED2 = '#8d0f20';
@@ -42,6 +42,11 @@ export function KiaDashboard() {
   const [back, setBack] = useState('');
   const [date, setDate] = useState(etToday());
 
+  // Priority tasks from the shared To Do list, surfaced here so the day's
+  // priorities are visible right on the sales dashboard. Same data/endpoints
+  // as the To Do List workspace, so toggles stay in sync.
+  const [priority, setPriority] = useState<TodoItem[]>([]);
+
   // Claude quick-log (plain-English deal note)
   const [note, setNote] = useState('');
   const [noteBusy, setNoteBusy] = useState(false);
@@ -53,10 +58,29 @@ export function KiaDashboard() {
       .kiaDashboard()
       .then((d) => alive && setDash(d))
       .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load dashboard'));
+    // Pull the Priority section from the shared To Do list (non-critical).
+    api
+      .getTodo()
+      .then((r) => alive && setPriority(r.sections.find((s) => s.title === 'Priority')?.items ?? []))
+      .catch(() => {
+        /* dashboard still works without it */
+      });
     return () => {
       alive = false;
     };
   }, []);
+
+  async function togglePriority(id: string) {
+    setBusy(true);
+    try {
+      const r = await api.toggleTodoItem(id);
+      setPriority(r.sections.find((s) => s.title === 'Priority')?.items ?? []);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Action failed');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function run(action: Promise<Dash>) {
     setBusy(true);
@@ -261,6 +285,30 @@ export function KiaDashboard() {
       {actionError && (
         <div onClick={() => setActionError(null)} style={bannerStyle}>
           {actionError} — refreshed. Click to dismiss.
+        </div>
+      )}
+
+      {/* Priority tasks pulled from the shared To Do list */}
+      {priority.length > 0 && (
+        <div style={{ ...panel, marginBottom: 14, borderColor: 'rgba(224,162,58,.45)' }}>
+          <div style={{ ...panelLabel, display: 'flex', alignItems: 'center' }}>
+            <span style={{ marginRight: 6 }}>⭐</span>Priority
+            <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: '#7d828a' }}>From To Do</span>
+          </div>
+          {priority.map((item) => (
+            <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '6px 0', borderBottom: `1px solid ${BORDER}` }}>
+              <button
+                onClick={() => !busy && togglePriority(item.id)}
+                title={item.done ? 'Mark not done' : 'Mark done'}
+                style={{ flex: 'none', width: 17, height: 17, marginTop: 1, borderRadius: 5, border: `1.5px solid ${item.done ? AMBER : '#3a3d44'}`, background: item.done ? AMBER : 'transparent', color: '#15171b', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
+              >
+                {item.done ? '✓' : ''}
+              </button>
+              <div style={{ fontSize: 12.5, lineHeight: 1.4, color: item.done ? '#7d828a' : '#eceef0', textDecoration: item.done ? 'line-through' : 'none' }}>
+                {item.text}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
