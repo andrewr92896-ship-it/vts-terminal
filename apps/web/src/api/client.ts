@@ -355,6 +355,7 @@ export const api = {
       commissionPct?: number;
       commissionFrontPct?: number;
       commissionBackPct?: number;
+      miniAmount?: number;
       reviewRequired?: boolean;
       reviewReqPct?: number;
       bonusTiers?: { units: number; amount: number }[];

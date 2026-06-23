@@ -20,6 +20,7 @@ const payPlanSchema = z
     commissionPct: z.coerce.number().min(0).max(100).optional(),
     commissionFrontPct: z.coerce.number().min(0).max(100).optional(),
     commissionBackPct: z.coerce.number().min(0).max(100).optional(),
+    miniAmount: z.coerce.number().int().min(0).max(100000).optional(),
     reviewRequired: z.boolean().optional(),
     reviewReqPct: z.coerce.number().int().min(0).max(100).optional(),
     bonusTiers: z
