@@ -192,6 +192,13 @@ export interface KiaDashboard {
   payPlan: KiaPayPlan;
 }
 
+// Result of logging a deal from a plain-English note via Claude.
+export interface KiaDealParseResult {
+  dashboard: KiaDashboard | null; // refreshed when a deal was logged
+  logged: boolean;
+  reply: string;
+}
+
 // ---- Vitalis Wealth Management ----
 export type WealthClientStatus = 'prospect' | 'onboarding' | 'active' | 'inactive';
 

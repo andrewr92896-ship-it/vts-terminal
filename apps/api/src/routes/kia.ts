@@ -10,6 +10,9 @@ import {
   updatePayPlan,
   updateSettings,
 } from '../kia/service.js';
+import { parseDeal } from '../kia/dealParser.js';
+import { aiConfigured } from '../ai/claude.js';
+import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const payPlanSchema = z
   .object({
@@ -51,6 +54,8 @@ const dealSchema = z
   .refine((v) => v.profit != null || v.frontProfit != null || v.backProfit != null, {
     message: 'Profit is required',
   });
+
+const parseSchema = z.object({ note: z.string().trim().min(1).max(500) });
 
 // All fields optional for editing an existing deal.
 const dealEditSchema = z
@@ -109,6 +114,21 @@ export async function kiaRoutes(app: FastifyInstance) {
     const userId = request.currentUser!.id;
     await addDeal(userId, parsed.data);
     return getDashboard(userId, monthOf(request));
+  });
+
+  // Log a deal from a plain-English note via Claude (Sonnet).
+  app.post('/api/kia/deals/parse', guard, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parsed = parseSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Type a deal to log' });
+    const userId = request.currentUser!.id;
+    try {
+      await enforceAiLimit(userId, 'kia_deal');
+      return await parseDeal(userId, parsed.data.note);
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not parse deal' });
+    }
   });
 
   app.patch('/api/kia/deals/:id', guard, async (request, reply) => {

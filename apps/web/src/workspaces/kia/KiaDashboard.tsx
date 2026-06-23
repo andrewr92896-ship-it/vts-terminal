@@ -42,6 +42,11 @@ export function KiaDashboard() {
   const [back, setBack] = useState('');
   const [date, setDate] = useState(etToday());
 
+  // Claude quick-log (plain-English deal note)
+  const [note, setNote] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteReply, setNoteReply] = useState<string | null>(null);
+
   useEffect(() => {
     let alive = true;
     api
@@ -67,6 +72,29 @@ export function KiaDashboard() {
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function quickLog() {
+    const text = note.trim();
+    if (!text || noteBusy) return;
+    setNoteBusy(true);
+    setActionError(null);
+    try {
+      const r = await api.kiaParseDeal(text);
+      if (r.dashboard) setDash(r.dashboard);
+      setNoteReply(r.reply);
+      if (r.logged) setNote('');
+    } catch (e) {
+      setActionError(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Could not log the deal',
+      );
+    } finally {
+      setNoteBusy(false);
     }
   }
 
@@ -240,6 +268,32 @@ export function KiaDashboard() {
           placeholder="Command bar arrives in Stage 4 (add deal Sportage LX 1850 for Reyes · set goal 12 · set reviews 60% · summary)"
           style={{ ...inputBase, color: '#6b7079', fontFamily: "'IBM Plex Mono', monospace" }}
         />
+      </div>
+
+      {/* Claude quick-log */}
+      <div style={{ ...panel, marginBottom: 12 }}>
+        <div style={{ ...panelLabel, display: 'flex', alignItems: 'center' }}>
+          Quick log
+          <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: '#7d828a' }}>Sonnet</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && quickLog()}
+            placeholder='Describe the deal, e.g. "Sold a used Sportage to the Garcias, $1,800 front, $700 back"'
+            style={{ ...inputBase, flex: 1 }}
+          />
+          <button onClick={quickLog} disabled={noteBusy || !note.trim()} style={{ ...redBtn, opacity: noteBusy || !note.trim() ? 0.6 : 1 }}>
+            {noteBusy ? '…' : 'Log'}
+          </button>
+        </div>
+        {noteReply && (
+          <div style={{ marginTop: 8, fontSize: 11.5, color: '#a7d8bf', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: GREEN }}>✓</span> {noteReply}
+            <button onClick={() => setNoteReply(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#6b7079', fontSize: 10.5, cursor: 'pointer' }}>dismiss</button>
+          </div>
+        )}
       </div>
 
       {/* Manual deal entry */}
