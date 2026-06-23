@@ -11,6 +11,7 @@ import {
 } from '../trading/trades.js';
 import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
+import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import {
   addConnection,
   listConnections,
@@ -92,6 +93,26 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.get('/api/trading/history', read, async (request) => {
     const u = request.currentUser!;
     return getHistory(u.id, !!u.viewBrokerage);
+  });
+
+  // ---- Account Metrics (prop-firm challenge) ----
+  app.get('/api/trading/challenge', read, async (request) => {
+    const u = request.currentUser!;
+    return getChallenge(u.id, !!u.viewBrokerage);
+  });
+
+  app.patch('/api/trading/challenge', write, async (request, reply) => {
+    const parsed = challengeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the challenge settings and try again' });
+    }
+    const u = request.currentUser!;
+    return updateChallenge(u.id, parsed.data, !!u.viewBrokerage);
+  });
+
+  app.post('/api/trading/challenge/sync-equity', write, async (request) => {
+    const u = request.currentUser!;
+    return syncEquityFromTradeLog(u.id, !!u.viewBrokerage);
   });
 
   app.post('/api/trading/trades', write, async (request, reply) => {
@@ -238,6 +259,23 @@ const editConnSchema = z
     label: z.string().trim().min(1).max(80).optional(),
     active: z.boolean().optional(),
     creds: credsSchema.optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const pct = z.number().finite().min(0).max(100);
+const dollars = z.number().finite().min(0).max(1_000_000_000);
+const challengeSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80).optional(),
+    accountSize: dollars.optional(),
+    targetPct: pct.optional(),
+    dailyDdPct: pct.optional(),
+    maxDdPct: pct.optional(),
+    trailing: z.boolean().optional(),
+    currentEquity: dollars.optional(),
+    peakEquity: dollars.optional(),
+    dayStartEquity: dollars.optional(),
+    startedAt: z.number().int().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 

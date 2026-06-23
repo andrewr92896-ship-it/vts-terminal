@@ -350,3 +350,28 @@ export const brokerConnections = sqliteTable('broker_connections', {
 });
 
 export type BrokerConnectionRow = typeof brokerConnections.$inferSelect;
+
+// ---- Trading — prop-firm challenge (Account Metrics) ----
+// One challenge per user (the FTP-style funded-account challenge). Drawdown and
+// target percentages are stored as basis points (1000 = 10%); money is stored
+// as reals (challenge equity is tracked to the cent). Equity is maintained by
+// the trader (FTP has no API) or pulled from the Trade Log.
+export const tradingChallenges = sqliteTable('trading_challenges', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  label: text('label').notNull().default('FTP Challenge'),
+  accountSize: real('account_size').notNull().default(200000),
+  targetBp: integer('target_bp').notNull().default(1000), // profit target, 10%
+  dailyDdBp: integer('daily_dd_bp').notNull().default(400), // daily drawdown, 4%
+  maxDdBp: integer('max_dd_bp').notNull().default(600), // max/trailing drawdown, 6%
+  trailing: integer('trailing', { mode: 'boolean' }).notNull().default(true),
+  currentEquity: real('current_equity').notNull().default(200000),
+  peakEquity: real('peak_equity').notNull().default(200000), // for trailing DD
+  dayStartEquity: real('day_start_equity').notNull().default(200000), // for daily DD
+  startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingChallengeRow = typeof tradingChallenges.$inferSelect;

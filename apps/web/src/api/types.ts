@@ -284,6 +284,54 @@ export interface ConnectionInput {
   creds?: Record<string, string>;
 }
 
+// ---- Trading — Account Metrics / challenge (mirror of apps/api/src/trading/challenge.ts) ----
+export interface ChallengeMetrics {
+  profit: number | null;
+  profitPct: number;
+  targetAmount: number | null;
+  targetEquity: number | null;
+  toTarget: number | null;
+  progressPct: number;
+  maxDdAmount: number | null;
+  maxFloor: number | null;
+  maxHeadroom: number | null;
+  maxHeadroomPct: number;
+  dailyDdAmount: number | null;
+  dailyFloor: number | null;
+  dailyHeadroom: number | null;
+  dailyHeadroomPct: number;
+  status: 'active' | 'passed' | 'breached';
+  breaches: { target: boolean; daily: boolean; max: boolean };
+}
+
+export interface ChallengeData {
+  label: string;
+  trailing: boolean;
+  startedAt: number;
+  targetPct: number;
+  dailyDdPct: number;
+  maxDdPct: number;
+  canSeeBalances: boolean;
+  accountSize: number | null;
+  equity: number | null;
+  peakEquity: number | null;
+  dayStartEquity: number | null;
+  metrics: ChallengeMetrics;
+}
+
+export interface ChallengeInput {
+  label?: string;
+  accountSize?: number;
+  targetPct?: number;
+  dailyDdPct?: number;
+  maxDdPct?: number;
+  trailing?: boolean;
+  currentEquity?: number;
+  peakEquity?: number;
+  dayStartEquity?: number;
+  startedAt?: number;
+}
+
 // ---- Trading — Trade Log (mirror of apps/api/src/trading/trades.ts) ----
 export type TradeStatus = 'open' | 'closed';
 

@@ -71,6 +71,33 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  metrics: {
+    title: 'Account Metrics',
+    intro: 'Your funded-account (prop) challenge dashboard — equity vs. profit target, plus daily and max drawdown limits. FTP has no API, so you keep equity current (or pull it from your Trade Log).',
+    steps: [
+      {
+        title: 'Set up the challenge',
+        body: 'Click Edit and enter your account size, profit target %, daily drawdown %, and max drawdown % (trailing or static). Defaults match a typical $200K / 10% / 4% / 6% trailing challenge.',
+      },
+      {
+        title: 'Keep equity current',
+        body: 'Type your current equity from your prop dashboard, or click “Pull equity from Trade Log” to set it to account size + realized P/L of your closed trades since the start date.',
+      },
+      {
+        title: 'Progress to target',
+        body: 'The top card shows equity, profit, and a bar toward your profit target, with how much is left to reach it.',
+      },
+      {
+        title: 'Drawdown buffers',
+        body: 'The two gauges show how much room you have before breaching the max drawdown (trailing from your peak equity) and the daily drawdown (from the day-start equity — reset it each trading day). The status pill flips to Breached if you cross a floor, or Target Reached when you hit the goal.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Use “Hide $” or Privacy mode to mask figures. Dollar amounts only show if your account has the brokerage-view permission; percentages always show.',
+      },
+    ],
+  },
+
   history: {
     title: 'Trade History',
     intro: 'Closed trades, recorded automatically. When an open position on the Live Wall closes (the broker stops reporting it), it’s moved here with its last-seen exit price and P/L.',
