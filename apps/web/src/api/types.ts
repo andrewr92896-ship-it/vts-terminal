@@ -73,6 +73,14 @@ export interface TodoItemState {
   dueAt: number | null;
 }
 
+// Result of running a Claude command-bar instruction over the list.
+export interface TodoCommandResult {
+  sections: TodoSection[];
+  applied: string[];
+  skipped: string[];
+  reply: string;
+}
+
 export type TodoMarker = 'check' | 'dash' | 'dot';
 
 export interface TodoItem {

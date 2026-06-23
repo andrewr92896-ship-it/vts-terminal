@@ -28,6 +28,7 @@ import type {
   RemovedWealthClient,
   RoleKey,
   TodoItemState,
+  TodoCommandResult,
   TodoSection,
   User,
   WealthClientStatus,
@@ -250,6 +251,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ done: prev.done, dueAt: prev.dueAt }),
     });
+  },
+  todoCommand(command: string): Promise<TodoCommandResult> {
+    return request('/api/todo/command', { method: 'POST', body: JSON.stringify({ command }) });
   },
   removeTodoItem(
     id: string,
