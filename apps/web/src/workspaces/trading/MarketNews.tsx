@@ -9,6 +9,7 @@ import type {
   MarketNewsData,
   NewsBias,
   NewsCategory,
+  NewsDraft,
   NewsImpact,
   NewsInput,
   NewsItem,
@@ -82,6 +83,27 @@ export function MarketNews() {
   const [composing, setComposing] = useState<'news' | 'event' | null>(null);
   const [brief, setBrief] = useState<string | null>(null);
   const [briefBusy, setBriefBusy] = useState(false);
+  // Claude headline draft (from a pasted blurb)
+  const [blurb, setBlurb] = useState('');
+  const [drafting, setDrafting] = useState(false);
+  const [draft, setDraft] = useState<NewsDraft | null>(null);
+
+  async function makeDraft() {
+    const text = blurb.trim();
+    if (!text || drafting) return;
+    setDrafting(true);
+    setErr(null);
+    try {
+      const r = await api.draftNews(text);
+      setDraft(r.draft);
+      setComposing('news');
+      setBlurb('');
+    } catch (e) {
+      setErr(e instanceof ApiError ? (e.status === 503 ? 'Claude isn’t configured yet — an API key needs to be set on the server.' : e.message) : 'Could not draft a headline');
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   async function load() {
     try { setData(await api.marketNews()); setErr(null); } catch (e) { setErr(e instanceof ApiError ? e.message : 'Failed to load'); }
@@ -148,8 +170,36 @@ export function MarketNews() {
         </div>
       )}
 
+      {/* Claude headline draft from a pasted blurb */}
+      {canWrite && (
+        <div style={{ ...card, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 }}>
+            Draft a headline with Claude
+            <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", color: FAINT }}>Sonnet</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={blurb}
+              onChange={(e) => setBlurb(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && makeDraft()}
+              placeholder="Paste a blurb or article title — Claude tags category, impact & bias for you to review"
+              style={{ flex: 1, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, padding: '10px 12px', color: TEXT, fontSize: 12.5, outline: 'none' }}
+            />
+            <button onClick={makeDraft} disabled={drafting || !blurb.trim()} style={{ ...goldBtn, opacity: drafting || !blurb.trim() ? 0.6 : 1 }}>
+              {drafting ? '…' : 'Draft'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {composing === 'news' && canWrite && (
-        <NewsForm busy={busy} submitLabel="Post headline" onSubmit={async (input) => { if (await run(api.addNews(input))) setComposing(null); }} onCancel={() => setComposing(null)} />
+        <NewsForm
+          initial={draft ?? undefined}
+          busy={busy}
+          submitLabel={draft ? 'Post draft' : 'Post headline'}
+          onSubmit={async (input) => { if (await run(api.addNews(input))) { setComposing(null); setDraft(null); } }}
+          onCancel={() => { setComposing(null); setDraft(null); }}
+        />
       )}
       {composing === 'event' && canWrite && (
         <EventForm busy={busy} submitLabel="Add event" onSubmit={async (input) => { if (await run(api.addCalendarEvent(input))) setComposing(null); }} onCancel={() => setComposing(null)} />
@@ -293,7 +343,9 @@ function EventRow({ e, canWrite, busy, onSave, onRemove }: { e: CalendarEvent; c
   );
 }
 
-function NewsForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?: NewsItem; busy: boolean; submitLabel: string; onSubmit: (input: NewsInput) => void; onCancel: () => void }) {
+function NewsForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?: NewsItem | NewsDraft; busy: boolean; submitLabel: string; onSubmit: (input: NewsInput) => void; onCancel: () => void }) {
+  // A persisted item has an id; a Claude draft does not.
+  const isEdit = !!initial && 'id' in initial;
   const [title, setTitle] = useState(initial?.title ?? '');
   const [body, setBody] = useState(initial?.body ?? '');
   const [source, setSource] = useState(initial?.source ?? '');
@@ -308,7 +360,7 @@ function NewsForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?
   }
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? 'Edit headline' : 'New headline'}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{isEdit ? 'Edit headline' : initial ? 'Review Claude draft' : 'New headline'}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Headline" style={{ ...input, flex: '1 1 100%' }} />
         <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Detail / context (optional)" rows={2} style={{ ...input, flex: '1 1 100%', resize: 'vertical', fontFamily: 'inherit' }} />

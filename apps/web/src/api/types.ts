@@ -679,6 +679,17 @@ export interface NewsInput {
   publishedAt?: number;
 }
 
+// AI-drafted headline (from a pasted blurb) for review before posting.
+export interface NewsDraft {
+  title: string;
+  body: string | null;
+  source: string | null;
+  url: string | null;
+  category: NewsCategory;
+  impact: NewsImpact;
+  bias: NewsBias;
+}
+
 export interface EventInput {
   title?: string;
   country?: string | null;

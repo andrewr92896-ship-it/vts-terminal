@@ -10,6 +10,7 @@ import {
   updateTrade,
 } from '../trading/trades.js';
 import { runTradeCommand } from '../trading/tradeParser.js';
+import { draftNews } from '../trading/newsDraft.js';
 import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
@@ -192,6 +193,21 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add headline' });
     }
   });
+  // Draft a structured headline from a pasted blurb via Claude (Sonnet). Does
+  // not post — returns a draft for the user to review and submit.
+  app.post('/api/trading/news/draft', write, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parsed = newsDraftSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paste a blurb or headline' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'news_draft');
+      return { draft: await draftNews(parsed.data.blurb) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not draft a headline' });
+    }
+  });
+
   app.patch('/api/trading/news/:id', write, async (request, reply) => {
     const parsed = editNewsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Check the headline details' });
@@ -465,6 +481,7 @@ const newsFields = {
   bias: z.enum(NEWS_BIASES).optional(),
   publishedAt: ts.optional(),
 };
+const newsDraftSchema = z.object({ blurb: z.string().trim().min(1).max(1200) });
 const newsSchema = z.object({ title: z.string().trim().min(1).max(240), ...newsFields });
 const editNewsSchema = z
   .object({ title: z.string().trim().min(1).max(240).optional(), ...newsFields })

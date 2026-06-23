@@ -18,6 +18,7 @@ import type {
   StrategySession,
   StudyQuizResult,
   MarketNewsData,
+  NewsDraft,
   NewsInput,
   EventInput,
   LiveWall,
@@ -198,6 +199,9 @@ export const api = {
   },
   addNews(input: NewsInput): Promise<MarketNewsData> {
     return request('/api/trading/news', { method: 'POST', body: JSON.stringify(input) });
+  },
+  draftNews(blurb: string): Promise<{ draft: NewsDraft }> {
+    return request('/api/trading/news/draft', { method: 'POST', body: JSON.stringify({ blurb }) });
   },
   updateNews(id: string, patch: NewsInput): Promise<MarketNewsData> {
     return request(`/api/trading/news/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
