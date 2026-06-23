@@ -1,39 +1,38 @@
 import type { FastifyInstance } from 'fastify';
 import { requireWorkspace } from '../auth/middleware.js';
+import { BROKER_META, isBrokerConfigured } from '../trading/config.js';
 
 // The four broker connections shown as status dots in the Trading top bar.
-// Stage 1 reports them all as "unconfigured" — real status, balances, and
-// trade history are wired in Stage 2 once keys live in the backend .env.
-const BROKERS = [
-  { key: 'ftp', name: 'Funded Trading Plus', short: 'FTP', platform: 'Match-Trader', kind: 'Funded prop' },
-  { key: 'oanda', name: 'OANDA', short: 'OANDA', platform: 'OANDA v20', kind: 'Forex' },
-  { key: 'kraken', name: 'Kraken Pro', short: 'KRKN', platform: 'Kraken', kind: 'Crypto' },
-  { key: 'tradestation', name: 'TradeStation', short: 'TS', platform: 'TradeStation', kind: 'Stocks' },
-] as const;
-
+// Status is derived from whether credentials are present in the environment:
+// 'unconfigured' until the owner adds API keys, then 'pending' (configured but
+// not yet confirmed live — the Live Wall reports per-broker fetch health).
 export async function brokerRoutes(app: FastifyInstance) {
   // Visible to anyone who can see the Trading workspace. Balances are gated
-  // separately by the viewBrokerage flag (relevant from Stage 2).
+  // separately by the viewBrokerage flag (see the Live Wall service).
   app.get(
     '/api/brokers/status',
     { preHandler: requireWorkspace('trading') },
-    async (request) => {
-      const canSeeBalances = !!request.currentUser?.viewBrokerage;
-      return {
-        brokers: BROKERS.map((b) => ({
+    async () => {
+      const brokers = BROKER_META.map((b) => {
+        const configured = isBrokerConfigured(b.key);
+        return {
           key: b.key,
           name: b.name,
           short: b.short,
           platform: b.platform,
           kind: b.kind,
-          status: 'unconfigured' as const,
-          // Always null in Stage 1. The flag is wired now so the UI can gate
-          // balance display from the start.
-          balance: canSeeBalances ? null : null,
+          status: configured ? ('pending' as const) : ('unconfigured' as const),
+          balance: null,
           lastSyncAt: null,
-        })),
-        stage: 1,
-        note: 'Broker connections are wired in Stage 2.',
+        };
+      });
+      const anyConfigured = brokers.some((b) => b.status === 'pending');
+      return {
+        brokers,
+        stage: 2,
+        note: anyConfigured
+          ? 'Broker credentials detected — live positions stream on the Live Wall.'
+          : 'Add broker API keys to stream live positions on the Live Wall.',
       };
     },
   );

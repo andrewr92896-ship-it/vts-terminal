@@ -16,6 +16,34 @@ export interface Tutorial {
 }
 
 export const TUTORIALS: Record<string, Tutorial> = {
+  // ---- Trading ----
+  live: {
+    title: 'Using the Live Wall',
+    intro: 'Your open positions across every connected broker, normalized into one feed — planned entry vs. actual fill, slippage, take-profit/stop-loss, and open P/L. The wall refreshes itself every 30 seconds.',
+    steps: [
+      {
+        title: 'Connect your brokers',
+        body: 'The strip near the top shows each broker (FTP, OANDA, Kraken, TradeStation) and whether it is connected. Until API keys are added, the wall shows clearly-labeled sample trades so you can see the layout. Once a broker is connected, its real open positions stream in.',
+      },
+      {
+        title: 'Read a trade card',
+        body: 'Each card shows the instrument and direction (LONG/SHORT), the planned entry → actual fill with slippage, take-profit and stop-loss, position size, and the strategy/timeframe. Cards are colored green for longs and red for shorts.',
+      },
+      {
+        title: 'Slippage',
+        body: 'Slippage is the actual fill minus the price you planned to enter at. It is green when the fill beat your plan and amber when it was worse. It only shows once a planned/alert price is recorded for the trade.',
+      },
+      {
+        title: 'Open P/L and balances',
+        body: 'The footer of each card shows live open profit or loss. This is only visible if your account has the "view brokerage" permission; otherwise it reads "P/L hidden".',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Click "Hide $" — or turn on Privacy mode in the top bar — to mask P/L figures when someone might see your screen. Use "Refresh" to pull the latest positions immediately.',
+      },
+    ],
+  },
+
   // ---- To Do List ----
   td_all: {
     title: 'Using your To Do List',

@@ -28,6 +28,7 @@ import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
 import { WealthClients } from '../workspaces/wealth/WealthClients';
+import { LiveWall } from '../workspaces/trading/LiveWall';
 
 // The Studies screens bundle the 400-question Series 65 database, so they're
 // code-split into a lazy chunk that only loads when the Studies workspace is
@@ -46,6 +47,8 @@ const StudyProgress = lazy(() =>
 // branded placeholder. `onNavigate` lets a screen jump to another tab.
 function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string) => void) {
   switch (screen) {
+    case 'live':
+      return <LiveWall />;
     case 'td_all':
       return <TodoAll />;
     case 'kia_dash':
