@@ -57,6 +57,13 @@
       "when": 1781872491481,
       "tag": "0007_kia_commission_split",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781872491482,
+      "tag": "0008_wealth_clients",
+      "breakpoints": true
     }
   ]
 }

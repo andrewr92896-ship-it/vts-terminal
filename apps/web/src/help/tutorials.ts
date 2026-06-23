@@ -118,6 +118,98 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  // ---- Studies (Series 65) ----
+  st_home: {
+    title: 'Study Hub',
+    intro: 'Your study home. Series 65 is the first track — the rest of the tabs (Practice Quiz, Flashcards, Progress) all work from it.',
+    steps: [
+      {
+        title: 'Open a subject',
+        body: 'The Series 65 card shows how many questions and flashcards are loaded. Use its buttons to jump straight into the quiz, flashcards, or your progress.',
+      },
+      {
+        title: 'Your progress is saved',
+        body: 'Quiz accuracy is stored on this device per login, so you can close the tab and pick up where you left off.',
+      },
+    ],
+  },
+  st_game: {
+    title: 'Study Game',
+    intro: 'A gamified Series 65 self-quiz: answer questions, level up each category, and track your score against the passing line.',
+    steps: [
+      {
+        title: 'Pick a category (or Mix)',
+        body: 'Use the chips at the top to drill one area, or choose “Mix (weighted)” to get questions across all four areas in the same proportions as the real exam.',
+      },
+      {
+        title: 'Answer the question',
+        body: 'Click the option you think is right. The correct choice is highlighted; if you missed it, the correct answer (and a quick definition when available) is shown.',
+      },
+      {
+        title: 'Watch your score',
+        body: 'Your score is accuracy over your last 100 answers, to one decimal, with the change from the previous question. The bar marks the ~72% pass line and the status shows how many points you are above or below it.',
+      },
+      {
+        title: 'Level up and prestige',
+        body: 'Each category has its own level ladder (Novice → Grandmaster) that climbs as you answer more questions in it. Max it out and the category prestiges — a crown 👑 is added and the ladder restarts.',
+      },
+      {
+        title: 'Flashcards',
+        body: 'Flip the Quiz / Flashcards switch at the top right to study the Series 65 vocabulary deck — filter by topic, tap a card to reveal the definition, or turn on auto-rotate (term 10s / definition 20s).',
+      },
+      {
+        title: 'Reset',
+        body: 'Use “Skip” to pass on a question without scoring it, or “Reset progress” to clear all levels and scores and start fresh.',
+      },
+    ],
+  },
+  st_progress: {
+    title: 'Progress',
+    intro: 'A snapshot of how you are doing in the Series 65 Study Game.',
+    steps: [
+      {
+        title: 'Overall score',
+        body: 'The top figure is your accuracy over the last 100 answered questions, with PASSING / NOT PASSING relative to the ~72% line.',
+      },
+      {
+        title: 'By category',
+        body: 'Each exam area shows its level (with any prestige crowns), how many questions you have answered there, and your score — so you can see which areas need more work.',
+      },
+    ],
+  },
+
+  // ---- Vitalis Wealth Management ----
+  wm_clients: {
+    title: 'Managing your clients',
+    intro: 'Your advisory client book. New accounts start empty — add clients as you bring them on. Every client is private to your login.',
+    steps: [
+      {
+        title: 'Add a client',
+        body: 'In "Add a client", enter the name (the only required field), plus optional email, phone, account value, status, and notes, then click "Add client".',
+      },
+      {
+        title: 'Track status',
+        body: 'Set each client to Prospect, Onboarding, Active, or Inactive. The list groups Active clients first, and the summary cards count your active relationships.',
+      },
+      {
+        title: 'Watch your AUM',
+        body: 'The "Assets Under Management" card adds up every client\'s account value. Leave the account field blank for prospects you have not funded yet.',
+      },
+      {
+        title: 'Edit a client',
+        body: 'Click "Edit" on any row to change details inline, then Save. Clearing the account value field removes the amount.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Click "Hide $ details" — or turn on Privacy mode in the top bar — to mask client names, contacts, and dollar amounts when someone might see your screen.',
+      },
+      {
+        title: 'Remove and undo',
+        body: 'Click the × to remove a client. A short "Undo" bar appears at the bottom so you can restore them if it was a mistake.',
+      },
+    ],
+  },
+
   // ---- Admin ----
   admin: {
     title: 'Managing users',
@@ -138,6 +230,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
       {
         title: 'Manage existing users',
         body: 'From each row you can change a role, reset a password, or deactivate / reactivate an account. Deactivating or resetting a password signs that user out everywhere.',
+      },
+      {
+        title: 'Delete an account',
+        body: 'Click "Delete", then "Confirm delete", to permanently remove an account and all of its data (to-dos, Kia deals, clients). This cannot be undone — use Deactivate instead if you only need to suspend access. You cannot delete your own account or the last remaining admin.',
       },
       {
         title: 'Renamed accounts',

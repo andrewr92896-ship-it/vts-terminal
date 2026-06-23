@@ -1,7 +1,16 @@
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users } from '../db/schema.js';
+import {
+  users,
+  sessions,
+  todoSections,
+  todoItems,
+  kiaSettings,
+  kiaMonthSettings,
+  kiaDeals,
+  wealthClients,
+} from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
 import { isRoleKey, parseRoles, type RoleKey } from '../auth/rbac.js';
@@ -156,4 +165,43 @@ export async function updateUser(
     await db.select().from(users).where(eq(users.id, targetId)).limit(1)
   )[0];
   return toView(updated);
+}
+
+// Permanently delete a user and all of their data. Unlike deactivation (which
+// keeps the row and just flips `active`), this is irreversible.
+export async function deleteUser(actingUserId: string, targetId: string): Promise<void> {
+  // An admin can't delete their own account (prevents self-lockout).
+  if (actingUserId === targetId) {
+    throw new AdminError('You cannot delete your own account');
+  }
+
+  const target = (
+    await db.select().from(users).where(eq(users.id, targetId)).limit(1)
+  )[0];
+  if (!target) throw new AdminError('User not found');
+
+  // Never delete the last admin, so the portal always has an owner who can
+  // manage it. (With self-deletion blocked above this is also a backstop.)
+  if (parseRoles(target).includes('admin')) {
+    const all = await db.select({ roles: users.roles }).from(users);
+    const adminCount = all.filter((u) => parseRoles(u).includes('admin')).length;
+    if (adminCount <= 1) {
+      throw new AdminError('Cannot delete the only remaining admin account');
+    }
+  }
+
+  // Remove the account and every per-user row in one transaction. Child rows
+  // are deleted explicitly rather than relying on SQLite's ON DELETE CASCADE
+  // (which only fires when the connection's foreign_keys pragma is on), so no
+  // data is ever orphaned. NOTE: add any new per-user table here.
+  await db.transaction(async (tx) => {
+    await tx.delete(todoItems).where(eq(todoItems.userId, targetId));
+    await tx.delete(todoSections).where(eq(todoSections.userId, targetId));
+    await tx.delete(kiaDeals).where(eq(kiaDeals.userId, targetId));
+    await tx.delete(kiaMonthSettings).where(eq(kiaMonthSettings.userId, targetId));
+    await tx.delete(kiaSettings).where(eq(kiaSettings.userId, targetId));
+    await tx.delete(wealthClients).where(eq(wealthClients.userId, targetId));
+    await tx.delete(sessions).where(eq(sessions.userId, targetId));
+    await tx.delete(users).where(eq(users.id, targetId));
+  });
 }

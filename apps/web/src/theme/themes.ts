@@ -134,8 +134,7 @@ export interface TabDef {
 export const TABS: Record<WorkspaceKey, TabDef[]> = {
   studies: [
     { key: 'st_home', label: 'Subjects' },
-    { key: 'st_quiz', label: 'Practice Quiz' },
-    { key: 'st_cards', label: 'Flashcards' },
+    { key: 'st_game', label: 'Study Game' },
     { key: 'st_progress', label: 'Progress' },
   ],
   trading: [

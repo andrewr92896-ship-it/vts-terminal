@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAdmin } from '../auth/middleware.js';
 import { ROLE_KEYS } from '../auth/rbac.js';
-import { AdminError, createUser, listUsers, updateUser } from '../admin/service.js';
+import { AdminError, createUser, deleteUser, listUsers, updateUser } from '../admin/service.js';
 
 const createSchema = z.object({
   username: z.string().trim().min(1).max(64),
@@ -50,6 +50,17 @@ export async function adminRoutes(app: FastifyInstance) {
     try {
       const user = await updateUser(request.currentUser!.id, targetId, parsed.data);
       return { user };
+    } catch (err) {
+      if (err instanceof AdminError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.delete('/api/admin/users/:id', guard, async (request, reply) => {
+    const targetId = (request.params as { id: string }).id;
+    try {
+      await deleteUser(request.currentUser!.id, targetId);
+      return { ok: true };
     } catch (err) {
       if (err instanceof AdminError) return reply.code(400).send({ error: err.message });
       throw err;

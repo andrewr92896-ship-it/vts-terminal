@@ -1,43 +1,44 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { SERIES65_VOCAB } from './series65Vocab';
+import { SERIES65_TOPICS, type Series65Topic } from './series65Questions';
 
 // Auto-rotation timing: show the term for 10s, then the definition for 20s.
 const TERM_SECS = 10;
 const DEF_SECS = 20;
 
-interface Card {
-  term: string;
-  def: string;
-}
+type Filter = 'All' | Series65Topic;
 
-// Sample Series 65 vocabulary (the first study track). Swap for real data later.
-const CARDS: Card[] = [
-  { term: 'Fiduciary', def: 'Someone legally required to act in the best interest of another party — e.g. an investment adviser to a client.' },
-  { term: 'Investment Adviser', def: 'A person or firm that, for compensation, is in the business of advising others about securities.' },
-  { term: 'Form ADV', def: 'The uniform registration form for investment advisers; Part 2 is the plain-English disclosure brochure given to clients.' },
-  { term: 'Discretionary Authority', def: "Written permission letting an adviser choose the security, amount, or action in a client's account without approval for each trade." },
-  { term: 'Net Asset Value (NAV)', def: "A fund's per-share value: total assets minus liabilities, divided by shares outstanding." },
-  { term: 'Dollar-Cost Averaging', def: 'Investing a fixed dollar amount at regular intervals regardless of price, lowering the average cost per share over time.' },
-  { term: 'Duration', def: "A measure of a bond's price sensitivity to interest-rate changes, expressed in years." },
-  { term: 'Efficient Market Hypothesis', def: 'The theory that prices already reflect all available information, making it hard to consistently beat the market.' },
-  { term: 'Sharpe Ratio', def: 'Risk-adjusted return: return above the risk-free rate divided by standard deviation (total risk).' },
-  { term: 'Wash Sale', def: 'Selling a security at a loss and buying the same or a substantially identical one within 30 days; the tax loss is disallowed.' },
-];
-
-export function Flashcards({ theme }: { theme: Theme }) {
+export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded?: boolean }) {
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
+
+  const [filter, setFilter] = useState<Filter>('All');
+  const cards = useMemo(
+    () => (filter === 'All' ? SERIES65_VOCAB : SERIES65_VOCAB.filter((c) => c.topic === filter)),
+    [filter],
+  );
 
   const [i, setI] = useState(0);
   const [showDef, setShowDef] = useState(false);
   const [auto, setAuto] = useState(false);
   const [secs, setSecs] = useState(TERM_SECS);
 
-  // Keep the latest phase available to the interval without restarting it.
+  // Keep the latest phase + deck length available to the interval without
+  // restarting it on every render.
   const showDefRef = useRef(showDef);
   showDefRef.current = showDef;
+  const lenRef = useRef(cards.length);
+  lenRef.current = cards.length;
+
+  // Reset to the first card whenever the topic filter changes.
+  useEffect(() => {
+    setI(0);
+    setShowDef(false);
+    setSecs(TERM_SECS);
+  }, [filter]);
 
   // One interval drives the whole rotation while auto is on. When the current
   // phase runs out, it flips term <-> definition (advancing the card after the
@@ -54,53 +55,61 @@ export function Flashcards({ theme }: { theme: Theme }) {
           return DEF_SECS;
         }
         setShowDef(false);
-        setI((idx) => (idx + 1) % CARDS.length);
+        setI((idx) => (idx + 1) % Math.max(1, lenRef.current));
         return TERM_SECS;
       });
     }, 1000);
     return () => clearInterval(id);
   }, [auto]);
 
-  const card = CARDS[i];
+  const card = cards[Math.min(i, cards.length - 1)];
   const phaseTotal = showDef ? DEF_SECS : TERM_SECS;
 
   function go(delta: number) {
-    setI((idx) => (idx + delta + CARDS.length) % CARDS.length);
+    setI((idx) => (idx + delta + cards.length) % cards.length);
     setShowDef(false);
     setSecs(TERM_SECS);
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Flashcards</h2>
-        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#a99ff0' }}>
-          Series 65 vocabulary · {CARDS.length} cards
-        </p>
+    <div style={{ maxWidth: 760, margin: embedded ? 0 : '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+      {!embedded && (
+        <div style={{ marginBottom: 14 }}>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Flashcards</h2>
+          <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#a99ff0' }}>
+            Series 65 vocabulary · {SERIES65_VOCAB.length} terms
+          </p>
+        </div>
+      )}
+
+      {/* Topic filter */}
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
+        {(['All', ...SERIES65_TOPICS] as Filter[]).map((t) => {
+          const on = filter === t;
+          return (
+            <button
+              key={t}
+              onClick={() => setFilter(t)}
+              style={{
+                fontSize: 11.5,
+                fontWeight: 600,
+                padding: '7px 12px',
+                borderRadius: 999,
+                cursor: 'pointer',
+                border: `1px solid ${on ? theme.accent : theme.navBorder}`,
+                background: on ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)',
+                color: on ? '#fff' : '#a99ff0',
+              }}
+            >
+              {t}
+            </button>
+          );
+        })}
       </div>
 
       {/* Controls */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-          marginBottom: 14,
-        }}
-      >
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 9,
-            cursor: 'pointer',
-            fontSize: 12.5,
-            color: '#cdbcff',
-            userSelect: 'none',
-          }}
-        >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 12.5, color: '#cdbcff', userSelect: 'none' }}>
           <input
             type="checkbox"
             checked={auto}
@@ -110,7 +119,7 @@ export function Flashcards({ theme }: { theme: Theme }) {
           Auto-rotate · term {TERM_SECS}s / definition {DEF_SECS}s
         </label>
         <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#8a7fc8' }}>
-          {i + 1} / {CARDS.length}
+          {cards.length === 0 ? '0 / 0' : `${Math.min(i, cards.length - 1) + 1} / ${cards.length}`}
         </span>
       </div>
 
@@ -126,14 +135,7 @@ export function Flashcards({ theme }: { theme: Theme }) {
             </span>
           </div>
           <div style={{ height: 6, background: theme.navBorder, borderRadius: 4, overflow: 'hidden' }}>
-            <div
-              style={{
-                height: '100%',
-                width: `${(secs / phaseTotal) * 100}%`,
-                background: accentGrad,
-                transition: 'width 1s linear',
-              }}
-            />
+            <div style={{ height: '100%', width: `${(secs / phaseTotal) * 100}%`, background: accentGrad, transition: 'width 1s linear' }} />
           </div>
         </div>
       )}
@@ -155,20 +157,16 @@ export function Flashcards({ theme }: { theme: Theme }) {
           cursor: auto ? 'default' : 'pointer',
         }}
       >
-        <div style={{ fontSize: isPhone ? 24 : 30, fontWeight: 700, color: '#fff', textAlign: 'center' }}>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '3px 9px', opacity: 0.85 }}>
+            {card.topic}
+          </span>
+        </div>
+        <div style={{ fontSize: isPhone ? 23 : 29, fontWeight: 700, color: '#fff', textAlign: 'center' }}>
           {card.term}
         </div>
         {showDef ? (
-          <div
-            style={{
-              fontSize: isPhone ? 14 : 15,
-              lineHeight: 1.6,
-              color: '#d7ccff',
-              textAlign: 'center',
-              borderTop: `1px solid ${theme.navBorder}`,
-              paddingTop: 16,
-            }}
-          >
+          <div style={{ fontSize: isPhone ? 14 : 15, lineHeight: 1.6, color: '#d7ccff', textAlign: 'center', borderTop: `1px solid ${theme.navBorder}`, paddingTop: 16 }}>
             {card.def}
           </div>
         ) : (

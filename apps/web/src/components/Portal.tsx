@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import type { BrokerStatus, RoleKey } from '../api/types';
@@ -27,11 +27,24 @@ import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
 import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
-import { Flashcards } from '../workspaces/studies/Flashcards';
+import { WealthClients } from '../workspaces/wealth/WealthClients';
+
+// The Studies screens bundle the 400-question Series 65 database, so they're
+// code-split into a lazy chunk that only loads when the Studies workspace is
+// opened — keeping the initial app load lean for everyone else.
+const Series65Game = lazy(() =>
+  import('../workspaces/studies/StudyGame').then((m) => ({ default: m.StudyGame })),
+);
+const StudyHub = lazy(() =>
+  import('../workspaces/studies/StudyHub').then((m) => ({ default: m.StudyHub })),
+);
+const StudyProgress = lazy(() =>
+  import('../workspaces/studies/StudyProgress').then((m) => ({ default: m.StudyProgress })),
+);
 
 // Screens that have real implementations; everything else falls back to the
-// branded placeholder.
-function renderScreen(screen: string, theme: Theme) {
+// branded placeholder. `onNavigate` lets a screen jump to another tab.
+function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string) => void) {
   switch (screen) {
     case 'td_all':
       return <TodoAll />;
@@ -43,8 +56,14 @@ function renderScreen(screen: string, theme: Theme) {
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
-    case 'st_cards':
-      return <Flashcards theme={theme} />;
+    case 'wm_clients':
+      return <WealthClients />;
+    case 'st_home':
+      return <StudyHub theme={theme} onNavigate={onNavigate} />;
+    case 'st_game':
+      return <Series65Game theme={theme} />;
+    case 'st_progress':
+      return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     default:
       return null;
   }
@@ -186,7 +205,9 @@ export function Portal() {
           padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
         }}
       >
-        {renderScreen(screen, theme) ?? <Screen screen={screen} theme={theme} />}
+        <Suspense fallback={<div style={{ padding: 24, color: '#8ea3cc', fontSize: 13 }}>Loading…</div>}>
+          {renderScreen(screen, theme, setScreen) ?? <Screen screen={screen} theme={theme} />}
+        </Suspense>
       </main>
 
       <footer
