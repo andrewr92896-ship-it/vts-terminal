@@ -200,6 +200,14 @@ export interface KiaDealParseResult {
   reply: string;
 }
 
+// Result of a plain-English Kia command (deals, goal, reviews) via Claude.
+export interface KiaCommandResult {
+  dashboard: KiaDashboard | null; // refreshed when anything changed
+  applied: string[];
+  skipped: string[];
+  reply: string;
+}
+
 // ---- Vitalis Wealth Management ----
 export type WealthClientStatus = 'prospect' | 'onboarding' | 'active' | 'inactive';
 
