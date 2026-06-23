@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="VTS Portal">
+  <defs>
+    <linearGradient id="vtsGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EBCB74"/>
+      <stop offset="1" stop-color="#C9A24B"/>
+    </linearGradient>
+  </defs>
+  <!-- Solid navy brand background -->
+  <rect x="0" y="0" width="512" height="512" fill="#0A2A6B"/>
+  <!-- Centered gold "V" formed by two diagonal strokes -->
+  <polyline points="140,150 256,372 372,150" fill="none" stroke="url(#vtsGold)"
+            stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
