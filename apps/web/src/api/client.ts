@@ -2,6 +2,9 @@ import type {
   AdminUser,
   BrokerStatus,
   LiveWall,
+  TradeInput,
+  TradeLogData,
+  RemovedTrade,
   KiaDashboard,
   RemovedKiaDeal,
   RemovedTodoItem,
@@ -120,6 +123,21 @@ export const api = {
   },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');
+  },
+  tradeLog(): Promise<TradeLogData> {
+    return request('/api/trading/trades');
+  },
+  addTrade(trade: TradeInput): Promise<TradeLogData> {
+    return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });
+  },
+  updateTrade(id: string, patch: TradeInput): Promise<TradeLogData> {
+    return request(`/api/trading/trades/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removeTrade(id: string): Promise<TradeLogData & { removed: RemovedTrade | null }> {
+    return request(`/api/trading/trades/${id}`, { method: 'DELETE' });
+  },
+  restoreTrade(trade: RemovedTrade): Promise<TradeLogData> {
+    return request('/api/trading/trades/restore', { method: 'POST', body: JSON.stringify(trade) });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');

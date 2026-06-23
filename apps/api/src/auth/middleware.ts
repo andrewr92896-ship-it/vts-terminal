@@ -5,7 +5,13 @@ import type {
   preHandlerHookHandler,
 } from 'fastify';
 import { SESSION_COOKIE, getUserForToken } from './sessions.js';
-import { canAccessWorkspace, isAdmin, parseRoles, type WorkspaceKey } from './rbac.js';
+import {
+  canAccessWorkspace,
+  isAdmin,
+  isWorkspaceReadOnly,
+  parseRoles,
+  type WorkspaceKey,
+} from './rbac.js';
 
 // Runs on every request: resolves the signed session cookie to a user
 // (or null) and attaches it to request.currentUser.
@@ -53,6 +59,25 @@ export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
     }
     if (!canAccessWorkspace(parseRoles(user), ws)) {
       return reply.code(403).send({ error: 'Forbidden' });
+    }
+  };
+}
+
+// Reject unless the user can *modify* the workspace. Read-only roles (today only
+// trading_viewer) can see the workspace but must not mutate it — use this on
+// every POST/PATCH/DELETE so a viewer's writes are rejected server-side.
+export function requireWorkspaceWrite(ws: WorkspaceKey): preHandlerHookHandler {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.currentUser;
+    if (!user) {
+      return reply.code(401).send({ error: 'Not authenticated' });
+    }
+    const roles = parseRoles(user);
+    if (!canAccessWorkspace(roles, ws)) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (isWorkspaceReadOnly(roles, ws)) {
+      return reply.code(403).send({ error: 'Read-only access' });
     }
   };
 }

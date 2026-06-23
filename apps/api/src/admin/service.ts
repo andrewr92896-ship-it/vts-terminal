@@ -10,6 +10,7 @@ import {
   kiaMonthSettings,
   kiaDeals,
   wealthClients,
+  tradingTrades,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -201,6 +202,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(kiaMonthSettings).where(eq(kiaMonthSettings.userId, targetId));
     await tx.delete(kiaSettings).where(eq(kiaSettings.userId, targetId));
     await tx.delete(wealthClients).where(eq(wealthClients.userId, targetId));
+    await tx.delete(tradingTrades).where(eq(tradingTrades.userId, targetId));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });
