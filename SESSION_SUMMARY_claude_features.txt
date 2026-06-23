@@ -1,0 +1,291 @@
+================================================================================
+VTS PORTAL — SESSION SUMMARY: "Finish all Claude features + edit options"
+Branch: claude/finance-command-parser-6xovqw   (not yet merged to main)
+Date: 2026-06-23
+================================================================================
+
+PURPOSE OF THIS DOC
+-------------------
+A complete record of everything built in this session, for pasting into project
+chats / memory. All work is on ONE feature branch (above), pushed to GitHub
+(andrewr92896-ship-it/vts-portal). No PR opened yet. Squash-merge to main when
+ready, like the rest of the project.
+
+MODELS: everything is Claude Sonnet (claude-sonnet-4-6) EXCEPT the existing trade
+screenshot analysis, which stays Opus 4.8 (claude-opus-4-8). Unchanged.
+
+VERIFICATION: the dev sandbox blocks network, so real Claude calls only run on
+the deployed site (Railway). Every feature was verified locally with:
+  - npm run -w @vts/api typecheck   (passes)
+  - npm run -w @vts/web build        (passes)
+  - throwaway stubbed-fetch scripts that fake the Anthropic /v1/messages
+    response (all asserted PASS, then deleted — none committed).
+
+================================================================================
+COMMITS ON THIS BRANCH (newest first)
+================================================================================
+cdcdd68  To Do: edit (rename) tasks inline
+7600d74  Ask Claude panel: take actions in the current workspace
+027eead  Tutorials: document the new Claude command bars and quiz
+ccf7f1f  Briefs: add "Brief me" to the Kia dashboard and Trade Log (Sonnet)
+a4ed11f  Market News: AI headline draft from a pasted blurb (Sonnet)
+fa1d020  Studies: AI practice-quiz generator (Sonnet)
+728b263  Trading: plain-English trade logging via Claude (Sonnet)
+8b3cc90  Wealth: plain-English "Quick add" via Claude (Sonnet)
+267a19b  Kia: finish the Claude command bar (deals, goal, reviews)
+352726f  Kia: surface the To Do Priority list on the Sales Dashboard
+e00050e  Finance: add the runFinanceCommand parser module
+c90e282  Finance: plain-English "Quick add" via Claude (Sonnet)
+
+================================================================================
+SHARED PATTERN USED BY EVERY NEW AI ENDPOINT
+================================================================================
+- aiConfigured() -> 503 when no ANTHROPIC_API_KEY.
+- enforceAiLimit(userId, '<kind>') -> 429 (AiLimitError) on burst/monthly cap.
+- 502 on any other Claude/parse failure.
+- Parsers: askClaude(prompt, SYSTEM) -> extractJson() -> validate each action ->
+  apply via the EXISTING workspace services (never raw SQL) -> return refreshed
+  data + applied[]/skipped[] + a one-line reply. Unresolvable actions are SKIPPED
+  (never half-applied). Most parsers cap at ~25 actions.
+- "Brief me" uses ai/brief.ts generateBrief(userId, kind, system, data), which
+  enforces the AI limit internally; UI reuses components/AiBrief.tsx
+  (useAiBrief hook + BriefButton/BriefCard/BriefError).
+
+New ai_usage "kind" strings introduced (each shows up in the ai_usage table):
+  finance_command, kia_command, wealth_command, trade_log, studies_quiz,
+  news_draft, kia_brief, trades_brief. (Plus existing: ask, kia, studies_tutor,
+  analyze, news_brief, *_brief.)
+
+================================================================================
+FEATURE 1 — FINANCE NATURAL-LANGUAGE "QUICK ADD"  (commits c90e282, e00050e)
+================================================================================
+Plain-English bar on Personal Finance > Overview. Logs expenses, net-worth
+assets/liabilities, and FTP settings — several at once.
+  e.g. "Add a $120 phone bill on the 15th", "Add my car worth 18000 as an asset",
+       "Add 9500 student loan as a liability", "Switch FTP to funded at 80%".
+
+Backend:
+  - apps/api/src/finance/parser.ts  -> runFinanceCommand(userId, note)
+    Actions: expense {label,amount,dayOfMonth,category?}, networth
+    {label,amount,kind:asset|liability}, settings {ftpPhase,ftpDivisor,ftpPayoutPct}.
+    Applies via finance/service.ts addExpense / addNetWorth / updateSettings.
+  - POST /api/finance/command  (requireWorkspace('finance'))
+Web:
+  - api.financeCommand(note); type FinanceCommandResult.
+  - "Quick add (Sonnet)" bar at top of workspaces/finance/FinanceOverview.tsx
+    (shows confirmation + skipped, refreshes overview).
+  - Tutorial step added (help/tutorials.ts fin_overview).
+
+================================================================================
+FEATURE 2 — KIA: PRIORITY LIST ON THE SALES DASHBOARD  (commit 352726f)
+================================================================================
+Whenever the shared To Do list's "Priority" section has tasks, they show in a
+highlighted card at the top of the Kia Sales Dashboard, with a live checkbox that
+toggles the same item (in sync with the To Do List workspace). Hidden when empty.
+  - Reads the section titled 'Priority' via api.getTodo() (matches how the To-Do
+    command bar files priority tasks). Non-blocking load.
+  - workspaces/kia/KiaDashboard.tsx only (no backend change).
+
+================================================================================
+FEATURE 3 — KIA CLAUDE COMMAND BAR (the "finish the command bar" ask) (267a19b)
+================================================================================
+Replaced the disabled Stage-4 placeholder AND the deal-only quick-log with ONE
+working "Ask Claude" command bar on the Sales Dashboard. Logs deals, sets the
+monthly unit goal, sets the review count — several at once.
+  e.g. "Sold a used Sportage, $1,800 front $700 back · set goal 12 · set reviews 60"
+
+Backend:
+  - apps/api/src/kia/command.ts  -> runKiaCommand(userId, note)
+    Actions: deal {customer?,model,dealType,profit|front/back,soldAt?},
+    goal {units}, reviews {count}. Applies via kia/service.ts addDeal /
+    updateSettings. Returns refreshed dashboard + applied/skipped.
+  - POST /api/kia/command  (requireWorkspace('kia'))
+Web:
+  - api.kiaCommand(note); type KiaCommandResult. Consolidated command bar UI.
+  (The old /api/kia/deals/parse endpoint still exists but the UI now uses /command.)
+
+================================================================================
+FEATURE 4 — WEALTH NATURAL-LANGUAGE "QUICK ADD"  (commit 8b3cc90)
+================================================================================
+Plain-English bar on Vitalis > Practice Overview. Logs clients, model portfolios
++ sleeves, planning scenarios, and compliance items — several at once.
+  e.g. "Add client Jane Doe, active, $250k",
+       "Add a US Equity 60% sleeve to Core Growth",
+       "Add a CPI filing due July 30".
+
+Backend:
+  - apps/api/src/wealth/parser.ts  -> runWealthCommand(userId, note)
+    Actions: client, portfolio, allocation (sleeve; matched to a portfolio by
+    name via getPortfolios), plan, compliance. Coerces percent->basis points and
+    date->ms. Applies via wealth service.ts / portfolios.ts / planning.ts /
+    compliance.ts. Refreshes the practice overview.
+  - POST /api/wealth/command  (requireWorkspace('wealth'))
+Web:
+  - api.wealthCommand(note); type WealthCommandResult. "Quick add" bar on
+    workspaces/wealth/WealthOverview.tsx.
+
+================================================================================
+FEATURE 5 — TRADING PLAIN-ENGLISH TRADE LOGGING  (commit 728b263)
+================================================================================
+"Log with Claude" bar on the Trade Log. One note -> one or more structured
+trades; prices keep their decimals; status defaults to open unless an exit/result
+is given. Hidden for read-only ('trading_viewer') users.
+  e.g. "Long 2 lots EUR/USD entry 1.0850 SL 1.0820 TP 1.0920, London breakout"
+
+Backend:
+  - apps/api/src/trading/tradeParser.ts -> runTradeCommand(userId, note, canSeeBalances)
+    Applies via trading/trades.ts addTrade. Skips trades missing instrument/entry.
+  - POST /api/trading/trades/parse  (requireWorkspaceWrite('trading'))
+Web:
+  - api.parseTrade(note); type TradeCommandResult. Command bar on
+    workspaces/trading/TradeLog.tsx.
+
+================================================================================
+FEATURE 6 — STUDIES AI PRACTICE-QUIZ GENERATOR  (commit fa1d020)
+================================================================================
+"Practice quiz" panel on the Study Hub: pick a topic + count, Claude writes fresh
+Series 65 multiple-choice questions, rendered as self-checking cards (click an
+option to reveal correct/incorrect + explanation).
+
+Backend:
+  - apps/api/src/ai/quiz.ts  -> generateQuiz(topic, count)
+    Returns validated questions: exactly four options, labels normalized A-D,
+    answer + explanation. count clamped 1..10.
+  - POST /api/ai/quiz  (requireWorkspace('studies'))
+Web:
+  - api.studyQuiz({topic,count}); types StudyQuizResult / StudyQuizQuestion.
+  - New component workspaces/studies/StudyQuiz.tsx, embedded in StudyHub.tsx.
+
+================================================================================
+FEATURE 7 — MARKET NEWS: AI HEADLINE DRAFT  (commit a4ed11f)
+================================================================================
+"Draft a headline with Claude" box on Market News (write users). Paste a blurb /
+article title -> Claude returns a tightened headline classified by category,
+impact, and directional bias. IMPORTANT: it does NOT auto-post — it opens the
+existing headline composer PRE-FILLED for review (labeled "Review Claude draft"),
+because Market News is a shared feed.
+
+Backend:
+  - apps/api/src/trading/newsDraft.ts -> draftNews(blurb)  (enum-safe fallbacks)
+  - POST /api/trading/news/draft  (requireWorkspaceWrite('trading'))
+Web:
+  - api.draftNews(blurb); type NewsDraft. NewsForm widened to accept a draft.
+
+================================================================================
+FEATURE 8 — "BRIEF ME" ON KIA DASHBOARD + TRADE LOG  (commit ccf7f1f)
+================================================================================
+Extended the existing Sonnet brief pattern to two more screens.
+  - POST /api/kia/brief        : month recap (units vs goal, pace, commission,
+                                  reviews, next bonus). Month-scoped.
+  - POST /api/trading/trades/brief : trade-log recap (counts, win rate, realized
+                                  P/L, slippage, recent trades/strategies).
+Both reuse generateBrief; wired to BriefButton/BriefCard via useAiBrief on
+KiaDashboard.tsx and TradeLog.tsx. Briefs instructed not to invent figures.
+(Existing briefs remain: Practice Overview, Personal Finance, Account Metrics,
+Market News desk brief.)
+
+================================================================================
+FEATURE 9 — GLOBAL "ASK CLAUDE" PANEL CAN TAKE ACTIONS  (commit 7600d74)
+================================================================================
+The always-on Ask Claude side panel now APPLIES add/log/set instructions (not
+just answers) in finance, wealth, kia, and trading. A message that reads like an
+action is routed to that workspace's parser; the panel shows what it did (and any
+skipped items). Non-action messages, or ones that resolve to nothing, fall back
+to a normal chat answer.
+  USER CHOSE: "Yes, let it act" (offered Yes / answers-only / act-but-confirm).
+
+Backend:
+  - POST /api/ai/act  { workspace, message }  (requireAuth)
+    Enforces the SAME per-workspace access as each command bar:
+      canAccessWorkspace(roles, ws) + isWorkspaceReadOnly(roles, ws) checks,
+      then enforceAiLimit with that workspace's kind. Dispatches to
+      runFinanceCommand / runWealthCommand / runKiaCommand / runTradeCommand.
+    Verified via app.inject: finance action applies (200, 1 applied); a
+    finance-only user is blocked from trading (403).
+Web:
+  - api.aiAct(workspace, message). AskClaudePanel.tsx detects action intent
+    (verb regex: add/log/set/create/new/record/sold/buy/long/short/...), routes
+    to /act with chat fallback, adds action examples to per-workspace suggestions.
+  - LIMITATION (noted to user): the underlying screen does not auto-refresh after
+    a panel action; the confirmation appears in the panel and the screen updates
+    on next load/navigation. The panel reply tells the user to refresh.
+
+================================================================================
+FEATURE 10 — EDIT (RENAME) TO-DO TASKS INLINE  (commit cdcdd68)
+================================================================================
+Follow-up request: "add an option to edit car deals, to do list items, etc."
+Audit finding: car deals, expenses, net worth, and ALL wealth lists (clients,
+portfolios, plans, compliance) and strategy sessions ALREADY had inline edit.
+The ONLY gap was To-Do tasks (could check/remove but not rename). Added it.
+
+Backend:
+  - apps/api/src/todo/service.ts -> updateItemText(userId, itemId, text)
+    Owner-scoped: throws "Item not found" if the item isn't the caller's.
+  - PATCH /api/todo/items/:id   (requireWorkspace('todo'))
+    Verified: rename works; another user cannot edit someone else's task.
+Web:
+  - api.updateTodoItem(id, text).
+  - Inline edit (pencil ✎ button -> input; Enter saves, Esc cancels) added to the
+    Row in all THREE to-do views:
+      workspaces/TodoAll.tsx, workspaces/kia/KiaTodo.tsx,
+      workspaces/trading/TradingTodo.tsx.
+
+================================================================================
+NEW / CHANGED FILES (by area)
+================================================================================
+API (apps/api/src):
+  NEW  finance/parser.ts
+  NEW  kia/command.ts
+  NEW  wealth/parser.ts
+  NEW  trading/tradeParser.ts
+  NEW  trading/newsDraft.ts
+  NEW  ai/quiz.ts
+  EDIT todo/service.ts            (+ updateItemText)
+  EDIT routes/finance.ts          (+ POST /command)
+  EDIT routes/kia.ts              (+ POST /command, + POST /brief)
+  EDIT routes/wealth.ts           (+ POST /command)
+  EDIT routes/trading.ts          (+ POST /trades/parse, /trades/brief, /news/draft)
+  EDIT routes/ai.ts               (+ POST /act, + POST /quiz)
+  EDIT routes/todo.ts             (+ PATCH /items/:id rename)
+
+WEB (apps/web/src):
+  NEW  workspaces/studies/StudyQuiz.tsx
+  EDIT api/client.ts              (financeCommand, kiaCommand, kiaBrief,
+                                   wealthCommand, parseTrade, tradeLogBrief,
+                                   draftNews, studyQuiz, aiAct, updateTodoItem)
+  EDIT api/types.ts              (FinanceCommandResult, KiaCommandResult,
+                                   WealthCommandResult, TradeCommandResult,
+                                   StudyQuizResult/Question, NewsDraft)
+  EDIT components/AskClaudePanel.tsx
+  EDIT components/AiBrief.tsx     (unchanged logic; reused)
+  EDIT workspaces/finance/FinanceOverview.tsx
+  EDIT workspaces/kia/KiaDashboard.tsx
+  EDIT workspaces/kia/KiaTodo.tsx
+  EDIT workspaces/wealth/WealthOverview.tsx
+  EDIT workspaces/trading/TradeLog.tsx
+  EDIT workspaces/trading/MarketNews.tsx
+  EDIT workspaces/trading/TradingTodo.tsx
+  EDIT workspaces/studies/StudyHub.tsx
+  EDIT workspaces/TodoAll.tsx
+  EDIT help/tutorials.ts          (steps for kia_dash, log, wm_home, st_home,
+                                   fin_overview)
+
+No DB migrations were needed (all features reuse existing tables; AI usage uses
+the existing ai_usage table). Latest migration idx remains 22 (0022_kia_mini).
+
+================================================================================
+STATUS / FOLLOW-UPS
+================================================================================
+- All Claude-powered features from the prior handoff backlog (P1-P7) are DONE,
+  plus the explicit Kia command bar and the to-do edit request.
+- Branch pushed; NO PR opened (waiting on request).
+- Known limitation: Ask Claude panel actions don't live-refresh the underlying
+  screen (see Feature 9). Possible future polish: dispatch a "data changed"
+  event so action-capable screens reload.
+- Pre-existing, NOT Claude (from earlier handoff, still pending): Announcements
+  board, Blog, Live chat for trading users.
+- Note: apps/api/_verify_mini.mts is a pre-existing tracked file from PR #43
+  (the $200 mini commission), unrelated to this session — left untouched.
+================================================================================
+END
+================================================================================
