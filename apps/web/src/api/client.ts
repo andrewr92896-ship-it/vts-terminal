@@ -1,5 +1,6 @@
 import type {
   AdminUser,
+  AlertsData,
   BrokerStatus,
   LiveWall,
   TradeInput,
@@ -138,6 +139,15 @@ export const api = {
   },
   restoreTrade(trade: RemovedTrade): Promise<TradeLogData> {
     return request('/api/trading/trades/restore', { method: 'POST', body: JSON.stringify(trade) });
+  },
+  tradingAlerts(): Promise<AlertsData> {
+    return request('/api/trading/alerts');
+  },
+  analyzeAlert(id: string, image: { imageBase64: string; mediaType: string }): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/analyze`, { method: 'POST', body: JSON.stringify(image) });
+  },
+  dismissAlert(id: string): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/dismiss`, { method: 'POST', body: JSON.stringify({}) });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');
