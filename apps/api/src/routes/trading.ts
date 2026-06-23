@@ -9,6 +9,8 @@ import {
   restoreTrade,
   updateTrade,
 } from '../trading/trades.js';
+import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
+import { aiConfigured } from '../ai/claude.js';
 import { TRADE_SIDES, TRADE_STATUSES } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
@@ -125,4 +127,52 @@ export async function tradingRoutes(app: FastifyInstance) {
     await restoreTrade(u.id, parsed.data);
     return getTrades(u.id, !!u.viewBrokerage);
   });
+
+  // ---- TradingView alerts (FTP/prop replacement) ----
+  app.get('/api/trading/alerts', read, async (request) => {
+    return getAlerts(request.currentUser!.id);
+  });
+
+  // Analyze an alert's pasted screenshot with Opus 4.8 and auto-create a trade.
+  // Screenshots are sizeable, so this route allows a larger body.
+  app.post(
+    '/api/trading/alerts/:id/analyze',
+    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const parsed = analyzeSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'A screenshot image is required' });
+      }
+      // Accept either a bare base64 string or a full data: URL.
+      let data = parsed.data.imageBase64;
+      let media = parsed.data.mediaType ?? 'image/png';
+      const m = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+      if (m) {
+        media = m[1] as typeof media;
+        data = m[2];
+      }
+      const u = request.currentUser!;
+      const id = (request.params as { id: string }).id;
+      try {
+        return await analyzeAlert(u.id, id, data, media);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Analysis failed';
+        return reply.code(502).send({ error: msg });
+      }
+    },
+  );
+
+  app.post('/api/trading/alerts/:id/dismiss', write, async (request) => {
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    return dismissAlert(u.id, id);
+  });
 }
+
+const analyzeSchema = z.object({
+  imageBase64: z.string().min(1),
+  mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
+});

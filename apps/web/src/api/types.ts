@@ -325,6 +325,49 @@ export interface RemovedTrade {
   createdAt: number;
 }
 
+// ---- Trading — TradingView alerts (mirror of apps/api/src/trading/alerts.ts) ----
+export type AlertStatus = 'new' | 'analyzed' | 'dismissed';
+
+export interface TradeAnalysis {
+  instrument: string | null;
+  side: 'long' | 'short' | 'unknown';
+  plannedEntry: number | null;
+  actualFill: number | null;
+  exit: number | null;
+  slippage: string;
+  setupQuality: string;
+  risk: string;
+  verdict: 'good' | 'acceptable' | 'poor' | 'unclear';
+  summary: string;
+}
+
+export interface AnalyzeResult {
+  raw: string;
+  parsed: TradeAnalysis | null;
+  model: string;
+}
+
+export interface AlertRecord {
+  id: string;
+  source: string;
+  instrument: string | null;
+  side: TradeSide | null;
+  price: number | null;
+  strategy: string | null;
+  timeframe: string | null;
+  message: string | null;
+  status: AlertStatus;
+  analysis: AnalyzeResult | null;
+  analyzedAt: number | null;
+  tradeId: string | null;
+  receivedAt: number;
+}
+
+export interface AlertsData {
+  alerts: AlertRecord[];
+  aiConfigured: boolean;
+}
+
 // Fields accepted when creating/editing a trade.
 export interface TradeInput {
   broker?: string | null;

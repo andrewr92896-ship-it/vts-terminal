@@ -139,6 +139,7 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
   ],
   trading: [
     { key: 'live', label: 'Live Wall', dot: '#35c47b' },
+    { key: 'alerts', label: 'Alerts', dot: '#EBCB74' },
     { key: 'log', label: 'Trade Log' },
     { key: 'sessions', label: 'Strategy Sessions' },
     { key: 'metrics', label: 'Account Metrics' },

@@ -225,3 +225,36 @@ export const tradingTrades = sqliteTable('trading_trades', {
 });
 
 export type TradingTradeRow = typeof tradingTrades.$inferSelect;
+
+// ---- Trading — TradingView alerts (the FTP/prop replacement) ----
+// FTP/Match-Trader has no usable API, so prop trades come in as TradingView
+// alert webhooks instead. Each alert is stored here (attributed to the owner),
+// the owner pastes a chart screenshot, and Claude (Opus 4.8 vision) analyzes
+// it — optionally auto-creating a trading_trades row. Status walks
+// new → analyzed (or dismissed).
+export const ALERT_STATUSES = ['new', 'analyzed', 'dismissed'] as const;
+export type AlertStatus = (typeof ALERT_STATUSES)[number];
+
+export const tradingAlerts = sqliteTable('trading_alerts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  source: text('source').notNull().default('tradingview'),
+  instrument: text('instrument'),
+  side: text('side', { enum: TRADE_SIDES }),
+  price: real('price'), // the alert/intended price
+  strategy: text('strategy'),
+  timeframe: text('timeframe'),
+  message: text('message'), // human-readable alert text
+  payload: text('payload'), // raw JSON the webhook received
+  status: text('status', { enum: ALERT_STATUSES }).notNull().default('new'),
+  analysis: text('analysis'), // Claude's analysis JSON, null until analyzed
+  analyzedAt: integer('analyzed_at', { mode: 'timestamp_ms' }),
+  tradeId: text('trade_id'), // the trading_trades row this created, if any
+  receivedAt: integer('received_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingAlertRow = typeof tradingAlerts.$inferSelect;

@@ -18,6 +18,15 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  // Claude / Anthropic. The key is optional — when absent, AI features report
+  // "not configured" instead of failing. The site default is Sonnet; trade
+  // screenshot analysis uses Opus 4.8 (vision).
+  ANTHROPIC_API_KEY: z.string().optional(),
+  ANTHROPIC_MODEL_DEFAULT: z.string().default('claude-sonnet-4-6'),
+  ANTHROPIC_MODEL_ANALYSIS: z.string().default('claude-opus-4-8'),
+  // Shared secret that inbound TradingView alerts must include (TradingView
+  // sends no auth of its own). When unset, the webhook rejects everything.
+  TRADINGVIEW_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({

@@ -14,6 +14,7 @@ interface ScreenInfo {
 const SCREENS: Record<string, ScreenInfo> = {
   // Trading
   live: { title: 'Live Wall', blurb: 'Live trade cards with planned entry, actual fill, slippage, TP, SL, strategy, timeframe, and lots — streamed from the brokers.', stage: 2 },
+  alerts: { title: 'Alerts', blurb: 'TradingView alerts arrive by webhook; paste a chart screenshot and Claude (Opus 4.8) analyzes the trade and logs it.', stage: 2 },
   log: { title: 'Trade Log', blurb: 'Full fill history with Deck and Tape layouts, computed slippage versus the alert price per trade.', stage: 2 },
   sessions: { title: 'Strategy Sessions', blurb: 'Active, opening, and closing strategy windows with bull and bear playbooks per instrument.', stage: 2 },
   metrics: { title: 'Account Metrics', blurb: 'FTP challenge dashboard: $200K account, 10% target, 4% daily and 6% trailing drawdown, live equity from the API.', stage: 2 },

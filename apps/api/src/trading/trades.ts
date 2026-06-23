@@ -175,14 +175,15 @@ export async function getTrades(userId: string, canSeeBalances: boolean): Promis
   };
 }
 
-export async function addTrade(userId: string, input: TradeInput): Promise<void> {
+export async function addTrade(userId: string, input: TradeInput): Promise<string> {
   const instrument = input.instrument.trim();
   if (!instrument) throw new Error('Instrument is required');
   if (!Number.isFinite(input.entryPrice)) throw new Error('A valid entry price is required');
   const now = new Date();
   const status: TradeStatus = isStatus(input.status) ? input.status : 'closed';
+  const id = crypto.randomUUID();
   await db.insert(tradingTrades).values({
-    id: crypto.randomUUID(),
+    id,
     userId,
     broker: cleanText(input.broker, 40),
     instrument: instrument.slice(0, 40),
@@ -203,6 +204,7 @@ export async function addTrade(userId: string, input: TradeInput): Promise<void>
     createdAt: now,
     updatedAt: now,
   });
+  return id;
 }
 
 export async function updateTrade(

@@ -44,6 +44,33 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  alerts: {
+    title: 'Using Alerts',
+    intro: 'TradingView alerts arrive here automatically by webhook (the prop/FTP trades that have no broker API). Paste a chart screenshot and Claude (Opus 4.8) analyzes the trade and logs it for you.',
+    steps: [
+      {
+        title: 'Connect TradingView',
+        body: 'In a TradingView alert, set the Webhook URL to https://vitalistradingsystems.com/api/webhooks/tradingview and put your shared secret plus the trade fields in the alert message (JSON). New alerts show up at the top of this list. Webhooks require a paid TradingView plan.',
+      },
+      {
+        title: 'Paste a screenshot',
+        body: 'On a new alert, paste a chart screenshot (Ctrl/Cmd-V) into the drop area, or use Upload. A preview appears so you can confirm it before analyzing.',
+      },
+      {
+        title: 'Analyze with Claude',
+        body: 'Click “Analyze with Opus 4.8”. Claude reads the chart against the alert and reports the fill vs. planned price, slippage, setup quality, risk, and a verdict.',
+      },
+      {
+        title: 'It lands in your Trade Log',
+        body: 'Each analyzed alert automatically creates a Trade Log entry (planned entry from the alert; fill, exit, and notes from the analysis). Use “View in Trade Log” to open it.',
+      },
+      {
+        title: 'Dismiss',
+        body: 'Use Dismiss to clear an alert you don’t want to log.',
+      },
+    ],
+  },
+
   log: {
     title: 'Using the Trade Log',
     intro: 'Your record of every trade — planned vs. actual entry, slippage, and realized P/L. New accounts start empty; log trades as you take them. Each log is private to your login.',

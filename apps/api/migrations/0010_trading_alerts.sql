@@ -1,0 +1,20 @@
+CREATE TABLE `trading_alerts` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`source` text DEFAULT 'tradingview' NOT NULL,
+	`instrument` text,
+	`side` text,
+	`price` real,
+	`strategy` text,
+	`timeframe` text,
+	`message` text,
+	`payload` text,
+	`status` text DEFAULT 'new' NOT NULL,
+	`analysis` text,
+	`analyzed_at` integer,
+	`trade_id` text,
+	`received_at` integer NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);
