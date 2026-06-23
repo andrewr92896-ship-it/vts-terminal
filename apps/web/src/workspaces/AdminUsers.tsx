@@ -45,6 +45,9 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [resetPw, setResetPw] = useState('');
 
+  // Two-step delete confirmation: holds the id of the user awaiting confirm.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   useEffect(() => {
     let alive = true;
     api
@@ -115,6 +118,20 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     await patch(id, { password: resetPw });
     setResetFor(null);
     setResetPw('');
+  }
+
+  async function remove(id: string) {
+    setBusyId(id);
+    setActionError(null);
+    try {
+      await api.adminDeleteUser(id);
+      setConfirmDeleteId(null);
+      await refresh();
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Could not delete user.');
+    } finally {
+      setBusyId(null);
+    }
   }
 
   if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>Loading users...</div>;
@@ -243,7 +260,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                     Reset password
                   </button>
 
-                  {!isSelf && (
+                  {!isSelf && confirmDeleteId !== u.id && (
                     <button
                       onClick={() => patch(u.id, { active: !u.active })}
                       disabled={busyId === u.id}
@@ -252,8 +269,48 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                       {u.active ? 'Deactivate' : 'Reactivate'}
                     </button>
                   )}
+
+                  {!isSelf &&
+                    (confirmDeleteId === u.id ? (
+                      <>
+                        <button
+                          onClick={() => remove(u.id)}
+                          disabled={busyId === u.id}
+                          style={dangerSolidBtn}
+                        >
+                          {busyId === u.id ? 'Deleting...' : 'Confirm delete'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          disabled={busyId === u.id}
+                          style={ghostBtn}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setConfirmDeleteId(u.id);
+                          setActionError(null);
+                        }}
+                        disabled={busyId === u.id}
+                        style={ghostDangerBtn}
+                        title="Permanently delete this account and all of its data"
+                      >
+                        Delete
+                      </button>
+                    ))}
                 </div>
               </div>
+
+              {confirmDeleteId === u.id && (
+                <div style={{ ...msgStyle(false), marginTop: 10 }}>
+                  Permanently delete <strong>{u.displayName}</strong> (@{u.username}) and all of
+                  their data? This cannot be undone — use Deactivate instead to suspend access
+                  without erasing anything.
+                </div>
+              )}
 
               {/* Role assignment */}
               <div style={{ marginTop: 12 }}>
@@ -452,6 +509,33 @@ const dangerBtn: CSSProperties = {
   color: '#ff8a80',
   fontSize: 12.5,
   fontWeight: 600,
+  padding: '9px 13px',
+  borderRadius: 8,
+  cursor: 'pointer',
+  minHeight: 40,
+};
+
+// A more muted danger outline for the first "Delete" click, so it reads as
+// distinct from the (also red) Deactivate button next to it.
+const ghostDangerBtn: CSSProperties = {
+  border: '1px solid rgba(239,84,104,.3)',
+  background: 'rgba(0,0,0,.18)',
+  color: '#e69a96',
+  fontSize: 12.5,
+  fontWeight: 600,
+  padding: '9px 13px',
+  borderRadius: 8,
+  cursor: 'pointer',
+  minHeight: 40,
+};
+
+// Solid red for the irreversible "Confirm delete" action.
+const dangerSolidBtn: CSSProperties = {
+  border: '1px solid #ef5468',
+  background: 'linear-gradient(180deg,#ef5468,#c8324a)',
+  color: '#fff',
+  fontSize: 12.5,
+  fontWeight: 700,
   padding: '9px 13px',
   borderRadius: 8,
   cursor: 'pointer',

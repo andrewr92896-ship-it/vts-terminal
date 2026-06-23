@@ -111,6 +111,9 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
+  adminDeleteUser(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/admin/users/${id}`, { method: 'DELETE' });
+  },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');
   },

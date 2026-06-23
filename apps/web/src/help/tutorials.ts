@@ -172,6 +172,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'From each row you can change a role, reset a password, or deactivate / reactivate an account. Deactivating or resetting a password signs that user out everywhere.',
       },
       {
+        title: 'Delete an account',
+        body: 'Click "Delete", then "Confirm delete", to permanently remove an account and all of its data (to-dos, Kia deals, clients). This cannot be undone — use Deactivate instead if you only need to suspend access. You cannot delete your own account or the last remaining admin.',
+      },
+      {
         title: 'Renamed accounts',
         body: 'If a user changes their own username, the row still shows the username the account was created with ("created as @…") so you can always recognize it.',
       },
