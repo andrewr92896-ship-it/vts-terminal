@@ -456,3 +456,46 @@ export const tradingSessions = sqliteTable('trading_sessions', {
 });
 
 export type TradingSessionRow = typeof tradingSessions.$inferSelect;
+
+// ---- Market News (a shared desk feed: headlines + economic calendar) ----
+// Unlike the per-user trading data, news and calendar events are shared across
+// all traders. Anyone in the Trading workspace can read them; only writers
+// (not trading_viewer) can post or edit. authorId is nullable and set to NULL
+// when its author is deleted, so the shared feed survives.
+export const NEWS_IMPACTS = ['high', 'medium', 'low'] as const;
+export type NewsImpact = (typeof NEWS_IMPACTS)[number];
+export const NEWS_BIASES = ['bullish', 'bearish', 'neutral'] as const;
+export type NewsBias = (typeof NEWS_BIASES)[number];
+export const NEWS_CATEGORIES = ['markets', 'geopolitical', 'economic', 'crypto', 'other'] as const;
+export type NewsCategory = (typeof NEWS_CATEGORIES)[number];
+
+export const tradingNews = sqliteTable('trading_news', {
+  id: text('id').primaryKey(),
+  authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  body: text('body'),
+  source: text('source'),
+  url: text('url'),
+  category: text('category', { enum: NEWS_CATEGORIES }).notNull().default('markets'),
+  impact: text('impact', { enum: NEWS_IMPACTS }).notNull().default('medium'),
+  bias: text('bias', { enum: NEWS_BIASES }).notNull().default('neutral'),
+  publishedAt: integer('published_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TradingNewsRow = typeof tradingNews.$inferSelect;
+
+export const tradingCalendar = sqliteTable('trading_calendar', {
+  id: text('id').primaryKey(),
+  authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+  title: text('title').notNull(),
+  country: text('country'),
+  impact: text('impact', { enum: NEWS_IMPACTS }).notNull().default('medium'),
+  eventTime: integer('event_time', { mode: 'timestamp_ms' }).notNull(), // displayed in ET
+  forecast: text('forecast'),
+  previous: text('previous'),
+  actual: text('actual'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TradingCalendarRow = typeof tradingCalendar.$inferSelect;

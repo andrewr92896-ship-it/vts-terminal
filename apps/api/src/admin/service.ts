@@ -19,6 +19,8 @@ import {
   financeSettings,
   financeExpenses,
   financeNetWorth,
+  tradingNews,
+  tradingCalendar,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -219,6 +221,10 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(financeExpenses).where(eq(financeExpenses.userId, targetId));
     await tx.delete(financeNetWorth).where(eq(financeNetWorth.userId, targetId));
     await tx.delete(financeSettings).where(eq(financeSettings.userId, targetId));
+    // Market News and the economic calendar are a shared desk feed, so they
+    // survive the user — just drop the authorship link.
+    await tx.update(tradingNews).set({ authorId: null }).where(eq(tradingNews.authorId, targetId));
+    await tx.update(tradingCalendar).set({ authorId: null }).where(eq(tradingCalendar.authorId, targetId));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });
