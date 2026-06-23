@@ -106,8 +106,15 @@ export const kiaSettings = sqliteTable('kia_settings', {
   goalUnits: integer('goal_units').notNull().default(12),
   reviewCount: integer('review_count').notNull().default(5),
   // Pay plan ----------------------------------------------------------------
+  // 'total' = one rate on each deal's total profit (front+back, the default);
+  // 'split' = separate rates on front-end and back-end profit.
+  commissionMode: text('commission_mode', { enum: ['total', 'split'] })
+    .notNull()
+    .default('total'),
   // Commission stored in basis points (1350 = 13.5%) to avoid float drift.
   commissionBp: integer('commission_bp').notNull().default(1350),
+  commissionFrontBp: integer('commission_front_bp').notNull().default(0),
+  commissionBackBp: integer('commission_back_bp').notNull().default(0),
   // Whether the unit bonus requires a minimum review percentage at all.
   reviewRequired: integer('review_required', { mode: 'boolean' }).notNull().default(true),
   reviewReqPct: integer('review_req_pct').notNull().default(50),
@@ -141,7 +148,11 @@ export const kiaDeals = sqliteTable('kia_deals', {
   customer: text('customer').notNull(),
   model: text('model').notNull(),
   type: text('type', { enum: ['New', 'Used'] }).notNull(),
-  profit: integer('profit').notNull(), // whole US dollars
+  profit: integer('profit').notNull(), // total profit (front+back), whole US dollars
+  // Optional front/back split, used by split-commission pay plans. Null when
+  // the deal was entered as a single total.
+  frontProfit: integer('front_profit'),
+  backProfit: integer('back_profit'),
   soldAt: integer('sold_at', { mode: 'timestamp_ms' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });

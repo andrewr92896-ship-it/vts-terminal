@@ -60,6 +60,8 @@ export interface RemovedKiaDeal {
   model: string;
   type: 'New' | 'Used';
   profit: number;
+  frontProfit: number | null;
+  backProfit: number | null;
   soldAt: number;
 }
 
@@ -97,6 +99,8 @@ export interface KiaDeal {
   model: string;
   type: 'New' | 'Used';
   profit: number;
+  frontProfit: number | null;
+  backProfit: number | null;
   dateLabel: string;
   soldAt: number;
 }
@@ -146,7 +150,10 @@ export interface KiaBonusTier {
 }
 
 export interface KiaPayPlan {
-  commissionRate: number; // fraction, e.g. 0.135
+  commissionMode: 'total' | 'split';
+  commissionRate: number; // total mode fraction, e.g. 0.135
+  frontRate: number; // split mode: front-end fraction
+  backRate: number; // split mode: back-end fraction
   reviewRequired: boolean;
   reviewReqPct: number;
   bonusTiers: KiaBonusTier[];

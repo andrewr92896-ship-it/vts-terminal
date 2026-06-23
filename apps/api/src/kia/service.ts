@@ -15,7 +15,12 @@ export interface BonusTier {
 
 // The editable, per-user compensation plan.
 export interface PayPlan {
-  commissionRate: number; // fraction of profit, e.g. 0.135
+  // 'total' uses one rate on each deal's total profit; 'split' uses separate
+  // front-end and back-end rates.
+  commissionMode: 'total' | 'split';
+  commissionRate: number; // total mode: fraction of total profit, e.g. 0.135
+  frontRate: number; // split mode: fraction of front-end profit
+  backRate: number; // split mode: fraction of back-end profit
   reviewRequired: boolean; // whether the bonus needs a minimum review %
   reviewReqPct: number; // that minimum, when required
   bonusTiers: BonusTier[]; // non-stacking; highest tier reached is earned
@@ -28,11 +33,29 @@ const DEFAULT_BONUS_TIERS: BonusTier[] = [
 ];
 
 export const DEFAULT_PAY_PLAN: PayPlan = {
+  commissionMode: 'total',
   commissionRate: 0.135,
+  frontRate: 0,
+  backRate: 0,
   reviewRequired: true,
   reviewReqPct: 50,
   bonusTiers: DEFAULT_BONUS_TIERS,
 };
+
+// Commission for one deal under the given plan. In split mode a deal without a
+// recorded front/back breakdown is treated as all front-end.
+function dealCommission(deal: Pick<KiaDealRow, 'profit' | 'frontProfit' | 'backProfit'>, plan: PayPlan): number {
+  if (plan.commissionMode === 'split') {
+    const front = deal.frontProfit ?? deal.profit;
+    const back = deal.backProfit ?? 0;
+    return front * plan.frontRate + back * plan.backRate;
+  }
+  return deal.profit * plan.commissionRate;
+}
+
+function commissionForDeals(deals: KiaDealRow[], plan: PayPlan): number {
+  return Math.round(deals.reduce((sum, d) => sum + dealCommission(d, plan), 0));
+}
 
 type KiaSettingsRow = typeof kiaSettings.$inferSelect;
 
@@ -58,7 +81,10 @@ function parsePayPlan(row: KiaSettingsRow | undefined): PayPlan {
     }
   }
   return {
+    commissionMode: row.commissionMode === 'split' ? 'split' : 'total',
     commissionRate: (row.commissionBp ?? 1350) / 10000,
+    frontRate: (row.commissionFrontBp ?? 0) / 10000,
+    backRate: (row.commissionBackBp ?? 0) / 10000,
     reviewRequired: row.reviewRequired ?? true,
     reviewReqPct: row.reviewReqPct ?? 50,
     bonusTiers: [...tiers].sort((a, b) => b.units - a.units),
@@ -188,6 +214,8 @@ export interface KiaDeal {
   model: string;
   type: 'New' | 'Used';
   profit: number;
+  frontProfit: number | null;
+  backProfit: number | null;
   dateLabel: string;
   soldAt: number;
 }
@@ -263,7 +291,14 @@ function computeMetrics(
 ): KiaMetrics {
   const units = deals.length;
   const totalProfit = deals.reduce((a, d) => a + d.profit, 0);
-  const commission = Math.round(totalProfit * plan.commissionRate);
+  const commission = commissionForDeals(deals, plan);
+  // Blended rate (commission ÷ total profit) used for the headline % and pace.
+  const effectiveRate =
+    totalProfit > 0
+      ? commission / totalProfit
+      : plan.commissionMode === 'split'
+        ? plan.frontRate
+        : plan.commissionRate;
   const reviewPct = units > 0 ? Math.round((reviewCount / units) * 100) : 0;
   // When the plan doesn't require reviews, the bonus is never gated by them.
   const reviewOk = !plan.reviewRequired || reviewPct >= plan.reviewReqPct;
@@ -280,7 +315,7 @@ function computeMetrics(
   const elapsed = dayOfMonth > 0 ? dayOfMonth : 1;
   const paceUnits = isCurrent ? Math.round((units / elapsed) * daysInMonth) : units;
   const paceProfit = isCurrent ? Math.round((totalProfit / elapsed) * daysInMonth) : totalProfit;
-  const paceComm = Math.round(paceProfit * plan.commissionRate);
+  const paceComm = Math.round(paceProfit * effectiveRate);
 
   return {
     units,
@@ -289,7 +324,7 @@ function computeMetrics(
     unitPct,
     totalProfit,
     commission,
-    commissionRate: plan.commissionRate,
+    commissionRate: effectiveRate,
     reviewCount,
     reviewPct,
     reviewReq: plan.reviewReqPct,
@@ -373,7 +408,7 @@ export async function getDashboard(
         label: monthLabel(k),
         units: rows.length,
         totalProfit,
-        commission: Math.round(totalProfit * payPlan.commissionRate),
+        commission: commissionForDeals(rows, payPlan),
       };
     })
     .sort((a, b) => (a.month < b.month ? 1 : -1));
@@ -391,6 +426,8 @@ export async function getDashboard(
     model: r.model,
     type: r.type,
     profit: r.profit,
+    frontProfit: r.frontProfit,
+    backProfit: r.backProfit,
     soldAt: r.soldAt.getTime(),
     dateLabel: dateLabelFmt.format(r.soldAt),
   }));
@@ -411,7 +448,10 @@ export async function getDashboard(
 export async function updatePayPlan(
   userId: string,
   input: {
+    commissionMode?: 'total' | 'split';
     commissionPct?: number;
+    commissionFrontPct?: number;
+    commissionBackPct?: number;
     reviewRequired?: boolean;
     reviewReqPct?: number;
     bonusTiers?: BonusTier[];
@@ -419,11 +459,12 @@ export async function updatePayPlan(
 ): Promise<void> {
   await ensureKiaSeed(userId);
   const patch: Partial<typeof kiaSettings.$inferInsert> = { updatedAt: new Date() };
+  const toBp = (pct: number) => Math.round(Math.max(0, Math.min(100, pct)) * 100);
 
-  if (input.commissionPct != null) {
-    const bp = Math.round(Math.max(0, Math.min(100, input.commissionPct)) * 100);
-    patch.commissionBp = bp;
-  }
+  if (input.commissionMode != null) patch.commissionMode = input.commissionMode;
+  if (input.commissionPct != null) patch.commissionBp = toBp(input.commissionPct);
+  if (input.commissionFrontPct != null) patch.commissionFrontBp = toBp(input.commissionFrontPct);
+  if (input.commissionBackPct != null) patch.commissionBackBp = toBp(input.commissionBackPct);
   if (input.reviewRequired != null) patch.reviewRequired = input.reviewRequired;
   if (input.reviewReqPct != null) {
     patch.reviewReqPct = Math.round(Math.max(0, Math.min(100, input.reviewReqPct)));
@@ -441,7 +482,15 @@ export async function updatePayPlan(
 
 export async function addDeal(
   userId: string,
-  input: { customer?: string; model: string; type: 'New' | 'Used'; profit: number; soldAt?: string },
+  input: {
+    customer?: string;
+    model: string;
+    type: 'New' | 'Used';
+    profit?: number;
+    frontProfit?: number;
+    backProfit?: number;
+    soldAt?: string;
+  },
 ): Promise<void> {
   await ensureKiaSeed(userId);
   let soldAt: Date;
@@ -452,13 +501,20 @@ export async function addDeal(
     const n = etNow();
     soldAt = dayAtNoonUtc(n.year, n.month, n.day);
   }
+  // When a front/back split is given, total profit is their sum.
+  const split = input.frontProfit != null || input.backProfit != null;
+  const front = input.frontProfit != null ? Math.max(0, Math.round(input.frontProfit)) : null;
+  const back = input.backProfit != null ? Math.max(0, Math.round(input.backProfit)) : null;
+  const profit = split ? (front ?? 0) + (back ?? 0) : Math.max(0, Math.round(input.profit ?? 0));
   await db.insert(kiaDeals).values({
     id: crypto.randomUUID(),
     userId,
     customer: (input.customer || 'Walk-in').trim() || 'Walk-in',
     model: input.model.trim(),
     type: input.type,
-    profit: Math.round(input.profit),
+    profit,
+    frontProfit: front,
+    backProfit: back,
     soldAt,
     createdAt: new Date(),
   });
@@ -472,6 +528,8 @@ export async function updateDeal(
     model?: string;
     type?: 'New' | 'Used';
     profit?: number;
+    frontProfit?: number;
+    backProfit?: number;
     soldAt?: string;
   },
 ): Promise<void> {
@@ -494,7 +552,19 @@ export async function updateDeal(
     patch.model = m;
   }
   if (input.type != null) patch.type = input.type;
-  if (input.profit != null) patch.profit = Math.max(0, Math.round(input.profit));
+  // Editing a front/back split recomputes total profit; editing total clears
+  // the split (it becomes a single number again).
+  if (input.frontProfit != null || input.backProfit != null) {
+    const front = Math.max(0, Math.round(input.frontProfit ?? existing.frontProfit ?? 0));
+    const back = Math.max(0, Math.round(input.backProfit ?? existing.backProfit ?? 0));
+    patch.frontProfit = front;
+    patch.backProfit = back;
+    patch.profit = front + back;
+  } else if (input.profit != null) {
+    patch.profit = Math.max(0, Math.round(input.profit));
+    patch.frontProfit = null;
+    patch.backProfit = null;
+  }
   if (input.soldAt != null) {
     const [y, m, d] = input.soldAt.split('-').map(Number);
     patch.soldAt = dayAtNoonUtc(y, m, d);
@@ -513,6 +583,8 @@ export interface RemovedKiaDeal {
   model: string;
   type: 'New' | 'Used';
   profit: number;
+  frontProfit: number | null;
+  backProfit: number | null;
   soldAt: number; // ms
 }
 
@@ -537,6 +609,8 @@ export async function removeDeal(
     model: row.model,
     type: row.type,
     profit: row.profit,
+    frontProfit: row.frontProfit,
+    backProfit: row.backProfit,
     soldAt: row.soldAt.getTime(),
   };
 }
@@ -553,6 +627,8 @@ export async function restoreDeal(userId: string, deal: RemovedKiaDeal): Promise
       model: deal.model,
       type: deal.type,
       profit: deal.profit,
+      frontProfit: deal.frontProfit,
+      backProfit: deal.backProfit,
       soldAt: new Date(deal.soldAt),
       createdAt: new Date(),
     })

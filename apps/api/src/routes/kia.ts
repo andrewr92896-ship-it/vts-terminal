@@ -13,7 +13,10 @@ import {
 
 const payPlanSchema = z
   .object({
+    commissionMode: z.enum(['total', 'split']).optional(),
     commissionPct: z.coerce.number().min(0).max(100).optional(),
+    commissionFrontPct: z.coerce.number().min(0).max(100).optional(),
+    commissionBackPct: z.coerce.number().min(0).max(100).optional(),
     reviewRequired: z.boolean().optional(),
     reviewReqPct: z.coerce.number().int().min(0).max(100).optional(),
     bonusTiers: z
@@ -30,16 +33,24 @@ const payPlanSchema = z
     message: 'Nothing to update',
   });
 
-const dealSchema = z.object({
-  customer: z.string().trim().max(120).optional(),
-  model: z.string().trim().min(1).max(120),
-  type: z.enum(['New', 'Used']),
-  profit: z.coerce.number().finite().min(0).max(1_000_000),
-  soldAt: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .optional(), // YYYY-MM-DD in the seller's local calendar
-});
+const money = z.coerce.number().finite().min(0).max(1_000_000);
+
+const dealSchema = z
+  .object({
+    customer: z.string().trim().max(120).optional(),
+    model: z.string().trim().min(1).max(120),
+    type: z.enum(['New', 'Used']),
+    profit: money.optional(),
+    frontProfit: money.optional(),
+    backProfit: money.optional(),
+    soldAt: z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/)
+      .optional(), // YYYY-MM-DD in the seller's local calendar
+  })
+  .refine((v) => v.profit != null || v.frontProfit != null || v.backProfit != null, {
+    message: 'Profit is required',
+  });
 
 // All fields optional for editing an existing deal.
 const dealEditSchema = z
@@ -47,7 +58,9 @@ const dealEditSchema = z
     customer: z.string().trim().max(120).optional(),
     model: z.string().trim().min(1).max(120).optional(),
     type: z.enum(['New', 'Used']).optional(),
-    profit: z.coerce.number().finite().min(0).max(1_000_000).optional(),
+    profit: money.optional(),
+    frontProfit: money.optional(),
+    backProfit: money.optional(),
     soldAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
@@ -69,6 +82,8 @@ const restoreSchema = z.object({
   model: z.string().min(1).max(120),
   type: z.enum(['New', 'Used']),
   profit: z.number().int().min(0).max(1_000_000),
+  frontProfit: z.number().int().min(0).max(1_000_000).nullable(),
+  backProfit: z.number().int().min(0).max(1_000_000).nullable(),
   soldAt: z.number().int(),
 });
 

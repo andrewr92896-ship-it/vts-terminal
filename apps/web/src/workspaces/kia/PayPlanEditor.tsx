@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { KiaPayPlan } from '../../api/types';
 import { useResponsive } from '../../hooks/useMediaQuery';
 
@@ -7,28 +7,40 @@ const RED2 = '#8d0f20';
 const CARD = '#15171b';
 const BORDER = '#2a2d33';
 
-// Editor for the per-user Kia pay plan: commission %, the (optional) review
-// requirement, and the bonus tiers. Current values are pre-filled.
+// Editor for the per-user Kia pay plan: the monthly unit goal, the commission
+// structure (a single rate on total profit, or separate front/back rates), the
+// optional review requirement, and the bonus tiers. Current values are
+// pre-filled.
 export function PayPlanEditor({
   open,
   plan,
+  goalUnits,
   busy,
   onClose,
   onSave,
 }: {
   open: boolean;
   plan: KiaPayPlan;
+  goalUnits: number;
   busy: boolean;
   onClose: () => void;
   onSave: (patch: {
+    commissionMode: 'total' | 'split';
     commissionPct: number;
+    commissionFrontPct: number;
+    commissionBackPct: number;
     reviewRequired: boolean;
     reviewReqPct: number;
     bonusTiers: { units: number; amount: number }[];
+    goalUnits: number;
   }) => void;
 }) {
   const { isPhone } = useResponsive();
+  const [mode, setMode] = useState<'total' | 'split'>(plan.commissionMode);
   const [commission, setCommission] = useState(String(+(plan.commissionRate * 100).toFixed(2)));
+  const [frontPct, setFrontPct] = useState(String(+(plan.frontRate * 100).toFixed(2)));
+  const [backPct, setBackPct] = useState(String(+(plan.backRate * 100).toFixed(2)));
+  const [goal, setGoal] = useState(String(goalUnits));
   const [reviewRequired, setReviewRequired] = useState(plan.reviewRequired);
   const [reviewReqPct, setReviewReqPct] = useState(String(plan.reviewReqPct));
   const [tiers, setTiers] = useState<{ units: string; amount: string }[]>(
@@ -52,15 +64,28 @@ export function PayPlanEditor({
 
   function save() {
     const c = Number(commission);
-    if (!Number.isFinite(c) || c < 0) return;
+    const f = Number(frontPct);
+    const b = Number(backPct);
+    const g = Number(goal);
+    // Validate only the fields that matter for the chosen mode.
+    if (mode === 'split') {
+      if (!Number.isFinite(f) || f < 0 || !Number.isFinite(b) || b < 0) return;
+    } else if (!Number.isFinite(c) || c < 0) {
+      return;
+    }
+    if (!Number.isFinite(g) || g < 1) return;
     const cleanTiers = tiers
       .map((t) => ({ units: Number(t.units), amount: Number(t.amount) }))
       .filter((t) => Number.isFinite(t.units) && t.units > 0 && Number.isFinite(t.amount) && t.amount >= 0);
     onSave({
-      commissionPct: c,
+      commissionMode: mode,
+      commissionPct: Number.isFinite(c) && c >= 0 ? c : 0,
+      commissionFrontPct: Number.isFinite(f) && f >= 0 ? f : 0,
+      commissionBackPct: Number.isFinite(b) && b >= 0 ? b : 0,
       reviewRequired,
       reviewReqPct: Number(reviewReqPct) || 0,
       bonusTiers: cleanTiers,
+      goalUnits: Math.round(g),
     });
   }
 
@@ -94,13 +119,47 @@ export function PayPlanEditor({
         </div>
 
         <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* Monthly unit goal */}
+          <div>
+            <label style={label}>Monthly unit goal</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input value={goal} onChange={(e) => setGoal(e.target.value)} type="number" min="1" step="1" style={{ ...input, width: 120 }} />
+              <span style={{ color: '#9aa0a8', fontSize: 13 }}>units / month</span>
+            </div>
+          </div>
+
           {/* Commission */}
           <div>
-            <label style={label}>Commission rate</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <input value={commission} onChange={(e) => setCommission(e.target.value)} type="number" min="0" max="100" step="0.1" style={{ ...input, width: 120 }} />
-              <span style={{ color: '#9aa0a8', fontSize: 13 }}>% of profit</span>
+            <label style={label}>Commission</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setMode('total')} style={modeBtn(mode === 'total')}>
+                % of total profit
+              </button>
+              <button onClick={() => setMode('split')} style={modeBtn(mode === 'split')}>
+                Front / back split
+              </button>
             </div>
+            {mode === 'total' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input value={commission} onChange={(e) => setCommission(e.target.value)} type="number" min="0" max="100" step="0.1" style={{ ...input, width: 120 }} />
+                <span style={{ color: '#9aa0a8', fontSize: 13 }}>% of profit</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input value={frontPct} onChange={(e) => setFrontPct(e.target.value)} type="number" min="0" max="100" step="0.1" style={{ ...input, width: 120 }} />
+                  <span style={{ color: '#9aa0a8', fontSize: 13 }}>% of front-end profit</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input value={backPct} onChange={(e) => setBackPct(e.target.value)} type="number" min="0" max="100" step="0.1" style={{ ...input, width: 120 }} />
+                  <span style={{ color: '#9aa0a8', fontSize: 13 }}>% of back-end profit</span>
+                </div>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: '#7d828a' }}>
+                  In split mode, log each deal's front and back profit separately. A deal entered
+                  as a single profit counts entirely as front-end.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Review requirement */}
@@ -154,7 +213,21 @@ export function PayPlanEditor({
   );
 }
 
-const label: React.CSSProperties = {
+function modeBtn(active: boolean): CSSProperties {
+  return {
+    flex: 1,
+    border: `1px solid ${active ? RED : BORDER}`,
+    background: active ? 'rgba(187,22,43,.15)' : 'rgba(255,255,255,.04)',
+    color: active ? '#fff' : '#9aa0a8',
+    fontSize: 12.5,
+    fontWeight: 600,
+    padding: '9px 10px',
+    borderRadius: 7,
+    cursor: 'pointer',
+  };
+}
+
+const label: CSSProperties = {
   display: 'block',
   fontSize: 10.5,
   letterSpacing: '0.5px',
@@ -164,7 +237,7 @@ const label: React.CSSProperties = {
   fontWeight: 600,
 };
 
-const input: React.CSSProperties = {
+const input: CSSProperties = {
   background: CARD,
   border: `1px solid ${BORDER}`,
   borderRadius: 7,
