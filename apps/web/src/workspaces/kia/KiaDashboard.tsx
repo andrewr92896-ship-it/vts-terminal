@@ -175,8 +175,14 @@ export function KiaDashboard() {
   const reviewColor = m.reviewOk ? GREEN : AMBER;
   const isCurrentMonth = dash.month === etToday().slice(0, 7);
   const monthKey = dash.month;
-  // Commission rate from the pay plan, shown as a tidy percent (e.g. 13.5).
-  const commPct = +(m.commissionRate * 100).toFixed(2);
+  // Show the configured pay-plan rate (e.g. 13.5%) plus the mini, not the
+  // blended effective rate — minis on thin deals would otherwise inflate it.
+  const pp = dash.payPlan;
+  const planRateLabel =
+    pp.commissionMode === 'split'
+      ? `${+(pp.frontRate * 100).toFixed(2)}/${+(pp.backRate * 100).toFixed(2)}%`
+      : `${+(pp.commissionRate * 100).toFixed(2)}%`;
+  const miniText = pp.miniAmount > 0 ? `$${pp.miniAmount.toLocaleString('en-US')} min` : '';
   const splitMode = dash.payPlan.commissionMode === 'split';
   const addDisabled = busy || !model.trim() || (splitMode ? front === '' && back === '' : profit === '');
 
@@ -195,7 +201,7 @@ export function KiaDashboard() {
     ...(showComm
       ? [
           { label: 'Total Profit', val: usd(m.totalProfit), sub: 'front + back' },
-          { label: `Commission (${commPct}%)`, val: usd(m.commission), sub: 'est. payout' },
+          { label: `Commission (${planRateLabel})`, val: usd(m.commission), sub: miniText ? `est. payout · ${miniText}` : 'est. payout' },
           {
             label: 'Unit Bonus',
             val: usd(m.bonusEarned),
@@ -392,10 +398,12 @@ export function KiaDashboard() {
           {/* Commission */}
           {showComm && (
             <div style={card}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 10 }}>Commission — {commPct}% of Profit</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 10 }}>
+                Commission — {planRateLabel}{miniText ? ` or ${miniText}` : ''}
+              </div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 30, fontWeight: 600, color: '#e07a86' }}>{money(m.commission)}</div>
               <div style={{ fontSize: 11, color: '#8b9098', marginTop: 6, lineHeight: 1.5 }}>
-                {commPct}% of {usd(m.totalProfit)} total profit on {m.units} units this month.
+                {planRateLabel} of profit per deal{miniText ? `, or the ${miniText} — whichever is higher` : ''}. {m.units} units · {usd(m.totalProfit)} total profit this month.
               </div>
             </div>
           )}
