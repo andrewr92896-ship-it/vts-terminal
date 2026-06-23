@@ -12,6 +12,8 @@ import {
 import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
+import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
+import { SESSION_BIASES } from '../db/schema.js';
 import {
   addConnection,
   listConnections,
@@ -114,6 +116,30 @@ export async function tradingRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     return syncEquityFromTradeLog(u.id, !!u.viewBrokerage);
   });
+
+  // ---- Strategy Sessions ----
+  app.get('/api/trading/sessions', read, async (request) => ({ sessions: await listSessions(request.currentUser!.id) }));
+  app.post('/api/trading/sessions', write, async (request, reply) => {
+    const parsed = addSessionSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name is required' });
+    try {
+      return { sessions: await addSession(request.currentUser!.id, parsed.data) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add session' });
+    }
+  });
+  app.patch('/api/trading/sessions/:id', write, async (request, reply) => {
+    const parsed = editSessionSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the session details' });
+    try {
+      return { sessions: await updateSession(request.currentUser!.id, (request.params as { id: string }).id, parsed.data) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update session' });
+    }
+  });
+  app.delete('/api/trading/sessions/:id', write, async (request) => ({
+    sessions: await removeSession(request.currentUser!.id, (request.params as { id: string }).id),
+  }));
 
   app.post('/api/trading/trades', write, async (request, reply) => {
     const parsed = addSchema.safeParse(request.body);
@@ -283,3 +309,20 @@ const analyzeSchema = z.object({
   imageBase64: z.string().min(1),
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
 });
+
+const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
+const sessionFields = {
+  instrument: z.string().trim().max(40).nullish(),
+  openTime: hhmm.optional(),
+  closeTime: hhmm.optional(),
+  timeframe: z.string().trim().max(16).nullish(),
+  bias: z.enum(SESSION_BIASES).optional(),
+  bullPlan: z.string().trim().max(2000).nullish(),
+  bearPlan: z.string().trim().max(2000).nullish(),
+  notes: z.string().trim().max(2000).nullish(),
+  active: z.boolean().optional(),
+};
+const addSessionSchema = z.object({ name: z.string().trim().min(1).max(80), ...sessionFields });
+const editSessionSchema = z
+  .object({ name: z.string().trim().min(1).max(80).optional(), ...sessionFields })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });

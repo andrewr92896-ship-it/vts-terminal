@@ -12,6 +12,8 @@ import type {
   HistoryData,
   NetWorthData,
   NetWorthKind,
+  SessionInput,
+  StrategySession,
   LiveWall,
   TradeInput,
   TradeLogData,
@@ -143,6 +145,18 @@ export const api = {
   },
   tradingHistory(): Promise<HistoryData> {
     return request('/api/trading/history');
+  },
+  tradingSessions(): Promise<{ sessions: StrategySession[] }> {
+    return request('/api/trading/sessions');
+  },
+  addSession(input: SessionInput): Promise<{ sessions: StrategySession[] }> {
+    return request('/api/trading/sessions', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateSession(id: string, patch: SessionInput): Promise<{ sessions: StrategySession[] }> {
+    return request(`/api/trading/sessions/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removeSession(id: string): Promise<{ sessions: StrategySession[] }> {
+    return request(`/api/trading/sessions/${id}`, { method: 'DELETE' });
   },
   tradingChallenge(): Promise<ChallengeData> {
     return request('/api/trading/challenge');

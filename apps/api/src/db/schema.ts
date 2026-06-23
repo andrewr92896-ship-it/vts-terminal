@@ -428,3 +428,31 @@ export const financeNetWorth = sqliteTable('finance_net_worth', {
 export type FinanceSettingsRow = typeof financeSettings.$inferSelect;
 export type FinanceExpenseRow = typeof financeExpenses.$inferSelect;
 export type FinanceNetWorthRow = typeof financeNetWorth.$inferSelect;
+
+// ---- Trading — Strategy Sessions ----
+// Per-user trading-session windows (e.g. London Open) with a bias and bull/bear
+// playbooks per instrument. Times are 'HH:MM' in Eastern Time; status (active /
+// opening / idle) is computed from the current ET time.
+export const SESSION_BIASES = ['bull', 'bear', 'both', 'neutral'] as const;
+export type SessionBias = (typeof SESSION_BIASES)[number];
+
+export const tradingSessions = sqliteTable('trading_sessions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  instrument: text('instrument'),
+  openTime: text('open_time').notNull().default('09:30'), // ET 'HH:MM'
+  closeTime: text('close_time').notNull().default('11:00'),
+  timeframe: text('timeframe'),
+  bias: text('bias', { enum: SESSION_BIASES }).notNull().default('neutral'),
+  bullPlan: text('bull_plan'),
+  bearPlan: text('bear_plan'),
+  notes: text('notes'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingSessionRow = typeof tradingSessions.$inferSelect;
