@@ -13,10 +13,11 @@ import {
   updateNetWorth,
   removeNetWorth,
 } from '../finance/service.js';
+import { runFinanceCommand } from '../finance/parser.js';
 import { FTP_PHASES, NET_WORTH_KINDS } from '../db/schema.js';
 import { aiConfigured } from '../ai/claude.js';
 import { generateBrief } from '../ai/brief.js';
-import { AiLimitError } from '../ai/usage.js';
+import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const usd = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 
@@ -46,6 +47,8 @@ const editExpenseSchema = z
     active: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const commandSchema = z.object({ note: z.string().trim().min(1).max(500) });
 
 const kind = z.enum(NET_WORTH_KINDS);
 const addNwSchema = z.object({ label: z.string().trim().min(1).max(80), amount: money, kind });
@@ -77,6 +80,21 @@ export async function financeRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
+    }
+  });
+
+  // Plain-English "add things" via Claude (Sonnet) — expenses, net-worth items,
+  // and FTP settings, several at once.
+  app.post('/api/finance/command', guard, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parsed = commandSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Type something to add' });
+    try {
+      await enforceAiLimit(uid(request), 'finance_command');
+      return await runFinanceCommand(uid(request), parsed.data.note);
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not process that' });
     }
   });
 

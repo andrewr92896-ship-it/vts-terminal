@@ -31,6 +31,12 @@ export function FinanceOverview() {
   const [scaleVal, setScaleVal] = useState('');
   const ai = useAiBrief(api.financeOverviewBrief);
 
+  // Claude quick-add (plain-English: expenses, net-worth items, FTP settings)
+  const [note, setNote] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteReply, setNoteReply] = useState<string | null>(null);
+  const [noteSkipped, setNoteSkipped] = useState<string[]>([]);
+
   async function load() {
     try { const d = await api.financeOverview(); setData(d); setScaleVal(String(d.settings.ftpPhase === 'funded' ? d.settings.ftpPayoutPct : d.settings.ftpDivisor)); setErr(null); }
     catch (e) { setErr(e instanceof ApiError ? e.message : 'Failed to load'); }
@@ -42,6 +48,30 @@ export function FinanceOverview() {
     try { const d = await api.financeUpdateSettings(patch); setData(d); setScaleVal(String(d.settings.ftpPhase === 'funded' ? d.settings.ftpPayoutPct : d.settings.ftpDivisor)); }
     catch (e) { setErr(e instanceof ApiError ? e.message : 'Action failed'); }
     finally { setBusy(false); }
+  }
+
+  async function quickAdd() {
+    const text = note.trim();
+    if (!text || noteBusy) return;
+    setNoteBusy(true);
+    setErr(null);
+    try {
+      const r = await api.financeCommand(text);
+      if (r.overview) setData(r.overview);
+      setNoteReply(r.reply);
+      setNoteSkipped(r.skipped);
+      if (r.applied.length) setNote('');
+    } catch (e) {
+      setErr(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Could not add that',
+      );
+    } finally {
+      setNoteBusy(false);
+    }
   }
 
   if (err) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{err}</div>;
@@ -80,6 +110,35 @@ export function FinanceOverview() {
 
       {ai.brief && <BriefCard brief={ai.brief} accent={ACCENT} onDismiss={ai.dismiss} />}
       {ai.error && <BriefError message={ai.error} onDismiss={ai.dismiss} />}
+
+      {/* Claude quick-add */}
+      <div style={{ ...card, marginBottom: 14 }}>
+        <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+          Quick add
+          <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: FAINT, letterSpacing: 0 }}>Sonnet</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={note}
+            onChange={(ev) => setNote(ev.target.value)}
+            onKeyDown={(ev) => ev.key === 'Enter' && quickAdd()}
+            placeholder='Add in plain English, e.g. "Add a $120 phone bill on the 15th" or "Add my car worth 18000 as an asset"'
+            style={{ ...input, flex: 1 }}
+          />
+          <button onClick={quickAdd} disabled={noteBusy || !note.trim()} style={{ ...accentBtn, opacity: noteBusy || !note.trim() ? 0.6 : 1 }}>
+            {noteBusy ? '…' : 'Add'}
+          </button>
+        </div>
+        {noteReply && (
+          <div style={{ marginTop: 8, fontSize: 11.5, color: '#a7d8bf', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: GREEN }}>✓</span> {noteReply}
+            <button onClick={() => { setNoteReply(null); setNoteSkipped([]); }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: FAINT, fontSize: 10.5, cursor: 'pointer' }}>dismiss</button>
+          </div>
+        )}
+        {noteSkipped.length > 0 && (
+          <div style={{ marginTop: 6, fontSize: 11, color: GOLD }}>Skipped: {noteSkipped.join('; ')}</div>
+        )}
+      </div>
 
       {/* This month headline */}
       <div style={{ ...card, marginBottom: 14 }}>
@@ -174,5 +233,6 @@ const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, b
 const sectionLabel: CSSProperties = { fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '8px 10px', outline: 'none' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '7px 12px', borderRadius: 7, cursor: 'pointer' };
+const accentBtn: CSSProperties = { fontSize: 12.5, fontWeight: 700, color: '#0a1226', background: ACCENT, border: 'none', padding: '8px 18px', borderRadius: 7, cursor: 'pointer' };
 const seg: CSSProperties = { background: 'none', border: 'none', color: MUTED, fontSize: 11.5, fontWeight: 600, padding: '7px 13px', cursor: 'pointer' };
 const segOn: CSSProperties = { background: 'rgba(111,139,255,.18)', color: ACCENT };

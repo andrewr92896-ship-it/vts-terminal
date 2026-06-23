@@ -22,6 +22,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
     intro: 'Your take-home this month across every job and business — car sales commission, real-broker trading, and Funded Trading Plus (scaled) — minus your bills.',
     steps: [
       {
+        title: 'Quick add with Claude',
+        body: 'Use the “Quick add” box to log things in plain English — e.g. “Add a $120 phone bill on the 15th”, “Add Netflix $18 on the 3rd, subscriptions”, or “Add my car worth 18000 as an asset”. Claude (Sonnet) figures out whether it’s an expense, an asset, or a liability, files it, and shows what it added (and skips anything it can’t resolve). You can add several at once.',
+      },
+      {
         title: 'Earnings this month',
         body: 'The top card adds up your earnings (Kia commission + real broker trading P/L + scaled FTP), subtracts your expenses, and shows what’s left after bills, with a “bills covered” bar.',
       },

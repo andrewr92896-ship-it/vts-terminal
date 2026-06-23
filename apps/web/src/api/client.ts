@@ -8,6 +8,7 @@ import type {
   ChallengeInput,
   ConnectionInput,
   Expense,
+  FinanceCommandResult,
   FinanceOverview,
   FtpPhase,
   HistoryData,
@@ -373,6 +374,9 @@ export const api = {
   },
   financeOverviewBrief(): Promise<{ brief: string }> {
     return request('/api/finance/overview/brief', { method: 'POST', body: JSON.stringify({}) });
+  },
+  financeCommand(note: string): Promise<FinanceCommandResult> {
+    return request('/api/finance/command', { method: 'POST', body: JSON.stringify({ note }) });
   },
   financeUpdateSettings(patch: { ftpPhase?: FtpPhase; ftpDivisor?: number; ftpPayoutPct?: number }): Promise<FinanceOverview> {
     return request('/api/finance/settings', { method: 'PATCH', body: JSON.stringify(patch) });

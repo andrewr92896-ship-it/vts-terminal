@@ -564,6 +564,16 @@ export interface NetWorthData {
   total: number;
 }
 
+// Result of adding things from a plain-English note via Claude.
+export interface FinanceCommandResult {
+  overview: FinanceOverview | null; // refreshed when anything changed
+  expenses: Expense[] | null;
+  networth: NetWorthData | null;
+  applied: string[];
+  skipped: string[];
+  reply: string;
+}
+
 // ---- Trading — Strategy Sessions (mirror of apps/api/src/trading/sessions.ts) ----
 export type SessionBias = 'bull' | 'bear' | 'both' | 'neutral';
 export type SessionStatus = 'active' | 'opening' | 'idle';
