@@ -23,6 +23,7 @@ import type {
   TradeLogData,
   RemovedTrade,
   KiaDashboard,
+  KiaDealParseResult,
   RemovedKiaDeal,
   RemovedTodoItem,
   PracticeOverview,
@@ -282,6 +283,9 @@ export const api = {
   },
   kiaDashboard(month?: string): Promise<KiaDashboard> {
     return request(`/api/kia/dashboard${monthQuery(month)}`);
+  },
+  kiaParseDeal(note: string): Promise<KiaDealParseResult> {
+    return request('/api/kia/deals/parse', { method: 'POST', body: JSON.stringify({ note }) });
   },
   kiaAddDeal(
     deal: {
