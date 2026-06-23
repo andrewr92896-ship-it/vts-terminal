@@ -31,6 +31,7 @@ import { WealthClients } from '../workspaces/wealth/WealthClients';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradeLog } from '../workspaces/trading/TradeLog';
 import { Alerts } from '../workspaces/trading/Alerts';
+import { History } from '../workspaces/trading/History';
 
 // The Studies screens bundle the 400-question Series 65 database, so they're
 // code-split into a lazy chunk that only loads when the Studies workspace is
@@ -55,6 +56,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <Alerts onNavigate={onNavigate} />;
     case 'log':
       return <TradeLog />;
+    case 'history':
+      return <History />;
     case 'td_all':
       return <TodoAll />;
     case 'kia_dash':

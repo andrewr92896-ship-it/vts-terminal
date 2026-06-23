@@ -2,6 +2,7 @@ import type {
   AdminUser,
   AlertsData,
   BrokerStatus,
+  HistoryData,
   LiveWall,
   TradeInput,
   TradeLogData,
@@ -127,6 +128,9 @@ export const api = {
   },
   tradeLog(): Promise<TradeLogData> {
     return request('/api/trading/trades');
+  },
+  tradingHistory(): Promise<HistoryData> {
+    return request('/api/trading/history');
   },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });
