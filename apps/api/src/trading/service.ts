@@ -13,6 +13,8 @@ import { fetchKrakenPositions } from './brokers/kraken.js';
 import { fetchTradeStationPositions } from './brokers/tradestation.js';
 import { fetchFtpPositions } from './brokers/ftp.js';
 import { sampleLiveTrades } from './sample.js';
+import { reconcile } from './history.js';
+import { isAdmin, parseRoles } from '../auth/rbac.js';
 import type { BrokerKey, BrokerLiveResult, LiveTrade, LiveWall } from './types.js';
 
 // Compute slippage once, centrally: the actual fill minus the planned/alert
@@ -123,7 +125,21 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
     }
   }
 
-  trades = gateBalances(withSlippage(trades), canSeeBalances).sort(newestFirst);
+  // Reconcile open positions → History before gating P/L for display. Only the
+  // account owner (an admin) drives this, so each closure is recorded once and
+  // against the real, ungated broker P/L. Never let a bookkeeping hiccup blank
+  // the wall.
+  const withSlip = withSlippage(trades);
+  if (isAdmin(parseRoles(user))) {
+    const okBrokers = new Set(brokers.filter((b) => b.ok).map((b) => b.broker));
+    try {
+      await reconcile(user.id, okBrokers, withSlip);
+    } catch {
+      /* ignore — the Live Wall must still render */
+    }
+  }
+
+  trades = gateBalances(withSlip, canSeeBalances).sort(newestFirst);
   const failed = brokers.filter((b) => b.configured && !b.ok);
   const note =
     failed.length > 0

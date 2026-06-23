@@ -71,6 +71,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  history: {
+    title: 'Trade History',
+    intro: 'Closed trades, recorded automatically. When an open position on the Live Wall closes (the broker stops reporting it), it’s moved here with its last-seen exit price and P/L.',
+    steps: [
+      {
+        title: 'Automatic',
+        body: 'You don’t add anything here — keep the Live Wall open and closures are captured as they happen. Exit price and P/L are the last values seen while the trade was open.',
+      },
+      {
+        title: 'Read your results',
+        body: 'The cards show closed-trade count, win rate, and total realized P/L. The “By Strategy” and “By Instrument” panels break those down so you can see what’s working.',
+      },
+      {
+        title: 'Closed trades',
+        body: 'The table lists each closed trade with its instrument, direction, entry → exit, strategy, realized P/L, and close date — newest first.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Use “Hide $” or Privacy mode to mask P/L during a screen-share. P/L is only shown if your account has the brokerage-view permission.',
+      },
+    ],
+  },
+
   log: {
     title: 'Using the Trade Log',
     intro: 'Your record of every trade — planned vs. actual entry, slippage, and realized P/L. New accounts start empty; log trades as you take them. Each log is private to your login.',

@@ -368,6 +368,47 @@ export interface AlertsData {
   aiConfigured: boolean;
 }
 
+// ---- Trading — History (mirror of apps/api/src/trading/history.ts) ----
+export interface HistoryRecord {
+  id: string;
+  broker: string;
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  plannedEntry: number | null;
+  entryPrice: number;
+  exitPrice: number | null;
+  slippage: number | null;
+  realizedPl: number | null;
+  strategy: string | null;
+  timeframe: string | null;
+  openedAt: number | null;
+  closedAt: number | null;
+}
+
+export interface HistoryGroup {
+  label: string;
+  count: number;
+  wins: number;
+  losses: number;
+  realizedPl: number | null;
+}
+
+export interface HistorySummary {
+  closed: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalRealizedPl: number | null;
+  byStrategy: HistoryGroup[];
+  byInstrument: HistoryGroup[];
+}
+
+export interface HistoryData {
+  trades: HistoryRecord[];
+  summary: HistorySummary;
+}
+
 // Fields accepted when creating/editing a trade.
 export interface TradeInput {
   broker?: string | null;

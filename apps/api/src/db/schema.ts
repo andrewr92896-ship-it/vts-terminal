@@ -278,3 +278,43 @@ export const tvAlerts = sqliteTable('tv_alerts', {
 });
 
 export type TvAlertRow = typeof tvAlerts.$inferSelect;
+
+// ---- Trading — broker positions & History ----
+// Snapshot of the open positions shown on the Live Wall (which streams live and
+// stores nothing), so closures can be detected: each Live Wall refresh upserts
+// the open rows, and any row whose broker still responded but is no longer
+// present is flipped to 'closed' — auto-populating History. Keyed to the owner
+// (the admin account holder). Exit price / realized P/L are the last values
+// seen while the position was open (approximate; can be reconciled against a
+// broker's closed-trade history later).
+export const POSITION_STATUSES = ['open', 'closed'] as const;
+export type PositionStatus = (typeof POSITION_STATUSES)[number];
+
+export const tradingPositions = sqliteTable('trading_positions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  key: text('key').notNull(), // `${broker}:${brokerTradeId}` — identifies the position
+  broker: text('broker').notNull(),
+  instrument: text('instrument').notNull(),
+  side: text('side', { enum: TRADE_SIDES }).notNull().default('long'),
+  units: real('units').notNull().default(0),
+  plannedEntry: real('planned_entry'),
+  entryPrice: real('entry_price').notNull(),
+  takeProfit: real('take_profit'),
+  stopLoss: real('stop_loss'),
+  currentPrice: real('current_price'), // last seen mark while open
+  unrealizedPl: real('unrealized_pl'), // last seen open P/L while open
+  exitPrice: real('exit_price'), // set on close (= last currentPrice)
+  realizedPl: real('realized_pl'), // set on close (= last unrealizedPl)
+  strategy: text('strategy'),
+  timeframe: text('timeframe'),
+  status: text('status', { enum: POSITION_STATUSES }).notNull().default('open'),
+  openedAt: integer('opened_at', { mode: 'timestamp_ms' }),
+  firstSeenAt: integer('first_seen_at', { mode: 'timestamp_ms' }).notNull(),
+  lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
+  closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+});
+
+export type TradingPositionRow = typeof tradingPositions.$inferSelect;

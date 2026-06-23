@@ -10,6 +10,7 @@ import {
   updateTrade,
 } from '../trading/trades.js';
 import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
+import { getHistory } from '../trading/history.js';
 import { aiConfigured } from '../ai/claude.js';
 import { TRADE_SIDES, TRADE_STATUSES } from '../db/schema.js';
 
@@ -79,6 +80,12 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.get('/api/trading/trades', read, async (request) => {
     const u = request.currentUser!;
     return getTrades(u.id, !!u.viewBrokerage);
+  });
+
+  // ---- History (closed positions, auto-recorded from the Live Wall) ----
+  app.get('/api/trading/history', read, async (request) => {
+    const u = request.currentUser!;
+    return getHistory(u.id, !!u.viewBrokerage);
   });
 
   app.post('/api/trading/trades', write, async (request, reply) => {
