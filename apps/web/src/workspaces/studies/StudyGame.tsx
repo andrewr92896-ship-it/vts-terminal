@@ -9,6 +9,8 @@ import {
   type Series65Topic,
 } from './series65Questions';
 import { SERIES65_VOCAB } from './series65Vocab';
+import { Flashcards } from './Flashcards';
+import { consumeStudyView, type StudyView } from './studiesNav';
 import {
   CATEGORY_META,
   PASS_THRESHOLD,
@@ -64,6 +66,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
 
   const poolsRef = useRef(buildPools());
   const [game, setGame] = useState<GameState>(() => loadGame(storageKey));
+  const [view, setView] = useState<StudyView>(() => consumeStudyView() ?? 'quiz');
   const [mode, setMode] = useState<Mode>('mix');
   const [current, setCurrent] = useState<{ q: Series65Question; topic: Series65Topic } | null>(null);
   const [selected, setSelected] = useState<Letter | null>(null);
@@ -135,7 +138,61 @@ export function StudyGame({ theme }: { theme: Theme }) {
   const overallScore = scorePct(game.recent);
   const muted = '#a99ff0';
 
-  if (!current) return <div style={{ color: muted, padding: 20, fontSize: 13 }}>Loading game…</div>;
+  // Shared header with the Quiz / Flashcards view toggle.
+  const header = (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
+      <div>
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Study Game</h2>
+        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
+          Series 65 · level up each category · pass line {PASS_THRESHOLD.toFixed(1)}%
+        </p>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden' }}>
+          {(['quiz', 'cards'] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              style={{
+                fontSize: 11.5,
+                fontWeight: 600,
+                padding: '7px 15px',
+                cursor: 'pointer',
+                border: 'none',
+                background: view === v ? theme.accent : 'transparent',
+                color: view === v ? theme.accentText : muted,
+              }}
+            >
+              {v === 'quiz' ? 'Quiz' : 'Flashcards'}
+            </button>
+          ))}
+        </div>
+        {view === 'quiz' && (
+          <button onClick={resetProgress} style={ghostBtn(theme)} title="Clear all levels and scores">
+            Reset progress
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (view === 'cards') {
+    return (
+      <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+        {header}
+        <Flashcards theme={theme} embedded />
+      </div>
+    );
+  }
+
+  if (!current) {
+    return (
+      <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff' }}>
+        {header}
+        <div style={{ color: muted, padding: 20, fontSize: 13 }}>Loading game…</div>
+      </div>
+    );
+  }
 
   const q = current.q;
   const cat = current.topic;
@@ -148,17 +205,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Study Game</h2>
-          <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Series 65 · level up each category as you go · pass line {PASS_THRESHOLD.toFixed(1)}%
-          </p>
-        </div>
-        <button onClick={resetProgress} style={ghostBtn(theme)} title="Clear all levels and scores">
-          Reset progress
-        </button>
-      </div>
+      {header}
 
       {/* Category selector */}
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>

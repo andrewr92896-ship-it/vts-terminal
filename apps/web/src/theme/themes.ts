@@ -135,7 +135,6 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
   studies: [
     { key: 'st_home', label: 'Subjects' },
     { key: 'st_game', label: 'Study Game' },
-    { key: 'st_cards', label: 'Flashcards' },
     { key: 'st_progress', label: 'Progress' },
   ],
   trading: [

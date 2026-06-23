@@ -11,6 +11,7 @@ import {
   round1,
   scorePct,
 } from './series65Game';
+import { requestStudyView } from './studiesNav';
 
 // Read-only view of the Study Game progress: overall score vs. the pass line,
 // plus each category's level and score.
@@ -96,10 +97,10 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-            <button onClick={() => onNavigate('st_game')} style={primaryBtn(theme, accentGrad)}>
+            <button onClick={() => { requestStudyView('quiz'); onNavigate('st_game'); }} style={primaryBtn(theme, accentGrad)}>
               Continue playing
             </button>
-            <button onClick={() => onNavigate('st_cards')} style={ghostBtn(theme)}>
+            <button onClick={() => { requestStudyView('cards'); onNavigate('st_game'); }} style={ghostBtn(theme)}>
               Flashcards
             </button>
           </div>

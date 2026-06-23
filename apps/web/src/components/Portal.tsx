@@ -32,9 +32,6 @@ import { WealthClients } from '../workspaces/wealth/WealthClients';
 // The Studies screens bundle the 400-question Series 65 database, so they're
 // code-split into a lazy chunk that only loads when the Studies workspace is
 // opened — keeping the initial app load lean for everyone else.
-const Flashcards = lazy(() =>
-  import('../workspaces/studies/Flashcards').then((m) => ({ default: m.Flashcards })),
-);
 const Series65Game = lazy(() =>
   import('../workspaces/studies/StudyGame').then((m) => ({ default: m.StudyGame })),
 );
@@ -65,8 +62,6 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
     case 'st_game':
       return <Series65Game theme={theme} />;
-    case 'st_cards':
-      return <Flashcards theme={theme} />;
     case 'st_progress':
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     default:

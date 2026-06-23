@@ -11,7 +11,7 @@ const DEF_SECS = 20;
 
 type Filter = 'All' | Series65Topic;
 
-export function Flashcards({ theme }: { theme: Theme }) {
+export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded?: boolean }) {
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
 
@@ -72,13 +72,15 @@ export function Flashcards({ theme }: { theme: Theme }) {
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
-      <div style={{ marginBottom: 14 }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Flashcards</h2>
-        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#a99ff0' }}>
-          Series 65 vocabulary · {SERIES65_VOCAB.length} terms
-        </p>
-      </div>
+    <div style={{ maxWidth: 760, margin: embedded ? 0 : '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+      {!embedded && (
+        <div style={{ marginBottom: 14 }}>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Flashcards</h2>
+          <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#a99ff0' }}>
+            Series 65 vocabulary · {SERIES65_VOCAB.length} terms
+          </p>
+        </div>
+      )}
 
       {/* Topic filter */}
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>

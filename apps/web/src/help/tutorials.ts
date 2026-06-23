@@ -154,26 +154,12 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Each category has its own level ladder (Novice → Grandmaster) that climbs as you answer more questions in it. Max it out and the category prestiges — a crown 👑 is added and the ladder restarts.',
       },
       {
+        title: 'Flashcards',
+        body: 'Flip the Quiz / Flashcards switch at the top right to study the Series 65 vocabulary deck — filter by topic, tap a card to reveal the definition, or turn on auto-rotate (term 10s / definition 20s).',
+      },
+      {
         title: 'Reset',
         body: 'Use “Skip” to pass on a question without scoring it, or “Reset progress” to clear all levels and scores and start fresh.',
-      },
-    ],
-  },
-  st_cards: {
-    title: 'Flashcards',
-    intro: 'Series 65 vocabulary, drawn from the terms in the question bank and grouped by topic.',
-    steps: [
-      {
-        title: 'Filter by topic',
-        body: 'Use the chips at the top to show all cards or just one area (Economics, Regulations & Ethics, Investments, Client Management).',
-      },
-      {
-        title: 'Flip a card',
-        body: 'Tap the card (or use “Show definition”) to reveal the meaning. Use Prev / Next to move through the deck.',
-      },
-      {
-        title: 'Auto-rotate',
-        body: 'Turn on “Auto-rotate” to cycle hands-free: the term shows for 10 seconds, then the definition for 20, then it advances. A countdown bar shows the timing.',
       },
     ],
   },

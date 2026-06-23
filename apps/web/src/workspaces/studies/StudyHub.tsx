@@ -4,6 +4,7 @@ import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { SERIES65_QUESTIONS, SERIES65_TOPICS } from './series65Questions';
 import { SERIES65_VOCAB } from './series65Vocab';
+import { requestStudyView } from './studiesNav';
 
 // Study Hub landing: the subject list. Series 65 is the first (and currently
 // only) live track; the buttons jump to its quiz, flashcards, and progress.
@@ -49,10 +50,10 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         </div>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={() => onNavigate('st_game')} style={primaryBtn(theme, accentGrad)}>
+          <button onClick={() => { requestStudyView('quiz'); onNavigate('st_game'); }} style={primaryBtn(theme, accentGrad)}>
             Play the Study Game
           </button>
-          <button onClick={() => onNavigate('st_cards')} style={ghostBtn(theme)}>
+          <button onClick={() => { requestStudyView('cards'); onNavigate('st_game'); }} style={ghostBtn(theme)}>
             Flashcards
           </button>
           <button onClick={() => onNavigate('st_progress')} style={ghostBtn(theme)}>
