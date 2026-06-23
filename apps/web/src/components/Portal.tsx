@@ -28,6 +28,9 @@ import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
 import { WealthClients } from '../workspaces/wealth/WealthClients';
+import { FinanceOverview } from '../workspaces/finance/FinanceOverview';
+import { FinanceExpenses } from '../workspaces/finance/FinanceExpenses';
+import { FinanceNetWorth } from '../workspaces/finance/FinanceNetWorth';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradeLog } from '../workspaces/trading/TradeLog';
 import { Alerts } from '../workspaces/trading/Alerts';
@@ -73,6 +76,12 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <KiaTodo />;
     case 'wm_clients':
       return <WealthClients />;
+    case 'fin_overview':
+      return <FinanceOverview />;
+    case 'fin_expenses':
+      return <FinanceExpenses />;
+    case 'fin_networth':
+      return <FinanceNetWorth />;
     case 'st_home':
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
     case 'st_game':

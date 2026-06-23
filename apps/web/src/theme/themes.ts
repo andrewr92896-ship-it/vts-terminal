@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'wealth';
+export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'wealth' | 'finance';
 
 export interface Theme {
   pageBg: string;
@@ -65,6 +65,16 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#2f9e86',
     accentText: '#06231d',
   },
+  finance: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1a1f44 0%,#0a0e22 60%)',
+    headerBg: 'linear-gradient(90deg,#15193a 0%,#222a5e 100%)',
+    headerBorder: '#2e3766',
+    navBg: '#12162f',
+    navBorder: '#262e57',
+    accent: '#6f8bff',
+    accent2: '#4f63d6',
+    accentText: '#0a0e22',
+  },
 };
 
 export function accentGradient(t: Theme): string {
@@ -121,6 +131,13 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     // Same Vitalis logo as Trading, with the Retirement & Wealth subtitle.
     wordmark: '/brand/vitalis-wealth-wordmark.svg',
   },
+  finance: {
+    name: () => 'FINANCE',
+    sub: 'Personal Finance',
+    color: '#9fb0ff',
+    size: '21px',
+    letterSpacing: '2px',
+  },
 };
 
 export interface TabDef {
@@ -161,6 +178,11 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'wm_planning', label: 'Planning' },
     { key: 'wm_compliance', label: 'Compliance' },
   ],
+  finance: [
+    { key: 'fin_overview', label: 'Overview' },
+    { key: 'fin_expenses', label: 'Expenses' },
+    { key: 'fin_networth', label: 'Net Worth' },
+  ],
 };
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
@@ -169,6 +191,7 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   todo: 'td_all',
   studies: 'st_home',
   wealth: 'wm_home',
+  finance: 'fin_overview',
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
@@ -177,4 +200,5 @@ export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   trading: 'Trading',
   studies: 'Studies',
   wealth: 'Wealth Management',
+  finance: 'Finance',
 };

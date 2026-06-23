@@ -1,6 +1,6 @@
 import type { UserRow } from '../db/schema.js';
 
-export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'wealth';
+export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'wealth' | 'finance';
 
 // Granular, admin-assigned roles. A user can hold any combination. `admin`
 // grants everything (including user management); `trading_viewer` is read-only
@@ -13,6 +13,7 @@ export const ROLE_KEYS = [
   'studies',
   'todo',
   'wealth',
+  'finance',
 ] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
 
@@ -24,6 +25,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   studies: 'Studies',
   todo: 'To Do',
   wealth: 'Wealth Management',
+  finance: 'Finance',
 };
 
 export function isRoleKey(v: unknown): v is RoleKey {
@@ -53,6 +55,7 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   todo: ['todo'],
   studies: ['studies'],
   wealth: ['wealth'],
+  finance: ['finance'],
 };
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
@@ -70,7 +73,7 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
 
 // Ordered as the top-bar switcher shows them.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'wealth', 'studies'];
+  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'wealth', 'finance', 'studies'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 
