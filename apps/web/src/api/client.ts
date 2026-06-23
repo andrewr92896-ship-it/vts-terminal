@@ -251,6 +251,9 @@ export const api = {
   parseTrade(note: string): Promise<TradeCommandResult> {
     return request('/api/trading/trades/parse', { method: 'POST', body: JSON.stringify({ note }) });
   },
+  tradeLogBrief(): Promise<{ brief: string }> {
+    return request('/api/trading/trades/brief', { method: 'POST', body: JSON.stringify({}) });
+  },
   updateTrade(id: string, patch: TradeInput): Promise<TradeLogData> {
     return request(`/api/trading/trades/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
   },
@@ -310,6 +313,9 @@ export const api = {
   },
   kiaCommand(note: string): Promise<KiaCommandResult> {
     return request('/api/kia/command', { method: 'POST', body: JSON.stringify({ note }) });
+  },
+  kiaBrief(month?: string): Promise<{ brief: string }> {
+    return request(`/api/kia/brief${monthQuery(month)}`, { method: 'POST', body: JSON.stringify({}) });
   },
   kiaAddDeal(
     deal: {

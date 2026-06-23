@@ -4,6 +4,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy, maskName } from '../../privacy/privacy';
+import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import { PayPlanEditor } from './PayPlanEditor';
 import { useDealership } from './dealership';
 import type { KiaDashboard as Dash, RemovedKiaDeal, TodoItem } from '../../api/types';
@@ -32,6 +33,7 @@ export function KiaDashboard() {
   const [busy, setBusy] = useState(false);
   const [hideComm, setHideComm] = useState(false);
   const [payPlanOpen, setPayPlanOpen] = useState(false);
+  const ai = useAiBrief(() => api.kiaBrief(dash?.month));
 
   // Manual deal entry form
   const [customer, setCustomer] = useState('');
@@ -277,6 +279,7 @@ export function KiaDashboard() {
           <button onClick={() => setHideComm((v) => !v)} style={ghostBtn}>
             {hideComm ? 'Show $ details' : 'Hide $ details'}
           </button>
+          <BriefButton onClick={ai.run} busy={ai.busy} accent={RED} accentText="#fff" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: '#9aa0a8' }}>
             <span style={{ width: 8, height: 8, borderRadius: '50%', background: RED }} />
             Manual entry
@@ -289,6 +292,9 @@ export function KiaDashboard() {
           {actionError} — refreshed. Click to dismiss.
         </div>
       )}
+
+      {ai.brief && <BriefCard brief={ai.brief} accent={RED} onDismiss={ai.dismiss} />}
+      {ai.error && <BriefError message={ai.error} onDismiss={ai.dismiss} />}
 
       {/* Priority tasks pulled from the shared To Do list */}
       {priority.length > 0 && (

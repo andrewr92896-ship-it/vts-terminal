@@ -283,6 +283,34 @@ export async function tradingRoutes(app: FastifyInstance) {
     return getTrades(u.id, !!u.viewBrokerage);
   });
 
+  // Claude (Sonnet) recap of the trade log.
+  app.post('/api/trading/trades/brief', read, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const u = request.currentUser!;
+    const log = await getTrades(u.id, !!u.viewBrokerage);
+    const s = log.summary;
+    if (s.total === 0) return { brief: 'No trades logged yet — add a few and I’ll recap how you’re trading.' };
+    const usd = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
+    const recent = log.trades.slice(0, 12).map((t) => {
+      const pl = t.realizedPl != null ? ` ${t.realizedPl >= 0 ? '+' : ''}${usd(t.realizedPl)}` : '';
+      return `${t.side} ${t.instrument} ${t.status}${t.strategy ? ` [${t.strategy}]` : ''}${pl}`;
+    });
+    const data = [
+      `Trades: ${s.total} (${s.open} open, ${s.closed} closed). Win rate ${Math.round(s.winRate * 100)}% (${s.wins}W/${s.losses}L).`,
+      s.totalRealizedPl != null ? `Realized P/L ${usd(s.totalRealizedPl)}.` : 'Realized P/L hidden.',
+      s.avgSlippage != null ? `Average slippage ${s.avgSlippage}.` : '',
+      `Recent: ${recent.join('; ')}.`,
+    ].filter(Boolean).join('\n');
+    const system =
+      'You are a trading-performance coach. Given a snapshot of a trader\'s log (counts, win rate, realized P/L, slippage, recent trades and strategies), write a short, practical recap: what stands out, any pattern in the recent trades or strategies, and one concrete focus to improve. Under 140 words, plain text, no markdown headers. Be risk-aware and do not invent figures you were not given.';
+    try {
+      return { brief: await generateBrief(u.id, 'trades_brief', system, data) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
+    }
+  });
+
   // Plain-English trade logging via Claude (Sonnet) — one or more trades.
   app.post('/api/trading/trades/parse', write, async (request, reply) => {
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });

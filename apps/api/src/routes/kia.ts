@@ -13,6 +13,7 @@ import {
 import { parseDeal } from '../kia/dealParser.js';
 import { runKiaCommand } from '../kia/command.js';
 import { aiConfigured } from '../ai/claude.js';
+import { generateBrief } from '../ai/brief.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const payPlanSchema = z
@@ -146,6 +147,30 @@ export async function kiaRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not process that' });
+    }
+  });
+
+  // Claude (Sonnet) month recap of the sales dashboard.
+  app.post('/api/kia/brief', guard, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const userId = request.currentUser!.id;
+    const dash = await getDashboard(userId, monthOf(request));
+    const m = dash.metrics;
+    const usd = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
+    const data = [
+      `Month ${dash.month}, day ${m.dayOfMonth} of ${m.daysInMonth} (${m.daysLeft} left).`,
+      `Units ${m.units} of goal ${m.goalUnits} (${m.toGoal} to go); pace projects ${m.paceUnits}. ${m.onPace ? 'On pace.' : 'Behind pace.'}`,
+      `Front+back profit ${usd(m.totalProfit)}; commission ${usd(m.commission)} (projected ${usd(m.paceComm)}).`,
+      `Google reviews ${m.reviewCount}${m.reviewRequired ? ` of ${m.reviewReq}% target (${m.reviewPct}% so far)` : ' (not required)'}.`,
+      m.nextBonus ? `Next bonus tier: ${m.nextBonus.units} units for ${usd(m.nextBonus.amount)} (${m.nextBonus.toGo} to go).` : 'No further bonus tiers.',
+    ].join('\n');
+    const system =
+      'You are a sales coach for a car salesperson. Given their month-to-date numbers (units vs goal, pace, profit/commission, reviews, bonus tiers), write a short, motivating but honest read: where they stand, what to focus on with the days left, and one concrete next action. Under 130 words, plain text, no markdown headers. Do not invent figures you were not given.';
+    try {
+      return { brief: await generateBrief(userId, 'kia_brief', system, data) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
     }
   });
 

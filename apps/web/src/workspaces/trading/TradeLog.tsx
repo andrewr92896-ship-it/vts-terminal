@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
+import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import type {
   RemovedTrade,
   TradeInput,
@@ -87,6 +88,7 @@ export function TradeLog() {
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteReply, setNoteReply] = useState<string | null>(null);
   const [noteSkipped, setNoteSkipped] = useState<string[]>([]);
+  const ai = useAiBrief(api.tradeLogBrief);
 
   useEffect(() => {
     let alive = true;
@@ -205,6 +207,7 @@ export function TradeLog() {
               {hideMoney ? 'Show $' : 'Hide $'}
             </button>
           )}
+          <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
           {!readOnly && (
             <button onClick={() => setAdding((v) => !v)} style={goldBtn}>
               {adding ? 'Close' : '+ Log a trade'}
@@ -219,6 +222,9 @@ export function TradeLog() {
       {actionError && (
         <div onClick={() => setActionError(null)} style={warnBanner}>{actionError} — refreshed. Click to dismiss.</div>
       )}
+
+      {ai.brief && <BriefCard brief={ai.brief} accent={GOLD} onDismiss={ai.dismiss} />}
+      {ai.error && <BriefError message={ai.error} onDismiss={ai.dismiss} />}
 
       {/* Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16 }}>
