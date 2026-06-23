@@ -3,6 +3,8 @@ import type {
   AlertsData,
   BrokerConnection,
   BrokerStatus,
+  ChallengeData,
+  ChallengeInput,
   ConnectionInput,
   HistoryData,
   LiveWall,
@@ -133,6 +135,15 @@ export const api = {
   },
   tradingHistory(): Promise<HistoryData> {
     return request('/api/trading/history');
+  },
+  tradingChallenge(): Promise<ChallengeData> {
+    return request('/api/trading/challenge');
+  },
+  updateChallenge(patch: ChallengeInput): Promise<ChallengeData> {
+    return request('/api/trading/challenge', { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  syncChallengeEquity(): Promise<ChallengeData> {
+    return request('/api/trading/challenge/sync-equity', { method: 'POST', body: JSON.stringify({}) });
   },
   tradingConnections(): Promise<{ connections: BrokerConnection[] }> {
     return request('/api/trading/connections');

@@ -32,6 +32,7 @@ import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradeLog } from '../workspaces/trading/TradeLog';
 import { Alerts } from '../workspaces/trading/Alerts';
 import { History } from '../workspaces/trading/History';
+import { AccountMetrics } from '../workspaces/trading/AccountMetrics';
 
 // The Studies screens bundle the 400-question Series 65 database, so they're
 // code-split into a lazy chunk that only loads when the Studies workspace is
@@ -58,6 +59,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <TradeLog />;
     case 'history':
       return <History />;
+    case 'metrics':
+      return <AccountMetrics />;
     case 'td_all':
       return <TodoAll />;
     case 'kia_dash':
