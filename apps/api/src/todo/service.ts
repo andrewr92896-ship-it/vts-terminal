@@ -314,8 +314,76 @@ export async function toggleItem(userId: string, itemId: string): Promise<void> 
   }
 }
 
-export async function removeItem(userId: string, itemId: string): Promise<void> {
+// The raw fields needed to restore a removed task exactly (undo).
+export interface RemovedTodoItem {
+  id: string;
+  sectionId: string;
+  text: string;
+  position: number;
+  hyphen: boolean;
+  done: boolean;
+  dueAt: number | null; // ms
+  intervalDays: number | null;
+}
+
+// Remove a task and return its raw data so the client can offer an undo.
+export async function removeItem(
+  userId: string,
+  itemId: string,
+): Promise<RemovedTodoItem | null> {
+  const row = (
+    await db
+      .select()
+      .from(todoItems)
+      .where(and(eq(todoItems.id, itemId), eq(todoItems.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!row) return null;
+
   await db
     .delete(todoItems)
     .where(and(eq(todoItems.id, itemId), eq(todoItems.userId, userId)));
+
+  return {
+    id: row.id,
+    sectionId: row.sectionId,
+    text: row.text,
+    position: row.position,
+    hyphen: row.hyphen,
+    done: row.done,
+    dueAt: row.dueAt ? row.dueAt.getTime() : null,
+    intervalDays: row.intervalDays,
+  };
+}
+
+// Re-insert a previously removed task (undo). Only restores into a section the
+// user still owns; ignored if the same id already exists.
+export async function restoreItem(
+  userId: string,
+  item: RemovedTodoItem,
+): Promise<void> {
+  const section = (
+    await db
+      .select({ id: todoSections.id })
+      .from(todoSections)
+      .where(and(eq(todoSections.id, item.sectionId), eq(todoSections.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!section) return; // section was deleted; nothing to restore into
+
+  await db
+    .insert(todoItems)
+    .values({
+      id: item.id,
+      userId,
+      sectionId: item.sectionId,
+      text: item.text,
+      position: item.position,
+      hyphen: item.hyphen,
+      done: item.done,
+      dueAt: item.dueAt != null ? new Date(item.dueAt) : null,
+      intervalDays: item.intervalDays,
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing();
 }

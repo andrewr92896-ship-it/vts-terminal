@@ -41,6 +41,27 @@ export interface AdminUser {
   createdAt: number;
 }
 
+// Raw data returned when an item is removed, so the client can offer "undo".
+export interface RemovedTodoItem {
+  id: string;
+  sectionId: string;
+  text: string;
+  position: number;
+  hyphen: boolean;
+  done: boolean;
+  dueAt: number | null;
+  intervalDays: number | null;
+}
+
+export interface RemovedKiaDeal {
+  id: string;
+  customer: string;
+  model: string;
+  type: 'New' | 'Used';
+  profit: number;
+  soldAt: number;
+}
+
 export type TodoMarker = 'check' | 'dash' | 'dot';
 
 export interface TodoItem {

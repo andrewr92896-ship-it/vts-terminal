@@ -1,8 +1,10 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { useUndo } from '../../hooks/useUndo';
+import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy, maskName } from '../../privacy/privacy';
-import type { KiaDashboard as Dash } from '../../api/types';
+import type { KiaDashboard as Dash, RemovedKiaDeal } from '../../api/types';
 
 const RED = '#BB162B';
 const RED2 = '#8d0f20';
@@ -20,6 +22,7 @@ function etToday(): string {
 export function KiaDashboard() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
+  const undo = useUndo<RemovedKiaDeal>();
   const [dash, setDash] = useState<Dash | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -84,6 +87,34 @@ export function KiaDashboard() {
     setProfit('');
     setDtype('New');
     setDate(etToday());
+  }
+
+  // Remove a deal, then offer to undo it.
+  async function removeDealWithUndo(id: string) {
+    const month = dash?.month;
+    setBusy(true);
+    try {
+      const r = await api.kiaRemoveDeal(id, month);
+      setDash(r);
+      setActionError(null);
+      if (r.removed) undo.flag(r.removed);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Action failed');
+      try {
+        setDash(await api.kiaDashboard(month));
+      } catch {
+        /* keep current view */
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function restoreRemovedDeal() {
+    const deal = undo.pending;
+    if (!deal) return;
+    undo.clear();
+    void run(api.kiaRestoreDeal(deal, dash?.month));
   }
 
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
@@ -219,7 +250,7 @@ export function KiaDashboard() {
                 deal={d}
                 showComm={showComm}
                 busy={busy}
-                onRemove={() => run(api.kiaRemoveDeal(d.id, monthKey))}
+                onRemove={() => removeDealWithUndo(d.id)}
                 onSave={(patch) =>
                   run(api.kiaUpdateDeal(d.id, patch, patch.soldAt ? patch.soldAt.slice(0, 7) : monthKey))
                 }
@@ -354,6 +385,10 @@ export function KiaDashboard() {
             })}
           </div>
         </div>
+      )}
+
+      {undo.pending && (
+        <UndoBar message="Deal removed." onUndo={restoreRemovedDeal} onDismiss={undo.clear} />
       )}
     </div>
   );

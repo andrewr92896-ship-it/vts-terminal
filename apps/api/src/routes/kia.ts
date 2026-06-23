@@ -1,7 +1,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/middleware.js';
-import { addDeal, getDashboard, removeDeal, updateDeal, updateSettings } from '../kia/service.js';
+import {
+  addDeal,
+  getDashboard,
+  removeDeal,
+  restoreDeal,
+  updateDeal,
+  updateSettings,
+} from '../kia/service.js';
 
 const dealSchema = z.object({
   customer: z.string().trim().max(120).optional(),
@@ -35,6 +42,15 @@ const settingsSchema = z
   .refine((v) => v.goalUnits != null || v.reviewCount != null, {
     message: 'Provide goalUnits or reviewCount',
   });
+
+const restoreSchema = z.object({
+  id: z.string().min(1),
+  customer: z.string().max(120),
+  model: z.string().min(1).max(120),
+  type: z.enum(['New', 'Used']),
+  profit: z.number().int().min(0).max(1_000_000),
+  soldAt: z.number().int(),
+});
 
 // The dashboard is month-scoped; mutations echo back the month the client is
 // viewing so the response matches what's on screen.
@@ -79,7 +95,19 @@ export async function kiaRoutes(app: FastifyInstance) {
   app.delete('/api/kia/deals/:id', guard, async (request) => {
     const id = (request.params as { id: string }).id;
     const userId = request.currentUser!.id;
-    await removeDeal(userId, id);
+    const removed = await removeDeal(userId, id);
+    const dashboard = await getDashboard(userId, monthOf(request));
+    return { ...dashboard, removed };
+  });
+
+  // Undo a deal removal.
+  app.post('/api/kia/deals/restore', guard, async (request, reply) => {
+    const parsed = restoreSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Could not restore deal' });
+    }
+    const userId = request.currentUser!.id;
+    await restoreDeal(userId, parsed.data);
     return getDashboard(userId, monthOf(request));
   });
 

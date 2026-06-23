@@ -413,8 +413,57 @@ export async function updateDeal(
     .where(and(eq(kiaDeals.id, id), eq(kiaDeals.userId, userId)));
 }
 
-export async function removeDeal(userId: string, id: string): Promise<void> {
+// The raw fields needed to restore a removed deal exactly (undo).
+export interface RemovedKiaDeal {
+  id: string;
+  customer: string;
+  model: string;
+  type: 'New' | 'Used';
+  profit: number;
+  soldAt: number; // ms
+}
+
+export async function removeDeal(
+  userId: string,
+  id: string,
+): Promise<RemovedKiaDeal | null> {
+  const row = (
+    await db
+      .select()
+      .from(kiaDeals)
+      .where(and(eq(kiaDeals.id, id), eq(kiaDeals.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!row) return null;
+
   await db.delete(kiaDeals).where(and(eq(kiaDeals.id, id), eq(kiaDeals.userId, userId)));
+
+  return {
+    id: row.id,
+    customer: row.customer,
+    model: row.model,
+    type: row.type,
+    profit: row.profit,
+    soldAt: row.soldAt.getTime(),
+  };
+}
+
+// Re-insert a previously removed deal (undo); ignored if the id already exists.
+export async function restoreDeal(userId: string, deal: RemovedKiaDeal): Promise<void> {
+  await ensureKiaSeed(userId);
+  await db
+    .insert(kiaDeals)
+    .values({
+      id: deal.id,
+      userId,
+      customer: deal.customer,
+      model: deal.model,
+      type: deal.type,
+      profit: deal.profit,
+      soldAt: new Date(deal.soldAt),
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing();
 }
 
 export async function updateSettings(
