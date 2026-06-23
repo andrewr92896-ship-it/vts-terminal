@@ -27,6 +27,9 @@ const envSchema = z.object({
   // Shared secret that inbound TradingView alerts must include (TradingView
   // sends no auth of its own). When unset, the webhook rejects everything.
   TRADINGVIEW_WEBHOOK_SECRET: z.string().optional(),
+  // Token that inbound /api/tv-webhook alerts must carry (set in Railway).
+  // When unset, the endpoint rejects every request. Never logged.
+  TV_WEBHOOK_SECRET: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({
