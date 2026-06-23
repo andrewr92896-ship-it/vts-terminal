@@ -135,10 +135,10 @@ export function Portal() {
         color: '#dfe7fa',
       }}
     >
-      {/* Background wordmark watermark — Trading only, matching the prototype. */}
-      {brand.useWordmark && (
+      {/* Background wordmark watermark — for workspaces with a wordmark logo. */}
+      {brand.wordmark && (
         <img
-          src="/brand/vitalis-wordmark.png"
+          src={brand.wordmark}
           alt=""
           aria-hidden
           style={{

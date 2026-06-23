@@ -77,8 +77,9 @@ export interface BrandMeta {
   color: string;
   size: string;
   letterSpacing: string;
-  // Trading uses the PNG wordmark; the others use a styled text brand.
-  useWordmark: boolean;
+  // When set, the header and background watermark use this wordmark image
+  // instead of the styled text brand (Trading and Wealth Management).
+  wordmark?: string;
 }
 
 export const BRAND: Record<WorkspaceKey, BrandMeta> = {
@@ -88,7 +89,7 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     color: '#EBCB74',
     size: '22px',
     letterSpacing: '2px',
-    useWordmark: true,
+    wordmark: '/brand/vitalis-wordmark.png',
   },
   studies: {
     name: () => 'STUDIES',
@@ -96,7 +97,6 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     color: '#cdbcff',
     size: '21px',
     letterSpacing: '2px',
-    useWordmark: false,
   },
   kia: {
     name: () => 'KIA',
@@ -104,7 +104,6 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     color: '#ffffff',
     size: '26px',
     letterSpacing: '5px',
-    useWordmark: false,
   },
   todo: {
     name: (userName: string) => `${userName}'s To Do List`,
@@ -112,7 +111,6 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     color: '#bfeee2',
     size: '19px',
     letterSpacing: '0.5px',
-    useWordmark: false,
   },
   wealth: {
     name: () => 'VITALIS',
@@ -120,7 +118,8 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     color: '#a9ecce',
     size: '22px',
     letterSpacing: '2px',
-    useWordmark: false,
+    // Same Vitalis logo as Trading, with the Retirement & Wealth subtitle.
+    wordmark: '/brand/vitalis-wealth-wordmark.svg',
   },
 };
 

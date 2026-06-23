@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 175" width="520" height="175" role="img" aria-label="Vitalis Retirement and Wealth Management">
+  <defs>
+    <linearGradient id="vwGold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f3da90"/>
+      <stop offset="0.5" stop-color="#e3c067"/>
+      <stop offset="1" stop-color="#c39a45"/>
+    </linearGradient>
+  </defs>
+  <!-- Wordmark: matches the Vitalis lockup, gold serif caps -->
+  <text x="260" y="80" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-weight="700"
+        font-size="72" letter-spacing="16" fill="url(#vwGold)">VITALIS</text>
+  <!-- Divider with a center diamond -->
+  <g stroke="#c39a45" stroke-width="1.5" opacity="0.7">
+    <line x1="70" y1="108" x2="232" y2="108"/>
+    <line x1="288" y1="108" x2="450" y2="108"/>
+  </g>
+  <rect x="252" y="100" width="16" height="16" transform="rotate(45 260 108)" fill="url(#vwGold)"/>
+  <!-- Subtitle: the new name, faint steel-blue caps, fit to width -->
+  <text x="260" y="142" text-anchor="middle"
+        font-family="Georgia, 'Times New Roman', serif" font-weight="400"
+        font-size="18" letter-spacing="6" fill="#9fb6d8" opacity="0.85"
+        textLength="430" lengthAdjust="spacingAndGlyphs">RETIREMENT AND WEALTH MANAGEMENT</text>
+</svg>
