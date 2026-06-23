@@ -124,6 +124,12 @@ export function TopBar(props: TopBarProps) {
         ...(narrow
           ? {
               width: '100%',
+              // min-width:0 + max-width:100% stop this scrollable flex child
+              // from expanding to its content's intrinsic width (a flex item's
+              // default min-width:auto), which would otherwise widen the whole
+              // header past the viewport instead of scrolling within the row.
+              minWidth: 0,
+              maxWidth: '100%',
               overflowX: 'auto',
               flexWrap: 'nowrap',
               WebkitOverflowScrolling: 'touch',
@@ -185,7 +191,7 @@ export function TopBar(props: TopBarProps) {
         display: 'flex',
         alignItems: 'center',
         gap: narrow ? 12 : 18,
-        ...(narrow ? { flexWrap: 'wrap' } : {}),
+        ...(narrow ? { flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' } : {}),
       }}
     >
       {isTrading && brokers.length > 0 && (
@@ -527,6 +533,12 @@ export function TopBar(props: TopBarProps) {
           borderBottom: `1px solid ${theme.headerBorder}`,
           position: 'relative',
           zIndex: 30,
+          // Constrain the header to the viewport. We deliberately do NOT clip
+          // overflow here — the flex children below carry min-width:0 so the
+          // scrollable switcher scrolls within its own row, and clipping would
+          // also cut off the absolutely-positioned user-badge dropdown.
+          width: '100%',
+          maxWidth: '100%',
         }}
       >
         <div
@@ -535,6 +547,8 @@ export function TopBar(props: TopBarProps) {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
+            minWidth: 0,
+            maxWidth: '100%',
           }}
         >
           {brandEl}
