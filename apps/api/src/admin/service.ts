@@ -13,6 +13,7 @@ import {
   tradingTrades,
   tradingAlerts,
   tradingPositions,
+  brokerConnections,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -207,6 +208,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingTrades).where(eq(tradingTrades.userId, targetId));
     await tx.delete(tradingAlerts).where(eq(tradingAlerts.userId, targetId));
     await tx.delete(tradingPositions).where(eq(tradingPositions.userId, targetId));
+    await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });

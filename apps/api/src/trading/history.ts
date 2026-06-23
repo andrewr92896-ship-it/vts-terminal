@@ -7,13 +7,13 @@ import type { LiveTrade } from './types.js';
 // Reconcile the Live Wall's open positions against what we last stored, so that
 // closures can be detected and auto-recorded to History.
 //
-// `okBrokers` is the set of broker keys that actually responded this cycle. A
-// position only counts as closed if its broker responded AND the position is no
-// longer in the live feed — so a broker that errored (its positions vanish from
-// the feed) can never trigger false closures.
+// `okSources` is the set of connection ids that actually responded this cycle.
+// A position only counts as closed if its source connection responded AND the
+// position is no longer in the live feed — so a connection that errored (its
+// positions vanish from the feed) can never trigger false closures.
 export async function reconcile(
   userId: string,
-  okBrokers: Set<string>,
+  okSources: Set<string>,
   liveTrades: LiveTrade[],
 ): Promise<void> {
   const now = new Date();
@@ -44,6 +44,7 @@ export async function reconcile(
         id: crypto.randomUUID(),
         userId,
         key: t.id,
+        connectionId: t.connectionId,
         broker: t.broker,
         instrument: t.instrument,
         side: t.side,
@@ -64,9 +65,9 @@ export async function reconcile(
     }
   }
 
-  // Close positions that vanished from a broker that DID respond this cycle.
+  // Close positions that vanished from a connection that DID respond this cycle.
   for (const r of openRows) {
-    if (okBrokers.has(r.broker) && !currentKeys.has(r.key)) {
+    if (r.connectionId && okSources.has(r.connectionId) && !currentKeys.has(r.key)) {
       await db
         .update(tradingPositions)
         .set({

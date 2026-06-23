@@ -315,6 +315,38 @@ export const tradingPositions = sqliteTable('trading_positions', {
   firstSeenAt: integer('first_seen_at', { mode: 'timestamp_ms' }).notNull(),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
   closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+  // The broker connection this position came from — the "source" used by the
+  // close reconciler (a position only closes if its source responded).
+  connectionId: text('connection_id'),
 });
 
 export type TradingPositionRow = typeof tradingPositions.$inferSelect;
+
+// ---- Per-user broker connections (encrypted credentials) ----
+// Each trader attaches their own broker API keys as a named connection (e.g.
+// "Andrew's Trades"). Credentials are stored AES-256-GCM encrypted in
+// `secret_enc`; `summary` holds a non-secret display hint only. The Live Wall
+// and History are driven by the calling user's active connections.
+export const BROKER_CONNECTION_KINDS = ['oanda', 'kraken'] as const;
+export type BrokerConnectionKind = (typeof BROKER_CONNECTION_KINDS)[number];
+
+export const brokerConnections = sqliteTable('broker_connections', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  broker: text('broker', { enum: BROKER_CONNECTION_KINDS }).notNull(),
+  label: text('label').notNull(),
+  secretEnc: text('secret_enc').notNull(), // encrypted JSON of the credentials
+  summary: text('summary'), // non-secret hint, e.g. "Practice · 001-…-001"
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  lastStatus: text('last_status', { enum: ['unknown', 'ok', 'error'] })
+    .notNull()
+    .default('unknown'),
+  lastError: text('last_error'),
+  lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type BrokerConnectionRow = typeof brokerConnections.$inferSelect;

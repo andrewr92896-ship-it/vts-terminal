@@ -11,8 +11,14 @@ import {
 } from '../trading/trades.js';
 import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
+import {
+  addConnection,
+  listConnections,
+  removeConnection,
+  updateConnection,
+} from '../trading/connections.js';
 import { aiConfigured } from '../ai/claude.js';
-import { TRADE_SIDES, TRADE_STATUSES } from '../db/schema.js';
+import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
 const status = z.enum(TRADE_STATUSES);
@@ -177,7 +183,63 @@ export async function tradingRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     return dismissAlert(u.id, id);
   });
+
+  // ---- Broker connections (per-user, self-service; credentials encrypted) ----
+  app.get('/api/trading/connections', read, async (request) => {
+    return { connections: await listConnections(request.currentUser!.id) };
+  });
+
+  app.post('/api/trading/connections', write, async (request, reply) => {
+    const parsed = addConnSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the connection details and try again' });
+    }
+    const uid = request.currentUser!.id;
+    try {
+      await addConnection(uid, { broker: parsed.data.broker, label: parsed.data.label, creds: parsed.data.creds });
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add connection' });
+    }
+    return { connections: await listConnections(uid) };
+  });
+
+  app.patch('/api/trading/connections/:id', write, async (request, reply) => {
+    const parsed = editConnSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the connection details and try again' });
+    }
+    const uid = request.currentUser!.id;
+    const id = (request.params as { id: string }).id;
+    try {
+      await updateConnection(uid, id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update connection' });
+    }
+    return { connections: await listConnections(uid) };
+  });
+
+  app.delete('/api/trading/connections/:id', write, async (request) => {
+    const uid = request.currentUser!.id;
+    const id = (request.params as { id: string }).id;
+    await removeConnection(uid, id);
+    return { connections: await listConnections(uid) };
+  });
 }
+
+const brokerKind = z.enum(BROKER_CONNECTION_KINDS);
+const credsSchema = z.record(z.string(), z.unknown());
+const addConnSchema = z.object({
+  broker: brokerKind,
+  label: z.string().trim().min(1).max(80),
+  creds: credsSchema,
+});
+const editConnSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80).optional(),
+    active: z.boolean().optional(),
+    creds: credsSchema.optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 const analyzeSchema = z.object({
   imageBase64: z.string().min(1),

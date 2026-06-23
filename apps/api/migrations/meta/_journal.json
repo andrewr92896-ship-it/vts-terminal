@@ -92,6 +92,13 @@
       "when": 1781872491486,
       "tag": "0012_trading_positions",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1781872491487,
+      "tag": "0013_broker_connections",
+      "breakpoints": true
     }
   ]
 }

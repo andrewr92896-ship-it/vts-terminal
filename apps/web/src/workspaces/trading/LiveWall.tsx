@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
+import { BrokerConnections } from './BrokerConnections';
 import type { LiveTrade, LiveWall as LiveWallData } from '../../api/types';
 
 // Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
@@ -64,6 +65,7 @@ export function LiveWall() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
+  const [connOpen, setConnOpen] = useState(false);
   const firstLoad = useRef(true);
 
   const load = useCallback(async () => {
@@ -116,11 +118,14 @@ export function LiveWall() {
               {hideMoney ? 'Show $' : 'Hide $'}
             </button>
           )}
+          <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
           <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
       </div>
+
+      <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={() => void load()} />
 
       {/* Broker health strip */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -128,7 +133,7 @@ export function LiveWall() {
           const color = !b.configured ? FAINT : b.ok ? GREEN : RED;
           const state = !b.configured ? 'unconfigured' : b.ok ? `${b.count} open` : 'error';
           return (
-            <div key={b.broker} style={brokerChip} title={b.error ?? `${b.name} — ${b.platform}`}>
+            <div key={b.connectionId} style={brokerChip} title={b.error ?? `${b.name} — ${b.platform}`}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flex: 'none' }} />
               <span style={{ fontWeight: 600, color: TEXT }}>{b.name}</span>
               <span style={{ color: MUTED }}>· {state}</span>

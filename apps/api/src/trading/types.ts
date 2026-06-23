@@ -10,9 +10,10 @@ export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
 // One open position, normalized across every broker. Money fields are in the
 // account's currency as whole-ish numbers; prices keep their natural precision.
 export interface LiveTrade {
-  id: string; // `${broker}:${brokerTradeId}` — stable per open position
+  id: string; // `${connectionId}:${broker}:${brokerTradeId}` — stable per position
+  connectionId: string; // the broker connection (source) this came from
   broker: BrokerKey;
-  brokerName: string;
+  brokerName: string; // the connection's label
   instrument: string; // e.g. EUR/USD, BTC/USD, MSFT
   side: TradeSide;
   units: number; // absolute position size (lots / contracts / shares)
@@ -37,8 +38,9 @@ export interface LiveTrade {
 // Per-broker outcome of a Live Wall refresh: was it configured, did the fetch
 // succeed, and what did it return.
 export interface BrokerLiveResult {
+  connectionId: string; // the connection/source this result is for
   broker: BrokerKey;
-  name: string;
+  name: string; // the connection's label
   platform: string;
   kind: string;
   configured: boolean; // credentials present in the environment

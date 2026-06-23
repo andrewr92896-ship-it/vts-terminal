@@ -56,6 +56,7 @@ export function mapFtpPositions(json: MtOpenPositionsResponse): LiveTrade[] {
   const name = brokerMeta('ftp').name;
   return (json.positions ?? []).map((p, i) => ({
     id: `ftp:${p.id ?? `${p.symbol}-${i}`}`,
+    connectionId: '', // set by the service when aggregating per connection
     broker: 'ftp' as const,
     brokerName: name,
     instrument: prettyMtSymbol(p.symbol),

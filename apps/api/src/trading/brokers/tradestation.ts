@@ -35,6 +35,7 @@ export function mapTradeStationPositions(json: TsPositionsResponse): LiveTrade[]
     const side = p.LongShort ? (p.LongShort === 'Long' ? 'long' : 'short') : qty >= 0 ? 'long' : 'short';
     return {
       id: `tradestation:${p.PositionID ?? `${p.Symbol}-${i}`}`,
+      connectionId: '', // set by the service when aggregating per connection
       broker: 'tradestation' as const,
       brokerName: name,
       instrument: p.Symbol,

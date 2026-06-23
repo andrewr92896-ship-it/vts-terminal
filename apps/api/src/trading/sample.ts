@@ -10,7 +10,7 @@ const MIN = 60_000;
 
 export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
   const t = (mins: number) => now - mins * MIN;
-  return [
+  const rows: Omit<LiveTrade, 'connectionId'>[] = [
     {
       id: 'oanda:sample-1',
       broker: 'oanda',
@@ -120,4 +120,5 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       openedAt: t(12),
     },
   ];
+  return rows.map((r) => ({ ...r, connectionId: 'sample' }));
 }
