@@ -258,3 +258,23 @@ export const tradingAlerts = sqliteTable('trading_alerts', {
 });
 
 export type TradingAlertRow = typeof tradingAlerts.$inferSelect;
+
+// ---- TradingView webhook ingestion (raw alert store) ----
+// Standalone landing table for alerts posted to POST /api/tv-webhook. Not keyed
+// to a user — it is a raw ingestion log. The parsed trade fields are captured
+// alongside the full raw payload exactly as received.
+export const tvAlerts = sqliteTable('tv_alerts', {
+  id: text('id').primaryKey(),
+  strategy: text('strategy'),
+  symbol: text('symbol'),
+  side: text('side'),
+  entry: real('entry'),
+  takeProfit: real('take_profit'),
+  stopLoss: real('stop_loss'),
+  alertPrice: real('alert_price'),
+  alertTime: text('alert_time'), // the alert's own time, as TradingView sent it
+  receivedAt: integer('received_at', { mode: 'timestamp_ms' }).notNull(),
+  payload: text('payload').notNull(), // the raw request body, verbatim
+});
+
+export type TvAlertRow = typeof tvAlerts.$inferSelect;

@@ -16,6 +16,7 @@ import { kiaRoutes } from './routes/kia.js';
 import { wealthRoutes } from './routes/wealth.js';
 import { tradingRoutes } from './routes/trading.js';
 import { webhookRoutes } from './routes/webhooks.js';
+import { tvWebhookRoutes } from './routes/tvWebhook.js';
 import { runMigrations } from './db/migrate.js';
 import { seedAdmin } from './seed.js';
 
@@ -27,6 +28,18 @@ export async function buildServer() {
   const app = Fastify({
     logger: {
       level: config.isProd ? 'info' : 'debug',
+      // Log only the path, never the query string — so a token or any other
+      // secret accidentally placed in the URL is never written to the logs.
+      serializers: {
+        req(request: { method?: string; url?: string; headers?: { host?: string }; ip?: string }) {
+          return {
+            method: request.method,
+            url: request.url ? request.url.split('?')[0] : request.url,
+            host: request.headers?.host,
+            remoteAddress: request.ip,
+          };
+        },
+      },
       transport: config.isProd
         ? undefined
         : { target: 'pino-pretty', options: { translateTime: 'SYS:standard', ignore: 'pid,hostname' } },
@@ -54,6 +67,7 @@ export async function buildServer() {
   await app.register(brokerRoutes);
   await app.register(tradingRoutes);
   await app.register(webhookRoutes);
+  await app.register(tvWebhookRoutes);
   await app.register(todoRoutes);
   await app.register(kiaRoutes);
   await app.register(wealthRoutes);
