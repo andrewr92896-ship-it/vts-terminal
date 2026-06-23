@@ -25,6 +25,9 @@ export function TodoAll() {
   const [draft, setDraft] = useState('');
   const [sectionId, setSectionId] = useState('');
   const [busy, setBusy] = useState(false);
+  const [command, setCommand] = useState('');
+  const [cmdBusy, setCmdBusy] = useState(false);
+  const [cmdResult, setCmdResult] = useState<{ reply: string; applied: string[]; skipped: string[] } | null>(null);
   const undo = useUndo<UndoAction>();
 
   useEffect(() => {
@@ -117,6 +120,29 @@ export function TodoAll() {
     if (!text || !sectionId) return;
     setDraft('');
     await run(api.addTodoItem(sectionId, text));
+  }
+
+  async function sendCommand() {
+    const text = command.trim();
+    if (!text || cmdBusy) return;
+    setCmdBusy(true);
+    setActionError(null);
+    try {
+      const r = await api.todoCommand(text);
+      setSections(r.sections);
+      setCmdResult({ reply: r.reply, applied: r.applied, skipped: r.skipped });
+      setCommand('');
+    } catch (e) {
+      setActionError(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Command failed',
+      );
+    } finally {
+      setCmdBusy(false);
+    }
   }
 
   if (loading) {
@@ -251,7 +277,7 @@ export function TodoAll() {
           </div>
         </div>
 
-        {/* Command bar — Claude parser arrives in Stage 4 */}
+        {/* Command bar — Claude parses a free-text instruction into list actions */}
         <div style={panelStyle}>
           <div style={panelLabelStyle}>
             <span
@@ -272,22 +298,61 @@ export function TodoAll() {
               ✦
             </span>
             Ask Claude / command
+            <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: '#5f7d8c', letterSpacing: 0 }}>Sonnet</span>
           </div>
-          <input
-            disabled
-            placeholder="Command parser arrives in Stage 4 (done 7.3 · P 1.2 · add to ... · reset weekly)"
-            style={{
-              width: '100%',
-              background: '#0d1620',
-              border: '1px solid #284158',
-              borderRadius: 7,
-              color: '#5f7d8c',
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: 12,
-              padding: '9px 11px',
-              outline: 'none',
-            }}
-          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendCommand()}
+              placeholder='e.g. "add to Finance: pay rent · done 1.2 · remove 3.1"'
+              style={{
+                flex: 1,
+                background: '#0d1620',
+                border: '1px solid #284158',
+                borderRadius: 7,
+                color: '#dfeaf0',
+                fontFamily: "'IBM Plex Mono', monospace",
+                fontSize: 12,
+                padding: '9px 11px',
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={sendCommand}
+              disabled={cmdBusy || !command.trim()}
+              style={{
+                border: 'none',
+                background: `linear-gradient(180deg,${ACCENT},${ACCENT2})`,
+                color: '#06231d',
+                fontWeight: 600,
+                fontSize: 12.5,
+                padding: '0 15px',
+                borderRadius: 7,
+                cursor: cmdBusy || !command.trim() ? 'default' : 'pointer',
+                opacity: cmdBusy || !command.trim() ? 0.6 : 1,
+              }}
+            >
+              {cmdBusy ? '…' : 'Run'}
+            </button>
+          </div>
+          {cmdResult && (
+            <div style={{ marginTop: 9, fontSize: 11.5, color: '#9fc7ba' }}>
+              {cmdResult.reply && <div style={{ color: '#cfeae0', marginBottom: 4 }}>{cmdResult.reply}</div>}
+              {cmdResult.applied.map((a, i) => (
+                <div key={`a${i}`} style={{ color: ACCENT }}>✓ {a}</div>
+              ))}
+              {cmdResult.skipped.map((s, i) => (
+                <div key={`s${i}`} style={{ color: '#c9a24b' }}>– {s}</div>
+              ))}
+              <button
+                onClick={() => setCmdResult(null)}
+                style={{ marginTop: 4, background: 'none', border: 'none', color: '#5f7d8c', fontSize: 10.5, cursor: 'pointer', padding: 0 }}
+              >
+                dismiss
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

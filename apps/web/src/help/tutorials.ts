@@ -272,6 +272,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'When you remove a task or check one off, a short Undo bar appears at the bottom. Click Undo to put it back or restore the prior checked state.',
       },
       {
+        title: 'Ask Claude / command',
+        body: 'Type a plain-English instruction in the "Ask Claude / command" box and click Run. Claude (Sonnet) updates the list for you — e.g. "add to Finance: pay rent", "done 1.2", "remove 3.1", or several at once separated by "·". It shows what it changed and skips anything it can\'t match.',
+      },
+      {
         title: 'Life Changes',
         body: 'Use the "Show Life Changes / Hide Life Changes" button at the top right to reveal or hide reflective note sections, which are kept separate from your checkable tasks.',
       },

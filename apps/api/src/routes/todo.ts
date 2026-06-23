@@ -9,6 +9,8 @@ import {
   setItemState,
   toggleItem,
 } from '../todo/service.js';
+import { runCommand } from '../todo/command.js';
+import { aiConfigured } from '../ai/claude.js';
 
 const addSchema = z.object({
   sectionId: z.string().min(1),
@@ -18,6 +20,10 @@ const addSchema = z.object({
 const stateSchema = z.object({
   done: z.boolean(),
   dueAt: z.number().int().nullable(),
+});
+
+const commandSchema = z.object({
+  command: z.string().trim().min(1).max(500),
 });
 
 const restoreSchema = z.object({
@@ -85,6 +91,22 @@ export async function todoRoutes(app: FastifyInstance) {
     const userId = request.currentUser!.id;
     const removed = await removeItem(userId, id);
     return { sections: await getTodo(userId), removed };
+  });
+
+  // Claude command bar: parse a free-text command into list actions and apply.
+  app.post('/api/todo/command', guard, async (request, reply) => {
+    if (!aiConfigured()) {
+      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    }
+    const parsed = commandSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Type a command to run' });
+    }
+    try {
+      return await runCommand(request.currentUser!.id, parsed.data.command);
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Command failed' });
+    }
   });
 
   // Undo a removal.
