@@ -7,8 +7,28 @@ import {
   removeDeal,
   restoreDeal,
   updateDeal,
+  updatePayPlan,
   updateSettings,
 } from '../kia/service.js';
+
+const payPlanSchema = z
+  .object({
+    commissionPct: z.coerce.number().min(0).max(100).optional(),
+    reviewRequired: z.boolean().optional(),
+    reviewReqPct: z.coerce.number().int().min(0).max(100).optional(),
+    bonusTiers: z
+      .array(
+        z.object({
+          units: z.coerce.number().int().min(1).max(1000),
+          amount: z.coerce.number().int().min(0).max(1_000_000),
+        }),
+      )
+      .max(20)
+      .optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: 'Nothing to update',
+  });
 
 const dealSchema = z.object({
   customer: z.string().trim().max(120).optional(),
@@ -120,5 +140,15 @@ export async function kiaRoutes(app: FastifyInstance) {
     const month = monthOf(request);
     await updateSettings(userId, month, parsed.data);
     return getDashboard(userId, month);
+  });
+
+  app.patch('/api/kia/payplan', guard, async (request, reply) => {
+    const parsed = payPlanSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the pay plan values and try again' });
+    }
+    const userId = request.currentUser!.id;
+    await updatePayPlan(userId, parsed.data);
+    return getDashboard(userId, monthOf(request));
   });
 }

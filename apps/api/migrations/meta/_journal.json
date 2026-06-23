@@ -43,6 +43,13 @@
       "when": 1781872491479,
       "tag": "0005_kia_month_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781872491480,
+      "tag": "0006_kia_pay_plan",
+      "breakpoints": true
     }
   ]
 }

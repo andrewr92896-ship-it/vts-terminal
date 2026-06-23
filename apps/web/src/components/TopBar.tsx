@@ -10,6 +10,7 @@ import {
 import { ALL_ROLES, ROLE_LABELS, isAdmin, rolesSummary } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { usePrivacy } from '../privacy/privacy';
+import { useDealership } from '../workspaces/kia/dealership';
 import { Clock } from './Clock';
 
 interface TopBarProps {
@@ -67,6 +68,9 @@ export function TopBar(props: TopBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { isPhone, isTablet } = useResponsive();
   const { privacy, toggle: togglePrivacy } = usePrivacy();
+  const dealership = useDealership();
+  // In the Kia workspace the sub-label follows the dealership-name toggle.
+  const brandSub = workspace === 'kia' ? dealership.name : brand.sub;
   // "narrow" = phones and small tablets. We restructure the single crowded row
   // into stacked rows + a scrollable workspace switcher so nothing overflows.
   const narrow = isTablet;
@@ -108,7 +112,7 @@ export function TopBar(props: TopBarProps) {
               whiteSpace: 'nowrap',
             }}
           >
-            {brand.sub}
+            {brandSub}
           </div>
         </div>
       )}

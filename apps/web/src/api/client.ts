@@ -189,6 +189,20 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
+  kiaUpdatePayPlan(
+    patch: {
+      commissionPct?: number;
+      reviewRequired?: boolean;
+      reviewReqPct?: number;
+      bonusTiers?: { units: number; amount: number }[];
+    },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/payplan${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
 };
 
 // Append ?month=YYYY-MM when a specific month is being viewed.

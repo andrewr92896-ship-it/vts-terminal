@@ -18,6 +18,7 @@ import { TabBar } from './TabBar';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
 import { PrivacyProvider } from '../privacy/privacy';
+import { DealershipProvider } from '../workspaces/kia/dealership';
 import { PageHelp } from './PageHelp';
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/AdminUsers';
@@ -123,6 +124,7 @@ export function Portal() {
 
   return (
     <PrivacyProvider>
+    <DealershipProvider>
     <div
       style={{
         position: 'relative',
@@ -274,6 +276,7 @@ export function Portal() {
       {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
       <PageHelp screen={screen} theme={theme} />
     </div>
+    </DealershipProvider>
     </PrivacyProvider>
   );
 }

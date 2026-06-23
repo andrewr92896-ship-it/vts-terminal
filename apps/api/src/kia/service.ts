@@ -8,14 +8,62 @@ import {
   type KiaDealRow,
 } from '../db/schema.js';
 
-const COMMISSION_RATE = 0.135;
-const REVIEW_REQ = 50; // percent of units needing a Google review to unlock bonus
-// Non-stacking unit bonuses; you earn the highest tier reached.
-const BONUS_TIERS = [
-  { units: 19, amount: 2000 },
-  { units: 15, amount: 1000 },
+export interface BonusTier {
+  units: number;
+  amount: number;
+}
+
+// The editable, per-user compensation plan.
+export interface PayPlan {
+  commissionRate: number; // fraction of profit, e.g. 0.135
+  reviewRequired: boolean; // whether the bonus needs a minimum review %
+  reviewReqPct: number; // that minimum, when required
+  bonusTiers: BonusTier[]; // non-stacking; highest tier reached is earned
+}
+
+const DEFAULT_BONUS_TIERS: BonusTier[] = [
   { units: 12, amount: 500 },
-] as const;
+  { units: 15, amount: 1000 },
+  { units: 19, amount: 2000 },
+];
+
+export const DEFAULT_PAY_PLAN: PayPlan = {
+  commissionRate: 0.135,
+  reviewRequired: true,
+  reviewReqPct: 50,
+  bonusTiers: DEFAULT_BONUS_TIERS,
+};
+
+type KiaSettingsRow = typeof kiaSettings.$inferSelect;
+
+// Build a clean PayPlan from a settings row (or defaults). Tiers are sorted
+// descending by units so the "highest tier reached" lookup is a simple find.
+function parsePayPlan(row: KiaSettingsRow | undefined): PayPlan {
+  if (!row) return DEFAULT_PAY_PLAN;
+  let tiers = DEFAULT_BONUS_TIERS;
+  if (row.bonusTiers) {
+    try {
+      const parsed = JSON.parse(row.bonusTiers);
+      if (Array.isArray(parsed)) {
+        const clean = parsed
+          .filter(
+            (t) =>
+              t && Number.isFinite(t.units) && Number.isFinite(t.amount) && t.units > 0 && t.amount >= 0,
+          )
+          .map((t) => ({ units: Math.round(t.units), amount: Math.round(t.amount) }));
+        if (clean.length) tiers = clean;
+      }
+    } catch {
+      /* fall back to defaults */
+    }
+  }
+  return {
+    commissionRate: (row.commissionBp ?? 1350) / 10000,
+    reviewRequired: row.reviewRequired ?? true,
+    reviewReqPct: row.reviewReqPct ?? 50,
+    bonusTiers: [...tiers].sort((a, b) => b.units - a.units),
+  };
+}
 
 const dateLabelFmt = new Intl.DateTimeFormat('en-US', {
   timeZone: 'America/New_York',
@@ -155,6 +203,7 @@ export interface KiaMetrics {
   reviewCount: number;
   reviewPct: number;
   reviewReq: number;
+  reviewRequired: boolean;
   reviewOk: boolean;
   bonusTiers: { units: number; amount: number }[];
   bonusEarned: number;
@@ -210,16 +259,19 @@ function computeMetrics(
   goalUnits: number,
   reviewCount: number,
   ctx: MonthContext,
+  plan: PayPlan,
 ): KiaMetrics {
   const units = deals.length;
   const totalProfit = deals.reduce((a, d) => a + d.profit, 0);
-  const commission = Math.round(totalProfit * COMMISSION_RATE);
+  const commission = Math.round(totalProfit * plan.commissionRate);
   const reviewPct = units > 0 ? Math.round((reviewCount / units) * 100) : 0;
-  const reviewOk = reviewPct >= REVIEW_REQ;
+  // When the plan doesn't require reviews, the bonus is never gated by them.
+  const reviewOk = !plan.reviewRequired || reviewPct >= plan.reviewReqPct;
 
-  const tierHit = BONUS_TIERS.find((t) => units >= t.units) ?? null;
+  const tiersDesc = plan.bonusTiers; // already sorted descending by units
+  const tierHit = tiersDesc.find((t) => units >= t.units) ?? null;
   const bonusEarned = reviewOk && tierHit ? tierHit.amount : 0;
-  const nextTier = [...BONUS_TIERS].reverse().find((t) => units < t.units) ?? null;
+  const nextTier = [...tiersDesc].reverse().find((t) => units < t.units) ?? null;
 
   const unitPct = goalUnits > 0 ? Math.min(100, Math.round((units / goalUnits) * 100)) : 0;
   const { daysInMonth, dayOfMonth, isCurrent } = ctx;
@@ -228,7 +280,7 @@ function computeMetrics(
   const elapsed = dayOfMonth > 0 ? dayOfMonth : 1;
   const paceUnits = isCurrent ? Math.round((units / elapsed) * daysInMonth) : units;
   const paceProfit = isCurrent ? Math.round((totalProfit / elapsed) * daysInMonth) : totalProfit;
-  const paceComm = Math.round(paceProfit * COMMISSION_RATE);
+  const paceComm = Math.round(paceProfit * plan.commissionRate);
 
   return {
     units,
@@ -237,12 +289,13 @@ function computeMetrics(
     unitPct,
     totalProfit,
     commission,
-    commissionRate: COMMISSION_RATE,
+    commissionRate: plan.commissionRate,
     reviewCount,
     reviewPct,
-    reviewReq: REVIEW_REQ,
+    reviewReq: plan.reviewReqPct,
+    reviewRequired: plan.reviewRequired,
     reviewOk,
-    bonusTiers: BONUS_TIERS.map((t) => ({ ...t })),
+    bonusTiers: tiersDesc.map((t) => ({ ...t })),
     bonusEarned,
     tierHitUnits: tierHit ? tierHit.units : null,
     nextBonus: nextTier
@@ -278,6 +331,7 @@ export interface KiaDashboardData {
   deals: KiaDeal[];
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };
+  payPlan: PayPlan;
 }
 
 export async function getDashboard(
@@ -285,6 +339,11 @@ export async function getDashboard(
   requestedMonth?: string,
 ): Promise<KiaDashboardData> {
   await ensureKiaSeed(userId);
+
+  const settingsRow = (
+    await db.select().from(kiaSettings).where(eq(kiaSettings.userId, userId)).limit(1)
+  )[0];
+  const payPlan = parsePayPlan(settingsRow);
 
   const allRows = await db.select().from(kiaDeals).where(eq(kiaDeals.userId, userId));
 
@@ -314,7 +373,7 @@ export async function getDashboard(
         label: monthLabel(k),
         units: rows.length,
         totalProfit,
-        commission: Math.round(totalProfit * COMMISSION_RATE),
+        commission: Math.round(totalProfit * payPlan.commissionRate),
       };
     })
     .sort((a, b) => (a.month < b.month ? 1 : -1));
@@ -341,9 +400,43 @@ export async function getDashboard(
     months,
     history,
     deals,
-    metrics: computeMetrics(rows, goalUnits, reviewCount, monthContext(month)),
+    metrics: computeMetrics(rows, goalUnits, reviewCount, monthContext(month), payPlan),
     settings: { goalUnits, reviewCount },
+    payPlan,
   };
+}
+
+// Update the user's pay plan. Any field can be changed; current values are the
+// defaults. Commission is given as a percent (e.g. 13.5) and stored in bp.
+export async function updatePayPlan(
+  userId: string,
+  input: {
+    commissionPct?: number;
+    reviewRequired?: boolean;
+    reviewReqPct?: number;
+    bonusTiers?: BonusTier[];
+  },
+): Promise<void> {
+  await ensureKiaSeed(userId);
+  const patch: Partial<typeof kiaSettings.$inferInsert> = { updatedAt: new Date() };
+
+  if (input.commissionPct != null) {
+    const bp = Math.round(Math.max(0, Math.min(100, input.commissionPct)) * 100);
+    patch.commissionBp = bp;
+  }
+  if (input.reviewRequired != null) patch.reviewRequired = input.reviewRequired;
+  if (input.reviewReqPct != null) {
+    patch.reviewReqPct = Math.round(Math.max(0, Math.min(100, input.reviewReqPct)));
+  }
+  if (input.bonusTiers != null) {
+    const clean = input.bonusTiers
+      .filter((t) => Number.isFinite(t.units) && Number.isFinite(t.amount) && t.units > 0 && t.amount >= 0)
+      .map((t) => ({ units: Math.round(t.units), amount: Math.round(t.amount) }))
+      .sort((a, b) => a.units - b.units);
+    patch.bonusTiers = JSON.stringify(clean);
+  }
+
+  await db.update(kiaSettings).set(patch).where(eq(kiaSettings.userId, userId));
 }
 
 export async function addDeal(
