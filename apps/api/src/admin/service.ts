@@ -13,6 +13,7 @@ import {
   wealthPortfolios,
   wealthAllocations,
   wealthPlans,
+  wealthCompliance,
   tradingTrades,
   tradingAlerts,
   tradingPositions,
@@ -218,6 +219,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(wealthAllocations).where(eq(wealthAllocations.userId, targetId));
     await tx.delete(wealthPortfolios).where(eq(wealthPortfolios.userId, targetId));
     await tx.delete(wealthPlans).where(eq(wealthPlans.userId, targetId));
+    await tx.delete(wealthCompliance).where(eq(wealthCompliance.userId, targetId));
     await tx.delete(tradingTrades).where(eq(tradingTrades.userId, targetId));
     await tx.delete(tradingAlerts).where(eq(tradingAlerts.userId, targetId));
     await tx.delete(tradingPositions).where(eq(tradingPositions.userId, targetId));

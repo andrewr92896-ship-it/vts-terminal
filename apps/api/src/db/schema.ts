@@ -576,3 +576,29 @@ export const wealthPlans = sqliteTable('wealth_plans', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type WealthPlanRow = typeof wealthPlans.$inferSelect;
+
+// ---- Wealth — Compliance (RIA recordkeeping register, per advisor) ----
+// Each row is a compliance obligation/record (a filing, disclosure, policy,
+// client document, or review) with a status and optional due date. Overdue is
+// derived (status != complete and dueAt in the past). clientId is a loose link.
+export const COMPLIANCE_CATEGORIES = ['filing', 'disclosure', 'policy', 'client_doc', 'review', 'other'] as const;
+export type ComplianceCategory = (typeof COMPLIANCE_CATEGORIES)[number];
+export const COMPLIANCE_STATUSES = ['not_started', 'in_progress', 'complete'] as const;
+export type ComplianceStatus = (typeof COMPLIANCE_STATUSES)[number];
+
+export const wealthCompliance = sqliteTable('wealth_compliance', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  category: text('category', { enum: COMPLIANCE_CATEGORIES }).notNull().default('filing'),
+  title: text('title').notNull(),
+  status: text('status', { enum: COMPLIANCE_STATUSES }).notNull().default('not_started'),
+  dueAt: integer('due_at', { mode: 'timestamp_ms' }),
+  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
+  clientId: text('client_id'),
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type WealthComplianceRow = typeof wealthCompliance.$inferSelect;

@@ -512,6 +512,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  wm_compliance: {
+    title: 'Compliance',
+    intro: 'Your RIA recordkeeping register — track filings, disclosures, policies, client documents, and reviews with a status and due date each.',
+    steps: [
+      {
+        title: 'Quick add common items',
+        body: 'Tap a “Quick add” chip to drop in a standard item (Form ADV amendment, Form CRS, IPS on file, privacy notice, and more). Each chip disappears once that item is on your register.',
+      },
+      {
+        title: 'Add your own',
+        body: 'Click "+ New item" to add anything else — a title, a category, a status, an optional due date, and an optional linked client.',
+      },
+      {
+        title: 'Track status',
+        body: 'Click the box on a row to cycle Not started → In progress → Complete. The summary cards count open, overdue, and complete items and show the next due date.',
+      },
+      {
+        title: 'Stay ahead of due dates',
+        body: 'Items sort overdue-first. A past due date on an item that isn’t complete shows in red and counts toward Overdue until you finish it.',
+      },
+    ],
+  },
+
   // ---- Admin ----
   admin: {
     title: 'Managing users',
