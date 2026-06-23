@@ -18,6 +18,7 @@ import { TabBar } from './TabBar';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
 import { PrivacyProvider } from '../privacy/privacy';
+import { PageHelp } from './PageHelp';
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
@@ -219,6 +220,9 @@ export function Portal() {
 
       <AskClaudePanel open={aiOpen} theme={theme} onClose={() => setAiOpen(false)} />
       <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
+
+      {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
+      <PageHelp screen={screen} theme={theme} />
     </div>
     </PrivacyProvider>
   );
