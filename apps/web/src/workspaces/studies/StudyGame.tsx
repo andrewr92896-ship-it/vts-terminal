@@ -8,7 +8,7 @@ import {
   type Series65Question,
   type Series65Topic,
 } from './series65Questions';
-import { SERIES65_VOCAB } from './series65Vocab';
+import { SERIES65_EXPLANATIONS } from './series65Explanations';
 import { Flashcards } from './Flashcards';
 import { consumeStudyView, type StudyView } from './studiesNav';
 import {
@@ -33,21 +33,6 @@ const RED = '#ef5468';
 const AMBER = '#e0a23a';
 type Letter = 'A' | 'B' | 'C' | 'D';
 type Mode = 'mix' | Series65Topic;
-
-// A short, sourced explanation: if a vocabulary term appears in the question or
-// its correct answer, surface its definition. (The bank has no explanations.)
-function hintFor(q: Series65Question): string | null {
-  const correct = q.options.find((o) => o.label === q.answer)?.text ?? '';
-  const hay = (q.stem + ' ' + correct).toLowerCase();
-  let best: { term: string; def: string } | null = null;
-  for (const c of SERIES65_VOCAB) {
-    const core = c.term.replace(/\(.*?\)/g, '').trim().toLowerCase();
-    if (core.length >= 4 && hay.includes(core) && (!best || core.length > best.term.length)) {
-      best = { term: c.term, def: c.def };
-    }
-  }
-  return best ? `${best.term} — ${best.def}` : null;
-}
 
 interface LevelEvent {
   prestige: boolean;
@@ -201,7 +186,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
   const crowns = '👑'.repeat(lvl.prestige);
   const passing = overallScore != null && overallScore >= PASS_THRESHOLD;
   const delta = overallScore == null ? 0 : round1(overallScore - PASS_THRESHOLD);
-  const hint = revealed && !outcome ? hintFor(q) : null;
+  const explanation = revealed ? SERIES65_EXPLANATIONS[q.id] : undefined;
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
@@ -338,14 +323,14 @@ export function StudyGame({ theme }: { theme: Theme }) {
                 )}
               </div>
               {!outcome && (
-                <div style={{ fontSize: 13, color: '#d7ccff', lineHeight: 1.55, marginBottom: hint ? 8 : 10 }}>
+                <div style={{ fontSize: 13, color: '#d7ccff', lineHeight: 1.55, marginBottom: 8 }}>
                   Correct answer: <strong style={{ color: '#fff' }}>{q.answer})</strong>{' '}
                   {q.options.find((o) => o.label === q.answer)?.text}
                 </div>
               )}
-              {hint && (
-                <div style={{ fontSize: 12, color: muted, lineHeight: 1.5, marginBottom: 10, paddingLeft: 10, borderLeft: `2px solid ${theme.accent}` }}>
-                  {hint}
+              {explanation && (
+                <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.55, marginBottom: 12, paddingLeft: 10, borderLeft: `2px solid ${theme.accent}` }}>
+                  {explanation}
                 </div>
               )}
               <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
