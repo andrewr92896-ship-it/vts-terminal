@@ -200,6 +200,25 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  td_trading: {
+    title: 'Trading To-Do',
+    intro: 'Your trading tasks and reminders — a focused view of the trading parts of your full To Do List.',
+    steps: [
+      {
+        title: 'Add a trading task',
+        body: 'Type a task in the box and click Add. It is filed under Vitalis Trading.',
+      },
+      {
+        title: 'Shared with your To Do List',
+        body: 'These tasks also appear in the full To Do List workspace, so anything you add here shows up there too.',
+      },
+      {
+        title: 'Check things off',
+        body: 'Tick the checkbox to complete a task. Completed tasks get a line through them; click the × to remove one, with a short Undo bar to restore it.',
+      },
+    ],
+  },
+
   // ---- To Do List ----
   td_all: {
     title: 'Using your To Do List',
