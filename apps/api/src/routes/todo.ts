@@ -1,11 +1,23 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/middleware.js';
-import { addItem, getTodo, removeItem, restoreItem, toggleItem } from '../todo/service.js';
+import {
+  addItem,
+  getTodo,
+  removeItem,
+  restoreItem,
+  setItemState,
+  toggleItem,
+} from '../todo/service.js';
 
 const addSchema = z.object({
   sectionId: z.string().min(1),
   text: z.string().trim().min(1).max(500),
+});
+
+const stateSchema = z.object({
+  done: z.boolean(),
+  dueAt: z.number().int().nullable(),
 });
 
 const restoreSchema = z.object({
@@ -45,12 +57,26 @@ export async function todoRoutes(app: FastifyInstance) {
   app.patch('/api/todo/items/:id/toggle', guard, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const userId = request.currentUser!.id;
+    let previous;
     try {
-      await toggleItem(userId, id);
+      previous = await toggleItem(userId, id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not update task';
       return reply.code(400).send({ error: msg });
     }
+    // `previous` lets the client offer an Undo that restores the prior state.
+    return { sections: await getTodo(userId), previous: { id, ...previous } };
+  });
+
+  // Undo a check/uncheck: restore an item's prior done flag and due date.
+  app.post('/api/todo/items/:id/state', guard, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const userId = request.currentUser!.id;
+    const parsed = stateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Could not update task' });
+    }
+    await setItemState(userId, id, parsed.data);
     return { sections: await getTodo(userId) };
   });
 
