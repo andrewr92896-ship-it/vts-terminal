@@ -6,7 +6,8 @@ import { api, ApiError } from '../api/client';
 interface AskClaudePanelProps {
   open: boolean;
   theme: Theme;
-  workspace?: string; // human label of the current workspace, for context
+  workspace?: string; // workspace key (trading, kia, finance, ...) for context
+  workspaceLabel?: string; // human label, for display
   onClose: () => void;
 }
 
@@ -15,13 +16,18 @@ interface Msg {
   content: string;
 }
 
-const SUGGESTIONS = [
-  'Summarize what this portal can do',
-  'How is my FTP challenge scored?',
-  'Tips for tracking expenses',
-];
+// Suggested prompts tailored to the current workspace.
+const SUGGESTIONS_BY_WS: Record<string, string[]> = {
+  trading: ['How is my FTP challenge scored?', 'What’s a healthy daily drawdown buffer?', 'How do I read slippage in my trade log?'],
+  kia: ['How is my commission calculated?', 'Tips to hit my unit goal this month', 'Telluride vs Sorento — quick pitch'],
+  finance: ['Tips for tracking monthly expenses', 'How does FTP payout scaling work?', 'Ways to improve my net worth'],
+  wealth: ['How should I structure model portfolios?', 'What goes in an IPS?', 'Key RIA compliance filings to track'],
+  studies: ['Explain the brochure rule (Series 65)', 'Quiz me on fiduciary duty', 'Define a discretionary account'],
+  todo: ['How do recurring tasks work?', 'What can the command bar do?', 'Help me plan my week'],
+};
+const DEFAULT_SUGGESTIONS = ['Summarize what this portal can do', 'What can you help me with here?'];
 
-export function AskClaudePanel({ open, theme, workspace, onClose }: AskClaudePanelProps) {
+export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose }: AskClaudePanelProps) {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -38,6 +44,8 @@ export function AskClaudePanel({ open, theme, workspace, onClose }: AskClaudePan
     if (!open) return;
     api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => setRemaining(null));
   }, [open]);
+
+  const suggestions = (workspace && SUGGESTIONS_BY_WS[workspace]) || DEFAULT_SUGGESTIONS;
 
   if (!open) return null;
 
@@ -99,6 +107,7 @@ export function AskClaudePanel({ open, theme, workspace, onClose }: AskClaudePan
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: accentGradient(theme) }} />
             <strong style={{ fontSize: 14, color: '#eef3ff' }}>Ask Claude</strong>
+            {workspaceLabel && <span style={{ fontSize: 11, color: '#7e92c0' }}>· {workspaceLabel}</span>}
             <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>Sonnet</span>
             {remaining != null && (
               <span title="AI requests left this month" style={{ fontSize: 9.5, color: remaining <= 5 ? '#e0a23a' : '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -118,9 +127,9 @@ export function AskClaudePanel({ open, theme, workspace, onClose }: AskClaudePan
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.length === 0 && !busy && (
             <div style={{ color: '#aebcd8', fontSize: 13, lineHeight: 1.6 }}>
-              <p style={{ marginTop: 0 }}>Ask anything about the portal, your workflow, trading, or finances. Powered by Claude Sonnet.</p>
+              <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the portal.` : 'Ask anything about the portal, your workflow, trading, or finances.'} Powered by Claude Sonnet.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
-                {SUGGESTIONS.map((s) => (
+                {suggestions.map((s) => (
                   <button key={s} onClick={() => void send(s)} style={chip(theme)}>{s}</button>
                 ))}
               </div>

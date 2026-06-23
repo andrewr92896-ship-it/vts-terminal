@@ -283,7 +283,7 @@ export function Portal() {
         </span>
       </footer>
 
-      <AskClaudePanel open={aiOpen} theme={theme} workspace={WORKSPACE_LABELS[workspace]} onClose={() => setAiOpen(false)} />
+      <AskClaudePanel open={aiOpen} theme={theme} workspace={workspace} workspaceLabel={WORKSPACE_LABELS[workspace]} onClose={() => setAiOpen(false)} />
       <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
 
       {/* User management — opened from the top-bar Admin button (admins only). */}
