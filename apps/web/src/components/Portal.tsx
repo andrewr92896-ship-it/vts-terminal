@@ -32,6 +32,7 @@ import { WealthClients } from '../workspaces/wealth/WealthClients';
 import { WealthOverview } from '../workspaces/wealth/WealthOverview';
 import { WealthPortfolios } from '../workspaces/wealth/WealthPortfolios';
 import { WealthPlanning } from '../workspaces/wealth/WealthPlanning';
+import { WealthCompliance } from '../workspaces/wealth/WealthCompliance';
 import { FinanceOverview } from '../workspaces/finance/FinanceOverview';
 import { FinanceExpenses } from '../workspaces/finance/FinanceExpenses';
 import { FinanceNetWorth } from '../workspaces/finance/FinanceNetWorth';
@@ -95,6 +96,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <WealthPortfolios />;
     case 'wm_planning':
       return <WealthPlanning />;
+    case 'wm_compliance':
+      return <WealthCompliance />;
     case 'fin_overview':
       return <FinanceOverview />;
     case 'fin_expenses':

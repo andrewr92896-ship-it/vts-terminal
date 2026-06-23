@@ -19,7 +19,19 @@ import {
   removeAllocation,
 } from '../wealth/portfolios.js';
 import { getPlans, addPlan, updatePlan, removePlan } from '../wealth/planning.js';
-import { WEALTH_CLIENT_STATUSES, PORTFOLIO_RISKS, ASSET_CLASSES } from '../db/schema.js';
+import {
+  getCompliance,
+  addItem as addComplianceItem,
+  updateItem as updateComplianceItem,
+  removeItem as removeComplianceItem,
+} from '../wealth/compliance.js';
+import {
+  WEALTH_CLIENT_STATUSES,
+  PORTFOLIO_RISKS,
+  ASSET_CLASSES,
+  COMPLIANCE_CATEGORIES,
+  COMPLIANCE_STATUSES,
+} from '../db/schema.js';
 
 const status = z.enum(WEALTH_CLIENT_STATUSES);
 const money = z.coerce.number().finite().min(0).max(1_000_000_000);
@@ -186,7 +198,46 @@ export async function wealthRoutes(app: FastifyInstance) {
   app.delete('/api/wealth/plans/:id', guard, async (request) =>
     removePlan(request.currentUser!.id, (request.params as { id: string }).id),
   );
+
+  // ---- Compliance register ----
+  app.get('/api/wealth/compliance', guard, async (request) => getCompliance(request.currentUser!.id));
+
+  app.post('/api/wealth/compliance', guard, async (request, reply) => {
+    const parsed = complianceSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A title is required' });
+    try {
+      return await addComplianceItem(request.currentUser!.id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add item' });
+    }
+  });
+  app.patch('/api/wealth/compliance/:id', guard, async (request, reply) => {
+    const parsed = editComplianceSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the item details' });
+    try {
+      return await updateComplianceItem(request.currentUser!.id, (request.params as { id: string }).id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update item' });
+    }
+  });
+  app.delete('/api/wealth/compliance/:id', guard, async (request) =>
+    removeComplianceItem(request.currentUser!.id, (request.params as { id: string }).id),
+  );
 }
+
+const cmplCategory = z.enum(COMPLIANCE_CATEGORIES);
+const cmplStatus = z.enum(COMPLIANCE_STATUSES);
+const cmplFields = {
+  category: cmplCategory.optional(),
+  status: cmplStatus.optional(),
+  dueAt: z.number().int().nullable().optional(),
+  clientId: z.string().trim().max(64).nullish(),
+  notes: z.string().trim().max(2000).nullish(),
+};
+const complianceSchema = z.object({ title: z.string().trim().min(1).max(160), ...cmplFields });
+const editComplianceSchema = z
+  .object({ title: z.string().trim().min(1).max(160).optional(), ...cmplFields })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 const ageField = z.coerce.number().int().min(0).max(120);
 const dollarField = z.coerce.number().int().min(0).max(1_000_000_000);

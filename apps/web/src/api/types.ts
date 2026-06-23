@@ -309,6 +309,41 @@ export interface PlanInput {
   incomeGoal?: number;
 }
 
+// ---- Wealth — Compliance (mirror of apps/api/src/wealth/compliance.ts) ----
+export type ComplianceCategory = 'filing' | 'disclosure' | 'policy' | 'client_doc' | 'review' | 'other';
+export type ComplianceStatus = 'not_started' | 'in_progress' | 'complete';
+export interface ComplianceItem {
+  id: string;
+  category: ComplianceCategory;
+  title: string;
+  status: ComplianceStatus;
+  overdue: boolean;
+  dueAt: number | null;
+  completedAt: number | null;
+  clientId: string | null;
+  notes: string | null;
+  updatedAt: number;
+}
+export interface ComplianceSummary {
+  total: number;
+  complete: number;
+  open: number;
+  overdue: number;
+  nextDueAt: number | null;
+}
+export interface ComplianceData {
+  items: ComplianceItem[];
+  summary: ComplianceSummary;
+}
+export interface ComplianceInput {
+  category?: ComplianceCategory;
+  title?: string;
+  status?: ComplianceStatus;
+  dueAt?: number | null;
+  clientId?: string | null;
+  notes?: string | null;
+}
+
 // ---- Wealth — Practice Overview (mirror of apps/api/src/wealth/service.ts) ----
 export interface PracticeStatusBreakdown {
   status: WealthClientStatus;

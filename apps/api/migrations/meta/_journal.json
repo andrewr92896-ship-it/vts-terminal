@@ -141,6 +141,13 @@
       "when": 1781872491493,
       "tag": "0019_wealth_plans",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1781872491494,
+      "tag": "0020_wealth_compliance",
+      "breakpoints": true
     }
   ]
 }
