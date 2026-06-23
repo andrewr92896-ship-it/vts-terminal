@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireWorkspace } from '../auth/middleware.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
+import { generateQuiz } from '../ai/quiz.js';
 
 const schema = z.object({
   messages: z
@@ -80,6 +81,11 @@ const tutorSchema = z.object({
   ask: z.string().trim().min(1).max(500).optional(),
 }).refine((v) => v.explain || v.ask, { message: 'Provide a question to explain or ask' });
 
+const quizSchema = z.object({
+  topic: z.string().trim().max(60).optional(),
+  count: z.coerce.number().int().min(1).max(10).optional(),
+});
+
 const KIA_SYSTEM = [
   'You are a Kia product expert helping a salesperson on the floor at a Kia dealership.',
   'Answer questions about Kia models, trims, specs, towing and payload, EV range and charging, MPG, key features, incentives, and basic troubleshooting — accurately and concisely, the way you would brief a salesperson before they walk back to a customer.',
@@ -138,6 +144,24 @@ export async function aiRoutes(app: FastifyInstance) {
     try {
       await enforceAiLimit(request.currentUser!.id, 'studies_tutor');
       return { reply: await chatClaude([{ role: 'user', content: prompt }], TUTOR_SYSTEM) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
+    }
+  });
+
+  // Series 65 practice-quiz generator — fresh AI-written questions on a topic.
+  app.post('/api/ai/quiz', { preHandler: requireWorkspace('studies') }, async (request, reply) => {
+    if (!aiConfigured()) {
+      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    }
+    const parsed = quizSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Pick a topic and number of questions' });
+    }
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_quiz');
+      return await generateQuiz(parsed.data.topic, parsed.data.count ?? 5);
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });

@@ -590,6 +590,18 @@ export interface FinanceCommandResult {
   reply: string;
 }
 
+// ---- Studies — AI-generated practice quiz (mirror of apps/api/src/ai/quiz.ts) ----
+export interface StudyQuizQuestion {
+  stem: string;
+  options: { label: 'A' | 'B' | 'C' | 'D'; text: string }[];
+  answer: 'A' | 'B' | 'C' | 'D';
+  explanation: string;
+}
+export interface StudyQuizResult {
+  topic: string | null;
+  questions: StudyQuizQuestion[];
+}
+
 // ---- Trading — Strategy Sessions (mirror of apps/api/src/trading/sessions.ts) ----
 export type SessionBias = 'bull' | 'bear' | 'both' | 'neutral';
 export type SessionStatus = 'active' | 'opening' | 'idle';

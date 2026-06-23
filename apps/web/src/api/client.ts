@@ -16,6 +16,7 @@ import type {
   NetWorthKind,
   SessionInput,
   StrategySession,
+  StudyQuizResult,
   MarketNewsData,
   NewsInput,
   EventInput,
@@ -167,6 +168,9 @@ export const api = {
     ask?: string;
   }): Promise<{ reply: string }> {
     return request('/api/ai/tutor', { method: 'POST', body: JSON.stringify(body) });
+  },
+  studyQuiz(body: { topic?: string; count?: number }): Promise<StudyQuizResult> {
+    return request('/api/ai/quiz', { method: 'POST', body: JSON.stringify(body) });
   },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');

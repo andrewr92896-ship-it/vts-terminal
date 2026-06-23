@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { SERIES65_QUESTIONS, SERIES65_TOPICS } from './series65Questions';
 import { SERIES65_VOCAB } from './series65Vocab';
 import { requestStudyView } from './studiesNav';
+import { StudyQuiz } from './StudyQuiz';
 
 // Study Hub landing: the subject list. Series 65 is the first (and currently
 // only) live track; the buttons jump to its quiz, flashcards, and progress.
@@ -61,6 +62,8 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
           </button>
         </div>
       </div>
+
+      <StudyQuiz theme={theme} />
 
       <p style={{ margin: '16px 2px 0', fontSize: 11.5, color: '#8a7fc8' }}>
         More subjects can be added later — this hub is built to hold additional tracks.
