@@ -9,6 +9,7 @@ import {
 } from '../theme/themes';
 import { ALL_ROLES, ROLE_LABELS, isAdmin, rolesSummary } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
+import { usePrivacy } from '../privacy/privacy';
 import { Clock } from './Clock';
 
 interface TopBarProps {
@@ -63,6 +64,7 @@ export function TopBar(props: TopBarProps) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const { isPhone, isTablet } = useResponsive();
+  const { privacy, toggle: togglePrivacy } = usePrivacy();
   // "narrow" = phones and small tablets. We restructure the single crowded row
   // into stacked rows + a scrollable workspace switcher so nothing overflows.
   const narrow = isTablet;
@@ -227,6 +229,35 @@ export function TopBar(props: TopBarProps) {
       )}
 
       <Clock />
+
+      <button
+        onClick={togglePrivacy}
+        title="Privacy mode — hide customer names and dollar amounts for demos"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontFamily: "'IBM Plex Mono', monospace",
+          fontSize: 10,
+          letterSpacing: '0.4px',
+          color: privacy ? '#e0a23a' : '#6f84b2',
+          background: privacy ? 'rgba(224,162,58,.12)' : 'rgba(0,0,0,.18)',
+          border: `1px solid ${privacy ? 'rgba(224,162,58,.45)' : '#2a4170'}`,
+          padding: narrow ? '11px 13px' : '7px 11px',
+          borderRadius: 6,
+          cursor: 'pointer',
+        }}
+      >
+        <span
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            background: privacy ? '#e0a23a' : '#6f84b2',
+          }}
+        />
+        {privacy ? 'PRIVACY ON' : 'PRIVACY'}
+      </button>
 
       <button
         onClick={onToggleSound}

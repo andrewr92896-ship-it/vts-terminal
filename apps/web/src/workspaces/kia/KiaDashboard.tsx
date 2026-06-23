@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { usePrivacy, maskName } from '../../privacy/privacy';
 import type { KiaDashboard as Dash } from '../../api/types';
 
 const RED = '#BB162B';
@@ -18,6 +19,7 @@ function etToday(): string {
 
 export function KiaDashboard() {
   const { isPhone } = useResponsive();
+  const { privacy } = usePrivacy();
   const [dash, setDash] = useState<Dash | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -88,7 +90,8 @@ export function KiaDashboard() {
   if (!dash) return <div style={{ color: '#8b9098', padding: 20, fontSize: 13 }}>Loading dashboard...</div>;
 
   const m = dash.metrics;
-  const showComm = !hideComm;
+  // Privacy mode also hides every dollar figure, on top of the manual toggle.
+  const showComm = !hideComm && !privacy;
   const money = (n: number) => (showComm ? usd(n) : '•••••');
   const reviewColor = m.reviewOk ? GREEN : AMBER;
   const isCurrentMonth = dash.month === etToday().slice(0, 7);
@@ -376,6 +379,7 @@ function DealRow({
     soldAt?: string;
   }) => void;
 }) {
+  const { privacy } = usePrivacy();
   const [editing, setEditing] = useState(false);
   const [customer, setCustomer] = useState(deal.customer);
   const [model, setModel] = useState(deal.model);
@@ -431,7 +435,7 @@ function DealRow({
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: 600, color: '#eceef0' }}>{deal.model}</div>
         <div style={{ fontSize: 10.5, color: '#8b9098', fontFamily: "'IBM Plex Mono', monospace", marginTop: 3 }}>
-          {deal.customer} · <span style={{ color: deal.type === 'New' ? '#c9cdd4' : '#9aa0a8' }}>{deal.type}</span> · {deal.dateLabel}
+          {maskName(deal.customer, privacy)} · <span style={{ color: deal.type === 'New' ? '#c9cdd4' : '#9aa0a8' }}>{deal.type}</span> · {deal.dateLabel}
         </div>
       </div>
       {showComm && (

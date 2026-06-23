@@ -17,6 +17,7 @@ import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
+import { PrivacyProvider } from '../privacy/privacy';
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
@@ -125,6 +126,7 @@ export function Portal() {
   }, [tabs, screen, workspace]);
 
   return (
+    <PrivacyProvider>
     <div
       style={{
         position: 'relative',
@@ -218,5 +220,6 @@ export function Portal() {
       <AskClaudePanel open={aiOpen} theme={theme} onClose={() => setAiOpen(false)} />
       <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
     </div>
+    </PrivacyProvider>
   );
 }
