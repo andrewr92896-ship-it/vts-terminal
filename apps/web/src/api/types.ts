@@ -8,7 +8,8 @@ export type RoleKey =
   | 'trading_viewer'
   | 'sales'
   | 'studies'
-  | 'todo';
+  | 'todo'
+  | 'wealth';
 
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {

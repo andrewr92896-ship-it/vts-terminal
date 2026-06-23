@@ -12,6 +12,7 @@ export const ALL_ROLES: RoleKey[] = [
   'sales',
   'studies',
   'todo',
+  'wealth',
 ];
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
@@ -21,6 +22,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   sales: 'Sales',
   studies: 'Studies',
   todo: 'To Do',
+  wealth: 'Wealth Management',
 };
 
 // Short descriptions shown next to each role in the admin picker.
@@ -31,6 +33,7 @@ export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
   sales: 'Kia Sales workspace',
   studies: 'Studies workspace',
   todo: 'Personal To Do List workspace',
+  wealth: 'Vitalis Retirement & Wealth Management workspace',
 };
 
 export function isAdmin(roles: RoleKey[]): boolean {
@@ -42,6 +45,7 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   kia: ['sales'],
   todo: ['todo'],
   studies: ['studies'],
+  wealth: ['wealth'],
 };
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
@@ -49,9 +53,9 @@ export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean 
   return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
 }
 
-// Ordered as the switcher shows them: To Do, Kia, Trading, Studies.
+// Ordered as the switcher shows them.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'studies'];
+  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'wealth', 'studies'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 
