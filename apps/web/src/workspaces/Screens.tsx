@@ -33,6 +33,13 @@ const SCREENS: Record<string, ScreenInfo> = {
   st_quiz: { title: 'Practice Quiz', blurb: 'One question at a time, rotating topics, with scoring.', stage: 3 },
   st_cards: { title: 'Flashcards', blurb: 'Topic-filtered flashcards with a known/review pile.', stage: 3 },
   st_progress: { title: 'Progress', blurb: 'Overall and per-topic accuracy over time.', stage: 3 },
+  // Vitalis Retirement & Wealth Management — the client-management portal for
+  // the future advisory firm (launches after the Series 65).
+  wm_home: { title: 'Practice Overview', blurb: 'Snapshot of the advisory practice: assets under management, client and household counts, recent activity, and upcoming tasks.', stage: 5 },
+  wm_clients: { title: 'Clients', blurb: 'Manage clients and households — contact details, accounts, risk profiles, goals, documents, and meeting notes.', stage: 5 },
+  wm_portfolios: { title: 'Portfolios', blurb: 'Model portfolios and per-client allocations, holdings, performance, and rebalancing.', stage: 5 },
+  wm_planning: { title: 'Planning', blurb: 'Retirement and financial planning: goals, cash-flow and income projections, and scenario analysis.', stage: 5 },
+  wm_compliance: { title: 'Compliance', blurb: 'RIA recordkeeping: ADV, investment policy statements, disclosures, and an audit trail.', stage: 5 },
 };
 
 export function Screen({ screen, theme }: { screen: string; theme: Theme }) {

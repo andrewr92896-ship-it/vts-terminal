@@ -75,10 +75,10 @@ export function TopBar(props: TopBarProps) {
   // Brand block (wordmark image or styled text).
   const brandEl = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-      {brand.useWordmark ? (
+      {brand.wordmark ? (
         <img
-          src="/brand/vitalis-wordmark.png"
-          alt="Vitalis Trading Systems"
+          src={brand.wordmark}
+          alt={brand.sub}
           style={{ height: narrow ? 28 : 34, display: 'block' }}
         />
       ) : (
