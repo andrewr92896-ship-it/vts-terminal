@@ -552,3 +552,27 @@ export const wealthAllocations = sqliteTable('wealth_allocations', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type WealthAllocationRow = typeof wealthAllocations.$inferSelect;
+
+// ---- Wealth — Planning (retirement projection scenarios, per advisor) ----
+// A scenario stores the inputs of a retirement projection; the math is computed
+// on read. Money is whole US dollars; rates are basis points (600 = 6.00%).
+// clientId optionally ties a scenario to a client (loose link, no FK).
+export const wealthPlans = sqliteTable('wealth_plans', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  clientId: text('client_id'),
+  currentAge: integer('current_age').notNull().default(35),
+  retirementAge: integer('retirement_age').notNull().default(65),
+  endAge: integer('end_age').notNull().default(90),
+  currentSavings: integer('current_savings').notNull().default(0),
+  annualContribution: integer('annual_contribution').notNull().default(0),
+  returnBp: integer('return_bp').notNull().default(600),
+  inflationBp: integer('inflation_bp').notNull().default(250),
+  incomeGoal: integer('income_goal').notNull().default(60000),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type WealthPlanRow = typeof wealthPlans.$inferSelect;

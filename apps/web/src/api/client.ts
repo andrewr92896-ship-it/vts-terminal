@@ -28,6 +28,8 @@ import type {
   PortfoliosData,
   PortfolioInput,
   AllocationInput,
+  PlansData,
+  PlanInput,
   RemovedWealthClient,
   RoleKey,
   TodoItemState,
@@ -399,6 +401,18 @@ export const api = {
   },
   wealthRemoveAllocation(id: string): Promise<PortfoliosData> {
     return request(`/api/wealth/allocations/${id}`, { method: 'DELETE' });
+  },
+  wealthPlans(): Promise<PlansData> {
+    return request('/api/wealth/plans');
+  },
+  wealthAddPlan(input: PlanInput): Promise<PlansData> {
+    return request('/api/wealth/plans', { method: 'POST', body: JSON.stringify(input) });
+  },
+  wealthUpdatePlan(id: string, patch: PlanInput): Promise<PlansData> {
+    return request(`/api/wealth/plans/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  wealthRemovePlan(id: string): Promise<PlansData> {
+    return request(`/api/wealth/plans/${id}`, { method: 'DELETE' });
   },
   wealthClients(): Promise<WealthClientsData> {
     return request('/api/wealth/clients');

@@ -18,6 +18,7 @@ import {
   updateAllocation,
   removeAllocation,
 } from '../wealth/portfolios.js';
+import { getPlans, addPlan, updatePlan, removePlan } from '../wealth/planning.js';
 import { WEALTH_CLIENT_STATUSES, PORTFOLIO_RISKS, ASSET_CLASSES } from '../db/schema.js';
 
 const status = z.enum(WEALTH_CLIENT_STATUSES);
@@ -160,7 +161,51 @@ export async function wealthRoutes(app: FastifyInstance) {
   app.delete('/api/wealth/allocations/:id', guard, async (request) =>
     removeAllocation(request.currentUser!.id, (request.params as { id: string }).id),
   );
+
+  // ---- Planning (retirement projection scenarios) ----
+  app.get('/api/wealth/plans', guard, async (request) => getPlans(request.currentUser!.id));
+
+  app.post('/api/wealth/plans', guard, async (request, reply) => {
+    const parsed = planSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A scenario name is required' });
+    try {
+      return await addPlan(request.currentUser!.id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add scenario' });
+    }
+  });
+  app.patch('/api/wealth/plans/:id', guard, async (request, reply) => {
+    const parsed = editPlanSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the scenario details' });
+    try {
+      return await updatePlan(request.currentUser!.id, (request.params as { id: string }).id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update scenario' });
+    }
+  });
+  app.delete('/api/wealth/plans/:id', guard, async (request) =>
+    removePlan(request.currentUser!.id, (request.params as { id: string }).id),
+  );
 }
+
+const ageField = z.coerce.number().int().min(0).max(120);
+const dollarField = z.coerce.number().int().min(0).max(1_000_000_000);
+const rateField = z.coerce.number().int().min(0).max(5000);
+const planFields = {
+  clientId: z.string().trim().max(64).nullish(),
+  currentAge: ageField.optional(),
+  retirementAge: ageField.optional(),
+  endAge: ageField.optional(),
+  currentSavings: dollarField.optional(),
+  annualContribution: dollarField.optional(),
+  returnBp: rateField.optional(),
+  inflationBp: rateField.optional(),
+  incomeGoal: dollarField.optional(),
+};
+const planSchema = z.object({ name: z.string().trim().min(1).max(120), ...planFields });
+const editPlanSchema = z
+  .object({ name: z.string().trim().min(1).max(120).optional(), ...planFields })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 const risk = z.enum(PORTFOLIO_RISKS);
 const assetClass = z.enum(ASSET_CLASSES);

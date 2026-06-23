@@ -489,6 +489,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  wm_planning: {
+    title: 'Planning',
+    intro: 'Retirement projection scenarios. Each one grows current savings and yearly contributions to retirement, then estimates the income that balance can sustain — compared to the goal.',
+    steps: [
+      {
+        title: 'Create a scenario',
+        body: 'Click "+ New scenario", name it, optionally link a client, and enter current/retirement/plan-to ages, current savings, yearly saving, expected return, inflation, and an income goal (in today\'s dollars).',
+      },
+      {
+        title: 'Read the projection',
+        body: 'The card shows the projected balance at retirement (nominal and in today\'s dollars), the inflation-adjusted income it can sustain through your plan-to age, the gap or surplus versus the goal, and a 4% rule figure. The growth chart traces the balance to retirement.',
+      },
+      {
+        title: 'On track vs shortfall',
+        body: 'The pill turns green "On track" when sustainable income meets the goal, or amber "Shortfall" when it falls short. Adjust the inputs to see what closes the gap.',
+      },
+      {
+        title: 'Hide dollars',
+        body: 'Use "Hide $" or Privacy mode to mask dollar amounts during a screen-share; ages and percentages still show.',
+      },
+    ],
+  },
+
   // ---- Admin ----
   admin: {
     title: 'Managing users',

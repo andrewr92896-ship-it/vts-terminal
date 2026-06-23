@@ -264,6 +264,51 @@ export interface AllocationInput {
   targetBp?: number;
 }
 
+// ---- Wealth — Planning (mirror of apps/api/src/wealth/planning.ts) ----
+export interface PlanProjection {
+  yearsToRetirement: number;
+  yearsInRetirement: number;
+  balanceAtRetirement: number;
+  realBalanceAtRetirement: number;
+  sustainableIncome: number;
+  fourPctIncome: number;
+  incomeGoal: number;
+  gap: number;
+  onTrack: boolean;
+  series: { age: number; balance: number }[];
+}
+export interface Plan {
+  id: string;
+  name: string;
+  clientId: string | null;
+  currentAge: number;
+  retirementAge: number;
+  endAge: number;
+  currentSavings: number;
+  annualContribution: number;
+  returnBp: number;
+  inflationBp: number;
+  incomeGoal: number;
+  projection: PlanProjection;
+  createdAt: number;
+  updatedAt: number;
+}
+export interface PlansData {
+  plans: Plan[];
+}
+export interface PlanInput {
+  name?: string;
+  clientId?: string | null;
+  currentAge?: number;
+  retirementAge?: number;
+  endAge?: number;
+  currentSavings?: number;
+  annualContribution?: number;
+  returnBp?: number;
+  inflationBp?: number;
+  incomeGoal?: number;
+}
+
 // ---- Wealth — Practice Overview (mirror of apps/api/src/wealth/service.ts) ----
 export interface PracticeStatusBreakdown {
   status: WealthClientStatus;
