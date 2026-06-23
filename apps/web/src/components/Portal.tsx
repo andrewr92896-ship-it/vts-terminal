@@ -29,10 +29,13 @@ import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
 import { WealthClients } from '../workspaces/wealth/WealthClients';
 import { Flashcards } from '../workspaces/studies/Flashcards';
+import { Series65Quiz } from '../workspaces/studies/Series65Quiz';
+import { StudyHub } from '../workspaces/studies/StudyHub';
+import { StudyProgress } from '../workspaces/studies/StudyProgress';
 
 // Screens that have real implementations; everything else falls back to the
-// branded placeholder.
-function renderScreen(screen: string, theme: Theme) {
+// branded placeholder. `onNavigate` lets a screen jump to another tab.
+function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string) => void) {
   switch (screen) {
     case 'td_all':
       return <TodoAll />;
@@ -46,8 +49,14 @@ function renderScreen(screen: string, theme: Theme) {
       return <KiaTodo />;
     case 'wm_clients':
       return <WealthClients />;
+    case 'st_home':
+      return <StudyHub theme={theme} onNavigate={onNavigate} />;
+    case 'st_quiz':
+      return <Series65Quiz theme={theme} />;
     case 'st_cards':
       return <Flashcards theme={theme} />;
+    case 'st_progress':
+      return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     default:
       return null;
   }
@@ -189,7 +198,7 @@ export function Portal() {
           padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
         }}
       >
-        {renderScreen(screen, theme) ?? <Screen screen={screen} theme={theme} />}
+        {renderScreen(screen, theme, setScreen) ?? <Screen screen={screen} theme={theme} />}
       </main>
 
       <footer

@@ -118,6 +118,80 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  // ---- Studies (Series 65) ----
+  st_home: {
+    title: 'Study Hub',
+    intro: 'Your study home. Series 65 is the first track — the rest of the tabs (Practice Quiz, Flashcards, Progress) all work from it.',
+    steps: [
+      {
+        title: 'Open a subject',
+        body: 'The Series 65 card shows how many questions and flashcards are loaded. Use its buttons to jump straight into the quiz, flashcards, or your progress.',
+      },
+      {
+        title: 'Your progress is saved',
+        body: 'Quiz accuracy is stored on this device per login, so you can close the tab and pick up where you left off.',
+      },
+    ],
+  },
+  st_quiz: {
+    title: 'Practice Quiz',
+    intro: 'A self-quiz that rotates through the four Series 65 topics and recycles the questions you miss.',
+    steps: [
+      {
+        title: 'Answer the question',
+        body: 'Read the question and click the option you think is right. The topic rotates on every question, so you cover all four areas.',
+      },
+      {
+        title: 'See the result',
+        body: 'After you answer, the correct choice is highlighted. If you were wrong, the correct answer is shown. Two figures update: overall accuracy (last 100) and accuracy in that topic (last 20).',
+      },
+      {
+        title: '“I don’t know”',
+        body: 'Not sure? Click “I don’t know” to reveal the answer. It counts as a miss, the same as answering incorrectly.',
+      },
+      {
+        title: 'Back-burner review',
+        body: 'Missed questions return later, tagged “Review.” Review questions do not count toward your percentages — they are just to reinforce the misses.',
+      },
+      {
+        title: 'Fix a mark',
+        body: 'If a question was scored wrong by mistake, use the small “mark right / wrong” buttons to override it. Use “Reset progress” to clear your stats and reshuffle the deck.',
+      },
+    ],
+  },
+  st_cards: {
+    title: 'Flashcards',
+    intro: 'Series 65 vocabulary, drawn from the terms in the question bank and grouped by topic.',
+    steps: [
+      {
+        title: 'Filter by topic',
+        body: 'Use the chips at the top to show all cards or just one area (Economics, Regulations & Ethics, Investments, Client Management).',
+      },
+      {
+        title: 'Flip a card',
+        body: 'Tap the card (or use “Show definition”) to reveal the meaning. Use Prev / Next to move through the deck.',
+      },
+      {
+        title: 'Auto-rotate',
+        body: 'Turn on “Auto-rotate” to cycle hands-free: the term shows for 10 seconds, then the definition for 20, then it advances. A countdown bar shows the timing.',
+      },
+    ],
+  },
+  st_progress: {
+    title: 'Progress',
+    intro: 'A snapshot of how you are doing on the Series 65 practice quiz.',
+    steps: [
+      {
+        title: 'Overall accuracy',
+        body: 'The top figure is your accuracy over the last 100 answered questions. The marker on the bar shows the ~72% passing line.',
+      },
+      {
+        title: 'By topic',
+        body: 'Each topic shows your accuracy over its last 20 answers, so you can see which areas need more work.',
+      },
+    ],
+  },
+
   // ---- Vitalis Wealth Management ----
   wm_clients: {
     title: 'Managing your clients',

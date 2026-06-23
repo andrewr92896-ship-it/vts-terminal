@@ -185,7 +185,7 @@ export function TopBar(props: TopBarProps) {
           whiteSpace: 'nowrap',
         }}
       >
-        Pre-Alpha V 0.2
+        Alpha V 1.0
       </span>
     </nav>
   );
