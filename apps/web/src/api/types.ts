@@ -81,6 +81,13 @@ export interface TodoCommandResult {
   reply: string;
 }
 
+// Current user's AI usage against the monthly cap.
+export interface AiUsage {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
 export type TodoMarker = 'check' | 'dash' | 'dot';
 
 export interface TodoItem {

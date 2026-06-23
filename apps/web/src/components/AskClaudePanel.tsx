@@ -26,11 +26,18 @@ export function AskClaudePanel({ open, theme, workspace, onClose }: AskClaudePan
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [remaining, setRemaining] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
+
+  // Load the monthly-usage counter when the panel opens.
+  useEffect(() => {
+    if (!open) return;
+    api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => setRemaining(null));
+  }, [open]);
 
   if (!open) return null;
 
@@ -45,14 +52,18 @@ export function AskClaudePanel({ open, theme, workspace, onClose }: AskClaudePan
     try {
       const { reply } = await api.askAi(next, workspace);
       setMessages([...next, { role: 'assistant', content: reply }]);
+      api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => { /* keep */ });
     } catch (e) {
       const msg =
         e instanceof ApiError
           ? e.status === 503
             ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
-            : e.message
+            : e.status === 429
+              ? e.message
+              : e.message
           : 'Request failed';
       setError(msg);
+      if (e instanceof ApiError && e.status === 429) setRemaining(0);
     } finally {
       setBusy(false);
     }
@@ -89,6 +100,11 @@ export function AskClaudePanel({ open, theme, workspace, onClose }: AskClaudePan
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: accentGradient(theme) }} />
             <strong style={{ fontSize: 14, color: '#eef3ff' }}>Ask Claude</strong>
             <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>Sonnet</span>
+            {remaining != null && (
+              <span title="AI requests left this month" style={{ fontSize: 9.5, color: remaining <= 5 ? '#e0a23a' : '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}>
+                {remaining} left
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             {messages.length > 0 && (

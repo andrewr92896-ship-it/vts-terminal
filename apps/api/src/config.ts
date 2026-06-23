@@ -24,6 +24,11 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL_DEFAULT: z.string().default('claude-sonnet-4-6'),
   ANTHROPIC_MODEL_ANALYSIS: z.string().default('claude-opus-4-8'),
+  // AI usage guardrails (per user). The monthly cap resets at the start of each
+  // Eastern-Time month; the per-minute limit smooths bursts. Keeps Claude use
+  // from running up an unexpected bill.
+  AI_MONTHLY_LIMIT: z.coerce.number().int().positive().default(1000),
+  AI_RATE_PER_MIN: z.coerce.number().int().positive().default(15),
   // Shared secret that inbound TradingView alerts must include (TradingView
   // sends no auth of its own). When unset, the webhook rejects everything.
   TRADINGVIEW_WEBHOOK_SECRET: z.string().optional(),

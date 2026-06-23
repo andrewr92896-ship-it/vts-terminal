@@ -1,5 +1,6 @@
 import type {
   AdminUser,
+  AiUsage,
   AlertsData,
   BrokerConnection,
   BrokerStatus,
@@ -149,6 +150,9 @@ export const api = {
   },
   askAi(messages: { role: 'user' | 'assistant'; content: string }[], workspace?: string): Promise<{ reply: string }> {
     return request('/api/ai/ask', { method: 'POST', body: JSON.stringify({ messages, workspace }) });
+  },
+  aiUsage(): Promise<AiUsage> {
+    return request('/api/ai/usage');
   },
   askKia(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<{ reply: string }> {
     return request('/api/ai/kia', { method: 'POST', body: JSON.stringify({ messages }) });
