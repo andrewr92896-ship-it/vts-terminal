@@ -4,6 +4,18 @@ import { eq } from 'drizzle-orm';
 import { db } from './db/index.js';
 import { users } from './db/schema.js';
 import { hashPassword } from './auth/passwords.js';
+import { seedConnectionsFromEnv } from './trading/connections.js';
+
+// Seed the admin's broker connections from the existing global env keys (so the
+// pre-multi-user OANDA/Kraken setup keeps working as "Andrew's Trades").
+// Idempotent and best-effort — never blocks startup.
+async function trySeedConnections(userId: string): Promise<void> {
+  try {
+    await seedConnectionsFromEnv(userId);
+  } catch (err) {
+    console.error('Broker connection seed failed:', err);
+  }
+}
 
 // Creates the initial Admin user once. Idempotent: if the username already
 // exists, it does nothing. The password comes from ADMIN_PASSWORD; if that is
@@ -20,7 +32,8 @@ export async function seedAdmin(): Promise<void> {
     .limit(1);
 
   if (existing[0]) {
-    console.log(`Admin user "${username}" already exists. Nothing to do.`);
+    console.log(`Admin user "${username}" already exists.`);
+    await trySeedConnections(existing[0].id);
     return;
   }
 
@@ -29,8 +42,9 @@ export async function seedAdmin(): Promise<void> {
   const password = provided || crypto.randomBytes(12).toString('base64url');
 
   const now = new Date();
+  const adminId = crypto.randomUUID();
   await db.insert(users).values({
-    id: crypto.randomUUID(),
+    id: adminId,
     username,
     createdUsername: username,
     displayName,
@@ -57,6 +71,8 @@ export async function seedAdmin(): Promise<void> {
   }
   console.log('  ---------------------------------------------');
   console.log('');
+
+  await trySeedConnections(adminId);
 }
 
 // Run directly (npm run db:seed) — but not when imported by the server.

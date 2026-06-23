@@ -242,6 +242,7 @@ export interface LiveTrade {
 }
 
 export interface BrokerLiveResult {
+  connectionId: string;
   broker: BrokerKey;
   name: string;
   platform: string;
@@ -259,6 +260,28 @@ export interface LiveWall {
   brokers: BrokerLiveResult[];
   trades: LiveTrade[];
   note: string | null;
+}
+
+// ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----
+export type BrokerConnectionKind = 'oanda' | 'kraken';
+
+export interface BrokerConnection {
+  id: string;
+  broker: BrokerConnectionKind;
+  label: string;
+  summary: string | null;
+  active: boolean;
+  lastStatus: 'unknown' | 'ok' | 'error';
+  lastError: string | null;
+  lastCheckedAt: number | null;
+  createdAt: number;
+}
+
+export interface ConnectionInput {
+  broker?: BrokerConnectionKind;
+  label?: string;
+  active?: boolean;
+  creds?: Record<string, string>;
 }
 
 // ---- Trading — Trade Log (mirror of apps/api/src/trading/trades.ts) ----

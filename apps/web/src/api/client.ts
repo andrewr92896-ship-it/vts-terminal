@@ -1,7 +1,9 @@
 import type {
   AdminUser,
   AlertsData,
+  BrokerConnection,
   BrokerStatus,
+  ConnectionInput,
   HistoryData,
   LiveWall,
   TradeInput,
@@ -131,6 +133,18 @@ export const api = {
   },
   tradingHistory(): Promise<HistoryData> {
     return request('/api/trading/history');
+  },
+  tradingConnections(): Promise<{ connections: BrokerConnection[] }> {
+    return request('/api/trading/connections');
+  },
+  addConnection(input: { broker: string; label: string; creds: Record<string, string> }): Promise<{ connections: BrokerConnection[] }> {
+    return request('/api/trading/connections', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateConnection(id: string, patch: ConnectionInput): Promise<{ connections: BrokerConnection[] }> {
+    return request(`/api/trading/connections/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removeConnection(id: string): Promise<{ connections: BrokerConnection[] }> {
+    return request(`/api/trading/connections/${id}`, { method: 'DELETE' });
   },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });
