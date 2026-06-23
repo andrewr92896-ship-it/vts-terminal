@@ -29,6 +29,7 @@ import type {
   RemovedKiaDeal,
   RemovedTodoItem,
   PracticeOverview,
+  WealthCommandResult,
   PortfoliosData,
   PortfolioInput,
   AllocationInput,
@@ -414,6 +415,9 @@ export const api = {
   },
   wealthOverviewBrief(): Promise<{ brief: string }> {
     return request('/api/wealth/overview/brief', { method: 'POST', body: JSON.stringify({}) });
+  },
+  wealthCommand(note: string): Promise<WealthCommandResult> {
+    return request('/api/wealth/command', { method: 'POST', body: JSON.stringify({ note }) });
   },
   wealthPortfolios(): Promise<PortfoliosData> {
     return request('/api/wealth/portfolios');

@@ -385,6 +385,14 @@ export interface PracticeRecentClient {
   status: WealthClientStatus;
   updatedAt: number;
 }
+// Result of adding practice items from a plain-English note via Claude.
+export interface WealthCommandResult {
+  overview: PracticeOverview | null; // refreshed when anything changed
+  applied: string[];
+  skipped: string[];
+  reply: string;
+}
+
 export interface PracticeOverview {
   summary: WealthSummary;
   avgAccount: number;

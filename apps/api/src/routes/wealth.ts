@@ -19,9 +19,10 @@ import {
   removeAllocation,
 } from '../wealth/portfolios.js';
 import { getPlans, addPlan, updatePlan, removePlan } from '../wealth/planning.js';
+import { runWealthCommand } from '../wealth/parser.js';
 import { aiConfigured } from '../ai/claude.js';
 import { generateBrief } from '../ai/brief.js';
-import { AiLimitError } from '../ai/usage.js';
+import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import {
   getCompliance,
   addItem as addComplianceItem,
@@ -103,6 +104,22 @@ export async function wealthRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
+    }
+  });
+
+  // Plain-English "add things" via Claude (Sonnet) — clients, portfolios +
+  // sleeves, planning scenarios, compliance items — several at once.
+  app.post('/api/wealth/command', guard, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parsed = commandSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Type something to add' });
+    const userId = request.currentUser!.id;
+    try {
+      await enforceAiLimit(userId, 'wealth_command');
+      return await runWealthCommand(userId, parsed.data.note);
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not process that' });
     }
   });
 
@@ -253,6 +270,8 @@ export async function wealthRoutes(app: FastifyInstance) {
     removeComplianceItem(request.currentUser!.id, (request.params as { id: string }).id),
   );
 }
+
+const commandSchema = z.object({ note: z.string().trim().min(1).max(500) });
 
 const cmplCategory = z.enum(COMPLIANCE_CATEGORIES);
 const cmplStatus = z.enum(COMPLIANCE_STATUSES);

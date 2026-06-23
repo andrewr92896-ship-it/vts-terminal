@@ -47,6 +47,36 @@ export function WealthOverview({ onNavigate }: { onNavigate?: (screen: string) =
   const [hideMoney, setHideMoney] = useState(false);
   const ai = useAiBrief(api.wealthOverviewBrief);
 
+  // Claude quick-add (clients, portfolios, plans, compliance items)
+  const [note, setNote] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteReply, setNoteReply] = useState<string | null>(null);
+  const [noteSkipped, setNoteSkipped] = useState<string[]>([]);
+
+  async function quickAdd() {
+    const text = note.trim();
+    if (!text || noteBusy) return;
+    setNoteBusy(true);
+    setErr(null);
+    try {
+      const r = await api.wealthCommand(text);
+      if (r.overview) setData(r.overview);
+      setNoteReply(r.reply);
+      setNoteSkipped(r.skipped);
+      if (r.applied.length) setNote('');
+    } catch (e) {
+      setErr(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Could not add that',
+      );
+    } finally {
+      setNoteBusy(false);
+    }
+  }
+
   useEffect(() => {
     let alive = true;
     api
@@ -82,6 +112,35 @@ export function WealthOverview({ onNavigate }: { onNavigate?: (screen: string) =
 
       {ai.brief && <BriefCard brief={ai.brief} accent={GREEN} onDismiss={ai.dismiss} />}
       {ai.error && <BriefError message={ai.error} onDismiss={ai.dismiss} />}
+
+      {/* Claude quick-add */}
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+          Quick add
+          <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: FAINT, letterSpacing: 0 }}>Sonnet</span>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && quickAdd()}
+            placeholder='Plain English: "Add client Jane Doe, active, $250k" or "Add a CPI filing due July 30"'
+            style={inputStyle}
+          />
+          <button onClick={quickAdd} disabled={noteBusy || !note.trim()} style={{ ...greenBtn, opacity: noteBusy || !note.trim() ? 0.6 : 1 }}>
+            {noteBusy ? '…' : 'Add'}
+          </button>
+        </div>
+        {noteReply && (
+          <div style={{ marginTop: 8, fontSize: 11.5, color: '#a7e0c4', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: GREEN }}>✓</span> {noteReply}
+            <button onClick={() => { setNoteReply(null); setNoteSkipped([]); }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: FAINT, fontSize: 10.5, cursor: 'pointer' }}>dismiss</button>
+          </div>
+        )}
+        {noteSkipped.length > 0 && (
+          <div style={{ marginTop: 6, fontSize: 11, color: '#e0a23a' }}>Skipped: {noteSkipped.join('; ')}</div>
+        )}
+      </div>
 
       {empty ? (
         <div style={{ ...card, textAlign: 'center', padding: '44px 24px' }}>
@@ -197,3 +256,5 @@ function SectionHeader({ title, action }: { title: string; action?: { label: str
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
 const greenBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GREEN},#239160)`, color: '#05231a', fontWeight: 700, fontSize: 12.5, padding: '9px 16px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#cfe6da', background: PANEL, border: `1px solid ${BORDER}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
+const sectionLabel: CSSProperties = { fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED };
+const inputStyle: CSSProperties = { flex: 1, background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 7, padding: '10px 12px', color: TEXT, fontSize: 12.5, outline: 'none' };
