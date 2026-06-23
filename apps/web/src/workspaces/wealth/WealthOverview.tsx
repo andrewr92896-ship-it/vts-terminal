@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy, maskName } from '../../privacy/privacy';
+import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import type { PracticeOverview, WealthClientStatus } from '../../api/types';
 
 // Wealth workspace palette — the dark green "pro-terminal" theme, hardcoded so
@@ -44,6 +45,7 @@ export function WealthOverview({ onNavigate }: { onNavigate?: (screen: string) =
   const [data, setData] = useState<PracticeOverview | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [hideMoney, setHideMoney] = useState(false);
+  const ai = useAiBrief(api.wealthOverviewBrief);
 
   useEffect(() => {
     let alive = true;
@@ -72,8 +74,14 @@ export function WealthOverview({ onNavigate }: { onNavigate?: (screen: string) =
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Practice Overview</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>A snapshot of the advisory book — assets under management, client mix, and recent activity.</div>
         </div>
-        <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $ details' : 'Hide $ details'}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {!empty && <BriefButton onClick={ai.run} busy={ai.busy} accent={GREEN} />}
+          <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $ details' : 'Hide $ details'}</button>
+        </div>
       </div>
+
+      {ai.brief && <BriefCard brief={ai.brief} accent={GREEN} onDismiss={ai.dismiss} />}
+      {ai.error && <BriefError message={ai.error} onDismiss={ai.dismiss} />}
 
       {empty ? (
         <div style={{ ...card, textAlign: 'center', padding: '44px 24px' }}>

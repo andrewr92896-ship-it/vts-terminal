@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
+import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import type { FinanceOverview as Data, FtpPhase } from '../../api/types';
 
 const ACCENT = '#6f8bff';
@@ -28,6 +29,7 @@ export function FinanceOverview() {
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [scaleVal, setScaleVal] = useState('');
+  const ai = useAiBrief(api.financeOverviewBrief);
 
   async function load() {
     try { const d = await api.financeOverview(); setData(d); setScaleVal(String(d.settings.ftpPhase === 'funded' ? d.settings.ftpPayoutPct : d.settings.ftpDivisor)); setErr(null); }
@@ -70,8 +72,14 @@ export function FinanceOverview() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Personal Finance</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>Take-home across every job & business — {data.monthLabel}.</div>
         </div>
-        <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <BriefButton onClick={ai.run} busy={ai.busy} accent={ACCENT} accentText="#0a1226" />
+          <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
+        </div>
       </div>
+
+      {ai.brief && <BriefCard brief={ai.brief} accent={ACCENT} onDismiss={ai.dismiss} />}
+      {ai.error && <BriefError message={ai.error} onDismiss={ai.dismiss} />}
 
       {/* This month headline */}
       <div style={{ ...card, marginBottom: 14 }}>

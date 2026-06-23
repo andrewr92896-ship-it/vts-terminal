@@ -19,6 +19,9 @@ import {
   removeAllocation,
 } from '../wealth/portfolios.js';
 import { getPlans, addPlan, updatePlan, removePlan } from '../wealth/planning.js';
+import { aiConfigured } from '../ai/claude.js';
+import { generateBrief } from '../ai/brief.js';
+import { AiLimitError } from '../ai/usage.js';
 import {
   getCompliance,
   addItem as addComplianceItem,
@@ -75,6 +78,32 @@ export async function wealthRoutes(app: FastifyInstance) {
 
   app.get('/api/wealth/overview', guard, async (request) => {
     return getPracticeOverview(request.currentUser!.id);
+  });
+
+  // Claude (Sonnet) read of the advisory practice.
+  app.post('/api/wealth/overview/brief', guard, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const o = await getPracticeOverview(request.currentUser!.id);
+    const wusd = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
+    if (o.summary.totalClients === 0) {
+      return { brief: 'Your book is empty — add a few clients and I’ll summarize the practice.' };
+    }
+    const mix = o.breakdown.map((b) => `${b.status} ${b.count} (${wusd(b.aum)})`).join(', ');
+    const data = [
+      `AUM ${wusd(o.summary.totalAum)} across ${o.summary.totalClients} clients (${o.summary.activeClients} active).`,
+      `Average funded account ${wusd(o.avgAccount)}; largest ${wusd(o.largestAccount)}.`,
+      `Pipeline (prospect + onboarding): ${wusd(o.pipelineValue)} across ${o.pipelineCount}.`,
+      `Status mix: ${mix}.`,
+      `Top relationships: ${o.topClients.map((c) => `${c.name} ${wusd(c.accountValue)}`).join(', ') || 'none'}.`,
+    ].join('\n');
+    const system =
+      'You are an assistant to a financial advisor. Given a snapshot of their practice (AUM, client mix, pipeline, top relationships), write a short, practical read: how the book looks, where the opportunity or risk is (e.g. concentration, pipeline), and one or two next actions. Under 140 words, plain text, no markdown headers.';
+    try {
+      return { brief: await generateBrief(request.currentUser!.id, 'wealth_brief', system, data) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
+    }
   });
 
   app.get('/api/wealth/clients', guard, async (request) => {

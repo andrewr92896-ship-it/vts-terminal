@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
+import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import type { ChallengeData, ChallengeInput } from '../../api/types';
 
 const GOLD = '#EBCB74';
@@ -42,6 +43,7 @@ export function AccountMetrics() {
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [editing, setEditing] = useState(false);
+  const ai = useAiBrief(api.tradingMetricsBrief);
 
   useEffect(() => {
     let alive = true;
@@ -78,10 +80,14 @@ export function AccountMetrics() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
           {canSee && <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>}
           <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? 'Close' : 'Edit'}</button>
         </div>
       </div>
+
+      {ai.brief && <BriefCard brief={ai.brief} accent={GOLD} onDismiss={ai.dismiss} />}
+      {ai.error && <BriefError message={ai.error} onDismiss={ai.dismiss} />}
 
       {actionError && <div onClick={() => setActionError(null)} style={banner}>{actionError} — click to dismiss.</div>}
 

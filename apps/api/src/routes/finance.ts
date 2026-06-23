@@ -14,6 +14,11 @@ import {
   removeNetWorth,
 } from '../finance/service.js';
 import { FTP_PHASES, NET_WORTH_KINDS } from '../db/schema.js';
+import { aiConfigured } from '../ai/claude.js';
+import { generateBrief } from '../ai/brief.js';
+import { AiLimitError } from '../ai/usage.js';
+
+const usd = (n: number) => '$' + Math.round(n).toLocaleString('en-US');
 
 const money = z.number().finite().min(0).max(1_000_000_000);
 const day = z.number().int().min(1).max(31);
@@ -53,6 +58,27 @@ export async function financeRoutes(app: FastifyInstance) {
   const uid = (r: { currentUser: { id: string } | null }) => r.currentUser!.id;
 
   app.get('/api/finance/overview', guard, async (request) => getOverview(uid(request)));
+
+  // Claude (Sonnet) plain-English read of the month's finances.
+  app.post('/api/finance/overview/brief', guard, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const o = await getOverview(uid(request));
+    const data = [
+      `Month: ${o.monthLabel} (day ${o.todayDay}).`,
+      `Earnings — Kia commission ${usd(o.earnings.kiaCommission)}, trading P/L ${usd(o.earnings.tradingReal)}, FTP scaled ${usd(o.earnings.ftpScaled)} (raw ${usd(o.earnings.ftpRaw)}, phase ${o.settings.ftpPhase}); total ${usd(o.earnings.total)}.`,
+      `Expenses — ${usd(o.expenses.total)} across ${o.expenses.count} bills; ${usd(o.expenses.paid)} paid, ${usd(o.expenses.upcoming)} upcoming. Bills covered by earnings: ${o.billsCoveredPct}%.`,
+      `Net this month: ${usd(o.net)}.`,
+      `Net worth — assets ${usd(o.netWorth.assets)}, liabilities ${usd(o.netWorth.liabilities)}, total ${usd(o.netWorth.total)}.`,
+    ].join('\n');
+    const system =
+      'You are a personal-finance assistant. Given one month of a user\'s earnings, expenses, and net worth, write a short, practical read: how the month is tracking, what stands out, and one or two concrete suggestions. Under 140 words, plain text, no markdown headers. Be encouraging but honest.';
+    try {
+      return { brief: await generateBrief(uid(request), 'finance_brief', system, data) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
+    }
+  });
 
   app.patch('/api/finance/settings', guard, async (request, reply) => {
     const parsed = settingsSchema.safeParse(request.body);
