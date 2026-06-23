@@ -4,6 +4,8 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy, maskName } from '../../privacy/privacy';
+import { PayPlanEditor } from './PayPlanEditor';
+import { useDealership } from './dealership';
 import type { KiaDashboard as Dash, RemovedKiaDeal } from '../../api/types';
 
 const RED = '#BB162B';
@@ -22,12 +24,14 @@ function etToday(): string {
 export function KiaDashboard() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
+  const dealership = useDealership();
   const undo = useUndo<RemovedKiaDeal>();
   const [dash, setDash] = useState<Dash | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [hideComm, setHideComm] = useState(false);
+  const [payPlanOpen, setPayPlanOpen] = useState(false);
 
   // Manual deal entry form
   const [customer, setCustomer] = useState('');
@@ -127,6 +131,8 @@ export function KiaDashboard() {
   const reviewColor = m.reviewOk ? GREEN : AMBER;
   const isCurrentMonth = dash.month === etToday().slice(0, 7);
   const monthKey = dash.month;
+  // Commission rate from the pay plan, shown as a tidy percent (e.g. 13.5).
+  const commPct = +(m.commissionRate * 100).toFixed(2);
 
   const kpis: { label: string; val: string; sub: string }[] = [
     { label: isCurrentMonth ? 'Units MTD' : 'Units', val: String(m.units), sub: `goal ${m.goalUnits}` },
@@ -143,15 +149,19 @@ export function KiaDashboard() {
     ...(showComm
       ? [
           { label: 'Total Profit', val: usd(m.totalProfit), sub: 'front + back' },
-          { label: 'Commission (13.5%)', val: usd(m.commission), sub: 'est. payout' },
+          { label: `Commission (${commPct}%)`, val: usd(m.commission), sub: 'est. payout' },
           {
             label: 'Unit Bonus',
             val: usd(m.bonusEarned),
-            sub: m.reviewOk ? (m.tierHitUnits ? `tier @ ${m.tierHitUnits}` : 'none yet') : 'reviews below 50%',
+            sub: m.reviewOk ? (m.tierHitUnits ? `tier @ ${m.tierHitUnits}` : 'none yet') : `reviews below ${m.reviewReq}%`,
           },
         ]
       : []),
-    { label: 'Google Reviews', val: `${m.reviewPct}%`, sub: `${m.reviewCount} of ${m.units} · need 50%` },
+    {
+      label: 'Google Reviews',
+      val: `${m.reviewPct}%`,
+      sub: m.reviewRequired ? `${m.reviewCount} of ${m.units} · need ${m.reviewReq}%` : `${m.reviewCount} of ${m.units} · not required`,
+    },
   ];
 
   return (
@@ -172,10 +182,20 @@ export function KiaDashboard() {
                 </option>
               ))}
             </select>
-            <span style={{ fontSize: 12.5, color: '#9aa0a8' }}>Kia of Streetsboro</span>
+            <span style={{ fontSize: 12.5, color: '#9aa0a8' }}>{dealership.name}</span>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={dealership.toggle}
+            style={ghostBtn}
+            title="Switch between the Kia dealership name and a generic label"
+          >
+            {dealership.generic ? 'Use Kia name' : 'Use generic name'}
+          </button>
+          <button onClick={() => setPayPlanOpen(true)} style={ghostBtn}>
+            Pay plan
+          </button>
           <button onClick={() => setHideComm((v) => !v)} style={ghostBtn}>
             {hideComm ? 'Show $ details' : 'Hide $ details'}
           </button>
@@ -292,10 +312,10 @@ export function KiaDashboard() {
           {/* Commission */}
           {showComm && (
             <div style={card}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 10 }}>Commission — 13.5% of Profit</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 10 }}>Commission — {commPct}% of Profit</div>
               <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 30, fontWeight: 600, color: '#e07a86' }}>{money(m.commission)}</div>
               <div style={{ fontSize: 11, color: '#8b9098', marginTop: 6, lineHeight: 1.5 }}>
-                13.5% of {usd(m.totalProfit)} total profit on {m.units} units this month.
+                {commPct}% of {usd(m.totalProfit)} total profit on {m.units} units this month.
               </div>
             </div>
           )}
@@ -314,7 +334,8 @@ export function KiaDashboard() {
               ))}
             </div>
             <div style={{ fontSize: 10.5, color: '#7d828a', lineHeight: 1.5 }}>
-              Bonuses don't stack — you earn the highest tier reached. Requires 50%+ Google reviews to qualify.
+              Bonuses don't stack — you earn the highest tier reached.{' '}
+              {m.reviewRequired ? `Requires ${m.reviewReq}%+ Google reviews to qualify.` : 'No review requirement on this plan.'}
             </div>
             <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #25282e', fontSize: 11.5, color: AMBER }}>
               {m.nextBonus ? `${usd(m.nextBonus.amount)} bonus at ${m.nextBonus.units} units · ${m.nextBonus.toGo} to go` : 'Top bonus tier reached'}
@@ -331,11 +352,16 @@ export function KiaDashboard() {
               </div>
             </div>
             <div style={{ height: 8, background: '#26282e', borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
-              <div style={{ position: 'absolute', top: 0, left: '50%', width: 2, height: '100%', background: '#5a5f67' }} />
+              {m.reviewRequired && (
+                <div style={{ position: 'absolute', top: 0, left: `${Math.min(100, m.reviewReq)}%`, width: 2, height: '100%', background: '#5a5f67' }} />
+              )}
               <div style={{ height: '100%', width: `${Math.min(100, m.reviewPct)}%`, background: reviewColor }} />
             </div>
             <div style={{ fontSize: 10.5, color: '#8b9098', marginTop: 8 }}>
-              {m.reviewCount} of {m.units} customers · need 50% to unlock the unit bonus. Marker shows the threshold.
+              {m.reviewCount} of {m.units} customers
+              {m.reviewRequired
+                ? ` · need ${m.reviewReq}% to unlock the unit bonus. Marker shows the threshold.`
+                : ' · reviews not required for the bonus on this plan.'}
             </div>
           </div>
         </div>
@@ -390,6 +416,17 @@ export function KiaDashboard() {
       {undo.pending && (
         <UndoBar message="Deal removed." onUndo={restoreRemovedDeal} onDismiss={undo.clear} />
       )}
+
+      <PayPlanEditor
+        open={payPlanOpen}
+        plan={dash.payPlan}
+        busy={busy}
+        onClose={() => setPayPlanOpen(false)}
+        onSave={(patch) => {
+          setPayPlanOpen(false);
+          void run(api.kiaUpdatePayPlan(patch, monthKey));
+        }}
+      />
     </div>
   );
 }

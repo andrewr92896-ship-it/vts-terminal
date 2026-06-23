@@ -97,14 +97,22 @@ export type TodoSectionRow = typeof todoSections.$inferSelect;
 export type TodoItemRow = typeof todoItems.$inferSelect;
 
 // ---- Kia Sales ----
-// Legacy global settings (one row per user). Superseded by per-month settings
-// below; kept as a fallback for the current month of pre-existing accounts.
+// Per-user Kia settings: the legacy goal/review fallback plus the editable pay
+// plan (commission rate, bonus tiers, and the review requirement).
 export const kiaSettings = sqliteTable('kia_settings', {
   userId: text('user_id')
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   goalUnits: integer('goal_units').notNull().default(12),
   reviewCount: integer('review_count').notNull().default(5),
+  // Pay plan ----------------------------------------------------------------
+  // Commission stored in basis points (1350 = 13.5%) to avoid float drift.
+  commissionBp: integer('commission_bp').notNull().default(1350),
+  // Whether the unit bonus requires a minimum review percentage at all.
+  reviewRequired: integer('review_required', { mode: 'boolean' }).notNull().default(true),
+  reviewReqPct: integer('review_req_pct').notNull().default(50),
+  // JSON array of { units, amount } bonus tiers; null falls back to defaults.
+  bonusTiers: text('bonus_tiers'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

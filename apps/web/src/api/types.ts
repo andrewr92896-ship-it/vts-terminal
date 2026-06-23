@@ -112,6 +112,7 @@ export interface KiaMetrics {
   reviewCount: number;
   reviewPct: number;
   reviewReq: number;
+  reviewRequired: boolean;
   reviewOk: boolean;
   bonusTiers: { units: number; amount: number }[];
   bonusEarned: number;
@@ -139,6 +140,18 @@ export interface KiaMonthSummary {
   commission: number;
 }
 
+export interface KiaBonusTier {
+  units: number;
+  amount: number;
+}
+
+export interface KiaPayPlan {
+  commissionRate: number; // fraction, e.g. 0.135
+  reviewRequired: boolean;
+  reviewReqPct: number;
+  bonusTiers: KiaBonusTier[];
+}
+
 export interface KiaDashboard {
   month: string; // the month currently shown, 'YYYY-MM'
   months: KiaMonthOption[]; // selectable months, newest first
@@ -146,6 +159,7 @@ export interface KiaDashboard {
   deals: KiaDeal[];
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };
+  payPlan: KiaPayPlan;
 }
 
 export interface BrokerStatus {
