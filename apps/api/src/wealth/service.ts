@@ -81,8 +81,7 @@ function summarize(rows: WealthClientRow[]): WealthSummary {
   return { totalClients: rows.length, totalAum, activeClients };
 }
 
-export async function getClients(userId: string): Promise<WealthClientsData> {
-  const rows = await db.select().from(wealthClients).where(eq(wealthClients.userId, userId));
+export async function getClients(userId: string): Promise<WealthClientsData> {  const rows = await db.select().from(wealthClients).where(eq(wealthClients.userId, userId));
   // Active first, then onboarding/prospect/inactive, and alphabetical within a
   // status — the order an advisor would scan the book in.
   const statusRank: Record<WealthClientStatus, number> = {
@@ -98,6 +97,98 @@ export async function getClients(userId: string): Promise<WealthClientsData> {
     return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
   });
   return { clients: sorted.map(toClient), summary: summarize(rows) };
+}
+
+// ---- Practice Overview (the Wealth landing screen) ----
+// A read-only roll-up of the same per-user client book: headline AUM, the
+// book broken down by status, the largest relationships, and recent activity.
+
+export interface PracticeStatusBreakdown {
+  status: WealthClientStatus;
+  count: number;
+  aum: number;
+}
+
+export interface PracticeTopClient {
+  id: string;
+  name: string;
+  status: WealthClientStatus;
+  accountValue: number;
+}
+
+export interface PracticeRecentClient {
+  id: string;
+  name: string;
+  status: WealthClientStatus;
+  updatedAt: number;
+}
+
+export interface PracticeOverview {
+  summary: WealthSummary;
+  avgAccount: number; // mean AUM across clients with a recorded value
+  largestAccount: number;
+  pipelineValue: number; // AUM tied to prospects + onboarding (not yet active)
+  pipelineCount: number;
+  breakdown: PracticeStatusBreakdown[];
+  topClients: PracticeTopClient[];
+  recent: PracticeRecentClient[];
+}
+
+export async function getPracticeOverview(userId: string): Promise<PracticeOverview> {
+  const rows = await db.select().from(wealthClients).where(eq(wealthClients.userId, userId));
+
+  // Status breakdown in the same scan order the book is shown in.
+  const order: WealthClientStatus[] = ['active', 'onboarding', 'prospect', 'inactive'];
+  const breakdown: PracticeStatusBreakdown[] = order.map((status) => {
+    const inStatus = rows.filter((r) => (isStatus(r.status) ? r.status : 'prospect') === status);
+    return {
+      status,
+      count: inStatus.length,
+      aum: inStatus.reduce((sum, r) => sum + (r.accountValue ?? 0), 0),
+    };
+  });
+
+  const valued = rows.filter((r) => r.accountValue != null && r.accountValue > 0);
+  const totalAum = rows.reduce((sum, r) => sum + (r.accountValue ?? 0), 0);
+  const avgAccount = valued.length > 0 ? Math.round(totalAum / valued.length) : 0;
+  const largestAccount = rows.reduce((max, r) => Math.max(max, r.accountValue ?? 0), 0);
+
+  const pipeline = rows.filter((r) => {
+    const s = isStatus(r.status) ? r.status : 'prospect';
+    return s === 'prospect' || s === 'onboarding';
+  });
+
+  const topClients: PracticeTopClient[] = [...rows]
+    .filter((r) => (r.accountValue ?? 0) > 0)
+    .sort((a, b) => (b.accountValue ?? 0) - (a.accountValue ?? 0))
+    .slice(0, 5)
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      status: isStatus(r.status) ? r.status : 'prospect',
+      accountValue: r.accountValue ?? 0,
+    }));
+
+  const recent: PracticeRecentClient[] = [...rows]
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .slice(0, 6)
+    .map((r) => ({
+      id: r.id,
+      name: r.name,
+      status: isStatus(r.status) ? r.status : 'prospect',
+      updatedAt: r.updatedAt.getTime(),
+    }));
+
+  return {
+    summary: summarize(rows),
+    avgAccount,
+    largestAccount,
+    pipelineValue: pipeline.reduce((sum, r) => sum + (r.accountValue ?? 0), 0),
+    pipelineCount: pipeline.length,
+    breakdown,
+    topClients,
+    recent,
+  };
 }
 
 export async function addClient(

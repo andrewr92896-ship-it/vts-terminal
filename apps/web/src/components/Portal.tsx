@@ -29,6 +29,7 @@ import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
 import { WealthClients } from '../workspaces/wealth/WealthClients';
+import { WealthOverview } from '../workspaces/wealth/WealthOverview';
 import { FinanceOverview } from '../workspaces/finance/FinanceOverview';
 import { FinanceExpenses } from '../workspaces/finance/FinanceExpenses';
 import { FinanceNetWorth } from '../workspaces/finance/FinanceNetWorth';
@@ -84,6 +85,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
+    case 'wm_home':
+      return <WealthOverview onNavigate={onNavigate} />;
     case 'wm_clients':
       return <WealthClients />;
     case 'fin_overview':

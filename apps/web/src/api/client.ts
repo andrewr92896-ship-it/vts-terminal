@@ -24,6 +24,7 @@ import type {
   KiaDashboard,
   RemovedKiaDeal,
   RemovedTodoItem,
+  PracticeOverview,
   RemovedWealthClient,
   RoleKey,
   TodoSection,
@@ -359,6 +360,9 @@ export const api = {
   },
   financeRemoveNetWorth(id: string): Promise<NetWorthData> {
     return request(`/api/finance/net-worth/${id}`, { method: 'DELETE' });
+  },
+  wealthOverview(): Promise<PracticeOverview> {
+    return request('/api/wealth/overview');
   },
   wealthClients(): Promise<WealthClientsData> {
     return request('/api/wealth/clients');

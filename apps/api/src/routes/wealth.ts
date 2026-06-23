@@ -4,6 +4,7 @@ import { requireWorkspace } from '../auth/middleware.js';
 import {
   addClient,
   getClients,
+  getPracticeOverview,
   removeClient,
   restoreClient,
   updateClient,
@@ -49,6 +50,10 @@ const restoreSchema = z.object({
 
 export async function wealthRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('wealth') };
+
+  app.get('/api/wealth/overview', guard, async (request) => {
+    return getPracticeOverview(request.currentUser!.id);
+  });
 
   app.get('/api/wealth/clients', guard, async (request) => {
     return getClients(request.currentUser!.id);

@@ -196,6 +196,35 @@ export interface WealthClientsData {
   summary: WealthSummary;
 }
 
+// ---- Wealth — Practice Overview (mirror of apps/api/src/wealth/service.ts) ----
+export interface PracticeStatusBreakdown {
+  status: WealthClientStatus;
+  count: number;
+  aum: number;
+}
+export interface PracticeTopClient {
+  id: string;
+  name: string;
+  status: WealthClientStatus;
+  accountValue: number;
+}
+export interface PracticeRecentClient {
+  id: string;
+  name: string;
+  status: WealthClientStatus;
+  updatedAt: number;
+}
+export interface PracticeOverview {
+  summary: WealthSummary;
+  avgAccount: number;
+  largestAccount: number;
+  pipelineValue: number;
+  pipelineCount: number;
+  breakdown: PracticeStatusBreakdown[];
+  topClients: PracticeTopClient[];
+  recent: PracticeRecentClient[];
+}
+
 // Raw data returned when a client is removed, so the client can offer "undo".
 export interface RemovedWealthClient {
   id: string;
