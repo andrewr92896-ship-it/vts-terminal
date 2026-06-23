@@ -6723,7 +6723,7 @@ export const SERIES65_QUESTIONS: Series65Question[] = [
       },
       {
         "label": "B",
-        "text": "Investment-grade municipal bonds​"
+        "text": "Investment-grade municipal bonds"
       },
       {
         "label": "C",
@@ -8274,7 +8274,7 @@ export const SERIES65_QUESTIONS: Series65Question[] = [
   },
   {
     "id": 345,
-    "topic": "Investments",
+    "topic": "Regulations & Ethics",
     "stem": "MidWest Advisory Services has $175 million in assets under management and has offices in 10 Midwest states. Regarding recordkeeping requirements, MidWest must meet those of",
     "options": [
       {
@@ -8955,15 +8955,15 @@ export const SERIES65_QUESTIONS: Series65Question[] = [
       },
       {
         "label": "B",
-        "text": "The ​investment adviser ​must increase its surety bond to make up the deficiency."
+        "text": "The investment adviser must increase its surety bond to make up the deficiency."
       },
       {
         "label": "C",
-        "text": "The​ ​investment adviser must notify the Administrator​ by the close of business on the following business day​."
+        "text": "The investment adviser must notify the Administrator by the close of business on the following business day."
       },
       {
         "label": "D",
-        "text": "The ​investment adviser is not required to file​ ​an amendment to its registration with the Administrator."
+        "text": "The investment adviser is not required to file an amendment to its registration with the Administrator."
       }
     ],
     "answer": "C"

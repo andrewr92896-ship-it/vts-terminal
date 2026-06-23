@@ -133,29 +133,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
     ],
   },
-  st_quiz: {
-    title: 'Practice Quiz',
-    intro: 'A self-quiz that rotates through the four Series 65 topics and recycles the questions you miss.',
+  st_game: {
+    title: 'Study Game',
+    intro: 'A gamified Series 65 self-quiz: answer questions, level up each category, and track your score against the passing line.',
     steps: [
       {
+        title: 'Pick a category (or Mix)',
+        body: 'Use the chips at the top to drill one area, or choose “Mix (weighted)” to get questions across all four areas in the same proportions as the real exam.',
+      },
+      {
         title: 'Answer the question',
-        body: 'Read the question and click the option you think is right. The topic rotates on every question, so you cover all four areas.',
+        body: 'Click the option you think is right. The correct choice is highlighted; if you missed it, the correct answer (and a quick definition when available) is shown.',
       },
       {
-        title: 'See the result',
-        body: 'After you answer, the correct choice is highlighted. If you were wrong, the correct answer is shown. Two figures update: overall accuracy (last 100) and accuracy in that topic (last 20).',
+        title: 'Watch your score',
+        body: 'Your score is accuracy over your last 100 answers, to one decimal, with the change from the previous question. The bar marks the ~72% pass line and the status shows how many points you are above or below it.',
       },
       {
-        title: '“I don’t know”',
-        body: 'Not sure? Click “I don’t know” to reveal the answer. It counts as a miss, the same as answering incorrectly.',
+        title: 'Level up and prestige',
+        body: 'Each category has its own level ladder (Novice → Grandmaster) that climbs as you answer more questions in it. Max it out and the category prestiges — a crown 👑 is added and the ladder restarts.',
       },
       {
-        title: 'Back-burner review',
-        body: 'Missed questions return later, tagged “Review.” Review questions do not count toward your percentages — they are just to reinforce the misses.',
-      },
-      {
-        title: 'Fix a mark',
-        body: 'If a question was scored wrong by mistake, use the small “mark right / wrong” buttons to override it. Use “Reset progress” to clear your stats and reshuffle the deck.',
+        title: 'Reset',
+        body: 'Use “Skip” to pass on a question without scoring it, or “Reset progress” to clear all levels and scores and start fresh.',
       },
     ],
   },
@@ -179,15 +179,15 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
   st_progress: {
     title: 'Progress',
-    intro: 'A snapshot of how you are doing on the Series 65 practice quiz.',
+    intro: 'A snapshot of how you are doing in the Series 65 Study Game.',
     steps: [
       {
-        title: 'Overall accuracy',
-        body: 'The top figure is your accuracy over the last 100 answered questions. The marker on the bar shows the ~72% passing line.',
+        title: 'Overall score',
+        body: 'The top figure is your accuracy over the last 100 answered questions, with PASSING / NOT PASSING relative to the ~72% line.',
       },
       {
-        title: 'By topic',
-        body: 'Each topic shows your accuracy over its last 20 answers, so you can see which areas need more work.',
+        title: 'By category',
+        body: 'Each exam area shows its level (with any prestige crowns), how many questions you have answered there, and your score — so you can see which areas need more work.',
       },
     ],
   },

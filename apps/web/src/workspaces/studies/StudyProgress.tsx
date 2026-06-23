@@ -2,74 +2,92 @@ import { useMemo, type CSSProperties } from 'react';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useAuth } from '../../auth/AuthContext';
-import { SERIES65_TOPICS } from './series65Questions';
-import { computeStats, historyKey, loadHistory } from './series65Progress';
+import {
+  CATEGORY_META,
+  PASS_THRESHOLD,
+  gameKey,
+  levelInfo,
+  loadGame,
+  round1,
+  scorePct,
+} from './series65Game';
 
-// Read-only view of the Series 65 quiz stats saved by the Practice Quiz:
-// overall accuracy (last 100) and per-topic accuracy (last 20 each).
+// Read-only view of the Study Game progress: overall score vs. the pass line,
+// plus each category's level and score.
 export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate: (screen: string) => void }) {
   const { user } = useAuth();
   const accentGrad = accentGradient(theme);
-  const stats = useMemo(() => computeStats(loadHistory(historyKey(user?.id))), [user?.id]);
-
+  const game = useMemo(() => loadGame(gameKey(user?.id)), [user?.id]);
   const muted = '#a99ff0';
+
+  const overall = scorePct(game.recent);
+  const passing = overall != null && overall >= PASS_THRESHOLD;
+  const delta = overall == null ? 0 : round1(overall - PASS_THRESHOLD);
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Progress</h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-          Series 65 · accuracy from your practice quiz on this device
+          Series 65 · your Study Game levels and scores on this device
         </p>
       </div>
 
-      {stats.total === 0 ? (
+      {game.totalAttempted === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 8 }}>No quiz answers yet</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 8 }}>No questions answered yet</div>
           <div style={{ fontSize: 13, color: muted, marginBottom: 16 }}>
-            Take the practice quiz and your accuracy will show up here.
+            Play the Study Game and your levels and accuracy will show up here.
           </div>
-          <button onClick={() => onNavigate('st_quiz')} style={primaryBtn(theme, accentGrad)}>
-            Start practice quiz
+          <button onClick={() => onNavigate('st_game')} style={primaryBtn(theme, accentGrad)}>
+            Play the Study Game
           </button>
         </div>
       ) : (
         <>
           <div style={{ ...card(theme), marginBottom: 14 }}>
-            <div style={statLabel}>Overall accuracy</div>
+            <div style={statLabel}>Overall score · last {Math.min(100, game.recent.length)}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 700, color: '#fff' }}>
-                {stats.overall == null ? '—' : `${stats.overall}%`}
+                {overall == null ? '—' : `${overall.toFixed(1)}%`}
               </span>
-              <span style={{ fontSize: 12, color: muted }}>
-                last {Math.min(100, stats.overallN)} answered · {stats.total} total
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: overall == null ? muted : passing ? '#35c47b' : '#ef5468' }}>
+                {overall == null ? '' : passing ? `PASSING · +${delta.toFixed(1)}` : `NOT PASSING · ${delta.toFixed(1)}`}
               </span>
             </div>
             <div style={{ height: 9, background: theme.navBorder, borderRadius: 5, overflow: 'hidden', marginTop: 12, position: 'relative' }}>
-              <div style={{ position: 'absolute', left: '72%', top: 0, width: 2, height: '100%', background: '#fff', opacity: 0.55 }} title="Passing ≈ 72%" />
-              <div style={{ height: '100%', width: `${stats.overall ?? 0}%`, background: accentGrad }} />
+              <div style={{ position: 'absolute', left: `${PASS_THRESHOLD}%`, top: 0, width: 2, height: '100%', background: '#fff', opacity: 0.6 }} />
+              <div style={{ height: '100%', width: `${overall ?? 0}%`, background: accentGrad }} />
             </div>
-            <div style={{ fontSize: 11, color: '#8a7fc8', marginTop: 8 }}>
-              The marker shows the ~72% passing line.
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+              <span>Pass {PASS_THRESHOLD.toFixed(1)}%</span>
+              <span>Attempted {game.totalAttempted} · Correct {game.totalCorrect}</span>
             </div>
           </div>
 
           <div style={card(theme)}>
-            <div style={statLabel}>By topic (last 20 answers each)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-              {SERIES65_TOPICS.map((t) => {
-                const pt = stats.perTopic[t];
+            <div style={statLabel}>By category</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 13, marginTop: 12 }}>
+              {CATEGORY_META.map((c) => {
+                const cs = game.cats[c.topic];
+                const cl = levelInfo(cs.answered);
+                const sc = scorePct(cs.recent);
                 return (
-                  <div key={t}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 5 }}>
-                      <span style={{ color: '#cdbcff' }}>{t}</span>
+                  <div key={c.topic}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 5 }}>
+                      <span style={{ color: '#fff', fontWeight: 600 }}>
+                        {'👑'.repeat(cl.prestige)}{cl.level.icon} {c.topic}
+                      </span>
                       <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#fff' }}>
-                        {pt.pct == null ? '—' : `${pt.pct}%`}
-                        <span style={{ color: muted }}> · {pt.n}</span>
+                        {sc == null ? '—' : `${sc.toFixed(1)}%`}
                       </span>
                     </div>
                     <div style={{ height: 7, background: theme.navBorder, borderRadius: 4, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${pt.pct ?? 0}%`, background: accentGrad }} />
+                      <div style={{ height: '100%', width: `${sc ?? 0}%`, background: accentGrad }} />
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: muted, marginTop: 4 }}>
+                      <span>Level {cl.index + 1} · {cl.level.name}{cl.prestige > 0 ? ` · Prestige ${cl.prestige}` : ''}</span>
+                      <span>{cs.answered} answered · {c.weight}% of exam</span>
                     </div>
                   </div>
                 );
@@ -78,8 +96,8 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
           </div>
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-            <button onClick={() => onNavigate('st_quiz')} style={primaryBtn(theme, accentGrad)}>
-              Continue quiz
+            <button onClick={() => onNavigate('st_game')} style={primaryBtn(theme, accentGrad)}>
+              Continue playing
             </button>
             <button onClick={() => onNavigate('st_cards')} style={ghostBtn(theme)}>
               Flashcards

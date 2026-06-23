@@ -35,8 +35,8 @@ import { WealthClients } from '../workspaces/wealth/WealthClients';
 const Flashcards = lazy(() =>
   import('../workspaces/studies/Flashcards').then((m) => ({ default: m.Flashcards })),
 );
-const Series65Quiz = lazy(() =>
-  import('../workspaces/studies/Series65Quiz').then((m) => ({ default: m.Series65Quiz })),
+const Series65Game = lazy(() =>
+  import('../workspaces/studies/StudyGame').then((m) => ({ default: m.StudyGame })),
 );
 const StudyHub = lazy(() =>
   import('../workspaces/studies/StudyHub').then((m) => ({ default: m.StudyHub })),
@@ -63,8 +63,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <WealthClients />;
     case 'st_home':
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
-    case 'st_quiz':
-      return <Series65Quiz theme={theme} />;
+    case 'st_game':
+      return <Series65Game theme={theme} />;
     case 'st_cards':
       return <Flashcards theme={theme} />;
     case 'st_progress':

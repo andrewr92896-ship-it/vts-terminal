@@ -37,9 +37,9 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
           </span>
         </div>
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
-          Self-quiz on the four exam areas — Economics, Regulations &amp; Ethics, Investments, and
-          Client Management. Questions rotate by topic and missed ones come back for review. Passing
-          is about 72%.
+          A self-quiz game across the four exam areas — Economic Factors, Investment Vehicles, Client
+          Recommendations, and Laws &amp; Ethics — weighted to the real exam. Level up each category
+          as you answer, and watch your last-100 score against the ~72% pass line.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr 1fr' : 'repeat(3,1fr)', gap: 10, margin: '18px 0' }}>
@@ -49,8 +49,8 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         </div>
 
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button onClick={() => onNavigate('st_quiz')} style={primaryBtn(theme, accentGrad)}>
-            Start practice quiz
+          <button onClick={() => onNavigate('st_game')} style={primaryBtn(theme, accentGrad)}>
+            Play the Study Game
           </button>
           <button onClick={() => onNavigate('st_cards')} style={ghostBtn(theme)}>
             Flashcards
