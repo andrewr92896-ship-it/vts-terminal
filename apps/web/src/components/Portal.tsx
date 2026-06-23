@@ -11,7 +11,7 @@ import {
   type TabDef,
   type Theme,
 } from '../theme/themes';
-import { workspacesForRoles, isAdmin } from '../auth/access';
+import { workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
@@ -42,8 +42,6 @@ function renderScreen(screen: string, theme: Theme) {
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
-    case 'admin':
-      return <AdminUsers theme={theme} />;
     case 'st_cards':
       return <Flashcards theme={theme} />;
     default:
@@ -77,20 +75,14 @@ export function Portal() {
   const [soundOn, setSoundOn] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
   const theme = THEMES[workspace];
   const brand = BRAND[workspace];
 
-  // Trading tabs gain an Admin tab only for Admins.
-  const tabs: TabDef[] = useMemo(() => {
-    const base = TABS[workspace];
-    if (workspace === 'trading' && isAdmin(effectiveRoles)) {
-      return [...base, { key: 'admin', label: 'Admin' }];
-    }
-    return base;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workspace, user, actingRole]);
+  // Workspace sub-tabs. User management is opened from the top bar (not a tab).
+  const tabs: TabDef[] = TABS[workspace];
 
   // Broker status drives the top-bar dots (Trading only).
   useEffect(() => {
@@ -177,6 +169,7 @@ export function Portal() {
         onToggleSound={() => setSoundOn((v) => !v)}
         onOpenClaude={() => setAiOpen(true)}
         onOpenAccount={() => setAccountOpen(true)}
+        onOpenAdmin={() => setAdminOpen(true)}
         onSetActingRole={changeActingRole}
         onLogout={logout}
       />
@@ -223,6 +216,60 @@ export function Portal() {
 
       <AskClaudePanel open={aiOpen} theme={theme} onClose={() => setAiOpen(false)} />
       <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
+
+      {/* User management — opened from the top-bar Admin button (admins only). */}
+      {adminOpen && (
+        <>
+          <div
+            onClick={() => setAdminOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 60, animation: 'fadeIn .2s ease' }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: isPhone ? 0 : '4vh',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: isPhone ? '100%' : 'min(1040px, 94vw)',
+              height: isPhone ? '100%' : '92vh',
+              overflowY: 'auto',
+              background: theme.pageBg,
+              border: isPhone ? 'none' : `1px solid ${theme.navBorder}`,
+              borderRadius: isPhone ? 0 : 14,
+              boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+              zIndex: 61,
+              animation: 'popIn .25s ease',
+            }}
+          >
+            <div
+              style={{
+                position: 'sticky',
+                top: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 18px',
+                background: theme.headerBg,
+                borderBottom: `1px solid ${theme.headerBorder}`,
+              }}
+            >
+              <strong style={{ fontSize: 15, color: '#eef3ff' }}>User Management</strong>
+              <button
+                onClick={() => setAdminOpen(false)}
+                aria-label="Close"
+                style={{ background: 'none', border: 'none', color: '#9fb0d6', fontSize: 22, lineHeight: 1, cursor: 'pointer' }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: isPhone ? '16px 14px' : '20px 22px' }}>
+              <AdminUsers theme={theme} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
       <PageHelp screen={screen} theme={theme} />

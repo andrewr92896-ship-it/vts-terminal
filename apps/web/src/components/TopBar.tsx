@@ -26,6 +26,7 @@ interface TopBarProps {
   onToggleSound: () => void;
   onOpenClaude: () => void;
   onOpenAccount: () => void;
+  onOpenAdmin: () => void;
   onSetActingRole: (r: RoleKey | null) => void;
   onLogout: () => void;
 }
@@ -58,6 +59,7 @@ export function TopBar(props: TopBarProps) {
     onToggleSound,
     onOpenClaude,
     onOpenAccount,
+    onOpenAdmin,
     onSetActingRole,
     onLogout,
   } = props;
@@ -324,6 +326,34 @@ export function TopBar(props: TopBarProps) {
     </div>
   );
 
+  // Admin (user management) button — sits just left of the user badge, admins
+  // only. Replaces the old Admin sub-tab in the Trading workspace.
+  const canAdmin = isAdmin(effectiveRoles);
+  const adminBtn = canAdmin ? (
+    <button
+      onClick={onOpenAdmin}
+      title="User management"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        flex: 'none',
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: '0.4px',
+        color: theme.accent,
+        background: 'rgba(0,0,0,.18)',
+        border: `1px solid ${theme.accent}`,
+        padding: narrow ? '11px 13px' : '7px 12px',
+        borderRadius: 6,
+        cursor: 'pointer',
+      }}
+    >
+      Admin
+    </button>
+  ) : null;
+
   // User / role badge with dropdown.
   const userBadge = (
     <div style={{ position: 'relative', flex: 'none' }}>
@@ -552,7 +582,10 @@ export function TopBar(props: TopBarProps) {
           }}
         >
           {brandEl}
-          {userBadge}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
+            {adminBtn}
+            {userBadge}
+          </div>
         </div>
         {controls}
         {workspaceNav}
@@ -583,9 +616,10 @@ export function TopBar(props: TopBarProps) {
         {workspaceNav}
       </div>
 
-      {/* Right: broker dots, clock, alerts, Ask Claude, user badge */}
+      {/* Right: broker dots, clock, alerts, Ask Claude, Admin, user badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         {controls}
+        {adminBtn}
         {userBadge}
       </div>
     </header>
