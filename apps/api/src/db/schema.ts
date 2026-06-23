@@ -160,3 +160,29 @@ export const kiaDeals = sqliteTable('kia_deals', {
 export type KiaSettingsRow = typeof kiaSettings.$inferSelect;
 export type KiaMonthSettingsRow = typeof kiaMonthSettings.$inferSelect;
 export type KiaDealRow = typeof kiaDeals.$inferSelect;
+
+// ---- Vitalis Wealth Management ----
+// Per-user client list for the advisory practice. Like every other workspace,
+// each row is keyed by userId so a new user's list starts empty. Account value
+// is stored as whole US dollars (integer); contact fields are optional.
+export const WEALTH_CLIENT_STATUSES = ['prospect', 'onboarding', 'active', 'inactive'] as const;
+export type WealthClientStatus = (typeof WEALTH_CLIENT_STATUSES)[number];
+
+export const wealthClients = sqliteTable('wealth_clients', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  // Assets under management for this client, in whole US dollars. Null when
+  // not yet known (e.g. a prospect).
+  accountValue: integer('account_value'),
+  status: text('status', { enum: WEALTH_CLIENT_STATUSES }).notNull().default('prospect'),
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type WealthClientRow = typeof wealthClients.$inferSelect;

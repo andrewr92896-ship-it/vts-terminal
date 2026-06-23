@@ -13,6 +13,7 @@ import { brokerRoutes } from './routes/brokers.js';
 import { healthRoutes } from './routes/health.js';
 import { todoRoutes } from './routes/todo.js';
 import { kiaRoutes } from './routes/kia.js';
+import { wealthRoutes } from './routes/wealth.js';
 import { runMigrations } from './db/migrate.js';
 import { seedAdmin } from './seed.js';
 
@@ -51,6 +52,7 @@ export async function buildServer() {
   await app.register(brokerRoutes);
   await app.register(todoRoutes);
   await app.register(kiaRoutes);
+  await app.register(wealthRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).

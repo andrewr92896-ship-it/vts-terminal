@@ -4,9 +4,12 @@ import type {
   KiaDashboard,
   RemovedKiaDeal,
   RemovedTodoItem,
+  RemovedWealthClient,
   RoleKey,
   TodoSection,
   User,
+  WealthClientStatus,
+  WealthClientsData,
 } from './types';
 
 export class ApiError extends Error {
@@ -208,6 +211,49 @@ export const api = {
     return request(`/api/kia/payplan${monthQuery(month)}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
+    });
+  },
+  wealthClients(): Promise<WealthClientsData> {
+    return request('/api/wealth/clients');
+  },
+  wealthAddClient(client: {
+    name: string;
+    email?: string;
+    phone?: string;
+    accountValue?: number;
+    status?: WealthClientStatus;
+    notes?: string;
+  }): Promise<WealthClientsData> {
+    return request('/api/wealth/clients', {
+      method: 'POST',
+      body: JSON.stringify(client),
+    });
+  },
+  wealthUpdateClient(
+    id: string,
+    patch: {
+      name?: string;
+      email?: string;
+      phone?: string;
+      accountValue?: number | null;
+      status?: WealthClientStatus;
+      notes?: string;
+    },
+  ): Promise<WealthClientsData> {
+    return request(`/api/wealth/clients/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+  wealthRemoveClient(
+    id: string,
+  ): Promise<WealthClientsData & { removed: RemovedWealthClient | null }> {
+    return request(`/api/wealth/clients/${id}`, { method: 'DELETE' });
+  },
+  wealthRestoreClient(client: RemovedWealthClient): Promise<WealthClientsData> {
+    return request('/api/wealth/clients/restore', {
+      method: 'POST',
+      body: JSON.stringify(client),
     });
   },
 };

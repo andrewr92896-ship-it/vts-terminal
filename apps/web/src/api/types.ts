@@ -169,6 +169,44 @@ export interface KiaDashboard {
   payPlan: KiaPayPlan;
 }
 
+// ---- Vitalis Wealth Management ----
+export type WealthClientStatus = 'prospect' | 'onboarding' | 'active' | 'inactive';
+
+export interface WealthClient {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  accountValue: number | null; // whole US dollars, null when not recorded
+  status: WealthClientStatus;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface WealthSummary {
+  totalClients: number;
+  totalAum: number;
+  activeClients: number;
+}
+
+export interface WealthClientsData {
+  clients: WealthClient[];
+  summary: WealthSummary;
+}
+
+// Raw data returned when a client is removed, so the client can offer "undo".
+export interface RemovedWealthClient {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  accountValue: number | null;
+  status: WealthClientStatus;
+  notes: string | null;
+  createdAt: number;
+}
+
 export interface BrokerStatus {
   key: string;
   name: string;

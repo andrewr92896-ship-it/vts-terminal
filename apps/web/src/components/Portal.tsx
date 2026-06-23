@@ -27,6 +27,7 @@ import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
 import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
+import { WealthClients } from '../workspaces/wealth/WealthClients';
 import { Flashcards } from '../workspaces/studies/Flashcards';
 
 // Screens that have real implementations; everything else falls back to the
@@ -43,6 +44,8 @@ function renderScreen(screen: string, theme: Theme) {
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
+    case 'wm_clients':
+      return <WealthClients />;
     case 'st_cards':
       return <Flashcards theme={theme} />;
     default:

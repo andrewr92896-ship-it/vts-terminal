@@ -118,6 +118,38 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  // ---- Vitalis Wealth Management ----
+  wm_clients: {
+    title: 'Managing your clients',
+    intro: 'Your advisory client book. New accounts start empty — add clients as you bring them on. Every client is private to your login.',
+    steps: [
+      {
+        title: 'Add a client',
+        body: 'In "Add a client", enter the name (the only required field), plus optional email, phone, account value, status, and notes, then click "Add client".',
+      },
+      {
+        title: 'Track status',
+        body: 'Set each client to Prospect, Onboarding, Active, or Inactive. The list groups Active clients first, and the summary cards count your active relationships.',
+      },
+      {
+        title: 'Watch your AUM',
+        body: 'The "Assets Under Management" card adds up every client\'s account value. Leave the account field blank for prospects you have not funded yet.',
+      },
+      {
+        title: 'Edit a client',
+        body: 'Click "Edit" on any row to change details inline, then Save. Clearing the account value field removes the amount.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Click "Hide $ details" — or turn on Privacy mode in the top bar — to mask client names, contacts, and dollar amounts when someone might see your screen.',
+      },
+      {
+        title: 'Remove and undo',
+        body: 'Click the × to remove a client. A short "Undo" bar appears at the bottom so you can restore them if it was a mistake.',
+      },
+    ],
+  },
+
   // ---- Admin ----
   admin: {
     title: 'Managing users',
