@@ -38,6 +38,8 @@ export function KiaDashboard() {
   const [model, setModel] = useState('');
   const [dtype, setDtype] = useState<'New' | 'Used'>('New');
   const [profit, setProfit] = useState('');
+  const [front, setFront] = useState('');
+  const [back, setBack] = useState('');
   const [date, setDate] = useState(etToday());
 
   useEffect(() => {
@@ -69,8 +71,20 @@ export function KiaDashboard() {
   }
 
   async function addDeal() {
-    const p = Number(profit);
-    if (!model.trim() || !Number.isFinite(p) || p < 0) return;
+    if (!model.trim()) return;
+    const split = dash?.payPlan.commissionMode === 'split';
+    // Build the profit payload depending on the pay-plan mode.
+    let profitFields: { profit?: number; frontProfit?: number; backProfit?: number };
+    if (split) {
+      const f = Number(front || 0);
+      const b = Number(back || 0);
+      if (!Number.isFinite(f) || !Number.isFinite(b) || f < 0 || b < 0 || f + b <= 0) return;
+      profitFields = { frontProfit: f, backProfit: b };
+    } else {
+      const p = Number(profit);
+      if (!Number.isFinite(p) || p < 0) return;
+      profitFields = { profit: p };
+    }
     // Show the month the deal was logged into (which may differ from the one
     // currently on screen).
     const dealMonth = (date || etToday()).slice(0, 7);
@@ -80,7 +94,7 @@ export function KiaDashboard() {
           customer: customer.trim() || undefined,
           model: model.trim(),
           type: dtype,
-          profit: p,
+          ...profitFields,
           soldAt: date || undefined,
         },
         dealMonth,
@@ -89,6 +103,8 @@ export function KiaDashboard() {
     setCustomer('');
     setModel('');
     setProfit('');
+    setFront('');
+    setBack('');
     setDtype('New');
     setDate(etToday());
   }
@@ -133,6 +149,8 @@ export function KiaDashboard() {
   const monthKey = dash.month;
   // Commission rate from the pay plan, shown as a tidy percent (e.g. 13.5).
   const commPct = +(m.commissionRate * 100).toFixed(2);
+  const splitMode = dash.payPlan.commissionMode === 'split';
+  const addDisabled = busy || !model.trim() || (splitMode ? front === '' && back === '' : profit === '');
 
   const kpis: { label: string; val: string; sub: string }[] = [
     { label: isCurrentMonth ? 'Units MTD' : 'Units', val: String(m.units), sub: `goal ${m.goalUnits}` },
@@ -234,9 +252,16 @@ export function KiaDashboard() {
             <option value="New">New</option>
             <option value="Used">Used</option>
           </select>
-          <input value={profit} onChange={(e) => setProfit(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 110px' }} />
+          {splitMode ? (
+            <>
+              <input value={front} onChange={(e) => setFront(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Front $" style={{ ...inputBase, flex: '0 0 100px' }} />
+              <input value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Back $" style={{ ...inputBase, flex: '0 0 100px' }} />
+            </>
+          ) : (
+            <input value={profit} onChange={(e) => setProfit(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 110px' }} />
+          )}
           <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
-          <button onClick={addDeal} disabled={busy || !model.trim() || profit === ''} style={{ ...redBtn, opacity: busy || !model.trim() || profit === '' ? 0.6 : 1 }}>
+          <button onClick={addDeal} disabled={addDisabled} style={{ ...redBtn, opacity: addDisabled ? 0.6 : 1 }}>
             Add deal
           </button>
         </div>
@@ -270,6 +295,7 @@ export function KiaDashboard() {
                 deal={d}
                 showComm={showComm}
                 busy={busy}
+                split={splitMode}
                 onRemove={() => removeDealWithUndo(d.id)}
                 onSave={(patch) =>
                   run(api.kiaUpdateDeal(d.id, patch, patch.soldAt ? patch.soldAt.slice(0, 7) : monthKey))
@@ -420,11 +446,22 @@ export function KiaDashboard() {
       <PayPlanEditor
         open={payPlanOpen}
         plan={dash.payPlan}
+        goalUnits={m.goalUnits}
         busy={busy}
         onClose={() => setPayPlanOpen(false)}
-        onSave={(patch) => {
+        onSave={({ goalUnits, ...planPatch }) => {
           setPayPlanOpen(false);
-          void run(api.kiaUpdatePayPlan(patch, monthKey));
+          // Save the pay plan, then apply the monthly goal so the returned
+          // dashboard reflects both changes.
+          void run(
+            api
+              .kiaUpdatePayPlan(planPatch, monthKey)
+              .then(() =>
+                goalUnits !== m.goalUnits
+                  ? api.kiaUpdateSettings({ goalUnits }, monthKey)
+                  : api.kiaDashboard(monthKey),
+              ),
+          );
         }}
       />
     </div>
@@ -436,18 +473,22 @@ function DealRow({
   deal,
   showComm,
   busy,
+  split,
   onRemove,
   onSave,
 }: {
   deal: Dash['deals'][number];
   showComm: boolean;
   busy: boolean;
+  split: boolean;
   onRemove: () => void;
   onSave: (patch: {
     customer?: string;
     model?: string;
     type?: 'New' | 'Used';
     profit?: number;
+    frontProfit?: number;
+    backProfit?: number;
     soldAt?: string;
   }) => void;
 }) {
@@ -457,6 +498,8 @@ function DealRow({
   const [model, setModel] = useState(deal.model);
   const [dtype, setDtype] = useState<'New' | 'Used'>(deal.type);
   const [profit, setProfit] = useState(String(deal.profit));
+  const [front, setFront] = useState(String(deal.frontProfit ?? deal.profit));
+  const [back, setBack] = useState(String(deal.backProfit ?? 0));
   const [date, setDate] = useState(isoFromMs(deal.soldAt));
 
   function start() {
@@ -464,20 +507,25 @@ function DealRow({
     setModel(deal.model);
     setDtype(deal.type);
     setProfit(String(deal.profit));
+    setFront(String(deal.frontProfit ?? deal.profit));
+    setBack(String(deal.backProfit ?? 0));
     setDate(isoFromMs(deal.soldAt));
     setEditing(true);
   }
 
   function save() {
-    const p = Number(profit);
-    if (!model.trim() || !Number.isFinite(p) || p < 0) return;
-    onSave({
-      customer: customer.trim() || undefined,
-      model: model.trim(),
-      type: dtype,
-      profit: p,
-      soldAt: date || undefined,
-    });
+    if (!model.trim()) return;
+    const base = { customer: customer.trim() || undefined, model: model.trim(), type: dtype, soldAt: date || undefined };
+    if (split) {
+      const f = Number(front || 0);
+      const b = Number(back || 0);
+      if (!Number.isFinite(f) || !Number.isFinite(b) || f < 0 || b < 0) return;
+      onSave({ ...base, frontProfit: f, backProfit: b });
+    } else {
+      const p = Number(profit);
+      if (!Number.isFinite(p) || p < 0) return;
+      onSave({ ...base, profit: p });
+    }
     setEditing(false);
   }
 
@@ -490,9 +538,16 @@ function DealRow({
           <option value="New">New</option>
           <option value="Used">Used</option>
         </select>
-        <input value={profit} onChange={(e) => setProfit(e.target.value)} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 100px' }} />
+        {split ? (
+          <>
+            <input value={front} onChange={(e) => setFront(e.target.value)} type="number" min="0" placeholder="Front $" style={{ ...inputBase, flex: '0 0 92px' }} />
+            <input value={back} onChange={(e) => setBack(e.target.value)} type="number" min="0" placeholder="Back $" style={{ ...inputBase, flex: '0 0 92px' }} />
+          </>
+        ) : (
+          <input value={profit} onChange={(e) => setProfit(e.target.value)} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 100px' }} />
+        )}
         <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
-        <button onClick={save} disabled={busy || !model.trim() || profit === ''} style={{ ...redBtn, opacity: busy || !model.trim() || profit === '' ? 0.6 : 1 }}>
+        <button onClick={save} disabled={busy || !model.trim()} style={{ ...redBtn, opacity: busy || !model.trim() ? 0.6 : 1 }}>
           Save
         </button>
         <button onClick={() => setEditing(false)} style={ghostBtn}>

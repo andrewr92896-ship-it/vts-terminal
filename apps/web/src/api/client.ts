@@ -142,7 +142,9 @@ export const api = {
       customer?: string;
       model: string;
       type: 'New' | 'Used';
-      profit: number;
+      profit?: number;
+      frontProfit?: number;
+      backProfit?: number;
       soldAt?: string;
     },
     month?: string,
@@ -159,6 +161,8 @@ export const api = {
       model?: string;
       type?: 'New' | 'Used';
       profit?: number;
+      frontProfit?: number;
+      backProfit?: number;
       soldAt?: string;
     },
     month?: string,
@@ -191,7 +195,10 @@ export const api = {
   },
   kiaUpdatePayPlan(
     patch: {
+      commissionMode?: 'total' | 'split';
       commissionPct?: number;
+      commissionFrontPct?: number;
+      commissionBackPct?: number;
       reviewRequired?: boolean;
       reviewReqPct?: number;
       bonusTiers?: { units: number; amount: number }[];

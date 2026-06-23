@@ -50,6 +50,13 @@
       "when": 1781872491480,
       "tag": "0006_kia_pay_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781872491481,
+      "tag": "0007_kia_commission_split",
+      "breakpoints": true
     }
   ]
 }
