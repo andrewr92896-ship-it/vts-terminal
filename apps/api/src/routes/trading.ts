@@ -9,6 +9,7 @@ import {
   restoreTrade,
   updateTrade,
 } from '../trading/trades.js';
+import { runTradeCommand } from '../trading/tradeParser.js';
 import { analyzeAlert, dismissAlert, getAlerts } from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
@@ -38,6 +39,8 @@ const side = z.enum(TRADE_SIDES);
 const status = z.enum(TRADE_STATUSES);
 const price = z.number().finite();
 const ts = z.number().int(); // ms epoch
+
+const parseSchema = z.object({ note: z.string().trim().min(1).max(600) });
 
 const addSchema = z.object({
   broker: z.string().trim().max(40).nullish(),
@@ -262,6 +265,21 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add trade' });
     }
     return getTrades(u.id, !!u.viewBrokerage);
+  });
+
+  // Plain-English trade logging via Claude (Sonnet) — one or more trades.
+  app.post('/api/trading/trades/parse', write, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parsed = parseSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Describe a trade to log' });
+    const u = request.currentUser!;
+    try {
+      await enforceAiLimit(u.id, 'trade_log');
+      return await runTradeCommand(u.id, parsed.data.note, !!u.viewBrokerage);
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not log the trade' });
+    }
   });
 
   app.patch('/api/trading/trades/:id', write, async (request, reply) => {

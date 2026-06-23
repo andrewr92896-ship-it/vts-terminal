@@ -719,6 +719,14 @@ export interface TradeLogData {
   summary: TradeSummary;
 }
 
+// Result of logging one or more trades from a plain-English note via Claude.
+export interface TradeCommandResult {
+  log: TradeLogData | null; // refreshed when a trade was logged
+  applied: string[];
+  skipped: string[];
+  reply: string;
+}
+
 // Raw data returned when a trade is removed, so the client can offer undo.
 export interface RemovedTrade {
   id: string;

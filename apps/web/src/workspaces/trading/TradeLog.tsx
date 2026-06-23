@@ -82,6 +82,11 @@ export function TradeLog() {
   const [hideMoney, setHideMoney] = useState(false);
   const [layout, setLayout] = useState<Layout>('deck');
   const [adding, setAdding] = useState(false);
+  // Claude trade logging (plain English)
+  const [note, setNote] = useState('');
+  const [noteBusy, setNoteBusy] = useState(false);
+  const [noteReply, setNoteReply] = useState<string | null>(null);
+  const [noteSkipped, setNoteSkipped] = useState<string[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -108,6 +113,30 @@ export function TradeLog() {
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function runCommand() {
+    const text = note.trim();
+    if (!text || noteBusy) return;
+    setNoteBusy(true);
+    setActionError(null);
+    try {
+      const r = await api.parseTrade(text);
+      if (r.log) setData(r.log);
+      setNoteReply(r.reply);
+      setNoteSkipped(r.skipped);
+      if (r.applied.length) setNote('');
+    } catch (e) {
+      setActionError(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Could not log the trade',
+      );
+    } finally {
+      setNoteBusy(false);
     }
   }
 
@@ -201,6 +230,37 @@ export function TradeLog() {
           </div>
         ))}
       </div>
+
+      {/* Claude trade logging */}
+      {!readOnly && (
+        <div style={{ ...card, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 }}>
+            Log with Claude
+            <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: FAINT, letterSpacing: 0 }}>Sonnet</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && runCommand()}
+              placeholder='Plain English: "Long 2 lots EUR/USD entry 1.0850 SL 1.0820 TP 1.0920, London breakout"'
+              style={{ flex: 1, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, padding: '10px 12px', color: TEXT, fontSize: 12.5, outline: 'none' }}
+            />
+            <button onClick={runCommand} disabled={noteBusy || !note.trim()} style={{ ...goldBtn, opacity: noteBusy || !note.trim() ? 0.6 : 1 }}>
+              {noteBusy ? '…' : 'Log'}
+            </button>
+          </div>
+          {noteReply && (
+            <div style={{ marginTop: 8, fontSize: 11.5, color: '#a7d8bf', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ color: GREEN }}>✓</span> {noteReply}
+              <button onClick={() => { setNoteReply(null); setNoteSkipped([]); }} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: FAINT, fontSize: 10.5, cursor: 'pointer' }}>dismiss</button>
+            </div>
+          )}
+          {noteSkipped.length > 0 && (
+            <div style={{ marginTop: 6, fontSize: 11, color: AMBER }}>Skipped: {noteSkipped.join('; ')}</div>
+          )}
+        </div>
+      )}
 
       {!readOnly && adding && (
         <TradeForm

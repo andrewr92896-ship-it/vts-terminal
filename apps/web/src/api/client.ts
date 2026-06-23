@@ -21,6 +21,7 @@ import type {
   EventInput,
   LiveWall,
   TradeInput,
+  TradeCommandResult,
   TradeLogData,
   RemovedTrade,
   KiaDashboard,
@@ -238,6 +239,9 @@ export const api = {
   },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });
+  },
+  parseTrade(note: string): Promise<TradeCommandResult> {
+    return request('/api/trading/trades/parse', { method: 'POST', body: JSON.stringify({ note }) });
   },
   updateTrade(id: string, patch: TradeInput): Promise<TradeLogData> {
     return request(`/api/trading/trades/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
