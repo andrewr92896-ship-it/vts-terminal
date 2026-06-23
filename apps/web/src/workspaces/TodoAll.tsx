@@ -87,6 +87,24 @@ export function TodoAll() {
     }
   }
 
+  // Rename a task.
+  async function saveText(id: string, text: string) {
+    setBusy(true);
+    try {
+      setSections((await api.updateTodoItem(id, text)).sections);
+      setActionError(null);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Action failed');
+      try {
+        setSections((await api.getTodo()).sections);
+      } catch {
+        /* leave current view in place */
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // Check/uncheck a task, then offer to undo it (restores the prior state).
   async function toggleWithUndo(id: string) {
     setBusy(true);
@@ -359,7 +377,7 @@ export function TodoAll() {
       {/* Sections — masonry columns (single column on phones) */}
       <div style={isPhone ? { columnCount: 1, columnGap: 16 } : { columnWidth: 360, columnGap: 16 }}>
         {visible.map((sec) => (
-          <SectionCard key={sec.id} section={sec} busy={busy} onToggle={toggleWithUndo} onRemove={removeWithUndo} />
+          <SectionCard key={sec.id} section={sec} busy={busy} onToggle={toggleWithUndo} onRemove={removeWithUndo} onSave={saveText} />
         ))}
       </div>
 
@@ -379,11 +397,13 @@ function SectionCard({
   busy,
   onToggle,
   onRemove,
+  onSave,
 }: {
   section: TodoSection;
   busy: boolean;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
+  onSave: (id: string, text: string) => void;
 }) {
   return (
     <div
@@ -413,7 +433,7 @@ function SectionCard({
         </div>
       )}
       {section.items.map((item) => (
-        <Row key={item.id} item={item} busy={busy} onToggle={onToggle} onRemove={onRemove} />
+        <Row key={item.id} item={item} busy={busy} onToggle={onToggle} onRemove={onRemove} onSave={onSave} />
       ))}
     </div>
   );
@@ -424,12 +444,40 @@ function Row({
   busy,
   onToggle,
   onRemove,
+  onSave,
 }: {
   item: TodoItem;
   busy: boolean;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
+  onSave: (id: string, text: string) => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(item.text);
+
+  function save() {
+    const t = text.trim();
+    if (!t || t === item.text) { setEditing(false); setText(item.text); return; }
+    onSave(item.id, t);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid rgba(40,65,88,.4)' }}>
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setEditing(false); setText(item.text); } }}
+          style={{ flex: 1, background: 'rgba(6,20,28,.6)', border: '1px solid #28415a', borderRadius: 6, padding: '7px 9px', color: '#dfeaf0', fontSize: 12.5, outline: 'none' }}
+        />
+        <button onClick={save} disabled={busy} style={{ flex: 'none', background: ACCENT, border: 'none', color: '#06231d', fontSize: 11.5, fontWeight: 700, padding: '6px 11px', borderRadius: 6, cursor: 'pointer' }}>Save</button>
+        <button onClick={() => { setEditing(false); setText(item.text); }} style={{ flex: 'none', background: 'none', border: '1px solid #28415a', color: '#7fa0b0', fontSize: 11.5, padding: '6px 10px', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -500,6 +548,13 @@ function Row({
         )}
       </div>
 
+      <button
+        onClick={() => { setText(item.text); setEditing(true); }}
+        title="Edit"
+        style={{ flex: 'none', background: 'none', border: 'none', color: '#3f5b6c', fontSize: 12, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}
+      >
+        ✎
+      </button>
       <button
         onClick={() => !busy && onRemove(item.id)}
         title="Remove"

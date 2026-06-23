@@ -287,6 +287,9 @@ export const api = {
   toggleTodoItem(id: string): Promise<{ sections: TodoSection[]; previous: TodoItemState }> {
     return request(`/api/todo/items/${id}/toggle`, { method: 'PATCH' });
   },
+  updateTodoItem(id: string, text: string): Promise<{ sections: TodoSection[] }> {
+    return request(`/api/todo/items/${id}`, { method: 'PATCH', body: JSON.stringify({ text }) });
+  },
   // Undo a check/uncheck by restoring the item's prior state.
   setTodoItemState(prev: TodoItemState): Promise<{ sections: TodoSection[] }> {
     return request(`/api/todo/items/${prev.id}/state`, {

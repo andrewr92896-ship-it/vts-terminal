@@ -299,6 +299,18 @@ export async function addItem(
   });
 }
 
+// Rename a task. Scoped to the calling user's own item; trims and caps length.
+export async function updateItemText(userId: string, itemId: string, text: string): Promise<void> {
+  const trimmed = text.trim();
+  if (!trimmed) throw new Error('Empty task');
+  const res = await db
+    .update(todoItems)
+    .set({ text: trimmed.slice(0, 500) })
+    .where(and(eq(todoItems.id, itemId), eq(todoItems.userId, userId)));
+  // libsql update returns rowsAffected; if nothing matched, the item isn't theirs.
+  if ((res as { rowsAffected?: number }).rowsAffected === 0) throw new Error('Item not found');
+}
+
 // The persisted state of an item before a toggle, so the client can undo a
 // check/uncheck (restoring the exact done flag and due date).
 export interface ItemState {

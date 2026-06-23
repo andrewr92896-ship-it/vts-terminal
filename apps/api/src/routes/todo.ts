@@ -8,6 +8,7 @@ import {
   restoreItem,
   setItemState,
   toggleItem,
+  updateItemText,
 } from '../todo/service.js';
 import { runCommand } from '../todo/command.js';
 import { aiConfigured } from '../ai/claude.js';
@@ -15,6 +16,10 @@ import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const addSchema = z.object({
   sectionId: z.string().min(1),
+  text: z.string().trim().min(1).max(500),
+});
+
+const editSchema = z.object({
   text: z.string().trim().min(1).max(500),
 });
 
@@ -57,6 +62,19 @@ export async function todoRoutes(app: FastifyInstance) {
       await addItem(userId, parsed.data.sectionId, parsed.data.text);
     } catch {
       return reply.code(400).send({ error: 'Could not add task' });
+    }
+    return { sections: await getTodo(userId) };
+  });
+
+  // Rename a task.
+  app.patch('/api/todo/items/:id', guard, async (request, reply) => {
+    const parsed = editSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Task text is required' });
+    const userId = request.currentUser!.id;
+    try {
+      await updateItemText(userId, (request.params as { id: string }).id, parsed.data.text);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update task' });
     }
     return { sections: await getTodo(userId) };
   });

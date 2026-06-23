@@ -136,7 +136,7 @@ export function TradingTodo() {
               </div>
             )}
             {sec.items.map((item) => (
-              <Row key={item.id} item={item} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={removeWithUndo} />
+              <Row key={item.id} item={item} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={removeWithUndo} onSave={(id, text) => run(api.updateTodoItem(id, text))} />
             ))}
           </div>
         ))}
@@ -149,7 +149,33 @@ export function TradingTodo() {
   );
 }
 
-function Row({ item, busy, onToggle, onRemove }: { item: TodoItem; busy: boolean; onToggle: (id: string) => void; onRemove: (id: string) => void }) {
+function Row({ item, busy, onToggle, onRemove, onSave }: { item: TodoItem; busy: boolean; onToggle: (id: string) => void; onRemove: (id: string) => void; onSave: (id: string, text: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(item.text);
+
+  function save() {
+    const t = text.trim();
+    if (!t || t === item.text) { setEditing(false); setText(item.text); return; }
+    onSave(item.id, t);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderBottom: '1px solid #142648' }}>
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setEditing(false); setText(item.text); } }}
+          style={{ flex: 1, background: 'rgba(6,15,36,.6)', border: '1px solid #1d3560', borderRadius: 6, padding: '7px 9px', color: '#dfe6f5', fontSize: 12.5, outline: 'none' }}
+        />
+        <button onClick={save} disabled={busy} style={{ flex: 'none', background: GOLD, border: 'none', color: '#0c2768', fontSize: 11.5, fontWeight: 700, padding: '6px 11px', borderRadius: 6, cursor: 'pointer' }}>Save</button>
+        <button onClick={() => { setEditing(false); setText(item.text); }} style={{ flex: 'none', background: 'none', border: '1px solid #1d3560', color: '#7e92c0', fontSize: 11.5, padding: '6px 10px', borderRadius: 6, cursor: 'pointer' }}>Cancel</button>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 0', borderBottom: '1px solid #142648' }}>
       <button
@@ -164,6 +190,9 @@ function Row({ item, busy, onToggle, onRemove }: { item: TodoItem; busy: boolean
           {item.text}
         </div>
       </div>
+      <button onClick={() => { setText(item.text); setEditing(true); }} title="Edit" style={{ flex: 'none', background: 'none', border: 'none', color: '#3a4868', fontSize: 12, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
+        ✎
+      </button>
       <button onClick={() => !busy && onRemove(item.id)} title="Remove" style={{ flex: 'none', background: 'none', border: 'none', color: '#3a4868', fontSize: 15, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
         ×
       </button>
