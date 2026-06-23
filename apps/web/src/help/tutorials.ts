@@ -466,6 +466,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  wm_portfolios: {
+    title: 'Model Portfolios',
+    intro: 'Build named target allocations (model portfolios) by risk level. Each model is made of sleeves — asset classes or holdings — with a target weight.',
+    steps: [
+      {
+        title: 'Create a portfolio',
+        body: 'Click "+ New portfolio", give it a name (e.g. "Core Growth") and a risk level, then Create. Portfolios are sorted from Conservative to Aggressive.',
+      },
+      {
+        title: 'Add sleeves',
+        body: 'On a portfolio, click "+ Sleeve" to add a holding: a name, an asset class, and a target weight as a percentage. The colored bar and the per-class summary update as you go.',
+      },
+      {
+        title: 'Balance to 100%',
+        body: 'The status line shows total allocated weight — green "✓ 100% allocated" when it balances, or amber with how much is unassigned or over.',
+      },
+      {
+        title: 'Edit and delete',
+        body: 'Use the ✎ and × on each sleeve to adjust or remove it, "Edit" to rename a portfolio or change its risk, and "Delete" to remove the whole model.',
+      },
+    ],
+  },
+
   // ---- Admin ----
   admin: {
     title: 'Managing users',

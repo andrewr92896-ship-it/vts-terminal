@@ -9,7 +9,16 @@ import {
   restoreClient,
   updateClient,
 } from '../wealth/service.js';
-import { WEALTH_CLIENT_STATUSES } from '../db/schema.js';
+import {
+  getPortfolios,
+  addPortfolio,
+  updatePortfolio,
+  removePortfolio,
+  addAllocation,
+  updateAllocation,
+  removeAllocation,
+} from '../wealth/portfolios.js';
+import { WEALTH_CLIENT_STATUSES, PORTFOLIO_RISKS, ASSET_CLASSES } from '../db/schema.js';
 
 const status = z.enum(WEALTH_CLIENT_STATUSES);
 const money = z.coerce.number().finite().min(0).max(1_000_000_000);
@@ -103,4 +112,82 @@ export async function wealthRoutes(app: FastifyInstance) {
     await restoreClient(userId, parsed.data);
     return getClients(userId);
   });
+
+  // ---- Model Portfolios ----
+  app.get('/api/wealth/portfolios', guard, async (request) => getPortfolios(request.currentUser!.id));
+
+  app.post('/api/wealth/portfolios', guard, async (request, reply) => {
+    const parsed = portfolioSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A portfolio name is required' });
+    try {
+      return await addPortfolio(request.currentUser!.id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add portfolio' });
+    }
+  });
+  app.patch('/api/wealth/portfolios/:id', guard, async (request, reply) => {
+    const parsed = editPortfolioSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the portfolio details' });
+    try {
+      return await updatePortfolio(request.currentUser!.id, (request.params as { id: string }).id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update portfolio' });
+    }
+  });
+  app.delete('/api/wealth/portfolios/:id', guard, async (request) =>
+    removePortfolio(request.currentUser!.id, (request.params as { id: string }).id),
+  );
+
+  // ---- Allocations (sleeves within a portfolio) ----
+  app.post('/api/wealth/portfolios/:id/allocations', guard, async (request, reply) => {
+    const parsed = allocationSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A sleeve name is required' });
+    try {
+      return await addAllocation(request.currentUser!.id, (request.params as { id: string }).id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add sleeve' });
+    }
+  });
+  app.patch('/api/wealth/allocations/:id', guard, async (request, reply) => {
+    const parsed = editAllocationSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the sleeve details' });
+    try {
+      return await updateAllocation(request.currentUser!.id, (request.params as { id: string }).id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update sleeve' });
+    }
+  });
+  app.delete('/api/wealth/allocations/:id', guard, async (request) =>
+    removeAllocation(request.currentUser!.id, (request.params as { id: string }).id),
+  );
 }
+
+const risk = z.enum(PORTFOLIO_RISKS);
+const assetClass = z.enum(ASSET_CLASSES);
+const bp = z.coerce.number().int().min(0).max(10000);
+
+const portfolioSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  risk: risk.optional(),
+  notes: z.string().trim().max(2000).nullish(),
+});
+const editPortfolioSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    risk: risk.optional(),
+    notes: z.string().trim().max(2000).nullish(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const allocationSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  assetClass: assetClass.optional(),
+  targetBp: bp.optional(),
+});
+const editAllocationSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    assetClass: assetClass.optional(),
+    targetBp: bp.optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });

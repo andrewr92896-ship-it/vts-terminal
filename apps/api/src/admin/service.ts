@@ -10,6 +10,8 @@ import {
   kiaMonthSettings,
   kiaDeals,
   wealthClients,
+  wealthPortfolios,
+  wealthAllocations,
   tradingTrades,
   tradingAlerts,
   tradingPositions,
@@ -212,6 +214,8 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(kiaMonthSettings).where(eq(kiaMonthSettings.userId, targetId));
     await tx.delete(kiaSettings).where(eq(kiaSettings.userId, targetId));
     await tx.delete(wealthClients).where(eq(wealthClients.userId, targetId));
+    await tx.delete(wealthAllocations).where(eq(wealthAllocations.userId, targetId));
+    await tx.delete(wealthPortfolios).where(eq(wealthPortfolios.userId, targetId));
     await tx.delete(tradingTrades).where(eq(tradingTrades.userId, targetId));
     await tx.delete(tradingAlerts).where(eq(tradingAlerts.userId, targetId));
     await tx.delete(tradingPositions).where(eq(tradingPositions.userId, targetId));

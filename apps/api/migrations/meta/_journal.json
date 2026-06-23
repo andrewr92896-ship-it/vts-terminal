@@ -127,6 +127,13 @@
       "when": 1781872491491,
       "tag": "0017_market_news",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1781872491492,
+      "tag": "0018_wealth_portfolios",
+      "breakpoints": true
     }
   ]
 }

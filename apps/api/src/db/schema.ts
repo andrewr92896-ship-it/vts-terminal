@@ -499,3 +499,56 @@ export const tradingCalendar = sqliteTable('trading_calendar', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingCalendarRow = typeof tradingCalendar.$inferSelect;
+
+// ---- Wealth — Model Portfolios & target allocations (per advisor) ----
+// A model portfolio is a named target allocation an advisor maintains; each
+// allocation row is a sleeve (asset class / holding) with a target weight in
+// basis points (10000 = 100%). Both are scoped to the owning user.
+export const PORTFOLIO_RISKS = [
+  'conservative',
+  'moderate_conservative',
+  'moderate',
+  'moderate_aggressive',
+  'aggressive',
+] as const;
+export type PortfolioRisk = (typeof PORTFOLIO_RISKS)[number];
+
+export const ASSET_CLASSES = [
+  'us_equity',
+  'intl_equity',
+  'fixed_income',
+  'real_assets',
+  'cash',
+  'alternative',
+  'other',
+] as const;
+export type AssetClass = (typeof ASSET_CLASSES)[number];
+
+export const wealthPortfolios = sqliteTable('wealth_portfolios', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  risk: text('risk', { enum: PORTFOLIO_RISKS }).notNull().default('moderate'),
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type WealthPortfolioRow = typeof wealthPortfolios.$inferSelect;
+
+export const wealthAllocations = sqliteTable('wealth_allocations', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  portfolioId: text('portfolio_id')
+    .notNull()
+    .references(() => wealthPortfolios.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  assetClass: text('asset_class', { enum: ASSET_CLASSES }).notNull().default('other'),
+  targetBp: integer('target_bp').notNull().default(0), // basis points; 10000 = 100%
+  position: integer('position').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type WealthAllocationRow = typeof wealthAllocations.$inferSelect;

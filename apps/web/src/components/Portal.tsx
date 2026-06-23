@@ -30,6 +30,7 @@ import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
 import { WealthClients } from '../workspaces/wealth/WealthClients';
 import { WealthOverview } from '../workspaces/wealth/WealthOverview';
+import { WealthPortfolios } from '../workspaces/wealth/WealthPortfolios';
 import { FinanceOverview } from '../workspaces/finance/FinanceOverview';
 import { FinanceExpenses } from '../workspaces/finance/FinanceExpenses';
 import { FinanceNetWorth } from '../workspaces/finance/FinanceNetWorth';
@@ -89,6 +90,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <WealthOverview onNavigate={onNavigate} />;
     case 'wm_clients':
       return <WealthClients />;
+    case 'wm_portfolios':
+      return <WealthPortfolios />;
     case 'fin_overview':
       return <FinanceOverview />;
     case 'fin_expenses':
