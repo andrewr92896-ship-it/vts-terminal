@@ -180,7 +180,28 @@ updated to 20, front/back persisted.
   earlier stack #3–#12).
 - **#14** — Kia: editable per‑user pay plan + dealership name toggle.
 - **#15** — Kia: optional front/back split commission + goal in pay‑plan editor.
+- **#16** — Add HANDOFF.md + PROJECT_LOG.md docs for session continuity.
+- **#17** — Wealth **Clients** list; admin **permanent account deletion**;
+  gamified **Series 65 Study Game** (+ vocab flashcards, Study Hub, Progress);
+  Studies data code‑split; version pill → **Alpha V 1.0**.
+
+## Recent additions (shipped in #17)
+- **Vitalis Wealth — Clients list:** per‑user `wealth_clients` table (migration
+  `0008`), service + routes (`requireWorkspace('wealth')`) with add/edit/remove +
+  undo and a clients/AUM/active summary; privacy‑masked, responsive screen on the
+  `wm_clients` tab.
+- **Admin — permanent account deletion:** `deleteUser` removes the user and every
+  per‑user row (todo, kia, wealth, sessions) in one transaction; guards block
+  deleting your own account or the last admin. UI has a one‑click confirm
+  alongside the existing Deactivate.
+- **Series 65 Study Game (Studies):** 400‑question bank parsed to a typed module,
+  each tagged to one of four exam areas; one question at a time, exam‑weighted
+  "Mix" or single category; score = accuracy over last 100 (1 decimal) vs a 72%
+  pass line with PASSING/NOT PASSING status; per‑category **levels + prestige**
+  (Novice→Grandmaster); per‑question **explanations**; **Flashcards** folded in as
+  a toggle; **Study Hub** + **Progress** screens. Persisted per user in
+  `localStorage`. Studies screens are `React.lazy` code‑split.
 
 ## What's next
-Build the **Vitalis Wealth "Clients" management list** (per‑user, privacy‑masked,
-add/edit/remove with undo) — full plan in `HANDOFF.md` §6.
+Build out the **Trading tab** until done — full plan and current (placeholder)
+state in `HANDOFF.md` §6.
