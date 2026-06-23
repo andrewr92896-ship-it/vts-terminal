@@ -115,8 +115,18 @@ async function seedUser(userId: string): Promise<void> {
 
 function markerFor(type: string, hyphen: boolean): Marker {
   if (type === 'note') return 'dot';
+  // Daily Routine items are checkable and reset every Eastern-Time day.
+  if (type === 'daily') return 'check';
   if (hyphen) return 'dash';
   return 'check';
+}
+
+// A Daily Routine item counts as "done" only for the Eastern-Time day it was
+// checked. While checked we store the next ET-midnight in dueAt; once today
+// reaches that date the check clears on its own (no write needed to display
+// it un-checked — toggle/normalize persist the reset on the next interaction).
+function dailyDone(item: TodoItemRow, todayMs: number): boolean {
+  return item.done && item.dueAt != null && item.dueAt.getTime() > todayMs;
 }
 
 // Recurring items auto-advance: once a completed task's due date passes,
@@ -142,6 +152,24 @@ function decorate(
   todayMs: number,
 ): DecoratedItem {
   const marker = markerFor(sectionType, item.hyphen);
+
+  // Daily Routine: checkable, resets each day, and shows no timer/overdue (the
+  // daily reset is implicit in the section).
+  if (sectionType === 'daily') {
+    return {
+      id: item.id,
+      code: '',
+      text: item.text,
+      marker: 'check',
+      checkable: true,
+      done: dailyDone(item, todayMs),
+      recurring: false,
+      timer: null,
+      overdue: false,
+      dueToday: false,
+    };
+  }
+
   const checkable = marker === 'check';
   const recurring = item.intervalDays != null && item.dueAt != null;
 
@@ -204,12 +232,16 @@ export async function getTodo(userId: string): Promise<DecoratedSection[]> {
   }
 
   return sections.map((sec: TodoSectionRow) => {
-    const isCheck = (r: TodoItemRow) => markerFor(sec.type, r.hyphen) === 'check';
+    // Effective done: daily items reset by day, so use the day-aware check.
+    const doneNow = (r: TodoItemRow) =>
+      sec.type === 'daily'
+        ? dailyDone(r, todayMs)
+        : markerFor(sec.type, r.hyphen) === 'check' && r.done;
     // Completed checkable items float to the top (prototype behavior); the
     // rest keep their stored order.
     const ordered = (bySection.get(sec.id) ?? []).slice().sort((a, b) => {
-      const ad = isCheck(a) && a.done;
-      const bd = isCheck(b) && b.done;
+      const ad = doneNow(a);
+      const bd = doneNow(b);
       if (ad !== bd) return ad ? -1 : 1;
       return a.position - b.position;
     });
@@ -267,7 +299,14 @@ export async function addItem(
   });
 }
 
-export async function toggleItem(userId: string, itemId: string): Promise<void> {
+// The persisted state of an item before a toggle, so the client can undo a
+// check/uncheck (restoring the exact done flag and due date).
+export interface ItemState {
+  done: boolean;
+  dueAt: number | null; // ms
+}
+
+export async function toggleItem(userId: string, itemId: string): Promise<ItemState> {
   const item = (
     await db
       .select()
@@ -287,6 +326,24 @@ export async function toggleItem(userId: string, itemId: string): Promise<void> 
   )[0];
   if (!sec || markerFor(sec.type, item.hyphen) !== 'check') {
     throw new Error('Item is not checkable');
+  }
+
+  // Snapshot the stored state up front so a toggle can be undone exactly.
+  const previous: ItemState = { done: item.done, dueAt: item.dueAt ? item.dueAt.getTime() : null };
+
+  // Daily Routine: check sets done for today (next reset = next ET midnight);
+  // unchecking clears it.
+  if (sec.type === 'daily') {
+    const todayMs = etTodayMs();
+    if (dailyDone(item, todayMs)) {
+      await db.update(todoItems).set({ done: false, dueAt: null }).where(eq(todoItems.id, itemId));
+    } else {
+      await db
+        .update(todoItems)
+        .set({ done: true, dueAt: new Date(todayMs + DAY) })
+        .where(eq(todoItems.id, itemId));
+    }
+    return previous;
   }
 
   if (item.intervalDays != null && item.dueAt != null) {
@@ -312,6 +369,20 @@ export async function toggleItem(userId: string, itemId: string): Promise<void> 
   } else {
     await db.update(todoItems).set({ done: !item.done }).where(eq(todoItems.id, itemId));
   }
+  return previous;
+}
+
+// Restore an item's done flag and due date to a captured state — the undo for a
+// check/uncheck. Scoped to the calling user's own item.
+export async function setItemState(
+  userId: string,
+  itemId: string,
+  state: ItemState,
+): Promise<void> {
+  await db
+    .update(todoItems)
+    .set({ done: state.done, dueAt: state.dueAt != null ? new Date(state.dueAt) : null })
+    .where(and(eq(todoItems.id, itemId), eq(todoItems.userId, userId)));
 }
 
 // The raw fields needed to restore a removed task exactly (undo).

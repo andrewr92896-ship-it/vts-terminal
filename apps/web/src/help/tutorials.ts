@@ -260,8 +260,16 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Tasks in Weekly / Monthly (and similar) categories show a timer like "+3 days", "due today", or an overdue count. When you complete one, it automatically schedules the next cycle.',
       },
       {
+        title: 'Daily Routine resets each day',
+        body: 'Daily Routine items are checkboxes you tick as you do them; they automatically uncheck at the start of the next day so the list is fresh each morning.',
+      },
+      {
         title: 'Remove a task',
         body: 'Click the × on the right side of any task to delete it.',
+      },
+      {
+        title: 'Undo',
+        body: 'When you remove a task or check one off, a short Undo bar appears at the bottom. Click Undo to put it back or restore the prior checked state.',
       },
       {
         title: 'Life Changes',

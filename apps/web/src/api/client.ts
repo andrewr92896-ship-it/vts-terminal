@@ -27,6 +27,7 @@ import type {
   PracticeOverview,
   RemovedWealthClient,
   RoleKey,
+  TodoItemState,
   TodoSection,
   User,
   WealthClientStatus,
@@ -240,8 +241,15 @@ export const api = {
       body: JSON.stringify({ sectionId, text }),
     });
   },
-  toggleTodoItem(id: string): Promise<{ sections: TodoSection[] }> {
+  toggleTodoItem(id: string): Promise<{ sections: TodoSection[]; previous: TodoItemState }> {
     return request(`/api/todo/items/${id}/toggle`, { method: 'PATCH' });
+  },
+  // Undo a check/uncheck by restoring the item's prior state.
+  setTodoItemState(prev: TodoItemState): Promise<{ sections: TodoSection[] }> {
+    return request(`/api/todo/items/${prev.id}/state`, {
+      method: 'POST',
+      body: JSON.stringify({ done: prev.done, dueAt: prev.dueAt }),
+    });
   },
   removeTodoItem(
     id: string,

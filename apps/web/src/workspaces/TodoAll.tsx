@@ -3,7 +3,13 @@ import { api, ApiError } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { useUndo } from '../hooks/useUndo';
 import { UndoBar } from '../components/UndoBar';
-import type { RemovedTodoItem, TodoItem, TodoSection } from '../api/types';
+import type { RemovedTodoItem, TodoItem, TodoItemState, TodoSection } from '../api/types';
+
+// The undo bar covers two actions: a delete (restore the task) and a
+// check/uncheck (restore the prior done state).
+type UndoAction =
+  | { kind: 'remove'; item: RemovedTodoItem }
+  | { kind: 'toggle'; prev: TodoItemState };
 
 const ACCENT = '#46c2a8';
 const ACCENT2 = '#2f9e86';
@@ -19,7 +25,7 @@ export function TodoAll() {
   const [draft, setDraft] = useState('');
   const [sectionId, setSectionId] = useState('');
   const [busy, setBusy] = useState(false);
-  const undo = useUndo<RemovedTodoItem>();
+  const undo = useUndo<UndoAction>();
 
   useEffect(() => {
     let alive = true;
@@ -65,7 +71,7 @@ export function TodoAll() {
       const r = await api.removeTodoItem(id);
       setSections(r.sections);
       setActionError(null);
-      if (r.removed) undo.flag(r.removed);
+      if (r.removed) undo.flag({ kind: 'remove', item: r.removed });
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : 'Action failed');
       try {
@@ -78,11 +84,32 @@ export function TodoAll() {
     }
   }
 
-  function restoreRemoved() {
-    const item = undo.pending;
-    if (!item) return;
+  // Check/uncheck a task, then offer to undo it (restores the prior state).
+  async function toggleWithUndo(id: string) {
+    setBusy(true);
+    try {
+      const r = await api.toggleTodoItem(id);
+      setSections(r.sections);
+      setActionError(null);
+      undo.flag({ kind: 'toggle', prev: r.previous });
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Action failed');
+      try {
+        setSections((await api.getTodo()).sections);
+      } catch {
+        /* leave current view in place */
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function undoLast() {
+    const action = undo.pending;
+    if (!action) return;
     undo.clear();
-    void run(api.restoreTodoItem(item));
+    if (action.kind === 'remove') void run(api.restoreTodoItem(action.item));
+    else void run(api.setTodoItemState(action.prev));
   }
 
   async function add() {
@@ -267,14 +294,14 @@ export function TodoAll() {
       {/* Sections — masonry columns (single column on phones) */}
       <div style={isPhone ? { columnCount: 1, columnGap: 16 } : { columnWidth: 360, columnGap: 16 }}>
         {visible.map((sec) => (
-          <SectionCard key={sec.id} section={sec} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={removeWithUndo} />
+          <SectionCard key={sec.id} section={sec} busy={busy} onToggle={toggleWithUndo} onRemove={removeWithUndo} />
         ))}
       </div>
 
       {undo.pending && (
         <UndoBar
-          message="Task removed."
-          onUndo={restoreRemoved}
+          message={undo.pending.kind === 'remove' ? 'Task removed.' : 'Task updated.'}
+          onUndo={undoLast}
           onDismiss={undo.clear}
         />
       )}

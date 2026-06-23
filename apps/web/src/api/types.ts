@@ -66,6 +66,13 @@ export interface RemovedKiaDeal {
   soldAt: number;
 }
 
+// The prior state of a toggled item, returned so the client can offer an Undo.
+export interface TodoItemState {
+  id: string;
+  done: boolean;
+  dueAt: number | null;
+}
+
 export type TodoMarker = 'check' | 'dash' | 'dot';
 
 export interface TodoItem {
