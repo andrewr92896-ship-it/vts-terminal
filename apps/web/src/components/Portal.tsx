@@ -16,6 +16,7 @@ import { workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
+import { InstallPrompt } from './InstallPrompt';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
 import { PrivacyProvider } from '../privacy/privacy';
@@ -242,6 +243,10 @@ export function Portal() {
       />
 
       <TabBar tabs={tabs} screen={screen} theme={theme} onSelect={setScreen} />
+
+      {/* Mobile-only "Install app" banner. Self-gating: hidden on desktop, when
+          already installed, when dismissed, or when install is not possible. */}
+      <InstallPrompt theme={theme} />
 
       <main
         style={{
