@@ -25,6 +25,7 @@ import {
   financeNetWorth,
   tradingNews,
   tradingCalendar,
+  aiUsage,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -220,6 +221,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(wealthPortfolios).where(eq(wealthPortfolios.userId, targetId));
     await tx.delete(wealthPlans).where(eq(wealthPlans.userId, targetId));
     await tx.delete(wealthCompliance).where(eq(wealthCompliance.userId, targetId));
+    await tx.delete(aiUsage).where(eq(aiUsage.userId, targetId));
     await tx.delete(tradingTrades).where(eq(tradingTrades.userId, targetId));
     await tx.delete(tradingAlerts).where(eq(tradingAlerts.userId, targetId));
     await tx.delete(tradingPositions).where(eq(tradingPositions.userId, targetId));

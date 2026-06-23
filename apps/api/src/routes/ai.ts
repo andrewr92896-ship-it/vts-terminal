@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireWorkspace } from '../auth/middleware.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
+import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
 
 const schema = z.object({
   messages: z
@@ -32,6 +33,11 @@ const KIA_SYSTEM = [
 ].join(' ');
 
 export async function aiRoutes(app: FastifyInstance) {
+  // Current user's AI usage against the monthly cap (for the UI to show).
+  app.get('/api/ai/usage', { preHandler: requireAuth }, async (request) => {
+    return getAiUsage(request.currentUser!.id);
+  });
+
   app.post('/api/ai/ask', { preHandler: requireAuth }, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -42,9 +48,11 @@ export async function aiRoutes(app: FastifyInstance) {
     }
     const user = request.currentUser!;
     try {
+      await enforceAiLimit(user.id, 'ask');
       const text = await chatClaude(parsed.data.messages, systemPrompt(parsed.data.workspace, user.displayName));
       return { reply: text };
     } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
     }
   });
@@ -59,8 +67,10 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid request' });
     }
     try {
+      await enforceAiLimit(request.currentUser!.id, 'kia');
       return { reply: await chatClaude(parsed.data.messages, KIA_SYSTEM) };
     } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
     }
   });

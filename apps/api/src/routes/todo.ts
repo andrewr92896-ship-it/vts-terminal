@@ -11,6 +11,7 @@ import {
 } from '../todo/service.js';
 import { runCommand } from '../todo/command.js';
 import { aiConfigured } from '../ai/claude.js';
+import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const addSchema = z.object({
   sectionId: z.string().min(1),
@@ -103,8 +104,10 @@ export async function todoRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Type a command to run' });
     }
     try {
+      await enforceAiLimit(request.currentUser!.id, 'todo_command');
       return await runCommand(request.currentUser!.id, parsed.data.command);
     } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Command failed' });
     }
   });

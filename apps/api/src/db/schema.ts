@@ -602,3 +602,16 @@ export const wealthCompliance = sqliteTable('wealth_compliance', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type WealthComplianceRow = typeof wealthCompliance.$inferSelect;
+
+// ---- AI usage (per-user guardrails) ----
+// One row per Claude call, used to enforce a monthly cap. `kind` records which
+// feature made the call (ask, kia, analyze, news_brief, todo_command, ...).
+export const aiUsage = sqliteTable('ai_usage', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type AiUsageRow = typeof aiUsage.$inferSelect;

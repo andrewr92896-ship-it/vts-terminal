@@ -30,6 +30,7 @@ import {
   updateConnection,
 } from '../trading/connections.js';
 import { aiConfigured, askClaude } from '../ai/claude.js';
+import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
@@ -199,7 +200,7 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   // A quick Claude (Sonnet) desk brief over the current headlines. Read-only
   // generation — no data is stored. Returns 503 if no API key is configured.
-  app.post('/api/trading/news/brief', read, async (_request, reply) => {
+  app.post('/api/trading/news/brief', read, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }
@@ -214,9 +215,11 @@ export async function tradingRoutes(app: FastifyInstance) {
     const system =
       'You are a trading-desk analyst. Given a list of market headlines with category, impact, and bias tags, write a brief, practical desk note: the overall risk tone, the few things that matter most today, and what to watch. Be concise (under 180 words), plain text, no markdown headers.';
     try {
+      await enforceAiLimit(request.currentUser!.id, 'news_brief');
       const brief = await askClaude(`Current headlines:\n${lines}`, system);
       return { brief };
     } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
     }
   });
@@ -297,8 +300,10 @@ export async function tradingRoutes(app: FastifyInstance) {
       const u = request.currentUser!;
       const id = (request.params as { id: string }).id;
       try {
+        await enforceAiLimit(u.id, 'analyze');
         return await analyzeAlert(u.id, id, data, media);
       } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
         const msg = err instanceof Error ? err.message : 'Analysis failed';
         return reply.code(502).send({ error: msg });
       }

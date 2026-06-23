@@ -148,6 +148,13 @@
       "when": 1781872491494,
       "tag": "0020_wealth_compliance",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1781872491495,
+      "tag": "0021_ai_usage",
+      "breakpoints": true
     }
   ]
 }
