@@ -205,6 +205,9 @@ export const api = {
   tradingChallenge(): Promise<ChallengeData> {
     return request('/api/trading/challenge');
   },
+  tradingMetricsBrief(): Promise<{ brief: string }> {
+    return request('/api/trading/metrics/brief', { method: 'POST', body: JSON.stringify({}) });
+  },
   updateChallenge(patch: ChallengeInput): Promise<ChallengeData> {
     return request('/api/trading/challenge', { method: 'PATCH', body: JSON.stringify(patch) });
   },
@@ -357,6 +360,9 @@ export const api = {
   financeOverview(): Promise<FinanceOverview> {
     return request('/api/finance/overview');
   },
+  financeOverviewBrief(): Promise<{ brief: string }> {
+    return request('/api/finance/overview/brief', { method: 'POST', body: JSON.stringify({}) });
+  },
   financeUpdateSettings(patch: { ftpPhase?: FtpPhase; ftpDivisor?: number; ftpPayoutPct?: number }): Promise<FinanceOverview> {
     return request('/api/finance/settings', { method: 'PATCH', body: JSON.stringify(patch) });
   },
@@ -386,6 +392,9 @@ export const api = {
   },
   wealthOverview(): Promise<PracticeOverview> {
     return request('/api/wealth/overview');
+  },
+  wealthOverviewBrief(): Promise<{ brief: string }> {
+    return request('/api/wealth/overview/brief', { method: 'POST', body: JSON.stringify({}) });
   },
   wealthPortfolios(): Promise<PortfoliosData> {
     return request('/api/wealth/portfolios');

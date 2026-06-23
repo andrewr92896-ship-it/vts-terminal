@@ -31,6 +31,7 @@ import {
 } from '../trading/connections.js';
 import { aiConfigured, askClaude } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
+import { generateBrief } from '../ai/brief.js';
 import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
@@ -111,6 +112,31 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.get('/api/trading/challenge', read, async (request) => {
     const u = request.currentUser!;
     return getChallenge(u.id, !!u.viewBrokerage);
+  });
+
+  // Claude (Sonnet) read of the prop-challenge dashboard.
+  app.post('/api/trading/metrics/brief', read, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const u = request.currentUser!;
+    const c = await getChallenge(u.id, !!u.viewBrokerage);
+    const m = c.metrics;
+    const pctOrDash = (v: number) => `${v.toFixed(1)}%`;
+    const data = [
+      `${c.label}: ${pctOrDash(c.targetPct)} profit target, ${pctOrDash(c.dailyDdPct)} daily / ${pctOrDash(c.maxDdPct)} max drawdown (${c.trailing ? 'trailing' : 'static'}). Status: ${m.status}.`,
+      `Profit so far: ${m.profitPct.toFixed(2)}% of account (${(m.progressPct * 100).toFixed(0)}% of the way to target).`,
+      `Max-drawdown buffer: ${(m.maxHeadroomPct * 100).toFixed(0)}% of the allowance remaining. Daily buffer: ${(m.dailyHeadroomPct * 100).toFixed(0)}%.`,
+      m.breaches.target ? 'Target reached.' : '',
+      m.breaches.daily ? 'Daily drawdown breached.' : '',
+      m.breaches.max ? 'Max drawdown breached.' : '',
+    ].filter(Boolean).join('\n');
+    const system =
+      'You are a prop-firm trading coach. Given a funded-account challenge dashboard (profit vs target, drawdown buffers, status), write a short, practical read: where the account stands, the main risk right now (which buffer is tight), and disciplined next steps. Under 130 words, plain text, no markdown headers. Do not invent dollar figures.';
+    try {
+      return { brief: await generateBrief(u.id, 'metrics_brief', system, data) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
+    }
   });
 
   app.patch('/api/trading/challenge', write, async (request, reply) => {
