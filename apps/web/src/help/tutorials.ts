@@ -205,6 +205,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
     intro: 'Your record of every trade — planned vs. actual entry, slippage, and realized P/L. New accounts start empty; log trades as you take them. Each log is private to your login.',
     steps: [
       {
+        title: 'Log with Claude',
+        body: 'Type a trade in plain English in the "Log with Claude" bar — e.g. "Long 2 lots EUR/USD entry 1.0850 SL 1.0820 TP 1.0920, London breakout". Claude (Sonnet) fills in the fields (open unless you give an exit) and adds it. You can log several at once. Use "✨ Brief me" for a recap of how you’re trading.',
+      },
+      {
         title: 'Log a trade',
         body: 'Click "+ Log a trade", then enter at least an instrument and entry price. Add the planned (alert) entry, exit, TP/SL, size, realized P/L, strategy, timeframe, and date as you have them. Set status to Open for a position still running.',
       },
@@ -292,6 +296,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
     intro: 'Track your month: deals, pace to goal, commission, and Google reviews — all updated automatically as you log deals.',
     steps: [
       {
+        title: 'Ask Claude (command bar)',
+        body: 'Type plain English in the "Ask Claude" bar to log deals and update targets — e.g. "Sold a used Sportage, $1,800 front $700 back · set goal 12 · set reviews 60". Claude (Sonnet) applies each change and tells you what it did. Use "✨ Brief me" for a quick month recap, and the Priority card surfaces your To Do priorities here.',
+      },
+      {
         title: 'Log a deal',
         body: 'In "Log a deal", enter the customer (optional), model, New/Used, profit in dollars, and the sale date, then click "Add deal". It appears in Recent Deals and updates every metric.',
       },
@@ -365,6 +373,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'The Series 65 card shows how many questions and flashcards are loaded. Use its buttons to jump straight into the quiz, flashcards, or your progress.',
       },
       {
+        title: 'AI practice quiz',
+        body: 'In the "Practice quiz" panel, pick a topic and how many questions, then Generate — Claude (Sonnet) writes fresh exam-style questions. Click an answer to check it and read the explanation, or Generate again for a new set.',
+      },
+      {
         title: 'Your progress is saved',
         body: 'Quiz accuracy is stored on this device per login, so you can close the tab and pick up where you left off.',
       },
@@ -420,6 +432,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
     title: 'Practice Overview',
     intro: 'The landing screen for your advisory practice — a read-only roll-up of the same client book you manage on the Clients tab.',
     steps: [
+      {
+        title: 'Quick add with Claude',
+        body: 'Use the "Quick add" box to log practice items in plain English — e.g. "Add client Jane Doe, active, $250k", "Add a US Equity 60% sleeve to Core Growth", or "Add a CPI filing due July 30". Claude (Sonnet) routes each to the right place (clients, portfolios, plans, compliance) and shows what it added.',
+      },
       {
         title: 'Headline metrics',
         body: 'The top cards show total assets under management, your client and active counts, the average funded account, and your largest relationship.',
