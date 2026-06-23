@@ -1,4 +1,13 @@
-import type { BrokerStatus, KiaDashboard, TodoSection, User } from './types';
+import type {
+  AdminUser,
+  BrokerStatus,
+  KiaDashboard,
+  RemovedKiaDeal,
+  RemovedTodoItem,
+  RoleKey,
+  TodoSection,
+  User,
+} from './types';
 
 export class ApiError extends Error {
   status: number;
@@ -57,6 +66,48 @@ export const api = {
   logout(): Promise<{ ok: boolean }> {
     return request('/api/auth/logout', { method: 'POST' });
   },
+  changePassword(currentPassword: string, newPassword: string): Promise<{ user: User }> {
+    return request('/api/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
+  updateProfile(patch: { username?: string; displayName?: string }): Promise<{ user: User }> {
+    return request('/api/auth/profile', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+  adminListUsers(): Promise<{ users: AdminUser[] }> {
+    return request('/api/admin/users');
+  },
+  adminCreateUser(input: {
+    username: string;
+    displayName: string;
+    password: string;
+    roles: RoleKey[];
+    viewBrokerage?: boolean;
+  }): Promise<{ user: AdminUser }> {
+    return request('/api/admin/users', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  adminUpdateUser(
+    id: string,
+    patch: {
+      displayName?: string;
+      roles?: RoleKey[];
+      active?: boolean;
+      viewBrokerage?: boolean;
+      password?: string;
+    },
+  ): Promise<{ user: AdminUser }> {
+    return request(`/api/admin/users/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');
   },
@@ -72,25 +123,75 @@ export const api = {
   toggleTodoItem(id: string): Promise<{ sections: TodoSection[] }> {
     return request(`/api/todo/items/${id}/toggle`, { method: 'PATCH' });
   },
-  removeTodoItem(id: string): Promise<{ sections: TodoSection[] }> {
+  removeTodoItem(
+    id: string,
+  ): Promise<{ sections: TodoSection[]; removed: RemovedTodoItem | null }> {
     return request(`/api/todo/items/${id}`, { method: 'DELETE' });
   },
-  kiaDashboard(): Promise<KiaDashboard> {
-    return request('/api/kia/dashboard');
+  restoreTodoItem(item: RemovedTodoItem): Promise<{ sections: TodoSection[] }> {
+    return request('/api/todo/items/restore', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    });
   },
-  kiaAddDeal(deal: {
-    customer?: string;
-    model: string;
-    type: 'New' | 'Used';
-    profit: number;
-    soldAt?: string;
-  }): Promise<KiaDashboard> {
-    return request('/api/kia/deals', { method: 'POST', body: JSON.stringify(deal) });
+  kiaDashboard(month?: string): Promise<KiaDashboard> {
+    return request(`/api/kia/dashboard${monthQuery(month)}`);
   },
-  kiaRemoveDeal(id: string): Promise<KiaDashboard> {
-    return request(`/api/kia/deals/${id}`, { method: 'DELETE' });
+  kiaAddDeal(
+    deal: {
+      customer?: string;
+      model: string;
+      type: 'New' | 'Used';
+      profit: number;
+      soldAt?: string;
+    },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/deals${monthQuery(month)}`, {
+      method: 'POST',
+      body: JSON.stringify(deal),
+    });
   },
-  kiaUpdateSettings(patch: { goalUnits?: number; reviewCount?: number }): Promise<KiaDashboard> {
-    return request('/api/kia/settings', { method: 'PATCH', body: JSON.stringify(patch) });
+  kiaUpdateDeal(
+    id: string,
+    patch: {
+      customer?: string;
+      model?: string;
+      type?: 'New' | 'Used';
+      profit?: number;
+      soldAt?: string;
+    },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/deals/${id}${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+  kiaRemoveDeal(
+    id: string,
+    month?: string,
+  ): Promise<KiaDashboard & { removed: RemovedKiaDeal | null }> {
+    return request(`/api/kia/deals/${id}${monthQuery(month)}`, { method: 'DELETE' });
+  },
+  kiaRestoreDeal(deal: RemovedKiaDeal, month?: string): Promise<KiaDashboard> {
+    return request(`/api/kia/deals/restore${monthQuery(month)}`, {
+      method: 'POST',
+      body: JSON.stringify(deal),
+    });
+  },
+  kiaUpdateSettings(
+    patch: { goalUnits?: number; reviewCount?: number },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/settings${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
   },
 };
+
+// Append ?month=YYYY-MM when a specific month is being viewed.
+function monthQuery(month?: string): string {
+  return month ? `?month=${encodeURIComponent(month)}` : '';
+}

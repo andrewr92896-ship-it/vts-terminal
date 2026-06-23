@@ -7,7 +7,7 @@ import {
   type TodoItemRow,
   type TodoSectionRow,
 } from '../db/schema.js';
-import { TODO_TEMPLATE } from './template.js';
+import { STARTER_SECTIONS } from './template.js';
 
 const DAY = 86_400_000;
 
@@ -64,7 +64,9 @@ export async function ensureSeed(userId: string): Promise<void> {
   }
 }
 
-// Create the default list for a user the first time they open To Do.
+// Create the starter categories for a user the first time they open To Do.
+// New users begin with empty categories (zero tasks); existing users are
+// untouched because seeding only runs when a user has no sections yet.
 async function seedUser(userId: string): Promise<void> {
   const existing = await db
     .select({ id: todoSections.id })
@@ -76,8 +78,8 @@ async function seedUser(userId: string): Promise<void> {
   const today = etTodayMs();
   const now = new Date();
 
-  for (let s = 0; s < TODO_TEMPLATE.length; s++) {
-    const tpl = TODO_TEMPLATE[s];
+  for (let s = 0; s < STARTER_SECTIONS.length; s++) {
+    const tpl = STARTER_SECTIONS[s];
     const sectionId = crypto.randomUUID();
     await db.insert(todoSections).values({
       id: sectionId,
@@ -312,8 +314,76 @@ export async function toggleItem(userId: string, itemId: string): Promise<void> 
   }
 }
 
-export async function removeItem(userId: string, itemId: string): Promise<void> {
+// The raw fields needed to restore a removed task exactly (undo).
+export interface RemovedTodoItem {
+  id: string;
+  sectionId: string;
+  text: string;
+  position: number;
+  hyphen: boolean;
+  done: boolean;
+  dueAt: number | null; // ms
+  intervalDays: number | null;
+}
+
+// Remove a task and return its raw data so the client can offer an undo.
+export async function removeItem(
+  userId: string,
+  itemId: string,
+): Promise<RemovedTodoItem | null> {
+  const row = (
+    await db
+      .select()
+      .from(todoItems)
+      .where(and(eq(todoItems.id, itemId), eq(todoItems.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!row) return null;
+
   await db
     .delete(todoItems)
     .where(and(eq(todoItems.id, itemId), eq(todoItems.userId, userId)));
+
+  return {
+    id: row.id,
+    sectionId: row.sectionId,
+    text: row.text,
+    position: row.position,
+    hyphen: row.hyphen,
+    done: row.done,
+    dueAt: row.dueAt ? row.dueAt.getTime() : null,
+    intervalDays: row.intervalDays,
+  };
+}
+
+// Re-insert a previously removed task (undo). Only restores into a section the
+// user still owns; ignored if the same id already exists.
+export async function restoreItem(
+  userId: string,
+  item: RemovedTodoItem,
+): Promise<void> {
+  const section = (
+    await db
+      .select({ id: todoSections.id })
+      .from(todoSections)
+      .where(and(eq(todoSections.id, item.sectionId), eq(todoSections.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!section) return; // section was deleted; nothing to restore into
+
+  await db
+    .insert(todoItems)
+    .values({
+      id: item.id,
+      userId,
+      sectionId: item.sectionId,
+      text: item.text,
+      position: item.position,
+      hyphen: item.hyphen,
+      done: item.done,
+      dueAt: item.dueAt != null ? new Date(item.dueAt) : null,
+      intervalDays: item.intervalDays,
+      createdAt: new Date(),
+    })
+    .onConflictDoNothing();
 }

@@ -32,10 +32,12 @@ export async function seedAdmin(): Promise<void> {
   await db.insert(users).values({
     id: crypto.randomUUID(),
     username,
+    createdUsername: username,
     displayName,
     email: null,
     passwordHash: await hashPassword(password),
-    role: 'Admin',
+    role: 'Admin', // legacy column, unused; kept populated for back-compat
+    roles: JSON.stringify(['admin']),
     viewBrokerage: true,
     active: true,
     mustChangePassword: generated,

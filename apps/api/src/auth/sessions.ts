@@ -79,3 +79,9 @@ export async function destroySession(token: string | undefined): Promise<void> {
   if (!token) return;
   await db.delete(sessions).where(eq(sessions.id, hashToken(token)));
 }
+
+// Revoke every active session for a user — used when an admin resets a
+// password or deactivates an account, so existing logins stop working.
+export async function destroyUserSessions(userId: string): Promise<void> {
+  await db.delete(sessions).where(eq(sessions.userId, userId));
+}

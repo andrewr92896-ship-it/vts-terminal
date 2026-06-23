@@ -1,7 +1,15 @@
 import type { WorkspaceKey } from '../theme/themes';
 
-export type Role = 'Admin' | 'Trader' | 'Sales' | 'Viewer';
-export type ListScope = 'all' | 'trading' | 'kia' | 'none';
+// Granular, admin-assigned roles (mirror of backend auth/rbac.ts ROLE_KEYS).
+// A user can hold any combination.
+export type RoleKey =
+  | 'admin'
+  | 'trading'
+  | 'trading_viewer'
+  | 'sales'
+  | 'studies'
+  | 'todo'
+  | 'wealth';
 
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {
@@ -9,15 +17,50 @@ export interface User {
   username: string;
   displayName: string;
   email: string | null;
-  role: Role;
-  readOnly: boolean;
+  roles: RoleKey[];
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   access: {
     label: string;
-    lists: ListScope;
     workspaces: WorkspaceKey[];
+    readOnlyWorkspaces: WorkspaceKey[];
   };
+}
+
+// Admin user-management view (matches the backend AdminUserView). Includes
+// the original created username, which never changes when a user renames.
+export interface AdminUser {
+  id: string;
+  username: string;
+  createdUsername: string;
+  displayName: string;
+  email: string | null;
+  roles: RoleKey[];
+  active: boolean;
+  viewBrokerage: boolean;
+  mustChangePassword: boolean;
+  createdAt: number;
+}
+
+// Raw data returned when an item is removed, so the client can offer "undo".
+export interface RemovedTodoItem {
+  id: string;
+  sectionId: string;
+  text: string;
+  position: number;
+  hyphen: boolean;
+  done: boolean;
+  dueAt: number | null;
+  intervalDays: number | null;
+}
+
+export interface RemovedKiaDeal {
+  id: string;
+  customer: string;
+  model: string;
+  type: 'New' | 'Used';
+  profit: number;
+  soldAt: number;
 }
 
 export type TodoMarker = 'check' | 'dash' | 'dot';
@@ -83,7 +126,23 @@ export interface KiaMetrics {
   onPace: boolean;
 }
 
+export interface KiaMonthOption {
+  key: string; // 'YYYY-MM'
+  label: string; // e.g. 'June 2026'
+}
+
+export interface KiaMonthSummary {
+  month: string;
+  label: string;
+  units: number;
+  totalProfit: number;
+  commission: number;
+}
+
 export interface KiaDashboard {
+  month: string; // the month currently shown, 'YYYY-MM'
+  months: KiaMonthOption[]; // selectable months, newest first
+  history: KiaMonthSummary[]; // per-month totals, newest first
   deals: KiaDeal[];
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };

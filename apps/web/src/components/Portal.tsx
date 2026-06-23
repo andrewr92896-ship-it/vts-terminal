@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
-import type { BrokerStatus, Role } from '../api/types';
+import type { BrokerStatus, RoleKey } from '../api/types';
 import {
   THEMES,
   BRAND,
@@ -9,22 +9,28 @@ import {
   DEFAULT_SCREEN,
   type WorkspaceKey,
   type TabDef,
+  type Theme,
 } from '../theme/themes';
-import { workspacesFor } from '../auth/access';
+import { workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { AskClaudePanel } from './AskClaudePanel';
+import { AccountSettings } from './AccountSettings';
+import { PrivacyProvider } from '../privacy/privacy';
+import { PageHelp } from './PageHelp';
 import { Screen } from '../workspaces/Screens';
+import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
 import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
 import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
+import { Flashcards } from '../workspaces/studies/Flashcards';
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder.
-function renderScreen(screen: string) {
+function renderScreen(screen: string, theme: Theme) {
   switch (screen) {
     case 'td_all':
       return <TodoAll />;
@@ -36,6 +42,8 @@ function renderScreen(screen: string) {
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
+    case 'st_cards':
+      return <Flashcards theme={theme} />;
     default:
       return null;
   }
@@ -50,31 +58,31 @@ export function Portal() {
   const { user, logout } = useAuth();
   const { isPhone, isTablet } = useResponsive();
 
-  // Admin-only "view as role" preview. Pure UI gating; the server still
-  // enforces the real role on every request.
-  const [actingRole, setActingRole] = useState<Role | null>(null);
-  const effectiveRole: Role = actingRole ?? user!.role;
-  const allowed = useMemo(() => workspacesFor(effectiveRole), [effectiveRole]);
+  // Admin-only "view as role" preview: emulate someone who holds only the one
+  // selected role. Pure UI gating; the server still enforces real roles.
+  const [actingRole, setActingRole] = useState<RoleKey | null>(null);
+  const effectiveRoles: RoleKey[] = actingRole ? [actingRole] : user!.roles;
+  const allowed = useMemo(
+    () => workspacesForRoles(effectiveRoles),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [actingRole, user],
+  );
 
   const [workspace, setWorkspace] = useState<WorkspaceKey>(() =>
-    pickInitialWorkspace(workspacesFor(user!.role)),
+    pickInitialWorkspace(workspacesForRoles(user!.roles)),
   );
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [soundOn, setSoundOn] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
   const theme = THEMES[workspace];
   const brand = BRAND[workspace];
 
-  // Trading tabs gain an Admin tab only for real Admins.
-  const tabs: TabDef[] = useMemo(() => {
-    const base = TABS[workspace];
-    if (workspace === 'trading' && user!.role === 'Admin') {
-      return [...base, { key: 'admin', label: 'Admin' }];
-    }
-    return base;
-  }, [workspace, user]);
+  // Workspace sub-tabs. User management is opened from the top bar (not a tab).
+  const tabs: TabDef[] = TABS[workspace];
 
   // Broker status drives the top-bar dots (Trading only).
   useEffect(() => {
@@ -96,10 +104,9 @@ export function Portal() {
     setScreen(DEFAULT_SCREEN[ws]);
   }
 
-  function changeActingRole(r: Role | null) {
+  function changeActingRole(r: RoleKey | null) {
     setActingRole(r);
-    const role = r ?? user!.role;
-    const nextAllowed = workspacesFor(role);
+    const nextAllowed = workspacesForRoles(r ? [r] : user!.roles);
     if (!nextAllowed.includes(workspace)) {
       const ws = pickInitialWorkspace(nextAllowed);
       setWorkspace(ws);
@@ -115,6 +122,7 @@ export function Portal() {
   }, [tabs, screen, workspace]);
 
   return (
+    <PrivacyProvider>
     <div
       style={{
         position: 'relative',
@@ -125,10 +133,10 @@ export function Portal() {
         color: '#dfe7fa',
       }}
     >
-      {/* Background wordmark watermark — Trading only, matching the prototype. */}
-      {brand.useWordmark && (
+      {/* Background wordmark watermark — for workspaces with a wordmark logo. */}
+      {brand.wordmark && (
         <img
-          src="/brand/vitalis-wordmark.png"
+          src={brand.wordmark}
           alt=""
           aria-hidden
           style={{
@@ -149,7 +157,7 @@ export function Portal() {
 
       <TopBar
         user={user!}
-        effectiveRole={effectiveRole}
+        effectiveRoles={effectiveRoles}
         actingRole={actingRole}
         workspace={workspace}
         workspaces={allowed}
@@ -160,6 +168,8 @@ export function Portal() {
         onSwitchWorkspace={switchWorkspace}
         onToggleSound={() => setSoundOn((v) => !v)}
         onOpenClaude={() => setAiOpen(true)}
+        onOpenAccount={() => setAccountOpen(true)}
+        onOpenAdmin={() => setAdminOpen(true)}
         onSetActingRole={changeActingRole}
         onLogout={logout}
       />
@@ -174,7 +184,7 @@ export function Portal() {
           padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
         }}
       >
-        {renderScreen(screen) ?? <Screen screen={screen} theme={theme} />}
+        {renderScreen(screen, theme) ?? <Screen screen={screen} theme={theme} />}
       </main>
 
       <footer
@@ -205,6 +215,65 @@ export function Portal() {
       </footer>
 
       <AskClaudePanel open={aiOpen} theme={theme} onClose={() => setAiOpen(false)} />
+      <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
+
+      {/* User management — opened from the top-bar Admin button (admins only). */}
+      {adminOpen && (
+        <>
+          <div
+            onClick={() => setAdminOpen(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 60, animation: 'fadeIn .2s ease' }}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            style={{
+              position: 'fixed',
+              top: isPhone ? 0 : '4vh',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: isPhone ? '100%' : 'min(1040px, 94vw)',
+              height: isPhone ? '100%' : '92vh',
+              overflowY: 'auto',
+              background: theme.pageBg,
+              border: isPhone ? 'none' : `1px solid ${theme.navBorder}`,
+              borderRadius: isPhone ? 0 : 14,
+              boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+              zIndex: 61,
+              animation: 'popIn .25s ease',
+            }}
+          >
+            <div
+              style={{
+                position: 'sticky',
+                top: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 18px',
+                background: theme.headerBg,
+                borderBottom: `1px solid ${theme.headerBorder}`,
+              }}
+            >
+              <strong style={{ fontSize: 15, color: '#eef3ff' }}>User Management</strong>
+              <button
+                onClick={() => setAdminOpen(false)}
+                aria-label="Close"
+                style={{ background: 'none', border: 'none', color: '#9fb0d6', fontSize: 22, lineHeight: 1, cursor: 'pointer' }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ padding: isPhone ? '16px 14px' : '20px 22px' }}>
+              <AdminUsers theme={theme} />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
+      <PageHelp screen={screen} theme={theme} />
     </div>
+    </PrivacyProvider>
   );
 }

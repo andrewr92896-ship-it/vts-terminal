@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { BrokerStatus, Role, User } from '../api/types';
+import type { BrokerStatus, RoleKey, User } from '../api/types';
 import {
   type Theme,
   type WorkspaceKey,
@@ -7,14 +7,15 @@ import {
   accentGradient,
   WORKSPACE_LABELS,
 } from '../theme/themes';
-import { ROLE_BADGE } from '../auth/access';
+import { ALL_ROLES, ROLE_LABELS, isAdmin, rolesSummary } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
+import { usePrivacy } from '../privacy/privacy';
 import { Clock } from './Clock';
 
 interface TopBarProps {
   user: User;
-  effectiveRole: Role;
-  actingRole: Role | null;
+  effectiveRoles: RoleKey[];
+  actingRole: RoleKey | null;
   workspace: WorkspaceKey;
   workspaces: WorkspaceKey[];
   theme: Theme;
@@ -24,11 +25,11 @@ interface TopBarProps {
   onSwitchWorkspace: (ws: WorkspaceKey) => void;
   onToggleSound: () => void;
   onOpenClaude: () => void;
-  onSetActingRole: (r: Role | null) => void;
+  onOpenAccount: () => void;
+  onOpenAdmin: () => void;
+  onSetActingRole: (r: RoleKey | null) => void;
   onLogout: () => void;
 }
-
-const ROLES: Role[] = ['Admin', 'Trader', 'Sales', 'Viewer'];
 
 function brokerDotColor(status: BrokerStatus['status']): string {
   switch (status) {
@@ -46,7 +47,7 @@ function brokerDotColor(status: BrokerStatus['status']): string {
 export function TopBar(props: TopBarProps) {
   const {
     user,
-    effectiveRole,
+    effectiveRoles,
     actingRole,
     workspace,
     workspaces,
@@ -57,12 +58,15 @@ export function TopBar(props: TopBarProps) {
     onSwitchWorkspace,
     onToggleSound,
     onOpenClaude,
+    onOpenAccount,
+    onOpenAdmin,
     onSetActingRole,
     onLogout,
   } = props;
 
   const [menuOpen, setMenuOpen] = useState(false);
   const { isPhone, isTablet } = useResponsive();
+  const { privacy, toggle: togglePrivacy } = usePrivacy();
   // "narrow" = phones and small tablets. We restructure the single crowded row
   // into stacked rows + a scrollable workspace switcher so nothing overflows.
   const narrow = isTablet;
@@ -73,10 +77,10 @@ export function TopBar(props: TopBarProps) {
   // Brand block (wordmark image or styled text).
   const brandEl = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0 }}>
-      {brand.useWordmark ? (
+      {brand.wordmark ? (
         <img
-          src="/brand/vitalis-wordmark.png"
-          alt="Vitalis Trading Systems"
+          src={brand.wordmark}
+          alt={brand.sub}
           style={{ height: narrow ? 28 : 34, display: 'block' }}
         />
       ) : (
@@ -122,6 +126,12 @@ export function TopBar(props: TopBarProps) {
         ...(narrow
           ? {
               width: '100%',
+              // min-width:0 + max-width:100% stop this scrollable flex child
+              // from expanding to its content's intrinsic width (a flex item's
+              // default min-width:auto), which would otherwise widen the whole
+              // header past the viewport instead of scrolling within the row.
+              minWidth: 0,
+              maxWidth: '100%',
               overflowX: 'auto',
               flexWrap: 'nowrap',
               WebkitOverflowScrolling: 'touch',
@@ -183,7 +193,7 @@ export function TopBar(props: TopBarProps) {
         display: 'flex',
         alignItems: 'center',
         gap: narrow ? 12 : 18,
-        ...(narrow ? { flexWrap: 'wrap' } : {}),
+        ...(narrow ? { flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' } : {}),
       }}
     >
       {isTrading && brokers.length > 0 && (
@@ -227,6 +237,35 @@ export function TopBar(props: TopBarProps) {
       )}
 
       <Clock />
+
+      <button
+        onClick={togglePrivacy}
+        title="Privacy mode — hide customer names and dollar amounts for demos"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          fontFamily: "'IBM Plex Mono', monospace",
+          fontSize: 10,
+          letterSpacing: '0.4px',
+          color: privacy ? '#e0a23a' : '#6f84b2',
+          background: privacy ? 'rgba(224,162,58,.12)' : 'rgba(0,0,0,.18)',
+          border: `1px solid ${privacy ? 'rgba(224,162,58,.45)' : '#2a4170'}`,
+          padding: narrow ? '11px 13px' : '7px 11px',
+          borderRadius: 6,
+          cursor: 'pointer',
+        }}
+      >
+        <span
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            background: privacy ? '#e0a23a' : '#6f84b2',
+          }}
+        />
+        {privacy ? 'PRIVACY ON' : 'PRIVACY'}
+      </button>
 
       <button
         onClick={onToggleSound}
@@ -287,6 +326,34 @@ export function TopBar(props: TopBarProps) {
     </div>
   );
 
+  // Admin (user management) button — sits just left of the user badge, admins
+  // only. Replaces the old Admin sub-tab in the Trading workspace.
+  const canAdmin = isAdmin(effectiveRoles);
+  const adminBtn = canAdmin ? (
+    <button
+      onClick={onOpenAdmin}
+      title="User management"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        flex: 'none',
+        fontFamily: "'IBM Plex Mono', monospace",
+        fontSize: 11,
+        fontWeight: 600,
+        letterSpacing: '0.4px',
+        color: theme.accent,
+        background: 'rgba(0,0,0,.18)',
+        border: `1px solid ${theme.accent}`,
+        padding: narrow ? '11px 13px' : '7px 12px',
+        borderRadius: 6,
+        cursor: 'pointer',
+      }}
+    >
+      Admin
+    </button>
+  ) : null;
+
   // User / role badge with dropdown.
   const userBadge = (
     <div style={{ position: 'relative', flex: 'none' }}>
@@ -331,8 +398,8 @@ export function TopBar(props: TopBarProps) {
               textTransform: 'uppercase',
             }}
           >
-            {ROLE_BADGE[effectiveRole]}
-            {actingRole && actingRole !== user.role ? ' · preview' : ''}
+            {rolesSummary(effectiveRoles)}
+            {actingRole ? ' · preview' : ''}
           </div>
         </div>
       </button>
@@ -366,10 +433,10 @@ export function TopBar(props: TopBarProps) {
             >
               Signed in as <strong style={{ color: '#cfe0ff' }}>{user.username}</strong>
               <br />
-              Role: {ROLE_BADGE[user.role]}
+              Roles: {rolesSummary(user.roles)}
             </div>
 
-            {user.role === 'Admin' && (
+            {isAdmin(user.roles) && (
               <div style={{ borderTop: '1px solid #1d3560', paddingTop: 8, marginTop: 4 }}>
                 <div
                   style={{
@@ -382,13 +449,33 @@ export function TopBar(props: TopBarProps) {
                 >
                   View as role (preview)
                 </div>
-                {ROLES.map((r) => {
-                  const on = effectiveRole === r;
+                <button
+                  onClick={() => {
+                    onSetActingRole(null);
+                    setMenuOpen(false);
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    background: !actingRole ? 'rgba(235,203,116,.1)' : 'transparent',
+                    border: 'none',
+                    color: !actingRole ? '#EBCB74' : '#cfe0ff',
+                    fontSize: 12.5,
+                    padding: '8px',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                  }}
+                >
+                  My access (all my roles)
+                </button>
+                {ALL_ROLES.map((r) => {
+                  const on = actingRole === r;
                   return (
                     <button
                       key={r}
                       onClick={() => {
-                        onSetActingRole(r === user.role ? null : r);
+                        onSetActingRole(on ? null : r);
                         setMenuOpen(false);
                       }}
                       style={{
@@ -404,8 +491,7 @@ export function TopBar(props: TopBarProps) {
                         cursor: 'pointer',
                       }}
                     >
-                      {ROLE_BADGE[r]}
-                      {r === user.role ? ' (your role)' : ''}
+                      {ROLE_LABELS[r]}
                     </button>
                   );
                 })}
@@ -413,6 +499,27 @@ export function TopBar(props: TopBarProps) {
             )}
 
             <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6, marginTop: 6 }}>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onOpenAccount();
+                }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#cfe0ff',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  padding: '8px',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                }}
+              >
+                Account settings
+              </button>
               <button
                 onClick={() => {
                   setMenuOpen(false);
@@ -456,6 +563,12 @@ export function TopBar(props: TopBarProps) {
           borderBottom: `1px solid ${theme.headerBorder}`,
           position: 'relative',
           zIndex: 30,
+          // Constrain the header to the viewport. We deliberately do NOT clip
+          // overflow here — the flex children below carry min-width:0 so the
+          // scrollable switcher scrolls within its own row, and clipping would
+          // also cut off the absolutely-positioned user-badge dropdown.
+          width: '100%',
+          maxWidth: '100%',
         }}
       >
         <div
@@ -464,10 +577,15 @@ export function TopBar(props: TopBarProps) {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 12,
+            minWidth: 0,
+            maxWidth: '100%',
           }}
         >
           {brandEl}
-          {userBadge}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
+            {adminBtn}
+            {userBadge}
+          </div>
         </div>
         {controls}
         {workspaceNav}
@@ -498,9 +616,10 @@ export function TopBar(props: TopBarProps) {
         {workspaceNav}
       </div>
 
-      {/* Right: broker dots, clock, alerts, Ask Claude, user badge */}
+      {/* Right: broker dots, clock, alerts, Ask Claude, Admin, user badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
         {controls}
+        {adminBtn}
         {userBadge}
       </div>
     </header>

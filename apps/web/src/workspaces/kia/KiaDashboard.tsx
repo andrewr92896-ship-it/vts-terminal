@@ -1,7 +1,10 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import type { KiaDashboard as Dash } from '../../api/types';
+import { useUndo } from '../../hooks/useUndo';
+import { UndoBar } from '../../components/UndoBar';
+import { usePrivacy, maskName } from '../../privacy/privacy';
+import type { KiaDashboard as Dash, RemovedKiaDeal } from '../../api/types';
 
 const RED = '#BB162B';
 const RED2 = '#8d0f20';
@@ -18,6 +21,8 @@ function etToday(): string {
 
 export function KiaDashboard() {
   const { isPhone } = useResponsive();
+  const { privacy } = usePrivacy();
+  const undo = useUndo<RemovedKiaDeal>();
   const [dash, setDash] = useState<Dash | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -50,7 +55,7 @@ export function KiaDashboard() {
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Action failed');
       try {
-        setDash(await api.kiaDashboard());
+        setDash(await api.kiaDashboard(dash?.month));
       } catch {
         /* keep current view */
       }
@@ -62,14 +67,20 @@ export function KiaDashboard() {
   async function addDeal() {
     const p = Number(profit);
     if (!model.trim() || !Number.isFinite(p) || p < 0) return;
+    // Show the month the deal was logged into (which may differ from the one
+    // currently on screen).
+    const dealMonth = (date || etToday()).slice(0, 7);
     await run(
-      api.kiaAddDeal({
-        customer: customer.trim() || undefined,
-        model: model.trim(),
-        type: dtype,
-        profit: p,
-        soldAt: date || undefined,
-      }),
+      api.kiaAddDeal(
+        {
+          customer: customer.trim() || undefined,
+          model: model.trim(),
+          type: dtype,
+          profit: p,
+          soldAt: date || undefined,
+        },
+        dealMonth,
+      ),
     );
     setCustomer('');
     setModel('');
@@ -78,18 +89,57 @@ export function KiaDashboard() {
     setDate(etToday());
   }
 
+  // Remove a deal, then offer to undo it.
+  async function removeDealWithUndo(id: string) {
+    const month = dash?.month;
+    setBusy(true);
+    try {
+      const r = await api.kiaRemoveDeal(id, month);
+      setDash(r);
+      setActionError(null);
+      if (r.removed) undo.flag(r.removed);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Action failed');
+      try {
+        setDash(await api.kiaDashboard(month));
+      } catch {
+        /* keep current view */
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function restoreRemovedDeal() {
+    const deal = undo.pending;
+    if (!deal) return;
+    undo.clear();
+    void run(api.kiaRestoreDeal(deal, dash?.month));
+  }
+
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
   if (!dash) return <div style={{ color: '#8b9098', padding: 20, fontSize: 13 }}>Loading dashboard...</div>;
 
   const m = dash.metrics;
-  const showComm = !hideComm;
+  // Privacy mode also hides every dollar figure, on top of the manual toggle.
+  const showComm = !hideComm && !privacy;
   const money = (n: number) => (showComm ? usd(n) : '•••••');
   const reviewColor = m.reviewOk ? GREEN : AMBER;
+  const isCurrentMonth = dash.month === etToday().slice(0, 7);
+  const monthKey = dash.month;
 
   const kpis: { label: string; val: string; sub: string }[] = [
-    { label: 'Units MTD', val: String(m.units), sub: `goal ${m.goalUnits}` },
-    { label: 'Pace', val: `${m.paceUnits} units`, sub: 'projected by month-end' },
-    { label: 'Days Left', val: String(m.daysLeft), sub: `of ${m.daysInMonth}-day month` },
+    { label: isCurrentMonth ? 'Units MTD' : 'Units', val: String(m.units), sub: `goal ${m.goalUnits}` },
+    {
+      label: 'Pace',
+      val: `${m.paceUnits} units`,
+      sub: isCurrentMonth ? 'projected by month-end' : 'final for the month',
+    },
+    {
+      label: 'Days Left',
+      val: isCurrentMonth ? String(m.daysLeft) : '—',
+      sub: isCurrentMonth ? `of ${m.daysInMonth}-day month` : 'month complete',
+    },
     ...(showComm
       ? [
           { label: 'Total Profit', val: usd(m.totalProfit), sub: 'front + back' },
@@ -109,7 +159,21 @@ export function KiaDashboard() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Sales Dashboard</h2>
-          <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#9aa0a8' }}>Andrew · Kia of Streetsboro · month to date</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 7, flexWrap: 'wrap' }}>
+            <select
+              value={dash.month}
+              onChange={(e) => run(api.kiaDashboard(e.target.value))}
+              disabled={busy}
+              style={{ ...inputBase, padding: '7px 10px', fontSize: 12.5, minHeight: 36, width: 'auto' }}
+            >
+              {dash.months.map((mo) => (
+                <option key={mo.key} value={mo.key}>
+                  {mo.label}
+                </option>
+              ))}
+            </select>
+            <span style={{ fontSize: 12.5, color: '#9aa0a8' }}>Kia of Streetsboro</span>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={() => setHideComm((v) => !v)} style={ghostBtn}>
@@ -181,23 +245,16 @@ export function KiaDashboard() {
               <div style={{ padding: '16px 18px', fontSize: 12, color: '#6b7079', fontStyle: 'italic' }}>No deals yet. Log one above.</div>
             )}
             {dash.deals.map((d) => (
-              <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 18px', borderBottom: '1px solid #1f2227' }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#eceef0' }}>{d.model}</div>
-                  <div style={{ fontSize: 10.5, color: '#8b9098', fontFamily: "'IBM Plex Mono', monospace", marginTop: 3 }}>
-                    {d.customer} · <span style={{ color: d.type === 'New' ? '#c9cdd4' : '#9aa0a8' }}>{d.type}</span> · {d.dateLabel}
-                  </div>
-                </div>
-                {showComm && (
-                  <div style={{ textAlign: 'right', flex: 'none' }}>
-                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: '#eceef0' }}>{usd(d.profit)}</div>
-                    <div style={{ fontSize: 9.5, color: '#7d828a', letterSpacing: '0.4px', textTransform: 'uppercase', marginTop: 2 }}>profit</div>
-                  </div>
-                )}
-                <button onClick={() => !busy && run(api.kiaRemoveDeal(d.id))} title="Remove deal" style={{ flex: 'none', background: 'none', border: 'none', color: '#4a4f57', fontSize: 16, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
-                  ×
-                </button>
-              </div>
+              <DealRow
+                key={d.id}
+                deal={d}
+                showComm={showComm}
+                busy={busy}
+                onRemove={() => removeDealWithUndo(d.id)}
+                onSave={(patch) =>
+                  run(api.kiaUpdateDeal(d.id, patch, patch.soldAt ? patch.soldAt.slice(0, 7) : monthKey))
+                }
+              />
             ))}
           </div>
         </div>
@@ -208,7 +265,7 @@ export function KiaDashboard() {
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Monthly Unit Goal</div>
-              <Stepper value={m.goalUnits} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ goalUnits: v }))} min={1} />
+              <Stepper value={m.goalUnits} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ goalUnits: v }, monthKey))} min={1} />
             </div>
             <div style={{ fontSize: 11, color: '#8b9098', marginBottom: 12 }}>{m.units} of {m.goalUnits} units</div>
             <div style={{ height: 10, background: '#26282e', borderRadius: 6, overflow: 'hidden' }}>
@@ -270,7 +327,7 @@ export function KiaDashboard() {
               <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Google Reviews</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: reviewColor }}>{m.reviewPct}%</span>
-                <Stepper value={m.reviewCount} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ reviewCount: v }))} min={0} />
+                <Stepper value={m.reviewCount} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ reviewCount: v }, monthKey))} min={0} />
               </div>
             </div>
             <div style={{ height: 8, background: '#26282e', borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
@@ -283,8 +340,158 @@ export function KiaDashboard() {
           </div>
         </div>
       </div>
+
+      {/* Monthly history */}
+      {dash.history.length > 0 && (
+        <div style={{ ...card, padding: 0, overflow: 'hidden', marginTop: 16 }}>
+          <div style={{ padding: '15px 18px', borderBottom: '1px solid #25282e', fontSize: 14, fontWeight: 600, color: '#fff' }}>
+            Monthly History
+          </div>
+          <div style={{ padding: '6px 0' }}>
+            {dash.history.map((h) => {
+              const selected = h.month === monthKey;
+              return (
+                <button
+                  key={h.month}
+                  onClick={() => !busy && h.month !== monthKey && run(api.kiaDashboard(h.month))}
+                  style={{
+                    display: 'flex',
+                    width: '100%',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 14,
+                    padding: '12px 18px',
+                    borderBottom: '1px solid #1f2227',
+                    background: selected ? 'rgba(187,22,43,.10)' : 'transparent',
+                    border: 'none',
+                    borderLeft: `3px solid ${selected ? RED : 'transparent'}`,
+                    cursor: busy || selected ? 'default' : 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#eceef0' }}>{h.label}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <span style={{ fontSize: 11.5, color: '#9aa0a8', fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {h.units} {h.units === 1 ? 'unit' : 'units'}
+                    </span>
+                    {showComm && (
+                      <span style={{ fontSize: 11.5, color: '#9aa0a8', fontFamily: "'IBM Plex Mono', monospace" }}>
+                        {usd(h.totalProfit)} · {usd(h.commission)} comm
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {undo.pending && (
+        <UndoBar message="Deal removed." onUndo={restoreRemovedDeal} onDismiss={undo.clear} />
+      )}
     </div>
   );
+}
+
+// One deal in the Recent Deals list, with inline editing.
+function DealRow({
+  deal,
+  showComm,
+  busy,
+  onRemove,
+  onSave,
+}: {
+  deal: Dash['deals'][number];
+  showComm: boolean;
+  busy: boolean;
+  onRemove: () => void;
+  onSave: (patch: {
+    customer?: string;
+    model?: string;
+    type?: 'New' | 'Used';
+    profit?: number;
+    soldAt?: string;
+  }) => void;
+}) {
+  const { privacy } = usePrivacy();
+  const [editing, setEditing] = useState(false);
+  const [customer, setCustomer] = useState(deal.customer);
+  const [model, setModel] = useState(deal.model);
+  const [dtype, setDtype] = useState<'New' | 'Used'>(deal.type);
+  const [profit, setProfit] = useState(String(deal.profit));
+  const [date, setDate] = useState(isoFromMs(deal.soldAt));
+
+  function start() {
+    setCustomer(deal.customer);
+    setModel(deal.model);
+    setDtype(deal.type);
+    setProfit(String(deal.profit));
+    setDate(isoFromMs(deal.soldAt));
+    setEditing(true);
+  }
+
+  function save() {
+    const p = Number(profit);
+    if (!model.trim() || !Number.isFinite(p) || p < 0) return;
+    onSave({
+      customer: customer.trim() || undefined,
+      model: model.trim(),
+      type: dtype,
+      profit: p,
+      soldAt: date || undefined,
+    });
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <div style={{ padding: '12px 18px', borderBottom: '1px solid #1f2227', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Customer" style={{ ...inputBase, flex: '1 1 130px' }} />
+        <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="Model" style={{ ...inputBase, flex: '1 1 150px' }} />
+        <select value={dtype} onChange={(e) => setDtype(e.target.value as 'New' | 'Used')} style={{ ...inputBase, flex: '0 0 86px' }}>
+          <option value="New">New</option>
+          <option value="Used">Used</option>
+        </select>
+        <input value={profit} onChange={(e) => setProfit(e.target.value)} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 100px' }} />
+        <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
+        <button onClick={save} disabled={busy || !model.trim() || profit === ''} style={{ ...redBtn, opacity: busy || !model.trim() || profit === '' ? 0.6 : 1 }}>
+          Save
+        </button>
+        <button onClick={() => setEditing(false)} style={ghostBtn}>
+          Cancel
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 18px', borderBottom: '1px solid #1f2227' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: '#eceef0' }}>{deal.model}</div>
+        <div style={{ fontSize: 10.5, color: '#8b9098', fontFamily: "'IBM Plex Mono', monospace", marginTop: 3 }}>
+          {maskName(deal.customer, privacy)} · <span style={{ color: deal.type === 'New' ? '#c9cdd4' : '#9aa0a8' }}>{deal.type}</span> · {deal.dateLabel}
+        </div>
+      </div>
+      {showComm && (
+        <div style={{ textAlign: 'right', flex: 'none' }}>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: '#eceef0' }}>{usd(deal.profit)}</div>
+          <div style={{ fontSize: 9.5, color: '#7d828a', letterSpacing: '0.4px', textTransform: 'uppercase', marginTop: 2 }}>profit</div>
+        </div>
+      )}
+      <button onClick={() => !busy && start()} title="Edit deal" style={{ flex: 'none', background: 'none', border: '1px solid #2a2d33', color: '#9aa0a8', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: busy ? 'default' : 'pointer' }}>
+        Edit
+      </button>
+      <button onClick={() => !busy && onRemove()} title="Remove deal" style={{ flex: 'none', background: 'none', border: 'none', color: '#4a4f57', fontSize: 16, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
+        ×
+      </button>
+    </div>
+  );
+}
+
+// Convert a stored timestamp to the YYYY-MM-DD it represents in Eastern Time.
+function isoFromMs(ms: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ms));
 }
 
 function Stepper({ value, onChange, busy, min }: { value: number; onChange: (v: number) => void; busy: boolean; min: number }) {

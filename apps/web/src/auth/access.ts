@@ -1,51 +1,67 @@
-import type { Role } from '../api/types';
+import type { RoleKey } from '../api/types';
 import type { WorkspaceKey } from '../theme/themes';
 
-// Mirror of the backend ACCESS matrix. The backend is the real enforcer;
-// this drives UI gating and the Admin "view as role" preview.
-interface AccessRule {
-  ws: { trading: boolean; kia: boolean; todo: boolean };
-  readOnly: boolean;
-  label: string;
+// Mirror of the backend role model (auth/rbac.ts). The backend is the real
+// enforcer; this drives UI gating, the admin role pickers, and the "view as"
+// preview.
+
+export const ALL_ROLES: RoleKey[] = [
+  'admin',
+  'trading',
+  'trading_viewer',
+  'sales',
+  'studies',
+  'todo',
+  'wealth',
+];
+
+export const ROLE_LABELS: Record<RoleKey, string> = {
+  admin: 'Admin',
+  trading: 'Trading',
+  trading_viewer: 'Trading (View only)',
+  sales: 'Sales',
+  studies: 'Studies',
+  todo: 'To Do',
+  wealth: 'Wealth Management',
+};
+
+// Short descriptions shown next to each role in the admin picker.
+export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
+  admin: 'Manage users and see every workspace',
+  trading: 'Trading workspace (full access)',
+  trading_viewer: 'Trading workspace (read-only)',
+  sales: 'Kia Sales workspace',
+  studies: 'Studies workspace',
+  todo: 'Personal To Do List workspace',
+  wealth: 'Vitalis Retirement & Wealth Management workspace',
+};
+
+export function isAdmin(roles: RoleKey[]): boolean {
+  return roles.includes('admin');
 }
 
-export const ACCESS: Record<Role, AccessRule> = {
-  Admin: {
-    ws: { trading: true, kia: true, todo: true },
-    readOnly: false,
-    label: 'Full access — every workspace and all to-do lists',
-  },
-  Trader: {
-    ws: { trading: true, kia: false, todo: true },
-    readOnly: false,
-    label: 'Trading workspace + Trading and personal to-do lists',
-  },
-  Sales: {
-    ws: { trading: false, kia: true, todo: true },
-    readOnly: false,
-    label: 'Kia workspace + Kia and personal to-do lists',
-  },
-  Viewer: {
-    ws: { trading: true, kia: false, todo: false },
-    readOnly: true,
-    label: 'Read-only Trading; no personal to-do lists',
-  },
+const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
+  trading: ['trading', 'trading_viewer'],
+  kia: ['sales'],
+  todo: ['todo'],
+  studies: ['studies'],
+  wealth: ['wealth'],
 };
 
-export const ROLE_BADGE: Record<Role, string> = {
-  Admin: 'Administrator',
-  Trader: 'Trader',
-  Sales: 'Sales',
-  Viewer: 'Viewer',
-};
+export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
+  if (isAdmin(roles)) return true;
+  return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
+}
 
-// Ordered as the switcher shows them: To Do, Kia, Trading, Studies.
-export function workspacesFor(role: Role): WorkspaceKey[] {
-  const a = ACCESS[role] ?? ACCESS.Viewer;
-  const out: WorkspaceKey[] = [];
-  if (a.ws.todo) out.push('todo');
-  if (a.ws.kia) out.push('kia');
-  if (a.ws.trading) out.push('trading');
-  out.push('studies');
-  return out;
+// Ordered as the switcher shows them.
+export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
+  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'wealth', 'studies'];
+  return order.filter((ws) => canAccessWorkspace(roles, ws));
+}
+
+// A short human summary of a set of roles, for the user badge / footer.
+export function rolesSummary(roles: RoleKey[]): string {
+  if (isAdmin(roles)) return 'Administrator';
+  if (roles.length === 0) return 'No roles';
+  return roles.map((r) => ROLE_LABELS[r]).join(' · ');
 }

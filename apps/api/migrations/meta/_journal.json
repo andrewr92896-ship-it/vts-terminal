@@ -22,6 +22,27 @@
       "when": 1781872491476,
       "tag": "0002_kia_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1781872491477,
+      "tag": "0003_account_username",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781872491478,
+      "tag": "0004_user_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781872491479,
+      "tag": "0005_kia_month_settings",
+      "breakpoints": true
     }
   ]
 }

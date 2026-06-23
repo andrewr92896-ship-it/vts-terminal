@@ -1,5 +1,6 @@
 import { useAuth } from './auth/AuthContext';
 import { Login } from './pages/Login';
+import { ChangePassword } from './pages/ChangePassword';
 import { Portal } from './components/Portal';
 
 export function App() {
@@ -25,5 +26,8 @@ export function App() {
     );
   }
 
-  return user ? <Portal /> : <Login />;
+  if (!user) return <Login />;
+  // Accounts created or reset by an admin must set a new password first.
+  if (user.mustChangePassword) return <ChangePassword />;
+  return <Portal />;
 }

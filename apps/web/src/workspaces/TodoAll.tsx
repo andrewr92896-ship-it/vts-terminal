@@ -1,7 +1,9 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
-import type { TodoItem, TodoSection } from '../api/types';
+import { useUndo } from '../hooks/useUndo';
+import { UndoBar } from '../components/UndoBar';
+import type { RemovedTodoItem, TodoItem, TodoSection } from '../api/types';
 
 const ACCENT = '#46c2a8';
 const ACCENT2 = '#2f9e86';
@@ -17,6 +19,7 @@ export function TodoAll() {
   const [draft, setDraft] = useState('');
   const [sectionId, setSectionId] = useState('');
   const [busy, setBusy] = useState(false);
+  const undo = useUndo<RemovedTodoItem>();
 
   useEffect(() => {
     let alive = true;
@@ -53,6 +56,33 @@ export function TodoAll() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Remove a task, then offer to undo it (restores the exact task).
+  async function removeWithUndo(id: string) {
+    setBusy(true);
+    try {
+      const r = await api.removeTodoItem(id);
+      setSections(r.sections);
+      setActionError(null);
+      if (r.removed) undo.flag(r.removed);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : 'Action failed');
+      try {
+        setSections((await api.getTodo()).sections);
+      } catch {
+        /* leave current view in place */
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function restoreRemoved() {
+    const item = undo.pending;
+    if (!item) return;
+    undo.clear();
+    void run(api.restoreTodoItem(item));
   }
 
   async function add() {
@@ -237,9 +267,17 @@ export function TodoAll() {
       {/* Sections — masonry columns (single column on phones) */}
       <div style={isPhone ? { columnCount: 1, columnGap: 16 } : { columnWidth: 360, columnGap: 16 }}>
         {visible.map((sec) => (
-          <SectionCard key={sec.id} section={sec} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={(id) => run(api.removeTodoItem(id))} />
+          <SectionCard key={sec.id} section={sec} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={removeWithUndo} />
         ))}
       </div>
+
+      {undo.pending && (
+        <UndoBar
+          message="Task removed."
+          onUndo={restoreRemoved}
+          onDismiss={undo.clear}
+        />
+      )}
     </div>
   );
 }

@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import type { TodoItem, TodoSection } from '../../api/types';
+import { useUndo } from '../../hooks/useUndo';
+import { UndoBar } from '../../components/UndoBar';
+import type { RemovedTodoItem, TodoItem, TodoSection } from '../../api/types';
 
 const RED = '#BB162B';
 const RED2 = '#8d0f20';
@@ -17,6 +19,7 @@ export function KiaTodo() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  const undo = useUndo<RemovedTodoItem>();
 
   useEffect(() => {
     let alive = true;
@@ -45,6 +48,32 @@ export function KiaTodo() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function removeWithUndo(id: string) {
+    setBusy(true);
+    try {
+      const r = await api.removeTodoItem(id);
+      setSections(r.sections);
+      setActionError(null);
+      if (r.removed) undo.flag(r.removed);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Action failed');
+      try {
+        setSections((await api.getTodo()).sections);
+      } catch {
+        /* keep view */
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function restoreRemoved() {
+    const item = undo.pending;
+    if (!item) return;
+    undo.clear();
+    void run(api.restoreTodoItem(item));
   }
 
   const kiaSections = sections.filter((s) => s.tag === 'kia');
@@ -106,11 +135,15 @@ export function KiaTodo() {
               </div>
             )}
             {sec.items.map((item) => (
-              <Row key={item.id} item={item} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={(id) => run(api.removeTodoItem(id))} />
+              <Row key={item.id} item={item} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={removeWithUndo} />
             ))}
           </div>
         ))}
       </div>
+
+      {undo.pending && (
+        <UndoBar message="Task removed." onUndo={restoreRemoved} onDismiss={undo.clear} />
+      )}
     </div>
   );
 }
