@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
 
 // The four roles match the prototype's access matrix exactly.
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
@@ -186,3 +186,42 @@ export const wealthClients = sqliteTable('wealth_clients', {
 });
 
 export type WealthClientRow = typeof wealthClients.$inferSelect;
+
+// ---- Trading — Trade Log ----
+// Per-user record of trades (the trader's own log), keyed by userId so a new
+// user starts empty. Prices and sizes are stored as reals (forex/crypto prices
+// need decimals, so the whole-dollar integer convention used for Kia/Wealth
+// does not apply here); realized P/L is a real in account currency. The planned
+// (alert) entry is what the broker position feed cannot supply — it is recorded
+// here so slippage (entry vs. plan) can be computed for the Trade Log.
+export const TRADE_SIDES = ['long', 'short'] as const;
+export type TradeSide = (typeof TRADE_SIDES)[number];
+export const TRADE_STATUSES = ['open', 'closed'] as const;
+export type TradeStatus = (typeof TRADE_STATUSES)[number];
+
+export const tradingTrades = sqliteTable('trading_trades', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  broker: text('broker'), // one of the broker keys, or null for a manual entry
+  instrument: text('instrument').notNull(),
+  side: text('side', { enum: TRADE_SIDES }).notNull().default('long'),
+  status: text('status', { enum: TRADE_STATUSES }).notNull().default('closed'),
+  plannedEntry: real('planned_entry'), // the alert/intended price; null if none
+  entryPrice: real('entry_price').notNull(), // actual average fill
+  exitPrice: real('exit_price'), // null while the trade is open
+  takeProfit: real('take_profit'),
+  stopLoss: real('stop_loss'),
+  units: real('units').notNull().default(0), // lots / contracts / shares
+  realizedPl: real('realized_pl'), // account currency; null while open / unknown
+  strategy: text('strategy'),
+  timeframe: text('timeframe'),
+  openedAt: integer('opened_at', { mode: 'timestamp_ms' }).notNull(),
+  closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingTradeRow = typeof tradingTrades.$inferSelect;

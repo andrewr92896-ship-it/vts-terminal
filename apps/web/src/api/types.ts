@@ -260,3 +260,87 @@ export interface LiveWall {
   trades: LiveTrade[];
   note: string | null;
 }
+
+// ---- Trading — Trade Log (mirror of apps/api/src/trading/trades.ts) ----
+export type TradeStatus = 'open' | 'closed';
+
+export interface TradeRecord {
+  id: string;
+  broker: string | null;
+  instrument: string;
+  side: TradeSide;
+  status: TradeStatus;
+  plannedEntry: number | null;
+  entryPrice: number;
+  exitPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  units: number;
+  slippage: number | null;
+  realizedPl: number | null; // null when balances are hidden
+  strategy: string | null;
+  timeframe: string | null;
+  openedAt: number;
+  closedAt: number | null;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TradeSummary {
+  total: number;
+  open: number;
+  closed: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  totalRealizedPl: number | null;
+  avgSlippage: number | null;
+}
+
+export interface TradeLogData {
+  trades: TradeRecord[];
+  summary: TradeSummary;
+}
+
+// Raw data returned when a trade is removed, so the client can offer undo.
+export interface RemovedTrade {
+  id: string;
+  broker: string | null;
+  instrument: string;
+  side: TradeSide;
+  status: TradeStatus;
+  plannedEntry: number | null;
+  entryPrice: number;
+  exitPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  units: number;
+  realizedPl: number | null;
+  strategy: string | null;
+  timeframe: string | null;
+  openedAt: number;
+  closedAt: number | null;
+  notes: string | null;
+  createdAt: number;
+}
+
+// Fields accepted when creating/editing a trade.
+export interface TradeInput {
+  broker?: string | null;
+  instrument?: string;
+  side?: TradeSide;
+  status?: TradeStatus;
+  plannedEntry?: number | null;
+  entryPrice?: number;
+  exitPrice?: number | null;
+  takeProfit?: number | null;
+  stopLoss?: number | null;
+  units?: number;
+  realizedPl?: number | null;
+  strategy?: string | null;
+  timeframe?: string | null;
+  openedAt?: number;
+  closedAt?: number | null;
+  notes?: string | null;
+}

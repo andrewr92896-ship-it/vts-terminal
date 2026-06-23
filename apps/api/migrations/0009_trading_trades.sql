@@ -1,0 +1,23 @@
+CREATE TABLE `trading_trades` (
+	`id` text PRIMARY KEY NOT NULL,
+	`user_id` text NOT NULL,
+	`broker` text,
+	`instrument` text NOT NULL,
+	`side` text DEFAULT 'long' NOT NULL,
+	`status` text DEFAULT 'closed' NOT NULL,
+	`planned_entry` real,
+	`entry_price` real NOT NULL,
+	`exit_price` real,
+	`take_profit` real,
+	`stop_loss` real,
+	`units` real DEFAULT 0 NOT NULL,
+	`realized_pl` real,
+	`strategy` text,
+	`timeframe` text,
+	`opened_at` integer NOT NULL,
+	`closed_at` integer,
+	`notes` text,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE cascade
+);

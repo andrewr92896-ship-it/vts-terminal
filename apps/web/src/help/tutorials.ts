@@ -44,6 +44,33 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  log: {
+    title: 'Using the Trade Log',
+    intro: 'Your record of every trade — planned vs. actual entry, slippage, and realized P/L. New accounts start empty; log trades as you take them. Each log is private to your login.',
+    steps: [
+      {
+        title: 'Log a trade',
+        body: 'Click "+ Log a trade", then enter at least an instrument and entry price. Add the planned (alert) entry, exit, TP/SL, size, realized P/L, strategy, timeframe, and date as you have them. Set status to Open for a position still running.',
+      },
+      {
+        title: 'Slippage',
+        body: 'When you record a planned entry, the log computes slippage (your actual fill minus the plan) and colors it green when the fill beat your plan, amber when it was worse. The summary shows your average slippage across all trades.',
+      },
+      {
+        title: 'Deck vs. Tape',
+        body: 'Use the Deck / Tape switch at the top right. Deck shows full trade cards; Tape is a dense, scannable row view of the same trades.',
+      },
+      {
+        title: 'Win rate and P/L',
+        body: 'The summary cards show your trade count, win rate over closed trades, total realized P/L, and average slippage. P/L is only visible if your account has the "view brokerage" permission.',
+      },
+      {
+        title: 'Edit, remove, undo',
+        body: 'In Deck view click Edit on a card to change a trade inline, or × to remove it. A short Undo bar lets you restore a removed trade. Use "Hide $" or Privacy mode to mask P/L during a screen-share.',
+      },
+    ],
+  },
+
   // ---- To Do List ----
   td_all: {
     title: 'Using your To Do List',

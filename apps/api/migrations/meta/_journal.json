@@ -64,6 +64,13 @@
       "when": 1781872491482,
       "tag": "0008_wealth_clients",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781872491483,
+      "tag": "0009_trading_trades",
+      "breakpoints": true
     }
   ]
 }

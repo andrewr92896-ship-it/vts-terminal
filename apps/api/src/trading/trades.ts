@@ -1,0 +1,335 @@
+import crypto from 'node:crypto';
+import { and, eq } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import {
+  tradingTrades,
+  TRADE_SIDES,
+  TRADE_STATUSES,
+  type TradeSide,
+  type TradeStatus,
+  type TradingTradeRow,
+} from '../db/schema.js';
+
+// The Trade Log mirrors the Wealth/Kia patterns: every row is keyed by userId
+// so a new user's log starts empty, removals return the full row for undo, and
+// restore re-inserts with onConflictDoNothing. Slippage is derived on read
+// (entry vs. planned), never stored. Realized P/L is gated by viewBrokerage.
+
+export interface TradeRecord {
+  id: string;
+  broker: string | null;
+  instrument: string;
+  side: TradeSide;
+  status: TradeStatus;
+  plannedEntry: number | null;
+  entryPrice: number;
+  exitPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  units: number;
+  slippage: number | null; // entryPrice - plannedEntry, computed
+  realizedPl: number | null; // null when balances are hidden
+  strategy: string | null;
+  timeframe: string | null;
+  openedAt: number; // ms
+  closedAt: number | null;
+  notes: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TradeSummary {
+  total: number;
+  open: number;
+  closed: number;
+  wins: number;
+  losses: number;
+  winRate: number; // 0..1 over closed trades with a known P/L
+  totalRealizedPl: number | null; // null when balances are hidden
+  avgSlippage: number | null; // over trades that have a planned entry
+}
+
+export interface TradeLogData {
+  trades: TradeRecord[];
+  summary: TradeSummary;
+}
+
+export interface TradeInput {
+  broker?: string | null;
+  instrument: string;
+  side?: TradeSide;
+  status?: TradeStatus;
+  plannedEntry?: number | null;
+  entryPrice: number;
+  exitPrice?: number | null;
+  takeProfit?: number | null;
+  stopLoss?: number | null;
+  units?: number;
+  realizedPl?: number | null;
+  strategy?: string | null;
+  timeframe?: string | null;
+  openedAt?: number; // ms; defaults to now
+  closedAt?: number | null;
+  notes?: string | null;
+}
+
+function isSide(v: unknown): v is TradeSide {
+  return typeof v === 'string' && (TRADE_SIDES as readonly string[]).includes(v);
+}
+function isStatus(v: unknown): v is TradeStatus {
+  return typeof v === 'string' && (TRADE_STATUSES as readonly string[]).includes(v);
+}
+
+function cleanText(v: string | null | undefined, max: number): string | null {
+  if (v == null) return null;
+  const t = v.trim();
+  return t ? t.slice(0, max) : null;
+}
+
+// Optional numeric: undefined/null/NaN → null; otherwise the finite number.
+function cleanNum(v: number | null | undefined): number | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  return v;
+}
+
+function slippageOf(plannedEntry: number | null, entryPrice: number): number | null {
+  if (plannedEntry == null) return null;
+  return Number((entryPrice - plannedEntry).toFixed(8));
+}
+
+function toRecord(row: TradingTradeRow, canSeeBalances: boolean): TradeRecord {
+  return {
+    id: row.id,
+    broker: row.broker,
+    instrument: row.instrument,
+    side: isSide(row.side) ? row.side : 'long',
+    status: isStatus(row.status) ? row.status : 'closed',
+    plannedEntry: row.plannedEntry,
+    entryPrice: row.entryPrice,
+    exitPrice: row.exitPrice,
+    takeProfit: row.takeProfit,
+    stopLoss: row.stopLoss,
+    units: row.units,
+    slippage: slippageOf(row.plannedEntry, row.entryPrice),
+    realizedPl: canSeeBalances ? row.realizedPl : null,
+    strategy: row.strategy,
+    timeframe: row.timeframe,
+    openedAt: row.openedAt.getTime(),
+    closedAt: row.closedAt ? row.closedAt.getTime() : null,
+    notes: row.notes,
+    createdAt: row.createdAt.getTime(),
+    updatedAt: row.updatedAt.getTime(),
+  };
+}
+
+function summarize(rows: TradingTradeRow[], canSeeBalances: boolean): TradeSummary {
+  let open = 0;
+  let closed = 0;
+  let wins = 0;
+  let losses = 0;
+  let totalPl = 0;
+  let slipSum = 0;
+  let slipCount = 0;
+  let scored = 0; // closed trades with a known P/L
+
+  for (const r of rows) {
+    if (r.status === 'open') open += 1;
+    else closed += 1;
+    if (r.realizedPl != null) {
+      totalPl += r.realizedPl;
+      if (r.status === 'closed') {
+        scored += 1;
+        if (r.realizedPl >= 0) wins += 1;
+        else losses += 1;
+      }
+    }
+    const slip = slippageOf(r.plannedEntry, r.entryPrice);
+    if (slip != null) {
+      slipSum += slip;
+      slipCount += 1;
+    }
+  }
+
+  return {
+    total: rows.length,
+    open,
+    closed,
+    wins,
+    losses,
+    winRate: scored > 0 ? wins / scored : 0,
+    totalRealizedPl: canSeeBalances ? totalPl : null,
+    avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
+  };
+}
+
+export async function getTrades(userId: string, canSeeBalances: boolean): Promise<TradeLogData> {
+  const rows = await db.select().from(tradingTrades).where(eq(tradingTrades.userId, userId));
+  // Open trades first, then newest by open time — the order a trader scans in.
+  const sorted = [...rows].sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
+    return b.openedAt.getTime() - a.openedAt.getTime();
+  });
+  return {
+    trades: sorted.map((r) => toRecord(r, canSeeBalances)),
+    summary: summarize(rows, canSeeBalances),
+  };
+}
+
+export async function addTrade(userId: string, input: TradeInput): Promise<void> {
+  const instrument = input.instrument.trim();
+  if (!instrument) throw new Error('Instrument is required');
+  if (!Number.isFinite(input.entryPrice)) throw new Error('A valid entry price is required');
+  const now = new Date();
+  const status: TradeStatus = isStatus(input.status) ? input.status : 'closed';
+  await db.insert(tradingTrades).values({
+    id: crypto.randomUUID(),
+    userId,
+    broker: cleanText(input.broker, 40),
+    instrument: instrument.slice(0, 40),
+    side: isSide(input.side) ? input.side : 'long',
+    status,
+    plannedEntry: cleanNum(input.plannedEntry),
+    entryPrice: input.entryPrice,
+    exitPrice: cleanNum(input.exitPrice),
+    takeProfit: cleanNum(input.takeProfit),
+    stopLoss: cleanNum(input.stopLoss),
+    units: cleanNum(input.units) ?? 0,
+    realizedPl: cleanNum(input.realizedPl),
+    strategy: cleanText(input.strategy, 80),
+    timeframe: cleanText(input.timeframe, 16),
+    openedAt: input.openedAt ? new Date(input.openedAt) : now,
+    closedAt: input.closedAt != null ? new Date(input.closedAt) : status === 'closed' ? now : null,
+    notes: cleanText(input.notes, 2000),
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+export async function updateTrade(
+  userId: string,
+  id: string,
+  input: Partial<TradeInput>,
+): Promise<void> {
+  const existing = (
+    await db
+      .select()
+      .from(tradingTrades)
+      .where(and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!existing) throw new Error('Trade not found');
+
+  const patch: Partial<typeof tradingTrades.$inferInsert> = { updatedAt: new Date() };
+  if (input.broker !== undefined) patch.broker = cleanText(input.broker, 40);
+  if (input.instrument !== undefined) {
+    const inst = input.instrument.trim();
+    if (!inst) throw new Error('Instrument is required');
+    patch.instrument = inst.slice(0, 40);
+  }
+  if (input.side !== undefined && isSide(input.side)) patch.side = input.side;
+  if (input.status !== undefined && isStatus(input.status)) patch.status = input.status;
+  if (input.plannedEntry !== undefined) patch.plannedEntry = cleanNum(input.plannedEntry);
+  if (input.entryPrice !== undefined) {
+    if (!Number.isFinite(input.entryPrice)) throw new Error('A valid entry price is required');
+    patch.entryPrice = input.entryPrice;
+  }
+  if (input.exitPrice !== undefined) patch.exitPrice = cleanNum(input.exitPrice);
+  if (input.takeProfit !== undefined) patch.takeProfit = cleanNum(input.takeProfit);
+  if (input.stopLoss !== undefined) patch.stopLoss = cleanNum(input.stopLoss);
+  if (input.units !== undefined) patch.units = cleanNum(input.units) ?? 0;
+  if (input.realizedPl !== undefined) patch.realizedPl = cleanNum(input.realizedPl);
+  if (input.strategy !== undefined) patch.strategy = cleanText(input.strategy, 80);
+  if (input.timeframe !== undefined) patch.timeframe = cleanText(input.timeframe, 16);
+  if (input.openedAt !== undefined) patch.openedAt = new Date(input.openedAt);
+  if (input.closedAt !== undefined) patch.closedAt = input.closedAt == null ? null : new Date(input.closedAt);
+  if (input.notes !== undefined) patch.notes = cleanText(input.notes, 2000);
+
+  await db
+    .update(tradingTrades)
+    .set(patch)
+    .where(and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId)));
+}
+
+// Raw fields needed to restore a removed trade exactly (undo).
+export interface RemovedTrade {
+  id: string;
+  broker: string | null;
+  instrument: string;
+  side: TradeSide;
+  status: TradeStatus;
+  plannedEntry: number | null;
+  entryPrice: number;
+  exitPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  units: number;
+  realizedPl: number | null;
+  strategy: string | null;
+  timeframe: string | null;
+  openedAt: number;
+  closedAt: number | null;
+  notes: string | null;
+  createdAt: number;
+}
+
+export async function removeTrade(userId: string, id: string): Promise<RemovedTrade | null> {
+  const row = (
+    await db
+      .select()
+      .from(tradingTrades)
+      .where(and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!row) return null;
+  await db
+    .delete(tradingTrades)
+    .where(and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId)));
+  return {
+    id: row.id,
+    broker: row.broker,
+    instrument: row.instrument,
+    side: isSide(row.side) ? row.side : 'long',
+    status: isStatus(row.status) ? row.status : 'closed',
+    plannedEntry: row.plannedEntry,
+    entryPrice: row.entryPrice,
+    exitPrice: row.exitPrice,
+    takeProfit: row.takeProfit,
+    stopLoss: row.stopLoss,
+    units: row.units,
+    realizedPl: row.realizedPl,
+    strategy: row.strategy,
+    timeframe: row.timeframe,
+    openedAt: row.openedAt.getTime(),
+    closedAt: row.closedAt ? row.closedAt.getTime() : null,
+    notes: row.notes,
+    createdAt: row.createdAt.getTime(),
+  };
+}
+
+export async function restoreTrade(userId: string, t: RemovedTrade): Promise<void> {
+  await db
+    .insert(tradingTrades)
+    .values({
+      id: t.id,
+      userId,
+      broker: t.broker,
+      instrument: t.instrument,
+      side: isSide(t.side) ? t.side : 'long',
+      status: isStatus(t.status) ? t.status : 'closed',
+      plannedEntry: t.plannedEntry,
+      entryPrice: t.entryPrice,
+      exitPrice: t.exitPrice,
+      takeProfit: t.takeProfit,
+      stopLoss: t.stopLoss,
+      units: t.units,
+      realizedPl: t.realizedPl,
+      strategy: t.strategy,
+      timeframe: t.timeframe,
+      openedAt: new Date(t.openedAt),
+      closedAt: t.closedAt != null ? new Date(t.closedAt) : null,
+      notes: t.notes,
+      createdAt: new Date(t.createdAt),
+      updatedAt: new Date(),
+    })
+    .onConflictDoNothing();
+}
