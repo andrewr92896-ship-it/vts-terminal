@@ -9,6 +9,7 @@ import {
   DEFAULT_SCREEN,
   type WorkspaceKey,
   type TabDef,
+  type Theme,
 } from '../theme/themes';
 import { workspacesFor } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
@@ -21,10 +22,11 @@ import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
 import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
+import { Flashcards } from '../workspaces/studies/Flashcards';
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder.
-function renderScreen(screen: string) {
+function renderScreen(screen: string, theme: Theme) {
   switch (screen) {
     case 'td_all':
       return <TodoAll />;
@@ -36,6 +38,8 @@ function renderScreen(screen: string) {
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
+    case 'st_cards':
+      return <Flashcards theme={theme} />;
     default:
       return null;
   }
@@ -174,7 +178,7 @@ export function Portal() {
           padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
         }}
       >
-        {renderScreen(screen) ?? <Screen screen={screen} theme={theme} />}
+        {renderScreen(screen, theme) ?? <Screen screen={screen} theme={theme} />}
       </main>
 
       <footer
