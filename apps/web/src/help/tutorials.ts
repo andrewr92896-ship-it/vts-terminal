@@ -400,6 +400,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
   // ---- Vitalis Wealth Management ----
+  wm_home: {
+    title: 'Practice Overview',
+    intro: 'The landing screen for your advisory practice — a read-only roll-up of the same client book you manage on the Clients tab.',
+    steps: [
+      {
+        title: 'Headline metrics',
+        body: 'The top cards show total assets under management, your client and active counts, the average funded account, and your largest relationship.',
+      },
+      {
+        title: 'Book by status',
+        body: 'See how your clients split across Active, Onboarding, Prospect, and Inactive — with the AUM in each — plus a pipeline total for prospects and onboarding you have not fully funded yet.',
+      },
+      {
+        title: 'Top relationships & recent activity',
+        body: 'The top relationships list ranks clients by account value; recent activity shows who you last added or edited. Use the “All clients →” link to jump to the Clients tab.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Click “Hide $ details” — or turn on Privacy mode in the top bar — to mask names and dollar amounts when someone might see your screen.',
+      },
+    ],
+  },
+
   wm_clients: {
     title: 'Managing your clients',
     intro: 'Your advisory client book. New accounts start empty — add clients as you bring them on. Every client is private to your login.',
