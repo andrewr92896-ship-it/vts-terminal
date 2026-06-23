@@ -1,0 +1,264 @@
+================================================================================
+VTS PORTAL — HANDOFF: "Finance Claude entry" + finish ALL Claude-powered features
+Written 2026-06-23. Paste this into the new chat to continue.
+================================================================================
+
+------------------------------------------------------------
+0) HOW TO USE THIS DOC
+------------------------------------------------------------
+This is a task handoff for a new Claude Code session working on the VTS Portal
+repo. The portal is feature-complete; this handoff is specifically about the
+Claude/AI features. Build STAGE BY STAGE: one focused feature per branch -> PR ->
+squash-merge to main, exactly like the rest of the project. Verify each piece
+before merging.
+
+PRIMARY REQUEST FROM ANDREW (verbatim intent):
+  "For the finance section, have a Claude chat that can add things just like the
+   Kia car tracker. Let's do all the Claude powered things on the portal."
+
+So there are two parts:
+  (A) IMMEDIATE: a Finance natural-language "add things" parser (mirror the Kia
+      deal parser) — type plain English, Claude logs an expense / net-worth item.
+  (B) BROADER: implement the remaining Claude-powered features across the portal
+      (backlog in section 4).
+
+Everything Sonnet by default; the ONLY Opus 4.8 use is trade-screenshot analysis.
+Models: default = claude-sonnet-4-6, analysis = claude-opus-4-8 (already wired).
+
+------------------------------------------------------------
+1) REPO / WORKFLOW FACTS
+------------------------------------------------------------
+- Monorepo, npm workspaces:
+    @vts/web  -> apps/web  (Vite + React 18 + TS, 100% inline styles, useResponsive())
+    @vts/api  -> apps/api  (Fastify 5, Drizzle ORM over libsql/SQLite, Zod, argon2)
+- Dev branch: claude/dazzling-planck-1t0qyc  (develop here; PR to main; squash-merge)
+- After each merge: `git checkout -q main && git pull` then
+  `git checkout -B claude/dazzling-planck-1t0qyc` to reset the feature branch.
+- Build/typecheck before every PR:
+    npm run -w @vts/api typecheck
+    npm run -w @vts/web build
+- GitHub: do PRs/merges via the GitHub MCP tools (no gh CLI in this env).
+- Git identity for commits: user.email noreply@anthropic.com, user.name Claude.
+  (Note: GitHub's squash-merge commit on main will show committer noreply@github.com
+   and a stop-hook will flag it as "Unverified" — that's expected and NOT
+   actionable; do not rewrite merged main history over it.)
+- DB migrations are PAIRS and must both be added:
+    1. apps/api/migrations/NNNN_name.sql
+    2. an entry in apps/api/migrations/meta/_journal.json (increment "idx")
+  LATEST migration idx = 22 (0022_kia_mini). NEXT = 0023.
+- Money: store whole US dollars as integers; percentages/rates as basis points.
+- Network is BLOCKED in the dev sandbox, so real broker/Claude calls only run on
+  the deployed site (Railway). Verify locally with typecheck/build + the
+  stubbed-fetch script pattern in section 5.
+
+------------------------------------------------------------
+2) WHAT'S ALREADY BUILT (do NOT rebuild) — the Claude foundation
+------------------------------------------------------------
+All AI goes through ONE backend module and ONE guard. Reuse them.
+
+- apps/api/src/ai/claude.ts
+    aiConfigured() -> bool (false when no ANTHROPIC_API_KEY)
+    askClaude(prompt, system?) -> string         (Sonnet, single-shot)
+    chatClaude(messages[], system?) -> string     (Sonnet, multi-turn)
+    extractJson(raw) -> unknown|null              (strip fences, parse first {...})
+    analyzeTradeScreenshot(...)                    (Opus 4.8 vision)
+
+- apps/api/src/ai/usage.ts  (USAGE GUARDRAILS — every AI route must use this)
+    enforceAiLimit(userId, kind) -> throws AiLimitError on burst/monthly cap, else
+      records the call. Per-minute in-memory limit + durable monthly cap from the
+      ai_usage table (per Eastern-Time month). Config: AI_MONTHLY_LIMIT (def 1000),
+      AI_RATE_PER_MIN (def 15).
+    getAiUsage(userId) -> { used, limit, remaining }
+    Route pattern (COPY THIS for every new AI endpoint):
+        if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+        try {
+          await enforceAiLimit(userId, '<kind>');
+          ... call Claude ...
+        } catch (err) {
+          if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+          return reply.code(502).send({ error: ... });
+        }
+
+- apps/api/src/ai/brief.ts -> generateBrief(userId, kind, system, data) for the
+  "Brief me" dashboard summaries.
+
+- apps/web/src/components/AiBrief.tsx -> useAiBrief(fetcher) hook + BriefButton /
+  BriefCard / BriefError. (Reusable "✨ Brief me" UI.)
+
+Claude features SHIPPED this session:
+  1. Usage guardrails (ai_usage table, GET /api/ai/usage, "N left" in Ask Claude). PR#38
+  2. "Brief me" Sonnet summaries on Practice Overview, Personal Finance, Account
+     Metrics (POST /api/{finance/overview,wealth/overview,trading/metrics}/brief). PR#39
+  3. Kia deal-note parser: POST /api/kia/deals/parse, quick-log bar on the Kia
+     dashboard. (apps/api/src/kia/dealParser.ts) PR#40   <-- THE TEMPLATE FOR FINANCE
+  4. Per-workspace Ask Claude assistant (WORKSPACE_GUIDE in routes/ai.ts;
+     per-workspace suggestions in AskClaudePanel). PR#41
+  5. Series 65 tutor: POST /api/ai/tutor; "Explain with Claude" in StudyGame. PR#42
+  Also earlier: To-Do command bar (apps/api/src/todo/command.ts, POST
+  /api/todo/command) and Kia Product Knowledge chat (POST /api/ai/kia).
+
+------------------------------------------------------------
+3) IMMEDIATE TASK (A): FINANCE NATURAL-LANGUAGE "ADD THINGS" PARSER
+------------------------------------------------------------
+GOAL: On the Personal Finance section, a Claude-powered input where Andrew types
+plain English and it logs the right thing — just like the Kia quick-log. Examples
+he should be able to type:
+  - "Add a $120 phone bill on the 15th"            -> expense
+  - "Add Netflix $18 on the 3rd, subscriptions"     -> expense w/ category
+  - "Add my car worth 18000 as an asset"            -> net-worth asset
+  - "Add 9500 student loan as a liability"          -> net-worth liability
+  - "Switch FTP to funded at 80%" (optional)        -> settings update
+  - Multiple in one line, separated by "·"/"and".
+
+DESIGN (mirror apps/api/src/kia/dealParser.ts + apps/api/src/todo/command.ts):
+  Backend service: apps/api/src/finance/parser.ts  ->  runFinanceCommand(userId, note)
+    - aiConfigured() handled in the route (503).
+    - enforceAiLimit(userId, 'finance_command') in the route.
+    - askClaude(prompt, SYSTEM) with a system prompt instructing STRICT JSON:
+        { "actions": [
+            {"type":"expense","label":"...","amount":120,"dayOfMonth":15,"category":"..."},
+            {"type":"networth","label":"...","amount":18000,"kind":"asset"|"liability"},
+            {"type":"settings","ftpPhase":"funded","ftpPayoutPct":80}   // optional/last
+          ],
+          "reply":"<one short sentence>" }
+    - extractJson(); validate each action; apply via the EXISTING finance services
+      (do NOT write SQL directly):
+        addExpense(userId, { label, amount, dayOfMonth, category? })   // dayOfMonth 1..31
+        addNetWorth(userId, { label, amount, kind })                    // kind: 'asset'|'liability'
+        updateSettings(userId, { ftpPhase?, ftpDivisor?, ftpPayoutPct? })
+      (signatures in apps/api/src/finance/service.ts; NET_WORTH_KINDS=['asset','liability'],
+       FTP_PHASES=['testing','funded'].)
+    - Coerce "$1,200" style strings to numbers (see num() in dealParser.ts).
+    - If an action can't be resolved (e.g. missing amount), SKIP it and explain;
+      don't half-apply. Return { overview/expenses/networth refreshed, applied[],
+      skipped[], reply }. Cap at ~25 actions.
+  Route: POST /api/finance/command  (preHandler requireWorkspace('finance'))
+    - 503 when unconfigured, 429 on AiLimitError, 502 otherwise.
+  Frontend: add a "Quick add (Sonnet)" command bar — simplest place is the top of
+    Personal Finance (apps/web/src/workspaces/finance/FinanceOverview.tsx), or the
+    Expenses screen. Mirror the Kia quick-log UI (KiaDashboard.tsx "Quick log"
+    block): an input + button, shows Claude's confirmation line + applied/skipped,
+    refreshes data on success, surfaces 503/limit messages. Add api client method
+    financeCommand(note) in apps/web/src/api/client.ts (+ a result type in types.ts).
+  Tutorial: add a step to the finance tutorial(s) in apps/web/src/help/tutorials.ts.
+
+NOTE: A general finance CHAT already exists via the per-workspace Ask Claude panel
+(it answers finance questions). The NEW thing is the ADD/parse capability. If Andrew
+wants the "chat" itself to take actions, the parser bar is the clean way; optionally
+also surface it from inside the Ask Claude panel later.
+
+Relevant finance files:
+  apps/api/src/finance/service.ts   (addExpense/updateExpense/removeExpense,
+                                      addNetWorth/updateNetWorth/removeNetWorth,
+                                      updateSettings, getOverview, listExpenses,
+                                      getNetWorth)
+  apps/api/src/routes/finance.ts    (financeRoutes; guard=requireWorkspace('finance');
+                                      already has /finance/overview/brief to copy from)
+  apps/web/src/workspaces/finance/FinanceOverview.tsx, FinanceExpenses.tsx, FinanceNetWorth.tsx
+  apps/web/src/api/client.ts        (financeAddExpense, financeAddNetWorth, etc.)
+
+------------------------------------------------------------
+4) BROADER TASK (B): "ALL THE CLAUDE-POWERED THINGS" — prioritized backlog
+------------------------------------------------------------
+Build these as separate PRs after the Finance parser. Each MUST use enforceAiLimit
++ aiConfigured + the 503/429 pattern. Suggested order:
+
+  P1. Finance natural-language add (section 3)  <-- do first, it's the explicit ask.
+
+  P2. Wealth natural-language add (parser): "Add client Jane Doe, active, $250k",
+      "Add a US Equity 60% sleeve to Core Growth", "Add CPI filing due July 30".
+      Apply via existing wealth services (wealth/service.ts addClient; wealth/
+      portfolios.ts addPortfolio/addAllocation; wealth/planning.ts addPlan;
+      wealth/compliance.ts addItem). Guard requireWorkspace('wealth'). A command
+      bar on Practice Overview or per-screen.
+
+  P3. Trading plain-English trade logging (parser) for the Trade Log: "Long 2 lots
+      EUR/USD entry 1.0850 SL 1.0820 TP 1.0920, London breakout". Apply via
+      trading/trades.ts addTrade. (Screenshot analysis via Opus already exists for
+      Alerts; this is text entry.) Guard requireWorkspaceWrite('trading').
+
+  P4. Studies "generate a practice quiz on <topic>": the /api/ai/tutor endpoint
+      already supports an "ask" mode; add a small UI in StudyHub/StudyGame to
+      request N practice questions on a chosen topic and render them. (Or extend
+      tutor with a structured-questions mode that returns JSON questions.)
+
+  P5. "Brief me" on the remaining read screens where it adds value: Trade Log /
+      History (a trading-week recap), Kia dashboard (month recap), Wealth Clients.
+      Reuse ai/brief.ts + AiBrief.tsx. Keep each brief's system prompt tailored and
+      tell it not to invent dollar figures it wasn't given.
+
+  P6. Market News: an "AI draft" helper that turns a pasted blurb/URL title into a
+      structured headline (category/impact/bias) for the shared feed — parser style
+      into trading/news.ts addNews. (Optional/nice-to-have.)
+
+  P7. Optional polish: let the global Ask Claude panel TAKE ACTIONS in the current
+      workspace (route its message to the right parser when it detects an intent),
+      so "add a $50 gym membership on the 1st" works from the panel anywhere.
+
+Cross-cutting: every new "kind" string passed to enforceAiLimit shows up in the
+ai_usage table; keep them short and descriptive (e.g. 'finance_command',
+'wealth_command', 'trade_log', 'studies_quiz', 'kia_brief').
+
+------------------------------------------------------------
+5) VERIFICATION PATTERN (network is blocked — stub Claude)
+------------------------------------------------------------
+Write a throwaway script in apps/api, e.g. apps/api/_verify_finance.mts, run it,
+then DELETE it before committing.
+
+Service-only logic (no Claude): just import the service and assert math/CRUD.
+
+Endpoints / parsers that call Claude: stub globalThis.fetch to fake the Anthropic
+/v1/messages response whose text is your canned JSON, then call the parser/route:
+    let nextJson = { actions: [...], reply: '...' };
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url, init) => {
+      if (String(url).includes('/v1/messages')) {
+        const body = { id:'m', type:'message', role:'assistant', model:'claude-sonnet-4-6',
+          content:[{type:'text', text: JSON.stringify(nextJson)}], stop_reason:'end_turn',
+          usage:{input_tokens:1,output_tokens:1} };
+        return new Response(JSON.stringify(body), { status:200, headers:{'content-type':'application/json'} });
+      }
+      return realFetch(url, init);
+    }) as typeof fetch;
+
+Run with env (network blocked, dummy key makes aiConfigured() true):
+    cd apps/api && mkdir -p data && rm -f data/_verify_finance.db
+    DATABASE_URL='file:./data/_verify_finance.db' SESSION_SECRET='verify-secret-verify-secret-verify-secret' \
+      ANTHROPIC_API_KEY='sk-test' NODE_ENV='test' npx tsx _verify_finance.mts
+For HTTP routes use buildServer() + app.inject(); auth cookie = app.signCookie(token)
+from createSession(userId).token, passed as cookies:{ vts_session: <signed> }.
+Seed a user row directly (see any _verify_*.mts pattern in git history /
+the PRs #38-#45). DELETE the script + temp db afterward; do not commit them.
+
+------------------------------------------------------------
+6) ALSO STILL PENDING (NON-CLAUDE — for awareness, not part of this task)
+------------------------------------------------------------
+Andrew previously queued three net-new sections (build later, his recommended order):
+  - Announcements: a board where Andrew posts updates for users.
+  - Blog: threads any user can create + post in.
+  - Live chat: real-time chat for trading users (will need polling or SSE/websocket;
+    recommend an approach when starting it).
+These are NOT Claude features; mentioned only so the next session has the full map.
+
+------------------------------------------------------------
+7) PORTAL STATE SUMMARY (so you don't re-explore)
+------------------------------------------------------------
+Workspaces & screens are ALL built (no placeholders left):
+  Trading: Live Wall, Alerts (TradingView webhook + Opus screenshot analysis),
+    Trade Log, Strategy Sessions, Account Metrics (FTP challenge), Market News
+    (shared headlines + ET economic calendar + Sonnet brief), History, To Do.
+  Kia Sales: Dashboard (deals, pay plan w/ $200 "mini" min commission, quick-log
+    parser), News, Product Knowledge (Sonnet chat), To Do.
+  To Do: sections, recurring tasks, Daily Routine daily auto-reset, undo for
+    delete+check, Claude command bar.
+  Wealth (Vitalis): Practice Overview (+brief), Clients, Model Portfolios,
+    Planning (retirement projections), Compliance register.
+  Personal Finance: Overview (+brief), Expenses, Net Worth.   <-- add the parser here
+  Studies: Study Hub, Series 65 Game (+Claude tutor), Progress.
+RBAC: requireWorkspace(ws) / requireWorkspaceWrite(ws); trading has a read-only
+  'trading_viewer' role. Admin "view as role" preview in the top bar.
+Privacy mode + per-screen "Hide $" toggles mask names/dollars.
+
+================================================================================
+END HANDOFF
+================================================================================
