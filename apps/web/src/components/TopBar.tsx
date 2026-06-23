@@ -141,7 +141,15 @@ export function TopBar(props: TopBarProps) {
               WebkitOverflowScrolling: 'touch',
               paddingBottom: 2,
             }
-          : {}),
+          : {
+              // On desktop the switcher also scrolls within its own space when
+              // the row is tight (e.g. an admin sees every workspace on a
+              // landscape tablet), so it never pushes the right-side controls
+              // off the edge.
+              minWidth: 0,
+              overflowX: 'auto',
+              flexWrap: 'nowrap',
+            }),
       }}
     >
       {workspaces.map((w) => {
@@ -614,14 +622,16 @@ export function TopBar(props: TopBarProps) {
         zIndex: 30,
       }}
     >
-      {/* Left: brand + workspace switcher + version pill */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 30 }}>
+      {/* Left: brand + workspace switcher + version pill. Shrinks (and the
+          switcher scrolls) so it never pushes the right group off-screen. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 30, minWidth: 0, flex: '1 1 auto' }}>
         {brandEl}
         {workspaceNav}
       </div>
 
-      {/* Right: broker dots, clock, alerts, Ask Claude, Admin, user badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+      {/* Right: broker dots, clock, alerts, Ask Claude, Admin, user badge.
+          flex:none keeps the user badge fully visible at any width. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flex: 'none' }}>
         {controls}
         {adminBtn}
         {userBadge}
