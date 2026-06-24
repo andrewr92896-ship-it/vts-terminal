@@ -58,7 +58,9 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
     setBusy(true);
     setError(null);
     try {
-      const { reply } = await api.askAi(next, workspace);
+      // In the Kia workspace, use the dedicated Kia product-expert persona;
+      // elsewhere the general workspace-aware assistant.
+      const { reply } = workspace === 'kia' ? await api.askKia(next) : await api.askAi(next, workspace);
       setMessages([...next, { role: 'assistant', content: reply }]);
       api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => { /* keep */ });
     } catch (e) {
