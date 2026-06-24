@@ -272,7 +272,7 @@ export const api = {
   chatMessages(channel: ChatChannel): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/${channel}`);
   },
-  hubActivity(): Promise<{ latest: number }> {
+  hubActivity(): Promise<{ chat: number; announcements: number; news: number }> {
     return request('/api/chat/activity');
   },
   sendChat(channel: ChatChannel, body: string): Promise<{ messages: ChatMessage[] }> {

@@ -101,6 +101,17 @@ export async function getMarketNews(): Promise<MarketNewsData> {
   return { headlines: headRows.map(toNews), calendar: calRows.map(toEvent) };
 }
 
+// Timestamp (ms) of the most recently published headline, or 0 when there are
+// none. Used by the hub's activity poll to flag and toast "new market news".
+export async function latestNewsAt(): Promise<number> {
+  const rows = await db
+    .select({ publishedAt: tradingNews.publishedAt })
+    .from(tradingNews)
+    .orderBy(desc(tradingNews.publishedAt))
+    .limit(1);
+  return rows[0]?.publishedAt ? rows[0].publishedAt.getTime() : 0;
+}
+
 export interface NewsInput {
   title?: string;
   body?: string | null;

@@ -16,6 +16,7 @@ import {
   listAnnouncements,
   removeAnnouncement,
 } from '../chat/announcements.js';
+import { latestNewsAt } from '../trading/news.js';
 
 const messageSchema = z.object({ body: z.string().trim().min(1).max(1000) });
 const announcementSchema = z.object({
@@ -65,16 +66,18 @@ export async function chatRoutes(app: FastifyInstance) {
     }
   });
 
-  // Latest activity across the channels this user can see plus announcements,
-  // so the hub can show an unread dot without loading every feed.
+  // Latest activity per source, so the hub can show an unread dot and toast a
+  // specific message ("new market news", "new message") without loading feeds.
   app.get('/api/chat/activity', auth, async (request) => {
+    const canTrade = canAccessWorkspace(parseRoles(request.currentUser!), 'trading');
     const channels: ChatChannel[] = ['general'];
-    if (canAccessWorkspace(parseRoles(request.currentUser!), 'trading')) channels.push('trading');
-    const [messages, announcement] = await Promise.all([
+    if (canTrade) channels.push('trading');
+    const [chat, announcements, news] = await Promise.all([
       latestMessageAt(channels),
       latestAnnouncementAt(),
+      canTrade ? latestNewsAt() : Promise.resolve(0),
     ]);
-    return { latest: Math.max(messages, announcement) };
+    return { chat, announcements, news };
   });
 
   app.delete('/api/chat/:channel/:id', auth, async (request, reply) => {
