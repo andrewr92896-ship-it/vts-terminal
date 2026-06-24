@@ -2,9 +2,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware.js';
 import { canAccessWorkspace, isAdmin, parseRoles } from '../auth/rbac.js';
-import { listMessages, postMessage, type ChatChannel } from '../chat/service.js';
+import { latestMessageAt, listMessages, postMessage, type ChatChannel } from '../chat/service.js';
 import {
   addAnnouncement,
+  latestAnnouncementAt,
   listAnnouncements,
   removeAnnouncement,
 } from '../chat/announcements.js';
@@ -55,6 +56,18 @@ export async function chatRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not send message' });
     }
+  });
+
+  // Latest activity across the channels this user can see plus announcements,
+  // so the hub can show an unread dot without loading every feed.
+  app.get('/api/chat/activity', auth, async (request) => {
+    const channels: ChatChannel[] = ['general'];
+    if (canAccessWorkspace(parseRoles(request.currentUser!), 'trading')) channels.push('trading');
+    const [messages, announcement] = await Promise.all([
+      latestMessageAt(channels),
+      latestAnnouncementAt(),
+    ]);
+    return { latest: Math.max(messages, announcement) };
   });
 
   app.get('/api/announcements', auth, async (request) => {

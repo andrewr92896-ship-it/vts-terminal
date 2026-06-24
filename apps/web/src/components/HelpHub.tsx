@@ -19,12 +19,79 @@ function dayTime(ms: number): string {
   return new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+const SEEN_KEY = 'vts-hub-seen';
+const ACTIVITY_MS = 30_000;
+
 export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme; user: User }) {
   const { isPhone } = useResponsive();
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('how');
   const accentGrad = accentGradient(theme);
   const canTrade = canAccessWorkspace(user.roles, 'trading');
+
+  // Unread dot: poll the latest chat/announcement activity and compare it to the
+  // last time this device opened the hub. The first ever load is treated as
+  // already seen, so the dot only appears for genuinely new activity.
+  const [latest, setLatest] = useState(0);
+  const [seen, setSeen] = useState<number>(() => {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(SEEN_KEY) : null;
+    return v ? Number(v) : -1;
+  });
+  const seenRef = useRef(seen);
+  seenRef.current = seen;
+
+  useEffect(() => {
+    let alive = true;
+    async function tick() {
+      try {
+        const r = await api.hubActivity();
+        if (!alive) return;
+        setLatest(r.latest);
+        if (seenRef.current < 0) {
+          // No record yet: start from the current state so we never nag on day one.
+          setSeen(r.latest);
+          try {
+            localStorage.setItem(SEEN_KEY, String(r.latest));
+          } catch {
+            // Storage may be blocked; the dot just relies on session state.
+          }
+        }
+      } catch {
+        // Transient failure: keep the last value and retry next tick.
+      }
+    }
+    void tick();
+    const id = window.setInterval(tick, ACTIVITY_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, []);
+
+  const hasUnread = seen >= 0 && latest > seen;
+
+  // While the hub is open, keep "seen" current so activity that arrives during
+  // the session does not re-flag the dot the moment it closes.
+  useEffect(() => {
+    if (open && latest > seen) {
+      setSeen(latest);
+      try {
+        localStorage.setItem(SEEN_KEY, String(latest));
+      } catch {
+        // ignore storage failures
+      }
+    }
+  }, [open, latest, seen]);
+
+  function openHub() {
+    setOpen(true);
+    setSeen(latest);
+    try {
+      localStorage.setItem(SEEN_KEY, String(latest));
+    } catch {
+      // ignore storage failures
+    }
+  }
 
   const TABS: { key: Tab; label: string }[] = [
     { key: 'how', label: 'How to' },
@@ -36,8 +103,8 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
   return (
     <>
       <button
-        onClick={() => setOpen((v) => !v)}
-        aria-label="Help, chat, and announcements"
+        onClick={() => (open ? setOpen(false) : openHub())}
+        aria-label={hasUnread ? 'Help and chat (new activity)' : 'Help, chat, and announcements'}
         title="Help, chat, and announcements"
         style={{
           position: 'fixed',
@@ -58,6 +125,21 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
         }}
       >
         {open ? '×' : '?'}
+        {hasUnread && !open && (
+          <span
+            aria-hidden
+            style={{
+              position: 'absolute',
+              top: 1,
+              right: 1,
+              width: 12,
+              height: 12,
+              borderRadius: '50%',
+              background: '#ef5468',
+              border: '2px solid #081226',
+            }}
+          />
+        )}
       </button>
 
       {open && (

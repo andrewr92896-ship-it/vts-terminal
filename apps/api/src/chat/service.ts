@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { chatMessages, type ChatMessageRow } from '../db/schema.js';
 
@@ -47,6 +47,19 @@ export async function listMessages(
     .limit(limit);
   // Newest-first from the query; reverse so the client renders oldest-first.
   return rows.reverse().map((r) => toView(r, currentUserId));
+}
+
+// The timestamp (ms) of the most recent message across the given channels, or 0
+// when there are none. Drives the hub's unread indicator.
+export async function latestMessageAt(channels: ChatChannel[]): Promise<number> {
+  if (channels.length === 0) return 0;
+  const rows = await db
+    .select({ createdAt: chatMessages.createdAt })
+    .from(chatMessages)
+    .where(inArray(chatMessages.channel, channels))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(1);
+  return rows[0]?.createdAt ? rows[0].createdAt.getTime() : 0;
 }
 
 export async function postMessage(

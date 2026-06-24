@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.2';
+export const APP_VERSION = 'Alpha V 1.3';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.3',
+    date: 'June 24, 2026',
+    notes: [
+      'The corner help and chat button now shows a dot when there are new chat messages or announcements since you last opened it.',
+    ],
+  },
   {
     version: 'Alpha V 1.2',
     date: 'June 24, 2026',

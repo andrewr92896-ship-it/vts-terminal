@@ -57,6 +57,16 @@ export async function addAnnouncement(
   return listAnnouncements();
 }
 
+// The timestamp (ms) of the newest announcement, or 0 when there are none.
+export async function latestAnnouncementAt(): Promise<number> {
+  const rows = await db
+    .select({ createdAt: announcements.createdAt })
+    .from(announcements)
+    .orderBy(desc(announcements.createdAt))
+    .limit(1);
+  return rows[0]?.createdAt ? rows[0].createdAt.getTime() : 0;
+}
+
 export async function removeAnnouncement(id: string): Promise<AnnouncementView[]> {
   await db.delete(announcements).where(eq(announcements.id, id));
   return listAnnouncements();
