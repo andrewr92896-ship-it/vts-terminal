@@ -30,7 +30,10 @@ function toView(row: AnnouncementRow): AnnouncementView {
 }
 
 export async function listAnnouncements(): Promise<AnnouncementView[]> {
-  const rows = await db.select().from(announcements).orderBy(desc(announcements.createdAt));
+  const rows = await db
+    .select()
+    .from(announcements)
+    .orderBy(desc(announcements.createdAt), desc(announcements.id));
   return rows.map(toView);
 }
 

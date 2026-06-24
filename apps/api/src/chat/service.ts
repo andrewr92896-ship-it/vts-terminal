@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { chatMessages, type ChatMessageRow } from '../db/schema.js';
 
@@ -42,7 +42,8 @@ export async function listMessages(
     .select()
     .from(chatMessages)
     .where(eq(chatMessages.channel, channel))
-    .orderBy(desc(chatMessages.createdAt))
+    // id as a secondary key gives a stable order when two messages share a ms.
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(limit);
   // Newest-first from the query; reverse so the client renders oldest-first.
   return rows.reverse().map((r) => toView(r, currentUserId));

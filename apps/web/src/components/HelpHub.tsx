@@ -226,8 +226,8 @@ function Announcements({ theme, user }: { theme: Theme; user: User }) {
           <div style={{ fontSize: 11, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#7488b5', marginBottom: 8 }}>
             Post an announcement
           </div>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" style={inputStyle} />
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={3} style={{ ...inputStyle, marginTop: 8, resize: 'vertical', fontFamily: 'inherit' }} />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" maxLength={120} style={inputStyle} />
+          <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={3} maxLength={4000} style={{ ...inputStyle, marginTop: 8, resize: 'vertical', fontFamily: 'inherit' }} />
           <button onClick={add} disabled={busy || !title.trim() || !body.trim()} style={{ marginTop: 10, border: 'none', background: accentGrad, color: theme.accentText, fontWeight: 700, fontSize: 12.5, padding: '9px 16px', borderRadius: 8, cursor: 'pointer', opacity: busy || !title.trim() || !body.trim() ? 0.6 : 1 }}>
             {busy ? 'Posting...' : 'Post'}
           </button>
@@ -300,8 +300,17 @@ function ChatColumn({ channel, label, theme, user }: { channel: ChatChannel; lab
     return () => window.clearInterval(id);
   }, [load]);
 
+  // Auto-scroll to the newest message on the first load and when the viewer is
+  // already near the bottom, but leave them alone if they have scrolled up to
+  // read history (so a 5s poll does not yank them back down).
+  const prevLen = useRef(0);
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    const firstFill = prevLen.current === 0 && messages.length > 0;
+    if (firstFill || nearBottom) el.scrollTo({ top: el.scrollHeight });
+    prevLen.current = messages.length;
   }, [messages]);
 
   async function send() {
@@ -369,6 +378,7 @@ function ChatColumn({ channel, label, theme, user }: { channel: ChatChannel; lab
               }
             }}
             placeholder="Message"
+            maxLength={1000}
             style={{ ...inputStyle, flex: 1, marginTop: 0 }}
           />
           <button
