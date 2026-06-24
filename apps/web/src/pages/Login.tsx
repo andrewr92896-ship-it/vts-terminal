@@ -183,7 +183,7 @@ export function Login() {
             opacity: demoBusy ? 0.6 : 1,
           }}
         >
-          {demoBusy ? 'Loading demo...' : 'View the live demo'}
+          {demoBusy ? 'Loading demo...' : 'View Demo'}
         </button>
         <p style={{ textAlign: 'center', margin: '8px 0 0', fontSize: 10.5, color: '#6f84b2', lineHeight: 1.5 }}>
           A read-only tour with simulated data. No account needed.
