@@ -162,6 +162,13 @@
       "when": 1781872491496,
       "tag": "0022_kia_mini",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1782269758913,
+      "tag": "0023_last_ravenous",
+      "breakpoints": true
     }
   ]
 }

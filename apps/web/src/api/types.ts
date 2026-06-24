@@ -777,6 +777,24 @@ export interface AlertsData {
   aiConfigured: boolean;
 }
 
+// ---- Chat + announcements (mirror of apps/api/src/chat) ----
+export type ChatChannel = 'trading' | 'general';
+export interface ChatMessage {
+  id: string;
+  channel: ChatChannel;
+  author: string;
+  body: string;
+  createdAt: number;
+  mine: boolean;
+}
+export interface Announcement {
+  id: string;
+  author: string;
+  title: string;
+  body: string;
+  createdAt: number;
+}
+
 // Desk-wide trading signal the client polls to chime on a new TradingView alert
 // (mirror of apps/api/src/trading/alerts.ts AlertSignal).
 export interface TradingSignals {
