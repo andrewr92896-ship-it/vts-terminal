@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { BrokerStatus, RoleKey, User } from '../api/types';
 import {
   type Theme,
@@ -65,6 +65,8 @@ export function TopBar(props: TopBarProps) {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [soundOpen, setSoundOpen] = useState(false);
+  // On narrow screens the secondary controls collapse into a single "More" menu.
+  const [moreOpen, setMoreOpen] = useState(false);
   const { isPhone, isTablet } = useResponsive();
   const { privacy, toggle: togglePrivacy } = usePrivacy();
   const sound = useAlertSound();
@@ -679,6 +681,202 @@ export function TopBar(props: TopBarProps) {
     </div>
   );
 
+  // Narrow layout: keep Ask Claude visible and fold the secondary controls
+  // (clock, privacy, alert sound, broker status, admin) into one "More" menu,
+  // so the header stays a single tidy row instead of a crowded wrapping one.
+  const moreItemBtn: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    width: '100%',
+    textAlign: 'left',
+    background: 'transparent',
+    border: 'none',
+    color: '#cfe0ff',
+    fontSize: 12.5,
+    fontWeight: 600,
+    padding: '9px 8px',
+    borderRadius: 6,
+    cursor: 'pointer',
+  };
+  const moreLabel: CSSProperties = {
+    fontSize: 9.5,
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase',
+    color: '#6f84b2',
+  };
+  const narrowControls = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+      <button
+        onClick={onOpenClaude}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          fontSize: 12.5,
+          fontWeight: 600,
+          color: theme.accentText,
+          background: accentGrad,
+          border: 'none',
+          padding: '9px 13px',
+          borderRadius: 6,
+          cursor: 'pointer',
+        }}
+      >
+        <span style={{ width: 7, height: 7, borderRadius: '50%', background: theme.accentText }} />
+        Ask Claude
+      </button>
+
+      <div style={{ position: 'relative', flex: 'none' }}>
+        <button
+          onClick={() => setMoreOpen((v) => !v)}
+          aria-label="More controls"
+          title="More"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 40,
+            height: 40,
+            fontSize: 20,
+            lineHeight: 1,
+            color: '#cfe0ff',
+            background: 'rgba(0,0,0,.18)',
+            border: '1px solid #2a4170',
+            borderRadius: 8,
+            cursor: 'pointer',
+          }}
+        >
+          ⋯
+        </button>
+
+        {moreOpen && (
+          <>
+            <div onClick={() => setMoreOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+            <div
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: 'calc(100% + 10px)',
+                minWidth: 250,
+                background: '#0c1c3c',
+                border: '1px solid #1d3560',
+                borderRadius: 10,
+                boxShadow: '0 16px 40px rgba(0,0,0,.5)',
+                padding: 10,
+                zIndex: 41,
+                maxHeight: '70vh',
+                overflowY: 'auto',
+              }}
+            >
+              {/* Clock + broker status */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '2px 6px 8px' }}>
+                <span style={moreLabel}>Status</span>
+                <Clock />
+              </div>
+              {isTrading && brokers.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '0 6px 8px' }}>
+                  {brokers.map((b) => (
+                    <span
+                      key={b.key}
+                      title={`${b.name} (${b.platform})`}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: '#8ea3cc', fontFamily: "'IBM Plex Mono', monospace" }}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: brokerDotColor(b.status) }} />
+                      {b.short}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Privacy */}
+              <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6 }}>
+                <button onClick={togglePrivacy} style={moreItemBtn}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: privacy ? '#e0a23a' : '#6f84b2', flex: 'none' }} />
+                  {privacy ? 'Privacy on' : 'Privacy off'}
+                </button>
+              </div>
+
+              {/* Trade alert sound (trading users) */}
+              {canTrade && (
+                <div style={{ borderTop: '1px solid #1d3560', marginTop: 6, paddingTop: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 8px' }}>
+                    <span style={moreLabel}>Trade alert sound</span>
+                    <button
+                      onClick={() => sound.setEnabled(!sound.enabled)}
+                      style={{
+                        fontFamily: "'IBM Plex Mono', monospace",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        color: sound.enabled ? '#35c47b' : '#6f84b2',
+                        background: 'rgba(0,0,0,.18)',
+                        border: `1px solid ${sound.enabled ? 'rgba(53,196,123,.3)' : '#2a4170'}`,
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {sound.enabled ? 'On' : 'Off'}
+                    </button>
+                  </div>
+                  {ALERT_SOUNDS.map((s) => {
+                    const on = s.key === sound.soundKey;
+                    return (
+                      <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          onClick={() => sound.setSoundKey(s.key)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 9,
+                            flex: '1 1 auto',
+                            textAlign: 'left',
+                            background: on ? 'rgba(235,203,116,.1)' : 'transparent',
+                            border: 'none',
+                            color: on ? '#EBCB74' : '#cfe0ff',
+                            fontSize: 12.5,
+                            padding: '8px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span style={{ width: 12, height: 12, borderRadius: '50%', flex: 'none', border: `2px solid ${on ? '#EBCB74' : '#52617f'}`, background: on ? '#EBCB74' : 'transparent' }} />
+                          {s.label}
+                        </button>
+                        <button
+                          onClick={() => sound.preview(s.key)}
+                          aria-label={`Preview ${s.label}`}
+                          style={{ flex: 'none', background: 'rgba(255,255,255,.05)', border: '1px solid #2a4170', color: '#cfe0ff', fontSize: 11, padding: '6px 9px', borderRadius: 6, cursor: 'pointer' }}
+                        >
+                          ▶
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Admin (user management) */}
+              {canAdmin && (
+                <div style={{ borderTop: '1px solid #1d3560', marginTop: 6, paddingTop: 6 }}>
+                  <button
+                    onClick={() => {
+                      setMoreOpen(false);
+                      onOpenAdmin();
+                    }}
+                    style={moreItemBtn}
+                  >
+                    User management
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
   // Narrow layout: stacked rows. The header is not sticky here (it scrolls
   // away) — the TabBar takes over as the sticky bar so the variable header
   // height never has to be reconciled with the tab row's offset.
@@ -714,11 +912,10 @@ export function TopBar(props: TopBarProps) {
         >
           {brandEl}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
-            {adminBtn}
+            {narrowControls}
             {userBadge}
           </div>
         </div>
-        {controls}
         {workspaceNav}
       </header>
     );
