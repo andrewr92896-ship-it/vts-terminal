@@ -98,32 +98,48 @@ export function gameKey(userId: string | undefined): string {
   return `vts_series65_game_${userId ?? 'anon'}`;
 }
 
-export function loadGame(key: string): GameState {
+// Coerce an arbitrary parsed object into a valid GameState, dropping anything
+// malformed. Shared by the localStorage and server-synced load paths.
+export function normalizeGame(p: unknown): GameState {
   const fresh = emptyGame();
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fresh;
-    const p = JSON.parse(raw);
-    if (!p || typeof p !== 'object') return fresh;
-    const g: GameState = {
-      recent: Array.isArray(p.recent) ? p.recent.filter((x: unknown) => typeof x === 'boolean').slice(-WINDOW) : [],
-      totalAttempted: Number(p.totalAttempted) || 0,
-      totalCorrect: Number(p.totalCorrect) || 0,
-      cats: fresh.cats,
-    };
-    for (const t of SERIES65_TOPICS) {
-      const c = p.cats?.[t];
-      if (c) {
-        g.cats[t] = {
-          answered: Number(c.answered) || 0,
-          correct: Number(c.correct) || 0,
-          recent: Array.isArray(c.recent) ? c.recent.filter((x: unknown) => typeof x === 'boolean').slice(-WINDOW) : [],
-        };
-      }
+  if (!p || typeof p !== 'object') return fresh;
+  const src = p as Record<string, unknown>;
+  const g: GameState = {
+    recent: Array.isArray(src.recent) ? src.recent.filter((x: unknown) => typeof x === 'boolean').slice(-WINDOW) : [],
+    totalAttempted: Number(src.totalAttempted) || 0,
+    totalCorrect: Number(src.totalCorrect) || 0,
+    cats: fresh.cats,
+  };
+  const cats = (src.cats ?? {}) as Record<string, { answered?: unknown; correct?: unknown; recent?: unknown }>;
+  for (const t of SERIES65_TOPICS) {
+    const c = cats[t];
+    if (c) {
+      g.cats[t] = {
+        answered: Number(c.answered) || 0,
+        correct: Number(c.correct) || 0,
+        recent: Array.isArray(c.recent) ? c.recent.filter((x: unknown) => typeof x === 'boolean').slice(-WINDOW) : [],
+      };
     }
-    return g;
+  }
+  return g;
+}
+
+// Parse a stored JSON string (from localStorage or the server) into a GameState,
+// returning null when it is absent or unparseable so callers can fall back.
+export function parseGame(raw: string | null): GameState | null {
+  if (!raw) return null;
+  try {
+    return normalizeGame(JSON.parse(raw));
   } catch {
-    return fresh;
+    return null;
+  }
+}
+
+export function loadGame(key: string): GameState {
+  try {
+    return parseGame(localStorage.getItem(key)) ?? emptyGame();
+  } catch {
+    return emptyGame();
   }
 }
 

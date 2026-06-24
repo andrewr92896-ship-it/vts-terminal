@@ -706,3 +706,15 @@ export const studyLearned = sqliteTable('study_learned', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type StudyLearnedRow = typeof studyLearned.$inferSelect;
+
+// One row per user holding the serialized Study Game state (per-category levels,
+// scores, and answer history), so quiz progress follows the learner across
+// devices instead of living only in that browser's localStorage.
+export const studyGame = sqliteTable('study_game', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  state: text('state').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyGameRow = typeof studyGame.$inferSelect;

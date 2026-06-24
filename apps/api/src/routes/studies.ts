@@ -2,8 +2,10 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/middleware.js';
 import { addLearned, listLearned, removeLearned } from '../studies/learned.js';
+import { getGame, normalizeState, saveGame } from '../studies/game.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
+const gameSchema = z.object({ state: z.string() });
 
 export async function studiesRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
@@ -24,5 +26,20 @@ export async function studiesRoutes(app: FastifyInstance) {
     const q = request.query as { term?: string };
     const term = typeof q.term === 'string' ? q.term : '';
     return { terms: await removeLearned(request.currentUser!.id, term) };
+  });
+
+  // The Study Game state (levels, scores, per-category history) is stored as one
+  // JSON blob per user so quiz progress follows them across devices.
+  app.get('/api/studies/game', guard, async (request) => {
+    return { state: await getGame(request.currentUser!.id) };
+  });
+
+  app.put('/api/studies/game', guard, async (request, reply) => {
+    const parsed = gameSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
+    const state = normalizeState(parsed.data.state);
+    if (state == null) return reply.code(400).send({ error: 'Invalid game state' });
+    await saveGame(request.currentUser!.id, state);
+    return { ok: true };
   });
 }
