@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.12';
+export const APP_VERSION = 'Alpha V 1.13';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.13',
+    date: 'June 24, 2026',
+    notes: [
+      'Flashcards: an "Explain simply" button on each card gives a plain-language breakdown that defines any tricky words used inside the definition itself.',
+    ],
+  },
   {
     version: 'Alpha V 1.12',
     date: 'June 24, 2026',
