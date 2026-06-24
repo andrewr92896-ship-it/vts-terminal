@@ -20,6 +20,7 @@ import { tvWebhookRoutes } from './routes/tvWebhook.js';
 import { financeRoutes } from './routes/finance.js';
 import { aiRoutes } from './routes/ai.js';
 import { chatRoutes } from './routes/chat.js';
+import { studiesRoutes } from './routes/studies.js';
 import { runMigrations } from './db/migrate.js';
 import { seedAdmin, seedDemo } from './seed.js';
 import { seedWelcome } from './chat/announcements.js';
@@ -82,6 +83,7 @@ export async function buildServer() {
   await app.register(financeRoutes);
   await app.register(aiRoutes);
   await app.register(chatRoutes);
+  await app.register(studiesRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).

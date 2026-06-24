@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { api } from '../../api/client';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -89,6 +90,9 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
     });
     setShowDef(false);
     setSecs(alwaysRef.current ? defRef.current : termRef.current);
+    // Sync to the account (best effort); the local copy already updated, and a
+    // read-only demo or offline session simply keeps the local copy.
+    void api.addLearnedTerm(term).catch(() => {});
   }
   function restore(term: string) {
     setLearned((prev) => {
@@ -97,7 +101,29 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
       persistLearned(next);
       return next;
     });
+    void api.removeLearnedTerm(term).catch(() => {});
   }
+
+  // Pull the learned set from the account once, so progress follows the user
+  // across devices. On failure (offline, demo) the local copy stays in use.
+  useEffect(() => {
+    let alive = true;
+    api
+      .studyLearned()
+      .then((r) => {
+        if (!alive) return;
+        const s = new Set(r.terms);
+        setLearned(s);
+        persistLearned(s);
+      })
+      .catch(() => {
+        /* keep the localStorage copy */
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Reset to the first card whenever the topic filter changes.
   useEffect(() => {
