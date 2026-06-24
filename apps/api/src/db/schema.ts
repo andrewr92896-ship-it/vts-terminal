@@ -331,7 +331,7 @@ export type TradingPositionRow = typeof tradingPositions.$inferSelect;
 // "Andrew's Trades"). Credentials are stored AES-256-GCM encrypted in
 // `secret_enc`; `summary` holds a non-secret display hint only. The Live Wall
 // and History are driven by the calling user's active connections.
-export const BROKER_CONNECTION_KINDS = ['oanda', 'kraken'] as const;
+export const BROKER_CONNECTION_KINDS = ['oanda', 'kraken', 'manual'] as const;
 export type BrokerConnectionKind = (typeof BROKER_CONNECTION_KINDS)[number];
 
 export const brokerConnections = sqliteTable('broker_connections', {
@@ -354,6 +354,35 @@ export const brokerConnections = sqliteTable('broker_connections', {
 });
 
 export type BrokerConnectionRow = typeof brokerConnections.$inferSelect;
+
+// ---- Trading: manual broker positions ----
+// A "manual" broker connection has no API credentials; the trader enters their
+// open positions by hand and they render on the Live Wall exactly like a
+// broker-streamed position (with the same forex pip math). Each row belongs to
+// one manual connection (and its owner). Prices and sizes are reals, matching
+// the rest of the Trading tables.
+export const manualPositions = sqliteTable('manual_positions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  connectionId: text('connection_id')
+    .notNull()
+    .references(() => brokerConnections.id, { onDelete: 'cascade' }),
+  instrument: text('instrument').notNull(),
+  side: text('side', { enum: TRADE_SIDES }).notNull().default('long'),
+  units: real('units').notNull().default(0),
+  entryPrice: real('entry_price').notNull(),
+  currentPrice: real('current_price'), // latest mark, when the trader supplies it
+  takeProfit: real('take_profit'),
+  stopLoss: real('stop_loss'),
+  plannedEntry: real('planned_entry'), // the alert/intended price; null if none
+  openedAt: integer('opened_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type ManualPositionRow = typeof manualPositions.$inferSelect;
 
 // ---- Trading — prop-firm challenge (Account Metrics) ----
 // One challenge per user (the FTP-style funded-account challenge). Drawdown and

@@ -15,11 +15,13 @@ import { decryptSecret, encryptSecret } from '../security/secretbox.js';
 
 export type OandaCreds = { token: string; accountId: string; env: 'practice' | 'live' };
 export type KrakenCreds = { apiKey: string; apiSecret: string };
-export type BrokerCreds = OandaCreds | KrakenCreds;
+// A manual connection has no credentials, positions are entered by hand.
+export type ManualCreds = Record<string, never>;
+export type BrokerCreds = OandaCreds | KrakenCreds | ManualCreds;
 
 export type ConnStatus = 'unknown' | 'ok' | 'error';
 
-// Client-safe view — never includes secrets.
+// Client-safe view, never includes secrets.
 export interface BrokerConnection {
   id: string;
   broker: BrokerConnectionKind;
@@ -52,6 +54,9 @@ function str(v: unknown): string {
 
 // Validate + normalize the credentials for a broker. Throws on missing fields.
 export function normalizeCreds(broker: BrokerConnectionKind, raw: Record<string, unknown>): BrokerCreds {
+  if (broker === 'manual') {
+    return {}; // no credentials, positions are entered by hand
+  }
   if (broker === 'oanda') {
     const token = str(raw.token);
     const accountId = str(raw.accountId);
@@ -70,6 +75,7 @@ export function normalizeCreds(broker: BrokerConnectionKind, raw: Record<string,
 
 // A short, non-secret hint shown in the UI.
 function summaryOf(broker: BrokerConnectionKind, creds: BrokerCreds): string {
+  if (broker === 'manual') return 'Manual entries';
   if (broker === 'oanda') {
     const c = creds as OandaCreds;
     return `${c.env === 'live' ? 'Live' : 'Practice'} · ${c.accountId}`;
@@ -114,7 +120,7 @@ export async function getActiveDecrypted(userId: string): Promise<DecryptedConne
     try {
       out.push({ id: r.id, broker: r.broker, label: r.label, creds: JSON.parse(decryptSecret(r.secretEnc)) });
     } catch {
-      // Undecryptable (e.g. key rotated) — skip; status stays as last recorded.
+      // Undecryptable (e.g. key rotated), skip; status stays as last recorded.
     }
   }
   return out;
@@ -124,7 +130,9 @@ export async function addConnection(
   userId: string,
   input: { broker: BrokerConnectionKind; label: string; creds: Record<string, unknown> },
 ): Promise<void> {
-  const label = str(input.label) || (input.broker === 'oanda' ? 'OANDA' : 'Kraken');
+  const label =
+    str(input.label) ||
+    (input.broker === 'oanda' ? 'OANDA' : input.broker === 'manual' ? 'Manual' : 'Kraken');
   const creds = normalizeCreds(input.broker, input.creds);
   const now = new Date();
   await db.insert(brokerConnections).values({

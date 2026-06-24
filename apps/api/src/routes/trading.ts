@@ -29,6 +29,12 @@ import {
   removeConnection,
   updateConnection,
 } from '../trading/connections.js';
+import {
+  addManualPosition,
+  listManualPositions,
+  removeManualPosition,
+  updateManualPosition,
+} from '../trading/manual.js';
 import { aiConfigured, askClaude } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
@@ -225,14 +231,14 @@ export async function tradingRoutes(app: FastifyInstance) {
   );
 
   // A quick Claude (Sonnet) desk brief over the current headlines. Read-only
-  // generation — no data is stored. Returns 503 if no API key is configured.
+  // generation, no data is stored. Returns 503 if no API key is configured.
   app.post('/api/trading/news/brief', read, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }
     const { headlines } = await getMarketNews();
     if (headlines.length === 0) {
-      return { brief: 'No headlines posted yet — add a few and I’ll summarize the desk view.' };
+      return { brief: 'No headlines posted yet, add a few and I’ll summarize the desk view.' };
     }
     const lines = headlines
       .slice(0, 40)
@@ -387,6 +393,59 @@ export async function tradingRoutes(app: FastifyInstance) {
     await removeConnection(uid, id);
     return { connections: await listConnections(uid) };
   });
+
+  // ---- Manual positions (hand-entered open positions on a 'manual' connection) ----
+  // The connection must belong to the calling user and be a 'manual' kind.
+  async function requireManualConnection(userId: string, connectionId: string): Promise<boolean> {
+    const conns = await listConnections(userId);
+    return conns.some((c) => c.id === connectionId && c.broker === 'manual');
+  }
+
+  app.get('/api/trading/connections/:id/positions', read, async (request, reply) => {
+    const uid = request.currentUser!.id;
+    const id = (request.params as { id: string }).id;
+    if (!(await requireManualConnection(uid, id))) {
+      return reply.code(404).send({ error: 'Manual connection not found' });
+    }
+    return { positions: await listManualPositions(id) };
+  });
+
+  app.post('/api/trading/connections/:id/positions', write, async (request, reply) => {
+    const uid = request.currentUser!.id;
+    const id = (request.params as { id: string }).id;
+    if (!(await requireManualConnection(uid, id))) {
+      return reply.code(404).send({ error: 'Manual connection not found' });
+    }
+    const parsed = addPositionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the position details and try again' });
+    }
+    try {
+      return { positions: await addManualPosition(uid, id, parsed.data) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add position' });
+    }
+  });
+
+  app.patch('/api/trading/positions/:id', write, async (request, reply) => {
+    const uid = request.currentUser!.id;
+    const id = (request.params as { id: string }).id;
+    const parsed = editPositionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the position details and try again' });
+    }
+    try {
+      return { positions: await updateManualPosition(uid, id, parsed.data) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update position' });
+    }
+  });
+
+  app.delete('/api/trading/positions/:id', write, async (request) => {
+    const uid = request.currentUser!.id;
+    const id = (request.params as { id: string }).id;
+    return { positions: await removeManualPosition(uid, id) };
+  });
 }
 
 const brokerKind = z.enum(BROKER_CONNECTION_KINDS);
@@ -403,6 +462,22 @@ const editConnSchema = z
     creds: credsSchema.optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const addPositionSchema = z.object({
+  instrument: z.string().trim().min(1).max(40),
+  side: side.optional(),
+  units: z.number().finite().min(0).optional(),
+  entryPrice: price,
+  currentPrice: price.nullish(),
+  takeProfit: price.nullish(),
+  stopLoss: price.nullish(),
+  plannedEntry: price.nullish(),
+  openedAt: ts.optional(),
+});
+const editPositionSchema = addPositionSchema.partial().refine(
+  (v) => Object.values(v).some((x) => x !== undefined),
+  { message: 'Nothing to update' },
+);
 
 const pct = z.number().finite().min(0).max(100);
 const dollars = z.number().finite().min(0).max(1_000_000_000);

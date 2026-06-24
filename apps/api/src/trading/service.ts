@@ -2,6 +2,7 @@ import type { UserRow } from '../db/schema.js';
 import { BROKER_META, brokerMeta } from './config.js';
 import { fetchOandaTrades } from './brokers/oanda.js';
 import { fetchKrakenPositions } from './brokers/kraken.js';
+import { getManualTrades } from './manual.js';
 import { sampleLiveTrades } from './sample.js';
 import { computeForex } from './forex.js';
 import { reconcile } from './history.js';
@@ -71,6 +72,8 @@ async function loadConnection(
       const apiBase =
         cr.env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com';
       trades = await fetchOandaTrades({ token: cr.token, accountId: cr.accountId, base: apiBase });
+    } else if (c.broker === 'manual') {
+      trades = await getManualTrades(c.id);
     } else {
       const cr = c.creds as KrakenCreds;
       trades = await fetchKrakenPositions({ apiKey: cr.apiKey, apiSecret: cr.apiSecret });

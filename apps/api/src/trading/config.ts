@@ -17,6 +17,7 @@ export const BROKER_META: BrokerMeta[] = [
   { key: 'oanda', name: 'OANDA', short: 'OANDA', platform: 'OANDA v20', kind: 'Forex' },
   { key: 'kraken', name: 'Kraken Pro', short: 'KRKN', platform: 'Kraken', kind: 'Crypto' },
   { key: 'tradestation', name: 'TradeStation', short: 'TS', platform: 'TradeStation', kind: 'Stocks' },
+  { key: 'manual', name: 'Manual', short: 'MAN', platform: 'Manual entry', kind: 'Manual' },
 ];
 
 export function brokerMeta(key: BrokerKey): BrokerMeta {
@@ -116,6 +117,9 @@ export function isBrokerConfigured(key: BrokerKey): boolean {
       return tradeStationConfig() !== null;
     case 'ftp':
       return ftpConfig() !== null;
+    case 'manual':
+      // Manual connections have no API credentials; positions are entered by hand.
+      return false;
   }
 }
 

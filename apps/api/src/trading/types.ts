@@ -5,7 +5,7 @@
 export type TradeSide = 'long' | 'short';
 
 // The four broker connections shown as status dots in the Trading top bar.
-export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
+export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation' | 'manual';
 
 // One open position, normalized across every broker. Money fields are in the
 // account's currency as whole-ish numbers; prices keep their natural precision.

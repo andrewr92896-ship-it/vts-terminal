@@ -10,6 +10,8 @@ import type {
   ChallengeData,
   ChallengeInput,
   ConnectionInput,
+  ManualPosition,
+  ManualPositionInput,
   Expense,
   FinanceOverview,
   FtpPhase,
@@ -239,6 +241,18 @@ export const api = {
   },
   removeConnection(id: string): Promise<{ connections: BrokerConnection[] }> {
     return request(`/api/trading/connections/${id}`, { method: 'DELETE' });
+  },
+  connectionPositions(connectionId: string): Promise<{ positions: ManualPosition[] }> {
+    return request(`/api/trading/connections/${connectionId}/positions`);
+  },
+  addPosition(connectionId: string, input: ManualPositionInput): Promise<{ positions: ManualPosition[] }> {
+    return request(`/api/trading/connections/${connectionId}/positions`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  updatePosition(positionId: string, patch: Partial<ManualPositionInput>): Promise<{ positions: ManualPosition[] }> {
+    return request(`/api/trading/positions/${positionId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removePosition(positionId: string): Promise<{ positions: ManualPosition[] }> {
+    return request(`/api/trading/positions/${positionId}`, { method: 'DELETE' });
   },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });

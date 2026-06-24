@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.4';
+export const APP_VERSION = 'Alpha V 1.5';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.5',
+    date: 'June 24, 2026',
+    notes: [
+      'Broker connections: a new Manual connection type for any broker. Name it after your broker, then enter your open positions by hand and they show on the Live Wall with full pip and risk and reward math. Update them when your trades change.',
+    ],
+  },
   {
     version: 'Alpha V 1.4',
     date: 'June 24, 2026',
