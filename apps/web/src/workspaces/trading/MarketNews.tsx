@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { useNowTick } from '../../hooks/useNowTick';
 import { useAuth } from '../../auth/AuthContext';
 import { isWorkspaceReadOnly } from '../../auth/access';
 import type {
@@ -73,6 +74,8 @@ function toLocalInput(ms: number): string {
 
 export function MarketNews() {
   const { isPhone } = useResponsive();
+  // Keep the "x ago" headline times fresh between the 120s data polls.
+  useNowTick();
   const { user } = useAuth();
   const canWrite = !!user && !isWorkspaceReadOnly(user.roles, 'trading');
 

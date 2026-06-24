@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.9';
+export const APP_VERSION = 'Alpha V 1.10';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.10',
+    date: 'June 24, 2026',
+    notes: [
+      'Ask Claude in the Kia workspace now uses the dedicated Kia product expert.',
+      'Market News headline times ("x ago") stay current instead of going stale between refreshes.',
+    ],
+  },
   {
     version: 'Alpha V 1.9',
     date: 'June 24, 2026',
