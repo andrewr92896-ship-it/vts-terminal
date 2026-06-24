@@ -28,23 +28,13 @@ function newestFirst(a: LiveTrade, b: LiveTrade): number {
   return (b.openedAt ?? -Infinity) - (a.openedAt ?? -Infinity);
 }
 
-// Hide P/L and the derived pip money (balance details) from anyone without the
-// viewBrokerage grant. Pip distances and the reward-to-risk ratio are price
-// facts, not balances, so they stay visible.
+// Hide open P/L (an account balance) from anyone without the viewBrokerage
+// grant. The forex pip money (per-pip value and risk/reward) is position math,
+// not an account balance, so it stays visible to every trader; the client still
+// respects the on-screen privacy and Hide-$ toggles.
 function gateBalances(trades: LiveTrade[], canSeeBalances: boolean): LiveTrade[] {
   if (canSeeBalances) return trades;
-  return trades.map((t) => ({
-    ...t,
-    unrealizedPl: null,
-    forex: t.forex
-      ? {
-          ...t.forex,
-          moneyPerPip: null,
-          risk: t.forex.risk ? { ...t.forex.risk, money: null } : null,
-          reward: t.forex.reward ? { ...t.forex.reward, money: null } : null,
-        }
-      : t.forex,
-  }));
+  return trades.map((t) => ({ ...t, unrealizedPl: null }));
 }
 
 // Attach forex pip math to any currency-pair trades that do not already have it

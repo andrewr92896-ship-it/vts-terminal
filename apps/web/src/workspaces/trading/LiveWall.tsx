@@ -169,7 +169,13 @@ export function LiveWall() {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>
           {data.trades.map((t) => (
-            <TradeCard key={t.id} t={t} showMoney={showMoney} canSeeBalances={data.canSeeBalances} />
+            <TradeCard
+              key={t.id}
+              t={t}
+              showMoney={showMoney}
+              showFxMoney={!privacy && !hideMoney}
+              canSeeBalances={data.canSeeBalances}
+            />
           ))}
         </div>
       )}
@@ -180,10 +186,14 @@ export function LiveWall() {
 function TradeCard({
   t,
   showMoney,
+  showFxMoney,
   canSeeBalances,
 }: {
   t: LiveTrade;
   showMoney: boolean;
+  // Forex pip money is shown to every trader (not balance-gated), but still
+  // hidden by the privacy and Hide-$ toggles.
+  showFxMoney: boolean;
   canSeeBalances: boolean;
 }) {
   const long = t.side === 'long';
@@ -240,7 +250,7 @@ function TradeCard({
       </div>
 
       {/* Forex pip math: per-pip value, risk/reward to SL/TP, and R:R */}
-      {t.forex && <ForexDetails f={t.forex} showMoney={showMoney} />}
+      {t.forex && <ForexDetails f={t.forex} showMoney={showFxMoney} />}
 
       {/* Strategy / timeframe */}
       {(t.strategy || t.timeframe) && (
