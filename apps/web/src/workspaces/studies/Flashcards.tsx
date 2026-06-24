@@ -60,6 +60,13 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
   // step); auto-rotate then just moves between cards on one timer.
   const [alwaysDef, setAlwaysDef] = useState(false);
 
+  // Plain-language expanded explanations that clarify any jargon used inside a
+  // definition. Cached per term so re-opening a card does not call the AI again.
+  const [explanations, setExplanations] = useState<Record<string, string>>({});
+  const [explainBusy, setExplainBusy] = useState(false);
+  const [explainErr, setExplainErr] = useState(false);
+  const [showExplain, setShowExplain] = useState(false);
+
   const revealed = alwaysDef || showDef;
 
   // Keep the latest values available to the interval without restarting it.
@@ -102,6 +109,25 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
       return next;
     });
     void api.removeLearnedTerm(term).catch(() => {});
+  }
+
+  // Ask the study tutor for a beginner-friendly explanation that breaks down any
+  // jargon used inside the definition itself (for example "stagnant growth").
+  async function explainCard(term: string, def: string) {
+    setShowExplain(true);
+    if (explanations[term]) return; // already have it
+    setExplainBusy(true);
+    setExplainErr(false);
+    try {
+      const r = await api.studyTutor({
+        ask: `Explain the Series 65 term "${term}" in plain, simple language for a complete beginner. Its textbook definition is: "${def}". Define any jargon or uncommon terms used inside that definition (for example economics phrases like "stagnant growth") in everyday words, then give a short plain-English summary. Keep it concise, a few short sentences.`,
+      });
+      setExplanations((prev) => ({ ...prev, [term]: r.reply }));
+    } catch {
+      setExplainErr(true);
+    } finally {
+      setExplainBusy(false);
+    }
   }
 
   // Pull the learned set from the account once, so progress follows the user
@@ -162,6 +188,14 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
   }, [auto, alwaysDef]);
 
   const card = cards.length ? cards[Math.min(i, cards.length - 1)] : null;
+
+  // Collapse any open explanation when the visible card changes (manual nav,
+  // auto-rotate, or a topic switch); the cache keeps prior answers ready.
+  useEffect(() => {
+    setShowExplain(false);
+    setExplainErr(false);
+  }, [card?.term]);
+
   const phaseTotal = alwaysDef ? defSecs : showDef ? defSecs : termSecs;
   const learnedList = useMemo(() => [...learned].sort((a, b) => a.localeCompare(b)), [learned]);
 
@@ -285,8 +319,47 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
                 {card.term}
               </div>
               {revealed ? (
-                <div style={{ fontSize: isPhone ? 14 : 15, lineHeight: 1.6, color: '#d7ccff', textAlign: 'center', borderTop: `1px solid ${theme.navBorder}`, paddingTop: 16 }}>
-                  {card.def}
+                <div style={{ borderTop: `1px solid ${theme.navBorder}`, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ fontSize: isPhone ? 14 : 15, lineHeight: 1.6, color: '#d7ccff', textAlign: 'center' }}>
+                    {card.def}
+                  </div>
+                  {!showExplain ? (
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void explainCard(card.term, card.def);
+                        }}
+                        style={explainBtn(theme)}
+                        title="Get a simpler explanation that defines any tricky words"
+                      >
+                        💡 Explain simply
+                      </button>
+                    </div>
+                  ) : (
+                    <div onClick={(e) => e.stopPropagation()} style={explainPanel(theme)}>
+                      {explainBusy && !explanations[card.term] ? (
+                        <span style={{ fontSize: 12.5, color: '#a99ff0' }}>Thinking…</span>
+                      ) : explainErr && !explanations[card.term] ? (
+                        <span style={{ fontSize: 12.5, color: '#ff9a9a' }}>
+                          Could not load an explanation.{' '}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void explainCard(card.term, card.def);
+                            }}
+                            style={{ background: 'none', border: 'none', color: theme.accent, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+                          >
+                            Try again
+                          </button>
+                        </span>
+                      ) : (
+                        <div style={{ fontSize: isPhone ? 13 : 13.5, lineHeight: 1.65, color: '#e7deff', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
+                          {explanations[card.term]}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: '#8a7fc8', textAlign: 'center' }}>
@@ -442,6 +515,28 @@ const knownBtn: CSSProperties = {
   cursor: 'pointer',
   minHeight: 42,
 };
+
+function explainBtn(theme: Theme): CSSProperties {
+  return {
+    border: `1px solid ${theme.accent}`,
+    background: 'rgba(255,255,255,.05)',
+    color: '#fff',
+    fontSize: 12.5,
+    fontWeight: 600,
+    padding: '8px 14px',
+    borderRadius: 8,
+    cursor: 'pointer',
+  };
+}
+
+function explainPanel(theme: Theme): CSSProperties {
+  return {
+    background: 'rgba(255,255,255,.04)',
+    border: `1px solid ${theme.navBorder}`,
+    borderRadius: 10,
+    padding: '12px 14px',
+  };
+}
 
 function primaryBtn(theme: Theme, grad: string): CSSProperties {
   return {
