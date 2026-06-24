@@ -230,8 +230,10 @@ the owner says it's done.
    then branch → PR → squash‑merge. Repeat per stage until done.
 
 ### Backlog the owner has floated (after / alongside Trading, confirm priority)
-- Kia "Ask Claude" command bar (currently a disabled placeholder on the Kia
-  dashboard).
+- ~~Kia "Ask Claude" command bar (currently a disabled placeholder on the Kia
+  dashboard).~~ Done — `POST /api/kia/command` (`apps/api/src/kia/command.ts`)
+  parses natural-language instructions (add/edit/remove deal, set goal, set
+  reviews, summary) and applies them; wired into the dashboard command bar.
 - Remaining Wealth tabs (Overview, Portfolios, Planning, Compliance).
 - Per‑page "?" tutorial polish.
 

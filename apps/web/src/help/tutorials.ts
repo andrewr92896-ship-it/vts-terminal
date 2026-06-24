@@ -292,6 +292,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'In "Log a deal", enter the customer (optional), model, New/Used, profit in dollars, and the sale date, then click "Add deal". It appears in Recent Deals and updates every metric.',
       },
       {
+        title: 'Ask Claude to change details',
+        body: 'Type a plain-English instruction in the "Ask Claude to change details" box and click Run. Claude (Sonnet) applies it for you — e.g. "add deal Sportage LX 1850 for Reyes", "set goal 12", "set reviews 60%", edit or remove a deal, or "summary" — even several at once separated by "·". It lists what it changed and skips anything it can\'t match.',
+      },
+      {
         title: 'Read your KPIs',
         body: 'The cards across the top show units sold, projected pace, days left in the month, total profit, estimated commission, and your review percentage.',
       },
