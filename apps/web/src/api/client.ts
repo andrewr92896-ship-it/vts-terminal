@@ -39,6 +39,7 @@ import type {
   TodoItemState,
   TodoCommandResult,
   TodoSection,
+  TradingSignals,
   User,
   WealthClientStatus,
   WealthClientsData,
@@ -100,6 +101,9 @@ export const api = {
   },
   logout(): Promise<{ ok: boolean }> {
     return request('/api/auth/logout', { method: 'POST' });
+  },
+  demoLogin(): Promise<{ user: User }> {
+    return request('/api/auth/demo', { method: 'POST', body: JSON.stringify({}) });
   },
   changePassword(currentPassword: string, newPassword: string): Promise<{ user: User }> {
     return request('/api/auth/change-password', {
@@ -247,6 +251,9 @@ export const api = {
   },
   tradingAlerts(): Promise<AlertsData> {
     return request('/api/trading/alerts');
+  },
+  tradingSignals(): Promise<TradingSignals> {
+    return request('/api/trading/signals');
   },
   analyzeAlert(id: string, image: { imageBase64: string; mediaType: string }): Promise<AlertsData> {
     return request(`/api/trading/alerts/${id}/analyze`, { method: 'POST', body: JSON.stringify(image) });

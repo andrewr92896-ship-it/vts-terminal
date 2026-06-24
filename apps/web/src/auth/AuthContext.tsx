@@ -13,6 +13,7 @@ interface AuthState {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
+  demoLogin: () => Promise<void>;
   logout: () => Promise<void>;
   // Self-service account actions; each updates the cached user on success.
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -48,6 +49,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(r.user);
   }, []);
 
+  const demoLogin = useCallback(async () => {
+    const r = await api.demoLogin();
+    setUser(r.user);
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await api.logout();
@@ -74,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthCtx.Provider
-      value={{ user, loading, login, logout, changePassword, updateProfile }}
+      value={{ user, loading, login, demoLogin, logout, changePassword, updateProfile }}
     >
       {children}
     </AuthCtx.Provider>

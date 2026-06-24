@@ -21,6 +21,7 @@ export interface User {
   roles: RoleKey[];
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  isDemo: boolean; // the public, read-only demo account
   access: {
     label: string;
     workspaces: WorkspaceKey[];
@@ -415,6 +416,22 @@ export interface BrokerStatus {
 export type TradeSide = 'long' | 'short';
 export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
 
+// Forex pip math attached to currency-pair positions (mirror of
+// apps/api/src/trading/forex.ts). Money fields are null when balances are hidden.
+export interface ForexLeg {
+  pips: number;
+  money: number | null;
+}
+export interface ForexMetrics {
+  pipSize: number;
+  accountCurrency: string;
+  pipsOpen: number | null; // open P/L distance in pips (signed)
+  moneyPerPip: number | null; // account-currency value of one pip
+  risk: ForexLeg | null; // entry -> stop loss
+  reward: ForexLeg | null; // entry -> take profit
+  rr: number | null; // reward-to-risk (e.g. 2 means 1:2)
+}
+
 export interface LiveTrade {
   id: string;
   broker: BrokerKey;
@@ -432,6 +449,7 @@ export interface LiveTrade {
   strategy: string | null;
   timeframe: string | null;
   openedAt: number | null;
+  forex?: ForexMetrics | null; // present only for genuine currency pairs
 }
 
 export interface BrokerLiveResult {
@@ -463,6 +481,7 @@ export interface BrokerConnection {
   broker: BrokerConnectionKind;
   label: string;
   summary: string | null;
+  env: 'practice' | 'live' | null; // OANDA environment, for restoring it on edit
   active: boolean;
   lastStatus: 'unknown' | 'ok' | 'error';
   lastError: string | null;
@@ -756,6 +775,13 @@ export interface AlertRecord {
 export interface AlertsData {
   alerts: AlertRecord[];
   aiConfigured: boolean;
+}
+
+// Desk-wide trading signal the client polls to chime on a new TradingView alert
+// (mirror of apps/api/src/trading/alerts.ts AlertSignal).
+export interface TradingSignals {
+  lastAlertAt: number | null;
+  alertCount: number;
 }
 
 // ---- Trading — History (mirror of apps/api/src/trading/history.ts) ----

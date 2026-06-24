@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireWorkspace } from '../auth/middleware.js';
+import { canAccessWorkspace, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
 
@@ -102,9 +103,16 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Invalid request' });
     }
     const user = request.currentUser!;
+    // Only adopt a workspace persona the caller can actually access, so a user
+    // cannot target a workspace they do not have by passing its key.
+    const wsKey = parsed.data.workspace;
+    const ws =
+      wsKey && wsKey in WORKSPACE_GUIDE && canAccessWorkspace(parseRoles(user), wsKey as WorkspaceKey)
+        ? wsKey
+        : undefined;
     try {
       await enforceAiLimit(user.id, 'ask');
-      const text = await chatClaude(parsed.data.messages, systemPrompt(parsed.data.workspace, user.displayName));
+      const text = await chatClaude(parsed.data.messages, systemPrompt(ws, user.displayName));
       return { reply: text };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });

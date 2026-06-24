@@ -7,10 +7,11 @@ import {
   accentGradient,
   WORKSPACE_LABELS,
 } from '../theme/themes';
-import { ALL_ROLES, ROLE_LABELS, isAdmin, rolesSummary } from '../auth/access';
+import { ALL_ROLES, ROLE_LABELS, canAccessWorkspace, isAdmin, rolesSummary } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { usePrivacy } from '../privacy/privacy';
 import { useDealership } from '../workspaces/kia/dealership';
+import { useAlertSound, ALERT_SOUNDS } from '../sound/alertSound';
 import { Clock } from './Clock';
 
 interface TopBarProps {
@@ -22,9 +23,7 @@ interface TopBarProps {
   theme: Theme;
   brand: BrandMeta;
   brokers: BrokerStatus[];
-  soundOn: boolean;
   onSwitchWorkspace: (ws: WorkspaceKey) => void;
-  onToggleSound: () => void;
   onOpenClaude: () => void;
   onOpenAccount: () => void;
   onOpenAdmin: () => void;
@@ -55,9 +54,7 @@ export function TopBar(props: TopBarProps) {
     theme,
     brand,
     brokers,
-    soundOn,
     onSwitchWorkspace,
-    onToggleSound,
     onOpenClaude,
     onOpenAccount,
     onOpenAdmin,
@@ -66,8 +63,13 @@ export function TopBar(props: TopBarProps) {
   } = props;
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const [soundOpen, setSoundOpen] = useState(false);
   const { isPhone, isTablet } = useResponsive();
   const { privacy, toggle: togglePrivacy } = usePrivacy();
+  const sound = useAlertSound();
+  // The trade-alert sound is only for users who can see the Trading workspace
+  // (full traders and view-only traders); nobody else gets the control or hears it.
+  const canTrade = canAccessWorkspace(effectiveRoles, 'trading');
   const dealership = useDealership();
   // In the Kia workspace the sub-label follows the dealership-name toggle.
   const brandSub = workspace === 'kia' ? dealership.name : brand.sub;
@@ -279,34 +281,150 @@ export function TopBar(props: TopBarProps) {
         {privacy ? 'PRIVACY ON' : 'PRIVACY'}
       </button>
 
-      <button
-        onClick={onToggleSound}
-        title="Trade-alert sound"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          fontFamily: "'IBM Plex Mono', monospace",
-          fontSize: 10,
-          letterSpacing: '0.4px',
-          color: soundOn ? '#35c47b' : '#6f84b2',
-          background: 'rgba(0,0,0,.18)',
-          border: `1px solid ${soundOn ? 'rgba(53,196,123,.3)' : '#2a4170'}`,
-          padding: narrow ? '11px 13px' : '7px 11px',
-          borderRadius: 6,
-          cursor: 'pointer',
-        }}
-      >
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: soundOn ? '#35c47b' : '#6f84b2',
-          }}
-        />
-        {soundOn ? 'ALERTS ON' : 'MUTED'}
-      </button>
+      {canTrade && (
+        <div style={{ position: 'relative', flex: 'none' }}>
+          <button
+            onClick={() => setSoundOpen((v) => !v)}
+            title="Trade-alert sound"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: 10,
+              letterSpacing: '0.4px',
+              color: sound.enabled ? '#35c47b' : '#6f84b2',
+              background: 'rgba(0,0,0,.18)',
+              border: `1px solid ${sound.enabled ? 'rgba(53,196,123,.3)' : '#2a4170'}`,
+              padding: narrow ? '11px 13px' : '7px 11px',
+              borderRadius: 6,
+              cursor: 'pointer',
+            }}
+          >
+            <span
+              style={{
+                width: 7,
+                height: 7,
+                borderRadius: '50%',
+                background: sound.enabled ? '#35c47b' : '#6f84b2',
+              }}
+            />
+            {sound.enabled ? 'ALERTS ON' : 'MUTED'}
+            <span style={{ fontSize: 8, opacity: 0.7 }}>▾</span>
+          </button>
+
+          {soundOpen && (
+            <>
+              <div
+                onClick={() => setSoundOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  right: 0,
+                  top: 'calc(100% + 10px)',
+                  minWidth: 236,
+                  background: '#0c1c3c',
+                  border: '1px solid #1d3560',
+                  borderRadius: 10,
+                  boxShadow: '0 16px 40px rgba(0,0,0,.5)',
+                  padding: 8,
+                  zIndex: 41,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '4px 8px 8px',
+                  }}
+                >
+                  <span style={{ fontSize: 11, color: '#7488b5' }}>Trade alert sound</span>
+                  <button
+                    onClick={() => sound.setEnabled(!sound.enabled)}
+                    style={{
+                      fontFamily: "'IBM Plex Mono', monospace",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      letterSpacing: '0.4px',
+                      color: sound.enabled ? '#35c47b' : '#6f84b2',
+                      background: 'rgba(0,0,0,.18)',
+                      border: `1px solid ${sound.enabled ? 'rgba(53,196,123,.3)' : '#2a4170'}`,
+                      padding: '5px 10px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {sound.enabled ? 'On' : 'Off'}
+                  </button>
+                </div>
+
+                <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6 }}>
+                  {ALERT_SOUNDS.map((s) => {
+                    const on = s.key === sound.soundKey;
+                    return (
+                      <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          onClick={() => sound.setSoundKey(s.key)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 9,
+                            flex: '1 1 auto',
+                            textAlign: 'left',
+                            background: on ? 'rgba(235,203,116,.1)' : 'transparent',
+                            border: 'none',
+                            color: on ? '#EBCB74' : '#cfe0ff',
+                            fontSize: 12.5,
+                            padding: '8px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              flex: 'none',
+                              border: `2px solid ${on ? '#EBCB74' : '#52617f'}`,
+                              background: on ? '#EBCB74' : 'transparent',
+                            }}
+                          />
+                          {s.label}
+                        </button>
+                        <button
+                          onClick={() => sound.preview(s.key)}
+                          title={`Preview ${s.label}`}
+                          aria-label={`Preview ${s.label}`}
+                          style={{
+                            flex: 'none',
+                            background: 'rgba(255,255,255,.05)',
+                            border: '1px solid #2a4170',
+                            color: '#cfe0ff',
+                            fontSize: 11,
+                            padding: '6px 9px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          ▶
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ fontSize: 10.5, color: '#6f84b2', padding: '8px 8px 2px', lineHeight: 1.45 }}>
+                  Plays on this device when a new TradingView alert arrives.
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       <button
         onClick={onOpenClaude}
