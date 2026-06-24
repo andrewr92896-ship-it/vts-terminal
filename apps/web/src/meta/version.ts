@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.6';
+export const APP_VERSION = 'Alpha V 1.7';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.7',
+    date: 'June 24, 2026',
+    notes: [
+      'Flashcards: mark a word "I know this" to hide it from the deck. Learned words collect in a side list with a checkmark; tap the X next to one to add it back.',
+    ],
+  },
   {
     version: 'Alpha V 1.6',
     date: 'June 24, 2026',
