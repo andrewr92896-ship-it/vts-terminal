@@ -6,7 +6,11 @@ import { useAlertSound } from './alertSound';
 // when a new TradingView alert arrives. Render this only for users who can
 // access the Trading workspace (full traders and viewers) so nobody else hears
 // it. It renders nothing.
-const POLL_MS = 15_000;
+//
+// This watcher runs on every screen, so it shares the Live Wall's 30s cadence
+// rather than polling twice as often: alerts arrive by webhook and a sound a few
+// seconds later is fine, and it halves the request load on the broker fan-out.
+const POLL_MS = 30_000;
 
 export function AlertSoundWatcher() {
   const { play } = useAlertSound();

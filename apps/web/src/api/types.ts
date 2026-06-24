@@ -480,6 +480,7 @@ export interface BrokerConnection {
   broker: BrokerConnectionKind;
   label: string;
   summary: string | null;
+  env: 'practice' | 'live' | null; // OANDA environment, for restoring it on edit
   active: boolean;
   lastStatus: 'unknown' | 'ok' | 'error';
   lastError: string | null;

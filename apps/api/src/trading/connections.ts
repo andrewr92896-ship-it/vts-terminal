@@ -25,6 +25,9 @@ export interface BrokerConnection {
   broker: BrokerConnectionKind;
   label: string;
   summary: string | null;
+  // OANDA environment, surfaced (non-secret) so the edit form can restore it
+  // instead of silently defaulting a credential rotation back to practice.
+  env: 'practice' | 'live' | null;
   active: boolean;
   lastStatus: ConnStatus;
   lastError: string | null;
@@ -81,6 +84,8 @@ function toPublic(row: BrokerConnectionRow): BrokerConnection {
     broker: row.broker,
     label: row.label,
     summary: row.summary,
+    // The summary encodes the environment ("Live · ..." / "Practice · ...").
+    env: row.broker === 'oanda' ? (row.summary?.startsWith('Live') ? 'live' : 'practice') : null,
     active: row.active,
     lastStatus: row.lastStatus,
     lastError: row.lastError,

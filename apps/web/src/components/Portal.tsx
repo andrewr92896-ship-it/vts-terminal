@@ -154,7 +154,12 @@ export function Portal() {
 
   // Broker status drives the top-bar dots (Trading only).
   useEffect(() => {
-    if (!allowed.includes('trading')) return;
+    // Clear any previously loaded dots so an admin previewing a non-trading role
+    // never sees stale broker status leak into that workspace.
+    if (!allowed.includes('trading')) {
+      setBrokers([]);
+      return;
+    }
     let alive = true;
     api
       .brokerStatus()

@@ -78,6 +78,9 @@ export function LiveWall() {
   const { privacy } = usePrivacy();
   const [data, setData] = useState<LiveWallData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // A failed *refresh* after the first load: keep the last data on screen but
+  // tell the user it is stale, instead of silently showing frozen positions.
+  const [staleError, setStaleError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
@@ -89,10 +92,13 @@ export function LiveWall() {
       const d = await api.liveWall();
       setData(d);
       setLoadError(null);
+      setStaleError(null);
     } catch (e) {
-      if (firstLoad.current) {
-        setLoadError(e instanceof ApiError ? e.message : 'Failed to load the Live Wall');
-      }
+      const msg = e instanceof ApiError ? e.message : 'Failed to load the Live Wall';
+      // First load with no data yet: show the full-screen error. Later failures
+      // keep the last good data and surface a thin "stale" banner instead.
+      if (firstLoad.current) setLoadError(msg);
+      else setStaleError(msg);
     } finally {
       firstLoad.current = false;
       setRefreshing(false);
@@ -141,6 +147,12 @@ export function LiveWall() {
       </div>
 
       <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={() => void load()} />
+
+      {staleError && (
+        <div style={warnBanner}>
+          Showing the last positions from {etTime(data.generatedAt)} ET. Couldn't refresh: {staleError}
+        </div>
+      )}
 
       {/* Broker health strip */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>

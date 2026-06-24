@@ -73,7 +73,9 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     setLabel(c.label);
     setToken('');
     setAccountId('');
-    setEnv('practice');
+    // Restore the saved environment so rotating the token does not silently
+    // switch a live account back to practice.
+    setEnv(c.env === 'live' ? 'live' : 'practice');
     setApiKey('');
     setApiSecret('');
   }
@@ -174,6 +176,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
               <button
                 onClick={() => !busy && apply(api.removeConnection(c.id))}
                 title="Remove"
+                aria-label={`Remove ${c.label}`}
                 style={{ ...ghostBtn, color: '#ff9a9a', borderColor: 'transparent' }}
               >
                 ×
