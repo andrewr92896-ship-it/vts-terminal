@@ -1,7 +1,29 @@
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { todoSections, todoItems, tradingAlerts } from '../db/schema.js';
+import {
+  todoSections,
+  todoItems,
+  tradingAlerts,
+  kiaDeals,
+  kiaSettings,
+  wealthClients,
+  wealthPortfolios,
+  wealthAllocations,
+  wealthPlans,
+  wealthCompliance,
+  tradingTrades,
+  tradingSessions,
+  tradingNews,
+  tradingCalendar,
+  tradingPositions,
+  tradingChallenges,
+  financeSettings,
+  financeExpenses,
+  financeNetWorth,
+  brokerConnections,
+  aiUsage,
+} from '../db/schema.js';
 import type { AnalyzeResult } from '../ai/claude.js';
 
 import { addDeal, updateSettings as updateKiaSettings } from '../kia/service.js';
@@ -34,6 +56,43 @@ function dayOfThisMonth(day: number): string {
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const d = Math.min(Math.max(1, day), daysInMonth);
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+// Remove every row the seeder owns for this user, so the demo can be refreshed
+// to the latest seed on deploy without piling up duplicates. Scoped strictly by
+// userId, and child tables are cleared before their parents. Each delete is
+// best-effort so one failure does not block the rest.
+export async function clearDemoData(userId: string): Promise<void> {
+  const tables = [
+    todoItems,
+    todoSections,
+    kiaDeals,
+    kiaSettings,
+    wealthAllocations,
+    wealthCompliance,
+    wealthPlans,
+    wealthPortfolios,
+    wealthClients,
+    tradingAlerts,
+    tradingNews,
+    tradingCalendar,
+    tradingSessions,
+    tradingTrades,
+    tradingPositions,
+    tradingChallenges,
+    financeExpenses,
+    financeNetWorth,
+    financeSettings,
+    brokerConnections,
+    aiUsage,
+  ];
+  for (const t of tables) {
+    try {
+      await db.delete(t).where(eq((t as unknown as { userId: typeof todoItems.userId }).userId, userId));
+    } catch (err) {
+      console.error('demo clear failed for a table:', err);
+    }
+  }
 }
 
 export async function seedDemoData(userId: string): Promise<void> {
@@ -110,8 +169,9 @@ export async function seedDemoData(userId: string): Promise<void> {
       await addNetWorth(userId, { label: n.label, amount: n.amount, kind: n.kind });
     }
 
-    // Testing-phase FTP: simulated P/L divided by 18.
-    await updateFinanceSettings(userId, { ftpPhase: 'testing', ftpDivisor: 18, ftpPayoutPct: 80 });
+    // Funded FTP account: payout is 80% of the prop-account P/L. This is the
+    // main income line that lands "left after bills" in a realistic range.
+    await updateFinanceSettings(userId, { ftpPhase: 'funded', ftpDivisor: 18, ftpPayoutPct: 80 });
   } catch (err) {
     console.error('demo seed finance failed:', err);
   }
@@ -402,6 +462,40 @@ export async function seedDemoData(userId: string): Promise<void> {
       closedAt: now - 4 * DAY_MS + 3 * 3_600_000,
       notes: 'Rejected daily supply, partial fill at target.',
     });
+
+    // Funded (FTP) prop-account trades closed this month. Their raw P/L drives
+    // the Personal Finance "FTP payout" income (scaled by the payout percent),
+    // which is what puts the monthly "left after bills" comfortably positive.
+    const ftpResults: Array<{
+      instrument: string;
+      side: 'long' | 'short';
+      entry: number;
+      exit: number;
+      pl: number;
+      tf: string;
+      strat: string;
+      day: number;
+    }> = [
+      { instrument: 'US30', side: 'long', entry: 38950, exit: 39180, pl: 1240, tf: 'H1', strat: 'Trend continuation', day: 6 },
+      { instrument: 'GBP/USD', side: 'long', entry: 1.271, exit: 1.2762, pl: 880, tf: 'M30', strat: 'Breakout retest', day: 4 },
+      { instrument: 'XAU/USD', side: 'long', entry: 2318, exit: 2331, pl: 620, tf: 'H1', strat: 'Pullback long', day: 3 },
+      { instrument: 'USD/CHF', side: 'short', entry: 0.9042, exit: 0.9061, pl: -340, tf: 'M15', strat: 'Failed reversal', day: 1 },
+    ];
+    for (const r of ftpResults) {
+      await addTrade(userId, {
+        broker: 'ftp',
+        instrument: r.instrument,
+        side: r.side,
+        status: 'closed',
+        entryPrice: r.entry,
+        exitPrice: r.exit,
+        realizedPl: r.pl,
+        strategy: r.strat,
+        timeframe: r.tf,
+        openedAt: now - r.day * DAY_MS,
+        closedAt: now - r.day * DAY_MS + 3 * 3_600_000,
+      });
+    }
 
     // Two strategy sessions (ET windows).
     await addSession(userId, {

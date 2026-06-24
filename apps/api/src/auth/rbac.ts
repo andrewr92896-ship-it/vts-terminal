@@ -109,7 +109,8 @@ export function toPublicUser(u: UserRow): PublicUser {
     id: u.id,
     username: u.username,
     displayName: u.displayName,
-    email: u.email,
+    // The demo account stores its seed version in the email column; never expose it.
+    email: u.username === DEMO_USERNAME ? null : u.email,
     roles,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,

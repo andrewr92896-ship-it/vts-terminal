@@ -5,8 +5,8 @@ import { db } from './db/index.js';
 import { users } from './db/schema.js';
 import { hashPassword } from './auth/passwords.js';
 import { seedConnectionsFromEnv } from './trading/connections.js';
-import { DEMO_USERNAME, DEMO_DISPLAY_NAME, DEMO_ROLES } from './demo/identity.js';
-import { seedDemoData } from './demo/seedData.js';
+import { DEMO_USERNAME, DEMO_DISPLAY_NAME, DEMO_ROLES, DEMO_SEED_VERSION } from './demo/identity.js';
+import { seedDemoData, clearDemoData } from './demo/seedData.js';
 
 // Seed the admin's broker connections from the existing global env keys (so the
 // pre-multi-user OANDA/Kraken setup keeps working as "Andrew's Trades").
@@ -77,44 +77,54 @@ export async function seedAdmin(): Promise<void> {
   await trySeedConnections(adminId);
 }
 
-// Creates the public, read-only demo user once and fills every workspace with
-// simulated data so a resume reviewer lands in a portal that looks alive. The
-// account holds no password worth guessing (entry is the one-click demo button),
-// and the demo guard blocks all writes. Idempotent: skips if it already exists.
+// Creates the public, read-only demo user and fills every workspace with
+// simulated data so a reviewer lands in a portal that looks alive. The account
+// holds no password worth guessing (entry is the one-click demo button) and the
+// demo guard blocks all writes. The applied seed version is stored in the demo
+// user's (otherwise unused) email column; when DEMO_SEED_VERSION changes, the
+// data is wiped and re-seeded on boot so tweaks ship on the next deploy.
 export async function seedDemo(): Promise<void> {
-  const existing = await db
-    .select()
-    .from(users)
-    .where(eq(users.username, DEMO_USERNAME))
-    .limit(1);
-  if (existing[0]) {
-    console.log(`Demo user "${DEMO_USERNAME}" already exists.`);
-    return;
-  }
+  const marker = `seed-v${DEMO_SEED_VERSION}`;
+  const existing = (
+    await db.select().from(users).where(eq(users.username, DEMO_USERNAME)).limit(1)
+  )[0];
 
-  const now = new Date();
-  const demoId = crypto.randomUUID();
-  await db.insert(users).values({
-    id: demoId,
-    username: DEMO_USERNAME,
-    createdUsername: DEMO_USERNAME,
-    displayName: DEMO_DISPLAY_NAME,
-    email: null,
-    // A random, unused password: the demo is entered through the one-click
-    // button, never the login form.
-    passwordHash: await hashPassword(crypto.randomBytes(18).toString('base64url')),
-    role: 'Viewer', // legacy column
-    roles: JSON.stringify([...DEMO_ROLES]),
-    viewBrokerage: true, // so balances and the forex pip money show in the demo
-    active: true,
-    mustChangePassword: false,
-    createdAt: now,
-    updatedAt: now,
-  });
+  let demoId: string;
+  if (existing) {
+    if (existing.email === marker) {
+      console.log(`Demo data is current (${marker}).`);
+      return;
+    }
+    demoId = existing.id;
+    console.log(`Refreshing demo data (${existing.email ?? 'unversioned'} -> ${marker}).`);
+    await clearDemoData(demoId);
+  } else {
+    const now = new Date();
+    demoId = crypto.randomUUID();
+    await db.insert(users).values({
+      id: demoId,
+      username: DEMO_USERNAME,
+      createdUsername: DEMO_USERNAME,
+      displayName: DEMO_DISPLAY_NAME,
+      email: null,
+      // A random, unused password: the demo is entered through the one-click button.
+      passwordHash: await hashPassword(crypto.randomBytes(18).toString('base64url')),
+      role: 'Viewer', // legacy column
+      roles: JSON.stringify([...DEMO_ROLES]),
+      viewBrokerage: true, // so balances and the forex pip money show in the demo
+      active: true,
+      mustChangePassword: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.log('Demo user created.');
+  }
 
   try {
     await seedDemoData(demoId);
-    console.log('Demo user created and seeded.');
+    // Stamp the applied version only after a successful seed.
+    await db.update(users).set({ email: marker, updatedAt: new Date() }).where(eq(users.id, demoId));
+    console.log(`Demo data seeded (${marker}).`);
   } catch (err) {
     console.error('Demo data seed failed:', err);
   }
