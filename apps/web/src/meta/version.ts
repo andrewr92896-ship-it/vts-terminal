@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.10';
+export const APP_VERSION = 'Alpha V 1.11';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.11',
+    date: 'June 24, 2026',
+    notes: [
+      'The corner button now shows the VTS mark, and pops a toast when a new chat message, announcement, or market news headline arrives.',
+    ],
+  },
   {
     version: 'Alpha V 1.10',
     date: 'June 24, 2026',

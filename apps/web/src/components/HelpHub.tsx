@@ -12,6 +12,15 @@ import type { Announcement, ChatChannel, ChatMessage, User } from '../api/types'
 
 type Tab = 'how' | 'chat' | 'notes' | 'news';
 
+// Activity sources the hub watches. Each can raise a toast naming what dropped.
+// `tab` is the hub tab to open on click (null = no in-hub destination).
+type ActivitySource = 'chat' | 'announcements' | 'news';
+const SOURCE_TOAST: Record<ActivitySource, { label: string; tab: Tab | null }> = {
+  chat: { label: 'New chat message', tab: 'chat' },
+  announcements: { label: 'New announcement', tab: 'news' },
+  news: { label: 'New market news', tab: null },
+};
+
 function clockTime(ms: number): string {
   return new Date(ms).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 }
@@ -29,9 +38,10 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
   const accentGrad = accentGradient(theme);
   const canTrade = canAccessWorkspace(user.roles, 'trading');
 
-  // Unread dot: poll the latest chat/announcement activity and compare it to the
-  // last time this device opened the hub. The first ever load is treated as
-  // already seen, so the dot only appears for genuinely new activity.
+  // The activity poll drives both the unread dot and the toast notifications.
+  // Each source (chat, announcements, market news) is tracked separately so a
+  // toast can name what dropped. The first poll only sets a baseline, so we
+  // never toast or nag for things that happened before this session.
   const [latest, setLatest] = useState(0);
   const [seen, setSeen] = useState<number>(() => {
     const v = typeof localStorage !== 'undefined' ? localStorage.getItem(SEEN_KEY) : null;
@@ -39,6 +49,21 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
   });
   const seenRef = useRef(seen);
   seenRef.current = seen;
+  const openRef = useRef(open);
+  openRef.current = open;
+
+  const [toasts, setToasts] = useState<{ id: number; source: ActivitySource }[]>([]);
+  const baselineRef = useRef<Record<ActivitySource, number> | null>(null);
+  const toastSeq = useRef(0);
+
+  function pushToast(source: ActivitySource) {
+    const id = (toastSeq.current += 1);
+    setToasts((t) => [...t, { id, source }].slice(-3));
+    window.setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 7000);
+  }
+  function dismissToast(id: number) {
+    setToasts((t) => t.filter((x) => x.id !== id));
+  }
 
   useEffect(() => {
     let alive = true;
@@ -46,18 +71,29 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
       try {
         const r = await api.hubActivity();
         if (!alive) return;
-        setLatest(r.latest);
+        const cur: Record<ActivitySource, number> = { chat: r.chat, announcements: r.announcements, news: r.news };
+        const max = Math.max(cur.chat, cur.announcements, cur.news);
+        setLatest(max);
         if (seenRef.current < 0) {
           // No record yet: start from the current state so we never nag on day one.
-          setSeen(r.latest);
+          setSeen(max);
           try {
-            localStorage.setItem(SEEN_KEY, String(r.latest));
+            localStorage.setItem(SEEN_KEY, String(max));
           } catch {
             // Storage may be blocked; the dot just relies on session state.
           }
         }
+        // Toast any source that advanced since the baseline, unless the hub is
+        // already open (the user is looking). The first poll only baselines.
+        const prev = baselineRef.current;
+        if (prev && !openRef.current) {
+          (['news', 'chat', 'announcements'] as ActivitySource[]).forEach((s) => {
+            if (cur[s] > prev[s]) pushToast(s);
+          });
+        }
+        baselineRef.current = cur;
       } catch {
-        // Transient failure: keep the last value and retry next tick.
+        // Transient failure: keep the last values and retry next tick.
       }
     }
     void tick();
@@ -85,12 +121,22 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
 
   function openHub() {
     setOpen(true);
+    setToasts([]);
     setSeen(latest);
     try {
       localStorage.setItem(SEEN_KEY, String(latest));
     } catch {
       // ignore storage failures
     }
+  }
+
+  function onToastClick(source: ActivitySource) {
+    const dest = SOURCE_TOAST[source].tab;
+    if (dest) {
+      setTab(dest);
+      openHub();
+    }
+    setToasts([]);
   }
 
   const TABS: { key: Tab; label: string }[] = [
@@ -110,21 +156,32 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
           position: 'fixed',
           right: isPhone ? 14 : 22,
           bottom: isPhone ? 14 : 22,
-          width: 44,
-          height: 44,
+          width: 46,
+          height: 46,
           borderRadius: '50%',
           border: `1px solid ${theme.accent}`,
-          background: accentGrad,
+          // The brand mark (navy with the gold V) when closed; the accent fill
+          // with a close glyph when open.
+          background: open ? accentGrad : '#0A2A6B',
           color: theme.accentText,
-          fontSize: 20,
+          fontSize: 22,
           fontWeight: 700,
           lineHeight: 1,
           cursor: 'pointer',
           boxShadow: '0 8px 24px rgba(0,0,0,.45)',
           zIndex: 45,
+          padding: 0,
+          overflow: 'hidden',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        {open ? '×' : '?'}
+        {open ? (
+          '×'
+        ) : (
+          <img src="/icon-192.png" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        )}
         {hasUnread && !open && (
           <span
             aria-hidden
@@ -141,6 +198,57 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
           />
         )}
       </button>
+
+      {/* Toast notifications, stacked just above the hub button. */}
+      {!open && toasts.length > 0 && (
+        <div
+          style={{
+            position: 'fixed',
+            right: isPhone ? 14 : 22,
+            bottom: (isPhone ? 14 : 22) + 58,
+            zIndex: 46,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            alignItems: 'flex-end',
+          }}
+        >
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              onClick={() => onToastClick(t.source)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 9,
+                maxWidth: 'min(280px, 80vw)',
+                background: '#0c1c3c',
+                border: `1px solid ${theme.accent}`,
+                borderRadius: 10,
+                boxShadow: '0 10px 30px rgba(0,0,0,.5)',
+                padding: '10px 12px',
+                cursor: 'pointer',
+                animation: 'popIn .2s ease',
+              }}
+            >
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: theme.accent, flex: 'none' }} />
+              <span style={{ fontSize: 12.5, color: '#eef3ff', fontWeight: 600, flex: 1 }}>
+                {SOURCE_TOAST[t.source].label}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dismissToast(t.id);
+                }}
+                aria-label="Dismiss"
+                style={{ background: 'none', border: 'none', color: '#7488b5', fontSize: 16, lineHeight: 1, cursor: 'pointer', flex: 'none' }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {open && (
         <>
