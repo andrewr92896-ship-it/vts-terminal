@@ -294,6 +294,12 @@ export const api = {
   removeLearnedTerm(term: string): Promise<{ terms: string[] }> {
     return request(`/api/studies/learned?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
   },
+  studyGame(): Promise<{ state: string | null }> {
+    return request('/api/studies/game');
+  },
+  saveStudyGame(state: string): Promise<{ ok: true }> {
+    return request('/api/studies/game', { method: 'PUT', body: JSON.stringify({ state }) });
+  },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');
   },

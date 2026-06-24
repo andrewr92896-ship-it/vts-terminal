@@ -21,6 +21,7 @@ import {
   levelInfo,
   loadGame,
   metaFor,
+  parseGame,
   recordAnswer,
   round1,
   saveGame,
@@ -65,9 +66,53 @@ export function StudyGame({ theme }: { theme: Theme }) {
   const [tutorBusy, setTutorBusy] = useState(false);
   const [tutorError, setTutorError] = useState<string | null>(null);
 
+  // Whether the saved server copy has been pulled yet, and the last state we
+  // pushed up (to skip redundant writes).
+  const [hydrated, setHydrated] = useState(false);
+  const lastSavedRef = useRef<string | null>(null);
+
   useEffect(() => {
     saveGame(storageKey, game);
   }, [game, storageKey]);
+
+  // Pull saved progress from the account once. The localStorage copy renders
+  // instantly; a server copy (if any) takes precedence so levels and scores
+  // follow the user across devices. On failure (offline, demo) the local copy
+  // stays in use, and any local progress is pushed up once we know none exists.
+  useEffect(() => {
+    let alive = true;
+    api
+      .studyGame()
+      .then((r) => {
+        if (!alive) return;
+        const remote = parseGame(r.state);
+        if (remote) {
+          lastSavedRef.current = JSON.stringify(remote);
+          setGame(remote);
+        }
+        setHydrated(true);
+      })
+      .catch(() => {
+        if (alive) setHydrated(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // After hydration, persist progress to the account (debounced). Skipped while
+  // the state matches what we last stored, and best-effort so demo/offline
+  // sessions simply keep their local copy.
+  useEffect(() => {
+    if (!hydrated) return;
+    const json = JSON.stringify(game);
+    if (json === lastSavedRef.current) return;
+    const id = setTimeout(() => {
+      lastSavedRef.current = json;
+      void api.saveStudyGame(json).catch(() => {});
+    }, 800);
+    return () => clearTimeout(id);
+  }, [game, hydrated]);
 
   function draw(cat: Series65Topic): number {
     let pool = poolsRef.current[cat];

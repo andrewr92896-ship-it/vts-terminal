@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.13';
+export const APP_VERSION = 'Alpha V 1.14';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.14',
+    date: 'June 24, 2026',
+    notes: [
+      'Study Game progress now saves to your account: your category levels, scores, and learned words follow you across devices instead of living only on one browser.',
+    ],
+  },
   {
     version: 'Alpha V 1.13',
     date: 'June 24, 2026',
