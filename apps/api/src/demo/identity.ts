@@ -5,6 +5,11 @@
 export const DEMO_USERNAME = 'demo';
 export const DEMO_DISPLAY_NAME = 'Demo User';
 
+// Bump this whenever the demo's seeded data changes. On boot, seedDemo() wipes
+// and re-seeds the demo account when the stored version differs, so tweaks to
+// the simulated data take effect on the next deploy without a manual reset.
+export const DEMO_SEED_VERSION = 2;
+
 // The roles the demo account holds: every workspace except admin (so a reviewer
 // sees the whole product but never the real user-management screen).
 export const DEMO_ROLES = ['trading', 'sales', 'studies', 'todo', 'wealth', 'finance'] as const;
