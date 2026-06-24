@@ -18,7 +18,8 @@ const dateFmt = new Intl.DateTimeFormat('en-US', {
 });
 
 // Ticking Eastern Time clock, AM/PM. Everything user-facing is ET per brief.
-export function Clock() {
+// `compact` renders a smaller single-line-ish version for the top bar.
+export function Clock({ compact = false }: { compact?: boolean }) {
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
@@ -27,19 +28,19 @@ export function Clock() {
   }, []);
 
   return (
-    <div style={{ textAlign: 'right', lineHeight: 1.2 }}>
+    <div style={{ textAlign: 'right', lineHeight: 1.15 }}>
       <div
         style={{
           fontFamily: "'IBM Plex Mono', monospace",
-          fontSize: 14,
+          fontSize: compact ? 11.5 : 14,
           fontWeight: 600,
           color: '#EBCB74',
-          letterSpacing: '0.5px',
+          letterSpacing: '0.4px',
         }}
       >
         {timeFmt.format(now)} ET
       </div>
-      <div style={{ fontSize: 10, color: '#7488b5', letterSpacing: '0.4px' }}>
+      <div style={{ fontSize: compact ? 8.5 : 10, color: '#7488b5', letterSpacing: '0.3px' }}>
         {dateFmt.format(now)}
       </div>
     </div>

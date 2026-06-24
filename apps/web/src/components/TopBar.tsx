@@ -64,9 +64,12 @@ export function TopBar(props: TopBarProps) {
   } = props;
 
   const [menuOpen, setMenuOpen] = useState(false);
-  const [soundOpen, setSoundOpen] = useState(false);
-  // On narrow screens the secondary controls collapse into a single "More" menu.
-  const [moreOpen, setMoreOpen] = useState(false);
+  // Secondary controls (privacy, trade-alert sound, broker status, clock on
+  // narrow) all live behind a single settings (gear) dropdown to keep the row
+  // tidy. The admin "view as role" preview list is a collapsible sub-section
+  // inside the user menu so it stays out of the way until needed.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [viewAsOpen, setViewAsOpen] = useState(false);
   const { isPhone, isTablet } = useResponsive();
   const { privacy, toggle: togglePrivacy } = usePrivacy();
   const sound = useAlertSound();
@@ -203,155 +206,157 @@ export function TopBar(props: TopBarProps) {
     </nav>
   );
 
-  // Secondary controls: broker dots (Trading), clock, sound, Ask Claude.
-  const controls = (
-    <div
+  const canAdmin = isAdmin(effectiveRoles);
+
+  // Shared menu-item styles (used by the settings and user dropdowns).
+  const moreItemBtn: CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 9,
+    width: '100%',
+    textAlign: 'left',
+    background: 'transparent',
+    border: 'none',
+    color: '#cfe0ff',
+    fontSize: 12.5,
+    fontWeight: 600,
+    padding: '9px 8px',
+    borderRadius: 6,
+    cursor: 'pointer',
+  };
+  const moreLabel: CSSProperties = {
+    fontSize: 9.5,
+    letterSpacing: '0.5px',
+    textTransform: 'uppercase',
+    color: '#6f84b2',
+  };
+
+  // Ask Claude stays a first-class button on the bar at every width.
+  const askClaudeBtn = (
+    <button
+      onClick={onOpenClaude}
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: narrow ? 12 : 18,
-        ...(narrow ? { flexWrap: 'wrap', minWidth: 0, maxWidth: '100%' } : {}),
+        gap: 7,
+        flex: 'none',
+        fontSize: 12.5,
+        fontWeight: 600,
+        color: theme.accentText,
+        background: accentGrad,
+        border: 'none',
+        padding: narrow ? '10px 13px' : '8px 14px',
+        borderRadius: 6,
+        cursor: 'pointer',
+        letterSpacing: '0.2px',
+        whiteSpace: 'nowrap',
       }}
     >
-      {isTrading && brokers.length > 0 && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 13,
-            paddingRight: 16,
-            borderRight: '1px solid #234584',
-          }}
-        >
-          {brokers.map((b) => (
-            <span
-              key={b.key}
-              title={`${b.name} (${b.platform}) — ${
-                b.status === 'unconfigured' ? 'Not configured yet (Stage 2)' : b.status
-              }`}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                fontSize: 10.5,
-                color: '#8ea3cc',
-                fontFamily: "'IBM Plex Mono', monospace",
-              }}
-            >
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: brokerDotColor(b.status),
-                  animation: b.status === 'live' ? 'livePulse 2.4s infinite' : 'none',
-                }}
-              />
-              {b.short}
-            </span>
-          ))}
-        </div>
-      )}
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: theme.accentText }} />
+      Ask Claude
+    </button>
+  );
 
-      <Clock />
-
+  // Settings (gear) dropdown: privacy, trade-alert sound, broker status, plus
+  // the time on narrow screens (where there is no room for an inline clock).
+  const showClockInMenu = narrow;
+  const hasStatus = showClockInMenu || (isTrading && brokers.length > 0);
+  const settingsMenu = (
+    <div style={{ position: 'relative', flex: 'none' }}>
       <button
-        onClick={togglePrivacy}
-        title="Privacy mode — hide customer names and dollar amounts for demos"
+        onClick={() => setSettingsOpen((v) => !v)}
+        aria-label="Settings"
+        title="Settings: privacy, alerts, status"
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 6,
-          fontFamily: "'IBM Plex Mono', monospace",
-          fontSize: 10,
-          letterSpacing: '0.4px',
-          color: privacy ? '#e0a23a' : '#6f84b2',
-          background: privacy ? 'rgba(224,162,58,.12)' : 'rgba(0,0,0,.18)',
-          border: `1px solid ${privacy ? 'rgba(224,162,58,.45)' : '#2a4170'}`,
-          padding: narrow ? '11px 13px' : '7px 11px',
-          borderRadius: 6,
+          justifyContent: 'center',
+          width: narrow ? 40 : 36,
+          height: narrow ? 40 : 36,
+          fontSize: 17,
+          lineHeight: 1,
+          color: settingsOpen ? theme.accent : '#cfe0ff',
+          background: 'rgba(0,0,0,.18)',
+          border: `1px solid ${settingsOpen ? theme.accent : '#2a4170'}`,
+          borderRadius: 8,
           cursor: 'pointer',
         }}
       >
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: privacy ? '#e0a23a' : '#6f84b2',
-          }}
-        />
-        {privacy ? 'PRIVACY ON' : 'PRIVACY'}
+        ⚙
       </button>
 
-      {canTrade && (
-        <div style={{ position: 'relative', flex: 'none' }}>
-          <button
-            onClick={() => setSoundOpen((v) => !v)}
-            title="Trade-alert sound"
+      {settingsOpen && (
+        <>
+          <div onClick={() => setSettingsOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
+          <div
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              fontFamily: "'IBM Plex Mono', monospace",
-              fontSize: 10,
-              letterSpacing: '0.4px',
-              color: sound.enabled ? '#35c47b' : '#6f84b2',
-              background: 'rgba(0,0,0,.18)',
-              border: `1px solid ${sound.enabled ? 'rgba(53,196,123,.3)' : '#2a4170'}`,
-              padding: narrow ? '11px 13px' : '7px 11px',
-              borderRadius: 6,
-              cursor: 'pointer',
+              position: 'absolute',
+              right: 0,
+              top: 'calc(100% + 10px)',
+              minWidth: 250,
+              background: '#0c1c3c',
+              border: '1px solid #1d3560',
+              borderRadius: 10,
+              boxShadow: '0 16px 40px rgba(0,0,0,.5)',
+              padding: 10,
+              zIndex: 41,
+              maxHeight: '70vh',
+              overflowY: 'auto',
             }}
           >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: sound.enabled ? '#35c47b' : '#6f84b2',
-              }}
-            />
-            {sound.enabled ? 'ALERTS ON' : 'MUTED'}
-            <span style={{ fontSize: 8, opacity: 0.7 }}>▾</span>
-          </button>
+            {hasStatus && (
+              <div style={{ padding: '2px 6px 8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={moreLabel}>Status</span>
+                  {showClockInMenu && <Clock compact />}
+                </div>
+                {isTrading && brokers.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8 }}>
+                    {brokers.map((b) => (
+                      <span
+                        key={b.key}
+                        title={`${b.name} (${b.platform}): ${
+                          b.status === 'unconfigured' ? 'Not configured yet (Stage 2)' : b.status
+                        }`}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: '#8ea3cc', fontFamily: "'IBM Plex Mono', monospace" }}
+                      >
+                        <span
+                          style={{
+                            width: 7,
+                            height: 7,
+                            borderRadius: '50%',
+                            background: brokerDotColor(b.status),
+                            animation: b.status === 'live' ? 'livePulse 2.4s infinite' : 'none',
+                          }}
+                        />
+                        {b.short}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
-          {soundOpen && (
-            <>
-              <div
-                onClick={() => setSoundOpen(false)}
-                style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-              />
-              <div
-                style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: 'calc(100% + 10px)',
-                  minWidth: 236,
-                  background: '#0c1c3c',
-                  border: '1px solid #1d3560',
-                  borderRadius: 10,
-                  boxShadow: '0 16px 40px rgba(0,0,0,.5)',
-                  padding: 8,
-                  zIndex: 41,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '4px 8px 8px',
-                  }}
-                >
-                  <span style={{ fontSize: 11, color: '#7488b5' }}>Trade alert sound</span>
+            <div style={hasStatus ? { borderTop: '1px solid #1d3560', paddingTop: 6 } : undefined}>
+              <button onClick={togglePrivacy} style={moreItemBtn}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: privacy ? '#e0a23a' : '#6f84b2', flex: 'none' }} />
+                {privacy ? 'Privacy on' : 'Privacy off'}
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: '#6f84b2' }}>
+                  {privacy ? 'hiding names and $' : 'visible'}
+                </span>
+              </button>
+            </div>
+
+            {canTrade && (
+              <div style={{ borderTop: '1px solid #1d3560', marginTop: 6, paddingTop: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 8px' }}>
+                  <span style={moreLabel}>Trade alert sound</span>
                   <button
                     onClick={() => sound.setEnabled(!sound.enabled)}
                     style={{
                       fontFamily: "'IBM Plex Mono', monospace",
                       fontSize: 10,
                       fontWeight: 600,
-                      letterSpacing: '0.4px',
                       color: sound.enabled ? '#35c47b' : '#6f84b2',
                       background: 'rgba(0,0,0,.18)',
                       border: `1px solid ${sound.enabled ? 'rgba(53,196,123,.3)' : '#2a4170'}`,
@@ -363,129 +368,51 @@ export function TopBar(props: TopBarProps) {
                     {sound.enabled ? 'On' : 'Off'}
                   </button>
                 </div>
-
-                <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6 }}>
-                  {ALERT_SOUNDS.map((s) => {
-                    const on = s.key === sound.soundKey;
-                    return (
-                      <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <button
-                          onClick={() => sound.setSoundKey(s.key)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 9,
-                            flex: '1 1 auto',
-                            textAlign: 'left',
-                            background: on ? 'rgba(235,203,116,.1)' : 'transparent',
-                            border: 'none',
-                            color: on ? '#EBCB74' : '#cfe0ff',
-                            fontSize: 12.5,
-                            padding: '8px',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <span
-                            style={{
-                              width: 12,
-                              height: 12,
-                              borderRadius: '50%',
-                              flex: 'none',
-                              border: `2px solid ${on ? '#EBCB74' : '#52617f'}`,
-                              background: on ? '#EBCB74' : 'transparent',
-                            }}
-                          />
-                          {s.label}
-                        </button>
-                        <button
-                          onClick={() => sound.preview(s.key)}
-                          title={`Preview ${s.label}`}
-                          aria-label={`Preview ${s.label}`}
-                          style={{
-                            flex: 'none',
-                            background: 'rgba(255,255,255,.05)',
-                            border: '1px solid #2a4170',
-                            color: '#cfe0ff',
-                            fontSize: 11,
-                            padding: '6px 9px',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          ▶
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
+                {ALERT_SOUNDS.map((s) => {
+                  const on = s.key === sound.soundKey;
+                  return (
+                    <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        onClick={() => sound.setSoundKey(s.key)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 9,
+                          flex: '1 1 auto',
+                          textAlign: 'left',
+                          background: on ? 'rgba(235,203,116,.1)' : 'transparent',
+                          border: 'none',
+                          color: on ? '#EBCB74' : '#cfe0ff',
+                          fontSize: 12.5,
+                          padding: '8px',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ width: 12, height: 12, borderRadius: '50%', flex: 'none', border: `2px solid ${on ? '#EBCB74' : '#52617f'}`, background: on ? '#EBCB74' : 'transparent' }} />
+                        {s.label}
+                      </button>
+                      <button
+                        onClick={() => sound.preview(s.key)}
+                        title={`Preview ${s.label}`}
+                        aria-label={`Preview ${s.label}`}
+                        style={{ flex: 'none', background: 'rgba(255,255,255,.05)', border: '1px solid #2a4170', color: '#cfe0ff', fontSize: 11, padding: '6px 9px', borderRadius: 6, cursor: 'pointer' }}
+                      >
+                        ▶
+                      </button>
+                    </div>
+                  );
+                })}
                 <div style={{ fontSize: 10.5, color: '#6f84b2', padding: '8px 8px 2px', lineHeight: 1.45 }}>
                   Plays on this device when a new TradingView alert arrives.
                 </div>
               </div>
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        </>
       )}
-
-      <button
-        onClick={onOpenClaude}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          fontSize: 12.5,
-          fontWeight: 600,
-          color: theme.accentText,
-          background: accentGrad,
-          border: 'none',
-          padding: narrow ? '11px 14px' : '8px 14px',
-          borderRadius: 6,
-          cursor: 'pointer',
-          letterSpacing: '0.2px',
-        }}
-      >
-        <span
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background: theme.accentText,
-          }}
-        />
-        Ask Claude
-      </button>
     </div>
   );
-
-  // Admin (user management) button — sits just left of the user badge, admins
-  // only. Replaces the old Admin sub-tab in the Trading workspace.
-  const canAdmin = isAdmin(effectiveRoles);
-  const adminBtn = canAdmin ? (
-    <button
-      onClick={onOpenAdmin}
-      title="User management"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        flex: 'none',
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 11,
-        fontWeight: 600,
-        letterSpacing: '0.4px',
-        color: theme.accent,
-        background: 'rgba(0,0,0,.18)',
-        border: `1px solid ${theme.accent}`,
-        padding: narrow ? '11px 13px' : '7px 12px',
-        borderRadius: 6,
-        cursor: 'pointer',
-      }}
-    >
-      Admin
-    </button>
-  ) : null;
 
   // User / role badge with dropdown.
   const userBadge = (
@@ -569,65 +496,87 @@ export function TopBar(props: TopBarProps) {
               Roles: {rolesSummary(user.roles)}
             </div>
 
-            {isAdmin(user.roles) && (
-              <div style={{ borderTop: '1px solid #1d3560', paddingTop: 8, marginTop: 4 }}>
-                <div
-                  style={{
-                    fontSize: 9.5,
-                    letterSpacing: '0.5px',
-                    textTransform: 'uppercase',
-                    color: '#6f84b2',
-                    padding: '2px 8px 6px',
-                  }}
-                >
-                  View as role (preview)
-                </div>
+            {/* Admin tools live inside the user menu now, not on the bar. */}
+            {canAdmin && (
+              <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6, marginTop: 4 }}>
                 <button
                   onClick={() => {
-                    onSetActingRole(null);
                     setMenuOpen(false);
+                    onOpenAdmin();
                   }}
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    textAlign: 'left',
-                    background: !actingRole ? 'rgba(235,203,116,.1)' : 'transparent',
-                    border: 'none',
-                    color: !actingRole ? '#EBCB74' : '#cfe0ff',
-                    fontSize: 12.5,
-                    padding: '8px',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                  }}
+                  style={{ ...moreItemBtn, fontWeight: 600 }}
                 >
-                  My access (all my roles)
+                  User management
                 </button>
-                {ALL_ROLES.map((r) => {
-                  const on = actingRole === r;
-                  return (
+              </div>
+            )}
+
+            {/* "View as role" is a collapsible sub-section so the role list
+                stays tucked away until an admin actually wants to preview. */}
+            {isAdmin(user.roles) && (
+              <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6, marginTop: 6 }}>
+                <button
+                  onClick={() => setViewAsOpen((v) => !v)}
+                  style={{ ...moreItemBtn, fontWeight: 600 }}
+                >
+                  View as role
+                  {actingRole && (
+                    <span style={{ fontSize: 10, color: '#EBCB74' }}>· {ROLE_LABELS[actingRole]}</span>
+                  )}
+                  <span style={{ marginLeft: 'auto', fontSize: 10, color: '#6f84b2' }}>
+                    {viewAsOpen ? '▴' : '▾'}
+                  </span>
+                </button>
+                {viewAsOpen && (
+                  <div style={{ marginTop: 2 }}>
                     <button
-                      key={r}
                       onClick={() => {
-                        onSetActingRole(on ? null : r);
+                        onSetActingRole(null);
                         setMenuOpen(false);
                       }}
                       style={{
                         display: 'block',
                         width: '100%',
                         textAlign: 'left',
-                        background: on ? 'rgba(235,203,116,.1)' : 'transparent',
+                        background: !actingRole ? 'rgba(235,203,116,.1)' : 'transparent',
                         border: 'none',
-                        color: on ? '#EBCB74' : '#cfe0ff',
+                        color: !actingRole ? '#EBCB74' : '#cfe0ff',
                         fontSize: 12.5,
-                        padding: '8px',
+                        padding: '8px 8px 8px 18px',
                         borderRadius: 6,
                         cursor: 'pointer',
                       }}
                     >
-                      {ROLE_LABELS[r]}
+                      My access (all my roles)
                     </button>
-                  );
-                })}
+                    {ALL_ROLES.map((r) => {
+                      const on = actingRole === r;
+                      return (
+                        <button
+                          key={r}
+                          onClick={() => {
+                            onSetActingRole(on ? null : r);
+                            setMenuOpen(false);
+                          }}
+                          style={{
+                            display: 'block',
+                            width: '100%',
+                            textAlign: 'left',
+                            background: on ? 'rgba(235,203,116,.1)' : 'transparent',
+                            border: 'none',
+                            color: on ? '#EBCB74' : '#cfe0ff',
+                            fontSize: 12.5,
+                            padding: '8px 8px 8px 18px',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {ROLE_LABELS[r]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
@@ -681,202 +630,6 @@ export function TopBar(props: TopBarProps) {
     </div>
   );
 
-  // Narrow layout: keep Ask Claude visible and fold the secondary controls
-  // (clock, privacy, alert sound, broker status, admin) into one "More" menu,
-  // so the header stays a single tidy row instead of a crowded wrapping one.
-  const moreItemBtn: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 9,
-    width: '100%',
-    textAlign: 'left',
-    background: 'transparent',
-    border: 'none',
-    color: '#cfe0ff',
-    fontSize: 12.5,
-    fontWeight: 600,
-    padding: '9px 8px',
-    borderRadius: 6,
-    cursor: 'pointer',
-  };
-  const moreLabel: CSSProperties = {
-    fontSize: 9.5,
-    letterSpacing: '0.5px',
-    textTransform: 'uppercase',
-    color: '#6f84b2',
-  };
-  const narrowControls = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
-      <button
-        onClick={onOpenClaude}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 7,
-          fontSize: 12.5,
-          fontWeight: 600,
-          color: theme.accentText,
-          background: accentGrad,
-          border: 'none',
-          padding: '9px 13px',
-          borderRadius: 6,
-          cursor: 'pointer',
-        }}
-      >
-        <span style={{ width: 7, height: 7, borderRadius: '50%', background: theme.accentText }} />
-        Ask Claude
-      </button>
-
-      <div style={{ position: 'relative', flex: 'none' }}>
-        <button
-          onClick={() => setMoreOpen((v) => !v)}
-          aria-label="More controls"
-          title="More"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 40,
-            height: 40,
-            fontSize: 20,
-            lineHeight: 1,
-            color: '#cfe0ff',
-            background: 'rgba(0,0,0,.18)',
-            border: '1px solid #2a4170',
-            borderRadius: 8,
-            cursor: 'pointer',
-          }}
-        >
-          ⋯
-        </button>
-
-        {moreOpen && (
-          <>
-            <div onClick={() => setMoreOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 40 }} />
-            <div
-              style={{
-                position: 'absolute',
-                right: 0,
-                top: 'calc(100% + 10px)',
-                minWidth: 250,
-                background: '#0c1c3c',
-                border: '1px solid #1d3560',
-                borderRadius: 10,
-                boxShadow: '0 16px 40px rgba(0,0,0,.5)',
-                padding: 10,
-                zIndex: 41,
-                maxHeight: '70vh',
-                overflowY: 'auto',
-              }}
-            >
-              {/* Clock + broker status */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '2px 6px 8px' }}>
-                <span style={moreLabel}>Status</span>
-                <Clock />
-              </div>
-              {isTrading && brokers.length > 0 && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '0 6px 8px' }}>
-                  {brokers.map((b) => (
-                    <span
-                      key={b.key}
-                      title={`${b.name} (${b.platform})`}
-                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: '#8ea3cc', fontFamily: "'IBM Plex Mono', monospace" }}
-                    >
-                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: brokerDotColor(b.status) }} />
-                      {b.short}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {/* Privacy */}
-              <div style={{ borderTop: '1px solid #1d3560', paddingTop: 6 }}>
-                <button onClick={togglePrivacy} style={moreItemBtn}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: privacy ? '#e0a23a' : '#6f84b2', flex: 'none' }} />
-                  {privacy ? 'Privacy on' : 'Privacy off'}
-                </button>
-              </div>
-
-              {/* Trade alert sound (trading users) */}
-              {canTrade && (
-                <div style={{ borderTop: '1px solid #1d3560', marginTop: 6, paddingTop: 8 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 8px' }}>
-                    <span style={moreLabel}>Trade alert sound</span>
-                    <button
-                      onClick={() => sound.setEnabled(!sound.enabled)}
-                      style={{
-                        fontFamily: "'IBM Plex Mono', monospace",
-                        fontSize: 10,
-                        fontWeight: 600,
-                        color: sound.enabled ? '#35c47b' : '#6f84b2',
-                        background: 'rgba(0,0,0,.18)',
-                        border: `1px solid ${sound.enabled ? 'rgba(53,196,123,.3)' : '#2a4170'}`,
-                        padding: '5px 10px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {sound.enabled ? 'On' : 'Off'}
-                    </button>
-                  </div>
-                  {ALERT_SOUNDS.map((s) => {
-                    const on = s.key === sound.soundKey;
-                    return (
-                      <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <button
-                          onClick={() => sound.setSoundKey(s.key)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 9,
-                            flex: '1 1 auto',
-                            textAlign: 'left',
-                            background: on ? 'rgba(235,203,116,.1)' : 'transparent',
-                            border: 'none',
-                            color: on ? '#EBCB74' : '#cfe0ff',
-                            fontSize: 12.5,
-                            padding: '8px',
-                            borderRadius: 6,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <span style={{ width: 12, height: 12, borderRadius: '50%', flex: 'none', border: `2px solid ${on ? '#EBCB74' : '#52617f'}`, background: on ? '#EBCB74' : 'transparent' }} />
-                          {s.label}
-                        </button>
-                        <button
-                          onClick={() => sound.preview(s.key)}
-                          aria-label={`Preview ${s.label}`}
-                          style={{ flex: 'none', background: 'rgba(255,255,255,.05)', border: '1px solid #2a4170', color: '#cfe0ff', fontSize: 11, padding: '6px 9px', borderRadius: 6, cursor: 'pointer' }}
-                        >
-                          ▶
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Admin (user management) */}
-              {canAdmin && (
-                <div style={{ borderTop: '1px solid #1d3560', marginTop: 6, paddingTop: 6 }}>
-                  <button
-                    onClick={() => {
-                      setMoreOpen(false);
-                      onOpenAdmin();
-                    }}
-                    style={moreItemBtn}
-                  >
-                    User management
-                  </button>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-
   // Narrow layout: stacked rows. The header is not sticky here (it scrolls
   // away) — the TabBar takes over as the sticky bar so the variable header
   // height never has to be reconciled with the tab row's offset.
@@ -911,8 +664,9 @@ export function TopBar(props: TopBarProps) {
           }}
         >
           {brandEl}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 'none' }}>
-            {narrowControls}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
+            {askClaudeBtn}
+            {settingsMenu}
             {userBadge}
           </div>
         </div>
@@ -945,11 +699,13 @@ export function TopBar(props: TopBarProps) {
         {workspaceNav}
       </div>
 
-      {/* Right: broker dots, clock, alerts, Ask Claude, Admin, user badge.
-          flex:none keeps the user badge fully visible at any width. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flex: 'none' }}>
-        {controls}
-        {adminBtn}
+      {/* Right: a small clock, Ask Claude, a settings (gear) dropdown that holds
+          privacy / alerts / broker status, and the user badge (with admin tools
+          and role preview inside it). flex:none keeps the badge fully visible. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flex: 'none' }}>
+        <Clock compact />
+        {askClaudeBtn}
+        {settingsMenu}
         {userBadge}
       </div>
     </header>
