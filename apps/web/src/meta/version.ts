@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.5';
+export const APP_VERSION = 'Alpha V 1.6';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.6',
+    date: 'June 24, 2026',
+    notes: [
+      'Flashcards: set your own auto-rotate times for the term and the definition.',
+      'Flashcards: a new mode that shows each word together with its definition (no term-only step) and rotates through the cards on one timer.',
+    ],
+  },
   {
     version: 'Alpha V 1.5',
     date: 'June 24, 2026',

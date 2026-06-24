@@ -1,13 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { SERIES65_VOCAB } from './series65Vocab';
 import { SERIES65_TOPICS, type Series65Topic } from './series65Questions';
 
-// Auto-rotation timing: show the term for 10s, then the definition for 20s.
-const TERM_SECS = 10;
-const DEF_SECS = 20;
+// Default auto-rotation timing; both are adjustable in the controls below.
+const DEFAULT_TERM_SECS = 10;
+const DEFAULT_DEF_SECS = 20;
+const MIN_SECS = 5;
+const MAX_SECS = 120;
+const STEP_SECS = 5;
+
+function clampSecs(v: number): number {
+  return Math.max(MIN_SECS, Math.min(MAX_SECS, v));
+}
 
 type Filter = 'All' | Series65Topic;
 
@@ -24,51 +31,78 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
   const [i, setI] = useState(0);
   const [showDef, setShowDef] = useState(false);
   const [auto, setAuto] = useState(false);
-  const [secs, setSecs] = useState(TERM_SECS);
+  const [secs, setSecs] = useState(DEFAULT_TERM_SECS);
 
-  // Keep the latest phase + deck length available to the interval without
-  // restarting it on every render.
+  // Adjustable rotation timing.
+  const [termSecs, setTermSecs] = useState(DEFAULT_TERM_SECS);
+  const [defSecs, setDefSecs] = useState(DEFAULT_DEF_SECS);
+  // When on, every card shows the word and its definition together (no term-only
+  // step); auto-rotate then just moves between cards on one timer.
+  const [alwaysDef, setAlwaysDef] = useState(false);
+
+  // The definition is visible when the user revealed it, or when "always show"
+  // is on (which has no separate term-only phase).
+  const revealed = alwaysDef || showDef;
+
+  // Keep the latest values available to the interval without restarting it on
+  // every render.
   const showDefRef = useRef(showDef);
   showDefRef.current = showDef;
   const lenRef = useRef(cards.length);
   lenRef.current = cards.length;
+  const termRef = useRef(termSecs);
+  termRef.current = termSecs;
+  const defRef = useRef(defSecs);
+  defRef.current = defSecs;
+  const alwaysRef = useRef(alwaysDef);
+  alwaysRef.current = alwaysDef;
 
   // Reset to the first card whenever the topic filter changes.
   useEffect(() => {
     setI(0);
     setShowDef(false);
-    setSecs(TERM_SECS);
+    setSecs(termRef.current);
   }, [filter]);
 
-  // One interval drives the whole rotation while auto is on. When the current
-  // phase runs out, it flips term <-> definition (advancing the card after the
-  // definition) and resets the countdown to the next phase's length.
+  // One interval drives the whole rotation while auto is on. With "always show"
+  // off it flips term -> definition then advances; with it on, each card just
+  // shows for the definition duration before advancing. Restarts when the mode
+  // toggles so the phase is always consistent.
   useEffect(() => {
     if (!auto) return;
-    setShowDef(false);
-    setSecs(TERM_SECS);
+    if (alwaysRef.current) {
+      setShowDef(true);
+      setSecs(defRef.current);
+    } else {
+      setShowDef(false);
+      setSecs(termRef.current);
+    }
     const id = setInterval(() => {
       setSecs((s) => {
         if (s > 1) return s - 1;
+        if (alwaysRef.current) {
+          setI((idx) => (idx + 1) % Math.max(1, lenRef.current));
+          return defRef.current;
+        }
         if (!showDefRef.current) {
           setShowDef(true);
-          return DEF_SECS;
+          return defRef.current;
         }
         setShowDef(false);
         setI((idx) => (idx + 1) % Math.max(1, lenRef.current));
-        return TERM_SECS;
+        return termRef.current;
       });
     }, 1000);
     return () => clearInterval(id);
-  }, [auto]);
+  }, [auto, alwaysDef]);
 
   const card = cards[Math.min(i, cards.length - 1)];
-  const phaseTotal = showDef ? DEF_SECS : TERM_SECS;
+  const phaseTotal = alwaysDef ? defSecs : showDef ? defSecs : termSecs;
 
   function go(delta: number) {
     setI((idx) => (idx + delta + cards.length) % cards.length);
     setShowDef(false);
-    setSecs(TERM_SECS);
+    setSecs(alwaysDef ? defSecs : termSecs);
   }
 
   return (
@@ -107,20 +141,35 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
         })}
       </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 12.5, color: '#cdbcff', userSelect: 'none' }}>
-          <input
-            type="checkbox"
-            checked={auto}
-            onChange={(e) => setAuto(e.target.checked)}
-            style={{ width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' }}
-          />
-          Auto-rotate · term {TERM_SECS}s / definition {DEF_SECS}s
-        </label>
-        <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#8a7fc8' }}>
-          {cards.length === 0 ? '0 / 0' : `${Math.min(i, cards.length - 1) + 1} / ${cards.length}`}
-        </span>
+      {/* Controls: auto-rotate, the always-show-definition mode, and timing. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <label style={checkLabel}>
+            <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} style={checkbox(theme)} />
+            Auto-rotate
+          </label>
+          <label style={checkLabel}>
+            <input type="checkbox" checked={alwaysDef} onChange={(e) => setAlwaysDef(e.target.checked)} style={checkbox(theme)} />
+            Always show the definition with the word
+          </label>
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#8a7fc8' }}>
+            {cards.length === 0 ? '0 / 0' : `${Math.min(i, cards.length - 1) + 1} / ${cards.length}`}
+          </span>
+        </div>
+
+        {/* Timing steppers (only relevant for auto-rotate). */}
+        {auto && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+            {alwaysDef ? (
+              <Stepper label="Seconds per card" value={defSecs} onChange={setDefSecs} theme={theme} />
+            ) : (
+              <>
+                <Stepper label="Term" value={termSecs} onChange={setTermSecs} theme={theme} />
+                <Stepper label="Definition" value={defSecs} onChange={setDefSecs} theme={theme} />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Rotation timer (auto only) */}
@@ -128,7 +177,7 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
             <span style={{ fontSize: 11.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent }}>
-              {showDef ? 'Definition' : 'Term'}
+              {alwaysDef ? 'Card' : showDef ? 'Definition' : 'Term'}
             </span>
             <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, fontWeight: 600, color: '#fff' }}>
               {secs}s
@@ -142,7 +191,7 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
 
       {/* Card */}
       <div
-        onClick={() => !auto && setShowDef((v) => !v)}
+        onClick={() => !auto && !alwaysDef && setShowDef((v) => !v)}
         style={{
           background: 'linear-gradient(180deg,rgba(40,30,72,.55),rgba(28,20,54,.6))',
           border: `1px solid ${theme.navBorder}`,
@@ -154,7 +203,7 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
           flexDirection: 'column',
           justifyContent: 'center',
           gap: 16,
-          cursor: auto ? 'default' : 'pointer',
+          cursor: auto || alwaysDef ? 'default' : 'pointer',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -165,7 +214,7 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
         <div style={{ fontSize: isPhone ? 23 : 29, fontWeight: 700, color: '#fff', textAlign: 'center' }}>
           {card.term}
         </div>
-        {showDef ? (
+        {revealed ? (
           <div style={{ fontSize: isPhone ? 14 : 15, lineHeight: 1.6, color: '#d7ccff', textAlign: 'center', borderTop: `1px solid ${theme.navBorder}`, paddingTop: 16 }}>
             {card.def}
           </div>
@@ -179,7 +228,7 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
       {/* Manual controls */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 16 }}>
         <button onClick={() => go(-1)} style={navBtn(theme)}>‹ Prev</button>
-        {!auto && (
+        {!auto && !alwaysDef && (
           <button onClick={() => setShowDef((v) => !v)} style={primaryBtn(theme, accentGrad)}>
             {showDef ? 'Show term' : 'Show definition'}
           </button>
@@ -190,7 +239,44 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
   );
 }
 
-function navBtn(theme: Theme): React.CSSProperties {
+// A small minus/value/plus control for a seconds duration.
+function Stepper({ label, value, onChange, theme }: { label: string; value: number; onChange: (v: number) => void; theme: Theme }) {
+  const btn: CSSProperties = {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    border: `1px solid ${theme.navBorder}`,
+    background: 'rgba(255,255,255,.05)',
+    color: '#cdbcff',
+    fontSize: 16,
+    lineHeight: 1,
+    cursor: 'pointer',
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+      <span style={{ fontSize: 12, color: '#cdbcff' }}>{label}</span>
+      <button onClick={() => onChange(clampSecs(value - STEP_SECS))} style={btn} aria-label={`Decrease ${label}`}>−</button>
+      <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: '#fff', minWidth: 34, textAlign: 'center' }}>{value}s</span>
+      <button onClick={() => onChange(clampSecs(value + STEP_SECS))} style={btn} aria-label={`Increase ${label}`}>+</button>
+    </div>
+  );
+}
+
+const checkLabel: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 9,
+  cursor: 'pointer',
+  fontSize: 12.5,
+  color: '#cdbcff',
+  userSelect: 'none',
+};
+
+function checkbox(theme: Theme): CSSProperties {
+  return { width: 16, height: 16, accentColor: theme.accent, cursor: 'pointer' };
+}
+
+function navBtn(theme: Theme): CSSProperties {
   return {
     border: `1px solid ${theme.navBorder}`,
     background: 'rgba(255,255,255,.05)',
@@ -204,7 +290,7 @@ function navBtn(theme: Theme): React.CSSProperties {
   };
 }
 
-function primaryBtn(theme: Theme, grad: string): React.CSSProperties {
+function primaryBtn(theme: Theme, grad: string): CSSProperties {
   return {
     border: 'none',
     background: grad,
