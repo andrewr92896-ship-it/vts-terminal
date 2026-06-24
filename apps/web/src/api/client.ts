@@ -264,6 +264,9 @@ export const api = {
   sendChat(channel: ChatChannel, body: string): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/${channel}`, { method: 'POST', body: JSON.stringify({ body }) });
   },
+  deleteChat(channel: ChatChannel, id: string): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/chat/${channel}/${id}`, { method: 'DELETE' });
+  },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');
   },

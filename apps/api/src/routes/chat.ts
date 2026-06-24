@@ -2,7 +2,14 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware.js';
 import { canAccessWorkspace, isAdmin, parseRoles } from '../auth/rbac.js';
-import { latestMessageAt, listMessages, postMessage, type ChatChannel } from '../chat/service.js';
+import {
+  ChatForbiddenError,
+  deleteMessage,
+  latestMessageAt,
+  listMessages,
+  postMessage,
+  type ChatChannel,
+} from '../chat/service.js';
 import {
   addAnnouncement,
   latestAnnouncementAt,
@@ -68,6 +75,20 @@ export async function chatRoutes(app: FastifyInstance) {
       latestAnnouncementAt(),
     ]);
     return { latest: Math.max(messages, announcement) };
+  });
+
+  app.delete('/api/chat/:channel/:id', auth, async (request, reply) => {
+    const channel = resolveChannel(request, reply);
+    if (!channel) return reply;
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    try {
+      const messages = await deleteMessage(channel, id, { id: u.id, isAdmin: isAdmin(parseRoles(u)) });
+      return { messages };
+    } catch (err) {
+      if (err instanceof ChatForbiddenError) return reply.code(403).send({ error: err.message });
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not delete message' });
+    }
   });
 
   app.get('/api/announcements', auth, async (request) => {

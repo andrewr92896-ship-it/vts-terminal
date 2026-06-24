@@ -3,7 +3,7 @@ import { useResponsive } from '../hooks/useMediaQuery';
 import { accentGradient, type Theme } from '../theme/themes';
 import { tutorialFor } from '../help/tutorials';
 import { PATCH_NOTES } from '../meta/version';
-import { canAccessWorkspace } from '../auth/access';
+import { canAccessWorkspace, isAdmin } from '../auth/access';
 import { api, ApiError } from '../api/client';
 import type { Announcement, ChatChannel, ChatMessage, User } from '../api/types';
 
@@ -349,17 +349,19 @@ function Announcements({ theme, user }: { theme: Theme; user: User }) {
 
 // ---- Chat (two columns) ----
 function ChatPanel({ theme, user, canTrade, isPhone }: { theme: Theme; user: User; canTrade: boolean; isPhone: boolean }) {
+  // Admins can remove any message; everyone can remove their own.
+  const canModerate = isAdmin(user.roles);
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: isPhone ? 'column' : 'row', gap: 1, background: '#16294f' }}>
-      {canTrade && <ChatColumn channel="trading" label="Trading desk" theme={theme} user={user} />}
-      <ChatColumn channel="general" label="Website" theme={theme} user={user} />
+      {canTrade && <ChatColumn channel="trading" label="Trading desk" theme={theme} user={user} canModerate={canModerate} />}
+      <ChatColumn channel="general" label="Website" theme={theme} user={user} canModerate={canModerate} />
     </div>
   );
 }
 
 const POLL_MS = 5000;
 
-function ChatColumn({ channel, label, theme, user }: { channel: ChatChannel; label: string; theme: Theme; user: User }) {
+function ChatColumn({ channel, label, theme, user, canModerate }: { channel: ChatChannel; label: string; theme: Theme; user: User; canModerate: boolean }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -411,6 +413,15 @@ function ChatColumn({ channel, label, theme, user }: { channel: ChatChannel; lab
     }
   }
 
+  async function del(id: string) {
+    setError(null);
+    try {
+      setMessages((await api.deleteChat(channel, id)).messages);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not delete');
+    }
+  }
+
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', background: '#0a1730' }}>
       <div style={{ padding: '9px 12px', borderBottom: '1px solid #16294f', fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent }}>
@@ -438,7 +449,19 @@ function ChatColumn({ channel, label, theme, user }: { channel: ChatChannel; lab
               >
                 {m.body}
               </div>
-              <div style={{ fontSize: 9, color: '#5d72a0', textAlign: m.mine ? 'right' : 'left', marginTop: 2 }}>{clockTime(m.createdAt)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: m.mine ? 'flex-end' : 'flex-start', marginTop: 2 }}>
+                <span style={{ fontSize: 9, color: '#5d72a0' }}>{clockTime(m.createdAt)}</span>
+                {(m.mine || canModerate) && !user.isDemo && (
+                  <button
+                    onClick={() => void del(m.id)}
+                    aria-label="Delete message"
+                    title="Delete message"
+                    style={{ background: 'none', border: 'none', color: '#7e6f6f', fontSize: 9, cursor: 'pointer', padding: 0 }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
           ))
         )}
