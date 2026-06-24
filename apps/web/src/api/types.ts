@@ -822,6 +822,16 @@ export interface Announcement {
   createdAt: number;
 }
 
+// A Trump Truth Social post pulled by the live feed (mirror of
+// apps/api/src/trading/feeds.ts TruthPostView).
+export interface TruthPost {
+  id: string;
+  author: string;
+  content: string;
+  url: string | null;
+  postedAt: number;
+}
+
 // Desk-wide trading signal the client polls to chime on a new TradingView alert
 // (mirror of apps/api/src/trading/alerts.ts AlertSignal).
 export interface TradingSignals {

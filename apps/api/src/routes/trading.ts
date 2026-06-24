@@ -22,6 +22,7 @@ import {
   updateEvent,
   removeEvent,
 } from '../trading/news.js';
+import { listTruthPosts } from '../trading/feeds.js';
 import { SESSION_BIASES, NEWS_IMPACTS, NEWS_BIASES, NEWS_CATEGORIES } from '../db/schema.js';
 import {
   addConnection,
@@ -185,6 +186,9 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   // ---- Market News (shared desk feed: headlines + economic calendar) ----
   app.get('/api/trading/news', read, async () => getMarketNews());
+
+  // Mirrored Truth Social posts (populated by the background poller).
+  app.get('/api/trading/truth', read, async () => ({ posts: await listTruthPosts() }));
 
   app.post('/api/trading/news', write, async (request, reply) => {
     const parsed = newsSchema.safeParse(request.body);

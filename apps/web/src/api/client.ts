@@ -12,6 +12,7 @@ import type {
   ConnectionInput,
   ManualPosition,
   ManualPositionInput,
+  TruthPost,
   Expense,
   FinanceOverview,
   FtpPhase,
@@ -272,8 +273,11 @@ export const api = {
   chatMessages(channel: ChatChannel): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/${channel}`);
   },
-  hubActivity(): Promise<{ chat: number; announcements: number; news: number }> {
+  hubActivity(): Promise<{ chat: number; announcements: number; news: number; truth: number }> {
     return request('/api/chat/activity');
+  },
+  tradingTruth(): Promise<{ posts: TruthPost[] }> {
+    return request('/api/trading/truth');
   },
   sendChat(channel: ChatChannel, body: string): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/${channel}`, { method: 'POST', body: JSON.stringify({ body }) });

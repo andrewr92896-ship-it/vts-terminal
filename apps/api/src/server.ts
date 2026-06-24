@@ -25,6 +25,7 @@ import { runMigrations } from './db/migrate.js';
 import { seedAdmin, seedDemo } from './seed.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
+import { startFeeds } from './trading/feeds.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
 // so the whole portal runs as one service.
@@ -123,6 +124,9 @@ async function main() {
   try {
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
     app.log.info(`VTS portal listening on port ${config.PORT}`);
+    // Start the background market-news pollers (production only). Best-effort
+    // and non-blocking: failures are contained and never affect serving.
+    startFeeds();
   } catch (err) {
     app.log.error(err);
     process.exit(1);
