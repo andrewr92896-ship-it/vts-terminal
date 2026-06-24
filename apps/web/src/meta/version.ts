@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.3';
+export const APP_VERSION = 'Alpha V 1.4';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.4',
+    date: 'June 24, 2026',
+    notes: [
+      'Chat: delete your own messages. Admins can remove any message.',
+    ],
+  },
   {
     version: 'Alpha V 1.3',
     date: 'June 24, 2026',

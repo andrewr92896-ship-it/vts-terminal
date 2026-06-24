@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { chatMessages, type ChatMessageRow } from '../db/schema.js';
 
@@ -77,5 +77,31 @@ export async function postMessage(
     body: text.slice(0, MAX_BODY),
     createdAt: new Date(),
   });
+  return listMessages(channel, user.id);
+}
+
+// Thrown when a user tries to delete a message that is not theirs (and they are
+// not an admin), so the route can answer 403 rather than 400.
+export class ChatForbiddenError extends Error {}
+
+// Delete a single message. The author can delete their own; an admin can delete
+// any. Returns the refreshed channel.
+export async function deleteMessage(
+  channel: ChatChannel,
+  id: string,
+  user: { id: string; isAdmin: boolean },
+): Promise<ChatMessageView[]> {
+  const row = (
+    await db
+      .select()
+      .from(chatMessages)
+      .where(and(eq(chatMessages.id, id), eq(chatMessages.channel, channel)))
+      .limit(1)
+  )[0];
+  if (!row) throw new Error('Message not found');
+  if (row.userId !== user.id && !user.isAdmin) {
+    throw new ChatForbiddenError('You can only delete your own messages');
+  }
+  await db.delete(chatMessages).where(eq(chatMessages.id, id));
   return listMessages(channel, user.id);
 }
