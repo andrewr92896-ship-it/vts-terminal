@@ -12,6 +12,7 @@ import { useResponsive } from '../hooks/useMediaQuery';
 import { usePrivacy } from '../privacy/privacy';
 import { useDealership } from '../workspaces/kia/dealership';
 import { useAlertSound, ALERT_SOUNDS } from '../sound/alertSound';
+import { APP_VERSION } from '../meta/version';
 import { Clock } from './Clock';
 
 interface TopBarProps {
@@ -195,7 +196,7 @@ export function TopBar(props: TopBarProps) {
           whiteSpace: 'nowrap',
         }}
       >
-        Alpha V 1.0
+        {APP_VERSION}
       </span>
     </nav>
   );

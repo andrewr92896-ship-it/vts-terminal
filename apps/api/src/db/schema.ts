@@ -607,6 +607,35 @@ export const wealthCompliance = sqliteTable('wealth_compliance', {
 });
 export type WealthComplianceRow = typeof wealthCompliance.$inferSelect;
 
+// ---- Chat & Announcements ----
+// A shared desk chat with two channels: 'trading' (gated to the Trading
+// workspace) and 'general' (any signed-in user). Messages denormalize the
+// author's display name so the feed survives a later rename. Announcements are
+// a separate, admin-managed broadcast list shown to everyone.
+export const chatMessages = sqliteTable('chat_messages', {
+  id: text('id').primaryKey(),
+  channel: text('channel').notNull(), // 'trading' | 'general'
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  author: text('author').notNull(), // denormalized display name
+  body: text('body').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type ChatMessageRow = typeof chatMessages.$inferSelect;
+
+export const announcements = sqliteTable('announcements', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  author: text('author').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type AnnouncementRow = typeof announcements.$inferSelect;
+
 // ---- AI usage (per-user guardrails) ----
 // One row per Claude call, used to enforce a monthly cap. `kind` records which
 // feature made the call (ask, kia, analyze, news_brief, todo_command, ...).

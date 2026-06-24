@@ -2,6 +2,9 @@ import type {
   AdminUser,
   AiUsage,
   AlertsData,
+  Announcement,
+  ChatChannel,
+  ChatMessage,
   BrokerConnection,
   BrokerStatus,
   ChallengeData,
@@ -251,6 +254,21 @@ export const api = {
   },
   tradingAlerts(): Promise<AlertsData> {
     return request('/api/trading/alerts');
+  },
+  chatMessages(channel: ChatChannel): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/chat/${channel}`);
+  },
+  sendChat(channel: ChatChannel, body: string): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/chat/${channel}`, { method: 'POST', body: JSON.stringify({ body }) });
+  },
+  announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
+    return request('/api/announcements');
+  },
+  addAnnouncement(title: string, body: string): Promise<{ announcements: Announcement[] }> {
+    return request('/api/announcements', { method: 'POST', body: JSON.stringify({ title, body }) });
+  },
+  removeAnnouncement(id: string): Promise<{ announcements: Announcement[] }> {
+    return request(`/api/announcements/${id}`, { method: 'DELETE' });
   },
   tradingSignals(): Promise<TradingSignals> {
     return request('/api/trading/signals');

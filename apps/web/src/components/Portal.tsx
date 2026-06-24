@@ -25,7 +25,7 @@ import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
 import { PrivacyProvider } from '../privacy/privacy';
 import { DealershipProvider } from '../workspaces/kia/dealership';
-import { PageHelp } from './PageHelp';
+import { HelpHub } from './HelpHub';
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
@@ -434,8 +434,8 @@ export function Portal() {
         </>
       )}
 
-      {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
-      <PageHelp screen={screen} theme={theme} />
+      {/* Corner hub: per-screen how-to, the chats, patch notes, and announcements. */}
+      <HelpHub screen={screen} theme={theme} user={user!} />
 
       {/* Guided demo tour: drives the portal screen-by-screen for reviewers. */}
       {isDemo && tourOpen && (
