@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.7';
+export const APP_VERSION = 'Alpha V 1.8';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.8',
+    date: 'June 24, 2026',
+    notes: [
+      'Cleaner small screens: the top bar now tucks the clock, privacy, trade alert sound, and admin into a single "More" menu, leaving just Ask Claude and your account in view.',
+      'On phones, a workspace\'s sections are now a dropdown picker instead of a row that ran off the edge.',
+    ],
+  },
   {
     version: 'Alpha V 1.7',
     date: 'June 24, 2026',
