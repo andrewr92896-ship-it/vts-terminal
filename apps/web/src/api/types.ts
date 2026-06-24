@@ -415,6 +415,22 @@ export interface BrokerStatus {
 export type TradeSide = 'long' | 'short';
 export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
 
+// Forex pip math attached to currency-pair positions (mirror of
+// apps/api/src/trading/forex.ts). Money fields are null when balances are hidden.
+export interface ForexLeg {
+  pips: number;
+  money: number | null;
+}
+export interface ForexMetrics {
+  pipSize: number;
+  accountCurrency: string;
+  pipsOpen: number | null; // open P/L distance in pips (signed)
+  moneyPerPip: number | null; // account-currency value of one pip
+  risk: ForexLeg | null; // entry -> stop loss
+  reward: ForexLeg | null; // entry -> take profit
+  rr: number | null; // reward-to-risk (e.g. 2 means 1:2)
+}
+
 export interface LiveTrade {
   id: string;
   broker: BrokerKey;
@@ -432,6 +448,7 @@ export interface LiveTrade {
   strategy: string | null;
   timeframe: string | null;
   openedAt: number | null;
+  forex?: ForexMetrics | null; // present only for genuine currency pairs
 }
 
 export interface BrokerLiveResult {

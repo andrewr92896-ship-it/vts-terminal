@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
+import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
+import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 
@@ -45,6 +47,11 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
   }, [open, user]);
 
   if (!open || !user) return null;
+
+  // Only full trading users (not view-only) may add their own broker APIs. The
+  // server enforces this on every connection write too.
+  const canManageBrokers =
+    canAccessWorkspace(user.roles, 'trading') && !isWorkspaceReadOnly(user.roles, 'trading');
 
   const profileChanged =
     displayName.trim() !== user.displayName || username.trim().toLowerCase() !== user.username;
@@ -249,6 +256,17 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
               </button>
             </div>
           </section>
+
+          {/* Broker connections, for full trading users only. */}
+          {canManageBrokers && (
+            <>
+              <div style={{ height: 1, background: '#1d3560' }} />
+              <section>
+                <div style={sectionLabel}>Broker connections</div>
+                <BrokerConnectionsPanel />
+              </section>
+            </>
+          )}
         </div>
       </div>
     </>

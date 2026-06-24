@@ -3,6 +3,7 @@ import { BROKER_META, brokerMeta } from './config.js';
 import { fetchOandaTrades } from './brokers/oanda.js';
 import { fetchKrakenPositions } from './brokers/kraken.js';
 import { sampleLiveTrades } from './sample.js';
+import { computeForex } from './forex.js';
 import { reconcile } from './history.js';
 import {
   getActiveDecrypted,
@@ -27,10 +28,30 @@ function newestFirst(a: LiveTrade, b: LiveTrade): number {
   return (b.openedAt ?? -Infinity) - (a.openedAt ?? -Infinity);
 }
 
-// Hide P/L (a balance detail) from anyone without the viewBrokerage grant.
+// Hide P/L and the derived pip money (balance details) from anyone without the
+// viewBrokerage grant. Pip distances and the reward-to-risk ratio are price
+// facts, not balances, so they stay visible.
 function gateBalances(trades: LiveTrade[], canSeeBalances: boolean): LiveTrade[] {
   if (canSeeBalances) return trades;
-  return trades.map((t) => ({ ...t, unrealizedPl: null }));
+  return trades.map((t) => ({
+    ...t,
+    unrealizedPl: null,
+    forex: t.forex
+      ? {
+          ...t.forex,
+          moneyPerPip: null,
+          risk: t.forex.risk ? { ...t.forex.risk, money: null } : null,
+          reward: t.forex.reward ? { ...t.forex.reward, money: null } : null,
+        }
+      : t.forex,
+  }));
+}
+
+// Attach forex pip math to any currency-pair trades that do not already have it
+// (the OANDA connector sets its own; the sample feed does not). Non-forex trades
+// get forex: null.
+function enrichForex(trades: LiveTrade[], accountCurrency: string): LiveTrade[] {
+  return trades.map((t) => (t.forex !== undefined ? t : { ...t, forex: computeForex(t, accountCurrency) }));
 }
 
 // Fetch open positions for a single broker connection. Never throws — a failed
@@ -80,9 +101,10 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
 
   // No connection yet → show the sample feed so the wall is never blank.
   if (conns.length === 0) {
-    const trades = gateBalances(withSlippage(sampleLiveTrades(generatedAt)), canSeeBalances).sort(
-      newestFirst,
-    );
+    const trades = gateBalances(
+      enrichForex(withSlippage(sampleLiveTrades(generatedAt)), 'USD'),
+      canSeeBalances,
+    ).sort(newestFirst);
     const brokers: BrokerLiveResult[] = BROKER_META.map((m) => ({
       connectionId: `sample-${m.key}`,
       broker: m.key,

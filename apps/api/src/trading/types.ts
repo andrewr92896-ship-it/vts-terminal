@@ -33,6 +33,9 @@ export interface LiveTrade {
   strategy: string | null;
   timeframe: string | null;
   openedAt: number | null; // ms epoch
+  // Forex pip math (pips of open P/L, money per pip, risk/reward), present only
+  // for genuine currency pairs. Money fields are gated like unrealizedPl.
+  forex?: import('./forex.js').ForexMetrics | null;
 }
 
 // Per-broker outcome of a Live Wall refresh: was it configured, did the fetch
