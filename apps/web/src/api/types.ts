@@ -21,6 +21,7 @@ export interface User {
   roles: RoleKey[];
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  isDemo: boolean; // the public, read-only demo account
   access: {
     label: string;
     workspaces: WorkspaceKey[];

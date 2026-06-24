@@ -12,6 +12,7 @@ import {
 } from '../auth/sessions.js';
 import { toPublicUser } from '../auth/rbac.js';
 import { requireAuth } from '../auth/middleware.js';
+import { DEMO_USERNAME } from '../demo/identity.js';
 
 const loginSchema = z.object({
   username: z.string().trim().min(1).max(64),
@@ -62,6 +63,24 @@ export async function authRoutes(app: FastifyInstance) {
       user.id,
       request.headers['user-agent'],
     );
+    reply.setCookie(SESSION_COOKIE, token, cookieOptions(maxAgeSeconds));
+    return { user: toPublicUser(user) };
+  });
+
+  // One-click entry to the public, read-only demo. No credentials: it signs the
+  // visitor into the pre-seeded demo account. Everything it can do is read-only
+  // (enforced by the demo guard), so this is safe to expose.
+  app.post('/api/auth/demo', async (request, reply) => {
+    const rows = await db
+      .select()
+      .from(users)
+      .where(eq(users.username, DEMO_USERNAME))
+      .limit(1);
+    const user = rows[0];
+    if (!user || !user.active) {
+      return reply.code(503).send({ error: 'The demo is not available right now' });
+    }
+    const { token, maxAgeSeconds } = await createSession(user.id, request.headers['user-agent']);
     reply.setCookie(SESSION_COOKIE, token, cookieOptions(maxAgeSeconds));
     return { user: toPublicUser(user) };
   });

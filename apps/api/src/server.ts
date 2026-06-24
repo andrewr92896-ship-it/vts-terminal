@@ -20,7 +20,8 @@ import { tvWebhookRoutes } from './routes/tvWebhook.js';
 import { financeRoutes } from './routes/finance.js';
 import { aiRoutes } from './routes/ai.js';
 import { runMigrations } from './db/migrate.js';
-import { seedAdmin } from './seed.js';
+import { seedAdmin, seedDemo } from './seed.js';
+import { demoGuard } from './demo/demo.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
 // so the whole portal runs as one service.
@@ -62,6 +63,9 @@ export async function buildServer() {
 
   app.decorateRequest('currentUser', null);
   app.addHook('onRequest', loadUser);
+  // The demo account is read-only and its AI is scripted; this refuses its
+  // writes and serves canned AI before any route handler runs.
+  app.addHook('preHandler', demoGuard);
 
   await app.register(healthRoutes);
   await app.register(authRoutes);
@@ -96,6 +100,7 @@ export async function buildServer() {
 async function bootstrapDatabase(): Promise<void> {
   await runMigrations();
   await seedAdmin();
+  await seedDemo();
 }
 
 async function main() {

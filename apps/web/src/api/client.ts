@@ -102,6 +102,9 @@ export const api = {
   logout(): Promise<{ ok: boolean }> {
     return request('/api/auth/logout', { method: 'POST' });
   },
+  demoLogin(): Promise<{ user: User }> {
+    return request('/api/auth/demo', { method: 'POST', body: JSON.stringify({}) });
+  },
   changePassword(currentPassword: string, newPassword: string): Promise<{ user: User }> {
     return request('/api/auth/change-password', {
       method: 'POST',

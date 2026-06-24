@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import type { BrokerStatus, RoleKey } from '../api/types';
@@ -8,6 +8,7 @@ import {
   TABS,
   DEFAULT_SCREEN,
   WORKSPACE_LABELS,
+  accentGradient,
   type WorkspaceKey,
   type TabDef,
   type Theme,
@@ -16,6 +17,7 @@ import { canAccessWorkspace, workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
+import { DemoTour } from './DemoTour';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { InstallPrompt } from './InstallPrompt';
@@ -177,6 +179,29 @@ export function Portal() {
     setScreen(DEFAULT_SCREEN[ws]);
   }
 
+  // Demo mode: a one-click, read-only showcase with a guided tour. The tour
+  // drives the portal to a specific workspace + screen, so it needs to set both.
+  const isDemo = !!user?.isDemo;
+  const [tourOpen, setTourOpen] = useState(false);
+  const goTo = useCallback((ws: WorkspaceKey, scr: string) => {
+    setWorkspace(ws);
+    setScreen(scr);
+  }, []);
+  // Open the tour automatically the first time a demo session loads.
+  useEffect(() => {
+    if (isDemo && sessionStorage.getItem('vts-demo-tour') !== 'seen') {
+      setTourOpen(true);
+    }
+  }, [isDemo]);
+  function closeTour() {
+    setTourOpen(false);
+    try {
+      sessionStorage.setItem('vts-demo-tour', 'seen');
+    } catch {
+      // Private mode can block storage; the tour just may reopen next load.
+    }
+  }
+
   function changeActingRole(r: RoleKey | null) {
     setActingRole(r);
     const nextAllowed = workspacesForRoles(r ? [r] : user!.roles);
@@ -211,6 +236,62 @@ export function Portal() {
         color: '#dfe7fa',
       }}
     >
+      {/* Demo banner: makes the read-only showcase obvious and offers the tour. */}
+      {isDemo && (
+        <div
+          style={{
+            position: 'relative',
+            zIndex: 2,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            padding: '8px 16px',
+            background: 'linear-gradient(90deg,#0a1f4d,#0c2768)',
+            borderBottom: '1px solid #243f74',
+            fontSize: 12,
+          }}
+        >
+          <span style={{ color: '#eaf1ff' }}>
+            <strong style={{ color: theme.accent }}>Demo mode</strong>
+            <span style={{ color: '#9fb0d6' }}> · read-only · simulated data. The live portal is available on request.</span>
+          </span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => setTourOpen(true)}
+              style={{
+                fontSize: 11.5,
+                fontWeight: 700,
+                color: theme.accentText,
+                background: accentGradient(theme),
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: 6,
+                cursor: 'pointer',
+              }}
+            >
+              Take the tour
+            </button>
+            <button
+              onClick={logout}
+              style={{
+                fontSize: 11.5,
+                fontWeight: 600,
+                color: '#cfe0ff',
+                background: 'rgba(255,255,255,.05)',
+                border: '1px solid #2a4170',
+                padding: '6px 12px',
+                borderRadius: 6,
+                cursor: 'pointer',
+              }}
+            >
+              Exit demo
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Background wordmark watermark — for workspaces with a wordmark logo. */}
       {brand.wordmark && (
         <img
@@ -355,6 +436,16 @@ export function Portal() {
 
       {/* Per-page "?" help button with a step-by-step tutorial for this screen. */}
       <PageHelp screen={screen} theme={theme} />
+
+      {/* Guided demo tour: drives the portal screen-by-screen for reviewers. */}
+      {isDemo && tourOpen && (
+        <DemoTour
+          theme={theme}
+          onGo={goTo}
+          onOpenClaude={() => setAiOpen(true)}
+          onClose={closeTour}
+        />
+      )}
     </div>
     </AlertSoundProvider>
     </DealershipProvider>

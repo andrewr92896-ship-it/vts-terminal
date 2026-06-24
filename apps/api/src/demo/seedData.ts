@@ -1,0 +1,693 @@
+import crypto from 'node:crypto';
+import { eq } from 'drizzle-orm';
+import { db } from '../db/index.js';
+import { todoSections, todoItems, tradingAlerts } from '../db/schema.js';
+import type { AnalyzeResult } from '../ai/claude.js';
+
+import { addDeal, updateSettings as updateKiaSettings } from '../kia/service.js';
+import {
+  addExpense,
+  addNetWorth,
+  updateSettings as updateFinanceSettings,
+} from '../finance/service.js';
+import { addClient } from '../wealth/service.js';
+import { addPortfolio, addAllocation, getPortfolios } from '../wealth/portfolios.js';
+import { addPlan } from '../wealth/planning.js';
+import { addItem as addComplianceItem } from '../wealth/compliance.js';
+import { addTrade } from '../trading/trades.js';
+import { addSession } from '../trading/sessions.js';
+import { addNews, addEvent } from '../trading/news.js';
+import { ensureSeed as ensureTodoSeed } from '../todo/service.js';
+
+// One-time seeding of a read-only public DEMO user so every workspace looks
+// alive for a reviewer. Runs once when the demo user is first created, no
+// per-row idempotency. Each workspace is wrapped in its own try/catch so a
+// single failure never aborts the rest. All data below is clearly fictional.
+
+const DAY_MS = 86_400_000;
+
+// 'YYYY-MM-DD' for a day in the current calendar month (clamped to a valid day).
+function dayOfThisMonth(day: number): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0-based
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const d = Math.min(Math.max(1, day), daysInMonth);
+  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+
+export async function seedDemoData(userId: string): Promise<void> {
+  // ---- Kia ----
+  try {
+    const deals: Array<{
+      customer: string;
+      model: string;
+      type: 'New' | 'Used';
+      frontProfit?: number;
+      backProfit?: number;
+      profit?: number;
+      day: number;
+    }> = [
+      { customer: 'Marcus Bell', model: 'Sportage LX', type: 'New', frontProfit: 1200, backProfit: 900, day: 3 },
+      { customer: 'Dana Whitfield', model: 'Forte GT', type: 'New', frontProfit: 850, backProfit: 1400, day: 6 },
+      { customer: 'Priya Nair', model: 'Sorento EX', type: 'New', frontProfit: 1650, backProfit: 1100, day: 9 },
+      { customer: 'Walk-in', model: 'Optima (Used)', type: 'Used', profit: 1850, day: 12 },
+      { customer: 'Elena Vasquez', model: 'Telluride SX', type: 'New', frontProfit: 2200, backProfit: 1300, day: 15 },
+      { customer: 'Trevor Lang', model: 'Soul S (Used)', type: 'Used', frontProfit: 700, backProfit: 600, day: 18 },
+      { customer: 'Hannah Brooks', model: 'Carnival SX', type: 'New', frontProfit: 1500, backProfit: 1750, day: 21 },
+      { customer: 'Walk-in', model: 'Niro EV', type: 'New', frontProfit: 1300, backProfit: 800, day: 24 },
+    ];
+    for (const d of deals) {
+      await addDeal(userId, {
+        customer: d.customer,
+        model: d.model,
+        type: d.type,
+        profit: d.profit,
+        frontProfit: d.frontProfit,
+        backProfit: d.backProfit,
+        soldAt: dayOfThisMonth(d.day),
+      });
+    }
+    // Monthly unit goal of 15; reviewCount is the per-month Google-review tally.
+    await updateKiaSettings(userId, undefined, { goalUnits: 15, reviewCount: 11 });
+  } catch (err) {
+    console.error('demo seed kia failed:', err);
+  }
+
+  // ---- Finance ----
+  try {
+    const expenses: Array<{ label: string; amount: number; dayOfMonth: number; category: string }> = [
+      { label: 'Mortgage', amount: 2150, dayOfMonth: 1, category: 'Housing' },
+      { label: 'Car Insurance', amount: 168, dayOfMonth: 5, category: 'Insurance' },
+      { label: 'Electric (PSE&G)', amount: 142, dayOfMonth: 8, category: 'Utilities' },
+      { label: 'Internet (Fios)', amount: 89, dayOfMonth: 10, category: 'Utilities' },
+      { label: 'Phone (Verizon)', amount: 95, dayOfMonth: 12, category: 'Utilities' },
+      { label: 'Gym Membership', amount: 45, dayOfMonth: 15, category: 'Health' },
+      { label: 'Student Loan', amount: 312, dayOfMonth: 18, category: 'Debt' },
+      { label: 'Streaming Bundle', amount: 38, dayOfMonth: 20, category: 'Entertainment' },
+      { label: 'Groceries (budget)', amount: 650, dayOfMonth: 22, category: 'Food' },
+      { label: 'Pet Insurance', amount: 52, dayOfMonth: 26, category: 'Insurance' },
+    ];
+    for (const e of expenses) {
+      await addExpense(userId, {
+        label: e.label,
+        amount: e.amount,
+        dayOfMonth: e.dayOfMonth,
+        category: e.category,
+      });
+    }
+
+    const netWorth: Array<{ label: string; amount: number; kind: 'asset' | 'liability' }> = [
+      { label: 'Brokerage (Schwab)', amount: 48200, kind: 'asset' },
+      { label: 'Roth IRA', amount: 31500, kind: 'asset' },
+      { label: 'Home Equity', amount: 92000, kind: 'asset' },
+      { label: 'Emergency Fund (HYSA)', amount: 18000, kind: 'asset' },
+      { label: 'Mortgage Balance', amount: 268000, kind: 'liability' },
+      { label: 'Auto Loan', amount: 14300, kind: 'liability' },
+      { label: 'Student Loans', amount: 21750, kind: 'liability' },
+    ];
+    for (const n of netWorth) {
+      await addNetWorth(userId, { label: n.label, amount: n.amount, kind: n.kind });
+    }
+
+    // Testing-phase FTP: simulated P/L divided by 18.
+    await updateFinanceSettings(userId, { ftpPhase: 'testing', ftpDivisor: 18, ftpPayoutPct: 80 });
+  } catch (err) {
+    console.error('demo seed finance failed:', err);
+  }
+
+  // ---- Wealth ----
+  try {
+    const clients: Array<{
+      name: string;
+      email: string;
+      phone: string;
+      accountValue: number;
+      status: 'prospect' | 'onboarding' | 'active' | 'inactive';
+      notes: string;
+    }> = [
+      {
+        name: 'Robert & Linda Carmichael',
+        email: 'carmichael.family@example.com',
+        phone: '(201) 555-0142',
+        accountValue: 1280000,
+        status: 'active',
+        notes: 'Retired couple, conservative income focus. Annual review in Q3.',
+      },
+      {
+        name: 'Sofia Mendez',
+        email: 'sofia.mendez@example.com',
+        phone: '(908) 555-0188',
+        accountValue: 615000,
+        status: 'active',
+        notes: 'Tech executive, growth tilt, maxing backdoor Roth.',
+      },
+      {
+        name: 'James Okafor',
+        email: 'j.okafor@example.com',
+        phone: '(732) 555-0119',
+        accountValue: 340000,
+        status: 'onboarding',
+        notes: 'Rollover from former 401(k) in progress.',
+      },
+      {
+        name: 'The Whitmore Trust',
+        email: 'trustee@example.com',
+        phone: '(609) 555-0173',
+        accountValue: 2150000,
+        status: 'active',
+        notes: 'Multi-generational trust; coordinate with estate attorney.',
+      },
+      {
+        name: 'Aaron Kelly',
+        email: 'aaron.kelly@example.com',
+        phone: '(862) 555-0150',
+        accountValue: 0,
+        status: 'prospect',
+        notes: 'Referral from Sofia Mendez. Intro meeting scheduled.',
+      },
+    ];
+    for (const c of clients) {
+      await addClient(userId, c);
+    }
+
+    // Two model portfolios, each with 3-4 sleeves (target weights in bps).
+    const models: Array<{
+      name: string;
+      risk:
+        | 'conservative'
+        | 'moderate_conservative'
+        | 'moderate'
+        | 'moderate_aggressive'
+        | 'aggressive';
+      notes: string;
+      sleeves: Array<{
+        name: string;
+        assetClass:
+          | 'us_equity'
+          | 'intl_equity'
+          | 'fixed_income'
+          | 'real_assets'
+          | 'cash'
+          | 'alternative'
+          | 'other';
+        targetBp: number;
+      }>;
+    }> = [
+      {
+        name: 'Core Growth 80/20',
+        risk: 'moderate_aggressive',
+        notes: 'Long-horizon accumulation sleeve.',
+        sleeves: [
+          { name: 'US Total Market', assetClass: 'us_equity', targetBp: 4500 },
+          { name: 'International Developed', assetClass: 'intl_equity', targetBp: 2500 },
+          { name: 'Aggregate Bond', assetClass: 'fixed_income', targetBp: 2000 },
+          { name: 'REIT Sleeve', assetClass: 'real_assets', targetBp: 1000 },
+        ],
+      },
+      {
+        name: 'Income & Preservation 40/60',
+        risk: 'moderate_conservative',
+        notes: 'Near-retirement income tilt.',
+        sleeves: [
+          { name: 'Dividend Equity', assetClass: 'us_equity', targetBp: 3000 },
+          { name: 'Intermediate Bond', assetClass: 'fixed_income', targetBp: 4500 },
+          { name: 'Short-Term Cash', assetClass: 'cash', targetBp: 1500 },
+          { name: 'Inflation-Protected', assetClass: 'real_assets', targetBp: 1000 },
+        ],
+      },
+    ];
+    for (const m of models) {
+      const before = (await getPortfolios(userId)).portfolios.map((p) => p.id);
+      await addPortfolio(userId, { name: m.name, risk: m.risk, notes: m.notes });
+      const after = await getPortfolios(userId);
+      const created =
+        after.portfolios.find((p) => p.name === m.name && !before.includes(p.id)) ??
+        after.portfolios.find((p) => p.name === m.name);
+      if (created) {
+        for (const s of m.sleeves) {
+          await addAllocation(userId, created.id, {
+            name: s.name,
+            assetClass: s.assetClass,
+            targetBp: s.targetBp,
+          });
+        }
+      }
+    }
+
+    // Planning scenarios (money in whole dollars, rates in bps).
+    await addPlan(userId, {
+      name: 'Mendez, Retire at 60',
+      currentAge: 42,
+      retirementAge: 60,
+      endAge: 92,
+      currentSavings: 615000,
+      annualContribution: 46000,
+      returnBp: 650,
+      inflationBp: 250,
+      incomeGoal: 140000,
+    });
+    await addPlan(userId, {
+      name: 'Okafor, Catch-Up Plan',
+      currentAge: 51,
+      retirementAge: 67,
+      endAge: 90,
+      currentSavings: 340000,
+      annualContribution: 30000,
+      returnBp: 600,
+      inflationBp: 250,
+      incomeGoal: 85000,
+    });
+    await addPlan(userId, {
+      name: 'Carmichael, Drawdown',
+      currentAge: 68,
+      retirementAge: 68,
+      endAge: 95,
+      currentSavings: 1280000,
+      annualContribution: 0,
+      returnBp: 450,
+      inflationBp: 250,
+      incomeGoal: 90000,
+    });
+
+    // Compliance items with due dates (ms epoch).
+    const now = Date.now();
+    await addComplianceItem(userId, {
+      category: 'filing',
+      title: 'Form ADV Annual Amendment',
+      status: 'in_progress',
+      dueAt: now + 21 * DAY_MS,
+      notes: 'Annual updating amendment within 90 days of fiscal year end.',
+    });
+    await addComplianceItem(userId, {
+      category: 'review',
+      title: 'Quarterly Account Suitability Review',
+      status: 'not_started',
+      dueAt: now + 9 * DAY_MS,
+      notes: 'Review discretionary accounts against IPS.',
+    });
+    await addComplianceItem(userId, {
+      category: 'disclosure',
+      title: 'Deliver Updated Form CRS to New Clients',
+      status: 'complete',
+      dueAt: now - 5 * DAY_MS,
+    });
+  } catch (err) {
+    console.error('demo seed wealth failed:', err);
+  }
+
+  // ---- Trading ----
+  try {
+    const now = Date.now();
+    // Six trades: forex pairs, one index, one crypto; mix of open/closed.
+    await addTrade(userId, {
+      broker: 'oanda',
+      instrument: 'EUR/USD',
+      side: 'long',
+      status: 'closed',
+      plannedEntry: 1.0825,
+      entryPrice: 1.0828,
+      exitPrice: 1.0901,
+      takeProfit: 1.0905,
+      stopLoss: 1.0795,
+      units: 50000,
+      realizedPl: 365,
+      strategy: 'London breakout',
+      timeframe: 'M15',
+      openedAt: now - 12 * DAY_MS,
+      closedAt: now - 12 * DAY_MS + 4 * 3_600_000,
+      notes: 'Clean breakout above Asian range, scaled out at target.',
+    });
+    await addTrade(userId, {
+      broker: 'oanda',
+      instrument: 'GBP/JPY',
+      side: 'short',
+      status: 'closed',
+      plannedEntry: 191.4,
+      entryPrice: 191.32,
+      exitPrice: 190.55,
+      takeProfit: 190.4,
+      stopLoss: 191.95,
+      units: 20000,
+      realizedPl: -154,
+      strategy: 'Trend pullback',
+      timeframe: 'H1',
+      openedAt: now - 9 * DAY_MS,
+      closedAt: now - 9 * DAY_MS + 6 * 3_600_000,
+      notes: 'Stopped early on news spike; thesis invalidated.',
+    });
+    await addTrade(userId, {
+      broker: 'oanda',
+      instrument: 'USD/CAD',
+      side: 'long',
+      status: 'closed',
+      plannedEntry: 1.362,
+      entryPrice: 1.3622,
+      exitPrice: 1.3688,
+      takeProfit: 1.369,
+      stopLoss: 1.3585,
+      units: 40000,
+      realizedPl: 264,
+      strategy: 'Range reversal',
+      timeframe: 'M30',
+      openedAt: now - 6 * DAY_MS,
+      closedAt: now - 6 * DAY_MS + 8 * 3_600_000,
+      notes: 'Bounced off weekly support, held to TP.',
+    });
+    await addTrade(userId, {
+      broker: 'oanda',
+      instrument: 'US100',
+      side: 'long',
+      status: 'open',
+      plannedEntry: 19850,
+      entryPrice: 19862,
+      takeProfit: 20150,
+      stopLoss: 19720,
+      units: 2,
+      strategy: 'Momentum continuation',
+      timeframe: 'H4',
+      openedAt: now - 2 * DAY_MS,
+      notes: 'Holding into earnings season; trailing stop active.',
+    });
+    await addTrade(userId, {
+      broker: 'kraken',
+      instrument: 'BTC/USD',
+      side: 'long',
+      status: 'open',
+      plannedEntry: 61200,
+      entryPrice: 61340,
+      takeProfit: 65000,
+      stopLoss: 59500,
+      units: 0.25,
+      strategy: 'Swing accumulation',
+      timeframe: 'D1',
+      openedAt: now - 1 * DAY_MS,
+      notes: 'Adding on the reclaim of the prior range high.',
+    });
+    await addTrade(userId, {
+      broker: 'oanda',
+      instrument: 'AUD/USD',
+      side: 'short',
+      status: 'closed',
+      plannedEntry: 0.6645,
+      entryPrice: 0.6643,
+      exitPrice: 0.6601,
+      takeProfit: 0.6595,
+      stopLoss: 0.6675,
+      units: 35000,
+      realizedPl: 147,
+      strategy: 'Supply retest',
+      timeframe: 'M15',
+      openedAt: now - 4 * DAY_MS,
+      closedAt: now - 4 * DAY_MS + 3 * 3_600_000,
+      notes: 'Rejected daily supply, partial fill at target.',
+    });
+
+    // Two strategy sessions (ET windows).
+    await addSession(userId, {
+      name: 'London Open',
+      instrument: 'EUR/USD',
+      openTime: '03:00',
+      closeTime: '05:00',
+      timeframe: 'M15',
+      bias: 'both',
+      bullPlan: 'Buy the breakout above the Asian session high on a retest with volume.',
+      bearPlan: 'Sell rejection of the Asian high; target the session VWAP.',
+      notes: 'Highest volatility window, size accordingly.',
+      active: true,
+    });
+    await addSession(userId, {
+      name: 'NY Open',
+      instrument: 'US100',
+      openTime: '09:30',
+      closeTime: '11:00',
+      timeframe: 'M5',
+      bias: 'bull',
+      bullPlan: 'Continuation of the premarket trend after the first 15-minute range breaks.',
+      bearPlan: 'Fade exhaustion gaps back to prior close.',
+      notes: 'Avoid the first 2 minutes; let the auction settle.',
+      active: true,
+    });
+
+    // Five market-news headlines.
+    const headlines: Array<{
+      title: string;
+      body: string;
+      source: string;
+      category: 'markets' | 'geopolitical' | 'economic' | 'crypto' | 'other';
+      impact: 'high' | 'medium' | 'low';
+      bias: 'bullish' | 'bearish' | 'neutral';
+      hoursAgo: number;
+    }> = [
+      {
+        title: 'Dollar firms as traders trim rate-cut bets ahead of CPI',
+        body: 'The dollar index edged higher as markets repriced the timing of the first cut.',
+        source: 'Desk Wire',
+        category: 'markets',
+        impact: 'high',
+        bias: 'bullish',
+        hoursAgo: 2,
+      },
+      {
+        title: 'Euro slips below 1.09 on soft German factory orders',
+        body: 'Weaker-than-expected industrial data weighed on the single currency.',
+        source: 'Desk Wire',
+        category: 'economic',
+        impact: 'medium',
+        bias: 'bearish',
+        hoursAgo: 5,
+      },
+      {
+        title: 'Bitcoin reclaims range high as ETF inflows resume',
+        body: 'Spot ETF net inflows turned positive for a third straight session.',
+        source: 'Crypto Desk',
+        category: 'crypto',
+        impact: 'medium',
+        bias: 'bullish',
+        hoursAgo: 9,
+      },
+      {
+        title: 'Oil steadies as supply concerns offset demand worries',
+        body: 'Brent held a tight range as the market weighed mixed signals.',
+        source: 'Desk Wire',
+        category: 'markets',
+        impact: 'low',
+        bias: 'neutral',
+        hoursAgo: 14,
+      },
+      {
+        title: 'Yen intervention risk rises as USD/JPY tests multi-decade highs',
+        body: 'Officials reiterated they are watching FX moves "with a high sense of urgency".',
+        source: 'Desk Wire',
+        category: 'geopolitical',
+        impact: 'high',
+        bias: 'bearish',
+        hoursAgo: 20,
+      },
+    ];
+    for (const h of headlines) {
+      await addNews(userId, {
+        title: h.title,
+        body: h.body,
+        source: h.source,
+        category: h.category,
+        impact: h.impact,
+        bias: h.bias,
+        publishedAt: now - h.hoursAgo * 3_600_000,
+      });
+    }
+
+    // Economic calendar events.
+    await addEvent(userId, {
+      title: 'US CPI (YoY)',
+      country: 'US',
+      impact: 'high',
+      eventTime: now + 1 * DAY_MS,
+      forecast: '3.2%',
+      previous: '3.4%',
+    });
+    await addEvent(userId, {
+      title: 'ECB Interest Rate Decision',
+      country: 'EU',
+      impact: 'high',
+      eventTime: now + 3 * DAY_MS,
+      forecast: '4.25%',
+      previous: '4.50%',
+    });
+    await addEvent(userId, {
+      title: 'US Nonfarm Payrolls',
+      country: 'US',
+      impact: 'high',
+      eventTime: now + 6 * DAY_MS,
+      forecast: '185K',
+      previous: '206K',
+    });
+
+    // Three TradingView alerts: one already analyzed (with a linked trade), two new.
+    const analyzedTradeId = await addTrade(userId, {
+      broker: 'ftp',
+      instrument: 'EUR/USD',
+      side: 'long',
+      status: 'closed',
+      plannedEntry: 1.085,
+      entryPrice: 1.0853,
+      exitPrice: 1.0912,
+      strategy: 'Breakout',
+      timeframe: 'M15',
+      openedAt: now - 3 * DAY_MS,
+      closedAt: now - 3 * DAY_MS + 5 * 3_600_000,
+      notes: 'Auto-created from analyzed TradingView alert.',
+    });
+
+    const analysis: AnalyzeResult = {
+      raw: 'Long EUR/USD breakout. Fill at 1.0853 vs alert 1.0850, minimal slippage. Setup was a clean retest of the broken Asian range high with a tight stop. Exit at 1.0912 captured the measured move. Good execution.',
+      parsed: {
+        instrument: 'EUR/USD',
+        side: 'long',
+        plannedEntry: 1.085,
+        actualFill: 1.0853,
+        exit: 1.0912,
+        slippage: '0.3 pips of positive slippage vs the alert price, negligible.',
+        setupQuality: 'Valid breakout-retest; entry aligned with the alert and session bias.',
+        risk: 'Stop placed below the retest low (~1.0820); ~0.3% account risk. Reasonable.',
+        verdict: 'good',
+        summary: 'Well-executed London breakout long with minimal slippage and a clean exit at target.',
+      },
+      model: 'claude-opus-4-8',
+    };
+
+    const alertNow = new Date();
+    const seedAlert = async (input: {
+      instrument: string;
+      side: 'long' | 'short';
+      price: number;
+      strategy: string;
+      timeframe: string;
+      message: string;
+      receivedAtMs: number;
+      status: 'new' | 'analyzed';
+      analysis?: AnalyzeResult;
+      analyzedAtMs?: number;
+      tradeId?: string;
+    }): Promise<void> => {
+      const payload = JSON.stringify({
+        instrument: input.instrument,
+        side: input.side,
+        price: input.price,
+        strategy: input.strategy,
+        timeframe: input.timeframe,
+        message: input.message,
+      });
+      await db.insert(tradingAlerts).values({
+        id: crypto.randomUUID(),
+        userId,
+        source: 'tradingview',
+        instrument: input.instrument,
+        side: input.side,
+        price: input.price,
+        strategy: input.strategy,
+        timeframe: input.timeframe,
+        message: input.message,
+        payload,
+        status: input.status,
+        analysis: input.analysis ? JSON.stringify(input.analysis) : null,
+        analyzedAt: input.analyzedAtMs != null ? new Date(input.analyzedAtMs) : null,
+        tradeId: input.tradeId ?? null,
+        receivedAt: new Date(input.receivedAtMs),
+        createdAt: alertNow,
+        updatedAt: alertNow,
+      });
+    };
+
+    await seedAlert({
+      instrument: 'EUR/USD',
+      side: 'long',
+      price: 1.085,
+      strategy: 'Breakout',
+      timeframe: 'M15',
+      message: 'BUY EUR/USD, breakout retest confirmed',
+      receivedAtMs: now - 3 * DAY_MS,
+      status: 'analyzed',
+      analysis,
+      analyzedAtMs: now - 3 * DAY_MS + 10 * 60_000,
+      tradeId: analyzedTradeId,
+    });
+    await seedAlert({
+      instrument: 'GBP/JPY',
+      side: 'short',
+      price: 191.4,
+      strategy: 'Trend pullback',
+      timeframe: 'H1',
+      message: 'SELL GBP/JPY, rejection at supply',
+      receivedAtMs: now - 90 * 60_000,
+      status: 'new',
+    });
+    await seedAlert({
+      instrument: 'US100',
+      side: 'long',
+      price: 19850,
+      strategy: 'Momentum continuation',
+      timeframe: 'H4',
+      message: 'BUY US100, momentum continuation above range',
+      receivedAtMs: now - 25 * 60_000,
+      status: 'new',
+    });
+  } catch (err) {
+    console.error('demo seed trading failed:', err);
+  }
+
+  // ---- Todo ----
+  try {
+    // Let the standard starter sections (which include 'Priority') be created.
+    await ensureTodoSeed(userId);
+
+    const sections = await db
+      .select()
+      .from(todoSections)
+      .where(eq(todoSections.userId, userId));
+
+    const findSection = (title: string) => sections.find((s) => s.title === title);
+
+    // Add items directly so done/undone state can be set precisely. Each item
+    // is a one-time checkable task in its section.
+    const seedItems = async (
+      title: string,
+      items: Array<{ text: string; done: boolean }>,
+    ): Promise<void> => {
+      const sec = findSection(title);
+      if (!sec) return;
+      const stamp = new Date();
+      for (let i = 0; i < items.length; i++) {
+        await db.insert(todoItems).values({
+          id: crypto.randomUUID(),
+          userId,
+          sectionId: sec.id,
+          text: items[i].text,
+          position: i,
+          hyphen: false,
+          done: items[i].done,
+          dueAt: null,
+          intervalDays: null,
+          createdAt: stamp,
+        });
+      }
+    };
+
+    await seedItems('Priority', [
+      { text: 'Finalize Q3 client review deck', done: false },
+      { text: 'Submit Form ADV amendment', done: false },
+      { text: 'Renew Series 65 registration', done: true },
+    ]);
+    await seedItems('Finance', [
+      { text: 'Rebalance Roth IRA to target allocation', done: false },
+      { text: 'Set up automatic HYSA transfer', done: true },
+      { text: 'Review credit report', done: false },
+    ]);
+    await seedItems('Personal / Home', [
+      { text: 'Schedule HVAC maintenance', done: false },
+      { text: 'Replace smoke detector batteries', done: true },
+    ]);
+  } catch (err) {
+    console.error('demo seed todo failed:', err);
+  }
+}

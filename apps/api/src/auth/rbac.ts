@@ -1,4 +1,5 @@
 import type { UserRow } from '../db/schema.js';
+import { DEMO_USERNAME } from '../demo/identity.js';
 
 export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'wealth' | 'finance';
 
@@ -93,6 +94,7 @@ export interface PublicUser {
   roles: RoleKey[];
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  isDemo: boolean; // the public, read-only demo account
   access: {
     label: string;
     workspaces: WorkspaceKey[];
@@ -111,6 +113,7 @@ export function toPublicUser(u: UserRow): PublicUser {
     roles,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
+    isDemo: u.username === DEMO_USERNAME,
     access: {
       label: accessLabel(roles),
       workspaces,

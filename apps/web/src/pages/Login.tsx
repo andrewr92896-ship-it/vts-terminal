@@ -3,11 +3,12 @@ import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, demoLogin } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -20,6 +21,17 @@ export function Login() {
         err instanceof ApiError ? err.message : 'Could not sign in. Try again.',
       );
       setBusy(false);
+    }
+  }
+
+  async function onDemo() {
+    setError(null);
+    setDemoBusy(true);
+    try {
+      await demoLogin();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'The demo is unavailable right now.');
+      setDemoBusy(false);
     }
   }
 
@@ -143,6 +155,39 @@ export function Login() {
         >
           {busy ? 'Signing in...' : 'Sign In'}
         </button>
+
+        {/* One-click public demo: no credentials, read-only, simulated data. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '18px 0 14px' }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(62,92,152,.35)' }} />
+          <span style={{ fontSize: 10, letterSpacing: '1px', textTransform: 'uppercase', color: '#5d72a0' }}>
+            or
+          </span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(62,92,152,.35)' }} />
+        </div>
+
+        <button
+          type="button"
+          onClick={onDemo}
+          disabled={demoBusy}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: 8,
+            cursor: demoBusy ? 'default' : 'pointer',
+            fontSize: 13.5,
+            fontWeight: 700,
+            letterSpacing: '0.3px',
+            color: '#eaf1ff',
+            background: 'rgba(255,255,255,.05)',
+            border: '1px solid rgba(124,156,224,.5)',
+            opacity: demoBusy ? 0.6 : 1,
+          }}
+        >
+          {demoBusy ? 'Loading demo...' : 'View the live demo'}
+        </button>
+        <p style={{ textAlign: 'center', margin: '8px 0 0', fontSize: 10.5, color: '#6f84b2', lineHeight: 1.5 }}>
+          A read-only tour with simulated data. No account needed.
+        </p>
 
         <p
           style={{
