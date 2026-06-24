@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.14';
+export const APP_VERSION = 'Alpha V 1.15';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.15',
+    date: 'June 24, 2026',
+    notes: [
+      'Cleaner top bar: privacy, trade alert sound, and broker status now live in one settings (gear) menu, and the clock is smaller, so the row is no longer crowded.',
+      'Admin tools moved into your name menu: "User management" is there, and "View as role" is a tucked-away collapsible list instead of a row of buttons.',
+    ],
+  },
   {
     version: 'Alpha V 1.14',
     date: 'June 24, 2026',
