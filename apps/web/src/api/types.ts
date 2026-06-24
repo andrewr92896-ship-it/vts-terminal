@@ -474,7 +474,7 @@ export interface LiveWall {
 }
 
 // ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----
-export type BrokerConnectionKind = 'oanda' | 'kraken';
+export type BrokerConnectionKind = 'oanda' | 'kraken' | 'manual';
 
 export interface BrokerConnection {
   id: string;
@@ -494,6 +494,33 @@ export interface ConnectionInput {
   label?: string;
   active?: boolean;
   creds?: Record<string, string>;
+}
+
+// A hand-entered open position on a manual broker connection (mirror of
+// apps/api/src/trading/manual.ts ManualPositionView).
+export interface ManualPosition {
+  id: string;
+  connectionId: string;
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  entryPrice: number;
+  currentPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  plannedEntry: number | null;
+  openedAt: number | null;
+}
+export interface ManualPositionInput {
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  entryPrice: number;
+  currentPrice?: number | null;
+  takeProfit?: number | null;
+  stopLoss?: number | null;
+  plannedEntry?: number | null;
+  openedAt?: number;
 }
 
 // ---- Trading — Account Metrics / challenge (mirror of apps/api/src/trading/challenge.ts) ----

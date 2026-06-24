@@ -169,6 +169,13 @@
       "when": 1782269758913,
       "tag": "0023_last_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1782316992207,
+      "tag": "0024_glorious_salo",
+      "breakpoints": true
     }
   ]
 }
