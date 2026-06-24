@@ -677,3 +677,17 @@ export const aiUsage = sqliteTable('ai_usage', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type AiUsageRow = typeof aiUsage.$inferSelect;
+
+// ---- Studies: learned flashcard terms (per user) ----
+// One row per vocabulary term the user has marked as known, so their flashcard
+// progress follows them across devices. The client also keeps a local copy for
+// instant feedback and offline use.
+export const studyLearned = sqliteTable('study_learned', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  term: text('term').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyLearnedRow = typeof studyLearned.$inferSelect;

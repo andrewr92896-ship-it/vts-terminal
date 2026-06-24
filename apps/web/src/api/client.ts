@@ -281,6 +281,15 @@ export const api = {
   deleteChat(channel: ChatChannel, id: string): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/${channel}/${id}`, { method: 'DELETE' });
   },
+  studyLearned(): Promise<{ terms: string[] }> {
+    return request('/api/studies/learned');
+  },
+  addLearnedTerm(term: string): Promise<{ terms: string[] }> {
+    return request('/api/studies/learned', { method: 'POST', body: JSON.stringify({ term }) });
+  },
+  removeLearnedTerm(term: string): Promise<{ terms: string[] }> {
+    return request(`/api/studies/learned?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
+  },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');
   },
