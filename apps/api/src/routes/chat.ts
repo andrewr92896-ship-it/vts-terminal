@@ -17,6 +17,7 @@ import {
   removeAnnouncement,
 } from '../chat/announcements.js';
 import { latestNewsAt } from '../trading/news.js';
+import { latestTruthAt } from '../trading/feeds.js';
 
 const messageSchema = z.object({ body: z.string().trim().min(1).max(1000) });
 const announcementSchema = z.object({
@@ -72,12 +73,13 @@ export async function chatRoutes(app: FastifyInstance) {
     const canTrade = canAccessWorkspace(parseRoles(request.currentUser!), 'trading');
     const channels: ChatChannel[] = ['general'];
     if (canTrade) channels.push('trading');
-    const [chat, announcements, news] = await Promise.all([
+    const [chat, announcements, news, truth] = await Promise.all([
       latestMessageAt(channels),
       latestAnnouncementAt(),
       canTrade ? latestNewsAt() : Promise.resolve(0),
+      canTrade ? latestTruthAt() : Promise.resolve(0),
     ]);
-    return { chat, announcements, news };
+    return { chat, announcements, news, truth };
   });
 
   app.delete('/api/chat/:channel/:id', auth, async (request, reply) => {

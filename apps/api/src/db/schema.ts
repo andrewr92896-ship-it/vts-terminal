@@ -533,6 +533,21 @@ export const tradingCalendar = sqliteTable('trading_calendar', {
 });
 export type TradingCalendarRow = typeof tradingCalendar.$inferSelect;
 
+// ---- Truth Social feed (best-effort poll of a single public account) ----
+// A scheduled poller mirrors the latest public posts into this table so the
+// Market News area can show them. externalId is the upstream status id and is
+// used to dedupe across polls; content is plain text (HTML stripped).
+export const truthPosts = sqliteTable('truth_posts', {
+  id: text('id').primaryKey(),
+  externalId: text('external_id').notNull(),
+  author: text('author').notNull(),
+  content: text('content').notNull(),
+  url: text('url'),
+  postedAt: integer('posted_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TruthPostRow = typeof truthPosts.$inferSelect;
+
 // ---- Wealth — Model Portfolios & target allocations (per advisor) ----
 // A model portfolio is a named target allocation an advisor maintains; each
 // allocation row is a sleeve (asset class / holding) with a target weight in

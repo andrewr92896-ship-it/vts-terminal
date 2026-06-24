@@ -14,11 +14,12 @@ type Tab = 'how' | 'chat' | 'notes' | 'news';
 
 // Activity sources the hub watches. Each can raise a toast naming what dropped.
 // `tab` is the hub tab to open on click (null = no in-hub destination).
-type ActivitySource = 'chat' | 'announcements' | 'news';
+type ActivitySource = 'chat' | 'announcements' | 'news' | 'truth';
 const SOURCE_TOAST: Record<ActivitySource, { label: string; tab: Tab | null }> = {
   chat: { label: 'New chat message', tab: 'chat' },
   announcements: { label: 'New announcement', tab: 'news' },
   news: { label: 'New market news', tab: null },
+  truth: { label: 'New Truth Social post', tab: null },
 };
 
 function clockTime(ms: number): string {
@@ -71,8 +72,8 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
       try {
         const r = await api.hubActivity();
         if (!alive) return;
-        const cur: Record<ActivitySource, number> = { chat: r.chat, announcements: r.announcements, news: r.news };
-        const max = Math.max(cur.chat, cur.announcements, cur.news);
+        const cur: Record<ActivitySource, number> = { chat: r.chat, announcements: r.announcements, news: r.news, truth: r.truth };
+        const max = Math.max(cur.chat, cur.announcements, cur.news, cur.truth);
         setLatest(max);
         if (seenRef.current < 0) {
           // No record yet: start from the current state so we never nag on day one.
@@ -87,7 +88,7 @@ export function HelpHub({ screen, theme, user }: { screen: string; theme: Theme;
         // already open (the user is looking). The first poll only baselines.
         const prev = baselineRef.current;
         if (prev && !openRef.current) {
-          (['news', 'chat', 'announcements'] as ActivitySource[]).forEach((s) => {
+          (['truth', 'news', 'chat', 'announcements'] as ActivitySource[]).forEach((s) => {
             if (cur[s] > prev[s]) pushToast(s);
           });
         }

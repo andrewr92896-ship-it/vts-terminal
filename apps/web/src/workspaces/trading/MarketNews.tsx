@@ -13,6 +13,7 @@ import type {
   NewsImpact,
   NewsInput,
   NewsItem,
+  TruthPost,
 } from '../../api/types';
 
 const GOLD = '#EBCB74';
@@ -80,6 +81,7 @@ export function MarketNews() {
   const canWrite = !!user && !isWorkspaceReadOnly(user.roles, 'trading');
 
   const [data, setData] = useState<MarketNewsData | null>(null);
+  const [truth, setTruth] = useState<TruthPost[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [composing, setComposing] = useState<'news' | 'event' | null>(null);
@@ -88,6 +90,9 @@ export function MarketNews() {
 
   async function load() {
     try { setData(await api.marketNews()); setErr(null); } catch (e) { setErr(e instanceof ApiError ? e.message : 'Failed to load'); }
+    // Best-effort: the Truth Social feed may be empty if the server poll is
+    // blocked, so a failure here never affects the rest of the page.
+    api.tradingTruth().then((r) => setTruth(r.posts)).catch(() => {});
   }
   useEffect(() => {
     void load();
@@ -156,6 +161,29 @@ export function MarketNews() {
       )}
       {composing === 'event' && canWrite && (
         <EventForm busy={busy} submitLabel="Add event" onSubmit={async (input) => { if (await run(api.addCalendarEvent(input))) setComposing(null); }} onCancel={() => setComposing(null)} />
+      )}
+
+      {/* Truth Social feed (best-effort live). */}
+      {truth.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <SectionLabel text={`Truth Social · @realDonaldTrump`} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {truth.slice(0, 8).map((p) => (
+              <div key={p.id} style={{ ...card, borderLeft: `3px solid ${GOLD}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>{p.author}</span>
+                  <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(p.postedAt)}</span>
+                </div>
+                <div style={{ fontSize: 13, lineHeight: 1.55, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{p.content}</div>
+                {p.url && (
+                  <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 7, fontSize: 11, color: GOLD, textDecoration: 'none' }}>
+                    View on Truth Social →
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'minmax(0,1.5fr) minmax(0,1fr)', gap: 18, alignItems: 'start' }}>

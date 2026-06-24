@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.11';
+export const APP_VERSION = 'Alpha V 1.12';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.12',
+    date: 'June 24, 2026',
+    notes: [
+      'Market News now pulls live market headlines and shows Donald Trump\'s Truth Social posts, refreshing automatically.',
+      'You get a toast in the corner when a new headline or Truth Social post arrives.',
+    ],
+  },
   {
     version: 'Alpha V 1.11',
     date: 'June 24, 2026',
