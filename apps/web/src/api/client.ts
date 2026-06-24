@@ -258,6 +258,9 @@ export const api = {
   chatMessages(channel: ChatChannel): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/${channel}`);
   },
+  hubActivity(): Promise<{ latest: number }> {
+    return request('/api/chat/activity');
+  },
   sendChat(channel: ChatChannel, body: string): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/${channel}`, { method: 'POST', body: JSON.stringify({ body }) });
   },
