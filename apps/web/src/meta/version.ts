@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.1';
+export const APP_VERSION = 'Alpha V 1.2';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.2',
+    date: 'June 24, 2026',
+    notes: [
+      'Chat: scrolling up to read older messages is no longer interrupted when new messages arrive.',
+      'Chat: message order is now stable, and the message box stops you at the length limit instead of erroring.',
+    ],
+  },
   {
     version: 'Alpha V 1.1',
     date: 'June 24, 2026',
