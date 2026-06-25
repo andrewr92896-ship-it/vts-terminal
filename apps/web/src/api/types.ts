@@ -715,6 +715,9 @@ export type TradeStatus = 'open' | 'closed';
 
 export interface TradeRecord {
   id: string;
+  ownerId: string; // the user who logged the trade
+  owner: string; // that user's username, shown on the trade
+  isMine: boolean; // the viewing user owns this trade (may edit/remove it)
   broker: string | null;
   instrument: string;
   side: TradeSide;
