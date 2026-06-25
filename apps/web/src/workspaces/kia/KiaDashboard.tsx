@@ -5,7 +5,7 @@ import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy, maskName } from '../../privacy/privacy';
 import { PayPlanEditor } from './PayPlanEditor';
-import { useDealership } from './dealership';
+import { useDealership, GENERIC_DEALERSHIP } from './dealership';
 import type { KiaDashboard as Dash, RemovedKiaDeal } from '../../api/types';
 
 const RED = '#BB162B';
@@ -253,6 +253,16 @@ export function KiaDashboard() {
           >
             {dealership.generic ? 'Use Kia name' : 'Use generic name'}
           </button>
+          {dealership.generic && (
+            <input
+              value={dealership.customName}
+              onChange={(e) => dealership.setCustomName(e.target.value)}
+              placeholder={GENERIC_DEALERSHIP}
+              maxLength={60}
+              title="Your custom name — shown in place of the Kia dealership"
+              style={{ ...inputBase, padding: '7px 10px', fontSize: 12, minHeight: 34, width: 180 }}
+            />
+          )}
           <button onClick={() => setPayPlanOpen(true)} style={ghostBtn}>
             Pay plan
           </button>
