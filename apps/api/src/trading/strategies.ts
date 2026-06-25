@@ -5,6 +5,7 @@ import {
   tradingAlerts,
   tradingTrades,
   tradingStrategies,
+  tradingStrategyPrefs,
   type TradeResult,
   type TradeSide,
   type TradingAlertRow,
@@ -36,7 +37,58 @@ export function normInstrument(s: string | null | undefined): string {
   return afterColon.toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 
-const STRATEGY_KEY = (name: string | null | undefined) => (name?.trim() || 'Unlabeled');
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// Direction words that vary per alert but don't identify the strategy.
+const DIRECTION_WORDS = ['both', 'long', 'short', 'longs', 'shorts', 'buy', 'sell', 'buys', 'sells'];
+
+// Collapse a noisy alert label down to a stable strategy name by stripping the
+// volatile bits: lot size, version number, trade direction, and any user-defined
+// "ignore" words (e.g. a brand tag like "VTS"). Example:
+//   "NAS100 BOTH (Lot 8) 5m mk1 VTS v2.4"  →  "NAS100 5m mk1"
+// so changing the lot or version never fragments a strategy's track record.
+export function canonicalStrategy(raw: string | null | undefined, ignore: string[] = []): string {
+  if (!raw || !raw.trim()) return 'Unlabeled';
+  let s = ` ${raw} `;
+  s = s.replace(/\((?:[^)]*\blots?\b[^)]*)\)/gi, ' '); // "(Lot 8)"
+  s = s.replace(/\blots?\s*\d+(?:\.\d+)?\b/gi, ' '); // bare "lot 8"
+  s = s.replace(/\bv\d+(?:\.\d+)*\b/gi, ' '); // "v2.4"
+  s = s.replace(/\bversion\s*\d+(?:\.\d+)*\b/gi, ' '); // "version 2.4"
+  s = s.replace(new RegExp(`\\b(?:${DIRECTION_WORDS.join('|')})\\b`, 'gi'), ' ');
+  for (const tok of ignore) {
+    const t = tok.trim();
+    if (t) s = s.replace(new RegExp(`\\b${escapeRegExp(t)}\\b`, 'gi'), ' ');
+  }
+  s = s.replace(/\(\s*\)/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  return s || raw.trim();
+}
+
+// Per-user list of extra words to strip during canonicalization.
+export async function getIgnoreTokens(userId: string): Promise<string[]> {
+  const row = (
+    await db.select().from(tradingStrategyPrefs).where(eq(tradingStrategyPrefs.userId, userId)).limit(1)
+  )[0];
+  if (!row?.ignoreTokens) return [];
+  try {
+    const parsed = JSON.parse(row.ignoreTokens);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function setIgnoreTokens(userId: string, tokens: string[]): Promise<void> {
+  const clean = Array.from(
+    new Set(tokens.map((t) => t.trim()).filter((t) => t.length > 0 && t.length <= 40)),
+  ).slice(0, 50);
+  const now = new Date();
+  await db
+    .insert(tradingStrategyPrefs)
+    .values({ userId, ignoreTokens: JSON.stringify(clean), updatedAt: now })
+    .onConflictDoUpdate({ target: tradingStrategyPrefs.userId, set: { ignoreTokens: JSON.stringify(clean), updatedAt: now } });
+}
 
 // Ensure a registry row exists for each given strategy name (so a start date can
 // be set even before any metrics exist). 'Unlabeled' is a display bucket, not a
@@ -181,6 +233,7 @@ export interface StrategyRow {
 export interface StrategyBoard {
   strategies: StrategyRow[];
   canSeeBalances: boolean;
+  ignoreTokens: string[]; // words stripped when collapsing labels to a strategy
 }
 
 function rollup(items: { result: TradeResult | null; pnl: number | null }[]): StratSideStat {
@@ -243,16 +296,21 @@ export async function getStrategyBoard(
   userId: string,
   canSeeBalances: boolean,
 ): Promise<StrategyBoard> {
-  const [alerts, trades, registry] = await Promise.all([
+  const [alerts, trades, registry, ignore] = await Promise.all([
     db.select().from(tradingAlerts).where(eq(tradingAlerts.userId, userId)),
     db.select().from(tradingTrades).where(eq(tradingTrades.userId, userId)),
     db.select().from(tradingStrategies).where(eq(tradingStrategies.userId, userId)),
+    getIgnoreTokens(userId),
   ]);
 
-  // Persist any strategy names we have seen but not yet registered.
+  // Collapse each volatile label to its stable strategy name up front.
+  const canon = (s: string | null | undefined) => canonicalStrategy(s, ignore);
+
+  // Persist any canonical strategy names we have seen but not yet registered.
   const seen = new Set<string>();
-  for (const a of alerts) if (a.strategy?.trim()) seen.add(a.strategy.trim());
-  for (const t of trades) if (t.strategy?.trim()) seen.add(t.strategy.trim());
+  for (const a of alerts) if (a.strategy?.trim()) seen.add(canon(a.strategy));
+  for (const t of trades) if (t.strategy?.trim()) seen.add(canon(t.strategy));
+  seen.delete('Unlabeled');
   await ensureStrategies(userId, seen);
 
   const startedFor = new Map<string, number | null>();
@@ -262,14 +320,13 @@ export async function getStrategyBoard(
     notesFor.set(r.name, r.notes);
   }
 
-  // alertsByStrategy / a trade may belong to a strategy by its own label OR by
-  // the alert it is linked to.
+  // A trade may belong to a strategy by its own (canonical) label OR by the
+  // alert it is linked to.
   const tradeById = new Map<string, TradingTradeRow>();
   for (const t of trades) tradeById.set(t.id, t);
 
   // Build the full set of strategy buckets to show.
   const names = new Set<string>([...seen, ...registry.map((r) => r.name)]);
-  // Include the Unlabeled bucket if any unlabeled, non-dismissed alert exists.
   if (alerts.some((a) => a.status !== 'dismissed' && !a.strategy?.trim())) names.add('Unlabeled');
 
   const rows: StrategyRow[] = [];
@@ -277,18 +334,19 @@ export async function getStrategyBoard(
     const startedAt = startedFor.get(name) ?? null;
     const inScope = (ms: number) => startedAt == null || ms >= startedAt;
 
-    // Hypothetical: alerts for this strategy (non-dismissed), scoped by start.
+    // Hypothetical: alerts whose canonical strategy is this one (non-dismissed),
+    // scoped by start date.
     const stratAlerts = alerts.filter(
-      (a) => a.status !== 'dismissed' && STRATEGY_KEY(a.strategy) === name && inScope(a.receivedAt.getTime()),
+      (a) => a.status !== 'dismissed' && canon(a.strategy) === name && inScope(a.receivedAt.getTime()),
     );
     const hypothetical = rollup(
       stratAlerts.map((a) => ({ result: (a.result as TradeResult | null) ?? null, pnl: a.pnl })),
     );
 
-    // Actual: real trades labeled this strategy, plus trades linked from this
-    // strategy's alerts. Deduped, scoped by start.
+    // Actual: real trades canonically labeled this strategy, plus trades linked
+    // from this strategy's alerts. Deduped, scoped by start.
     const tradeIds = new Set<string>();
-    for (const t of trades) if (STRATEGY_KEY(t.strategy) === name) tradeIds.add(t.id);
+    for (const t of trades) if (canon(t.strategy) === name) tradeIds.add(t.id);
     for (const a of stratAlerts) if (a.tradeId) tradeIds.add(a.tradeId);
     const stratTrades: TradingTradeRow[] = [];
     for (const id of tradeIds) {
@@ -319,7 +377,7 @@ export async function getStrategyBoard(
       a.name.localeCompare(b.name),
   );
 
-  return { strategies: rows, canSeeBalances };
+  return { strategies: rows, canSeeBalances, ignoreTokens: ignore };
 }
 
 // Compact summary of the real trade an alert is linked to, for the Alerts page

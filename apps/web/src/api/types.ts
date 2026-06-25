@@ -872,6 +872,7 @@ export interface StrategyRow {
 export interface StrategyBoard {
   strategies: StrategyRow[];
   canSeeBalances: boolean;
+  ignoreTokens: string[]; // words stripped when collapsing labels to a strategy
 }
 
 // ---- Chat + announcements (mirror of apps/api/src/chat) ----

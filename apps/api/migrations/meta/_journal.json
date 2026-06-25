@@ -211,6 +211,13 @@
 			"when": 1782336156907,
 			"tag": "0029_trading_strategies",
 			"breakpoints": true
+		},
+		{
+			"idx": 30,
+			"version": "6",
+			"when": 1782336256907,
+			"tag": "0030_trading_strategy_prefs",
+			"breakpoints": true
 		}
 	]
 }

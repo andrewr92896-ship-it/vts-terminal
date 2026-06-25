@@ -295,6 +295,21 @@ export const tradingStrategies = sqliteTable(
 
 export type TradingStrategyRow = typeof tradingStrategies.$inferSelect;
 
+// Per-user strategy-analytics preferences. Currently the custom "noise" tokens
+// to strip when collapsing a volatile alert label (e.g. lot size and version)
+// down to a stable strategy name — "NAS100 BOTH (Lot 8) 5m mk1 VTS v2.4" →
+// "NAS100 5m mk1". Lot/version/direction are stripped automatically; this list
+// holds extra brand/custom words like "VTS".
+export const tradingStrategyPrefs = sqliteTable('trading_strategy_prefs', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  ignoreTokens: text('ignore_tokens'), // JSON array of words to strip
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingStrategyPrefsRow = typeof tradingStrategyPrefs.$inferSelect;
+
 // ---- TradingView webhook ingestion (raw alert store) ----
 // Standalone landing table for alerts posted to POST /api/tv-webhook. Not keyed
 // to a user — it is a raw ingestion log. The parsed trade fields are captured

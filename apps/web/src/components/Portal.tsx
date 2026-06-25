@@ -45,6 +45,7 @@ import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradeLog } from '../workspaces/trading/TradeLog';
 import { Alerts } from '../workspaces/trading/Alerts';
 import { History } from '../workspaces/trading/History';
+import { StrategyAnalytics } from '../workspaces/trading/StrategyAnalytics';
 import { AccountMetrics } from '../workspaces/trading/AccountMetrics';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
@@ -73,6 +74,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <Alerts onNavigate={onNavigate} />;
     case 'log':
       return <TradeLog />;
+    case 'strategies':
+      return <StrategyAnalytics />;
     case 'history':
       return <History />;
     case 'metrics':

@@ -353,6 +353,9 @@ export const api = {
   setStrategyMeta(input: { name: string; startedAt?: number | null; notes?: string | null }): Promise<StrategyBoard> {
     return request('/api/trading/strategies', { method: 'PATCH', body: JSON.stringify(input) });
   },
+  setStrategyIgnore(tokens: string[]): Promise<StrategyBoard> {
+    return request('/api/trading/strategies/ignore', { method: 'PATCH', body: JSON.stringify({ tokens }) });
+  },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');
   },

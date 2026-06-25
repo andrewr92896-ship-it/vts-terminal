@@ -21,6 +21,7 @@ import {
   autoMatch,
   getStrategyBoard,
   linkAlertTrade,
+  setIgnoreTokens,
   setStrategyMeta,
   unlinkAlertTrade,
 } from '../trading/strategies.js';
@@ -350,6 +351,15 @@ export async function tradingRoutes(app: FastifyInstance) {
     return getStrategyBoard(u.id, !!u.viewBrokerage);
   });
 
+  // Set the words stripped when collapsing alert labels to a strategy name.
+  app.patch('/api/trading/strategies/ignore', write, async (request, reply) => {
+    const parsed = ignoreSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Provide a list of words' });
+    const u = request.currentUser!;
+    await setIgnoreTokens(u.id, parsed.data.tokens);
+    return getStrategyBoard(u.id, !!u.viewBrokerage);
+  });
+
   // Manually link / unlink an alert and a real trade.
   app.post('/api/trading/alerts/:id/link', write, async (request, reply) => {
     const parsed = linkSchema.safeParse(request.body);
@@ -622,6 +632,9 @@ const strategyMetaSchema = z.object({
 
 // Manually link an alert to a specific real trade.
 const linkSchema = z.object({ tradeId: z.string().min(1) });
+
+// The list of extra words to strip when collapsing labels to a strategy name.
+const ignoreSchema = z.object({ tokens: z.array(z.string().trim().max(40)).max(50) });
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
 const sessionFields = {
