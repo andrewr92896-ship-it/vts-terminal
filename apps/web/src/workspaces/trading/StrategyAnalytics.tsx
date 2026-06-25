@@ -41,6 +41,23 @@ function winRateColor(wr: number | null): string {
   return RED;
 }
 
+// Guess a clean strategy name from a TradingView export filename like
+// "<hash>-NAS100_BUY_Lot_8_5m_mk1_VTS_v2.4_OANDA_NAS100USD_<date>_<hash>.csv"
+// → "NAS100 5m mk1". Anything unrecognized falls back to the de-underscored
+// stem (the server canonicalizes it the same way regardless).
+function deriveStrategyName(fileName: string): string {
+  const clean = fileName
+    .replace(/\.csv$/i, '')
+    .replace(/^[a-f0-9]{6,}-/, '')
+    .replace(/_(OANDA|COINBASE|NASDAQ|FXCM|FOREXCOM|BINANCE|KRAKEN)_.*$/i, '');
+  const tokens = clean.split('_');
+  const instrument = tokens[0] || '';
+  const tf = tokens.find((t) => /^\d+[mhdwMHDW]$/.test(t)) || '';
+  const mk = tokens.find((t) => /^mk\d+$/i.test(t)) || '';
+  const name = [instrument, tf, mk].filter(Boolean).join(' ');
+  return name || clean.replace(/_/g, ' ');
+}
+
 export function StrategyAnalytics() {
   const { privacy } = usePrivacy();
   const [board, setBoard] = useState<StrategyBoard | null>(null);
@@ -49,8 +66,7 @@ export function StrategyAnalytics() {
   const [hideMoney, setHideMoney] = useState(false);
   const [newToken, setNewToken] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
-  const [importCsv, setImportCsv] = useState<{ name: string; text: string } | null>(null);
-  const [importName, setImportName] = useState('');
+  const [queue, setQueue] = useState<{ fileName: string; text: string; name: string }[]>([]);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState<string | null>(null);
 
@@ -98,29 +114,44 @@ export function StrategyAnalytics() {
     }
   }
 
-  function onPickFile(e: ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function onPickFiles(e: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setImportCsv({ name: file.name, text: String(reader.result) });
-    reader.readAsText(file);
+    if (!files.length) return;
+    void Promise.all(
+      files.map((file) => file.text().then((text) => ({ fileName: file.name, text, name: deriveStrategyName(file.name) }))),
+    ).then((items) => setQueue((q) => [...q, ...items]));
   }
-  async function doImport() {
-    if (!importCsv || !importName.trim() || importing) return;
+  function setQueueName(i: number, name: string) {
+    setQueue((q) => q.map((it, j) => (j === i ? { ...it, name } : it)));
+  }
+  async function doImportAll() {
+    if (!queue.length || importing) return;
     setImporting(true);
     setImportMsg(null);
-    try {
-      const r = await api.importBacktest(importName.trim(), importCsv.text);
-      setBoard(r);
-      setImportMsg(`Imported ${r.imported.imported} trades into “${r.imported.strategy}” · ${r.imported.wins}W ${r.imported.losses}L.`);
-      setImportCsv(null);
-      setImportName('');
-    } catch (e) {
-      setImportMsg(e instanceof ApiError ? e.message : 'Import failed');
-    } finally {
-      setImporting(false);
+    const done: string[] = [];
+    const failed: string[] = [];
+    let lastBoard: StrategyBoard | null = null;
+    for (const item of queue) {
+      if (!item.name.trim()) {
+        failed.push(`${item.fileName} (no name)`);
+        continue;
+      }
+      try {
+        const r = await api.importBacktest(item.name.trim(), item.text);
+        lastBoard = r;
+        done.push(`${r.imported.strategy} (${r.imported.imported})`);
+      } catch (e) {
+        failed.push(`${item.fileName}: ${e instanceof ApiError ? e.message : 'failed'}`);
+      }
     }
+    if (lastBoard) setBoard(lastBoard);
+    setQueue([]);
+    setImporting(false);
+    setImportMsg(
+      `Imported ${done.length} file${done.length === 1 ? '' : 's'}${done.length ? ': ' + done.join(', ') : ''}` +
+        (failed.length ? ` · ${failed.length} failed: ${failed.join('; ')}` : '.'),
+    );
   }
 
   const canSee = board?.canSeeBalances ?? false;
@@ -200,32 +231,36 @@ export function StrategyAnalytics() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: '#fff' }}>Backtest</div>
             <span style={{ fontSize: 11.5, color: MUTED }}>
-              Import a TradingView “List of Trades” CSV to set a strategy’s backtest baseline. One file = one strategy; re-importing replaces it.
+              Import TradingView “List of Trades” CSVs to set each strategy’s baseline. Names auto-fill from the filename; re-importing a strategy replaces it.
             </span>
-            {!importCsv && (
-              <button onClick={() => fileRef.current?.click()} style={{ ...goldBtn, marginLeft: 'auto' }}>Import backtest CSV</button>
-            )}
-            <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={onPickFile} />
+            <button onClick={() => fileRef.current?.click()} style={{ ...goldBtn, marginLeft: 'auto' }}>Add backtest CSVs</button>
+            <input ref={fileRef} type="file" accept=".csv,text/csv" multiple style={{ display: 'none' }} onChange={onPickFiles} />
           </div>
-          {importCsv && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
-              <span style={{ fontSize: 11, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>{importCsv.name}</span>
-              <span style={{ fontSize: 11, color: FAINT }}>→ assign to</span>
-              <input
-                value={importName}
-                onChange={(e) => setImportName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && void doImport()}
-                placeholder="strategy, e.g. BTC 5m mk2"
-                list="strat-names"
-                style={{ background: '#0d1f44', border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 12, padding: '7px 10px', minWidth: 200 }}
-              />
+          {queue.length > 0 && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {queue.map((it, i) => (
+                <div key={`${it.fileName}-${i}`} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace", flex: '1 1 200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{it.fileName}</span>
+                  <span style={{ fontSize: 11, color: FAINT }}>→</span>
+                  <input
+                    value={it.name}
+                    onChange={(e) => setQueueName(i, e.target.value)}
+                    list="strat-names"
+                    placeholder="strategy name"
+                    style={{ background: '#0d1f44', border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 12, padding: '6px 9px', minWidth: 170 }}
+                  />
+                  <button onClick={() => setQueue((q) => q.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: FAINT, cursor: 'pointer', fontSize: 14 }} aria-label="Remove">×</button>
+                </div>
+              ))}
               <datalist id="strat-names">
                 {board.strategies.map((s) => <option key={s.name} value={s.name} />)}
               </datalist>
-              <button onClick={() => void doImport()} disabled={importing || !importName.trim()} style={{ ...goldBtn, opacity: importing || !importName.trim() ? 0.6 : 1 }}>
-                {importing ? 'Importing…' : 'Import'}
-              </button>
-              <button onClick={() => { setImportCsv(null); setImportName(''); }} style={ghostBtn}>Cancel</button>
+              <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <button onClick={() => void doImportAll()} disabled={importing} style={{ ...goldBtn, opacity: importing ? 0.6 : 1 }}>
+                  {importing ? 'Importing…' : `Import all (${queue.length})`}
+                </button>
+                <button onClick={() => setQueue([])} disabled={importing} style={ghostBtn}>Clear</button>
+              </div>
             </div>
           )}
           {importMsg && <div style={{ fontSize: 11.5, color: '#a7d8bf', marginTop: 8 }}>{importMsg}</div>}
