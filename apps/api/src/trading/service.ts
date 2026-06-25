@@ -260,7 +260,11 @@ export async function reconcileDeskPositions(): Promise<void> {
   await reconcilePerOwner(conns, brokers, withSlip);
 }
 
-const DESK_WATCH_MS = 60_000;
+// Poll cadence for the background trade watch. 15s keeps the latency on a "trade
+// opened/closed" buzz low without hammering broker rate limits (the client Live
+// Wall polls every 30s, so this is the tighter loop). Override with
+// DESK_WATCH_SECONDS if a broker needs a gentler cadence.
+const DESK_WATCH_MS = Math.max(5, Number(process.env.DESK_WATCH_SECONDS) || 15) * 1000;
 
 // Poll broker positions in the background so trade open/close notifications fire
 // even when no client has the Live Wall open. Production-only, and only when
@@ -271,7 +275,7 @@ export function startDeskWatch(): void {
   const tick = () => {
     void reconcileDeskPositions().catch((err) => console.error('Desk watch error:', err));
   };
-  setTimeout(tick, 20 * 1000);
+  setTimeout(tick, 8 * 1000);
   const timer = setInterval(tick, DESK_WATCH_MS);
   timer.unref?.();
 }

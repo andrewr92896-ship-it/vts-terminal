@@ -97,6 +97,11 @@ export async function sendToUsers(userIds: string[], payload: PushPayload): Prom
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           body,
+          // Trade/alert notifications are time-sensitive: ask the push service
+          // (APNs/FCM) to deliver immediately rather than batch for power
+          // saving, and drop it after 5 minutes if the device is unreachable
+          // (a stale fill alert is just noise).
+          { urgency: 'high', TTL: 300 },
         );
       } catch (err) {
         const status = (err as { statusCode?: number }).statusCode;
