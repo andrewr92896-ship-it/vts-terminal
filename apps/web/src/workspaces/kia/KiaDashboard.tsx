@@ -4,6 +4,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy, maskName } from '../../privacy/privacy';
+import { AiEntry } from '../../components/AiEntry';
 import { PayPlanEditor } from './PayPlanEditor';
 import { useDealership, GENERIC_DEALERSHIP } from './dealership';
 import type { KiaDashboard as Dash, RemovedKiaDeal } from '../../api/types';
@@ -323,6 +324,23 @@ export function KiaDashboard() {
       {/* Manual deal entry */}
       <div style={{ ...panel, marginBottom: 16 }}>
         <div style={panelLabel}>Log a deal</div>
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="kia_deal"
+            label="deal"
+            accent={RED}
+            notePlaceholder='Describe the deal, e.g. "Used Sportage to the Garcias, $1,800 front, $700 back"'
+            onFill={(f) => {
+              if (typeof f.customer === 'string') setCustomer(f.customer);
+              if (typeof f.model === 'string') setModel(f.model);
+              if (f.type === 'New' || f.type === 'Used') setDtype(f.type);
+              if (typeof f.frontProfit === 'number') setFront(String(f.frontProfit));
+              if (typeof f.backProfit === 'number') setBack(String(f.backProfit));
+              if (typeof f.profit === 'number') setProfit(String(f.profit));
+              if (typeof f.soldAt === 'string') setDate(f.soldAt);
+            }}
+          />
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Customer (optional)" style={{ ...inputBase, flex: '1 1 150px' }} />
           <input value={model} onChange={(e) => setModel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} placeholder="Model" style={{ ...inputBase, flex: '1 1 160px' }} />

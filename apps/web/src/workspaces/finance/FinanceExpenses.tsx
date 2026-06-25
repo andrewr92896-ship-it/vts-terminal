@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
+import { AiEntry } from '../../components/AiEntry';
 import type { Expense } from '../../api/types';
 
 const ACCENT = '#6f8bff';
@@ -82,6 +83,20 @@ export function FinanceExpenses() {
       {/* Add */}
       <div style={{ ...panel, marginBottom: 16 }}>
         <div style={sectionLabel}>Add an expense</div>
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="expense"
+            label="expense"
+            accent={ACCENT}
+            notePlaceholder='Describe the bill, or drop a statement screenshot — e.g. "Rent $1,650 on the 1st"'
+            onFill={(f) => {
+              if (typeof f.label === 'string') setLabel(f.label);
+              if (typeof f.amount === 'number') setAmount(String(f.amount));
+              if (typeof f.dayOfMonth === 'number') setDay(String(f.dayOfMonth));
+              if (typeof f.category === 'string') setCategory(f.category);
+            }}
+          />
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Rent)" style={{ ...input, flex: '1 1 150px' }} />
           <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="any" placeholder="Amount $" style={{ ...input, flex: '0 0 120px' }} />

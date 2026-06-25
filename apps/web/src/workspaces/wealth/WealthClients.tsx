@@ -4,6 +4,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy, maskName, REDACTED } from '../../privacy/privacy';
+import { AiEntry } from '../../components/AiEntry';
 import type {
   WealthClient,
   WealthClientsData,
@@ -186,6 +187,22 @@ export function WealthClients() {
       {/* Add a client */}
       <div style={{ ...panel, marginBottom: 16 }}>
         <div style={panelLabel}>Add a client</div>
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="wealth_client"
+            label="client"
+            accent={GREEN}
+            notePlaceholder='Describe the client, or drop a business card / intake screenshot'
+            onFill={(f) => {
+              if (typeof f.name === 'string') setName(f.name);
+              if (typeof f.email === 'string') setEmail(f.email);
+              if (typeof f.phone === 'string') setPhone(f.phone);
+              if (typeof f.accountValue === 'number') setValue(String(f.accountValue));
+              if (f.status === 'prospect' || f.status === 'onboarding' || f.status === 'active' || f.status === 'inactive') setStatus(f.status);
+              if (typeof f.notes === 'string') setNotes(f.notes);
+            }}
+          />
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Name" style={{ ...inputBase, flex: '1 1 160px' }} />
           <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Email (optional)" style={{ ...inputBase, flex: '1 1 170px' }} />

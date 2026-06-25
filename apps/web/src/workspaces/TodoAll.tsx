@@ -3,6 +3,7 @@ import { api, ApiError } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { useUndo } from '../hooks/useUndo';
 import { UndoBar } from '../components/UndoBar';
+import { AiEntry } from '../components/AiEntry';
 import type { RemovedTodoItem, TodoItem, TodoItemState, TodoSection } from '../api/types';
 
 // The undo bar covers two actions: a delete (restore the task) and a
@@ -274,6 +275,17 @@ export function TodoAll() {
             >
               Add
             </button>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <AiEntry
+              kind="todo"
+              label="task"
+              accent={ACCENT}
+              notePlaceholder='Describe a task, or drop a screenshot to pull one out'
+              onFill={(f) => {
+                if (typeof f.text === 'string') setDraft(f.text);
+              }}
+            />
           </div>
         </div>
 

@@ -144,6 +144,42 @@ export async function analyzeTradeScreenshot(
   return { raw, parsed, model };
 }
 
+export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+
+// Generic structured extraction for "fill this form with AI". Takes a system
+// prompt describing the target fields, plus a free-text note and/or a screenshot,
+// and returns the model's raw response (expected to be a JSON object). Uses the
+// vision model (Opus 4.8) when an image is attached, otherwise Sonnet 4.6.
+export async function extractFromInput(
+  system: string,
+  input: { note?: string; imageBase64?: string; mediaType?: ImageMediaType },
+): Promise<{ raw: string; model: string }> {
+  const hasImage = !!input.imageBase64;
+  const model = hasImage ? config.ANTHROPIC_MODEL_ANALYSIS : config.ANTHROPIC_MODEL_DEFAULT;
+  const content: Anthropic.ContentBlockParam[] = [];
+  if (hasImage) {
+    content.push({
+      type: 'image',
+      source: { type: 'base64', media_type: input.mediaType ?? 'image/png', data: input.imageBase64! },
+    });
+  }
+  const note = input.note?.trim();
+  const instruction = note
+    ? hasImage
+      ? `Extract the entry from the attached screenshot. Extra details from the user: ${note}`
+      : note
+    : 'Extract the entry from the attached screenshot.';
+  content.push({ type: 'text', text: instruction });
+
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 1500,
+    system,
+    messages: [{ role: 'user', content }],
+  });
+  return { raw: textOf(message), model };
+}
+
 // Sonnet 4.6: the site-wide assistant (Ask Claude, product knowledge, parsing).
 export async function askClaude(prompt: string, system?: string): Promise<string> {
   const message = await getClient().messages.create({

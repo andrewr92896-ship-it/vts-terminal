@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
+import { AiEntry } from '../../components/AiEntry';
 import type { RemovedTodoItem, TodoItem, TodoSection } from '../../api/types';
 
 const RED = '#BB162B';
@@ -117,6 +118,18 @@ export function KiaTodo() {
         <button onClick={add} disabled={busy || !draft.trim()} style={{ border: 'none', background: `linear-gradient(180deg,${RED},${RED2})`, color: '#fff', fontWeight: 600, fontSize: 12.5, padding: '0 16px', borderRadius: 7, cursor: busy || !draft.trim() ? 'default' : 'pointer', opacity: busy || !draft.trim() ? 0.6 : 1 }}>
           Add
         </button>
+      </div>
+
+      <div style={{ maxWidth: 560, marginTop: -8, marginBottom: 18 }}>
+        <AiEntry
+          kind="todo"
+          label="task"
+          accent={RED}
+          notePlaceholder='Describe a task, or drop a screenshot to pull one out'
+          onFill={(f) => {
+            if (typeof f.text === 'string') setDraft(f.text);
+          }}
+        />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 16, alignItems: 'start' }}>

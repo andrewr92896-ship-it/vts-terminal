@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { usePrivacy } from '../../privacy/privacy';
+import { AiEntry } from '../../components/AiEntry';
 import type { NetWorthData, NetWorthItem, NetWorthKind } from '../../api/types';
 
 const ACCENT = '#6f8bff';
@@ -70,6 +71,19 @@ export function FinanceNetWorth() {
 
       <div style={{ ...panel, marginBottom: 16 }}>
         <div style={sectionLabel}>Add an item</div>
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="networth"
+            label="item"
+            accent={ACCENT}
+            notePlaceholder='Describe it, or drop a statement screenshot — e.g. "Car loan, $14,200 owed"'
+            onFill={(f) => {
+              if (typeof f.label === 'string') setLabel(f.label);
+              if (typeof f.amount === 'number') setAmount(String(f.amount));
+              if (f.kind === 'asset' || f.kind === 'liability') setKind(f.kind);
+            }}
+          />
+        </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Savings, Car loan)" style={{ ...input, flex: '1 1 180px' }} />
           <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="any" placeholder="Amount $" style={{ ...input, flex: '0 0 130px' }} />
