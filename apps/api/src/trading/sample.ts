@@ -10,7 +10,7 @@ const MIN = 60_000;
 
 export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
   const t = (mins: number) => now - mins * MIN;
-  const rows: Omit<LiveTrade, 'connectionId'>[] = [
+  const rows: Omit<LiveTrade, 'connectionId' | 'ownerId' | 'owner'>[] = [
     {
       id: 'oanda:sample-1',
       broker: 'oanda',
@@ -120,5 +120,6 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       openedAt: t(12),
     },
   ];
-  return rows.map((r) => ({ ...r, connectionId: 'sample' }));
+  // owner/ownerId are filled in by the service (attributed to the viewer).
+  return rows.map((r) => ({ ...r, connectionId: 'sample', ownerId: '', owner: '' }));
 }

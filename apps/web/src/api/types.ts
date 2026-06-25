@@ -447,6 +447,8 @@ export interface ForexMetrics {
 
 export interface LiveTrade {
   id: string;
+  ownerId: string; // the teammate whose broker account this position is on
+  owner: string; // that teammate's username, shown on the position
   broker: BrokerKey;
   brokerName: string;
   instrument: string;
@@ -467,6 +469,8 @@ export interface LiveTrade {
 
 export interface BrokerLiveResult {
   connectionId: string;
+  ownerId: string; // the teammate who owns this connection
+  owner: string; // that teammate's username
   broker: BrokerKey;
   name: string;
   platform: string;
@@ -858,6 +862,9 @@ export interface TradingSignals {
 // ---- Trading — History (mirror of apps/api/src/trading/history.ts) ----
 export interface HistoryRecord {
   id: string;
+  ownerId: string; // the teammate whose account this closed trade was on
+  owner: string; // that teammate's username, shown on the row
+  isMine: boolean; // the viewing user owns this trade
   broker: string;
   instrument: string;
   side: TradeSide;

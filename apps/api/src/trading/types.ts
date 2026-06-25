@@ -12,6 +12,8 @@ export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation' | 'manual';
 export interface LiveTrade {
   id: string; // `${connectionId}:${broker}:${brokerTradeId}` — stable per position
   connectionId: string; // the broker connection (source) this came from
+  ownerId: string; // the teammate whose broker account this position is on
+  owner: string; // that teammate's username, shown on the position
   broker: BrokerKey;
   brokerName: string; // the connection's label
   instrument: string; // e.g. EUR/USD, BTC/USD, MSFT
@@ -42,6 +44,8 @@ export interface LiveTrade {
 // succeed, and what did it return.
 export interface BrokerLiveResult {
   connectionId: string; // the connection/source this result is for
+  ownerId: string; // the teammate who owns this connection
+  owner: string; // that teammate's username
   broker: BrokerKey;
   name: string; // the connection's label
   platform: string;

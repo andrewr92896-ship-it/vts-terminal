@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingPositions, type TradeSide, type TradingPositionRow } from '../db/schema.js';
+import { tradingPositions, users, type TradeSide, type TradingPositionRow } from '../db/schema.js';
+import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import type { LiveTrade } from './types.js';
 
 // Reconcile the Live Wall's open positions against what we last stored, so that
@@ -84,6 +85,9 @@ export async function reconcile(
 // ---- History read model ----
 export interface HistoryRecord {
   id: string;
+  ownerId: string; // the teammate whose account this closed trade was on
+  owner: string; // that teammate's username, shown on the row
+  isMine: boolean; // the viewing user owns this trade
   broker: string;
   instrument: string;
   side: TradeSide;
@@ -127,9 +131,17 @@ function slippageOf(planned: number | null, entry: number): number | null {
   return Number((entry - planned).toFixed(8));
 }
 
-function toRecord(row: TradingPositionRow, canSeeBalances: boolean): HistoryRecord {
+function toRecord(
+  row: TradingPositionRow,
+  owner: string,
+  viewerId: string,
+  canSeeBalances: boolean,
+): HistoryRecord {
   return {
     id: row.id,
+    ownerId: row.userId,
+    owner,
+    isMine: row.userId === viewerId,
     broker: row.broker,
     instrument: row.instrument,
     side: row.side as TradeSide,
@@ -174,12 +186,20 @@ function groupBy(
     .sort((a, b) => b.count - a.count);
 }
 
-export async function getHistory(userId: string, canSeeBalances: boolean): Promise<HistoryData> {
-  const rows = await db
-    .select()
+export async function getHistory(viewerId: string, canSeeBalances: boolean): Promise<HistoryData> {
+  // Shared desk history: every trading-team member's closed positions, tagged
+  // with the owner. Joined live with users so a teammate who loses trading
+  // access drops off, mirroring the Live Wall and Trade Log.
+  const joined = await db
+    .select({ pos: tradingPositions, username: users.username, roles: users.roles })
     .from(tradingPositions)
-    .where(and(eq(tradingPositions.userId, userId), eq(tradingPositions.status, 'closed')))
+    .innerJoin(users, eq(users.id, tradingPositions.userId))
+    .where(eq(tradingPositions.status, 'closed'))
     .orderBy(desc(tradingPositions.closedAt));
+
+  const visible = joined.filter((r) => canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'));
+  const rows = visible.map((r) => r.pos);
+  const ownerOf = new Map(visible.map((r) => [r.pos.id, r.username]));
 
   let wins = 0;
   let losses = 0;
@@ -195,7 +215,7 @@ export async function getHistory(userId: string, canSeeBalances: boolean): Promi
   }
 
   return {
-    trades: rows.map((r) => toRecord(r, canSeeBalances)),
+    trades: rows.map((r) => toRecord(r, ownerOf.get(r.id) ?? '', viewerId, canSeeBalances)),
     summary: {
       closed: rows.length,
       wins,
