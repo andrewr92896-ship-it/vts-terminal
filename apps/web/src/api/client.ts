@@ -2,6 +2,7 @@ import type {
   AdminUser,
   AiUsage,
   AlertsData,
+  StrategyBoard,
   TradeResult,
   Announcement,
   ChatChannel,
@@ -339,6 +340,18 @@ export const api = {
     occurredAt?: number | null;
   }): Promise<AlertsData> {
     return request('/api/trading/alerts/manual', { method: 'POST', body: JSON.stringify(input) });
+  },
+  linkAlert(id: string, tradeId: string): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/link`, { method: 'POST', body: JSON.stringify({ tradeId }) });
+  },
+  unlinkAlert(id: string): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/unlink`, { method: 'POST', body: JSON.stringify({}) });
+  },
+  tradingStrategies(): Promise<StrategyBoard> {
+    return request('/api/trading/strategies');
+  },
+  setStrategyMeta(input: { name: string; startedAt?: number | null; notes?: string | null }): Promise<StrategyBoard> {
+    return request('/api/trading/strategies', { method: 'PATCH', body: JSON.stringify(input) });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');

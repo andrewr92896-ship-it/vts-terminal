@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingAlerts,
+  tradingTrades,
   users,
   TRADE_SIDES,
   TRADE_RESULTS,
@@ -13,6 +14,7 @@ import {
 } from '../db/schema.js';
 import { parseRoles } from '../auth/rbac.js';
 import { addTrade } from './trades.js';
+import { autoMatch, linkedTradeSummary, type LinkedTradeSummary } from './strategies.js';
 import { aiConfigured, analyzeTradeScreenshot, type AnalyzeResult } from '../ai/claude.js';
 
 // TradingView alerts are the FTP/prop-trade replacement. The webhook is
@@ -35,6 +37,7 @@ export interface AlertRecord {
   analysis: AnalyzeResult | null;
   analyzedAt: number | null;
   tradeId: string | null;
+  linkedTrade: LinkedTradeSummary | null; // the real trade this alert is tied to
   receivedAt: number;
 }
 
@@ -171,6 +174,8 @@ export async function ingestAlert(body: Record<string, unknown>, rawPayload: str
     createdAt: now,
     updatedAt: now,
   });
+  // Tie this alert to a real trade already logged near its time, if any.
+  await autoMatch(ownerId);
   return id;
 }
 
@@ -241,6 +246,7 @@ export async function setAlertResult(
   ownerId: string,
   alertId: string,
   input: { result: TradeResult | null; exitPrice?: number | null; pnl?: number | null },
+  canSeeBalances = false,
 ): Promise<AlertsData> {
   const row = (
     await db
@@ -256,7 +262,7 @@ export async function setAlertResult(
       .update(tradingAlerts)
       .set({ result: null, exitPrice: null, pnl: null, updatedAt: new Date() })
       .where(and(eq(tradingAlerts.id, alertId), eq(tradingAlerts.userId, ownerId)));
-    return getAlerts(ownerId);
+    return getAlerts(ownerId, canSeeBalances);
   }
 
   const exit = input.exitPrice != null ? input.exitPrice : row.exitPrice;
@@ -271,7 +277,7 @@ export async function setAlertResult(
     .update(tradingAlerts)
     .set({ result, exitPrice: exit, pnl, updatedAt: new Date() })
     .where(and(eq(tradingAlerts.id, alertId), eq(tradingAlerts.userId, ownerId)));
-  return getAlerts(ownerId);
+  return getAlerts(ownerId, canSeeBalances);
 }
 
 function toRecord(row: TradingAlertRow): AlertRecord {
@@ -299,6 +305,7 @@ function toRecord(row: TradingAlertRow): AlertRecord {
     analysis,
     analyzedAt: row.analyzedAt ? row.analyzedAt.getTime() : null,
     tradeId: row.tradeId,
+    linkedTrade: null, // filled in by getAlerts, which has the trade map
     receivedAt: row.receivedAt.getTime(),
   };
 }
@@ -356,13 +363,19 @@ export function computeStrategyStats(alerts: AlertRecord[]): StrategyStat[] {
   return stats.sort((a, b) => b.trades - a.trades || a.strategy.localeCompare(b.strategy));
 }
 
-export async function getAlerts(ownerId: string): Promise<AlertsData> {
+export async function getAlerts(ownerId: string, canSeeBalances = false): Promise<AlertsData> {
   const rows = await db
     .select()
     .from(tradingAlerts)
     .where(eq(tradingAlerts.userId, ownerId))
     .orderBy(desc(tradingAlerts.receivedAt));
-  const alerts = rows.map(toRecord);
+  const tradeRows = await db.select().from(tradingTrades).where(eq(tradingTrades.userId, ownerId));
+  const tradeMap = new Map(tradeRows.map((t) => [t.id, t]));
+  const alerts = rows.map((r) => {
+    const rec = toRecord(r);
+    rec.linkedTrade = linkedTradeSummary(r, tradeMap, canSeeBalances);
+    return rec;
+  });
   return { alerts, strategies: computeStrategyStats(alerts), aiConfigured: aiConfigured() };
 }
 
@@ -396,6 +409,7 @@ export async function analyzeAlert(
   alertId: string,
   imageBase64: string,
   mediaType: ImageMediaType,
+  canSeeBalances = false,
 ): Promise<AlertsData> {
   const row = (
     await db
@@ -447,13 +461,17 @@ export async function analyzeAlert(
     })
     .where(and(eq(tradingAlerts.id, alertId), eq(tradingAlerts.userId, ownerId)));
 
-  return getAlerts(ownerId);
+  return getAlerts(ownerId, canSeeBalances);
 }
 
-export async function dismissAlert(ownerId: string, alertId: string): Promise<AlertsData> {
+export async function dismissAlert(
+  ownerId: string,
+  alertId: string,
+  canSeeBalances = false,
+): Promise<AlertsData> {
   await db
     .update(tradingAlerts)
     .set({ status: 'dismissed', updatedAt: new Date() })
     .where(and(eq(tradingAlerts.id, alertId), eq(tradingAlerts.userId, ownerId)));
-  return getAlerts(ownerId);
+  return getAlerts(ownerId, canSeeBalances);
 }

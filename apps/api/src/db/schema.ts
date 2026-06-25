@@ -272,6 +272,29 @@ export const tradingAlerts = sqliteTable('trading_alerts', {
 
 export type TradingAlertRow = typeof tradingAlerts.$inferSelect;
 
+// ---- Trading — strategies registry ----
+// One row per strategy name the trader uses. Strategy labels arrive free-text on
+// alerts and trades; this table gives each a stable home for a "start date" (the
+// last time the strategy's logic was changed) and notes. Metrics for a strategy
+// only count alerts/trades on or after startedAt, so editing the logic resets
+// its track record. Rows are auto-created when a new strategy name appears.
+export const tradingStrategies = sqliteTable(
+  'trading_strategies',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(), // matches alert.strategy / trade.strategy
+    startedAt: integer('started_at', { mode: 'timestamp_ms' }), // null = all-time
+    notes: text('notes'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.name] }) }),
+);
+
+export type TradingStrategyRow = typeof tradingStrategies.$inferSelect;
+
 // ---- TradingView webhook ingestion (raw alert store) ----
 // Standalone landing table for alerts posted to POST /api/tv-webhook. Not keyed
 // to a user — it is a raw ingestion log. The parsed trade fields are captured

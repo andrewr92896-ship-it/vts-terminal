@@ -204,6 +204,13 @@
 			"when": 1782336056907,
 			"tag": "0028_alert_result",
 			"breakpoints": true
+		},
+		{
+			"idx": 29,
+			"version": "6",
+			"when": 1782336156907,
+			"tag": "0029_trading_strategies",
+			"breakpoints": true
 		}
 	]
 }

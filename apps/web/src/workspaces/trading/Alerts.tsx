@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ClipboardEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import type { AlertRecord, AlertsData, StrategyStat, TradeAnalysis, TradeResult } from '../../api/types';
+import type { AlertRecord, AlertsData, StrategyStat, TradeAnalysis, TradeRecord, TradeResult } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
 const GOLD = '#EBCB74';
@@ -35,6 +35,10 @@ function fmtSigned(n: number | null): string {
   if (n == null) return '—';
   const v = Number(Math.abs(n) >= 1000 ? n.toFixed(2) : n.toFixed(5));
   return (v > 0 ? '+' : '') + v.toLocaleString('en-US', { maximumFractionDigits: 5 });
+}
+function fmtMoney(n: number | null): string {
+  if (n == null) return '—';
+  return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 const RESULT: Record<TradeResult, { label: string; color: string }> = {
@@ -149,6 +153,8 @@ function AlertCard({
   const [mediaType, setMediaType] = useState('image/png');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
+  const [trades, setTrades] = useState<TradeRecord[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const long = alert.side === 'long';
@@ -216,6 +222,41 @@ function AlertCard({
     }
   }
 
+  async function openPicker() {
+    setLinking(true);
+    setError(null);
+    try {
+      const log = await api.tradeLog();
+      setTrades(log.trades);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not load trades');
+    }
+  }
+
+  async function linkTrade(tradeId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      onChanged(await api.linkAlert(alert.id, tradeId));
+      setLinking(false);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not link trade');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unlink() {
+    setBusy(true);
+    try {
+      onChanged(await api.unlinkAlert(alert.id));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not unlink');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden', borderLeft: `3px solid ${accent}` }}>
       {/* Header */}
@@ -262,6 +303,57 @@ function AlertCard({
           <button onClick={() => void tag(null)} disabled={busy} style={{ ...tagBtn, color: FAINT, border: `1px solid ${BORDER2}` }}>Clear</button>
         )}
       </div>
+
+      {/* Hypothetical (this alert) vs. the actual trade it's tied to */}
+      {alert.linkedTrade ? (
+        <div style={{ margin: '0 16px 12px', border: `1px solid ${BORDER2}`, borderRadius: 8, background: PANEL, padding: '10px 12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>Actual trade</span>
+            <span style={{ ...badge, color: GREEN, border: `1px solid ${GREEN}` }}>{alert.linkedTrade.status.toUpperCase()}</span>
+            <button onClick={() => void onViewTrade()} style={{ ...ghostBtn, padding: '4px 9px', fontSize: 10.5 }}>Trade Log →</button>
+            <button onClick={() => void unlink()} disabled={busy} style={{ ...ghostBtn, marginLeft: 'auto', padding: '4px 9px', fontSize: 10.5 }}>Unlink</button>
+          </div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+            <Field label="Planned" value={alert.price == null ? '—' : fmtPrice(alert.price)} />
+            <Field label="Fill" value={fmtPrice(alert.linkedTrade.entryPrice)} strong />
+            <Field label="Slippage" value={fmtSigned(alert.linkedTrade.slippage)} />
+            <Field label="Exit" value={alert.linkedTrade.exitPrice == null ? '—' : fmtPrice(alert.linkedTrade.exitPrice)} />
+            <Field label="Real P&L" value={fmtMoney(alert.linkedTrade.realizedPl)} />
+          </div>
+          <div style={{ fontSize: 10, color: FAINT, marginTop: 7 }}>
+            Paper {alert.pnl == null ? '—' : `${fmtSigned(alert.pnl)} pts`} · actual {fmtMoney(alert.linkedTrade.realizedPl)}
+          </div>
+        </div>
+      ) : (
+        alert.status !== 'dismissed' && (
+          <div style={{ padding: '0 16px 12px' }}>
+            {!linking ? (
+              <button onClick={() => void openPicker()} disabled={busy} style={{ ...ghostBtn, padding: '6px 11px', fontSize: 11 }}>
+                Link a real trade…
+              </button>
+            ) : (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  onChange={(e) => e.target.value && void linkTrade(e.target.value)}
+                  disabled={busy || trades == null}
+                  defaultValue=""
+                  style={{ background: '#0d1f44', border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 11.5, padding: '7px 9px', maxWidth: '100%' }}
+                >
+                  <option value="" disabled>
+                    {trades == null ? 'Loading trades…' : trades.length ? 'Choose a trade…' : 'No trades logged yet'}
+                  </option>
+                  {trades?.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.instrument} {t.side === 'long' ? 'L' : 'S'} @ {fmtPrice(t.entryPrice)} · {etTime(t.openedAt)}
+                    </option>
+                  ))}
+                </select>
+                <button onClick={() => setLinking(false)} style={{ ...ghostBtn, padding: '6px 11px', fontSize: 11 }}>Cancel</button>
+              </div>
+            )}
+          </div>
+        )
+      )}
       {alert.message && (
         <div style={{ padding: '0 16px 10px', fontSize: 11.5, color: '#8fa3cc', fontStyle: 'italic' }}>“{alert.message}”</div>
       )}
