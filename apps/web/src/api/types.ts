@@ -12,6 +12,19 @@ export type RoleKey =
   | 'wealth'
   | 'finance';
 
+// One player's row in the Study Game high-score table. Mirrors the backend's
+// LeaderboardEntry (studies/game.ts).
+export interface LeaderboardEntry {
+  userId: string;
+  name: string;
+  score: number | null; // accuracy % over the last 100 answers
+  attempted: number; // lifetime questions answered
+  correct: number; // lifetime correct answers
+  accuracy: number | null; // lifetime correct / attempted, as a %
+  crowns: number; // total prestige crowns across all categories
+  isMe: boolean;
+}
+
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {
   id: string;
@@ -434,6 +447,8 @@ export interface ForexMetrics {
 
 export interface LiveTrade {
   id: string;
+  ownerId: string; // the teammate whose broker account this position is on
+  owner: string; // that teammate's username, shown on the position
   broker: BrokerKey;
   brokerName: string;
   instrument: string;
@@ -454,6 +469,8 @@ export interface LiveTrade {
 
 export interface BrokerLiveResult {
   connectionId: string;
+  ownerId: string; // the teammate who owns this connection
+  owner: string; // that teammate's username
   broker: BrokerKey;
   name: string;
   platform: string;
@@ -702,6 +719,9 @@ export type TradeStatus = 'open' | 'closed';
 
 export interface TradeRecord {
   id: string;
+  ownerId: string; // the user who logged the trade
+  owner: string; // that user's username, shown on the trade
+  isMine: boolean; // the viewing user owns this trade (may edit/remove it)
   broker: string | null;
   instrument: string;
   side: TradeSide;
@@ -713,7 +733,7 @@ export interface TradeRecord {
   stopLoss: number | null;
   units: number;
   slippage: number | null;
-  realizedPl: number | null; // null when balances are hidden
+  realizedPl: number | null; // null only while open / unknown — shared with the desk
   strategy: string | null;
   timeframe: string | null;
   openedAt: number;
@@ -842,6 +862,9 @@ export interface TradingSignals {
 // ---- Trading — History (mirror of apps/api/src/trading/history.ts) ----
 export interface HistoryRecord {
   id: string;
+  ownerId: string; // the teammate whose account this closed trade was on
+  owner: string; // that teammate's username, shown on the row
+  isMine: boolean; // the viewing user owns this trade
   broker: string;
   instrument: string;
   side: TradeSide;

@@ -171,6 +171,8 @@ export async function getManualTrades(connectionId: string): Promise<LiveTrade[]
     const trade: LiveTrade = {
       id: p.id,
       connectionId: '',
+      ownerId: '', // set by the service from the connection's owner
+      owner: '',
       broker: 'manual',
       brokerName: '',
       instrument: p.instrument,

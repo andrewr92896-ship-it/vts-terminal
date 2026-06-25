@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { BrokerConnections } from './BrokerConnections';
@@ -76,6 +77,7 @@ function slippageFavorable(t: LiveTrade): boolean | null {
 export function LiveWall() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
+  const { user } = useAuth();
   const [data, setData] = useState<LiveWallData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // A failed *refresh* after the first load: keep the last data on screen but
@@ -127,7 +129,7 @@ export function LiveWall() {
             <span style={isSample ? sampledPill : livePill}>{isSample ? 'Sample data' : 'Live'}</span>
           </div>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Open positions across your brokers — planned entry vs. actual fill, slippage, TP/SL, and open P/L.
+            Open positions across the whole desk — every trader’s fills, slippage, TP/SL, and open P/L, tagged by trader.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -163,6 +165,7 @@ export function LiveWall() {
             <div key={b.connectionId} style={brokerChip} title={b.error ?? `${b.name} — ${b.platform}`}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flex: 'none' }} />
               <span style={{ fontWeight: 600, color: TEXT }}>{b.name}</span>
+              {b.owner && <span style={{ color: b.ownerId === user?.id ? GOLD : FAINT }}>@{b.owner}</span>}
               <span style={{ color: MUTED }}>· {state}</span>
             </div>
           );
@@ -184,6 +187,7 @@ export function LiveWall() {
             <TradeCard
               key={t.id}
               t={t}
+              mine={t.ownerId === user?.id}
               showMoney={showMoney}
               showFxMoney={!privacy && !hideMoney}
               canSeeBalances={data.canSeeBalances}
@@ -197,11 +201,13 @@ export function LiveWall() {
 
 function TradeCard({
   t,
+  mine,
   showMoney,
   showFxMoney,
   canSeeBalances,
 }: {
   t: LiveTrade;
+  mine: boolean; // the position is on the viewer's own broker account
   showMoney: boolean;
   // Forex pip money is shown to every trader (not balance-gated), but still
   // hidden by the privacy and Hide-$ toggles.
@@ -235,7 +241,10 @@ function TradeCard({
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
         </div>
-        <span style={brokerTag}>{t.brokerName}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={ownerTag(mine)} title={mine ? `${t.owner} (you)` : t.owner}>@{t.owner}{mine ? ' · you' : ''}</span>
+          <span style={brokerTag}>{t.brokerName}</span>
+        </div>
       </div>
 
       {/* Entry: planned -> fill, with slippage */}
@@ -396,6 +405,18 @@ const brokerTag: CSSProperties = {
   borderRadius: 5,
   padding: '3px 7px',
 };
+function ownerTag(mine: boolean): CSSProperties {
+  return {
+    fontSize: 10,
+    fontWeight: 700,
+    color: mine ? GOLD : '#bcd0ff',
+    background: mine ? 'rgba(235,203,116,.12)' : 'rgba(120,150,220,.12)',
+    border: `1px solid ${mine ? 'rgba(235,203,116,.4)' : BORDER2}`,
+    borderRadius: 5,
+    padding: '3px 7px',
+    fontFamily: MONO,
+  };
+}
 const brokerChip: CSSProperties = {
   display: 'flex',
   alignItems: 'center',

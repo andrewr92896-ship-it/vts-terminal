@@ -72,7 +72,7 @@ export function History() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>History</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Closed trades — recorded automatically when a Live Wall position closes.
+            Closed trades across the desk — recorded automatically when a Live Wall position closes, tagged by trader.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -116,6 +116,7 @@ export function History() {
             {!isPhone && (
               <div style={{ ...row, color: FAINT, fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', borderBottom: `1px solid ${BORDER}` }}>
                 <span style={{ flex: '1 1 90px' }}>Instrument</span>
+                <span style={{ flex: '0 0 90px' }}>Trader</span>
                 <span style={col}>Side</span>
                 <span style={col}>Entry</span>
                 <span style={col}>Exit</span>
@@ -167,6 +168,9 @@ function TradeRow({ t, isPhone, showMoney, canSeeBalances }: { t: HistoryRecord;
       <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center' }}>
         {t.instrument}
         <span style={{ fontSize: 8.5, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 3, padding: '1px 4px' }}>{t.broker}</span>
+      </span>
+      <span style={{ flex: '0 0 90px', color: t.isMine ? GOLD : MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
+        @{t.owner}{t.isMine ? ' · you' : ''}
       </span>
       <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
       <span style={col}>{fmtPrice(t.entryPrice)}</span>

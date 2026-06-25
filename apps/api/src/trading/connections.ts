@@ -3,10 +3,12 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   brokerConnections,
+  users,
   BROKER_CONNECTION_KINDS,
   type BrokerConnectionKind,
   type BrokerConnectionRow,
 } from '../db/schema.js';
+import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { decryptSecret, encryptSecret } from '../security/secretbox.js';
 
 // Per-user broker connections. Credentials are encrypted at rest; only a
@@ -42,6 +44,13 @@ export interface DecryptedConnection {
   broker: BrokerConnectionKind;
   label: string;
   creds: BrokerCreds;
+}
+
+// A decrypted connection plus the teammate who owns it. Used by the shared Live
+// Wall, which streams every trading-team member's positions side by side.
+export interface OwnedConnection extends DecryptedConnection {
+  ownerId: string;
+  owner: string; // owner's username, shown on each position
 }
 
 export function isBrokerKind(v: unknown): v is BrokerConnectionKind {
@@ -119,6 +128,40 @@ export async function getActiveDecrypted(userId: string): Promise<DecryptedConne
   for (const r of rows) {
     try {
       out.push({ id: r.id, broker: r.broker, label: r.label, creds: JSON.parse(decryptSecret(r.secretEnc)) });
+    } catch {
+      // Undecryptable (e.g. key rotated), skip; status stays as last recorded.
+    }
+  }
+  return out;
+}
+
+// Every active connection across the whole trading team, decrypted and tagged
+// with its owner. Powers the shared Live Wall so each trader sees everyone's
+// open positions. Only connections owned by a user who currently has trading
+// access are included, so a revoked teammate drops off automatically.
+export async function getAllActiveDecrypted(): Promise<OwnedConnection[]> {
+  const rows = await db
+    .select({
+      conn: brokerConnections,
+      username: users.username,
+      roles: users.roles,
+    })
+    .from(brokerConnections)
+    .innerJoin(users, eq(users.id, brokerConnections.userId))
+    .where(eq(brokerConnections.active, true));
+
+  const out: OwnedConnection[] = [];
+  for (const r of rows) {
+    if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
+    try {
+      out.push({
+        id: r.conn.id,
+        broker: r.conn.broker,
+        label: r.conn.label,
+        creds: JSON.parse(decryptSecret(r.conn.secretEnc)),
+        ownerId: r.conn.userId,
+        owner: r.username,
+      });
     } catch {
       // Undecryptable (e.g. key rotated), skip; status stays as last recorded.
     }

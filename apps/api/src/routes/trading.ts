@@ -96,9 +96,14 @@ export async function tradingRoutes(app: FastifyInstance) {
   const read = { preHandler: requireWorkspace('trading') };
   const write = { preHandler: requireWorkspaceWrite('trading') };
 
+  // The trading desk is a shared team: every endpoint here is behind the
+  // `trading` workspace guard, so any caller holds a trading role (full or
+  // view-only). Balances are open to the whole team — there is no separate
+  // viewBrokerage grant in play, so dollar figures always flow through.
+  const SEE_BALANCES = true;
+
   // The Live Wall: open positions streamed from every configured broker.
-  // Read-only, so the trading_viewer role is fine. Balances (open P/L) are
-  // gated inside the service by the viewBrokerage flag.
+  // Read-only, so the trading_viewer role is fine. Balances are open to the team.
   app.get('/api/trading/live', read, async (request) => {
     return getLiveWall(request.currentUser!);
   });
@@ -106,26 +111,26 @@ export async function tradingRoutes(app: FastifyInstance) {
   // ---- Trade Log (per-user) ----
   app.get('/api/trading/trades', read, async (request) => {
     const u = request.currentUser!;
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   // ---- History (closed positions, auto-recorded from the Live Wall) ----
   app.get('/api/trading/history', read, async (request) => {
     const u = request.currentUser!;
-    return getHistory(u.id, !!u.viewBrokerage);
+    return getHistory(u.id, SEE_BALANCES);
   });
 
   // ---- Account Metrics (prop-firm challenge) ----
   app.get('/api/trading/challenge', read, async (request) => {
     const u = request.currentUser!;
-    return getChallenge(u.id, !!u.viewBrokerage);
+    return getChallenge(u.id, SEE_BALANCES);
   });
 
   // Claude (Sonnet) read of the prop-challenge dashboard.
   app.post('/api/trading/metrics/brief', read, async (request, reply) => {
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     const u = request.currentUser!;
-    const c = await getChallenge(u.id, !!u.viewBrokerage);
+    const c = await getChallenge(u.id, SEE_BALANCES);
     const m = c.metrics;
     const pctOrDash = (v: number) => `${v.toFixed(1)}%`;
     const data = [
@@ -152,12 +157,12 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Check the challenge settings and try again' });
     }
     const u = request.currentUser!;
-    return updateChallenge(u.id, parsed.data, !!u.viewBrokerage);
+    return updateChallenge(u.id, parsed.data, SEE_BALANCES);
   });
 
   app.post('/api/trading/challenge/sync-equity', write, async (request) => {
     const u = request.currentUser!;
-    return syncEquityFromTradeLog(u.id, !!u.viewBrokerage);
+    return syncEquityFromTradeLog(u.id, SEE_BALANCES);
   });
 
   // ---- Strategy Sessions ----
@@ -271,7 +276,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add trade' });
     }
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   app.patch('/api/trading/trades/:id', write, async (request, reply) => {
@@ -286,14 +291,14 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update trade' });
     }
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   app.delete('/api/trading/trades/:id', write, async (request) => {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
     const removed = await removeTrade(u.id, id);
-    const data = await getTrades(u.id, !!u.viewBrokerage);
+    const data = await getTrades(u.id);
     return { ...data, removed };
   });
 
@@ -304,7 +309,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
     const u = request.currentUser!;
     await restoreTrade(u.id, parsed.data);
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   // ---- TradingView alerts (FTP/prop replacement) ----

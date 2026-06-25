@@ -55,6 +55,8 @@ export function mapKrakenPositions(json: KrakenResponse): LiveTrade[] {
     return {
       id: `kraken:${txid}`,
       connectionId: '', // set by the service when aggregating per connection
+      ownerId: '', // set by the service from the connection's owner
+      owner: '',
       broker: 'kraken' as const,
       brokerName: name,
       instrument: prettyKrakenPair(p.pair),

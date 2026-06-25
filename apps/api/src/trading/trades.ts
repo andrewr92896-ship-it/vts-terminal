@@ -3,20 +3,27 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingTrades,
+  users,
   TRADE_SIDES,
   TRADE_STATUSES,
   type TradeSide,
   type TradeStatus,
   type TradingTradeRow,
 } from '../db/schema.js';
+import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 
-// The Trade Log mirrors the Wealth/Kia patterns: every row is keyed by userId
-// so a new user's log starts empty, removals return the full row for undo, and
-// restore re-inserts with onConflictDoNothing. Slippage is derived on read
-// (entry vs. planned), never stored. Realized P/L is gated by viewBrokerage.
+// The Trade Log is a shared trading-desk view: every user with trading access
+// (full or view-only) sees every other trading user's trades in full — capital
+// (realized P/L), lot sizes, fills, and all — each tagged with the owner's
+// username. Rows are still keyed by userId, so a trader can only edit, remove,
+// or restore their own; those paths stay scoped to the owner. Slippage is
+// derived on read (entry vs. planned), never stored.
 
 export interface TradeRecord {
   id: string;
+  ownerId: string; // the user who logged the trade
+  owner: string; // that user's username, shown on the trade
+  isMine: boolean; // the viewing user owns this trade (may edit/remove it)
   broker: string | null;
   instrument: string;
   side: TradeSide;
@@ -28,7 +35,7 @@ export interface TradeRecord {
   stopLoss: number | null;
   units: number;
   slippage: number | null; // entryPrice - plannedEntry, computed
-  realizedPl: number | null; // null when balances are hidden
+  realizedPl: number | null; // null only while open / unknown — shared with the desk
   strategy: string | null;
   timeframe: string | null;
   openedAt: number; // ms
@@ -45,7 +52,7 @@ export interface TradeSummary {
   wins: number;
   losses: number;
   winRate: number; // 0..1 over closed trades with a known P/L
-  totalRealizedPl: number | null; // null when balances are hidden
+  totalRealizedPl: number; // desk-wide realized P/L across closed trades
   avgSlippage: number | null; // over trades that have a planned entry
 }
 
@@ -97,9 +104,12 @@ function slippageOf(plannedEntry: number | null, entryPrice: number): number | n
   return Number((entryPrice - plannedEntry).toFixed(8));
 }
 
-function toRecord(row: TradingTradeRow, canSeeBalances: boolean): TradeRecord {
+function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeRecord {
   return {
     id: row.id,
+    ownerId: row.userId,
+    owner,
+    isMine: row.userId === viewerId,
     broker: row.broker,
     instrument: row.instrument,
     side: isSide(row.side) ? row.side : 'long',
@@ -111,7 +121,7 @@ function toRecord(row: TradingTradeRow, canSeeBalances: boolean): TradeRecord {
     stopLoss: row.stopLoss,
     units: row.units,
     slippage: slippageOf(row.plannedEntry, row.entryPrice),
-    realizedPl: canSeeBalances ? row.realizedPl : null,
+    realizedPl: row.realizedPl,
     strategy: row.strategy,
     timeframe: row.timeframe,
     openedAt: row.openedAt.getTime(),
@@ -122,7 +132,7 @@ function toRecord(row: TradingTradeRow, canSeeBalances: boolean): TradeRecord {
   };
 }
 
-function summarize(rows: TradingTradeRow[], canSeeBalances: boolean): TradeSummary {
+function summarize(rows: TradingTradeRow[]): TradeSummary {
   let open = 0;
   let closed = 0;
   let wins = 0;
@@ -157,21 +167,34 @@ function summarize(rows: TradingTradeRow[], canSeeBalances: boolean): TradeSumma
     wins,
     losses,
     winRate: scored > 0 ? wins / scored : 0,
-    totalRealizedPl: canSeeBalances ? totalPl : null,
+    totalRealizedPl: totalPl,
     avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
   };
 }
 
-export async function getTrades(userId: string, canSeeBalances: boolean): Promise<TradeLogData> {
-  const rows = await db.select().from(tradingTrades).where(eq(tradingTrades.userId, userId));
+export async function getTrades(viewerId: string): Promise<TradeLogData> {
+  // Pull every trade alongside its owner's username and roles, then keep only
+  // those owned by a user who currently has trading access (full or view-only).
+  // Joining live keeps the desk view correct as people's roles change.
+  const rows = await db
+    .select({
+      trade: tradingTrades,
+      username: users.username,
+      roles: users.roles,
+    })
+    .from(tradingTrades)
+    .innerJoin(users, eq(users.id, tradingTrades.userId));
+
+  const visible = rows.filter((r) => canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'));
+
   // Open trades first, then newest by open time — the order a trader scans in.
-  const sorted = [...rows].sort((a, b) => {
-    if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
-    return b.openedAt.getTime() - a.openedAt.getTime();
+  const sorted = [...visible].sort((a, b) => {
+    if (a.trade.status !== b.trade.status) return a.trade.status === 'open' ? -1 : 1;
+    return b.trade.openedAt.getTime() - a.trade.openedAt.getTime();
   });
   return {
-    trades: sorted.map((r) => toRecord(r, canSeeBalances)),
-    summary: summarize(rows, canSeeBalances),
+    trades: sorted.map((r) => toRecord(r.trade, r.username, viewerId)),
+    summary: summarize(visible.map((r) => r.trade)),
   };
 }
 

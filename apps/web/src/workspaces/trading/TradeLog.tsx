@@ -135,9 +135,9 @@ export function TradeLog() {
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
   if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the log…</div>;
 
-  // The API nulls summary.totalRealizedPl (and every realizedPl) only when the
-  // user lacks the viewBrokerage grant, so it's a reliable "can see balances"
-  // signal even though an individual open trade may have a null P/L.
+  // Balances are shared across the whole trading team, so the desk summary
+  // always carries a number here. (Kept as a guard for the older nullable shape;
+  // the Hide-$ and privacy toggles below are the per-screen controls.)
   const canSeeBalances = data.summary.totalRealizedPl !== null;
   const showMoney = canSeeBalances && !privacy && !hideMoney;
   const s = data.summary;
@@ -160,7 +160,7 @@ export function TradeLog() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Trade Log</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Your fill history — planned vs. actual entry, slippage, and realized P/L per trade.
+            Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -217,7 +217,7 @@ export function TradeLog() {
       {/* List */}
       {data.trades.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          No trades logged yet.{!readOnly && ' Use “+ Log a trade” to add your first one.'}
+          No trades logged on the desk yet.{!readOnly && ' Use “+ Log a trade” to add the first one.'}
         </div>
       ) : layout === 'deck' ? (
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(290px,1fr))', gap: 13 }}>
@@ -304,6 +304,11 @@ function DeckCard({
         <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etDate(t.openedAt)}</span>
       </div>
 
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px 8px' }}>
+        <span style={ownerChip(t.isMine)}>@{t.owner}</span>
+        {t.isMine && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.4px', color: GOLD }}>YOU</span>}
+      </div>
+
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '0 14px 9px', flexWrap: 'wrap' }}>
         <Field label="Planned" value={fmtPrice(t.plannedEntry)} />
         <span style={{ color: FAINT, fontSize: 13 }}>→</span>
@@ -348,7 +353,7 @@ function DeckCard({
             </span>
           )}
         </div>
-        {!readOnly && (
+        {!readOnly && t.isMine && (
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>
             <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, color: '#52668f', borderColor: 'transparent', fontSize: 16, padding: '2px 6px' }}>×</button>
@@ -382,6 +387,7 @@ function Tape({
       {!isPhone && (
         <div style={{ ...tapeRow, color: FAINT, fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', borderBottom: `1px solid ${BORDER}` }}>
           <span style={{ flex: '1 1 90px' }}>Instrument</span>
+          <span style={{ flex: '0 0 90px' }}>Trader</span>
           <span style={col}>Side</span>
           <span style={col}>Entry</span>
           <span style={col}>Exit</span>
@@ -403,6 +409,9 @@ function Tape({
               {t.instrument}
               {t.status === 'open' && <span style={{ fontSize: 8.5, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 4px' }}>OPEN</span>}
             </span>
+            <span style={{ flex: '0 0 90px', color: t.isMine ? GOLD : MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
+              @{t.owner}
+            </span>
             <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
             <span style={col}>{fmtPrice(t.entryPrice)}</span>
             <span style={col}>{fmtPrice(t.exitPrice)}</span>
@@ -412,9 +421,12 @@ function Tape({
               {!canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••'}
             </span>
             <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.openedAt)}</span>
-            {!readOnly && (
-              <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
-            )}
+            {!readOnly &&
+              (t.isMine ? (
+                <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
+              ) : (
+                <span style={{ width: 24 }} />
+              ))}
           </div>
         );
       })}
@@ -556,6 +568,18 @@ const segBtn: CSSProperties = { background: 'none', border: 'none', color: MUTED
 const segActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const sideBadge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '3px 8px' };
+function ownerChip(mine: boolean): CSSProperties {
+  return {
+    fontSize: 10,
+    fontWeight: 700,
+    color: mine ? GOLD : '#bcd0ff',
+    background: mine ? 'rgba(235,203,116,.12)' : 'rgba(120,150,220,.12)',
+    border: `1px solid ${mine ? 'rgba(235,203,116,.4)' : BORDER2}`,
+    borderRadius: 5,
+    padding: '2px 7px',
+    fontFamily: "'IBM Plex Mono', monospace",
+  };
+}
 const tapeRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace" };
 const col: CSSProperties = { flex: '0 0 56px' };
 const infoBanner: CSSProperties = { fontSize: 12.5, color: '#f3e3b8', background: 'rgba(235,203,116,.08)', border: '1px solid rgba(235,203,116,.35)', borderRadius: 8, padding: '9px 12px' };

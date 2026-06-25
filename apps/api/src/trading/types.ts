@@ -12,6 +12,8 @@ export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation' | 'manual';
 export interface LiveTrade {
   id: string; // `${connectionId}:${broker}:${brokerTradeId}` — stable per position
   connectionId: string; // the broker connection (source) this came from
+  ownerId: string; // the teammate whose broker account this position is on
+  owner: string; // that teammate's username, shown on the position
   broker: BrokerKey;
   brokerName: string; // the connection's label
   instrument: string; // e.g. EUR/USD, BTC/USD, MSFT
@@ -27,8 +29,8 @@ export interface LiveTrade {
   stopLoss: number | null;
   // entryPrice - plannedEntry, in price terms; null when there is no plan.
   slippage: number | null;
-  // Open P/L in account currency. Gated by the viewBrokerage flag — null when
-  // the user is not allowed to see balances.
+  // Open P/L in account currency. Shared with the whole trading team; null only
+  // when the broker feed does not provide it.
   unrealizedPl: number | null;
   strategy: string | null;
   timeframe: string | null;
@@ -42,6 +44,8 @@ export interface LiveTrade {
 // succeed, and what did it return.
 export interface BrokerLiveResult {
   connectionId: string; // the connection/source this result is for
+  ownerId: string; // the teammate who owns this connection
+  owner: string; // that teammate's username
   broker: BrokerKey;
   name: string; // the connection's label
   platform: string;
@@ -57,7 +61,7 @@ export interface LiveWall {
   // 'sample'— no broker configured yet, so a representative sample is shown.
   source: 'live' | 'sample';
   generatedAt: number; // ms epoch
-  canSeeBalances: boolean; // mirrors the user's viewBrokerage flag
+  canSeeBalances: boolean; // always true now — balances are open to the trading team
   brokers: BrokerLiveResult[];
   trades: LiveTrade[]; // flattened across brokers, newest first
   note: string | null;

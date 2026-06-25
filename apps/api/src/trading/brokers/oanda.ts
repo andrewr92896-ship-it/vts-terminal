@@ -64,6 +64,8 @@ export function mapOandaTrades(json: OandaOpenTradesResponse): LiveTrade[] {
     return {
       id: `oanda:${t.id}`,
       connectionId: '', // set by the service when aggregating per connection
+      ownerId: '', // set by the service from the connection's owner
+      owner: '',
       broker: 'oanda' as const,
       brokerName: name,
       instrument: t.instrument.replace('_', '/'),

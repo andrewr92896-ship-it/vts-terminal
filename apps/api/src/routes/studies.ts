@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/middleware.js';
 import { addLearned, listLearned, removeLearned } from '../studies/learned.js';
-import { getGame, normalizeState, saveGame } from '../studies/game.js';
+import { getGame, getLeaderboard, normalizeState, saveGame } from '../studies/game.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
@@ -41,5 +41,11 @@ export async function studiesRoutes(app: FastifyInstance) {
     if (state == null) return reply.code(400).send({ error: 'Invalid game state' });
     await saveGame(request.currentUser!.id, state);
     return { ok: true };
+  });
+
+  // High-score table: everyone's headline Study Game stats, so learners can see
+  // where they stand and compare progress with each other.
+  app.get('/api/studies/leaderboard', guard, async (request) => {
+    return { entries: await getLeaderboard(request.currentUser!.id) };
   });
 }

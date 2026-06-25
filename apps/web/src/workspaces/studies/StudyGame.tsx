@@ -11,6 +11,7 @@ import {
 } from './series65Questions';
 import { SERIES65_EXPLANATIONS } from './series65Explanations';
 import { Flashcards } from './Flashcards';
+import { Leaderboard } from './Leaderboard';
 import { consumeStudyView, type StudyView } from './studiesNav';
 import {
   CATEGORY_META,
@@ -208,7 +209,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden' }}>
-          {(['quiz', 'cards'] as const).map((v) => (
+          {(['quiz', 'cards', 'leaderboard'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -222,7 +223,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
                 color: view === v ? theme.accentText : muted,
               }}
             >
-              {v === 'quiz' ? 'Quiz' : 'Flashcards'}
+              {v === 'quiz' ? 'Quiz' : v === 'cards' ? 'Flashcards' : 'Leaderboard'}
             </button>
           ))}
         </div>
@@ -240,6 +241,15 @@ export function StudyGame({ theme }: { theme: Theme }) {
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
         <Flashcards theme={theme} embedded />
+      </div>
+    );
+  }
+
+  if (view === 'leaderboard') {
+    return (
+      <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+        {header}
+        <Leaderboard theme={theme} />
       </div>
     );
   }
