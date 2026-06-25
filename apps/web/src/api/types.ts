@@ -166,6 +166,14 @@ export interface KiaMetrics {
   paceProfit: number;
   paceComm: number;
   onPace: boolean;
+  paceMode: 'calendar' | 'working';
+  workingDaysInMonth: number;
+  workingDaysLeft: number;
+}
+
+export interface KiaPaceConfig {
+  mode: 'calendar' | 'working';
+  offDays: number[]; // weekday numbers off, 0=Sunday … 6=Saturday
 }
 
 export interface KiaMonthOption {
@@ -204,6 +212,7 @@ export interface KiaDashboard {
   deals: KiaDeal[];
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };
+  pace: KiaPaceConfig;
   payPlan: KiaPayPlan;
 }
 

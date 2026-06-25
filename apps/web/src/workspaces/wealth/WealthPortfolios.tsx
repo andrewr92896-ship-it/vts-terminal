@@ -1,6 +1,7 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { AiEntry } from '../../components/AiEntry';
 import type {
   Allocation,
   AllocationInput,
@@ -198,6 +199,28 @@ function PortfolioForm({ initial, busy, submitLabel, onSubmit, onCancel }: { ini
   return (
     <div style={{ ...(initial ? {} : panel), marginBottom: initial ? 0 : 16 }}>
       <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? 'Edit portfolio' : 'New portfolio'}</div>
+      {!initial && (
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="wealth_portfolio"
+            label="portfolio"
+            accent={GREEN}
+            notePlaceholder='Describe the model, or drop a screenshot — e.g. "Core Growth, moderately aggressive"'
+            onFill={(f) => {
+              if (typeof f.name === 'string') setName(f.name);
+              if (
+                f.risk === 'conservative' ||
+                f.risk === 'moderate_conservative' ||
+                f.risk === 'moderate' ||
+                f.risk === 'moderate_aggressive' ||
+                f.risk === 'aggressive'
+              )
+                setRisk(f.risk);
+              if (typeof f.notes === 'string') setNotes(f.notes);
+            }}
+          />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Core Growth)" style={{ ...input, flex: '1 1 200px' }} />
         <select value={risk} onChange={(e) => setRisk(e.target.value as PortfolioRisk)} style={{ ...input, flex: '1 1 180px' }}>
@@ -224,6 +247,30 @@ function AllocationForm({ initial, busy, submitLabel, onSubmit, onCancel }: { in
   }
   return (
     <div>
+      {!initial && (
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="wealth_allocation"
+            label="sleeve"
+            accent={GREEN}
+            notePlaceholder='Describe the sleeve, or drop a screenshot — e.g. "US Large Cap 40%"'
+            onFill={(f) => {
+              if (typeof f.name === 'string') setName(f.name);
+              if (
+                f.assetClass === 'us_equity' ||
+                f.assetClass === 'intl_equity' ||
+                f.assetClass === 'fixed_income' ||
+                f.assetClass === 'real_assets' ||
+                f.assetClass === 'cash' ||
+                f.assetClass === 'alternative' ||
+                f.assetClass === 'other'
+              )
+                setAssetClass(f.assetClass);
+              if (typeof f.targetPct === 'number') setPctStr(String(f.targetPct));
+            }}
+          />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Sleeve (e.g. US Large Cap or VTI)" style={{ ...input, flex: '1 1 200px' }} />
         <select value={assetClass} onChange={(e) => setAssetClass(e.target.value as AssetClass)} style={{ ...input, flex: '1 1 150px' }}>

@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
+import { AiEntry } from '../../components/AiEntry';
 import type {
   RemovedTrade,
   TradeInput,
@@ -500,6 +501,33 @@ function TradeForm({
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
       <div style={panelLabel}>{initial ? 'Edit trade' : 'Log a trade'}</div>
+      {!initial && (
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="trade"
+            label="trade"
+            accent={GOLD}
+            notePlaceholder='Describe the trade, or drop a broker/chart screenshot'
+            onFill={(f) => {
+              if (f.broker === 'ftp' || f.broker === 'oanda' || f.broker === 'kraken' || f.broker === 'tradestation') setBroker(f.broker);
+              if (typeof f.instrument === 'string') setInstrument(f.instrument);
+              if (f.side === 'long' || f.side === 'short') setSide(f.side);
+              if (f.status === 'open' || f.status === 'closed') setStatus(f.status);
+              if (typeof f.plannedEntry === 'number') setPlanned(String(f.plannedEntry));
+              if (typeof f.entryPrice === 'number') setEntry(String(f.entryPrice));
+              if (typeof f.exitPrice === 'number') setExit(String(f.exitPrice));
+              if (typeof f.takeProfit === 'number') setTp(String(f.takeProfit));
+              if (typeof f.stopLoss === 'number') setSl(String(f.stopLoss));
+              if (typeof f.units === 'number') setUnits(String(f.units));
+              if (typeof f.realizedPl === 'number') setPl(String(f.realizedPl));
+              if (typeof f.strategy === 'string') setStrategy(f.strategy);
+              if (typeof f.timeframe === 'string') setTimeframe(f.timeframe);
+              if (typeof f.openedAt === 'string') setOpenedAt(f.openedAt);
+              if (typeof f.notes === 'string') setNotes(f.notes);
+            }}
+          />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. EUR/USD)" style={{ ...inputBase, flex: '1 1 150px' }} />
         <select value={side} onChange={(e) => setSide(e.target.value as TradeSide)} style={{ ...inputBase, flex: '0 0 110px' }}>

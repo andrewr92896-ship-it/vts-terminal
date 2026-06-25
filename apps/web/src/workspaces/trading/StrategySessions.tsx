@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { AiEntry } from '../../components/AiEntry';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import type { SessionBias, SessionInput, SessionStatus, StrategySession } from '../../api/types';
@@ -179,6 +180,27 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
       <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? 'Edit session' : 'New session'}</div>
+      {!initial && (
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="trading_session"
+            label="session"
+            accent={GOLD}
+            notePlaceholder='Describe the session plan, or drop a screenshot of your notes'
+            onFill={(f) => {
+              if (typeof f.name === 'string') setName(f.name);
+              if (typeof f.instrument === 'string') setInstrument(f.instrument);
+              if (typeof f.openTime === 'string') setOpenTime(f.openTime);
+              if (typeof f.closeTime === 'string') setCloseTime(f.closeTime);
+              if (typeof f.timeframe === 'string') setTimeframe(f.timeframe);
+              if (f.bias === 'bull' || f.bias === 'bear' || f.bias === 'both' || f.bias === 'neutral') setBias(f.bias);
+              if (typeof f.bullPlan === 'string') setBullPlan(f.bullPlan);
+              if (typeof f.bearPlan === 'string') setBearPlan(f.bearPlan);
+              if (typeof f.notes === 'string') setNotes(f.notes);
+            }}
+          />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. London Open)" style={{ ...input, flex: '1 1 180px' }} />
         <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. GBP/USD)" style={{ ...input, flex: '1 1 150px' }} />

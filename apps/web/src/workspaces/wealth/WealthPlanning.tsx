@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
+import { AiEntry } from '../../components/AiEntry';
 import type { Plan, PlanInput, PlansData, WealthClient } from '../../api/types';
 
 const GREEN = '#34b87a';
@@ -208,6 +209,27 @@ function PlanForm({ initial, clients, busy, submitLabel, onSubmit, onCancel }: {
   return (
     <div style={{ ...(initial ? {} : panel), marginBottom: initial ? 0 : 16 }}>
       <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? 'Edit scenario' : 'New scenario'}</div>
+      {!initial && (
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="wealth_plan"
+            label="scenario"
+            accent={GREEN}
+            notePlaceholder='Describe the plan, or drop a screenshot — e.g. "42, retire at 65, $250k saved, $30k/yr, 6% return"'
+            onFill={(f) => {
+              if (typeof f.name === 'string') setName(f.name);
+              if (typeof f.currentAge === 'number') setCurrentAge(String(f.currentAge));
+              if (typeof f.retirementAge === 'number') setRetirementAge(String(f.retirementAge));
+              if (typeof f.endAge === 'number') setEndAge(String(f.endAge));
+              if (typeof f.currentSavings === 'number') setCurrentSavings(String(f.currentSavings));
+              if (typeof f.annualContribution === 'number') setAnnualContribution(String(f.annualContribution));
+              if (typeof f.returnPct === 'number') setRet(String(f.returnPct));
+              if (typeof f.inflationPct === 'number') setInf(String(f.inflationPct));
+              if (typeof f.incomeGoal === 'number') setIncomeGoal(String(f.incomeGoal));
+            }}
+          />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Scenario name" style={{ ...input, flex: '1 1 200px' }} />
         <select value={clientId} onChange={(e) => setClientId(e.target.value)} style={{ ...input, flex: '1 1 180px' }}>

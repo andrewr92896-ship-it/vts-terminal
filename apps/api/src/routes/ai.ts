@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireWorkspace } from '../auth/middleware.js';
 import { canAccessWorkspace, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
+import { extractEntry, specForKind } from '../ai/extract.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
 
 const schema = z.object({
@@ -81,6 +82,20 @@ const tutorSchema = z.object({
   ask: z.string().trim().min(1).max(500).optional(),
 }).refine((v) => v.explain || v.ask, { message: 'Provide a question to explain or ask' });
 
+// "Fill with AI" for manual-entry forms: a free-text note and/or a screenshot
+// (data URL or bare base64). Screenshots can be large, so the route allows a
+// bigger body than the JSON default.
+const extractSchema = z
+  .object({
+    kind: z.string().trim().min(1).max(40),
+    note: z.string().trim().max(2000).optional(),
+    imageBase64: z.string().min(1).max(14_000_000).optional(),
+    mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
+  })
+  .refine((v) => (v.note && v.note.length > 0) || v.imageBase64, {
+    message: 'Provide a note or a screenshot',
+  });
+
 const KIA_SYSTEM = [
   'You are a Kia product expert helping a salesperson on the floor at a Kia dealership.',
   'Answer questions about Kia models, trims, specs, towing and payload, EV range and charging, MPG, key features, incentives, and basic troubleshooting — accurately and concisely, the way you would brief a salesperson before they walk back to a customer.',
@@ -151,6 +166,53 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
     }
   });
+
+  // Fill a manual-entry form from a note and/or screenshot. The kind selects
+  // the target form; access is gated by that form's workspace so a user can't
+  // extract into a workspace they don't have.
+  app.post(
+    '/api/ai/extract',
+    { preHandler: requireAuth, bodyLimit: 16 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const parsed = extractSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'Provide a note or a screenshot' });
+      }
+      const spec = specForKind(parsed.data.kind);
+      if (!spec) return reply.code(400).send({ error: 'Unknown entry type' });
+
+      const user = request.currentUser!;
+      if (!canAccessWorkspace(parseRoles(user), spec.workspace)) {
+        return reply.code(403).send({ error: 'You do not have access to that workspace' });
+      }
+
+      // Accept either a bare base64 string or a full data: URL.
+      let data = parsed.data.imageBase64;
+      let media = parsed.data.mediaType ?? 'image/png';
+      if (data) {
+        const m = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+        if (m) {
+          media = m[1] as typeof media;
+          data = m[2];
+        }
+      }
+
+      try {
+        await enforceAiLimit(user.id, 'extract');
+        return await extractEntry(parsed.data.kind, {
+          note: parsed.data.note,
+          imageBase64: data,
+          mediaType: media,
+        });
+      } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+        return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not read that' });
+      }
+    },
+  );
 
   // Kia Product Knowledge — same Sonnet model, a vehicle-expert persona.
   app.post('/api/ai/kia', { preHandler: requireWorkspace('kia') }, async (request, reply) => {

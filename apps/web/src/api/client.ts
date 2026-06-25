@@ -166,6 +166,16 @@ export const api = {
   aiUsage(): Promise<AiUsage> {
     return request('/api/ai/usage');
   },
+  // Fill a manual-entry form from a note and/or a screenshot. `kind` selects the
+  // target form; `fields` comes back with only the values the model could read.
+  aiExtract(input: {
+    kind: string;
+    note?: string;
+    imageBase64?: string;
+    mediaType?: string;
+  }): Promise<{ fields: Record<string, unknown>; raw: string; model: string }> {
+    return request('/api/ai/extract', { method: 'POST', body: JSON.stringify(input) });
+  },
   askKia(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<{ reply: string }> {
     return request('/api/ai/kia', { method: 'POST', body: JSON.stringify({ messages }) });
   },
@@ -413,6 +423,15 @@ export const api = {
     month?: string,
   ): Promise<KiaDashboard> {
     return request(`/api/kia/settings${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+  kiaUpdatePace(
+    patch: { mode?: 'calendar' | 'working'; offDays?: number[] },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/pace${monthQuery(month)}`, {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });

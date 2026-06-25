@@ -124,6 +124,15 @@ export const kiaSettings = sqliteTable('kia_settings', {
   reviewReqPct: integer('review_req_pct').notNull().default(50),
   // JSON array of { units, amount } bonus tiers; null falls back to defaults.
   bonusTiers: text('bonus_tiers'),
+  // Pace mode: 'calendar' counts every day of the month; 'working' counts only
+  // the days the salesperson actually works (off days excluded), so the pace
+  // projection isn't diluted by days they were never going to sell on.
+  paceMode: text('pace_mode', { enum: ['calendar', 'working'] })
+    .notNull()
+    .default('calendar'),
+  // JSON array of weekday numbers the salesperson is off (0=Sunday … 6=Saturday).
+  // Only consulted when paceMode is 'working'. Defaults to none.
+  offDays: text('off_days').notNull().default('[]'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
