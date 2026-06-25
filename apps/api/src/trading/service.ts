@@ -14,6 +14,8 @@ import {
   type OandaCreds,
 } from './connections.js';
 import { isDemoUser } from '../demo/identity.js';
+import { pushConfigured } from '../notifications/push.js';
+import { config } from '../config.js';
 import type { BrokerLiveResult, LiveTrade, LiveWall } from './types.js';
 
 // Compute slippage once, centrally: the actual fill minus the planned/alert
@@ -180,6 +182,29 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   }
 
   // Pull every active connection in parallel and merge.
+  const { brokers, raw: loaded } = await loadDesk(conns);
+
+  // Backfill missing marks on hand-entered manual positions from the rest of the
+  // desk's open trades, so their P/L and pip math render like any other.
+  const raw = fillManualMarks(loaded);
+
+  // Reconcile open positions → History before display, keyed per owner so each
+  // teammate's positions feed their own History (not the viewer's). Never let
+  // bookkeeping blank the wall.
+  const withSlip = withSlippage(raw);
+  await reconcilePerOwner(conns, brokers, withSlip);
+
+  const trades = gateBalances(withSlip, canSeeBalances).sort(newestFirst);
+  const failed = brokers.filter((b) => !b.ok);
+  const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
+
+  return { source: 'live', generatedAt, canSeeBalances, brokers, trades, note };
+}
+
+// Fan out to every active connection and merge their open positions, recording
+// per-connection health. Shared by the Live Wall render and the background
+// desk watch.
+async function loadDesk(conns: OwnedConnection[]): Promise<{ brokers: BrokerLiveResult[]; raw: LiveTrade[] }> {
   const settled = await Promise.allSettled(conns.map((c) => loadConnection(c)));
   const brokers: BrokerLiveResult[] = [];
   let raw: LiveTrade[] = [];
@@ -189,18 +214,20 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
       raw = raw.concat(s.value.trades);
     }
   }
-
   // Persist per-connection health (drives the status dots). Best-effort.
   await Promise.allSettled(brokers.map((b) => recordConnectionStatus(b.connectionId, b.ok, b.error)));
+  return { brokers, raw };
+}
 
-  // Backfill missing marks on hand-entered manual positions from the rest of the
-  // desk's open trades, so their P/L and pip math render like any other.
-  raw = fillManualMarks(raw);
-
-  // Reconcile open positions → History before display, keyed per owner so each
-  // teammate's positions feed their own History (not the viewer's). The
-  // "responded" guard is per connection. Never let bookkeeping blank the wall.
-  const withSlip = withSlippage(raw);
+// Reconcile open positions → History per owner, so each teammate's positions
+// feed their own History. The "responded" set is per connection so a connection
+// that errored this cycle can never trigger false closures. This is also where
+// trade open/close push notifications fire (inside reconcile).
+async function reconcilePerOwner(
+  conns: OwnedConnection[],
+  brokers: BrokerLiveResult[],
+  withSlip: LiveTrade[],
+): Promise<void> {
   const connOwner = new Map(conns.map((c) => [c.id, c.ownerId]));
   const okByOwner = new Map<string, Set<string>>();
   for (const b of brokers) {
@@ -211,21 +238,40 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
     set.add(b.connectionId);
     okByOwner.set(ownerId, set);
   }
-  // Every owner with an active connection this cycle (so vanished positions are
-  // closed even when an owner currently has zero open trades).
   const ownerNameById = new Map(conns.map((c) => [c.ownerId, c.owner]));
   for (const ownerId of new Set(conns.map((c) => c.ownerId))) {
     const ownerTrades = withSlip.filter((t) => t.ownerId === ownerId);
     try {
       await reconcile(ownerId, okByOwner.get(ownerId) ?? new Set<string>(), ownerTrades, ownerNameById.get(ownerId));
     } catch {
-      /* ignore — the Live Wall must still render */
+      /* ignore — bookkeeping must never throw into the caller */
     }
   }
+}
 
-  const trades = gateBalances(withSlip, canSeeBalances).sort(newestFirst);
-  const failed = brokers.filter((b) => !b.ok);
-  const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
+// Reconcile the whole desk with no viewer present. This is what makes trade
+// open/close push notifications fire when nobody has the Live Wall open — the
+// background watch calls it on an interval. Cheap when there are no connections.
+export async function reconcileDeskPositions(): Promise<void> {
+  const conns = await getAllActiveDecrypted();
+  if (conns.length === 0) return;
+  const { brokers, raw } = await loadDesk(conns);
+  const withSlip = withSlippage(fillManualMarks(raw));
+  await reconcilePerOwner(conns, brokers, withSlip);
+}
 
-  return { source: 'live', generatedAt, canSeeBalances, brokers, trades, note };
+const DESK_WATCH_MS = 60_000;
+
+// Poll broker positions in the background so trade open/close notifications fire
+// even when no client has the Live Wall open. Production-only, and only when
+// push is actually configured (no point spending broker API quota otherwise).
+// Best-effort: every tick is try/caught and never keeps the process alive.
+export function startDeskWatch(): void {
+  if (!config.isProd || !pushConfigured()) return;
+  const tick = () => {
+    void reconcileDeskPositions().catch((err) => console.error('Desk watch error:', err));
+  };
+  setTimeout(tick, 20 * 1000);
+  const timer = setInterval(tick, DESK_WATCH_MS);
+  timer.unref?.();
 }
