@@ -27,8 +27,8 @@ export interface LiveTrade {
   stopLoss: number | null;
   // entryPrice - plannedEntry, in price terms; null when there is no plan.
   slippage: number | null;
-  // Open P/L in account currency. Gated by the viewBrokerage flag — null when
-  // the user is not allowed to see balances.
+  // Open P/L in account currency. Shared with the whole trading team; null only
+  // when the broker feed does not provide it.
   unrealizedPl: number | null;
   strategy: string | null;
   timeframe: string | null;
@@ -57,7 +57,7 @@ export interface LiveWall {
   // 'sample'— no broker configured yet, so a representative sample is shown.
   source: 'live' | 'sample';
   generatedAt: number; // ms epoch
-  canSeeBalances: boolean; // mirrors the user's viewBrokerage flag
+  canSeeBalances: boolean; // always true now — balances are open to the trading team
   brokers: BrokerLiveResult[];
   trades: LiveTrade[]; // flattened across brokers, newest first
   note: string | null;

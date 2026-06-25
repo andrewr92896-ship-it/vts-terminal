@@ -135,9 +135,9 @@ export function TradeLog() {
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
   if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the log…</div>;
 
-  // The API nulls summary.totalRealizedPl (and every realizedPl) only when the
-  // user lacks the viewBrokerage grant, so it's a reliable "can see balances"
-  // signal even though an individual open trade may have a null P/L.
+  // Balances are shared across the whole trading team, so the desk summary
+  // always carries a number here. (Kept as a guard for the older nullable shape;
+  // the Hide-$ and privacy toggles below are the per-screen controls.)
   const canSeeBalances = data.summary.totalRealizedPl !== null;
   const showMoney = canSeeBalances && !privacy && !hideMoney;
   const s = data.summary;

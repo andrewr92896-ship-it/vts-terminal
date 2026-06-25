@@ -29,10 +29,12 @@ function newestFirst(a: LiveTrade, b: LiveTrade): number {
   return (b.openedAt ?? -Infinity) - (a.openedAt ?? -Infinity);
 }
 
-// Hide open P/L (an account balance) from anyone without the viewBrokerage
-// grant. The forex pip money (per-pip value and risk/reward) is position math,
-// not an account balance, so it stays visible to every trader; the client still
-// respects the on-screen privacy and Hide-$ toggles.
+// Optionally strip open P/L (an account balance) from the wall. The trading desk
+// now shares balances team-wide, so callers pass canSeeBalances=true; the helper
+// stays general in case a future surface needs to withhold them. The forex pip
+// money (per-pip value and risk/reward) is position math, not an account
+// balance, so it is never stripped; the client still respects the on-screen
+// privacy and Hide-$ toggles.
 function gateBalances(trades: LiveTrade[], canSeeBalances: boolean): LiveTrade[] {
   if (canSeeBalances) return trades;
   return trades.map((t) => ({ ...t, unrealizedPl: null }));
@@ -87,7 +89,10 @@ async function loadConnection(
 }
 
 export async function getLiveWall(user: UserRow): Promise<LiveWall> {
-  const canSeeBalances = !!user.viewBrokerage;
+  // The trading desk is a shared team: anyone reaching this route already holds
+  // a trading role (the workspace guard enforces it), so balances are open to
+  // them in full — no separate viewBrokerage grant required.
+  const canSeeBalances = true;
   const generatedAt = Date.now();
 
   const conns = await getActiveDecrypted(user.id);
