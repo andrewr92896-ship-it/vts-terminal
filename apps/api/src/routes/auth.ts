@@ -3,7 +3,7 @@ import { and, eq, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
-import { hashPassword, verifyPassword } from '../auth/passwords.js';
+import { hashPassword, verifyDummyPassword, verifyPassword } from '../auth/passwords.js';
 import {
   SESSION_COOKIE,
   cookieOptions,
@@ -48,12 +48,15 @@ export async function authRoutes(app: FastifyInstance) {
       .limit(1);
     const user = rows[0];
 
-    // Same generic error and a verify call even when the user is missing,
-    // so timing and messaging do not reveal which usernames exist.
-    const ok =
-      !!user &&
-      user.active &&
-      (await verifyPassword(user.passwordHash, password));
+    // Same generic error and the same amount of hashing work whether or not the
+    // user exists, so neither the message nor the response time reveals which
+    // usernames are real. The dummy verify on the miss path is deliberate.
+    let ok = false;
+    if (user && user.active) {
+      ok = await verifyPassword(user.passwordHash, password);
+    } else {
+      await verifyDummyPassword(password);
+    }
 
     if (!ok || !user) {
       return reply.code(401).send({ error: 'Invalid username or password' });

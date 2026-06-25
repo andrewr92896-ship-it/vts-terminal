@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { hash, verify } from '@node-rs/argon2';
 
 // Argon2id with sensible interactive parameters. @node-rs/argon2 ships
@@ -21,4 +22,16 @@ export async function verifyPassword(
   } catch {
     return false;
   }
+}
+
+// A hash of a throwaway secret, computed once at startup. When a login attempt
+// names a user that doesn't exist (or is inactive), the route verifies the
+// supplied password against this instead of skipping the hash entirely — so the
+// response takes the same ~Argon2 time either way and an attacker can't tell
+// real usernames apart from fake ones by timing. Always returns false.
+const dummyHash: Promise<string> = hashPassword(crypto.randomBytes(32).toString('hex'));
+
+export async function verifyDummyPassword(plain: string): Promise<boolean> {
+  await verify(await dummyHash, plain).catch(() => false);
+  return false;
 }

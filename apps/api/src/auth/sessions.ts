@@ -6,6 +6,10 @@ import { config } from '../config.js';
 
 export const SESSION_COOKIE = 'vts_session';
 const TTL_MS = config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+// Only persist last-seen this often. Every authenticated request would
+// otherwise write to the sessions row; throttling keeps "last seen" accurate
+// to within a few minutes while cutting a DB write off the hot path.
+const LAST_SEEN_THROTTLE_MS = 5 * 60 * 1000;
 
 function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -66,11 +70,14 @@ export async function getUserForToken(
   const user = userRows[0];
   if (!user || !user.active) return null;
 
-  // Touch last-seen without blocking the request.
-  void db
-    .update(sessions)
-    .set({ lastSeenAt: new Date() })
-    .where(eq(sessions.id, id));
+  // Touch last-seen without blocking the request, but at most once per throttle
+  // window so a chatty client doesn't write on every request.
+  if (Date.now() - session.lastSeenAt.getTime() > LAST_SEEN_THROTTLE_MS) {
+    void db
+      .update(sessions)
+      .set({ lastSeenAt: new Date() })
+      .where(eq(sessions.id, id));
+  }
 
   return user;
 }
