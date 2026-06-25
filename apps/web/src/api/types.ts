@@ -201,6 +201,14 @@ export interface KiaDealParseResult {
   reply: string;
 }
 
+// Result of running a Claude command-bar instruction over the dashboard.
+export interface KiaCommandResult {
+  dashboard: KiaDashboard; // refreshed dashboard after applying the command
+  applied: string[];
+  skipped: string[];
+  reply: string;
+}
+
 // ---- Vitalis Wealth Management ----
 export type WealthClientStatus = 'prospect' | 'onboarding' | 'active' | 'inactive';
 
@@ -783,12 +791,17 @@ export interface AnalyzeResult {
   model: string;
 }
 
+export type TradeResult = 'win' | 'loss' | 'breakeven';
+
 export interface AlertRecord {
   id: string;
   source: string;
   instrument: string | null;
   side: TradeSide | null;
   price: number | null;
+  exitPrice: number | null;
+  result: TradeResult | null;
+  pnl: number | null;
   strategy: string | null;
   timeframe: string | null;
   message: string | null;
@@ -796,12 +809,72 @@ export interface AlertRecord {
   analysis: AnalyzeResult | null;
   analyzedAt: number | null;
   tradeId: string | null;
+  linkedTrade: LinkedTradeSummary | null; // the real trade this alert is tied to
   receivedAt: number;
+}
+
+// Compact view of the real Trade Log trade an alert is linked to.
+export interface LinkedTradeSummary {
+  id: string;
+  side: TradeSide;
+  entryPrice: number;
+  exitPrice: number | null;
+  slippage: number | null; // entryPrice − plannedEntry
+  realizedPl: number | null; // null when balances are hidden
+  status: string;
+  openedAt: number;
+}
+
+// Per-strategy rollup of recorded outcomes (the paper-trading scoreboard).
+export interface StrategyStat {
+  strategy: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  open: number;
+  winRate: number | null; // 0–100 over decided trades
+  totalPnl: number | null;
+  avgPnl: number | null;
+  profitFactor: number | null;
 }
 
 export interface AlertsData {
   alerts: AlertRecord[];
+  strategies: StrategyStat[];
   aiConfigured: boolean;
+}
+
+// ---- Strategy performance board (hypothetical alerts vs. actual trades) ----
+export interface StratSideStat {
+  trades: number; // entries with a recorded result
+  wins: number;
+  losses: number;
+  breakeven: number;
+  open: number;
+  winRate: number | null; // 0–100 over decided
+  totalPnl: number | null; // points (hypothetical) or account $ (actual)
+  avgPnl: number | null;
+  profitFactor: number | null;
+}
+
+export interface StrategyRow {
+  name: string;
+  startedAt: number | null; // ms; null = all-time
+  notes: string | null;
+  hypothetical: StratSideStat; // from alerts — P&L in price points
+  actual: StratSideStat; // from real trades — P&L in account currency
+  backtest: StratSideStat; // from an imported TradingView CSV — P&L in USD
+  hasBacktest: boolean; // a backtest CSV has been imported for this strategy
+  signals: number; // alerts in scope
+  taken: number; // alerts in scope with a linked real trade
+  takenRate: number | null; // 0–100
+}
+
+export interface StrategyBoard {
+  strategies: StrategyRow[];
+  canSeeBalances: boolean;
+  ignoreTokens: string[]; // words stripped when collapsing labels to a strategy
 }
 
 // ---- Chat + announcements (mirror of apps/api/src/chat) ----

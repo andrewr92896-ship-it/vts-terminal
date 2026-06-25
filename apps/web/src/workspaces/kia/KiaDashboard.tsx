@@ -47,6 +47,11 @@ export function KiaDashboard() {
   const [noteBusy, setNoteBusy] = useState(false);
   const [noteReply, setNoteReply] = useState<string | null>(null);
 
+  // Claude command bar (natural-language dashboard edits)
+  const [command, setCommand] = useState('');
+  const [cmdBusy, setCmdBusy] = useState(false);
+  const [cmdResult, setCmdResult] = useState<{ reply: string; applied: string[]; skipped: string[] } | null>(null);
+
   useEffect(() => {
     let alive = true;
     api
@@ -95,6 +100,29 @@ export function KiaDashboard() {
       );
     } finally {
       setNoteBusy(false);
+    }
+  }
+
+  async function sendCommand() {
+    const text = command.trim();
+    if (!text || cmdBusy) return;
+    setCmdBusy(true);
+    setActionError(null);
+    try {
+      const r = await api.kiaCommand(text, dash?.month);
+      setDash(r.dashboard);
+      setCmdResult({ reply: r.reply, applied: r.applied, skipped: r.skipped });
+      setCommand('');
+    } catch (e) {
+      setActionError(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Command failed',
+      );
+    } finally {
+      setCmdBusy(false);
     }
   }
 
@@ -264,16 +292,41 @@ export function KiaDashboard() {
         </div>
       )}
 
-      {/* Claude command bar — placeholder for Stage 4 */}
+      {/* Claude command bar — natural-language dashboard edits */}
       <div style={{ ...panel, marginBottom: 14 }}>
-        <div style={panelLabel}>
+        <div style={{ ...panelLabel, display: 'flex', alignItems: 'center' }}>
           <span style={sparkle}>✦</span>Ask Claude to change details
+          <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: '#7d828a' }}>Sonnet</span>
         </div>
-        <input
-          disabled
-          placeholder="Command bar arrives in Stage 4 (add deal Sportage LX 1850 for Reyes · set goal 12 · set reviews 60% · summary)"
-          style={{ ...inputBase, color: '#6b7079', fontFamily: "'IBM Plex Mono', monospace" }}
-        />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={command}
+            onChange={(e) => setCommand(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && sendCommand()}
+            placeholder="add deal Sportage LX 1850 for Reyes · set goal 12 · set reviews 60% · summary"
+            style={{ ...inputBase, flex: 1, fontFamily: "'IBM Plex Mono', monospace", fontSize: 12 }}
+          />
+          <button onClick={sendCommand} disabled={cmdBusy || !command.trim()} style={{ ...redBtn, opacity: cmdBusy || !command.trim() ? 0.6 : 1 }}>
+            {cmdBusy ? '…' : 'Run'}
+          </button>
+        </div>
+        {cmdResult && (
+          <div style={{ marginTop: 9, fontSize: 11.5 }}>
+            {cmdResult.reply && <div style={{ color: '#cdd9d2', marginBottom: 4 }}>{cmdResult.reply}</div>}
+            {cmdResult.applied.map((a, i) => (
+              <div key={`a${i}`} style={{ color: GREEN }}>✓ {a}</div>
+            ))}
+            {cmdResult.skipped.map((s, i) => (
+              <div key={`s${i}`} style={{ color: AMBER }}>– {s}</div>
+            ))}
+            <button
+              onClick={() => setCmdResult(null)}
+              style={{ marginTop: 4, background: 'none', border: 'none', color: '#6b7079', fontSize: 10.5, cursor: 'pointer', padding: 0 }}
+            >
+              dismiss
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Claude quick-log */}

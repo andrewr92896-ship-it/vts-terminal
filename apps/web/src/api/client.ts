@@ -2,6 +2,8 @@ import type {
   AdminUser,
   AiUsage,
   AlertsData,
+  StrategyBoard,
+  TradeResult,
   Announcement,
   ChatChannel,
   ChatMessage,
@@ -29,6 +31,7 @@ import type {
   TradeLogData,
   RemovedTrade,
   KiaDashboard,
+  KiaCommandResult,
   KiaDealParseResult,
   RemovedKiaDeal,
   RemovedTodoItem,
@@ -318,6 +321,44 @@ export const api = {
   dismissAlert(id: string): Promise<AlertsData> {
     return request(`/api/trading/alerts/${id}/dismiss`, { method: 'POST', body: JSON.stringify({}) });
   },
+  setAlertResult(
+    id: string,
+    body: { result: TradeResult | null; exitPrice?: number | null; pnl?: number | null },
+  ): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/result`, { method: 'POST', body: JSON.stringify(body) });
+  },
+  addManualAlert(input: {
+    strategy?: string | null;
+    instrument?: string | null;
+    side?: 'long' | 'short' | null;
+    entry?: number | null;
+    exit?: number | null;
+    result?: TradeResult | null;
+    pnl?: number | null;
+    timeframe?: string | null;
+    message?: string | null;
+    occurredAt?: number | null;
+  }): Promise<AlertsData> {
+    return request('/api/trading/alerts/manual', { method: 'POST', body: JSON.stringify(input) });
+  },
+  linkAlert(id: string, tradeId: string): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/link`, { method: 'POST', body: JSON.stringify({ tradeId }) });
+  },
+  unlinkAlert(id: string): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/unlink`, { method: 'POST', body: JSON.stringify({}) });
+  },
+  tradingStrategies(): Promise<StrategyBoard> {
+    return request('/api/trading/strategies');
+  },
+  setStrategyMeta(input: { name: string; startedAt?: number | null; notes?: string | null }): Promise<StrategyBoard> {
+    return request('/api/trading/strategies', { method: 'PATCH', body: JSON.stringify(input) });
+  },
+  setStrategyIgnore(tokens: string[]): Promise<StrategyBoard> {
+    return request('/api/trading/strategies/ignore', { method: 'PATCH', body: JSON.stringify({ tokens }) });
+  },
+  importBacktest(strategy: string, csv: string): Promise<StrategyBoard & { imported: { strategy: string; imported: number; wins: number; losses: number } }> {
+    return request('/api/trading/strategies/backtest', { method: 'PATCH', body: JSON.stringify({ strategy, csv }) });
+  },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');
   },
@@ -356,6 +397,12 @@ export const api = {
   },
   kiaParseDeal(note: string): Promise<KiaDealParseResult> {
     return request('/api/kia/deals/parse', { method: 'POST', body: JSON.stringify({ note }) });
+  },
+  kiaCommand(command: string, month?: string): Promise<KiaCommandResult> {
+    return request(`/api/kia/command${monthQuery(month)}`, {
+      method: 'POST',
+      body: JSON.stringify({ command }),
+    });
   },
   kiaAddDeal(
     deal: {

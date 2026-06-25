@@ -19,6 +19,7 @@ const SCREENS: Record<string, ScreenInfo> = {
   sessions: { title: 'Strategy Sessions', blurb: 'Active, opening, and closing strategy windows with bull and bear playbooks per instrument.', stage: 2 },
   metrics: { title: 'Account Metrics', blurb: 'FTP challenge dashboard: $200K account, 10% target, 4% daily and 6% trailing drawdown, live equity from the API.', stage: 2 },
   news: { title: 'Market News', blurb: 'Market and geopolitical headlines with impact and bias tags, plus the economic calendar in ET.', stage: 2 },
+  strategies: { title: 'Strategies', blurb: 'Per-strategy performance: hypothetical (every alert) vs. actual (real trades), scoped by each strategy’s start date.', stage: 2 },
   history: { title: 'History', blurb: 'Historical performance, closed trades, and per-strategy results over time.', stage: 2 },
   td_trading: { title: 'Trading To Do', blurb: 'Trading tasks, also visible in your full To Do List workspace.', stage: 3 },
   admin: { title: 'Admin', blurb: 'User and role management, broker connection health, and audit settings.', stage: 3 },

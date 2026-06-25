@@ -9,7 +9,23 @@ import {
   restoreTrade,
   updateTrade,
 } from '../trading/trades.js';
-import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
+import {
+  analyzeAlert,
+  createManualAlert,
+  dismissAlert,
+  getAlerts,
+  getAlertSignal,
+  setAlertResult,
+} from '../trading/alerts.js';
+import {
+  autoMatch,
+  getStrategyBoard,
+  linkAlertTrade,
+  setIgnoreTokens,
+  setStrategyMeta,
+  unlinkAlertTrade,
+} from '../trading/strategies.js';
+import { importBacktest } from '../trading/backtest.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
@@ -39,7 +55,7 @@ import {
 import { aiConfigured, askClaude } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
-import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
+import { TRADE_SIDES, TRADE_STATUSES, TRADE_RESULTS, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
 const status = z.enum(TRADE_STATUSES);
@@ -268,6 +284,8 @@ export async function tradingRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     try {
       await addTrade(u.id, parsed.data);
+      // Tie the new trade to a matching alert (same instrument/side, within ±1h).
+      await autoMatch(u.id);
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add trade' });
     }
@@ -309,7 +327,73 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   // ---- TradingView alerts (FTP/prop replacement) ----
   app.get('/api/trading/alerts', read, async (request) => {
-    return getAlerts(request.currentUser!.id);
+    const u = request.currentUser!;
+    await autoMatch(u.id); // keep alert↔trade links fresh on each load
+    return getAlerts(u.id, !!u.viewBrokerage);
+  });
+
+  // Per-strategy hypothetical (alerts) vs. actual (real trades) scoreboard.
+  app.get('/api/trading/strategies', read, async (request) => {
+    const u = request.currentUser!;
+    await autoMatch(u.id);
+    return getStrategyBoard(u.id, !!u.viewBrokerage);
+  });
+
+  // Set a strategy's start date / notes.
+  app.patch('/api/trading/strategies', write, async (request, reply) => {
+    const parsed = strategyMetaSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Provide a strategy name' });
+    const u = request.currentUser!;
+    try {
+      await setStrategyMeta(u.id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update strategy' });
+    }
+    return getStrategyBoard(u.id, !!u.viewBrokerage);
+  });
+
+  // Set the words stripped when collapsing alert labels to a strategy name.
+  app.patch('/api/trading/strategies/ignore', write, async (request, reply) => {
+    const parsed = ignoreSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Provide a list of words' });
+    const u = request.currentUser!;
+    await setIgnoreTokens(u.id, parsed.data.tokens);
+    return getStrategyBoard(u.id, !!u.viewBrokerage);
+  });
+
+  // Import a TradingView "List of Trades" CSV as one strategy's backtest track.
+  app.patch('/api/trading/strategies/backtest', { ...write, bodyLimit: 6 * 1024 * 1024 }, async (request, reply) => {
+    const parsed = backtestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Provide a strategy name and CSV' });
+    const u = request.currentUser!;
+    try {
+      const result = await importBacktest(u.id, parsed.data.strategy, parsed.data.csv);
+      const board = await getStrategyBoard(u.id, !!u.viewBrokerage);
+      return { ...board, imported: result };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Import failed' });
+    }
+  });
+
+  // Manually link / unlink an alert and a real trade.
+  app.post('/api/trading/alerts/:id/link', write, async (request, reply) => {
+    const parsed = linkSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A trade is required' });
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    try {
+      await linkAlertTrade(u.id, id, parsed.data.tradeId);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not link trade' });
+    }
+    return getAlerts(u.id, !!u.viewBrokerage);
+  });
+
+  app.post('/api/trading/alerts/:id/unlink', write, async (request) => {
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    await unlinkAlertTrade(u.id, id);
+    return getAlerts(u.id, !!u.viewBrokerage);
   });
 
   // Lightweight desk-wide poll so trading clients can play an alert sound when a
@@ -342,7 +426,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       const id = (request.params as { id: string }).id;
       try {
         await enforceAiLimit(u.id, 'analyze');
-        return await analyzeAlert(u.id, id, data, media);
+        return await analyzeAlert(u.id, id, data, media, !!u.viewBrokerage);
       } catch (err) {
         if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
         const msg = err instanceof Error ? err.message : 'Analysis failed';
@@ -354,7 +438,35 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.post('/api/trading/alerts/:id/dismiss', write, async (request) => {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    return dismissAlert(u.id, id);
+    return dismissAlert(u.id, id, !!u.viewBrokerage);
+  });
+
+  // Tag (or clear) an alert's win/loss outcome by hand.
+  app.post('/api/trading/alerts/:id/result', write, async (request, reply) => {
+    const parsed = alertResultSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Provide a result (win, loss, breakeven) or null to clear' });
+    }
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    try {
+      return await setAlertResult(u.id, id, parsed.data, !!u.viewBrokerage);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update result' });
+    }
+  });
+
+  // Manually add a (typically historical) trade so the strategy metrics can
+  // cover trades that never came through the webhook.
+  app.post('/api/trading/alerts/manual', write, async (request, reply) => {
+    const parsed = manualAlertSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the trade details and try again' });
+    }
+    const u = request.currentUser!;
+    await createManualAlert(u.id, parsed.data);
+    await autoMatch(u.id);
+    return getAlerts(u.id, !!u.viewBrokerage);
   });
 
   // ---- Broker connections (per-user, self-service; credentials encrypted) ----
@@ -503,6 +615,46 @@ const challengeSchema = z
 const analyzeSchema = z.object({
   imageBase64: z.string().min(1),
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
+});
+
+// Set/clear an alert's outcome. result:null clears it back to "open".
+const alertResultSchema = z.object({
+  result: z.enum(TRADE_RESULTS).nullable(),
+  exitPrice: z.coerce.number().finite().nullish(),
+  pnl: z.coerce.number().finite().nullish(),
+});
+
+// Manually backfill a historical trade as an alert row.
+const manualAlertSchema = z.object({
+  strategy: z.string().trim().max(80).nullish(),
+  instrument: z.string().trim().max(40).nullish(),
+  side: z.enum(TRADE_SIDES).nullish(),
+  entry: z.coerce.number().finite().nullish(),
+  exit: z.coerce.number().finite().nullish(),
+  result: z.enum(TRADE_RESULTS).nullish(),
+  pnl: z.coerce.number().finite().nullish(),
+  timeframe: z.string().trim().max(16).nullish(),
+  message: z.string().trim().max(2000).nullish(),
+  occurredAt: z.coerce.number().int().nullish(),
+});
+
+// Set a strategy's start date ("last date the logic was touched") and notes.
+const strategyMetaSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  startedAt: z.coerce.number().int().nullish(),
+  notes: z.string().trim().max(500).nullish(),
+});
+
+// Manually link an alert to a specific real trade.
+const linkSchema = z.object({ tradeId: z.string().min(1) });
+
+// The list of extra words to strip when collapsing labels to a strategy name.
+const ignoreSchema = z.object({ tokens: z.array(z.string().trim().max(40)).max(50) });
+
+// Import a TradingView "List of Trades" CSV as a strategy's backtest track.
+const backtestSchema = z.object({
+  strategy: z.string().trim().min(1).max(120),
+  csv: z.string().min(1).max(5_000_000),
 });
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);

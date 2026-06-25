@@ -239,6 +239,11 @@ export type TradingTradeRow = typeof tradingTrades.$inferSelect;
 export const ALERT_STATUSES = ['new', 'analyzed', 'dismissed'] as const;
 export type AlertStatus = (typeof ALERT_STATUSES)[number];
 
+// Outcome of the trade an alert represents. Drives the per-strategy metrics on
+// the Alerts page. null = no result recorded yet (the trade is still open).
+export const TRADE_RESULTS = ['win', 'loss', 'breakeven'] as const;
+export type TradeResult = (typeof TRADE_RESULTS)[number];
+
 export const tradingAlerts = sqliteTable('trading_alerts', {
   id: text('id').primaryKey(),
   userId: text('user_id')
@@ -252,6 +257,10 @@ export const tradingAlerts = sqliteTable('trading_alerts', {
   timeframe: text('timeframe'),
   message: text('message'), // human-readable alert text
   payload: text('payload'), // raw JSON the webhook received
+  // Trade outcome — drives the per-strategy metrics. null = still open.
+  result: text('result', { enum: TRADE_RESULTS }),
+  exitPrice: real('exit_price'), // close/exit price when the trade is resolved
+  pnl: real('pnl'), // profit/loss; price points unless the alert sent an explicit value
   status: text('status', { enum: ALERT_STATUSES }).notNull().default('new'),
   analysis: text('analysis'), // Claude's analysis JSON, null until analyzed
   analyzedAt: integer('analyzed_at', { mode: 'timestamp_ms' }),
@@ -262,6 +271,64 @@ export const tradingAlerts = sqliteTable('trading_alerts', {
 });
 
 export type TradingAlertRow = typeof tradingAlerts.$inferSelect;
+
+// ---- Trading — strategies registry ----
+// One row per strategy name the trader uses. Strategy labels arrive free-text on
+// alerts and trades; this table gives each a stable home for a "start date" (the
+// last time the strategy's logic was changed) and notes. Metrics for a strategy
+// only count alerts/trades on or after startedAt, so editing the logic resets
+// its track record. Rows are auto-created when a new strategy name appears.
+export const tradingStrategies = sqliteTable(
+  'trading_strategies',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(), // matches alert.strategy / trade.strategy
+    startedAt: integer('started_at', { mode: 'timestamp_ms' }), // null = all-time
+    notes: text('notes'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.name] }) }),
+);
+
+export type TradingStrategyRow = typeof tradingStrategies.$inferSelect;
+
+// Per-user strategy-analytics preferences. Currently the custom "noise" tokens
+// to strip when collapsing a volatile alert label (e.g. lot size and version)
+// down to a stable strategy name — "NAS100 BOTH (Lot 8) 5m mk1 VTS v2.4" →
+// "NAS100 5m mk1". Lot/version/direction are stripped automatically; this list
+// holds extra brand/custom words like "VTS".
+export const tradingStrategyPrefs = sqliteTable('trading_strategy_prefs', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  ignoreTokens: text('ignore_tokens'), // JSON array of words to strip
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingStrategyPrefsRow = typeof tradingStrategyPrefs.$inferSelect;
+
+// Imported backtest trades (from a TradingView "List of Trades" CSV export), one
+// row per backtested trade, attached to a canonical strategy name. This is the
+// third comparison track next to hypothetical (alerts) and actual (real trades).
+// Re-importing a strategy's file replaces its rows.
+export const tradingBacktestTrades = sqliteTable('trading_backtest_trades', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  strategy: text('strategy').notNull(), // canonical strategy this import is for
+  side: text('side', { enum: TRADE_SIDES }).notNull().default('long'),
+  entryPrice: real('entry_price'),
+  exitPrice: real('exit_price'),
+  pnl: real('pnl'), // Net P&L in account currency (USD), per the export
+  openedAt: integer('opened_at', { mode: 'timestamp_ms' }).notNull(), // entry time
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingBacktestTradeRow = typeof tradingBacktestTrades.$inferSelect;
 
 // ---- TradingView webhook ingestion (raw alert store) ----
 // Standalone landing table for alerts posted to POST /api/tv-webhook. Not keyed
