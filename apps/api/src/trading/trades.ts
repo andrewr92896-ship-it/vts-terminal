@@ -11,6 +11,7 @@ import {
   type TradingTradeRow,
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
+import { DEMO_USERNAME } from '../demo/identity.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
 // (full or view-only) sees every other trading user's trades in full — capital
@@ -172,7 +173,7 @@ function summarize(rows: TradingTradeRow[]): TradeSummary {
   };
 }
 
-export async function getTrades(viewerId: string): Promise<TradeLogData> {
+export async function getTrades(viewerId: string, viewerIsDemo = false): Promise<TradeLogData> {
   // Pull every trade alongside its owner's username and roles, then keep only
   // those owned by a user who currently has trading access (full or view-only).
   // Joining live keeps the desk view correct as people's roles change.
@@ -185,7 +186,13 @@ export async function getTrades(viewerId: string): Promise<TradeLogData> {
     .from(tradingTrades)
     .innerJoin(users, eq(users.id, tradingTrades.userId));
 
-  const visible = rows.filter((r) => canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'));
+  const visible = rows.filter((r) => {
+    if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) return false;
+    // The public demo is sandboxed: a real trader never sees the demo's
+    // showcase trades on the shared desk, and the demo only sees its own
+    // showcase — never the real desk.
+    return viewerIsDemo ? r.username === DEMO_USERNAME : r.username !== DEMO_USERNAME;
+  });
 
   // Open trades first, then newest by open time — the order a trader scans in.
   const sorted = [...visible].sort((a, b) => {

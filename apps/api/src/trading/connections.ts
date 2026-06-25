@@ -10,6 +10,7 @@ import {
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { decryptSecret, encryptSecret } from '../security/secretbox.js';
+import { DEMO_USERNAME } from '../demo/identity.js';
 
 // Per-user broker connections. Credentials are encrypted at rest; only a
 // non-secret `summary` is ever exposed to the client. The connector layer uses
@@ -191,6 +192,10 @@ export async function getAllActiveDecrypted(): Promise<OwnedConnection[]> {
 
   const out: OwnedConnection[] = [];
   for (const r of rows) {
+    // The public demo account is a sandbox, not a desk member: keep its
+    // connections off the shared Live Wall (and keep the real desk's positions
+    // out of the demo, handled in the service).
+    if (r.username === DEMO_USERNAME) continue;
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     try {
       out.push({

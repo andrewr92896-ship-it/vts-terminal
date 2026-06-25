@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingPositions, users, type TradeSide, type TradingPositionRow } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
+import { DEMO_USERNAME } from '../demo/identity.js';
 import type { LiveTrade } from './types.js';
 
 // Reconcile the Live Wall's open positions against what we last stored, so that
@@ -186,7 +187,21 @@ function groupBy(
     .sort((a, b) => b.count - a.count);
 }
 
-export async function getHistory(viewerId: string, canSeeBalances: boolean): Promise<HistoryData> {
+export async function getHistory(
+  viewerId: string,
+  canSeeBalances: boolean,
+  viewerIsDemo = false,
+): Promise<HistoryData> {
+  // The public demo is sandboxed off the real desk: it never sees teammates'
+  // closed trades (and its own showcase has no closed positions), so its History
+  // is empty rather than a window into real accounts.
+  if (viewerIsDemo) {
+    return {
+      trades: [],
+      summary: { closed: 0, wins: 0, losses: 0, winRate: 0, totalRealizedPl: canSeeBalances ? 0 : null, byStrategy: [], byInstrument: [] },
+    };
+  }
+
   // Shared desk history: every trading-team member's closed positions, tagged
   // with the owner. Joined live with users so a teammate who loses trading
   // access drops off, mirroring the Live Wall and Trade Log.
@@ -197,7 +212,12 @@ export async function getHistory(viewerId: string, canSeeBalances: boolean): Pro
     .where(eq(tradingPositions.status, 'closed'))
     .orderBy(desc(tradingPositions.closedAt));
 
-  const visible = joined.filter((r) => canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'));
+  const visible = joined.filter(
+    (r) =>
+      // Drop the demo account: it's a sandbox, so its positions never surface as
+      // "demo"-tagged rows in a real trader's shared history.
+      r.username !== DEMO_USERNAME && canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'),
+  );
   const rows = visible.map((r) => r.pos);
   const ownerOf = new Map(visible.map((r) => [r.pos.id, r.username]));
 

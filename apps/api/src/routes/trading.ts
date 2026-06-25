@@ -33,6 +33,7 @@ import {
   updateConnection,
 } from '../trading/connections.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
+import { isDemoUser } from '../demo/identity.js';
 import {
   addManualPosition,
   listManualPositions,
@@ -114,13 +115,13 @@ export async function tradingRoutes(app: FastifyInstance) {
   // ---- Trade Log (per-user) ----
   app.get('/api/trading/trades', read, async (request) => {
     const u = request.currentUser!;
-    return getTrades(u.id);
+    return getTrades(u.id, isDemoUser(u));
   });
 
   // ---- History (closed positions, auto-recorded from the Live Wall) ----
   app.get('/api/trading/history', read, async (request) => {
     const u = request.currentUser!;
-    return getHistory(u.id, SEE_BALANCES);
+    return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
   });
 
   // ---- Account Metrics (prop-firm challenge) ----
@@ -279,7 +280,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add trade' });
     }
-    return getTrades(u.id);
+    return getTrades(u.id, isDemoUser(u));
   });
 
   app.patch('/api/trading/trades/:id', write, async (request, reply) => {
@@ -294,14 +295,14 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update trade' });
     }
-    return getTrades(u.id);
+    return getTrades(u.id, isDemoUser(u));
   });
 
   app.delete('/api/trading/trades/:id', write, async (request) => {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
     const removed = await removeTrade(u.id, id);
-    const data = await getTrades(u.id);
+    const data = await getTrades(u.id, isDemoUser(u));
     return { ...data, removed };
   });
 
@@ -312,7 +313,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
     const u = request.currentUser!;
     await restoreTrade(u.id, parsed.data);
-    return getTrades(u.id);
+    return getTrades(u.id, isDemoUser(u));
   });
 
   // ---- TradingView alerts (FTP/prop replacement) ----

@@ -13,6 +13,7 @@ import {
   type KrakenCreds,
   type OandaCreds,
 } from './connections.js';
+import { isDemoUser } from '../demo/identity.js';
 import type { BrokerLiveResult, LiveTrade, LiveWall } from './types.js';
 
 // Compute slippage once, centrally: the actual fill minus the planned/alert
@@ -141,7 +142,10 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
 
   // Every active connection across the trading team — not just this user's — so
   // the wall shows the whole desk's open positions, each tagged with its owner.
-  const conns = await getAllActiveDecrypted();
+  // The public demo is sandboxed: it never reaches the real desk's connections,
+  // so it falls through to the sample feed below instead of streaming live
+  // money positions to anyone who opens the demo.
+  const conns = isDemoUser(user) ? [] : await getAllActiveDecrypted();
 
   // No connection anywhere on the desk → show the sample feed so the wall is
   // never blank. The sample is attributed to the viewer.
