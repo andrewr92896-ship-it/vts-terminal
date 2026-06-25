@@ -213,10 +213,11 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   }
   // Every owner with an active connection this cycle (so vanished positions are
   // closed even when an owner currently has zero open trades).
+  const ownerNameById = new Map(conns.map((c) => [c.ownerId, c.owner]));
   for (const ownerId of new Set(conns.map((c) => c.ownerId))) {
     const ownerTrades = withSlip.filter((t) => t.ownerId === ownerId);
     try {
-      await reconcile(ownerId, okByOwner.get(ownerId) ?? new Set<string>(), ownerTrades);
+      await reconcile(ownerId, okByOwner.get(ownerId) ?? new Set<string>(), ownerTrades, ownerNameById.get(ownerId));
     } catch {
       /* ignore — the Live Wall must still render */
     }

@@ -39,6 +39,10 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Pull our push/notification handlers into the generated service worker.
+        // Kept as a static file (public/push-sw.js) so the worker stays
+        // auto-generated while still handling Web Push.
+        importScripts: ['/push-sw.js'],
         // Precache the built static shell so the app opens and routes offline.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
         // Single-page app: unknown routes fall back to the app shell.

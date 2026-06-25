@@ -340,6 +340,19 @@ export const api = {
   dismissAlert(id: string): Promise<AlertsData> {
     return request(`/api/trading/alerts/${id}/dismiss`, { method: 'POST', body: JSON.stringify({}) });
   },
+  // ---- Phone push (Web Push) ----
+  pushStatus(): Promise<{ configured: boolean; publicKey: string | null; subscribed: boolean }> {
+    return request('/api/push/status');
+  },
+  pushSubscribe(sub: PushSubscriptionJSON): Promise<{ ok: true }> {
+    return request('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub) });
+  },
+  pushUnsubscribe(endpoint: string): Promise<{ ok: true }> {
+    return request('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) });
+  },
+  pushTest(): Promise<{ ok: true }> {
+    return request('/api/push/test', { method: 'POST', body: JSON.stringify({}) });
+  },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');
   },

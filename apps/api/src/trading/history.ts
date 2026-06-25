@@ -4,7 +4,19 @@ import { db } from '../db/index.js';
 import { tradingPositions, users, type TradeSide, type TradingPositionRow } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
+import { sendToTradingDesk } from '../notifications/push.js';
 import type { LiveTrade } from './types.js';
+
+// A position opened within this window is treated as a fresh fill worth a push;
+// older "new to us" positions (e.g. on the first sync after a deploy) are not,
+// so a backfill never floods every phone.
+const FRESH_OPEN_MS = 15 * 60_000;
+
+function fmtPl(n: number | null): string {
+  if (n == null) return '';
+  const sign = n < 0 ? '-' : '+';
+  return `${sign}$${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+}
 
 // Reconcile the Live Wall's open positions against what we last stored, so that
 // closures can be detected and auto-recorded to History.
@@ -17,6 +29,7 @@ export async function reconcile(
   userId: string,
   okSources: Set<string>,
   liveTrades: LiveTrade[],
+  ownerName?: string,
 ): Promise<void> {
   const now = new Date();
   const openRows = await db
@@ -25,6 +38,11 @@ export async function reconcile(
     .where(and(eq(tradingPositions.userId, userId), eq(tradingPositions.status, 'open')));
   const byKey = new Map(openRows.map((r) => [r.key, r]));
   const currentKeys = new Set(liveTrades.map((t) => t.id));
+
+  // Trade events to notify on after the DB work: genuinely fresh fills and
+  // positions that just closed (TP/SL/manual exit). Collected here, pushed once.
+  const opened: LiveTrade[] = [];
+  const closed: { instrument: string; pl: number | null }[] = [];
 
   // Upsert every currently-open position (refresh mark + P/L, or insert new).
   for (const t of liveTrades) {
@@ -64,6 +82,9 @@ export async function reconcile(
         firstSeenAt: now,
         lastSeenAt: now,
       });
+      // Only a genuinely recent fill is push-worthy, so the first sync after a
+      // deploy (where every open trade is "new to us") never floods phones.
+      if (t.openedAt != null && now.getTime() - t.openedAt < FRESH_OPEN_MS) opened.push(t);
     }
   }
 
@@ -79,7 +100,31 @@ export async function reconcile(
           realizedPl: r.unrealizedPl, // last open P/L we saw
         })
         .where(eq(tradingPositions.id, r.id));
+      closed.push({ instrument: r.instrument, pl: r.unrealizedPl });
     }
+  }
+
+  // Buzz the desk about fresh fills and closes. Best-effort and fire-and-forget
+  // so the Live Wall render never waits on (or fails from) a push. Because the
+  // open/close DB transition happens exactly once, this notifies once even
+  // though every viewer's poll calls reconcile.
+  const who = ownerName ? `${ownerName} · ` : '';
+  for (const t of opened) {
+    void sendToTradingDesk({
+      title: `Trade opened · ${t.instrument}`,
+      body: `${who}${t.side.toUpperCase()} ${t.units}${t.entryPrice ? ` @ ${t.entryPrice}` : ''}`,
+      url: '/?screen=live',
+      tag: `vts-open-${t.id}`,
+    }).catch(() => {});
+  }
+  for (const c of closed) {
+    const pl = fmtPl(c.pl);
+    void sendToTradingDesk({
+      title: `Trade closed · ${c.instrument}`,
+      body: `${who}${pl ? `${pl}` : 'position closed'}`,
+      url: '/?screen=history',
+      tag: `vts-close-${c.instrument}`,
+    }).catch(() => {});
   }
 }
 

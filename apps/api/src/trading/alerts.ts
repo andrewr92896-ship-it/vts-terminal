@@ -12,6 +12,7 @@ import {
 import { parseRoles } from '../auth/rbac.js';
 import { addTrade } from './trades.js';
 import { aiConfigured, analyzeTradeScreenshot, type AnalyzeResult } from '../ai/claude.js';
+import { sendToTradingDesk } from '../notifications/push.js';
 
 // TradingView alerts are the FTP/prop-trade replacement. The webhook is
 // unauthenticated, so each alert is attributed to the owner (the earliest
@@ -99,6 +100,20 @@ export async function ingestAlert(body: Record<string, unknown>, rawPayload: str
     createdAt: now,
     updatedAt: now,
   });
+
+  // Buzz every subscribed trading phone that a fresh alert landed. Best-effort —
+  // the webhook must return 200 fast and never fail on a push hiccup.
+  const instrument = str(body.instrument ?? body.ticker ?? body.symbol, 40) ?? 'Alert';
+  const side = asSide(body.side ?? body.action ?? body.order);
+  const price = asNum(body.price ?? body.close ?? body.entry);
+  const parts = [side ? side.toUpperCase() : null, price != null ? `@ ${price}` : null].filter(Boolean);
+  void sendToTradingDesk({
+    title: `Alert · ${instrument}`,
+    body: parts.length ? parts.join(' ') : 'New TradingView alert',
+    url: '/?screen=alerts',
+    tag: 'vts-alert',
+  }).catch(() => {});
+
   return id;
 }
 

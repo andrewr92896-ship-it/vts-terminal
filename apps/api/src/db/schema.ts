@@ -707,6 +707,25 @@ export const studyLearned = sqliteTable('study_learned', {
 });
 export type StudyLearnedRow = typeof studyLearned.$inferSelect;
 
+// ---- Web Push subscriptions (per user, per device) ----
+// One row per browser/device the user has opted into phone push from. The
+// endpoint is the unique push URL; p256dh/auth are the client's encryption keys
+// (all non-secret to us — they only let our server reach that one device). A
+// user can have several (phone, laptop). Pruned when the push service reports
+// the subscription is gone.
+export const pushSubscriptions = sqliteTable('push_subscriptions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  endpoint: text('endpoint').notNull().unique(),
+  p256dh: text('p256dh').notNull(),
+  auth: text('auth').notNull(),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+
 // One row per user holding the serialized Study Game state (per-category levels,
 // scores, and answer history), so quiz progress follows the learner across
 // devices instead of living only in that browser's localStorage.

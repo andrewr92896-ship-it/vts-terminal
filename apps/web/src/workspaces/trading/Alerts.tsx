@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ClipboardEvent } 
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { usePushNotifications } from '../../push/usePushNotifications';
 import type { AlertRecord, AlertsData, TradeAnalysis } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
@@ -78,9 +79,12 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
             TradingView alerts arrive by webhook. Paste a chart screenshot and Claude (Opus 4.8) analyzes the trade.
           </div>
         </div>
-        <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!readOnly && <PhoneAlerts />}
+          <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {!data.aiConfigured && (
@@ -110,6 +114,60 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// The opt-in control for phone push. Each device enables it once; after that
+// the desk's alerts and trade open/close events buzz the phone even when the
+// app is closed. On iOS this only works once the portal is installed to the
+// Home Screen (Share → Add to Home Screen), so we surface that hint.
+function PhoneAlerts() {
+  const { state, busy, error, enable, disable, sendTest } = usePushNotifications();
+  const [open, setOpen] = useState(false);
+
+  if (state === 'unsupported') return null;
+
+  const on = state === 'on';
+  const label =
+    state === 'unconfigured'
+      ? 'Alerts unavailable'
+      : state === 'denied'
+        ? '🔔 Blocked'
+        : on
+          ? '🔔 Phone alerts on'
+          : '🔔 Phone alerts';
+
+  const disabled = busy || state === 'unconfigured' || state === 'denied';
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => (on ? setOpen((v) => !v) : void enable())}
+        disabled={disabled}
+        title={
+          state === 'unconfigured'
+            ? 'Push is not configured on the server yet'
+            : state === 'denied'
+              ? 'Notifications are blocked — enable them for this site in your browser/phone settings'
+              : 'Get trade and alert notifications on this device'
+        }
+        style={{ ...ghostBtn, color: on ? GREEN : '#dfe7fa', borderColor: on ? GREEN : BORDER2, opacity: disabled ? 0.6 : 1 }}
+      >
+        {busy ? 'Working…' : label}
+      </button>
+      {on && open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 20, width: 230, background: '#0b1a3a', border: `1px solid ${BORDER2}`, borderRadius: 10, padding: 12, boxShadow: '0 18px 40px rgba(0,0,0,.5)' }}>
+          <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+            This device will buzz on new alerts and when trades open or close.
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => void sendTest()} style={{ ...ghostBtn, flex: 1 }}>Send test</button>
+            <button onClick={() => { setOpen(false); void disable(); }} style={{ ...ghostBtn, flex: 1, color: '#ff9a9a' }}>Turn off</button>
+          </div>
+        </div>
+      )}
+      {error && <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 20, width: 230, fontSize: 11, color: '#ffb4ab' }}>{error}</div>}
     </div>
   );
 }
