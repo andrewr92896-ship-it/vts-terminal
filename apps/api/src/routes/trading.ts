@@ -26,17 +26,20 @@ import { listTruthPosts } from '../trading/feeds.js';
 import { SESSION_BIASES, NEWS_IMPACTS, NEWS_BIASES, NEWS_CATEGORIES } from '../db/schema.js';
 import {
   addConnection,
+  adminUpdateConnection,
+  listAllConnections,
   listConnections,
   removeConnection,
   updateConnection,
 } from '../trading/connections.js';
+import { isAdmin, parseRoles } from '../auth/rbac.js';
 import {
   addManualPosition,
   listManualPositions,
   removeManualPosition,
   updateManualPosition,
 } from '../trading/manual.js';
-import { aiConfigured, askClaude } from '../ai/claude.js';
+import { aiConfigured, askClaude, parsePositionScreenshot } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
 import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
@@ -367,6 +370,33 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { connections: await listConnections(request.currentUser!.id) };
   });
 
+  // Admin-only: every teammate's connection, tagged with its owner, so an admin
+  // can tidy labels desk-wide (e.g. rename a default "Oanda" to "Dale's Trades").
+  app.get('/api/trading/connections/all', read, async (request, reply) => {
+    if (!isAdmin(parseRoles(request.currentUser!))) {
+      return reply.code(403).send({ error: 'Admins only' });
+    }
+    return { connections: await listAllConnections() };
+  });
+
+  // Admin-only: rename / pause any connection regardless of owner.
+  app.patch('/api/trading/connections/:id/admin', write, async (request, reply) => {
+    if (!isAdmin(parseRoles(request.currentUser!))) {
+      return reply.code(403).send({ error: 'Admins only' });
+    }
+    const parsed = adminConnSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the connection details and try again' });
+    }
+    const id = (request.params as { id: string }).id;
+    try {
+      await adminUpdateConnection(id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update connection' });
+    }
+    return { connections: await listAllConnections() };
+  });
+
   app.post('/api/trading/connections', write, async (request, reply) => {
     const parsed = addConnSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -436,6 +466,61 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
+  // Read an open position off a broker/order screenshot with Opus 4.8 vision and
+  // save it as a manual position. For funded accounts that disallow API trading:
+  // screenshot the filled entry and it lands on the Live Wall. Screenshots are
+  // sizeable, so this route allows a larger body.
+  app.post(
+    '/api/trading/connections/:id/positions/analyze',
+    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const uid = request.currentUser!.id;
+      const id = (request.params as { id: string }).id;
+      if (!(await requireManualConnection(uid, id))) {
+        return reply.code(404).send({ error: 'Manual connection not found' });
+      }
+      const parsed = analyzeSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'A screenshot image is required' });
+      }
+      // Accept either a bare base64 string or a full data: URL.
+      let data = parsed.data.imageBase64;
+      let media: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' = parsed.data.mediaType ?? 'image/png';
+      const m = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+      if (m) {
+        media = m[1] as typeof media;
+        data = m[2];
+      }
+      try {
+        await enforceAiLimit(uid, 'position_screenshot');
+        const { parsed: p, model } = await parsePositionScreenshot(data, media);
+        if (p.entryPrice == null || !p.instrument) {
+          return reply.code(422).send({
+            error: "Couldn't read an entry price and instrument from that screenshot. Add it by hand, or try a clearer image.",
+            parsed: p,
+          });
+        }
+        const positions = await addManualPosition(uid, id, {
+          instrument: p.instrument,
+          side: p.side === 'short' ? 'short' : 'long',
+          units: p.units ?? 0,
+          entryPrice: p.entryPrice,
+          currentPrice: p.currentPrice,
+          takeProfit: p.takeProfit,
+          stopLoss: p.stopLoss,
+        });
+        return { positions, parsed: p, model };
+      } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+        const msg = err instanceof Error ? err.message : 'Analysis failed';
+        return reply.code(502).send({ error: msg });
+      }
+    },
+  );
+
   app.patch('/api/trading/positions/:id', write, async (request, reply) => {
     const uid = request.currentUser!.id;
     const id = (request.params as { id: string }).id;
@@ -469,6 +554,15 @@ const editConnSchema = z
     label: z.string().trim().min(1).max(80).optional(),
     active: z.boolean().optional(),
     creds: credsSchema.optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+// Admin override edits a teammate's connection: label and active only, never
+// credentials.
+const adminConnSchema = z
+  .object({
+    label: z.string().trim().min(1).max(80).optional(),
+    active: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 

@@ -1,6 +1,12 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import type { BrokerConnection, BrokerConnectionKind, ManualPosition } from '../../api/types';
+import { useAuth } from '../../auth/AuthContext';
+import type {
+  BrokerConnection,
+  BrokerConnectionKind,
+  ManualPosition,
+  OwnedBrokerConnection,
+} from '../../api/types';
 
 // The list + add/edit form for a user's broker connections. Shared by the Live
 // Wall "Connections" modal and the Account Settings page so both stay in sync.
@@ -31,6 +37,8 @@ function statusColor(s: BrokerConnection['lastStatus']): string {
 }
 
 export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }) {
+  const { user } = useAuth();
+  const isAdmin = !!user?.roles.includes('admin');
   const [conns, setConns] = useState<BrokerConnection[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -284,6 +292,120 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
           )}
         </div>
       </div>
+
+      {isAdmin && <TeamConnections onChanged={() => onChanged?.()} />}
+    </div>
+  );
+}
+
+// Admin-only roster of every teammate's connection. Lets an admin tidy labels
+// desk-wide — e.g. rename a teammate's default "Oanda" to "Dale's Trades" — and
+// pause/resume any connection. Credentials are never touched here.
+function TeamConnections({ onChanged }: { onChanged?: () => void }) {
+  const [conns, setConns] = useState<OwnedBrokerConnection[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [label, setLabel] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .allConnections()
+      .then((d) => alive && (setConns(d.connections), setLoaded(true)))
+      .catch(() => alive && setLoaded(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function apply(p: Promise<{ connections: OwnedBrokerConnection[] }>) {
+    setBusy(true);
+    setErr(null);
+    try {
+      setConns((await p).connections);
+      onChanged?.();
+      return true;
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.message : 'Action failed');
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveLabel(id: string) {
+    const l = label.trim();
+    if (!l) {
+      setErr('A name is required');
+      return;
+    }
+    if (await apply(api.adminUpdateConnection(id, { label: l }))) {
+      setEditId(null);
+      setLabel('');
+    }
+  }
+
+  if (loaded && conns.length === 0) return null;
+
+  return (
+    <div style={{ ...panel, marginTop: 16 }}>
+      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 4 }}>
+        Team connections (admin)
+      </div>
+      <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 10, lineHeight: 1.5 }}>
+        Every trader's connections across the desk. Rename them so the Live Wall reads cleanly (e.g. “Dale's Trades”).
+        You can rename and pause, but never see or change a teammate's keys.
+      </div>
+
+      {err && <div style={banner}>{err}</div>}
+
+      {!loaded ? (
+        <div style={{ color: MUTED, fontSize: 12 }}>Loading…</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {conns.map((c) => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: statusColor(c.lastStatus), flex: 'none' }} />
+              {editId === c.id ? (
+                <>
+                  <input
+                    value={label}
+                    onChange={(e) => setLabel(e.target.value)}
+                    autoFocus
+                    onKeyDown={(e) => e.key === 'Enter' && saveLabel(c.id)}
+                    style={{ ...input, flex: '1 1 160px', padding: '6px 9px' }}
+                  />
+                  <button onClick={() => saveLabel(c.id)} disabled={busy} style={{ ...goldBtn, padding: '6px 12px' }}>
+                    Save
+                  </button>
+                  <button onClick={() => (setEditId(null), setLabel(''))} style={ghostBtn}>
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <span style={{ fontWeight: 600, color: TEXT }}>{c.label}</span>
+                  <span style={{ fontSize: 10, color: FAINT }}>
+                    · {c.broker}
+                    {c.active ? '' : ' · paused'}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>@{c.owner}</span>
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                    <button onClick={() => (setEditId(c.id), setLabel(c.label), setErr(null))} style={ghostBtn}>
+                      Rename
+                    </button>
+                    <button onClick={() => !busy && apply(api.adminUpdateConnection(c.id, { active: !c.active }))} style={ghostBtn}>
+                      {c.active ? 'Pause' : 'Resume'}
+                    </button>
+                  </span>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -305,6 +427,58 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
   const [mark, setMark] = useState('');
   const [tp, setTp] = useState('');
   const [sl, setSl] = useState('');
+
+  // Screenshot → position: paste/upload an order ticket and Claude reads it.
+  const [shotImage, setShotImage] = useState<string | null>(null);
+  const [shotMedia, setShotMedia] = useState('image/png');
+  const [reading, setReading] = useState(false);
+  const [readNote, setReadNote] = useState<string | null>(null);
+  const shotRef = useRef<HTMLInputElement>(null);
+
+  function readImage(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      setShotImage(reader.result as string);
+      setShotMedia(file.type);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function onPasteShot(e: ClipboardEvent<HTMLDivElement>) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const it of items) {
+      if (it.type.startsWith('image/')) {
+        readImage(it.getAsFile());
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+
+  async function readScreenshot() {
+    if (!shotImage) return;
+    setReading(true);
+    setErr(null);
+    setReadNote(null);
+    try {
+      const r = await api.analyzePosition(connectionId, { imageBase64: shotImage, mediaType: shotMedia });
+      setPositions(r.positions);
+      onChanged?.();
+      const p = r.parsed;
+      setReadNote(
+        `Added ${p.instrument ?? 'position'} ${p.side === 'short' ? 'SHORT' : 'LONG'}${
+          p.entryPrice != null ? ` @ ${p.entryPrice}` : ''
+        }. Check the details below and edit if needed.`,
+      );
+      setShotImage(null);
+    } catch (e2) {
+      setErr(e2 instanceof ApiError ? e2.message : 'Could not read the screenshot');
+    } finally {
+      setReading(false);
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -412,6 +586,54 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
               </span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Screenshot → position. For funded accounts with no API: paste the
+          filled order ticket and Claude reads it into a position. */}
+      {!editId && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 }}>
+            Add from a screenshot
+          </div>
+          {readNote && (
+            <div style={{ ...banner, color: '#bfe9cf', background: 'rgba(53,196,123,.1)', borderColor: 'rgba(53,196,123,.4)' }}>
+              {readNote}
+            </div>
+          )}
+          <div
+            tabIndex={0}
+            onPaste={onPasteShot}
+            onClick={() => shotRef.current?.click()}
+            style={{
+              border: `1px dashed ${BORDER2}`,
+              borderRadius: 9,
+              background: INPUT_BG,
+              padding: shotImage ? 8 : '16px 14px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            {shotImage ? (
+              <img src={shotImage} alt="screenshot preview" style={{ maxWidth: '100%', maxHeight: 200, borderRadius: 6, display: 'block', margin: '0 auto' }} />
+            ) : (
+              <div style={{ fontSize: 12, color: MUTED }}>
+                Paste an order/positions screenshot (Ctrl/Cmd-V), or click to upload.
+              </div>
+            )}
+          </div>
+          <input ref={shotRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={(e) => readImage(e.target.files?.[0])} />
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+            <button onClick={readScreenshot} disabled={reading || !shotImage} style={{ ...goldBtn, opacity: reading || !shotImage ? 0.55 : 1 }}>
+              {reading ? 'Reading…' : 'Read screenshot'}
+            </button>
+            {shotImage && (
+              <button onClick={() => setShotImage(null)} style={ghostBtn}>
+                Clear
+              </button>
+            )}
+          </div>
         </div>
       )}
 

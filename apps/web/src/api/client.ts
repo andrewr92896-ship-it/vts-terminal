@@ -12,6 +12,8 @@ import type {
   ConnectionInput,
   ManualPosition,
   ManualPositionInput,
+  AnalyzePositionResult,
+  OwnedBrokerConnection,
   TruthPost,
   Expense,
   FinanceOverview,
@@ -256,6 +258,21 @@ export const api = {
   },
   removePosition(positionId: string): Promise<{ positions: ManualPosition[] }> {
     return request(`/api/trading/positions/${positionId}`, { method: 'DELETE' });
+  },
+  // Read an open position off a broker/order screenshot and save it as a manual
+  // position (for funded accounts with no API access).
+  analyzePosition(connectionId: string, image: { imageBase64: string; mediaType: string }): Promise<AnalyzePositionResult> {
+    return request(`/api/trading/connections/${connectionId}/positions/analyze`, {
+      method: 'POST',
+      body: JSON.stringify(image),
+    });
+  },
+  // Admin: every teammate's connection, and rename/pause any of them.
+  allConnections(): Promise<{ connections: OwnedBrokerConnection[] }> {
+    return request('/api/trading/connections/all');
+  },
+  adminUpdateConnection(id: string, patch: { label?: string; active?: boolean }): Promise<{ connections: OwnedBrokerConnection[] }> {
+    return request(`/api/trading/connections/${id}/admin`, { method: 'PATCH', body: JSON.stringify(patch) });
   },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });

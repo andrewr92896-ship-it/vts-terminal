@@ -47,6 +47,41 @@ function enrichForex(trades: LiveTrade[], accountCurrency: string): LiveTrade[] 
   return trades.map((t) => (t.forex !== undefined ? t : { ...t, forex: computeForex(t, accountCurrency) }));
 }
 
+// Manual positions are entered by hand on a funded account with no API, so they
+// often have no live mark. When a manual trade is missing its current price,
+// borrow the mark from another open position on the same instrument elsewhere on
+// the desk (preferring a broker-streamed price over another hand-entered one) so
+// its pip math and open P/L still compute against the same price the rest of the
+// desk sees. Manual positions are assumed to be USD-account for the pip math.
+function fillManualMarks(trades: LiveTrade[]): LiveTrade[] {
+  const marks = new Map<string, { price: number; fromManual: boolean }>();
+  for (const t of trades) {
+    if (t.currentPrice == null) continue;
+    const key = t.instrument.toUpperCase();
+    const fromManual = t.broker === 'manual';
+    const existing = marks.get(key);
+    // Broker-streamed marks win over hand-entered ones for the same instrument.
+    if (!existing || (existing.fromManual && !fromManual)) {
+      marks.set(key, { price: t.currentPrice, fromManual });
+    }
+  }
+  return trades.map((t) => {
+    if (t.broker !== 'manual' || t.currentPrice != null) return t;
+    const mark = marks.get(t.instrument.toUpperCase());
+    if (!mark) return t;
+    const filled: LiveTrade = { ...t, currentPrice: mark.price };
+    const forex = computeForex(filled, 'USD');
+    filled.forex = forex;
+    // Derive open P/L from the pip math once we have a mark (forex pairs only;
+    // other instruments keep a null P/L rather than guess a contract size).
+    filled.unrealizedPl =
+      forex && forex.pipsOpen != null && forex.moneyPerPip != null
+        ? Number((forex.pipsOpen * forex.moneyPerPip).toFixed(2))
+        : t.unrealizedPl;
+    return filled;
+  });
+}
+
 // Fetch open positions for a single broker connection. Never throws — a failed
 // connection just reports ok:false so one bad connection can't blank the wall.
 // Trade ids are re-keyed with the connection id so two accounts on the same
@@ -153,6 +188,10 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
 
   // Persist per-connection health (drives the status dots). Best-effort.
   await Promise.allSettled(brokers.map((b) => recordConnectionStatus(b.connectionId, b.ok, b.error)));
+
+  // Backfill missing marks on hand-entered manual positions from the rest of the
+  // desk's open trades, so their P/L and pip math render like any other.
+  raw = fillManualMarks(raw);
 
   // Reconcile open positions → History before display, keyed per owner so each
   // teammate's positions feed their own History (not the viewer's). The

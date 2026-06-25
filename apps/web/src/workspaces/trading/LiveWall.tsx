@@ -165,6 +165,9 @@ export function LiveWall() {
             <div key={b.connectionId} style={brokerChip} title={b.error ?? `${b.name} — ${b.platform}`}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flex: 'none' }} />
               <span style={{ fontWeight: 600, color: TEXT }}>{b.name}</span>
+              {/* The platform tells two same-named connections apart (e.g. an
+                  OANDA and a Kraken account both labeled the same). */}
+              <span style={platformPill}>{b.platform}</span>
               {b.owner && <span style={{ color: b.ownerId === user?.id ? GOLD : FAINT }}>@{b.owner}</span>}
               <span style={{ color: MUTED }}>· {state}</span>
             </div>
@@ -426,6 +429,17 @@ const brokerChip: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
   padding: '7px 11px',
+};
+const platformPill: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: '0.4px',
+  textTransform: 'uppercase',
+  color: MUTED,
+  background: 'rgba(255,255,255,.04)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 4,
+  padding: '1px 5px',
 };
 const metaChip: CSSProperties = {
   fontSize: 10,
