@@ -29,6 +29,7 @@ import { importBacktest } from '../trading/backtest.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
+import { getStrategySchedule } from '../trading/strategySchedule.js';
 import {
   getMarketNews,
   addNews,
@@ -177,6 +178,8 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // ---- Strategy Sessions ----
+  // Read-only schedule derived from the live Pine strategies (day + fill-hour cells).
+  app.get('/api/trading/strategy-schedule', read, async () => getStrategySchedule());
   app.get('/api/trading/sessions', read, async (request) => ({ sessions: await listSessions(request.currentUser!.id) }));
   app.post('/api/trading/sessions', write, async (request, reply) => {
     const parsed = addSessionSchema.safeParse(request.body);

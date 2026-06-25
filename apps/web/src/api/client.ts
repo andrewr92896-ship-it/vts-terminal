@@ -23,6 +23,7 @@ import type {
   NetWorthKind,
   SessionInput,
   StrategySession,
+  StrategyScheduleData,
   MarketNewsData,
   NewsInput,
   EventInput,
@@ -188,6 +189,9 @@ export const api = {
   },
   tradingSessions(): Promise<{ sessions: StrategySession[] }> {
     return request('/api/trading/sessions');
+  },
+  strategySchedule(): Promise<StrategyScheduleData> {
+    return request('/api/trading/strategy-schedule');
   },
   addSession(input: SessionInput): Promise<{ sessions: StrategySession[] }> {
     return request('/api/trading/sessions', { method: 'POST', body: JSON.stringify(input) });

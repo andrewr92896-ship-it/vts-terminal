@@ -622,6 +622,30 @@ export interface NetWorthData {
 export type SessionBias = 'bull' | 'bear' | 'both' | 'neutral';
 export type SessionStatus = 'active' | 'opening' | 'idle';
 
+// Read-only strategy schedule derived from the live Pine scripts.
+export interface ScheduleWindow {
+  days: string[]; // e.g. ["Tue"] or ["Sun","Mon","Tue"]
+  time: string; // "09:00–10:00" or "all day"
+  bias: 'bull' | 'bear';
+  signal: string | null;
+  active: boolean;
+}
+export interface StrategyScheduleItem {
+  name: string;
+  instrument: string;
+  timeframe: string;
+  bias: 'bull' | 'bear' | 'both';
+  blocked: string;
+  status: SessionStatus;
+  nextOpenMins: number | null;
+  nextOpenLabel: string | null;
+  windows: ScheduleWindow[];
+}
+export interface StrategyScheduleData {
+  strategies: StrategyScheduleItem[];
+  nowEtMin: number;
+}
+
 export interface StrategySession {
   id: string;
   name: string;
