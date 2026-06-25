@@ -10,6 +10,7 @@ import {
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { decryptSecret, encryptSecret } from '../security/secretbox.js';
+import { DEMO_USERNAME } from '../demo/identity.js';
 
 // Per-user broker connections. Credentials are encrypted at rest; only a
 // non-secret `summary` is ever exposed to the client. The connector layer uses
@@ -119,6 +120,45 @@ export async function listConnections(userId: string): Promise<BrokerConnection[
     .map(toPublic);
 }
 
+// A client-safe connection tagged with its owner. Used by the admin "team
+// connections" view so an admin can see and rename every teammate's connection
+// (e.g. tidy a teammate's default "Oanda" label into "Dale's Trades").
+export interface OwnedBrokerConnection extends BrokerConnection {
+  ownerId: string;
+  owner: string;
+}
+
+export async function listAllConnections(): Promise<OwnedBrokerConnection[]> {
+  const rows = await db
+    .select({ conn: brokerConnections, username: users.username })
+    .from(brokerConnections)
+    .innerJoin(users, eq(users.id, brokerConnections.userId));
+  return [...rows]
+    .sort((a, b) => a.conn.createdAt.getTime() - b.conn.createdAt.getTime())
+    .map((r) => ({ ...toPublic(r.conn), ownerId: r.conn.userId, owner: r.username }));
+}
+
+// Admin-only: rename or pause/resume any connection regardless of owner. Limited
+// to label and active on purpose — an admin never rotates a teammate's secrets.
+export async function adminUpdateConnection(
+  id: string,
+  input: { label?: string; active?: boolean },
+): Promise<void> {
+  const existing = (
+    await db.select({ id: brokerConnections.id }).from(brokerConnections).where(eq(brokerConnections.id, id)).limit(1)
+  )[0];
+  if (!existing) throw new Error('Connection not found');
+
+  const patch: Partial<typeof brokerConnections.$inferInsert> = { updatedAt: new Date() };
+  if (input.label !== undefined) {
+    const l = str(input.label);
+    if (!l) throw new Error('Label cannot be empty');
+    patch.label = l.slice(0, 80);
+  }
+  if (input.active !== undefined) patch.active = input.active;
+  await db.update(brokerConnections).set(patch).where(eq(brokerConnections.id, id));
+}
+
 export async function getActiveDecrypted(userId: string): Promise<DecryptedConnection[]> {
   const rows = await db
     .select()
@@ -152,6 +192,10 @@ export async function getAllActiveDecrypted(): Promise<OwnedConnection[]> {
 
   const out: OwnedConnection[] = [];
   for (const r of rows) {
+    // The public demo account is a sandbox, not a desk member: keep its
+    // connections off the shared Live Wall (and keep the real desk's positions
+    // out of the demo, handled in the service).
+    if (r.username === DEMO_USERNAME) continue;
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     try {
       out.push({
@@ -283,8 +327,10 @@ export async function seedConnectionsFromEnv(userId: string): Promise<void> {
   const krakenSecret = env('KRAKEN_API_SECRET');
   if (krakenKey && krakenSecret) {
     await addConnection(userId, {
+      // Distinct from the OANDA seed above so the two never render as identical
+      // "Andrew's Trades" chips on the shared Live Wall.
       broker: 'kraken',
-      label: "Andrew's Trades",
+      label: "Andrew's Crypto",
       creds: { apiKey: krakenKey, apiSecret: krakenSecret },
     });
   }

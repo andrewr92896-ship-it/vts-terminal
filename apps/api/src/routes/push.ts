@@ -1,0 +1,61 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { requireWorkspace } from '../auth/middleware.js';
+import {
+  hasSubscription,
+  pushConfigured,
+  removeSubscription,
+  saveSubscription,
+  sendTest,
+  vapidPublicKey,
+} from '../notifications/push.js';
+
+// Phone push (Web Push) subscription management. Gated behind trading access —
+// these notifications are the alert/trade feed, so only trading-desk users
+// subscribe. The public demo is read-only and never reaches a write here.
+
+const subSchema = z.object({
+  endpoint: z.string().url().max(2000),
+  keys: z.object({
+    p256dh: z.string().min(1).max(400),
+    auth: z.string().min(1).max(400),
+  }),
+});
+
+export async function pushRoutes(app: FastifyInstance) {
+  const trading = { preHandler: requireWorkspace('trading') };
+
+  // The client needs the VAPID public key to create a subscription, plus whether
+  // this user already has one on some device.
+  app.get('/api/push/status', trading, async (request) => {
+    const configured = pushConfigured();
+    return {
+      configured,
+      publicKey: vapidPublicKey(),
+      subscribed: configured ? await hasSubscription(request.currentUser!.id) : false,
+    };
+  });
+
+  app.post('/api/push/subscribe', trading, async (request, reply) => {
+    if (!pushConfigured()) return reply.code(503).send({ error: 'Push is not configured on the server' });
+    const parsed = subSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid push subscription' });
+    const ua = request.headers['user-agent'] ?? null;
+    await saveSubscription(request.currentUser!.id, parsed.data, typeof ua === 'string' ? ua : null);
+    return { ok: true };
+  });
+
+  app.post('/api/push/unsubscribe', trading, async (request, reply) => {
+    const parsed = z.object({ endpoint: z.string().min(1).max(2000) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'An endpoint is required' });
+    await removeSubscription(parsed.data.endpoint);
+    return { ok: true };
+  });
+
+  // Fire a test notification to the caller's devices so they can confirm setup.
+  app.post('/api/push/test', trading, async (request, reply) => {
+    if (!pushConfigured()) return reply.code(503).send({ error: 'Push is not configured on the server' });
+    await sendTest(request.currentUser!.id);
+    return { ok: true };
+  });
+}

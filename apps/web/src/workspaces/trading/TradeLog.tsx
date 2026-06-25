@@ -12,6 +12,7 @@ import type {
   TradeRecord,
   TradeSide,
   TradeStatus,
+  TradeSummary,
 } from '../../api/types';
 
 // Trading navy/gold palette — self-contained, matching the Live Wall.
@@ -66,6 +67,38 @@ function slippageFavorable(t: TradeRecord): boolean | null {
   return t.side === 'long' ? t.slippage < 0 : t.slippage > 0;
 }
 
+// Recompute the KPI stats for a subset of trades (one trader's), mirroring the
+// backend's desk-wide summarize() so a per-trader view reads the same way.
+function summarizeTrades(trades: TradeRecord[]): TradeSummary {
+  let open = 0, closed = 0, wins = 0, losses = 0, totalPl = 0, slipSum = 0, slipCount = 0, scored = 0;
+  for (const t of trades) {
+    if (t.status === 'open') open += 1;
+    else closed += 1;
+    if (t.realizedPl != null) {
+      totalPl += t.realizedPl;
+      if (t.status === 'closed') {
+        scored += 1;
+        if (t.realizedPl >= 0) wins += 1;
+        else losses += 1;
+      }
+    }
+    if (t.slippage != null) {
+      slipSum += t.slippage;
+      slipCount += 1;
+    }
+  }
+  return {
+    total: trades.length,
+    open,
+    closed,
+    wins,
+    losses,
+    winRate: scored > 0 ? wins / scored : 0,
+    totalRealizedPl: totalPl,
+    avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
+  };
+}
+
 type Layout = 'deck' | 'tape';
 
 export function TradeLog() {
@@ -82,6 +115,8 @@ export function TradeLog() {
   const [hideMoney, setHideMoney] = useState(false);
   const [layout, setLayout] = useState<Layout>('deck');
   const [adding, setAdding] = useState(false);
+  // Per-trader filter: '' = the whole desk; otherwise an ownerId.
+  const [trader, setTrader] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -140,7 +175,15 @@ export function TradeLog() {
   // the Hide-$ and privacy toggles below are the per-screen controls.)
   const canSeeBalances = data.summary.totalRealizedPl !== null;
   const showMoney = canSeeBalances && !privacy && !hideMoney;
-  const s = data.summary;
+
+  // Distinct traders on the desk (for the filter dropdown), plus the filtered
+  // view + its recomputed stats so the KPI cards reflect the chosen trader.
+  const traders = [...new Map(data.trades.map((t) => [t.ownerId, t.owner])).entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
+  const s = trader ? summarizeTrades(shownTrades) : data.summary;
+  const selectedTraderName = traders.find((t) => t.id === trader)?.name ?? null;
 
   const kpis: { label: string; val: string; sub: string }[] = [
     { label: 'Trades', val: String(s.total), sub: `${s.open} open · ${s.closed} closed` },
@@ -164,6 +207,22 @@ export function TradeLog() {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {traders.length > 1 && (
+            <select
+              value={trader}
+              onChange={(e) => setTrader(e.target.value)}
+              title="Show stats for one trader"
+              style={{ ...inputBase, flex: '0 0 auto', padding: '7px 11px' }}
+            >
+              <option value="">Whole desk</option>
+              {traders.map((t) => (
+                <option key={t.id} value={t.id}>
+                  @{t.name}
+                  {t.id === user?.id ? ' (you)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
           <div style={{ display: 'flex', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
             {(['deck', 'tape'] as Layout[]).map((l) => (
               <button key={l} onClick={() => setLayout(l)} style={{ ...segBtn, ...(layout === l ? segActive : {}) }}>
@@ -192,6 +251,9 @@ export function TradeLog() {
       )}
 
       {/* Summary */}
+      <div style={{ fontSize: 11, color: FAINT, marginBottom: 8, letterSpacing: '0.3px' }}>
+        {selectedTraderName ? `Individual stats — @${selectedTraderName}` : 'Whole desk — combined stats'}
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={card}>
@@ -215,13 +277,15 @@ export function TradeLog() {
       )}
 
       {/* List */}
-      {data.trades.length === 0 ? (
+      {shownTrades.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          No trades logged on the desk yet.{!readOnly && ' Use “+ Log a trade” to add the first one.'}
+          {selectedTraderName
+            ? `No trades logged by @${selectedTraderName}.`
+            : `No trades logged on the desk yet.${!readOnly ? ' Use “+ Log a trade” to add the first one.' : ''}`}
         </div>
       ) : layout === 'deck' ? (
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(290px,1fr))', gap: 13 }}>
-          {data.trades.map((t) => (
+          {shownTrades.map((t) => (
             <DeckCard
               key={t.id}
               t={t}
@@ -236,7 +300,7 @@ export function TradeLog() {
         </div>
       ) : (
         <Tape
-          trades={data.trades}
+          trades={shownTrades}
           showMoney={showMoney}
           canSeeBalances={canSeeBalances}
           readOnly={readOnly}

@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
@@ -23,6 +24,8 @@ function etToday(): string {
 
 export function KiaDashboard() {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const { privacy } = usePrivacy();
   const dealership = useDealership();
   const undo = useUndo<RemovedKiaDeal>();
@@ -273,9 +276,11 @@ export function KiaDashboard() {
           >
             {dealership.generic ? 'Use Kia name' : 'Use generic name'}
           </button>
-          <button onClick={() => setPayPlanOpen(true)} style={ghostBtn}>
-            Pay plan
-          </button>
+          {!readOnly && (
+            <button onClick={() => setPayPlanOpen(true)} style={ghostBtn}>
+              Pay plan
+            </button>
+          )}
           <button onClick={() => setHideComm((v) => !v)} style={ghostBtn}>
             {hideComm ? 'Show $ details' : 'Hide $ details'}
           </button>
@@ -356,29 +361,31 @@ export function KiaDashboard() {
       </div>
 
       {/* Manual deal entry */}
-      <div style={{ ...panel, marginBottom: 16 }}>
-        <div style={panelLabel}>Log a deal</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Customer (optional)" style={{ ...inputBase, flex: '1 1 150px' }} />
-          <input value={model} onChange={(e) => setModel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} placeholder="Model" style={{ ...inputBase, flex: '1 1 160px' }} />
-          <select value={dtype} onChange={(e) => setDtype(e.target.value as 'New' | 'Used')} style={{ ...inputBase, flex: '0 0 90px' }}>
-            <option value="New">New</option>
-            <option value="Used">Used</option>
-          </select>
-          {splitMode ? (
-            <>
-              <input value={front} onChange={(e) => setFront(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Front $" style={{ ...inputBase, flex: '0 0 100px' }} />
-              <input value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Back $" style={{ ...inputBase, flex: '0 0 100px' }} />
-            </>
-          ) : (
-            <input value={profit} onChange={(e) => setProfit(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 110px' }} />
-          )}
-          <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
-          <button onClick={addDeal} disabled={addDisabled} style={{ ...redBtn, opacity: addDisabled ? 0.6 : 1 }}>
-            Add deal
-          </button>
+      {!readOnly && (
+        <div style={{ ...panel, marginBottom: 16 }}>
+          <div style={panelLabel}>Log a deal</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={customer} onChange={(e) => setCustomer(e.target.value)} placeholder="Customer (optional)" style={{ ...inputBase, flex: '1 1 150px' }} />
+            <input value={model} onChange={(e) => setModel(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} placeholder="Model" style={{ ...inputBase, flex: '1 1 160px' }} />
+            <select value={dtype} onChange={(e) => setDtype(e.target.value as 'New' | 'Used')} style={{ ...inputBase, flex: '0 0 90px' }}>
+              <option value="New">New</option>
+              <option value="Used">Used</option>
+            </select>
+            {splitMode ? (
+              <>
+                <input value={front} onChange={(e) => setFront(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Front $" style={{ ...inputBase, flex: '0 0 100px' }} />
+                <input value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Back $" style={{ ...inputBase, flex: '0 0 100px' }} />
+              </>
+            ) : (
+              <input value={profit} onChange={(e) => setProfit(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 110px' }} />
+            )}
+            <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
+            <button onClick={addDeal} disabled={addDisabled} style={{ ...redBtn, opacity: addDisabled ? 0.6 : 1 }}>
+              Add deal
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* KPI cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 13, marginBottom: 16 }}>
@@ -409,6 +416,7 @@ export function KiaDashboard() {
                 showComm={showComm}
                 busy={busy}
                 split={splitMode}
+                readOnly={readOnly}
                 onRemove={() => removeDealWithUndo(d.id)}
                 onSave={(patch) =>
                   run(api.kiaUpdateDeal(d.id, patch, patch.soldAt ? patch.soldAt.slice(0, 7) : monthKey))
@@ -424,7 +432,9 @@ export function KiaDashboard() {
           <div style={card}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Monthly Unit Goal</div>
-              <Stepper value={m.goalUnits} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ goalUnits: v }, monthKey))} min={1} />
+              {!readOnly && (
+                <Stepper value={m.goalUnits} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ goalUnits: v }, monthKey))} min={1} />
+              )}
             </div>
             <div style={{ fontSize: 11, color: '#8b9098', marginBottom: 12 }}>{m.units} of {m.goalUnits} units</div>
             <div style={{ height: 10, background: '#26282e', borderRadius: 6, overflow: 'hidden' }}>
@@ -489,7 +499,9 @@ export function KiaDashboard() {
               <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Google Reviews</div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: reviewColor }}>{m.reviewPct}%</span>
-                <Stepper value={m.reviewCount} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ reviewCount: v }, monthKey))} min={0} />
+                {!readOnly && (
+                  <Stepper value={m.reviewCount} busy={busy} onChange={(v) => run(api.kiaUpdateSettings({ reviewCount: v }, monthKey))} min={0} />
+                )}
               </div>
             </div>
             <div style={{ height: 8, background: '#26282e', borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
@@ -559,7 +571,7 @@ export function KiaDashboard() {
       )}
 
       <PayPlanEditor
-        open={payPlanOpen}
+        open={payPlanOpen && !readOnly}
         plan={dash.payPlan}
         goalUnits={m.goalUnits}
         busy={busy}
@@ -589,6 +601,7 @@ function DealRow({
   showComm,
   busy,
   split,
+  readOnly,
   onRemove,
   onSave,
 }: {
@@ -596,6 +609,7 @@ function DealRow({
   showComm: boolean;
   busy: boolean;
   split: boolean;
+  readOnly: boolean;
   onRemove: () => void;
   onSave: (patch: {
     customer?: string;
@@ -686,12 +700,16 @@ function DealRow({
           <div style={{ fontSize: 9.5, color: '#7d828a', letterSpacing: '0.4px', textTransform: 'uppercase', marginTop: 2 }}>profit</div>
         </div>
       )}
-      <button onClick={() => !busy && start()} title="Edit deal" style={{ flex: 'none', background: 'none', border: '1px solid #2a2d33', color: '#9aa0a8', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: busy ? 'default' : 'pointer' }}>
-        Edit
-      </button>
-      <button onClick={() => !busy && onRemove()} title="Remove deal" style={{ flex: 'none', background: 'none', border: 'none', color: '#4a4f57', fontSize: 16, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
-        ×
-      </button>
+      {!readOnly && (
+        <>
+          <button onClick={() => !busy && start()} title="Edit deal" style={{ flex: 'none', background: 'none', border: '1px solid #2a2d33', color: '#9aa0a8', fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: busy ? 'default' : 'pointer' }}>
+            Edit
+          </button>
+          <button onClick={() => !busy && onRemove()} title="Remove deal" style={{ flex: 'none', background: 'none', border: 'none', color: '#4a4f57', fontSize: 16, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
+            ×
+          </button>
+        </>
+      )}
     </div>
   );
 }

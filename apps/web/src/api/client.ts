@@ -12,6 +12,8 @@ import type {
   ConnectionInput,
   ManualPosition,
   ManualPositionInput,
+  AnalyzePositionResult,
+  OwnedBrokerConnection,
   TruthPost,
   Expense,
   FinanceOverview,
@@ -257,6 +259,21 @@ export const api = {
   removePosition(positionId: string): Promise<{ positions: ManualPosition[] }> {
     return request(`/api/trading/positions/${positionId}`, { method: 'DELETE' });
   },
+  // Read an open position off a broker/order screenshot and save it as a manual
+  // position (for funded accounts with no API access).
+  analyzePosition(connectionId: string, image: { imageBase64: string; mediaType: string }): Promise<AnalyzePositionResult> {
+    return request(`/api/trading/connections/${connectionId}/positions/analyze`, {
+      method: 'POST',
+      body: JSON.stringify(image),
+    });
+  },
+  // Admin: every teammate's connection, and rename/pause any of them.
+  allConnections(): Promise<{ connections: OwnedBrokerConnection[] }> {
+    return request('/api/trading/connections/all');
+  },
+  adminUpdateConnection(id: string, patch: { label?: string; active?: boolean }): Promise<{ connections: OwnedBrokerConnection[] }> {
+    return request(`/api/trading/connections/${id}/admin`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });
   },
@@ -322,6 +339,19 @@ export const api = {
   },
   dismissAlert(id: string): Promise<AlertsData> {
     return request(`/api/trading/alerts/${id}/dismiss`, { method: 'POST', body: JSON.stringify({}) });
+  },
+  // ---- Phone push (Web Push) ----
+  pushStatus(): Promise<{ configured: boolean; publicKey: string | null; subscribed: boolean }> {
+    return request('/api/push/status');
+  },
+  pushSubscribe(sub: PushSubscriptionJSON): Promise<{ ok: true }> {
+    return request('/api/push/subscribe', { method: 'POST', body: JSON.stringify(sub) });
+  },
+  pushUnsubscribe(endpoint: string): Promise<{ ok: true }> {
+    return request('/api/push/unsubscribe', { method: 'POST', body: JSON.stringify({ endpoint }) });
+  },
+  pushTest(): Promise<{ ok: true }> {
+    return request('/api/push/test', { method: 'POST', body: JSON.stringify({}) });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');

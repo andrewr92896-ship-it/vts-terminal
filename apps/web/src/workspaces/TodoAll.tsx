@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { useUndo } from '../hooks/useUndo';
 import { UndoBar } from '../components/UndoBar';
@@ -16,6 +17,8 @@ const ACCENT2 = '#2f9e86';
 const OVERDUE = '#ef5468';
 
 export function TodoAll() {
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const { isPhone } = useResponsive();
   const [sections, setSections] = useState<TodoSection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -209,6 +212,7 @@ export function TodoAll() {
       )}
 
       {/* Add a task */}
+      {!readOnly && (
       <div
         style={{
           display: 'grid',
@@ -355,11 +359,12 @@ export function TodoAll() {
           )}
         </div>
       </div>
+      )}
 
       {/* Sections — masonry columns (single column on phones) */}
       <div style={isPhone ? { columnCount: 1, columnGap: 16 } : { columnWidth: 360, columnGap: 16 }}>
         {visible.map((sec) => (
-          <SectionCard key={sec.id} section={sec} busy={busy} onToggle={toggleWithUndo} onRemove={removeWithUndo} />
+          <SectionCard key={sec.id} section={sec} busy={busy} readOnly={readOnly} onToggle={toggleWithUndo} onRemove={removeWithUndo} />
         ))}
       </div>
 
@@ -377,11 +382,13 @@ export function TodoAll() {
 function SectionCard({
   section,
   busy,
+  readOnly = false,
   onToggle,
   onRemove,
 }: {
   section: TodoSection;
   busy: boolean;
+  readOnly?: boolean;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
@@ -413,7 +420,7 @@ function SectionCard({
         </div>
       )}
       {section.items.map((item) => (
-        <Row key={item.id} item={item} busy={busy} onToggle={onToggle} onRemove={onRemove} />
+        <Row key={item.id} item={item} busy={busy} readOnly={readOnly} onToggle={onToggle} onRemove={onRemove} />
       ))}
     </div>
   );
@@ -422,11 +429,13 @@ function SectionCard({
 function Row({
   item,
   busy,
+  readOnly = false,
   onToggle,
   onRemove,
 }: {
   item: TodoItem;
   busy: boolean;
+  readOnly?: boolean;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
 }) {
@@ -440,30 +449,52 @@ function Row({
         borderBottom: '1px solid rgba(40,65,88,.4)',
       }}
     >
-      {item.marker === 'check' && (
-        <button
-          onClick={() => !busy && onToggle(item.id)}
-          style={{
-            flex: 'none',
-            width: 18,
-            height: 18,
-            marginTop: 1,
-            borderRadius: 5,
-            border: `1.5px solid ${item.done ? ACCENT : '#3a5670'}`,
-            background: item.done ? ACCENT : 'transparent',
-            color: '#06231d',
-            fontSize: 11,
-            fontWeight: 700,
-            cursor: busy ? 'default' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            lineHeight: 1,
-          }}
-        >
-          {item.done ? '✓' : ''}
-        </button>
-      )}
+      {item.marker === 'check' &&
+        (readOnly ? (
+          <span
+            style={{
+              flex: 'none',
+              width: 18,
+              height: 18,
+              marginTop: 1,
+              borderRadius: 5,
+              border: `1.5px solid ${item.done ? ACCENT : '#3a5670'}`,
+              background: item.done ? ACCENT : 'transparent',
+              color: '#06231d',
+              fontSize: 11,
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+            }}
+          >
+            {item.done ? '✓' : ''}
+          </span>
+        ) : (
+          <button
+            onClick={() => !busy && onToggle(item.id)}
+            style={{
+              flex: 'none',
+              width: 18,
+              height: 18,
+              marginTop: 1,
+              borderRadius: 5,
+              border: `1.5px solid ${item.done ? ACCENT : '#3a5670'}`,
+              background: item.done ? ACCENT : 'transparent',
+              color: '#06231d',
+              fontSize: 11,
+              fontWeight: 700,
+              cursor: busy ? 'default' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+            }}
+          >
+            {item.done ? '✓' : ''}
+          </button>
+        ))}
       {item.marker === 'dash' && (
         <span style={{ flex: 'none', width: 18, textAlign: 'center', color: ACCENT, marginTop: 1 }}>—</span>
       )}
@@ -500,21 +531,23 @@ function Row({
         )}
       </div>
 
-      <button
-        onClick={() => !busy && onRemove(item.id)}
-        title="Remove"
-        style={{
-          flex: 'none',
-          background: 'none',
-          border: 'none',
-          color: '#3f5b6c',
-          fontSize: 15,
-          lineHeight: 1,
-          cursor: busy ? 'default' : 'pointer',
-        }}
-      >
-        ×
-      </button>
+      {!readOnly && (
+        <button
+          onClick={() => !busy && onRemove(item.id)}
+          title="Remove"
+          style={{
+            flex: 'none',
+            background: 'none',
+            border: 'none',
+            color: '#3f5b6c',
+            fontSize: 15,
+            lineHeight: 1,
+            cursor: busy ? 'default' : 'pointer',
+          }}
+        >
+          ×
+        </button>
+      )}
     </div>
   );
 }

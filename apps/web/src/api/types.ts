@@ -548,6 +548,31 @@ export interface ManualPositionInput {
   openedAt?: number;
 }
 
+// What Claude read off an order/positions screenshot (mirror of the backend
+// ParsedPosition). Returned alongside the saved positions so the UI can show a
+// "read EUR/USD long @ 1.0840" confirmation.
+export interface ParsedPosition {
+  instrument: string | null;
+  side: 'long' | 'short' | 'unknown';
+  units: number | null;
+  entryPrice: number | null;
+  currentPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  summary: string;
+}
+export interface AnalyzePositionResult {
+  positions: ManualPosition[];
+  parsed: ParsedPosition;
+  model: string;
+}
+
+// A broker connection tagged with its owner (admin "team connections" view).
+export interface OwnedBrokerConnection extends BrokerConnection {
+  ownerId: string;
+  owner: string;
+}
+
 // ---- Trading — Account Metrics / challenge (mirror of apps/api/src/trading/challenge.ts) ----
 export interface ChallengeMetrics {
   profit: number | null;

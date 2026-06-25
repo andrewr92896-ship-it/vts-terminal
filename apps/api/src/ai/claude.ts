@@ -144,6 +144,78 @@ export async function analyzeTradeScreenshot(
   return { raw, parsed, model };
 }
 
+// The open position read off a broker order/positions screenshot, used to
+// create a manual Live Wall position when the account has no API (a funded
+// account where API trading is disallowed). Every numeric field is null when it
+// cannot be read with confidence; the caller validates that an entry exists.
+export interface ParsedPosition {
+  instrument: string | null;
+  side: 'long' | 'short' | 'unknown';
+  units: number | null;
+  entryPrice: number | null;
+  currentPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  summary: string;
+}
+
+const POSITION_SYSTEM = `You read a single OPEN trade position from a broker or trading-platform screenshot (an order ticket, positions blotter, or filled-order confirmation). Extract the position so it can be tracked on a live wall.
+
+Respond with ONLY a JSON object (no prose, no code fences) of exactly this shape:
+{
+  "instrument": string | null,   // e.g. "EUR/USD", "XAU/USD", "US30", "NVDA". Normalize forex to BASE/QUOTE with a slash.
+  "side": "long" | "short" | "unknown",   // buy = long, sell = short
+  "units": number | null,        // position size in units/contracts/shares/lots as shown (a raw number)
+  "entryPrice": number | null,   // the average fill / entry / open price
+  "currentPrice": number | null, // the current/market price if shown, else null
+  "takeProfit": number | null,
+  "stopLoss": number | null,
+  "summary": string              // 1 sentence describing what you read
+}
+Read prices exactly as shown, preserving decimals. Use null for anything you cannot read with confidence. Keep the summary under 200 characters.`;
+
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null;
+}
+
+// Opus 4.8 vision: read an open position off a broker/platform screenshot so it
+// can be saved as a manual Live Wall position.
+export async function parsePositionScreenshot(
+  imageBase64: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+): Promise<{ parsed: ParsedPosition; raw: string; model: string }> {
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 1500,
+    thinking: { type: 'adaptive' },
+    system: POSITION_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: 'Extract the open position from this screenshot.' },
+        ],
+      },
+    ],
+  });
+
+  const raw = textOf(message);
+  const json = (extractJson(raw) ?? {}) as Partial<ParsedPosition>;
+  const parsed: ParsedPosition = {
+    instrument: typeof json.instrument === 'string' && json.instrument.trim() ? json.instrument.trim() : null,
+    side: json.side === 'long' || json.side === 'short' ? json.side : 'unknown',
+    units: num(json.units),
+    entryPrice: num(json.entryPrice),
+    currentPrice: num(json.currentPrice),
+    takeProfit: num(json.takeProfit),
+    stopLoss: num(json.stopLoss),
+    summary: typeof json.summary === 'string' ? json.summary.slice(0, 200) : raw.slice(0, 200),
+  };
+  return { parsed, raw, model };
+}
+
 // Sonnet 4.6: the site-wide assistant (Ask Claude, product knowledge, parsing).
 export async function askClaude(prompt: string, system?: string): Promise<string> {
   const message = await getClient().messages.create({

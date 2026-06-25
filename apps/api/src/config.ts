@@ -39,6 +39,13 @@ const envSchema = z.object({
   // falls back to a key derived from SESSION_SECRET. Set once and keep stable
   // (changing it makes stored credentials undecryptable).
   CREDENTIALS_KEY: z.string().optional(),
+  // Web Push (VAPID) keys for phone push notifications. Generate once with
+  // `npx web-push generate-vapid-keys` and set both. When unset, push features
+  // report "not configured" and the rest of the app is unaffected. The subject
+  // is a contact URL or mailto: the push services can reach if needed.
+  VAPID_PUBLIC_KEY: z.string().optional(),
+  VAPID_PRIVATE_KEY: z.string().optional(),
+  VAPID_SUBJECT: z.string().default('mailto:admin@vitalistradingsystems.com'),
 });
 
 const parsed = envSchema.safeParse({

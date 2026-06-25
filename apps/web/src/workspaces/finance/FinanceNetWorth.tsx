@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { usePrivacy } from '../../privacy/privacy';
 import type { NetWorthData, NetWorthItem, NetWorthKind } from '../../api/types';
 
@@ -18,6 +19,8 @@ const BORDER2 = '#2e3766';
 const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
 
 export function FinanceNetWorth() {
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const { privacy } = usePrivacy();
   const [data, setData] = useState<NetWorthData | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -68,25 +71,27 @@ export function FinanceNetWorth() {
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
 
-      <div style={{ ...panel, marginBottom: 16 }}>
-        <div style={sectionLabel}>Add an item</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Savings, Car loan)" style={{ ...input, flex: '1 1 180px' }} />
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="any" placeholder="Amount $" style={{ ...input, flex: '0 0 130px' }} />
-          <select value={kind} onChange={(e) => setKind(e.target.value as NetWorthKind)} style={{ ...input, flex: '0 0 130px' }}>
-            <option value="asset">Asset</option>
-            <option value="liability">Liability</option>
-          </select>
-          <button onClick={add} disabled={busy || !label.trim() || !amount} style={{ ...accentBtn, opacity: busy || !label.trim() || !amount ? 0.6 : 1 }}>Add</button>
+      {!readOnly && (
+        <div style={{ ...panel, marginBottom: 16 }}>
+          <div style={sectionLabel}>Add an item</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Savings, Car loan)" style={{ ...input, flex: '1 1 180px' }} />
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="any" placeholder="Amount $" style={{ ...input, flex: '0 0 130px' }} />
+            <select value={kind} onChange={(e) => setKind(e.target.value as NetWorthKind)} style={{ ...input, flex: '0 0 130px' }}>
+              <option value="asset">Asset</option>
+              <option value="liability">Liability</option>
+            </select>
+            <button onClick={add} disabled={busy || !label.trim() || !amount} style={{ ...accentBtn, opacity: busy || !label.trim() || !amount ? 0.6 : 1 }}>Add</button>
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
         {data.items.length === 0 ? (
           <div style={{ padding: '24px 18px', color: MUTED, fontSize: 12.5, fontStyle: 'italic' }}>Nothing yet — add your accounts, assets, and debts above.</div>
         ) : (
           data.items.map((it) => (
-            <NwRow key={it.id} it={it} busy={busy} money={money}
+            <NwRow key={it.id} it={it} busy={busy} money={money} readOnly={readOnly}
               onSave={(patch) => run(api.financeUpdateNetWorth(it.id, patch))}
               onRemove={() => run(api.financeRemoveNetWorth(it.id))} />
           ))
@@ -96,8 +101,8 @@ export function FinanceNetWorth() {
   );
 }
 
-function NwRow({ it, busy, money, onSave, onRemove }: {
-  it: NetWorthItem; busy: boolean; money: (n: number) => string;
+function NwRow({ it, busy, money, readOnly, onSave, onRemove }: {
+  it: NetWorthItem; busy: boolean; money: (n: number) => string; readOnly: boolean;
   onSave: (p: { label?: string; amount?: number; kind?: NetWorthKind }) => void; onRemove: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -106,7 +111,7 @@ function NwRow({ it, busy, money, onSave, onRemove }: {
   const [kind, setKind] = useState<NetWorthKind>(it.kind);
   const liability = it.kind === 'liability';
 
-  if (editing) {
+  if (editing && !readOnly) {
     return (
       <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
         <input value={label} onChange={(e) => setLabel(e.target.value)} style={{ ...input, flex: '1 1 160px' }} />
@@ -129,8 +134,12 @@ function NwRow({ it, busy, money, onSave, onRemove }: {
         <span style={{ ...chip, marginLeft: 8 }}>{liability ? 'Liability' : 'Asset'}</span>
       </div>
       <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, color: liability ? RED : TEXT }}>{liability ? `(${money(it.amount)})` : money(it.amount)}</div>
-      <button onClick={() => setEditing(true)} style={ghostBtn}>Edit</button>
-      <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...ghostBtn, color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
+      {!readOnly && (
+        <>
+          <button onClick={() => setEditing(true)} style={ghostBtn}>Edit</button>
+          <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...ghostBtn, color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
+        </>
+      )}
     </div>
   );
 }

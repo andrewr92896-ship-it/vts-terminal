@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import type { Expense } from '../../api/types';
@@ -25,6 +26,8 @@ function ordinal(d: number): string {
 }
 
 export function FinanceExpenses() {
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
   const [items, setItems] = useState<Expense[] | null>(null);
@@ -80,19 +83,21 @@ export function FinanceExpenses() {
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
 
       {/* Add */}
-      <div style={{ ...panel, marginBottom: 16 }}>
-        <div style={sectionLabel}>Add an expense</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Rent)" style={{ ...input, flex: '1 1 150px' }} />
-          <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="any" placeholder="Amount $" style={{ ...input, flex: '0 0 120px' }} />
-          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: MUTED }}>
-            Bank day
-            <input value={day} onChange={(e) => setDay(e.target.value)} type="number" min="1" max="31" style={{ ...input, width: 64 }} />
-          </label>
-          <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category (optional)" style={{ ...input, flex: '1 1 120px' }} />
-          <button onClick={add} disabled={busy || !label.trim() || !amount} style={{ ...accentBtn, opacity: busy || !label.trim() || !amount ? 0.6 : 1 }}>Add</button>
+      {!readOnly && (
+        <div style={{ ...panel, marginBottom: 16 }}>
+          <div style={sectionLabel}>Add an expense</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Label (e.g. Rent)" style={{ ...input, flex: '1 1 150px' }} />
+            <input value={amount} onChange={(e) => setAmount(e.target.value)} type="number" step="any" placeholder="Amount $" style={{ ...input, flex: '0 0 120px' }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: MUTED }}>
+              Bank day
+              <input value={day} onChange={(e) => setDay(e.target.value)} type="number" min="1" max="31" style={{ ...input, width: 64 }} />
+            </label>
+            <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category (optional)" style={{ ...input, flex: '1 1 120px' }} />
+            <button onClick={add} disabled={busy || !label.trim() || !amount} style={{ ...accentBtn, opacity: busy || !label.trim() || !amount ? 0.6 : 1 }}>Add</button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* List */}
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
@@ -100,7 +105,7 @@ export function FinanceExpenses() {
           <div style={{ padding: '24px 18px', color: MUTED, fontSize: 12.5, fontStyle: 'italic' }}>No expenses yet — add your bills above.</div>
         ) : (
           items.map((e) => (
-            <ExpenseRow key={e.id} e={e} today={today} isPhone={isPhone} money={money} busy={busy}
+            <ExpenseRow key={e.id} e={e} today={today} isPhone={isPhone} money={money} busy={busy} readOnly={readOnly}
               onSave={(patch) => run(api.financeUpdateExpense(e.id, patch))}
               onRemove={() => run(api.financeRemoveExpense(e.id))} />
           ))
@@ -110,8 +115,8 @@ export function FinanceExpenses() {
   );
 }
 
-function ExpenseRow({ e, today, isPhone, money, busy, onSave, onRemove }: {
-  e: Expense; today: number; isPhone: boolean; money: (n: number) => string; busy: boolean;
+function ExpenseRow({ e, today, isPhone, money, busy, readOnly, onSave, onRemove }: {
+  e: Expense; today: number; isPhone: boolean; money: (n: number) => string; busy: boolean; readOnly: boolean;
   onSave: (p: { label?: string; amount?: number; dayOfMonth?: number; category?: string | null; active?: boolean }) => void; onRemove: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -120,7 +125,7 @@ function ExpenseRow({ e, today, isPhone, money, busy, onSave, onRemove }: {
   const [day, setDay] = useState(String(e.dayOfMonth));
   const [category, setCategory] = useState(e.category ?? '');
 
-  if (editing) {
+  if (editing && !readOnly) {
     return (
       <div style={{ display: 'flex', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
         <input value={label} onChange={(ev) => setLabel(ev.target.value)} style={{ ...input, flex: '1 1 140px' }} />
@@ -147,9 +152,13 @@ function ExpenseRow({ e, today, isPhone, money, busy, onSave, onRemove }: {
         </div>
       </div>
       <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, color: TEXT }}>{money(e.amount)}</div>
-      <button onClick={() => !busy && onSave({ active: !e.active })} style={ghostBtn}>{e.active ? 'Pause' : 'Resume'}</button>
-      <button onClick={() => setEditing(true)} style={ghostBtn}>Edit</button>
-      <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...ghostBtn, color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
+      {!readOnly && (
+        <>
+          <button onClick={() => !busy && onSave({ active: !e.active })} style={ghostBtn}>{e.active ? 'Pause' : 'Resume'}</button>
+          <button onClick={() => setEditing(true)} style={ghostBtn}>Edit</button>
+          <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...ghostBtn, color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
+        </>
+      )}
     </div>
   );
 }

@@ -118,6 +118,9 @@ export function LiveWall() {
 
   const showMoney = data.canSeeBalances && !privacy && !hideMoney;
   const isSample = data.source === 'sample';
+  // The demo (and trading view-only roles) can browse the wall but not manage
+  // broker connections — hide the entry point to the connection editor.
+  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
@@ -141,7 +144,9 @@ export function LiveWall() {
               {hideMoney ? 'Show $' : 'Hide $'}
             </button>
           )}
-          <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
+          {!readOnly && (
+            <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
+          )}
           <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -165,6 +170,9 @@ export function LiveWall() {
             <div key={b.connectionId} style={brokerChip} title={b.error ?? `${b.name} — ${b.platform}`}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flex: 'none' }} />
               <span style={{ fontWeight: 600, color: TEXT }}>{b.name}</span>
+              {/* The platform tells two same-named connections apart (e.g. an
+                  OANDA and a Kraken account both labeled the same). */}
+              <span style={platformPill}>{b.platform}</span>
               {b.owner && <span style={{ color: b.ownerId === user?.id ? GOLD : FAINT }}>@{b.owner}</span>}
               <span style={{ color: MUTED }}>· {state}</span>
             </div>
@@ -426,6 +434,17 @@ const brokerChip: CSSProperties = {
   border: `1px solid ${BORDER}`,
   borderRadius: 8,
   padding: '7px 11px',
+};
+const platformPill: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: '0.4px',
+  textTransform: 'uppercase',
+  color: MUTED,
+  background: 'rgba(255,255,255,.04)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 4,
+  padding: '1px 5px',
 };
 const metaChip: CSSProperties = {
   fontSize: 10,

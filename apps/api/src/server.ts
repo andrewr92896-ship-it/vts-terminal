@@ -21,11 +21,13 @@ import { financeRoutes } from './routes/finance.js';
 import { aiRoutes } from './routes/ai.js';
 import { chatRoutes } from './routes/chat.js';
 import { studiesRoutes } from './routes/studies.js';
+import { pushRoutes } from './routes/push.js';
 import { runMigrations } from './db/migrate.js';
 import { seedAdmin, seedDemo } from './seed.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
+import { startDeskWatch } from './trading/service.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
 // so the whole portal runs as one service.
@@ -85,6 +87,7 @@ export async function buildServer() {
   await app.register(aiRoutes);
   await app.register(chatRoutes);
   await app.register(studiesRoutes);
+  await app.register(pushRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).
@@ -127,6 +130,9 @@ async function main() {
     // Start the background market-news pollers (production only). Best-effort
     // and non-blocking: failures are contained and never affect serving.
     startFeeds();
+    // Watch broker positions server-side so trade open/close push fires even
+    // when no one has the Live Wall open (production + push configured only).
+    startDeskWatch();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import type {
   ComplianceCategory,
@@ -70,6 +71,8 @@ function fromDateInput(v: string): number | null {
 
 export function WealthCompliance() {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const [data, setData] = useState<ComplianceData | null>(null);
   const [clients, setClients] = useState<WealthClient[]>([]);
   const [err, setErr] = useState<string | null>(null);
@@ -102,7 +105,7 @@ export function WealthCompliance() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Compliance</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>RIA recordkeeping register — filings, disclosures, policies, and client documents with status and due dates.</div>
         </div>
-        <button onClick={() => setAdding((v) => !v)} style={greenBtn}>{adding ? 'Close' : '+ New item'}</button>
+        {!readOnly && <button onClick={() => setAdding((v) => !v)} style={greenBtn}>{adding ? 'Close' : '+ New item'}</button>}
       </div>
 
       {/* Summary */}
@@ -116,28 +119,30 @@ export function WealthCompliance() {
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
 
       {/* Templates */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 14 }}>
-        <span style={{ fontSize: 11, color: FAINT, alignSelf: 'center', marginRight: 2 }}>Quick add:</span>
-        {TEMPLATES.filter((t) => !usedTemplates.has(t.title)).map((t) => (
-          <button key={t.title} disabled={busy} onClick={() => void run(api.wealthAddCompliance({ title: t.title, category: t.category }))}
-            style={{ fontSize: 11, color: '#cfe6da', background: 'rgba(52,184,122,.08)', border: `1px solid ${BORDER}`, borderRadius: 14, padding: '5px 11px', cursor: busy ? 'default' : 'pointer' }}>
-            + {t.title}
-          </button>
-        ))}
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginBottom: 14 }}>
+          <span style={{ fontSize: 11, color: FAINT, alignSelf: 'center', marginRight: 2 }}>Quick add:</span>
+          {TEMPLATES.filter((t) => !usedTemplates.has(t.title)).map((t) => (
+            <button key={t.title} disabled={busy} onClick={() => void run(api.wealthAddCompliance({ title: t.title, category: t.category }))}
+              style={{ fontSize: 11, color: '#cfe6da', background: 'rgba(52,184,122,.08)', border: `1px solid ${BORDER}`, borderRadius: 14, padding: '5px 11px', cursor: busy ? 'default' : 'pointer' }}>
+              + {t.title}
+            </button>
+          ))}
+        </div>
+      )}
 
-      {adding && (
+      {!readOnly && adding && (
         <ItemForm busy={busy} clients={clients} submitLabel="Add item" onSubmit={async (input) => { if (await run(api.wealthAddCompliance(input))) setAdding(false); }} onCancel={() => setAdding(false)} />
       )}
 
       {data.items.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 22px', color: MUTED, fontSize: 13 }}>
-          No compliance items yet. Use a quick-add above or “+ New item” to start your register.
+          {readOnly ? 'No compliance items yet.' : 'No compliance items yet. Use a quick-add above or “+ New item” to start your register.'}
         </div>
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
           {data.items.map((it, i) => (
-            <ItemRow key={it.id} it={it} clients={clients} busy={busy} last={i === data.items.length - 1}
+            <ItemRow key={it.id} it={it} clients={clients} busy={busy} readOnly={readOnly} last={i === data.items.length - 1}
               onCycle={() => run(api.wealthUpdateCompliance(it.id, { status: NEXT_STATUS[it.status] }))}
               onSave={(patch) => run(api.wealthUpdateCompliance(it.id, patch))}
               onRemove={() => run(api.wealthRemoveCompliance(it.id))} />
@@ -157,8 +162,8 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
   );
 }
 
-function ItemRow({ it, clients, busy, last, onCycle, onSave, onRemove }: {
-  it: ComplianceItem; clients: WealthClient[]; busy: boolean; last: boolean;
+function ItemRow({ it, clients, busy, readOnly, last, onCycle, onSave, onRemove }: {
+  it: ComplianceItem; clients: WealthClient[]; busy: boolean; readOnly: boolean; last: boolean;
   onCycle: () => void; onSave: (patch: ComplianceInput) => void; onRemove: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -174,9 +179,15 @@ function ItemRow({ it, clients, busy, last, onCycle, onSave, onRemove }: {
   const client = it.clientId ? clients.find((c) => c.id === it.clientId) : undefined;
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '12px 16px', borderBottom: last ? 'none' : `1px solid ${BORDER}` }}>
-      <button onClick={() => !busy && onCycle()} title="Change status" style={{ flex: 'none', marginTop: 1, width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${st.color}`, background: it.status === 'complete' ? GREEN : 'transparent', color: '#05231a', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
-        {it.status === 'complete' ? '✓' : it.status === 'in_progress' ? '·' : ''}
-      </button>
+      {readOnly ? (
+        <span title={st.label} style={{ flex: 'none', marginTop: 1, width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${st.color}`, background: it.status === 'complete' ? GREEN : 'transparent', color: '#05231a', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+          {it.status === 'complete' ? '✓' : it.status === 'in_progress' ? '·' : ''}
+        </span>
+      ) : (
+        <button onClick={() => !busy && onCycle()} title="Change status" style={{ flex: 'none', marginTop: 1, width: 18, height: 18, borderRadius: 5, border: `1.5px solid ${st.color}`, background: it.status === 'complete' ? GREEN : 'transparent', color: '#05231a', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+          {it.status === 'complete' ? '✓' : it.status === 'in_progress' ? '·' : ''}
+        </button>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, color: it.status === 'complete' ? MUTED : TEXT, textDecoration: it.status === 'complete' ? 'line-through' : 'none' }}>{it.title}</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 10px', marginTop: 5, fontSize: 10.5, alignItems: 'center' }}>
@@ -191,10 +202,12 @@ function ItemRow({ it, clients, busy, last, onCycle, onSave, onRemove }: {
         </div>
         {it.notes && <div style={{ fontSize: 11, color: '#8fa39a', marginTop: 4 }}>{it.notes}</div>}
       </div>
-      <div style={{ flex: 'none', display: 'flex', gap: 4 }}>
-        <button onClick={() => setEditing(true)} style={iconBtn} title="Edit">✎</button>
-        <button onClick={() => !busy && onRemove()} style={{ ...iconBtn, color: '#ff9a9a' }} title="Remove">×</button>
-      </div>
+      {!readOnly && (
+        <div style={{ flex: 'none', display: 'flex', gap: 4 }}>
+          <button onClick={() => setEditing(true)} style={iconBtn} title="Edit">✎</button>
+          <button onClick={() => !busy && onRemove()} style={{ ...iconBtn, color: '#ff9a9a' }} title="Remove">×</button>
+        </div>
+      )}
     </div>
   );
 }
