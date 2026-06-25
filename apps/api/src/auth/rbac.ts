@@ -105,6 +105,7 @@ export interface PublicUser {
 export function toPublicUser(u: UserRow): PublicUser {
   const roles = parseRoles(u);
   const workspaces = workspacesForRoles(roles);
+  const isDemo = u.username === DEMO_USERNAME;
   return {
     id: u.id,
     username: u.username,
@@ -114,11 +115,14 @@ export function toPublicUser(u: UserRow): PublicUser {
     roles,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
-    isDemo: u.username === DEMO_USERNAME,
+    isDemo,
     access: {
       label: accessLabel(roles),
       workspaces,
-      readOnlyWorkspaces: workspaces.filter((ws) => isWorkspaceReadOnly(roles, ws)),
+      // The public demo is a look-only presentation: every workspace it can
+      // reach is read-only, so the UI hides all add/edit/delete controls (the
+      // demoGuard already refuses the writes server-side regardless).
+      readOnlyWorkspaces: isDemo ? workspaces : workspaces.filter((ws) => isWorkspaceReadOnly(roles, ws)),
     },
   };
 }

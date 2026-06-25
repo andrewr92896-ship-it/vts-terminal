@@ -39,6 +39,8 @@ function statusColor(s: BrokerConnection['lastStatus']): string {
 export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }) {
   const { user } = useAuth();
   const isAdmin = !!user?.roles.includes('admin');
+  // The public demo is look-only: hide every connection mutation control.
+  const readOnly = !!user?.isDemo;
   const [conns, setConns] = useState<BrokerConnection[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -157,7 +159,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
         <div style={{ color: MUTED, fontSize: 12.5, marginBottom: 14 }}>Loading…</div>
       ) : conns.length === 0 ? (
         <div style={{ ...panel, marginBottom: 14, color: MUTED, fontSize: 12.5 }}>
-          No connections yet. Add one below.
+          {readOnly ? 'No broker connections to show.' : 'No connections yet. Add one below.'}
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 8, marginBottom: 16 }}>
@@ -181,25 +183,29 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                     {c.lastStatus === 'error' && c.lastError ? ` · ${c.lastError}` : ''}
                   </div>
                 </div>
-                {c.broker === 'manual' && (
-                  <button onClick={() => setOpenPosConn(openPosConn === c.id ? null : c.id)} style={ghostBtn}>
-                    {openPosConn === c.id ? 'Hide' : 'Positions'}
-                  </button>
+                {!readOnly && (
+                  <>
+                    {c.broker === 'manual' && (
+                      <button onClick={() => setOpenPosConn(openPosConn === c.id ? null : c.id)} style={ghostBtn}>
+                        {openPosConn === c.id ? 'Hide' : 'Positions'}
+                      </button>
+                    )}
+                    <button onClick={() => !busy && apply(api.updateConnection(c.id, { active: !c.active }))} style={ghostBtn}>
+                      {c.active ? 'Pause' : 'Resume'}
+                    </button>
+                    <button onClick={() => startEdit(c)} style={ghostBtn}>
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => !busy && apply(api.removeConnection(c.id))}
+                      title="Remove"
+                      aria-label={`Remove ${c.label}`}
+                      style={{ ...ghostBtn, color: '#ff9a9a', borderColor: 'transparent' }}
+                    >
+                      ×
+                    </button>
+                  </>
                 )}
-                <button onClick={() => !busy && apply(api.updateConnection(c.id, { active: !c.active }))} style={ghostBtn}>
-                  {c.active ? 'Pause' : 'Resume'}
-                </button>
-                <button onClick={() => startEdit(c)} style={ghostBtn}>
-                  Edit
-                </button>
-                <button
-                  onClick={() => !busy && apply(api.removeConnection(c.id))}
-                  title="Remove"
-                  aria-label={`Remove ${c.label}`}
-                  style={{ ...ghostBtn, color: '#ff9a9a', borderColor: 'transparent' }}
-                >
-                  ×
-                </button>
               </div>
               {c.broker === 'manual' && openPosConn === c.id && (
                 <ManualPositions connectionId={c.id} onChanged={() => onChanged?.()} />
@@ -210,6 +216,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
       )}
 
       {/* Add / edit form */}
+      {!readOnly && (
       <div style={{ ...panel }}>
         <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>
           {editingId ? 'Edit connection' : 'Add a connection'}
@@ -292,6 +299,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
           )}
         </div>
       </div>
+      )}
 
       {isAdmin && <TeamConnections onChanged={() => onChanged?.()} />}
     </div>

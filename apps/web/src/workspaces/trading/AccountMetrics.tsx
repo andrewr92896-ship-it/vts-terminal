@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
@@ -37,6 +38,8 @@ const STATUS: Record<ChallengeData['metrics']['status'], { label: string; color:
 export function AccountMetrics() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
+  const { user } = useAuth();
+  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
   const [data, setData] = useState<ChallengeData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -82,7 +85,7 @@ export function AccountMetrics() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
           {canSee && <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>}
-          <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? 'Close' : 'Edit'}</button>
+          {!readOnly && <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? 'Close' : 'Edit'}</button>}
         </div>
       </div>
 

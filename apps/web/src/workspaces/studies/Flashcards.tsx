@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { useAuth } from '../../auth/AuthContext';
 import { SERIES65_VOCAB } from './series65Vocab';
 import { SERIES65_TOPICS, type Series65Topic } from './series65Questions';
 
@@ -32,8 +33,20 @@ function loadLearned(): Set<string> {
 
 type Filter = 'All' | Series65Topic;
 
-export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded?: boolean }) {
+export function Flashcards({
+  theme,
+  embedded = false,
+  readOnly: readOnlyProp,
+}: {
+  theme: Theme;
+  embedded?: boolean;
+  readOnly?: boolean;
+}) {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  // The parent (StudyGame) passes readOnly down; standalone use falls back to
+  // the auth hook so the public demo stays look-only here too.
+  const readOnly = readOnlyProp ?? !!user?.isDemo;
   const accentGrad = accentGradient(theme);
 
   const [filter, setFilter] = useState<Filter>('All');
@@ -399,9 +412,11 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
                   {showDef ? 'Show term' : 'Show definition'}
                 </button>
               )}
-              <button onClick={() => markKnown(card.term)} style={knownBtn} title="Hide this word; you already know it">
-                ✓ I know this
-              </button>
+              {!readOnly && (
+                <button onClick={() => markKnown(card.term)} style={knownBtn} title="Hide this word; you already know it">
+                  ✓ I know this
+                </button>
+              )}
               <button onClick={() => go(1)} style={navBtn(theme)}>Next ›</button>
             </div>
           )}
@@ -425,7 +440,9 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
           </div>
           {learnedList.length === 0 ? (
             <div style={{ fontSize: 11.5, color: '#8a7fc8', lineHeight: 1.5 }}>
-              Words you mark with "I know this" move here and leave the deck. Tap the X to add one back.
+              {readOnly
+                ? 'Words marked as known move here and leave the deck.'
+                : 'Words you mark with "I know this" move here and leave the deck. Tap the X to add one back.'}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -435,14 +452,16 @@ export function Flashcards({ theme, embedded = false }: { theme: Theme; embedded
                   <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: '#cdbcff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={term}>
                     {term}
                   </span>
-                  <button
-                    onClick={() => restore(term)}
-                    title={`Add ${term} back to the deck`}
-                    aria-label={`Add ${term} back to the deck`}
-                    style={{ flex: 'none', background: 'none', border: 'none', color: '#ff9a9a', fontSize: 13, lineHeight: 1, cursor: 'pointer', padding: '2px 4px' }}
-                  >
-                    ×
-                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => restore(term)}
+                      title={`Add ${term} back to the deck`}
+                      aria-label={`Add ${term} back to the deck`}
+                      style={{ flex: 'none', background: 'none', border: 'none', color: '#ff9a9a', fontSize: 13, lineHeight: 1, cursor: 'pointer', padding: '2px 4px' }}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

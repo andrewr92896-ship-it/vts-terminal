@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import type {
   Allocation,
@@ -46,6 +47,8 @@ const pct = (bp: number) => (bp / 100).toFixed(bp % 100 === 0 ? 0 : 1) + '%';
 
 export function WealthPortfolios() {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const [data, setData] = useState<PortfoliosData | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -71,23 +74,23 @@ export function WealthPortfolios() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Model Portfolios</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>Target allocations by risk level. Each sleeve carries a target weight; a model is balanced when its weights total 100%.</div>
         </div>
-        <button onClick={() => setAdding((v) => !v)} style={greenBtn}>{adding ? 'Close' : '+ New portfolio'}</button>
+        {!readOnly && <button onClick={() => setAdding((v) => !v)} style={greenBtn}>{adding ? 'Close' : '+ New portfolio'}</button>}
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
 
-      {adding && (
+      {!readOnly && adding && (
         <PortfolioForm busy={busy} submitLabel="Create portfolio" onSubmit={async (input) => { if (await run(api.wealthAddPortfolio(input))) setAdding(false); }} onCancel={() => setAdding(false)} />
       )}
 
       {data.portfolios.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 22px', color: MUTED, fontSize: 13 }}>
-          No model portfolios yet. Create one (e.g. “Core Growth”), then add sleeves like US Equity 60%, Fixed Income 35%, Cash 5%.
+          {readOnly ? 'No model portfolios yet.' : 'No model portfolios yet. Create one (e.g. “Core Growth”), then add sleeves like US Equity 60%, Fixed Income 35%, Cash 5%.'}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(440px,1fr))', gap: 16, alignItems: 'start' }}>
           {data.portfolios.map((p) => (
-            <PortfolioCard key={p.id} p={p} busy={busy}
+            <PortfolioCard key={p.id} p={p} busy={busy} readOnly={readOnly}
               onSave={(patch) => run(api.wealthUpdatePortfolio(p.id, patch))}
               onRemove={() => run(api.wealthRemovePortfolio(p.id))}
               onAddAlloc={(input) => run(api.wealthAddAllocation(p.id, input))}
@@ -100,8 +103,8 @@ export function WealthPortfolios() {
   );
 }
 
-function PortfolioCard({ p, busy, onSave, onRemove, onAddAlloc, onSaveAlloc, onRemoveAlloc }: {
-  p: Portfolio; busy: boolean;
+function PortfolioCard({ p, busy, readOnly, onSave, onRemove, onAddAlloc, onSaveAlloc, onRemoveAlloc }: {
+  p: Portfolio; busy: boolean; readOnly: boolean;
   onSave: (patch: PortfolioInput) => void; onRemove: () => void;
   onAddAlloc: (input: AllocationInput) => void; onSaveAlloc: (id: string, patch: AllocationInput) => void; onRemoveAlloc: (id: string) => void;
 }) {
@@ -149,12 +152,14 @@ function PortfolioCard({ p, busy, onSave, onRemove, onAddAlloc, onSaveAlloc, onR
       {/* Sleeves */}
       <div style={{ borderTop: `1px solid ${BORDER}` }}>
         {p.allocations.map((a) => (
-          <SleeveRow key={a.id} a={a} busy={busy} onSave={(patch) => onSaveAlloc(a.id, patch)} onRemove={() => onRemoveAlloc(a.id)} />
+          <SleeveRow key={a.id} a={a} busy={busy} readOnly={readOnly} onSave={(patch) => onSaveAlloc(a.id, patch)} onRemove={() => onRemoveAlloc(a.id)} />
         ))}
         {p.allocations.length === 0 && !addingAlloc && (
-          <div style={{ fontSize: 11.5, color: FAINT, fontStyle: 'italic', padding: '11px 16px' }}>No sleeves yet — add the first one below.</div>
+          <div style={{ fontSize: 11.5, color: FAINT, fontStyle: 'italic', padding: '11px 16px' }}>
+            {readOnly ? 'No sleeves yet.' : 'No sleeves yet — add the first one below.'}
+          </div>
         )}
-        {addingAlloc && (
+        {!readOnly && addingAlloc && (
           <div style={{ padding: '11px 16px', background: PANEL }}>
             <AllocationForm busy={busy} submitLabel="Add sleeve" onSubmit={(input) => { onAddAlloc(input); setAddingAlloc(false); }} onCancel={() => setAddingAlloc(false)} />
           </div>
@@ -163,16 +168,18 @@ function PortfolioCard({ p, busy, onSave, onRemove, onAddAlloc, onSaveAlloc, onR
 
       {p.notes && <div style={{ padding: '9px 16px', fontSize: 11.5, color: '#8fa39a', borderTop: `1px solid ${BORDER}` }}>{p.notes}</div>}
 
-      <div style={{ display: 'flex', gap: 6, padding: '9px 16px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
-        {!addingAlloc && <button onClick={() => setAddingAlloc(true)} style={smallBtn}>+ Sleeve</button>}
-        <button onClick={() => setEditing(true)} style={smallBtn}>Edit</button>
-        <button onClick={() => !busy && onRemove()} title="Delete portfolio" style={{ ...smallBtn, marginLeft: 'auto', color: '#ff9a9a', borderColor: 'transparent' }}>Delete</button>
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 6, padding: '9px 16px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
+          {!addingAlloc && <button onClick={() => setAddingAlloc(true)} style={smallBtn}>+ Sleeve</button>}
+          <button onClick={() => setEditing(true)} style={smallBtn}>Edit</button>
+          <button onClick={() => !busy && onRemove()} title="Delete portfolio" style={{ ...smallBtn, marginLeft: 'auto', color: '#ff9a9a', borderColor: 'transparent' }}>Delete</button>
+        </div>
+      )}
     </div>
   );
 }
 
-function SleeveRow({ a, busy, onSave, onRemove }: { a: Allocation; busy: boolean; onSave: (patch: AllocationInput) => void; onRemove: () => void }) {
+function SleeveRow({ a, busy, readOnly, onSave, onRemove }: { a: Allocation; busy: boolean; readOnly: boolean; onSave: (patch: AllocationInput) => void; onRemove: () => void }) {
   const [editing, setEditing] = useState(false);
   if (editing) {
     return <div style={{ padding: '11px 16px', background: PANEL, borderBottom: `1px solid #12251d` }}><AllocationForm busy={busy} initial={a} submitLabel="Save" onSubmit={(patch) => { onSave(patch); setEditing(false); }} onCancel={() => setEditing(false)} /></div>;
@@ -184,8 +191,12 @@ function SleeveRow({ a, busy, onSave, onRemove }: { a: Allocation; busy: boolean
       <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</span>
       <span style={{ fontSize: 10.5, color: FAINT }}>{m.label}</span>
       <span style={{ fontSize: 12.5, color: TEXT, fontFamily: "'IBM Plex Mono', monospace", width: 52, textAlign: 'right' }}>{pct(a.targetBp)}</span>
-      <button onClick={() => setEditing(true)} style={{ ...iconBtn }} title="Edit sleeve">✎</button>
-      <button onClick={() => !busy && onRemove()} style={{ ...iconBtn, color: '#ff9a9a' }} title="Remove sleeve">×</button>
+      {!readOnly && (
+        <>
+          <button onClick={() => setEditing(true)} style={{ ...iconBtn }} title="Edit sleeve">✎</button>
+          <button onClick={() => !busy && onRemove()} style={{ ...iconBtn, color: '#ff9a9a' }} title="Remove sleeve">×</button>
+        </>
+      )}
     </div>
   );
 }

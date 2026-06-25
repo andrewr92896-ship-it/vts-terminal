@@ -3,7 +3,6 @@ import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useNowTick } from '../../hooks/useNowTick';
 import { useAuth } from '../../auth/AuthContext';
-import { isWorkspaceReadOnly } from '../../auth/access';
 import type {
   CalendarEvent,
   EventInput,
@@ -78,7 +77,9 @@ export function MarketNews() {
   // Keep the "x ago" headline times fresh between the 120s data polls.
   useNowTick();
   const { user } = useAuth();
-  const canWrite = !!user && !isWorkspaceReadOnly(user.roles, 'trading');
+  // Read-only for trading view-only roles AND the public demo (which is marked
+  // read-only on every workspace). Gates the compose/edit/remove controls below.
+  const canWrite = !!user && !user.access.readOnlyWorkspaces.includes('trading');
 
   const [data, setData] = useState<MarketNewsData | null>(null);
   const [truth, setTruth] = useState<TruthPost[]>([]);

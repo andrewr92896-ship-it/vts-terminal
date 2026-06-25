@@ -21,6 +21,9 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
   const { user, updateProfile, changePassword } = useAuth();
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
+  // The public demo is look-only: it can open settings to see them, but cannot
+  // change its profile or password (the server refuses these regardless).
+  const isDemo = !!user?.isDemo;
 
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
@@ -186,6 +189,7 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              readOnly={isDemo}
               style={inputStyle}
             />
             <label style={{ ...fieldLabel, marginTop: 14 }}>Username</label>
@@ -194,6 +198,7 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
               onChange={(e) => setUsername(e.target.value)}
               autoCapitalize="none"
               autoCorrect="off"
+              readOnly={isDemo}
               style={inputStyle}
             />
             <p style={hintStyle}>
@@ -203,22 +208,25 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
             {profileMsg && (
               <div style={msgStyle(profileMsg.ok)}>{profileMsg.text}</div>
             )}
-            <div style={{ marginTop: 12 }}>
-              <button
-                onClick={saveProfile}
-                disabled={profileBusy || !profileChanged || !displayName.trim() || !username.trim()}
-                style={saveBtn(
-                  profileBusy || !profileChanged || !displayName.trim() || !username.trim(),
-                )}
-              >
-                {profileBusy ? 'Saving...' : 'Save profile'}
-              </button>
-            </div>
+            {!isDemo && (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  onClick={saveProfile}
+                  disabled={profileBusy || !profileChanged || !displayName.trim() || !username.trim()}
+                  style={saveBtn(
+                    profileBusy || !profileChanged || !displayName.trim() || !username.trim(),
+                  )}
+                >
+                  {profileBusy ? 'Saving...' : 'Save profile'}
+                </button>
+              </div>
+            )}
           </section>
 
-          <div style={{ height: 1, background: '#1d3560' }} />
+          {!isDemo && <div style={{ height: 1, background: '#1d3560' }} />}
 
           {/* Password */}
+          {!isDemo && (
           <section>
             <div style={sectionLabel}>Password</div>
             <label style={fieldLabel}>Current password</label>
@@ -256,6 +264,7 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
               </button>
             </div>
           </section>
+          )}
 
           {/* Broker connections, for full trading users only. */}
           {canManageBrokers && (

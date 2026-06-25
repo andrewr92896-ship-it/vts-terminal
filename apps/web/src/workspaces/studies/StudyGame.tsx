@@ -49,6 +49,7 @@ interface LevelEvent {
 export function StudyGame({ theme }: { theme: Theme }) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const accentGrad = accentGradient(theme);
   const storageKey = gameKey(user?.id);
 
@@ -105,7 +106,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
   // the state matches what we last stored, and best-effort so demo/offline
   // sessions simply keep their local copy.
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || readOnly) return;
     const json = JSON.stringify(game);
     if (json === lastSavedRef.current) return;
     const id = setTimeout(() => {
@@ -113,7 +114,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
       void api.saveStudyGame(json).catch(() => {});
     }, 800);
     return () => clearTimeout(id);
-  }, [game, hydrated]);
+  }, [game, hydrated, readOnly]);
 
   function draw(cat: Series65Topic): number {
     let pool = poolsRef.current[cat];
@@ -227,7 +228,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
             </button>
           ))}
         </div>
-        {view === 'quiz' && (
+        {view === 'quiz' && !readOnly && (
           <button onClick={resetProgress} style={ghostBtn(theme)} title="Clear all levels and scores">
             Reset progress
           </button>
@@ -240,7 +241,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
     return (
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
-        <Flashcards theme={theme} embedded />
+        <Flashcards theme={theme} embedded readOnly={readOnly} />
       </div>
     );
   }

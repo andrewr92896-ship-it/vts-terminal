@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import type { Plan, PlanInput, PlansData, WealthClient } from '../../api/types';
@@ -25,6 +26,8 @@ const pctStr = (bp: number) => (bp / 100).toFixed(2).replace(/\.00$/, '') + '%';
 
 export function WealthPlanning() {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const { privacy } = usePrivacy();
   const [data, setData] = useState<PlansData | null>(null);
   const [clients, setClients] = useState<WealthClient[]>([]);
@@ -60,24 +63,24 @@ export function WealthPlanning() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
-          <button onClick={() => setAdding((v) => !v)} style={greenBtn}>{adding ? 'Close' : '+ New scenario'}</button>
+          {!readOnly && <button onClick={() => setAdding((v) => !v)} style={greenBtn}>{adding ? 'Close' : '+ New scenario'}</button>}
         </div>
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
 
-      {adding && (
+      {!readOnly && adding && (
         <PlanForm busy={busy} clients={clients} submitLabel="Create scenario" onSubmit={async (input) => { if (await run(api.wealthAddPlan(input))) setAdding(false); }} onCancel={() => setAdding(false)} />
       )}
 
       {data.plans.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 22px', color: MUTED, fontSize: 13 }}>
-          No scenarios yet. Create one (e.g. “Smith retirement”) with current age, savings, and a yearly contribution to see the projection.
+          {readOnly ? 'No scenarios yet.' : 'No scenarios yet. Create one (e.g. “Smith retirement”) with current age, savings, and a yearly contribution to see the projection.'}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(480px,1fr))', gap: 16, alignItems: 'start' }}>
           {data.plans.map((p) => (
-            <PlanCard key={p.id} p={p} clients={clients} busy={busy} showMoney={showMoney}
+            <PlanCard key={p.id} p={p} clients={clients} busy={busy} showMoney={showMoney} readOnly={readOnly}
               onSave={(patch) => run(api.wealthUpdatePlan(p.id, patch))}
               onRemove={() => run(api.wealthRemovePlan(p.id))} />
           ))}
@@ -87,8 +90,8 @@ export function WealthPlanning() {
   );
 }
 
-function PlanCard({ p, clients, busy, showMoney, onSave, onRemove }: {
-  p: Plan; clients: WealthClient[]; busy: boolean; showMoney: boolean;
+function PlanCard({ p, clients, busy, showMoney, readOnly, onSave, onRemove }: {
+  p: Plan; clients: WealthClient[]; busy: boolean; showMoney: boolean; readOnly: boolean;
   onSave: (patch: PlanInput) => void; onRemove: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -128,10 +131,12 @@ function PlanCard({ p, clients, busy, showMoney, onSave, onRemove }: {
         <span>Saving {showMoney ? usd(p.annualContribution) : '•••'}/yr on {showMoney ? usd(p.currentSavings) : '•••'}</span>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, padding: '9px 16px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
-        <button onClick={() => setEditing(true)} style={smallBtn}>Edit inputs</button>
-        <button onClick={() => !busy && onRemove()} title="Delete scenario" style={{ ...smallBtn, marginLeft: 'auto', color: '#ff9a9a', borderColor: 'transparent' }}>Delete</button>
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 6, padding: '9px 16px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
+          <button onClick={() => setEditing(true)} style={smallBtn}>Edit inputs</button>
+          <button onClick={() => !busy && onRemove()} title="Delete scenario" style={{ ...smallBtn, marginLeft: 'auto', color: '#ff9a9a', borderColor: 'transparent' }}>Delete</button>
+        </div>
+      )}
     </div>
   );
 }

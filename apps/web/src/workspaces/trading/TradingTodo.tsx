@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import type { RemovedTodoItem, TodoItem, TodoSection } from '../../api/types';
@@ -11,6 +12,8 @@ const GOLD2 = '#C9A24B';
 // trading-tagged section (Vitalis Trading). It uses the same todo endpoints,
 // so changes here also show in the To Do List workspace.
 export function TradingTodo() {
+  const { user } = useAuth();
+  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
   const [sections, setSections] = useState<TodoSection[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -103,18 +106,20 @@ export function TradingTodo() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 18, maxWidth: 560 }}>
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
-          placeholder="New trading task..."
-          style={{ flex: 1, background: '#0a1834', border: '1px solid #16294f', borderRadius: 7, padding: '10px 12px', color: '#dfe6f5', fontSize: 12.5, outline: 'none' }}
-        />
-        <button onClick={add} disabled={busy || !draft.trim()} style={{ border: 'none', background: `linear-gradient(180deg,${GOLD},${GOLD2})`, color: '#0c2768', fontWeight: 700, fontSize: 12.5, padding: '0 16px', borderRadius: 7, cursor: busy || !draft.trim() ? 'default' : 'pointer', opacity: busy || !draft.trim() ? 0.6 : 1 }}>
-          Add
-        </button>
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 18, maxWidth: 560 }}>
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && add()}
+            placeholder="New trading task..."
+            style={{ flex: 1, background: '#0a1834', border: '1px solid #16294f', borderRadius: 7, padding: '10px 12px', color: '#dfe6f5', fontSize: 12.5, outline: 'none' }}
+          />
+          <button onClick={add} disabled={busy || !draft.trim()} style={{ border: 'none', background: `linear-gradient(180deg,${GOLD},${GOLD2})`, color: '#0c2768', fontWeight: 700, fontSize: 12.5, padding: '0 16px', borderRadius: 7, cursor: busy || !draft.trim() ? 'default' : 'pointer', opacity: busy || !draft.trim() ? 0.6 : 1 }}>
+            Add
+          </button>
+        </div>
+      )}
 
       {tradingSections.length === 0 && (
         <div style={{ fontSize: 12.5, color: '#6b78a0', fontStyle: 'italic' }}>No trading section yet.</div>
@@ -136,7 +141,7 @@ export function TradingTodo() {
               </div>
             )}
             {sec.items.map((item) => (
-              <Row key={item.id} item={item} busy={busy} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={removeWithUndo} />
+              <Row key={item.id} item={item} busy={busy} readOnly={readOnly} onToggle={(id) => run(api.toggleTodoItem(id))} onRemove={removeWithUndo} />
             ))}
           </div>
         ))}
@@ -149,24 +154,28 @@ export function TradingTodo() {
   );
 }
 
-function Row({ item, busy, onToggle, onRemove }: { item: TodoItem; busy: boolean; onToggle: (id: string) => void; onRemove: (id: string) => void }) {
+function Row({ item, busy, readOnly, onToggle, onRemove }: { item: TodoItem; busy: boolean; readOnly: boolean; onToggle: (id: string) => void; onRemove: (id: string) => void }) {
+  const boxStyle = { flex: 'none', width: 18, height: 18, marginTop: 1, borderRadius: 5, border: `1.5px solid ${item.done ? GOLD : '#2a3d68'}`, background: item.done ? GOLD : 'transparent', color: '#0c2768', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 } as const;
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '7px 0', borderBottom: '1px solid #142648' }}>
-      <button
-        onClick={() => !busy && onToggle(item.id)}
-        style={{ flex: 'none', width: 18, height: 18, marginTop: 1, borderRadius: 5, border: `1.5px solid ${item.done ? GOLD : '#2a3d68'}`, background: item.done ? GOLD : 'transparent', color: '#0c2768', fontSize: 11, fontWeight: 700, cursor: busy ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}
-      >
-        {item.done ? '✓' : ''}
-      </button>
+      {readOnly ? (
+        <span style={boxStyle}>{item.done ? '✓' : ''}</span>
+      ) : (
+        <button onClick={() => !busy && onToggle(item.id)} style={{ ...boxStyle, cursor: busy ? 'default' : 'pointer' }}>
+          {item.done ? '✓' : ''}
+        </button>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 12.5, lineHeight: 1.4, color: item.done ? '#6b78a0' : '#dfe6f5', textDecoration: item.done ? 'line-through' : 'none' }}>
           <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: '#5d6b94', marginRight: 6 }}>{item.code}</span>
           {item.text}
         </div>
       </div>
-      <button onClick={() => !busy && onRemove(item.id)} title="Remove" style={{ flex: 'none', background: 'none', border: 'none', color: '#3a4868', fontSize: 15, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
-        ×
-      </button>
+      {!readOnly && (
+        <button onClick={() => !busy && onRemove(item.id)} title="Remove" style={{ flex: 'none', background: 'none', border: 'none', color: '#3a4868', fontSize: 15, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
+          ×
+        </button>
+      )}
     </div>
   );
 }

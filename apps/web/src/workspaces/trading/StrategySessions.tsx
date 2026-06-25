@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import type { SessionBias, SessionInput, SessionStatus, StrategySession } from '../../api/types';
 
@@ -38,6 +39,8 @@ function fmtMins(m: number | null): string {
 
 export function StrategySessions() {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
   const [sessions, setSessions] = useState<StrategySession[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -70,7 +73,7 @@ export function StrategySessions() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Strategy Sessions</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>Your trading windows (Eastern Time) with bull & bear playbooks per instrument.</div>
         </div>
-        <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? 'Close' : '+ New session'}</button>
+        {!readOnly && <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? 'Close' : '+ New session'}</button>}
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
@@ -96,7 +99,7 @@ export function StrategySessions() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(330px,1fr))', gap: 13 }}>
                 {list.map((s) => (
-                  <SessionCard key={s.id} s={s} busy={busy}
+                  <SessionCard key={s.id} s={s} busy={busy} readOnly={readOnly}
                     onSave={(patch) => run(api.updateSession(s.id, patch))}
                     onRemove={() => run(api.removeSession(s.id))} />
                 ))}
@@ -109,7 +112,7 @@ export function StrategySessions() {
   );
 }
 
-function SessionCard({ s, busy, onSave, onRemove }: { s: StrategySession; busy: boolean; onSave: (p: SessionInput) => void; onRemove: () => void }) {
+function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySession; busy: boolean; readOnly: boolean; onSave: (p: SessionInput) => void; onRemove: () => void }) {
   const [editing, setEditing] = useState(false);
   if (editing) {
     return <div style={{ gridColumn: '1 / -1' }}><SessionForm busy={busy} initial={s} submitLabel="Save" onSubmit={(p) => { onSave(p); setEditing(false); }} onCancel={() => setEditing(false)} /></div>;
@@ -142,11 +145,13 @@ function SessionCard({ s, busy, onSave, onRemove }: { s: StrategySession; busy: 
       )}
       {s.notes && <div style={{ padding: '8px 15px', fontSize: 11, color: '#8fa3cc', borderTop: `1px solid ${BORDER}` }}>{s.notes}</div>}
 
-      <div style={{ display: 'flex', gap: 6, padding: '9px 15px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
-        <button onClick={() => !busy && onSave({ active: !s.active })} style={smallBtn}>{s.active ? 'Pause' : 'Resume'}</button>
-        <button onClick={() => setEditing(true)} style={smallBtn}>Edit</button>
-        <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, marginLeft: 'auto', color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
-      </div>
+      {!readOnly && (
+        <div style={{ display: 'flex', gap: 6, padding: '9px 15px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
+          <button onClick={() => !busy && onSave({ active: !s.active })} style={smallBtn}>{s.active ? 'Pause' : 'Resume'}</button>
+          <button onClick={() => setEditing(true)} style={smallBtn}>Edit</button>
+          <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, marginLeft: 'auto', color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
+        </div>
+      )}
     </div>
   );
 }

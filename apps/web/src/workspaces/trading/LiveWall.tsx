@@ -118,6 +118,9 @@ export function LiveWall() {
 
   const showMoney = data.canSeeBalances && !privacy && !hideMoney;
   const isSample = data.source === 'sample';
+  // The demo (and trading view-only roles) can browse the wall but not manage
+  // broker connections — hide the entry point to the connection editor.
+  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
@@ -141,7 +144,9 @@ export function LiveWall() {
               {hideMoney ? 'Show $' : 'Hide $'}
             </button>
           )}
-          <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
+          {!readOnly && (
+            <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
+          )}
           <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>

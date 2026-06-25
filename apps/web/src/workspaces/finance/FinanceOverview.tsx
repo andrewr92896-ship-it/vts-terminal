@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
@@ -22,6 +23,8 @@ const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 
 export function FinanceOverview() {
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
   const [data, setData] = useState<Data | null>(null);
@@ -113,18 +116,20 @@ export function FinanceOverview() {
             </div>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 15, fontWeight: 700, color: ACCENT }}>{money(e.ftpScaled)}</div>
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
-              {(['testing', 'funded'] as FtpPhase[]).map((p) => (
-                <button key={p} onClick={() => setPhase(p)} disabled={busy} style={{ ...seg, ...(data.settings.ftpPhase === p ? segOn : {}) }}>
-                  {p === 'testing' ? 'Testing' : 'Funded'}
-                </button>
-              ))}
+          {!readOnly && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 10, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
+                {(['testing', 'funded'] as FtpPhase[]).map((p) => (
+                  <button key={p} onClick={() => setPhase(p)} disabled={busy} style={{ ...seg, ...(data.settings.ftpPhase === p ? segOn : {}) }}>
+                    {p === 'testing' ? 'Testing' : 'Funded'}
+                  </button>
+                ))}
+              </div>
+              <span style={{ fontSize: 11.5, color: MUTED }}>{funded ? 'Payout % of P/L' : 'Divide P/L by'}</span>
+              <input value={scaleVal} onChange={(ev) => setScaleVal(ev.target.value)} onBlur={saveScale} onKeyDown={(ev) => ev.key === 'Enter' && saveScale()} type="number" step="any" style={{ ...input, width: 90 }} />
+              <span style={{ fontSize: 11, color: FAINT }}>{funded ? '%' : '÷'}</span>
             </div>
-            <span style={{ fontSize: 11.5, color: MUTED }}>{funded ? 'Payout % of P/L' : 'Divide P/L by'}</span>
-            <input value={scaleVal} onChange={(ev) => setScaleVal(ev.target.value)} onBlur={saveScale} onKeyDown={(ev) => ev.key === 'Enter' && saveScale()} type="number" step="any" style={{ ...input, width: 90 }} />
-            <span style={{ fontSize: 11, color: FAINT }}>{funded ? '%' : '÷'}</span>
-          </div>
+          )}
         </div>
 
         <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 12, paddingTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

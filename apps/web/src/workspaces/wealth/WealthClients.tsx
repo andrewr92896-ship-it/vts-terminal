@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
@@ -37,6 +38,8 @@ function statusMeta(s: WealthClientStatus) {
 
 export function WealthClients() {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const { privacy } = usePrivacy();
   const undo = useUndo<RemovedWealthClient>();
   const [data, setData] = useState<WealthClientsData | null>(null);
@@ -184,24 +187,26 @@ export function WealthClients() {
       </div>
 
       {/* Add a client */}
-      <div style={{ ...panel, marginBottom: 16 }}>
-        <div style={panelLabel}>Add a client</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Name" style={{ ...inputBase, flex: '1 1 160px' }} />
-          <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Email (optional)" style={{ ...inputBase, flex: '1 1 170px' }} />
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Phone (optional)" style={{ ...inputBase, flex: '1 1 140px' }} />
-          <input value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} type="number" min="0" placeholder="Account $ (optional)" style={{ ...inputBase, flex: '0 0 150px' }} />
-          <select value={status} onChange={(e) => setStatus(e.target.value as WealthClientStatus)} style={{ ...inputBase, flex: '0 0 130px' }}>
-            {STATUSES.map((st) => (
-              <option key={st.key} value={st.key}>{st.label}</option>
-            ))}
-          </select>
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Notes (optional)" style={{ ...inputBase, flex: '1 1 100%' }} />
-          <button onClick={addClient} disabled={addDisabled} style={{ ...greenBtn, opacity: addDisabled ? 0.6 : 1 }}>
-            Add client
-          </button>
+      {!readOnly && (
+        <div style={{ ...panel, marginBottom: 16 }}>
+          <div style={panelLabel}>Add a client</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Name" style={{ ...inputBase, flex: '1 1 160px' }} />
+            <input value={email} onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Email (optional)" style={{ ...inputBase, flex: '1 1 170px' }} />
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Phone (optional)" style={{ ...inputBase, flex: '1 1 140px' }} />
+            <input value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} type="number" min="0" placeholder="Account $ (optional)" style={{ ...inputBase, flex: '0 0 150px' }} />
+            <select value={status} onChange={(e) => setStatus(e.target.value as WealthClientStatus)} style={{ ...inputBase, flex: '0 0 130px' }}>
+              {STATUSES.map((st) => (
+                <option key={st.key} value={st.key}>{st.label}</option>
+              ))}
+            </select>
+            <input value={notes} onChange={(e) => setNotes(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addClient()} placeholder="Notes (optional)" style={{ ...inputBase, flex: '1 1 100%' }} />
+            <button onClick={addClient} disabled={addDisabled} style={{ ...greenBtn, opacity: addDisabled ? 0.6 : 1 }}>
+              Add client
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Client list */}
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
@@ -214,7 +219,7 @@ export function WealthClients() {
         <div style={{ padding: '6px 0' }}>
           {data.clients.length === 0 && (
             <div style={{ padding: '16px 18px', fontSize: 12, color: '#6f8a7d', fontStyle: 'italic' }}>
-              No clients yet. Add your first one above.
+              {readOnly ? 'No clients yet.' : 'No clients yet. Add your first one above.'}
             </div>
           )}
           {data.clients.map((c) => (
@@ -225,6 +230,7 @@ export function WealthClients() {
               showMoney={showMoney}
               privacy={privacy}
               busy={busy}
+              readOnly={readOnly}
               money={money}
               onRemove={() => removeWithUndo(c.id)}
               onSave={(patch) => run(api.wealthUpdateClient(c.id, patch))}
@@ -247,6 +253,7 @@ function ClientRow({
   showMoney,
   privacy,
   busy,
+  readOnly,
   money,
   onRemove,
   onSave,
@@ -256,6 +263,7 @@ function ClientRow({
   showMoney: boolean;
   privacy: boolean;
   busy: boolean;
+  readOnly: boolean;
   money: (n: number | null) => string;
   onRemove: () => void;
   onSave: (patch: {
@@ -372,12 +380,16 @@ function ClientRow({
           <div style={{ fontSize: 9.5, color: '#6f8a7d', letterSpacing: '0.4px', textTransform: 'uppercase', marginTop: 2 }}>assets</div>
         </div>
       )}
-      <button onClick={() => !busy && start()} title="Edit client" style={{ flex: 'none', background: 'none', border: `1px solid ${BORDER}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: busy ? 'default' : 'pointer' }}>
-        Edit
-      </button>
-      <button onClick={() => !busy && onRemove()} title="Remove client" style={{ flex: 'none', background: 'none', border: 'none', color: '#3f5249', fontSize: 16, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
-        ×
-      </button>
+      {!readOnly && (
+        <>
+          <button onClick={() => !busy && start()} title="Edit client" style={{ flex: 'none', background: 'none', border: `1px solid ${BORDER}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: busy ? 'default' : 'pointer' }}>
+            Edit
+          </button>
+          <button onClick={() => !busy && onRemove()} title="Remove client" style={{ flex: 'none', background: 'none', border: 'none', color: '#3f5249', fontSize: 16, lineHeight: 1, cursor: busy ? 'default' : 'pointer' }}>
+            ×
+          </button>
+        </>
+      )}
     </div>
   );
 }
