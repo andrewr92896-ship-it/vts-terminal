@@ -180,6 +180,78 @@ const SPECS: Record<string, EntrySpec> = {
       { key: 'notes', type: 'string', desc: 'notes', max: 500 },
     ],
   },
+  wealth_allocation: {
+    workspace: 'wealth',
+    entity: 'portfolio allocation sleeve',
+    guide: 'One holding/sleeve in a model portfolio. targetPct is its target weight as a percentage.',
+    fields: [
+      { key: 'name', type: 'string', desc: 'sleeve name or ticker, e.g. "US Large Cap" or "VTI"', max: 120 },
+      {
+        key: 'assetClass',
+        type: 'enum',
+        desc: 'asset class',
+        values: ['us_equity', 'intl_equity', 'fixed_income', 'real_assets', 'cash', 'alternative', 'other'],
+      },
+      { key: 'targetPct', type: 'number', desc: 'target weight as a percent (0-100)' },
+    ],
+  },
+  wealth_compliance: {
+    workspace: 'wealth',
+    entity: 'RIA compliance item / task',
+    fields: [
+      { key: 'title', type: 'string', desc: 'item title, e.g. "Form ADV annual amendment"', max: 160 },
+      {
+        key: 'category',
+        type: 'enum',
+        desc: 'category',
+        values: ['filing', 'disclosure', 'policy', 'client_doc', 'review', 'other'],
+      },
+      {
+        key: 'status',
+        type: 'enum',
+        desc: 'progress',
+        values: ['not_started', 'in_progress', 'complete'],
+      },
+      { key: 'dueAt', type: 'date', desc: 'due date' },
+      { key: 'notes', type: 'string', desc: 'notes', max: 500 },
+    ],
+  },
+  trading_session: {
+    workspace: 'trading',
+    entity: 'trading session plan',
+    guide:
+      'A recurring session/window the trader plans around (e.g. London Open). openTime/closeTime are 24-hour HH:MM.',
+    fields: [
+      { key: 'name', type: 'string', desc: 'session name, e.g. "London Open"', max: 80 },
+      { key: 'instrument', type: 'string', desc: 'instrument traded', max: 40 },
+      { key: 'openTime', type: 'string', desc: 'session start, 24-hour "HH:MM"', max: 5 },
+      { key: 'closeTime', type: 'string', desc: 'session end, 24-hour "HH:MM"', max: 5 },
+      { key: 'timeframe', type: 'string', desc: 'chart timeframe, e.g. "M15"', max: 20 },
+      { key: 'bias', type: 'enum', desc: 'directional bias', values: ['bull', 'bear', 'both', 'neutral'] },
+      { key: 'bullPlan', type: 'string', desc: 'the bull-case playbook', max: 500 },
+      { key: 'bearPlan', type: 'string', desc: 'the bear-case playbook', max: 500 },
+      { key: 'notes', type: 'string', desc: 'notes', max: 500 },
+    ],
+  },
+  trading_news: {
+    workspace: 'trading',
+    entity: 'market news headline',
+    guide: 'A single news headline, often from an article or post screenshot.',
+    fields: [
+      { key: 'title', type: 'string', desc: 'the headline', max: 200 },
+      { key: 'body', type: 'string', desc: 'detail/context', max: 1000 },
+      { key: 'source', type: 'string', desc: 'source, e.g. "Reuters"', max: 80 },
+      { key: 'url', type: 'string', desc: 'link to the article, if shown', max: 400 },
+      {
+        key: 'category',
+        type: 'enum',
+        desc: 'category',
+        values: ['markets', 'geopolitical', 'economic', 'crypto', 'other'],
+      },
+      { key: 'impact', type: 'enum', desc: 'market impact', values: ['high', 'medium', 'low'] },
+      { key: 'bias', type: 'enum', desc: 'directional read', values: ['bullish', 'bearish', 'neutral'] },
+    ],
+  },
   wealth_plan: {
     workspace: 'wealth',
     entity: 'retirement plan scenario',

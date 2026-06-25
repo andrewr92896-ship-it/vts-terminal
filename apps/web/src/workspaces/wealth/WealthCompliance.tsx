@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { AiEntry } from '../../components/AiEntry';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import type {
@@ -217,6 +218,31 @@ function ItemForm({ initial, clients, busy, submitLabel, onSubmit, onCancel }: {
   return (
     <div style={{ ...(initial ? {} : panel), marginBottom: initial ? 0 : 16 }}>
       <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? 'Edit item' : 'New compliance item'}</div>
+      {!initial && (
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="wealth_compliance"
+            label="item"
+            accent={GREEN}
+            notePlaceholder='Describe the item, or drop a notice/screenshot — e.g. "ADV amendment due 3/31"'
+            onFill={(f) => {
+              if (typeof f.title === 'string') setTitle(f.title);
+              if (
+                f.category === 'filing' ||
+                f.category === 'disclosure' ||
+                f.category === 'policy' ||
+                f.category === 'client_doc' ||
+                f.category === 'review' ||
+                f.category === 'other'
+              )
+                setCategory(f.category);
+              if (f.status === 'not_started' || f.status === 'in_progress' || f.status === 'complete') setStatus(f.status);
+              if (typeof f.dueAt === 'string') setDue(f.dueAt);
+              if (typeof f.notes === 'string') setNotes(f.notes);
+            }}
+          />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title (e.g. Form ADV annual amendment)" style={{ ...input, flex: '1 1 100%' }} />
         <select value={category} onChange={(e) => setCategory(e.target.value as ComplianceCategory)} style={{ ...input, flex: '1 1 140px' }}>

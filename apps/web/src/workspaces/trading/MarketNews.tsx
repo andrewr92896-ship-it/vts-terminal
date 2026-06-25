@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { AiEntry } from '../../components/AiEntry';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useNowTick } from '../../hooks/useNowTick';
@@ -340,6 +341,25 @@ function NewsForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
       <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? 'Edit headline' : 'New headline'}</div>
+      {!initial && (
+        <div style={{ marginBottom: 10 }}>
+          <AiEntry
+            kind="trading_news"
+            label="headline"
+            accent={GOLD}
+            notePlaceholder='Paste/drop a screenshot of the article or post, or describe it'
+            onFill={(f) => {
+              if (typeof f.title === 'string') setTitle(f.title);
+              if (typeof f.body === 'string') setBody(f.body);
+              if (typeof f.source === 'string') setSource(f.source);
+              if (typeof f.url === 'string') setUrl(f.url);
+              if (f.category === 'markets' || f.category === 'geopolitical' || f.category === 'economic' || f.category === 'crypto' || f.category === 'other') setCategory(f.category);
+              if (f.impact === 'high' || f.impact === 'medium' || f.impact === 'low') setImpact(f.impact);
+              if (f.bias === 'bullish' || f.bias === 'bearish' || f.bias === 'neutral') setBias(f.bias);
+            }}
+          />
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Headline" style={{ ...input, flex: '1 1 100%' }} />
         <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Detail / context (optional)" rows={2} style={{ ...input, flex: '1 1 100%', resize: 'vertical', fontFamily: 'inherit' }} />
