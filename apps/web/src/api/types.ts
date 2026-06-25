@@ -729,7 +729,7 @@ export interface TradeRecord {
   stopLoss: number | null;
   units: number;
   slippage: number | null;
-  realizedPl: number | null; // null when balances are hidden
+  realizedPl: number | null; // null only while open / unknown — shared with the desk
   strategy: string | null;
   timeframe: string | null;
   openedAt: number;

@@ -106,7 +106,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   // ---- Trade Log (per-user) ----
   app.get('/api/trading/trades', read, async (request) => {
     const u = request.currentUser!;
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   // ---- History (closed positions, auto-recorded from the Live Wall) ----
@@ -271,7 +271,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add trade' });
     }
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   app.patch('/api/trading/trades/:id', write, async (request, reply) => {
@@ -286,14 +286,14 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update trade' });
     }
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   app.delete('/api/trading/trades/:id', write, async (request) => {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
     const removed = await removeTrade(u.id, id);
-    const data = await getTrades(u.id, !!u.viewBrokerage);
+    const data = await getTrades(u.id);
     return { ...data, removed };
   });
 
@@ -304,7 +304,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
     const u = request.currentUser!;
     await restoreTrade(u.id, parsed.data);
-    return getTrades(u.id, !!u.viewBrokerage);
+    return getTrades(u.id);
   });
 
   // ---- TradingView alerts (FTP/prop replacement) ----
