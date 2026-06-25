@@ -28,6 +28,9 @@ const PANEL = '#15171b';
 const FIELD = '#0e0f12';
 const MUTED = '#8b9098';
 
+// The image types the backend (and Anthropic's vision API) accepts.
+const SUPPORTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
 // Pick a readable text color (near-black or white) for text sitting on top of
 // the accent, so the "Fill form" button stays legible for any workspace accent.
 function readableOn(hex: string): string {
@@ -50,7 +53,11 @@ export function AiEntry({ kind, onFill, label = 'entry', notePlaceholder, accent
   const fileRef = useRef<HTMLInputElement>(null);
 
   function readImage(file: File | null | undefined) {
-    if (!file || !file.type.startsWith('image/')) return;
+    if (!file) return;
+    if (!SUPPORTED_IMAGE_TYPES.includes(file.type)) {
+      setError('Use a PNG, JPEG, GIF, or WebP image.');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       setImage(reader.result as string);
@@ -58,6 +65,12 @@ export function AiEntry({ kind, onFill, label = 'entry', notePlaceholder, accent
       setError(null);
     };
     reader.readAsDataURL(file);
+  }
+
+  function clearImage() {
+    setImage(null);
+    // Clear the file input's value so re-selecting the same file fires onChange.
+    if (fileRef.current) fileRef.current.value = '';
   }
 
   function onPaste(e: ClipboardEvent) {
@@ -99,7 +112,7 @@ export function AiEntry({ kind, onFill, label = 'entry', notePlaceholder, accent
       onFill(res.fields);
       setDone(`Filled ${count} field${count === 1 ? '' : 's'} — review and save.`);
       setNote('');
-      setImage(null);
+      clearImage();
       setOpen(false);
     } catch (e) {
       setError(
@@ -177,8 +190,16 @@ export function AiEntry({ kind, onFill, label = 'entry', notePlaceholder, accent
 
       <div
         tabIndex={0}
+        role="button"
+        aria-label="Add a screenshot — click to upload, or paste an image"
         onPaste={onPaste}
         onClick={() => fileRef.current?.click()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            fileRef.current?.click();
+          }
+        }}
         onDragOver={(e) => {
           e.preventDefault();
           setDragOver(true);
@@ -211,9 +232,12 @@ export function AiEntry({ kind, onFill, label = 'entry', notePlaceholder, accent
       <input
         ref={fileRef}
         type="file"
-        accept="image/*"
+        accept={SUPPORTED_IMAGE_TYPES.join(',')}
         style={{ display: 'none' }}
-        onChange={(e) => readImage(e.target.files?.[0])}
+        onChange={(e) => {
+          readImage(e.target.files?.[0]);
+          e.target.value = ''; // allow re-selecting the same file later
+        }}
       />
 
       {error && <div style={{ fontSize: 11.5, color: '#ffb4ab' }}>{error}</div>}
@@ -238,7 +262,7 @@ export function AiEntry({ kind, onFill, label = 'entry', notePlaceholder, accent
           {busy ? 'Reading…' : 'Fill form'}
         </button>
         {image && (
-          <button type="button" onClick={() => setImage(null)} style={ghost}>
+          <button type="button" onClick={clearImage} style={ghost}>
             Clear image
           </button>
         )}

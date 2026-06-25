@@ -298,6 +298,7 @@ export async function extractEntry(
 ): Promise<ExtractResult> {
   const spec = SPECS[kind];
   if (!spec) throw new Error('Unknown entry type');
+  if (!input.note?.trim() && !input.imageBase64) throw new Error('Provide a note or a screenshot');
 
   const { raw, model } = await extractFromInput(buildSystem(spec), input);
   const json = (extractJson(raw) ?? {}) as Record<string, unknown>;
