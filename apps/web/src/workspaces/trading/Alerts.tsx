@@ -154,6 +154,7 @@ function AlertCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linking, setLinking] = useState(false);
+  const [editResult, setEditResult] = useState(false);
   const [trades, setTrades] = useState<TradeRecord[] | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -282,25 +283,40 @@ function AlertCard({
         {alert.strategy && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}>{alert.strategy}</span>}
       </div>
 
-      {/* Outcome tagging */}
+      {/* Outcome — automatic when the alert carries an exit/result; the buttons
+          are just a manual fallback for alerts that arrive without an exit. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px 10px', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, marginRight: 2 }}>Result</span>
-        {(['win', 'loss', 'breakeven'] as const).map((r) => {
-          const on = alert.result === r;
-          const c = RESULT[r].color;
-          return (
-            <button
-              key={r}
-              onClick={() => void tag(on ? null : r)}
-              disabled={busy}
-              style={{ ...tagBtn, color: on ? '#0c2768' : c, background: on ? c : 'transparent', border: `1px solid ${c}`, opacity: busy ? 0.6 : 1 }}
-            >
-              {RESULT[r].label}
-            </button>
-          );
-        })}
-        {alert.result && (
-          <button onClick={() => void tag(null)} disabled={busy} style={{ ...tagBtn, color: FAINT, border: `1px solid ${BORDER2}` }}>Clear</button>
+        {res && !editResult ? (
+          <>
+            <span style={{ ...badge, color: '#0c2768', background: res.color, border: `1px solid ${res.color}` }}>{res.label}</span>
+            <span style={{ fontSize: 9, letterSpacing: '0.4px', textTransform: 'uppercase', color: FAINT }}>auto</span>
+            <button onClick={() => setEditResult(true)} style={{ ...tagBtn, color: FAINT, border: `1px solid ${BORDER2}`, marginLeft: 2 }}>change</button>
+          </>
+        ) : (
+          <>
+            {!res && <span style={{ fontSize: 10, color: FAINT, marginRight: 2 }}>auto-fills when your alert sends the exit — or set it:</span>}
+            {(['win', 'loss', 'breakeven'] as const).map((r) => {
+              const on = alert.result === r;
+              const c = RESULT[r].color;
+              return (
+                <button
+                  key={r}
+                  onClick={() => { void tag(on ? null : r); setEditResult(false); }}
+                  disabled={busy}
+                  style={{ ...tagBtn, color: on ? '#0c2768' : c, background: on ? c : 'transparent', border: `1px solid ${c}`, opacity: busy ? 0.6 : 1 }}
+                >
+                  {RESULT[r].label}
+                </button>
+              );
+            })}
+            {alert.result && (
+              <button onClick={() => { void tag(null); setEditResult(false); }} disabled={busy} style={{ ...tagBtn, color: FAINT, border: `1px solid ${BORDER2}` }}>Clear</button>
+            )}
+            {res && editResult && (
+              <button onClick={() => setEditResult(false)} style={{ ...tagBtn, color: FAINT, border: `1px solid ${BORDER2}` }}>done</button>
+            )}
+          </>
         )}
       </div>
 
