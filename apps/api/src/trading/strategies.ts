@@ -6,6 +6,7 @@ import {
   tradingTrades,
   tradingStrategies,
   tradingStrategyPrefs,
+  tradingBacktestTrades,
   type TradeResult,
   type TradeSide,
   type TradingAlertRow,
@@ -53,9 +54,10 @@ export function canonicalStrategy(raw: string | null | undefined, ignore: string
   if (!raw || !raw.trim()) return 'Unlabeled';
   let s = ` ${raw} `;
   s = s.replace(/\((?:[^)]*\blots?\b[^)]*)\)/gi, ' '); // "(Lot 8)"
-  s = s.replace(/\blots?\s*\d+(?:\.\d+)?\b/gi, ' '); // bare "lot 8"
+  s = s.replace(/\blots?\s*\d+(?:\.\d+)?\b/gi, ' '); // bare "lot 8" / "lot 1.0"
   s = s.replace(/\bv\d+(?:\.\d+)*\b/gi, ' '); // "v2.4"
   s = s.replace(/\bversion\s*\d+(?:\.\d+)*\b/gi, ' '); // "version 2.4"
+  s = s.replace(/\b\d+\.\d+\b/g, ' '); // bare decimal version, e.g. "VTS 2.0"
   s = s.replace(new RegExp(`\\b(?:${DIRECTION_WORDS.join('|')})\\b`, 'gi'), ' ');
   for (const tok of ignore) {
     const t = tok.trim();
@@ -225,6 +227,8 @@ export interface StrategyRow {
   notes: string | null;
   hypothetical: StratSideStat; // from alerts — P&L in price points
   actual: StratSideStat; // from linked/real trades — P&L in account currency
+  backtest: StratSideStat; // from an imported TradingView CSV — P&L in USD
+  hasBacktest: boolean; // a backtest CSV has been imported for this strategy
   signals: number; // alerts in scope (the denominator for taken rate)
   taken: number; // alerts in scope that have a linked real trade
   takenRate: number | null; // 0–100, taken ÷ signals
@@ -296,10 +300,11 @@ export async function getStrategyBoard(
   userId: string,
   canSeeBalances: boolean,
 ): Promise<StrategyBoard> {
-  const [alerts, trades, registry, ignore] = await Promise.all([
+  const [alerts, trades, registry, backtest, ignore] = await Promise.all([
     db.select().from(tradingAlerts).where(eq(tradingAlerts.userId, userId)),
     db.select().from(tradingTrades).where(eq(tradingTrades.userId, userId)),
     db.select().from(tradingStrategies).where(eq(tradingStrategies.userId, userId)),
+    db.select().from(tradingBacktestTrades).where(eq(tradingBacktestTrades.userId, userId)),
     getIgnoreTokens(userId),
   ]);
 
@@ -310,6 +315,7 @@ export async function getStrategyBoard(
   const seen = new Set<string>();
   for (const a of alerts) if (a.strategy?.trim()) seen.add(canon(a.strategy));
   for (const t of trades) if (t.strategy?.trim()) seen.add(canon(t.strategy));
+  for (const b of backtest) seen.add(b.strategy); // already canonical at import
   seen.delete('Unlabeled');
   await ensureStrategies(userId, seen);
 
@@ -355,6 +361,16 @@ export async function getStrategyBoard(
     }
     const actual = rollup(stratTrades.map((t) => tradeOutcome(t, canSeeBalances)));
 
+    // Backtest: imported CSV trades for this strategy, scoped by start date.
+    // Result comes from the realized P&L sign; P&L is in USD.
+    const btTrades = backtest.filter((b) => b.strategy === name && inScope(b.openedAt.getTime()));
+    const backtestStat = rollup(
+      btTrades.map((b) => ({
+        result: b.pnl == null ? null : b.pnl > 0 ? 'win' : b.pnl < 0 ? 'loss' : 'breakeven',
+        pnl: b.pnl,
+      })),
+    );
+
     const signals = stratAlerts.length;
     const taken = stratAlerts.filter((a) => a.tradeId).length;
 
@@ -364,17 +380,17 @@ export async function getStrategyBoard(
       notes: notesFor.get(name) ?? null,
       hypothetical,
       actual,
+      backtest: backtestStat,
+      hasBacktest: backtest.some((b) => b.strategy === name),
       signals,
       taken,
       takenRate: signals > 0 ? round((taken / signals) * 100, 1) : null,
     });
   }
 
+  const activity = (r: StrategyRow) => r.hypothetical.trades + r.actual.trades + r.backtest.trades;
   rows.sort(
-    (a, b) =>
-      b.hypothetical.trades + b.actual.trades - (a.hypothetical.trades + a.actual.trades) ||
-      b.signals - a.signals ||
-      a.name.localeCompare(b.name),
+    (a, b) => activity(b) - activity(a) || b.signals - a.signals || a.name.localeCompare(b.name),
   );
 
   return { strategies: rows, canSeeBalances, ignoreTokens: ignore };

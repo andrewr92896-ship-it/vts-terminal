@@ -356,6 +356,9 @@ export const api = {
   setStrategyIgnore(tokens: string[]): Promise<StrategyBoard> {
     return request('/api/trading/strategies/ignore', { method: 'PATCH', body: JSON.stringify({ tokens }) });
   },
+  importBacktest(strategy: string, csv: string): Promise<StrategyBoard & { imported: { strategy: string; imported: number; wins: number; losses: number } }> {
+    return request('/api/trading/strategies/backtest', { method: 'PATCH', body: JSON.stringify({ strategy, csv }) });
+  },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');
   },

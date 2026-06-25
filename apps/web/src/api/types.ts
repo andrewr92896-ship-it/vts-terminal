@@ -864,6 +864,8 @@ export interface StrategyRow {
   notes: string | null;
   hypothetical: StratSideStat; // from alerts — P&L in price points
   actual: StratSideStat; // from real trades — P&L in account currency
+  backtest: StratSideStat; // from an imported TradingView CSV — P&L in USD
+  hasBacktest: boolean; // a backtest CSV has been imported for this strategy
   signals: number; // alerts in scope
   taken: number; // alerts in scope with a linked real trade
   takenRate: number | null; // 0–100

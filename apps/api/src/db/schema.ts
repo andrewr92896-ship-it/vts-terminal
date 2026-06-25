@@ -310,6 +310,26 @@ export const tradingStrategyPrefs = sqliteTable('trading_strategy_prefs', {
 
 export type TradingStrategyPrefsRow = typeof tradingStrategyPrefs.$inferSelect;
 
+// Imported backtest trades (from a TradingView "List of Trades" CSV export), one
+// row per backtested trade, attached to a canonical strategy name. This is the
+// third comparison track next to hypothetical (alerts) and actual (real trades).
+// Re-importing a strategy's file replaces its rows.
+export const tradingBacktestTrades = sqliteTable('trading_backtest_trades', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  strategy: text('strategy').notNull(), // canonical strategy this import is for
+  side: text('side', { enum: TRADE_SIDES }).notNull().default('long'),
+  entryPrice: real('entry_price'),
+  exitPrice: real('exit_price'),
+  pnl: real('pnl'), // Net P&L in account currency (USD), per the export
+  openedAt: integer('opened_at', { mode: 'timestamp_ms' }).notNull(), // entry time
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingBacktestTradeRow = typeof tradingBacktestTrades.$inferSelect;
+
 // ---- TradingView webhook ingestion (raw alert store) ----
 // Standalone landing table for alerts posted to POST /api/tv-webhook. Not keyed
 // to a user — it is a raw ingestion log. The parsed trade fields are captured

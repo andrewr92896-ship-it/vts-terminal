@@ -25,6 +25,7 @@ import {
   setStrategyMeta,
   unlinkAlertTrade,
 } from '../trading/strategies.js';
+import { importBacktest } from '../trading/backtest.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
@@ -360,6 +361,20 @@ export async function tradingRoutes(app: FastifyInstance) {
     return getStrategyBoard(u.id, !!u.viewBrokerage);
   });
 
+  // Import a TradingView "List of Trades" CSV as one strategy's backtest track.
+  app.patch('/api/trading/strategies/backtest', { ...write, bodyLimit: 6 * 1024 * 1024 }, async (request, reply) => {
+    const parsed = backtestSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Provide a strategy name and CSV' });
+    const u = request.currentUser!;
+    try {
+      const result = await importBacktest(u.id, parsed.data.strategy, parsed.data.csv);
+      const board = await getStrategyBoard(u.id, !!u.viewBrokerage);
+      return { ...board, imported: result };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Import failed' });
+    }
+  });
+
   // Manually link / unlink an alert and a real trade.
   app.post('/api/trading/alerts/:id/link', write, async (request, reply) => {
     const parsed = linkSchema.safeParse(request.body);
@@ -635,6 +650,12 @@ const linkSchema = z.object({ tradeId: z.string().min(1) });
 
 // The list of extra words to strip when collapsing labels to a strategy name.
 const ignoreSchema = z.object({ tokens: z.array(z.string().trim().max(40)).max(50) });
+
+// Import a TradingView "List of Trades" CSV as a strategy's backtest track.
+const backtestSchema = z.object({
+  strategy: z.string().trim().min(1).max(120),
+  csv: z.string().min(1).max(5_000_000),
+});
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
 const sessionFields = {

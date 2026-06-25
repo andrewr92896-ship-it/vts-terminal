@@ -1,6 +1,5 @@
-import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties, type KeyboardEvent } from 'react';
 import { api, ApiError } from '../../api/client';
-import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import type { StrategyBoard, StrategyRow, StratSideStat } from '../../api/types';
 
@@ -43,13 +42,17 @@ function winRateColor(wr: number | null): string {
 }
 
 export function StrategyAnalytics() {
-  const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
   const [board, setBoard] = useState<StrategyBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [newToken, setNewToken] = useState('');
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importCsv, setImportCsv] = useState<{ name: string; text: string } | null>(null);
+  const [importName, setImportName] = useState('');
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
 
   async function load() {
     setBusy(true);
@@ -95,6 +98,31 @@ export function StrategyAnalytics() {
     }
   }
 
+  function onPickFile(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setImportCsv({ name: file.name, text: String(reader.result) });
+    reader.readAsText(file);
+  }
+  async function doImport() {
+    if (!importCsv || !importName.trim() || importing) return;
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      const r = await api.importBacktest(importName.trim(), importCsv.text);
+      setBoard(r);
+      setImportMsg(`Imported ${r.imported.imported} trades into “${r.imported.strategy}” · ${r.imported.wins}W ${r.imported.losses}L.`);
+      setImportCsv(null);
+      setImportName('');
+    } catch (e) {
+      setImportMsg(e instanceof ApiError ? e.message : 'Import failed');
+    } finally {
+      setImporting(false);
+    }
+  }
+
   const canSee = board?.canSeeBalances ?? false;
   const showMoney = canSee && !privacy && !hideMoney;
   const actMoney = (n: number | null) => {
@@ -102,6 +130,13 @@ export function StrategyAnalytics() {
     if (!showMoney) return '•••';
     if (n == null) return '—';
     return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  };
+  // Backtest $ is simulated, not real account money, so it isn't gated by the
+  // brokerage permission — only masked under privacy / hide-$.
+  const btMoney = (n: number | null) => {
+    if (n == null) return '—';
+    if (privacy || hideMoney) return '•••';
+    return (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
   };
 
   return (
@@ -159,6 +194,44 @@ export function StrategyAnalytics() {
         </div>
       )}
 
+      {/* Backtest import — one TradingView "List of Trades" CSV per strategy */}
+      {board && (
+        <div style={{ ...card, marginBottom: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: '#fff' }}>Backtest</div>
+            <span style={{ fontSize: 11.5, color: MUTED }}>
+              Import a TradingView “List of Trades” CSV to set a strategy’s backtest baseline. One file = one strategy; re-importing replaces it.
+            </span>
+            {!importCsv && (
+              <button onClick={() => fileRef.current?.click()} style={{ ...goldBtn, marginLeft: 'auto' }}>Import backtest CSV</button>
+            )}
+            <input ref={fileRef} type="file" accept=".csv,text/csv" style={{ display: 'none' }} onChange={onPickFile} />
+          </div>
+          {importCsv && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 10 }}>
+              <span style={{ fontSize: 11, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>{importCsv.name}</span>
+              <span style={{ fontSize: 11, color: FAINT }}>→ assign to</span>
+              <input
+                value={importName}
+                onChange={(e) => setImportName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && void doImport()}
+                placeholder="strategy, e.g. BTC 5m mk2"
+                list="strat-names"
+                style={{ background: '#0d1f44', border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 12, padding: '7px 10px', minWidth: 200 }}
+              />
+              <datalist id="strat-names">
+                {board.strategies.map((s) => <option key={s.name} value={s.name} />)}
+              </datalist>
+              <button onClick={() => void doImport()} disabled={importing || !importName.trim()} style={{ ...goldBtn, opacity: importing || !importName.trim() ? 0.6 : 1 }}>
+                {importing ? 'Importing…' : 'Import'}
+              </button>
+              <button onClick={() => { setImportCsv(null); setImportName(''); }} style={ghostBtn}>Cancel</button>
+            </div>
+          )}
+          {importMsg && <div style={{ fontSize: 11.5, color: '#a7d8bf', marginTop: 8 }}>{importMsg}</div>}
+        </div>
+      )}
+
       {!board ? (
         <div style={{ ...card, color: MUTED, fontSize: 12.5 }}>Loading…</div>
       ) : board.strategies.length === 0 ? (
@@ -168,16 +241,20 @@ export function StrategyAnalytics() {
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: isPhone ? 760 : undefined, fontSize: 11.5 }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1040, fontSize: 11.5 }}>
               <thead>
                 <tr style={{ color: FAINT }}>
                   <th style={{ ...th, textAlign: 'left' }} rowSpan={2}>Strategy</th>
                   <th style={th} rowSpan={2}>Start date</th>
                   <th style={th} rowSpan={2}>Taken</th>
+                  <th style={{ ...th, borderLeft: `1px solid ${BORDER2}`, color: '#8fa3cc' }} colSpan={3}>Backtest (CSV)</th>
                   <th style={{ ...th, borderLeft: `1px solid ${BORDER2}`, color: GOLD }} colSpan={3}>Hypothetical (alerts)</th>
                   <th style={{ ...th, borderLeft: `1px solid ${BORDER2}`, color: GREEN }} colSpan={3}>Actual (trades)</th>
                 </tr>
                 <tr style={{ color: FAINT }}>
+                  <th style={{ ...th, borderLeft: `1px solid ${BORDER2}` }}>W–L</th>
+                  <th style={th}>Win%</th>
+                  <th style={th}>Net ($)</th>
                   <th style={{ ...th, borderLeft: `1px solid ${BORDER2}` }}>W–L</th>
                   <th style={th}>Win%</th>
                   <th style={th}>Net (pts)</th>
@@ -188,7 +265,7 @@ export function StrategyAnalytics() {
               </thead>
               <tbody>
                 {board.strategies.map((r) => (
-                  <Row key={r.name} r={r} actMoney={actMoney} onSave={saveMeta} />
+                  <Row key={r.name} r={r} actMoney={actMoney} btMoney={btMoney} onSave={saveMeta} />
                 ))}
               </tbody>
             </table>
@@ -202,12 +279,15 @@ export function StrategyAnalytics() {
 function Row({
   r,
   actMoney,
+  btMoney,
   onSave,
 }: {
   r: StrategyRow;
   actMoney: (n: number | null) => string;
+  btMoney: (n: number | null) => string;
   onSave: (name: string, patch: { startedAt?: number | null; notes?: string | null }) => void;
 }) {
+  const emptySide = (s: typeof r.backtest) => s.trades === 0 && s.open === 0;
   return (
     <tr style={{ borderTop: `1px solid ${BORDER}` }}>
       <td style={{ ...td, textAlign: 'left', fontWeight: 600, color: TEXT }}>
@@ -225,6 +305,16 @@ function Row({
       <td style={{ ...td, color: r.takenRate != null && r.takenRate > 0 ? TEXT : FAINT }}>
         {r.taken}/{r.signals}
         {r.takenRate != null && <span style={{ color: FAINT }}> · {r.takenRate}%</span>}
+      </td>
+      {/* Backtest */}
+      <td style={{ ...td, borderLeft: `1px solid ${BORDER2}`, color: r.hasBacktest ? MUTED : FAINT }}>
+        {r.hasBacktest ? record(r.backtest) : '—'}
+      </td>
+      <td style={{ ...td, color: winRateColor(r.backtest.winRate), fontWeight: 700 }}>
+        {r.backtest.winRate == null ? '—' : `${r.backtest.winRate}%`}
+      </td>
+      <td style={{ ...td, color: emptySide(r.backtest) ? FAINT : (r.backtest.totalPnl ?? 0) >= 0 ? GREEN : RED, fontWeight: 700 }}>
+        {r.hasBacktest ? btMoney(r.backtest.totalPnl) : '—'}
       </td>
       {/* Hypothetical */}
       <td style={{ ...td, borderLeft: `1px solid ${BORDER2}` }}>{record(r.hypothetical)}</td>
