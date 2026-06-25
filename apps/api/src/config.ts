@@ -46,6 +46,13 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default('mailto:admin@vitalistradingsystems.com'),
+  // Pushover application token (one per app, from pushover.net/apps/build). Each
+  // trader connects their own Pushover "user key" in settings. When unset,
+  // Pushover features report "not configured". Optional per-event sound name
+  // (a built-in or a custom sound uploaded to the Pushover account); when blank,
+  // the trader's own per-app sound choice in the Pushover app applies.
+  PUSHOVER_APP_TOKEN: z.string().optional(),
+  PUSHOVER_SOUND: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({

@@ -726,6 +726,19 @@ export const pushSubscriptions = sqliteTable('push_subscriptions', {
 });
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
 
+// ---- Pushover (per user) ----
+// One row per user who has connected Pushover for trade/alert notifications with
+// a custom sound. Stores only their Pushover "user key" (not a secret to us —
+// it just addresses their devices through our application token).
+export const pushoverUsers = sqliteTable('pushover_users', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  userKey: text('user_key').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type PushoverUserRow = typeof pushoverUsers.$inferSelect;
+
 // One row per user holding the serialized Study Game state (per-category levels,
 // scores, and answer history), so quiz progress follows the learner across
 // devices instead of living only in that browser's localStorage.

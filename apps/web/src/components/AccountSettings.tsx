@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { ApiError } from '../api/client';
+import { api, ApiError } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
@@ -275,6 +275,8 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
             <>
               <div style={{ height: 1, background: '#1d3560' }} />
               <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
+              <div style={{ height: 1, background: '#1d3560' }} />
+              <PushoverSection accent={accentGrad} accentText={theme.accentText} />
             </>
           )}
 
@@ -367,6 +369,133 @@ function PhoneNotificationsSection({ accent, accentText }: { accent: string; acc
         want buzzed needs to be turned on once.
       </p>
       {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
+    </section>
+  );
+}
+
+// Pushover lets a trader get trade/alert notifications with a custom, can't-miss
+// sound (chosen in the Pushover app). They paste their personal "user key" once;
+// the app token lives on the server.
+function PushoverSection({ accent, accentText }: { accent: string; accentText: string }) {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .pushoverStatus()
+      .then((s) => alive && (setConfigured(s.configured), setConnected(s.connected)))
+      .catch(() => alive && setConfigured(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function run(p: Promise<unknown>, okText: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await p;
+      setMsg({ ok: true, text: okText });
+      return true;
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong' });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const primaryBtn: React.CSSProperties = {
+    border: 'none',
+    background: accent,
+    color: accentText,
+    fontWeight: 600,
+    fontSize: 13,
+    padding: '10px 16px',
+    borderRadius: 8,
+    cursor: busy ? 'default' : 'pointer',
+    opacity: busy ? 0.6 : 1,
+    minHeight: 40,
+  };
+  const ghost: React.CSSProperties = {
+    background: 'rgba(255,255,255,.05)',
+    border: '1px solid #1d3560',
+    color: '#dfe7fa',
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: '10px 14px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    minHeight: 40,
+  };
+
+  return (
+    <section>
+      <div style={sectionLabel}>Pushover (custom alert sound)</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Get trade and alert notifications through{' '}
+        <a href="https://pushover.net/" target="_blank" rel="noreferrer" style={{ color: '#8ea3cc' }}>Pushover</a>{' '}
+        with your own loud, custom sound — pick or upload it right in the Pushover app.
+      </p>
+
+      {configured === false ? (
+        <div style={hintStyle}>Pushover isn’t set up on the server yet.</div>
+      ) : configured == null ? (
+        <div style={hintStyle}>Checking…</div>
+      ) : connected ? (
+        <>
+          <div style={{ fontSize: 12.5, color: '#7fd6a3', marginBottom: 10, fontWeight: 600 }}>Connected ✓</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => void run(api.pushoverTest(), 'Test sent — check your phone.')} disabled={busy} style={ghost}>
+              Send test
+            </button>
+            <button
+              onClick={async () => {
+                if (await run(api.pushoverDisconnect(), 'Disconnected.')) setConnected(false);
+              }}
+              disabled={busy}
+              style={{ ...ghost, color: '#ff9a9a' }}
+            >
+              Disconnect
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <input
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            placeholder="Your Pushover user key"
+            autoCapitalize="none"
+            autoCorrect="off"
+            style={inputStyle}
+          />
+          <p style={hintStyle}>
+            Install the Pushover app, and copy your <b>User Key</b> from its home screen (or
+            pushover.net). Each device you want buzzed needs the app installed.
+          </p>
+          <div style={{ marginTop: 4 }}>
+            <button
+              onClick={async () => {
+                if (await run(api.pushoverConnect(keyInput.trim()), 'Connected — sending a test…')) {
+                  setConnected(true);
+                  setKeyInput('');
+                  void api.pushoverTest().catch(() => {});
+                }
+              }}
+              disabled={busy || keyInput.trim().length < 20}
+              style={{ ...primaryBtn, opacity: busy || keyInput.trim().length < 20 ? 0.6 : 1 }}
+            >
+              {busy ? 'Connecting…' : 'Connect Pushover'}
+            </button>
+          </div>
+        </>
+      )}
+      {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
     </section>
   );
 }

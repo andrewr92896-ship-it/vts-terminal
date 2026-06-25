@@ -15,6 +15,7 @@ import {
 } from './connections.js';
 import { isDemoUser } from '../demo/identity.js';
 import { pushConfigured } from '../notifications/push.js';
+import { pushoverConfigured } from '../notifications/pushover.js';
 import { config } from '../config.js';
 import type { BrokerLiveResult, LiveTrade, LiveWall } from './types.js';
 
@@ -271,7 +272,7 @@ const DESK_WATCH_MS = Math.max(5, Number(process.env.DESK_WATCH_SECONDS) || 15) 
 // push is actually configured (no point spending broker API quota otherwise).
 // Best-effort: every tick is try/caught and never keeps the process alive.
 export function startDeskWatch(): void {
-  if (!config.isProd || !pushConfigured()) return;
+  if (!config.isProd || (!pushConfigured() && !pushoverConfigured())) return;
   const tick = () => {
     void reconcileDeskPositions().catch((err) => console.error('Desk watch error:', err));
   };
