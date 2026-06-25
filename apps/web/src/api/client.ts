@@ -413,6 +413,15 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
+  kiaUpdatePace(
+    patch: { mode?: 'calendar' | 'working'; offDays?: number[] },
+    month?: string,
+  ): Promise<KiaDashboard> {
+    return request(`/api/kia/pace${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
   kiaUpdatePayPlan(
     patch: {
       commissionMode?: 'total' | 'split';

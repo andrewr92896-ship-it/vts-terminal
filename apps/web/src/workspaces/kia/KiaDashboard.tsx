@@ -17,6 +17,9 @@ const AMBER = '#e0a23a';
 
 const usd = (n: number) => '$' + n.toLocaleString('en-US');
 
+// Weekday labels for the working-pace off-day picker (0=Sunday … 6=Saturday).
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
 function etToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
 }
@@ -186,17 +189,22 @@ export function KiaDashboard() {
   const splitMode = dash.payPlan.commissionMode === 'split';
   const addDisabled = busy || !model.trim() || (splitMode ? front === '' && back === '' : profit === '');
 
+  const workingPace = m.paceMode === 'working';
   const kpis: { label: string; val: string; sub: string }[] = [
     { label: isCurrentMonth ? 'Units MTD' : 'Units', val: String(m.units), sub: `goal ${m.goalUnits}` },
     {
       label: 'Pace',
       val: `${m.paceUnits} units`,
-      sub: isCurrentMonth ? 'projected by month-end' : 'final for the month',
+      sub: isCurrentMonth ? (workingPace ? 'projected by working days' : 'projected by month-end') : 'final for the month',
     },
     {
-      label: 'Days Left',
-      val: isCurrentMonth ? String(m.daysLeft) : '—',
-      sub: isCurrentMonth ? `of ${m.daysInMonth}-day month` : 'month complete',
+      label: workingPace ? 'Work Days Left' : 'Days Left',
+      val: isCurrentMonth ? String(workingPace ? m.workingDaysLeft : m.daysLeft) : '—',
+      sub: isCurrentMonth
+        ? workingPace
+          ? `of ${m.workingDaysInMonth} working days`
+          : `of ${m.daysInMonth}-day month`
+        : 'month complete',
     },
     ...(showComm
       ? [
@@ -382,8 +390,19 @@ export function KiaDashboard() {
 
           {/* Monthly Pace */}
           <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 4 }}>Monthly Pace</div>
-            <div style={{ fontSize: 11, color: '#8b9098', marginBottom: 10 }}>{m.daysLeft} days left this month</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>Monthly Pace</div>
+              <PaceModeToggle
+                mode={dash.pace.mode}
+                busy={busy}
+                onChange={(mode) => run(api.kiaUpdatePace({ mode }, monthKey))}
+              />
+            </div>
+            <div style={{ fontSize: 11, color: '#8b9098', marginBottom: 10 }}>
+              {workingPace
+                ? `${m.workingDaysLeft} working ${m.workingDaysLeft === 1 ? 'day' : 'days'} left this month`
+                : `${m.daysLeft} days left this month`}
+            </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 26, fontWeight: 600, color: m.onPace ? GREEN : AMBER }}>{m.paceUnits}</span>
               <span style={{ fontSize: 12, color: '#8b9098' }}>units projected vs goal of {m.goalUnits}</span>
@@ -391,6 +410,46 @@ export function KiaDashboard() {
             {showComm && (
               <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #25282e', fontSize: 11.5, color: '#9aa0a8' }}>
                 On pace for <span style={{ color: '#e07a86' }}>{usd(m.paceProfit)}</span> profit · <span style={{ color: '#e07a86' }}>{usd(m.paceComm)}</span> commission
+              </div>
+            )}
+            {workingPace && (
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #25282e' }}>
+                <div style={{ fontSize: 10.5, color: '#8b9098', marginBottom: 7 }}>Days off (excluded from pace)</div>
+                <div style={{ display: 'flex', gap: 5 }}>
+                  {WEEKDAYS.map((label, day) => {
+                    const off = dash.pace.offDays.includes(day);
+                    return (
+                      <button
+                        key={day}
+                        disabled={busy}
+                        onClick={() => {
+                          const next = off
+                            ? dash.pace.offDays.filter((d) => d !== day)
+                            : [...dash.pace.offDays, day];
+                          run(api.kiaUpdatePace({ offDays: next }, monthKey));
+                        }}
+                        title={off ? 'Off — click to count this day' : 'Working — click to mark off'}
+                        style={{
+                          flex: 1,
+                          padding: '6px 0',
+                          fontSize: 11,
+                          fontWeight: 600,
+                          fontFamily: "'IBM Plex Mono', monospace",
+                          borderRadius: 6,
+                          cursor: busy ? 'default' : 'pointer',
+                          border: `1px solid ${off ? RED : BORDER}`,
+                          background: off ? 'rgba(187,22,43,.18)' : 'rgba(255,255,255,.04)',
+                          color: off ? '#f0a9b2' : '#9aa0a8',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 10.5, color: '#7d828a', marginTop: 7, lineHeight: 1.5 }}>
+                  Pace counts only the {m.workingDaysInMonth} days you work this month.
+                </div>
               </div>
             )}
           </div>
@@ -646,6 +705,47 @@ function DealRow({
 // Convert a stored timestamp to the YYYY-MM-DD it represents in Eastern Time.
 function isoFromMs(ms: number): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date(ms));
+}
+
+// Segmented toggle between calendar pace (every day) and working pace (only the
+// days the salesperson works).
+function PaceModeToggle({
+  mode,
+  busy,
+  onChange,
+}: {
+  mode: 'calendar' | 'working';
+  busy: boolean;
+  onChange: (mode: 'calendar' | 'working') => void;
+}) {
+  const opt = (value: 'calendar' | 'working', label: string) => {
+    const active = mode === value;
+    return (
+      <button
+        key={value}
+        disabled={busy || active}
+        onClick={() => onChange(value)}
+        style={{
+          padding: '4px 9px',
+          fontSize: 10.5,
+          fontWeight: 600,
+          border: 'none',
+          borderRadius: 5,
+          cursor: busy || active ? 'default' : 'pointer',
+          background: active ? `linear-gradient(180deg,${RED},${RED2})` : 'transparent',
+          color: active ? '#fff' : '#9aa0a8',
+        }}
+      >
+        {label}
+      </button>
+    );
+  };
+  return (
+    <div style={{ display: 'flex', gap: 2, padding: 2, background: '#0e0f12', border: `1px solid ${BORDER}`, borderRadius: 7 }}>
+      {opt('calendar', 'Calendar')}
+      {opt('working', 'Working')}
+    </div>
+  );
 }
 
 function Stepper({ value, onChange, busy, min }: { value: number; onChange: (v: number) => void; busy: boolean; min: number }) {

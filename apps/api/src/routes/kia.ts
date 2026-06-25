@@ -7,6 +7,7 @@ import {
   removeDeal,
   restoreDeal,
   updateDeal,
+  updatePace,
   updatePayPlan,
   updateSettings,
 } from '../kia/service.js';
@@ -80,6 +81,15 @@ const settingsSchema = z
   })
   .refine((v) => v.goalUnits != null || v.reviewCount != null, {
     message: 'Provide goalUnits or reviewCount',
+  });
+
+const paceSchema = z
+  .object({
+    mode: z.enum(['calendar', 'working']).optional(),
+    offDays: z.array(z.coerce.number().int().min(0).max(6)).max(7).optional(),
+  })
+  .refine((v) => v.mode != null || v.offDays != null, {
+    message: 'Provide a pace mode or off days',
   });
 
 const restoreSchema = z.object({
@@ -176,6 +186,16 @@ export async function kiaRoutes(app: FastifyInstance) {
     const month = monthOf(request);
     await updateSettings(userId, month, parsed.data);
     return getDashboard(userId, month);
+  });
+
+  app.patch('/api/kia/pace', guard, async (request, reply) => {
+    const parsed = paceSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Provide a pace mode or off days' });
+    }
+    const userId = request.currentUser!.id;
+    await updatePace(userId, parsed.data);
+    return getDashboard(userId, monthOf(request));
   });
 
   app.patch('/api/kia/payplan', guard, async (request, reply) => {

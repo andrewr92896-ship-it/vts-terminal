@@ -159,21 +159,75 @@ function monthLabel(key: string): string {
   }).format(new Date(Date.UTC(y, m - 1, 1, 12)));
 }
 
+// How pace is projected. 'calendar' divides progress by every elapsed day of
+// the month; 'working' divides by only the days the salesperson actually works,
+// so off days don't dilute the projection. Off days are weekday numbers
+// (0=Sunday … 6=Saturday).
+export interface PaceConfig {
+  mode: 'calendar' | 'working';
+  offDays: number[];
+}
+
+const DEFAULT_PACE: PaceConfig = { mode: 'calendar', offDays: [] };
+
+// Read the user's pace config off their settings row, tolerating bad/legacy data.
+function parsePaceConfig(row: KiaSettingsRow | undefined): PaceConfig {
+  if (!row) return DEFAULT_PACE;
+  let offDays: number[] = [];
+  if (row.offDays) {
+    try {
+      const parsed = JSON.parse(row.offDays);
+      if (Array.isArray(parsed)) {
+        offDays = [...new Set(parsed.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+      }
+    } catch {
+      /* fall back to no off days */
+    }
+  }
+  return { mode: row.paceMode === 'working' ? 'working' : 'calendar', offDays };
+}
+
+// Count the working days in a month between day `from` and day `to` (inclusive),
+// i.e. calendar days whose weekday is not in the off-day set. Weekday is taken
+// in UTC, which matches how deal dates are anchored (noon UTC).
+function countWorkingDays(year: number, month1: number, from: number, to: number, off: Set<number>): number {
+  let count = 0;
+  for (let d = from; d <= to; d++) {
+    if (!off.has(new Date(Date.UTC(year, month1 - 1, d)).getUTCDay())) count++;
+  }
+  return count;
+}
+
 interface MonthContext {
   daysInMonth: number;
   dayOfMonth: number;
   isCurrent: boolean;
+  paceMode: 'calendar' | 'working';
+  offDays: number[];
+  workingDaysInMonth: number;
+  workingDaysElapsed: number;
 }
 
 // Pace math needs to know how far through the month we are. The current month
 // uses today's date; completed (past) months are treated as fully elapsed so
-// their pace equals the actual result rather than a projection.
-function monthContext(key: string): MonthContext {
+// their pace equals the actual result rather than a projection. Working-day
+// counts are computed up front so pace can divide by either basis.
+function monthContext(key: string, pace: PaceConfig): MonthContext {
   const [y, m] = key.split('-').map(Number);
   const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
   const now = etNow();
   const isCurrent = y === now.year && m === now.month;
-  return { daysInMonth, dayOfMonth: isCurrent ? now.day : daysInMonth, isCurrent };
+  const dayOfMonth = isCurrent ? now.day : daysInMonth;
+  const off = new Set(pace.offDays);
+  return {
+    daysInMonth,
+    dayOfMonth,
+    isCurrent,
+    paceMode: pace.mode,
+    offDays: pace.offDays,
+    workingDaysInMonth: countWorkingDays(y, m, 1, daysInMonth, off),
+    workingDaysElapsed: countWorkingDays(y, m, 1, dayOfMonth, off),
+  };
 }
 
 function resolveMonth(requested?: string): string {
@@ -251,6 +305,11 @@ export interface KiaMetrics {
   paceProfit: number;
   paceComm: number;
   onPace: boolean;
+  // Pace basis. In 'working' mode the pace projection and the days-left figures
+  // below count only the salesperson's working days.
+  paceMode: 'calendar' | 'working';
+  workingDaysInMonth: number;
+  workingDaysLeft: number;
 }
 
 const seeding = new Map<string, Promise<void>>();
@@ -316,12 +375,21 @@ function computeMetrics(
   const nextTier = [...tiersDesc].reverse().find((t) => units < t.units) ?? null;
 
   const unitPct = goalUnits > 0 ? Math.min(100, Math.round((units / goalUnits) * 100)) : 0;
-  const { daysInMonth, dayOfMonth, isCurrent } = ctx;
+  const { daysInMonth, dayOfMonth, isCurrent, paceMode, workingDaysInMonth, workingDaysElapsed } = ctx;
   const daysLeft = isCurrent ? Math.max(0, daysInMonth - dayOfMonth) : 0;
-  // Past months are complete, so their pace is just the actual result.
-  const elapsed = dayOfMonth > 0 ? dayOfMonth : 1;
-  const paceUnits = isCurrent ? Math.round((units / elapsed) * daysInMonth) : units;
-  const paceProfit = isCurrent ? Math.round((totalProfit / elapsed) * daysInMonth) : totalProfit;
+  const workingDaysLeft = isCurrent ? Math.max(0, workingDaysInMonth - workingDaysElapsed) : 0;
+
+  // Pace projects the run rate to the full month. 'working' mode divides by only
+  // the working days so far and scales to the month's total working days; if no
+  // working day has elapsed yet (e.g. early in the month, only off days passed),
+  // there's no rate to project from, so the pace is just the actuals.
+  const working = paceMode === 'working';
+  const totalBasis = working ? workingDaysInMonth : daysInMonth;
+  const elapsedBasis = working ? workingDaysElapsed : dayOfMonth > 0 ? dayOfMonth : 1;
+  const project = (value: number) =>
+    !isCurrent || elapsedBasis <= 0 ? value : Math.round((value / elapsedBasis) * totalBasis);
+  const paceUnits = project(units);
+  const paceProfit = project(totalProfit);
   const paceComm = Math.round(paceProfit * effectiveRate);
 
   return {
@@ -350,6 +418,9 @@ function computeMetrics(
     paceProfit,
     paceComm,
     onPace: paceUnits >= goalUnits,
+    paceMode,
+    workingDaysInMonth,
+    workingDaysLeft,
   };
 }
 
@@ -373,6 +444,7 @@ export interface KiaDashboardData {
   deals: KiaDeal[];
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };
+  pace: PaceConfig;
   payPlan: PayPlan;
 }
 
@@ -386,6 +458,7 @@ export async function getDashboard(
     await db.select().from(kiaSettings).where(eq(kiaSettings.userId, userId)).limit(1)
   )[0];
   const payPlan = parsePayPlan(settingsRow);
+  const pace = parsePaceConfig(settingsRow);
 
   const allRows = await db.select().from(kiaDeals).where(eq(kiaDeals.userId, userId));
 
@@ -444,8 +517,9 @@ export async function getDashboard(
     months,
     history,
     deals,
-    metrics: computeMetrics(rows, goalUnits, reviewCount, monthContext(month), payPlan),
+    metrics: computeMetrics(rows, goalUnits, reviewCount, monthContext(month, pace), payPlan),
     settings: { goalUnits, reviewCount },
+    pace,
     payPlan,
   };
 }
@@ -668,4 +742,21 @@ export async function updateSettings(
       target: [kiaMonthSettings.userId, kiaMonthSettings.month],
       set: { goalUnits, reviewCount, updatedAt: now },
     });
+}
+
+// Update how pace is projected. The schedule is the salesperson's own, so it's
+// stored once on their settings row (not per month). Off days are normalized to
+// a sorted, de-duplicated set of weekday numbers (0=Sunday … 6=Saturday).
+export async function updatePace(
+  userId: string,
+  input: { mode?: 'calendar' | 'working'; offDays?: number[] },
+): Promise<void> {
+  await ensureKiaSeed(userId);
+  const patch: Partial<typeof kiaSettings.$inferInsert> = { updatedAt: new Date() };
+  if (input.mode != null) patch.paceMode = input.mode;
+  if (input.offDays != null) {
+    const clean = [...new Set(input.offDays.filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort();
+    patch.offDays = JSON.stringify(clean);
+  }
+  await db.update(kiaSettings).set(patch).where(eq(kiaSettings.userId, userId));
 }
