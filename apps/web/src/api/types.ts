@@ -791,12 +791,17 @@ export interface AnalyzeResult {
   model: string;
 }
 
+export type TradeResult = 'win' | 'loss' | 'breakeven';
+
 export interface AlertRecord {
   id: string;
   source: string;
   instrument: string | null;
   side: TradeSide | null;
   price: number | null;
+  exitPrice: number | null;
+  result: TradeResult | null;
+  pnl: number | null;
   strategy: string | null;
   timeframe: string | null;
   message: string | null;
@@ -807,8 +812,23 @@ export interface AlertRecord {
   receivedAt: number;
 }
 
+// Per-strategy rollup of recorded outcomes (the paper-trading scoreboard).
+export interface StrategyStat {
+  strategy: string;
+  trades: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  open: number;
+  winRate: number | null; // 0–100 over decided trades
+  totalPnl: number | null;
+  avgPnl: number | null;
+  profitFactor: number | null;
+}
+
 export interface AlertsData {
   alerts: AlertRecord[];
+  strategies: StrategyStat[];
   aiConfigured: boolean;
 }
 

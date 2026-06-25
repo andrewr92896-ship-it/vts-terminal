@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ClipboardEvent } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import type { AlertRecord, AlertsData, TradeAnalysis } from '../../api/types';
+import type { AlertRecord, AlertsData, StrategyStat, TradeAnalysis, TradeResult } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
 const GOLD = '#EBCB74';
@@ -30,6 +30,18 @@ function fmtPrice(n: number | null): string {
   if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
   return String(Number(n.toFixed(5)));
 }
+// Signed P&L with a leading +/- so wins and losses read at a glance.
+function fmtSigned(n: number | null): string {
+  if (n == null) return '—';
+  const v = Number(Math.abs(n) >= 1000 ? n.toFixed(2) : n.toFixed(5));
+  return (v > 0 ? '+' : '') + v.toLocaleString('en-US', { maximumFractionDigits: 5 });
+}
+
+const RESULT: Record<TradeResult, { label: string; color: string }> = {
+  win: { label: 'WIN', color: GREEN },
+  loss: { label: 'LOSS', color: RED },
+  breakeven: { label: 'B/E', color: MUTED },
+};
 
 const VERDICT: Record<TradeAnalysis['verdict'], { label: string; color: string }> = {
   good: { label: 'Good', color: GREEN },
@@ -43,6 +55,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
   const [data, setData] = useState<AlertsData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   async function load() {
     setRefreshing(true);
@@ -72,12 +85,17 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Alerts</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            TradingView alerts arrive by webhook. Paste a chart screenshot and Claude (Opus 4.8) analyzes the trade.
+            TradingView alerts arrive by webhook and build a paper-trading dataset. Tag each one win/loss to track strategy metrics, or add past trades by hand.
           </div>
         </div>
-        <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
-          {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => setAdding((v) => !v)} style={ghostBtn}>
+            {adding ? 'Close' : '+ Add trade'}
+          </button>
+          <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {!data.aiConfigured && (
@@ -85,6 +103,10 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
           Claude isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server.
         </div>
       )}
+
+      {adding && <ManualAddForm onAdded={(d) => { setData(d); setAdding(false); }} onCancel={() => setAdding(false)} />}
+
+      <StrategyMetrics strategies={data.strategies} />
 
       {active.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
@@ -132,6 +154,21 @@ function AlertCard({
   const long = alert.side === 'long';
   const sideColor = alert.side ? (long ? GREEN : RED) : MUTED;
   const analyzed = alert.status === 'analyzed';
+  const res = alert.result ? RESULT[alert.result] : null;
+  // The card's left accent reflects the outcome once tagged, else the side.
+  const accent = res ? res.color : sideColor;
+
+  async function tag(result: TradeResult | null) {
+    setBusy(true);
+    setError(null);
+    try {
+      onChanged(await api.setAlertResult(alert.id, { result }));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not update result');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function readImage(file: File | null | undefined) {
     if (!file || !file.type.startsWith('image/')) return;
@@ -180,12 +217,14 @@ function AlertCard({
   }
 
   return (
-    <div style={{ ...card, padding: 0, overflow: 'hidden', borderLeft: `3px solid ${sideColor}` }}>
+    <div style={{ ...card, padding: 0, overflow: 'hidden', borderLeft: `3px solid ${accent}` }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 8px', flexWrap: 'wrap', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{alert.instrument ?? 'Alert'}</span>
           {alert.side && <span style={{ ...badge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>}
+          {res && <span style={{ ...badge, color: res.color, border: `1px solid ${res.color}` }}>{res.label}</span>}
+          {alert.source === 'manual' && <span style={{ ...badge, color: FAINT, border: `1px solid ${BORDER2}` }}>MANUAL</span>}
           <span style={{ ...badge, color: analyzed ? GREEN : GOLD, border: `1px solid ${analyzed ? GREEN : GOLD}` }}>
             {analyzed ? 'ANALYZED' : 'NEW'}
           </span>
@@ -195,9 +234,33 @@ function AlertCard({
 
       {/* Alert meta */}
       <div style={{ display: 'flex', gap: 16, padding: '0 16px 10px', flexWrap: 'wrap', fontSize: 12, color: MUTED }}>
-        {alert.price != null && <span>Alert price <b style={{ color: TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtPrice(alert.price)}</b></span>}
+        {alert.price != null && <span>Entry <b style={{ color: TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtPrice(alert.price)}</b></span>}
+        {alert.exitPrice != null && <span>Exit <b style={{ color: TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtPrice(alert.exitPrice)}</b></span>}
+        {alert.pnl != null && <span>P&L <b style={{ color: alert.pnl > 0 ? GREEN : alert.pnl < 0 ? RED : TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtSigned(alert.pnl)}</b></span>}
         {alert.timeframe && <span style={metaChip}>{alert.timeframe}</span>}
         {alert.strategy && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}>{alert.strategy}</span>}
+      </div>
+
+      {/* Outcome tagging */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px 10px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, marginRight: 2 }}>Result</span>
+        {(['win', 'loss', 'breakeven'] as const).map((r) => {
+          const on = alert.result === r;
+          const c = RESULT[r].color;
+          return (
+            <button
+              key={r}
+              onClick={() => void tag(on ? null : r)}
+              disabled={busy}
+              style={{ ...tagBtn, color: on ? '#0c2768' : c, background: on ? c : 'transparent', border: `1px solid ${c}`, opacity: busy ? 0.6 : 1 }}
+            >
+              {RESULT[r].label}
+            </button>
+          );
+        })}
+        {alert.result && (
+          <button onClick={() => void tag(null)} disabled={busy} style={{ ...tagBtn, color: FAINT, border: `1px solid ${BORDER2}` }}>Clear</button>
+        )}
       </div>
       {alert.message && (
         <div style={{ padding: '0 16px 10px', fontSize: 11.5, color: '#8fa3cc', fontStyle: 'italic' }}>“{alert.message}”</div>
@@ -324,9 +387,143 @@ function Row({ label, text }: { label: string; text: string }) {
   );
 }
 
+// Per-strategy scoreboard that grows as outcomes are tagged.
+function StrategyMetrics({ strategies }: { strategies: StrategyStat[] }) {
+  if (strategies.length === 0) return null;
+  const cols = ['Strategy', 'Trades', 'W', 'L', 'B/E', 'Win %', 'Net P&L', 'Avg', 'PF', 'Open'];
+  return (
+    <div style={{ ...card, padding: 0, overflow: 'hidden', marginBottom: 13 }}>
+      <div style={{ padding: '12px 16px 8px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>Strategy metrics</span>
+        <span style={{ fontSize: 11, color: FAINT }}>win rate, P&L and profit factor per strategy</span>
+      </div>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <thead>
+            <tr>
+              {cols.map((c, i) => (
+                <th key={c} style={{ ...th, textAlign: i === 0 ? 'left' : 'right' }}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {strategies.map((s) => (
+              <tr key={s.strategy}>
+                <td style={{ ...td, textAlign: 'left', color: GOLD, fontWeight: 600 }}>{s.strategy}</td>
+                <td style={tdNum}>{s.trades}</td>
+                <td style={{ ...tdNum, color: GREEN }}>{s.wins}</td>
+                <td style={{ ...tdNum, color: RED }}>{s.losses}</td>
+                <td style={tdNum}>{s.breakeven}</td>
+                <td style={{ ...tdNum, color: s.winRate == null ? FAINT : s.winRate >= 50 ? GREEN : RED, fontWeight: 700 }}>
+                  {s.winRate == null ? '—' : `${s.winRate}%`}
+                </td>
+                <td style={{ ...tdNum, color: s.totalPnl == null ? FAINT : s.totalPnl > 0 ? GREEN : s.totalPnl < 0 ? RED : TEXT }}>
+                  {s.totalPnl == null ? '—' : fmtSigned(s.totalPnl)}
+                </td>
+                <td style={tdNum}>{s.avgPnl == null ? '—' : fmtSigned(s.avgPnl)}</td>
+                <td style={tdNum}>{s.profitFactor == null ? '—' : s.profitFactor.toFixed(2)}</td>
+                <td style={{ ...tdNum, color: FAINT }}>{s.open || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Backfill a past trade by hand so the metrics cover trades that never came
+// through the webhook.
+function ManualAddForm({ onAdded, onCancel }: { onAdded: (d: AlertsData) => void; onCancel: () => void }) {
+  const [strategy, setStrategy] = useState('');
+  const [instrument, setInstrument] = useState('');
+  const [side, setSide] = useState<'long' | 'short'>('long');
+  const [entry, setEntry] = useState('');
+  const [exit, setExit] = useState('');
+  const [result, setResult] = useState<TradeResult | ''>('');
+  const [pnl, setPnl] = useState('');
+  const [date, setDate] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const numOrNull = (s: string): number | null => {
+    const t = s.trim();
+    if (!t) return null;
+    const n = Number(t.replace(/[$,\s]/g, ''));
+    return Number.isFinite(n) ? n : null;
+  };
+
+  async function submit() {
+    if (!strategy.trim() && !instrument.trim()) {
+      setError('Add at least a strategy or an instrument.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const occurredAt = date ? new Date(`${date}T12:00:00`).getTime() : null;
+      onAdded(
+        await api.addManualAlert({
+          strategy: strategy.trim() || null,
+          instrument: instrument.trim() || null,
+          side,
+          entry: numOrNull(entry),
+          exit: numOrNull(exit),
+          result: result || null,
+          pnl: numOrNull(pnl),
+          occurredAt,
+        }),
+      );
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not add trade');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ ...card, marginBottom: 13 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Add a past trade</div>
+      <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
+        Enter what you know. Leave the result blank and it’s inferred from entry vs. exit; leave P&L blank and it’s computed in price points.
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input value={strategy} onChange={(e) => setStrategy(e.target.value)} placeholder="Strategy" style={{ ...input, flex: '1 1 160px' }} />
+        <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. BTCUSD)" style={{ ...input, flex: '1 1 150px' }} />
+        <select value={side} onChange={(e) => setSide(e.target.value as 'long' | 'short')} style={{ ...input, flex: '0 0 100px' }}>
+          <option value="long">Long</option>
+          <option value="short">Short</option>
+        </select>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <input value={entry} onChange={(e) => setEntry(e.target.value)} inputMode="decimal" placeholder="Entry price" style={{ ...input, flex: '1 1 110px' }} />
+        <input value={exit} onChange={(e) => setExit(e.target.value)} inputMode="decimal" placeholder="Exit price" style={{ ...input, flex: '1 1 110px' }} />
+        <select value={result} onChange={(e) => setResult(e.target.value as TradeResult | '')} style={{ ...input, flex: '0 0 130px' }}>
+          <option value="">Result: auto</option>
+          <option value="win">Win</option>
+          <option value="loss">Loss</option>
+          <option value="breakeven">Break-even</option>
+        </select>
+        <input value={pnl} onChange={(e) => setPnl(e.target.value)} inputMode="decimal" placeholder="P&L (optional)" style={{ ...input, flex: '1 1 110px' }} />
+        <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...input, flex: '0 0 150px' }} />
+      </div>
+      {error && <div style={{ ...warnBanner, margin: '10px 0 0' }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <button onClick={submit} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>{busy ? 'Adding…' : 'Add trade'}</button>
+        <button onClick={onCancel} style={ghostBtn}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '9px 15px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '9px 12px', borderRadius: 7, cursor: 'pointer' };
 const badge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };
+const tagBtn: CSSProperties = { fontSize: 9.5, fontWeight: 800, letterSpacing: '0.5px', borderRadius: 4, padding: '3px 9px', cursor: 'pointer', background: 'transparent' };
+const th: CSSProperties = { fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, fontWeight: 600, padding: '6px 12px', borderBottom: `1px solid ${BORDER}`, whiteSpace: 'nowrap' };
+const td: CSSProperties = { padding: '7px 12px', borderBottom: `1px solid ${BORDER}`, color: TEXT, whiteSpace: 'nowrap' };
+const tdNum: CSSProperties = { ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace" };
+const input: CSSProperties = { background: PANEL, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '3px 8px' };
 const warnBanner: CSSProperties = { fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', marginBottom: 14 };

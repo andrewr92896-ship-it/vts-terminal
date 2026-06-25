@@ -2,6 +2,7 @@ import type {
   AdminUser,
   AiUsage,
   AlertsData,
+  TradeResult,
   Announcement,
   ChatChannel,
   ChatMessage,
@@ -318,6 +319,26 @@ export const api = {
   },
   dismissAlert(id: string): Promise<AlertsData> {
     return request(`/api/trading/alerts/${id}/dismiss`, { method: 'POST', body: JSON.stringify({}) });
+  },
+  setAlertResult(
+    id: string,
+    body: { result: TradeResult | null; exitPrice?: number | null; pnl?: number | null },
+  ): Promise<AlertsData> {
+    return request(`/api/trading/alerts/${id}/result`, { method: 'POST', body: JSON.stringify(body) });
+  },
+  addManualAlert(input: {
+    strategy?: string | null;
+    instrument?: string | null;
+    side?: 'long' | 'short' | null;
+    entry?: number | null;
+    exit?: number | null;
+    result?: TradeResult | null;
+    pnl?: number | null;
+    timeframe?: string | null;
+    message?: string | null;
+    occurredAt?: number | null;
+  }): Promise<AlertsData> {
+    return request('/api/trading/alerts/manual', { method: 'POST', body: JSON.stringify(input) });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');

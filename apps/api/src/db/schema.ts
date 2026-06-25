@@ -239,6 +239,11 @@ export type TradingTradeRow = typeof tradingTrades.$inferSelect;
 export const ALERT_STATUSES = ['new', 'analyzed', 'dismissed'] as const;
 export type AlertStatus = (typeof ALERT_STATUSES)[number];
 
+// Outcome of the trade an alert represents. Drives the per-strategy metrics on
+// the Alerts page. null = no result recorded yet (the trade is still open).
+export const TRADE_RESULTS = ['win', 'loss', 'breakeven'] as const;
+export type TradeResult = (typeof TRADE_RESULTS)[number];
+
 export const tradingAlerts = sqliteTable('trading_alerts', {
   id: text('id').primaryKey(),
   userId: text('user_id')
@@ -252,6 +257,10 @@ export const tradingAlerts = sqliteTable('trading_alerts', {
   timeframe: text('timeframe'),
   message: text('message'), // human-readable alert text
   payload: text('payload'), // raw JSON the webhook received
+  // Trade outcome — drives the per-strategy metrics. null = still open.
+  result: text('result', { enum: TRADE_RESULTS }),
+  exitPrice: real('exit_price'), // close/exit price when the trade is resolved
+  pnl: real('pnl'), // profit/loss; price points unless the alert sent an explicit value
   status: text('status', { enum: ALERT_STATUSES }).notNull().default('new'),
   analysis: text('analysis'), // Claude's analysis JSON, null until analyzed
   analyzedAt: integer('analyzed_at', { mode: 'timestamp_ms' }),

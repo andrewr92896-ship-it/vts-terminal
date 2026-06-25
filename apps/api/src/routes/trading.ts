@@ -9,7 +9,14 @@ import {
   restoreTrade,
   updateTrade,
 } from '../trading/trades.js';
-import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
+import {
+  analyzeAlert,
+  createManualAlert,
+  dismissAlert,
+  getAlerts,
+  getAlertSignal,
+  setAlertResult,
+} from '../trading/alerts.js';
 import { getHistory } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
@@ -39,7 +46,7 @@ import {
 import { aiConfigured, askClaude } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
-import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
+import { TRADE_SIDES, TRADE_STATUSES, TRADE_RESULTS, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
 const status = z.enum(TRADE_STATUSES);
@@ -357,6 +364,33 @@ export async function tradingRoutes(app: FastifyInstance) {
     return dismissAlert(u.id, id);
   });
 
+  // Tag (or clear) an alert's win/loss outcome by hand.
+  app.post('/api/trading/alerts/:id/result', write, async (request, reply) => {
+    const parsed = alertResultSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Provide a result (win, loss, breakeven) or null to clear' });
+    }
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    try {
+      return await setAlertResult(u.id, id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update result' });
+    }
+  });
+
+  // Manually add a (typically historical) trade so the strategy metrics can
+  // cover trades that never came through the webhook.
+  app.post('/api/trading/alerts/manual', write, async (request, reply) => {
+    const parsed = manualAlertSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the trade details and try again' });
+    }
+    const u = request.currentUser!;
+    await createManualAlert(u.id, parsed.data);
+    return getAlerts(u.id);
+  });
+
   // ---- Broker connections (per-user, self-service; credentials encrypted) ----
   app.get('/api/trading/connections', read, async (request) => {
     return { connections: await listConnections(request.currentUser!.id) };
@@ -503,6 +537,27 @@ const challengeSchema = z
 const analyzeSchema = z.object({
   imageBase64: z.string().min(1),
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
+});
+
+// Set/clear an alert's outcome. result:null clears it back to "open".
+const alertResultSchema = z.object({
+  result: z.enum(TRADE_RESULTS).nullable(),
+  exitPrice: z.coerce.number().finite().nullish(),
+  pnl: z.coerce.number().finite().nullish(),
+});
+
+// Manually backfill a historical trade as an alert row.
+const manualAlertSchema = z.object({
+  strategy: z.string().trim().max(80).nullish(),
+  instrument: z.string().trim().max(40).nullish(),
+  side: z.enum(TRADE_SIDES).nullish(),
+  entry: z.coerce.number().finite().nullish(),
+  exit: z.coerce.number().finite().nullish(),
+  result: z.enum(TRADE_RESULTS).nullish(),
+  pnl: z.coerce.number().finite().nullish(),
+  timeframe: z.string().trim().max(16).nullish(),
+  message: z.string().trim().max(2000).nullish(),
+  occurredAt: z.coerce.number().int().nullish(),
 });
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
