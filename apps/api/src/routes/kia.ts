@@ -11,6 +11,7 @@ import {
   updateSettings,
 } from '../kia/service.js';
 import { parseDeal } from '../kia/dealParser.js';
+import { runKiaCommand } from '../kia/command.js';
 import { aiConfigured } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
@@ -57,6 +58,8 @@ const dealSchema = z
   });
 
 const parseSchema = z.object({ note: z.string().trim().min(1).max(500) });
+
+const commandSchema = z.object({ command: z.string().trim().min(1).max(500) });
 
 // All fields optional for editing an existing deal.
 const dealEditSchema = z
@@ -129,6 +132,22 @@ export async function kiaRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not parse deal' });
+    }
+  });
+
+  // Free-text command bar via Claude (Sonnet): add/edit/remove deals, set the
+  // goal/reviews/pay-plan, or summarize the month — several actions at once.
+  app.post('/api/kia/command', guard, async (request, reply) => {
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parsed = commandSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Type a command to run' });
+    const userId = request.currentUser!.id;
+    try {
+      await enforceAiLimit(userId, 'kia_command');
+      return await runKiaCommand(userId, parsed.data.command, monthOf(request));
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not run command' });
     }
   });
 

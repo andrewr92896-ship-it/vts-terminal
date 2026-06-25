@@ -28,6 +28,7 @@ import type {
   TradeInput,
   TradeLogData,
   RemovedTrade,
+  KiaCommandResult,
   KiaDashboard,
   KiaDealParseResult,
   LeaderboardEntry,
@@ -360,6 +361,12 @@ export const api = {
   },
   kiaParseDeal(note: string): Promise<KiaDealParseResult> {
     return request('/api/kia/deals/parse', { method: 'POST', body: JSON.stringify({ note }) });
+  },
+  kiaCommand(command: string, month?: string): Promise<KiaCommandResult> {
+    return request(`/api/kia/command${monthQuery(month)}`, {
+      method: 'POST',
+      body: JSON.stringify({ command }),
+    });
   },
   kiaAddDeal(
     deal: {
