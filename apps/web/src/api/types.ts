@@ -214,6 +214,14 @@ export interface KiaDealParseResult {
   reply: string;
 }
 
+// Result of running a Claude command-bar instruction over the month.
+export interface KiaCommandResult {
+  dashboard: KiaDashboard; // refreshed dashboard for the viewed month
+  applied: string[];
+  skipped: string[];
+  reply: string;
+}
+
 // ---- Vitalis Wealth Management ----
 export type WealthClientStatus = 'prospect' | 'onboarding' | 'active' | 'inactive';
 

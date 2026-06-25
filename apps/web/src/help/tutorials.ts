@@ -288,6 +288,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
     intro: 'Track your month: deals, pace to goal, commission, and Google reviews — all updated automatically as you log deals.',
     steps: [
       {
+        title: 'Ask Claude to change details',
+        body: 'The command bar runs several changes at once in plain English — e.g. "add deal Sportage LX 1850 for Reyes · set goal 12 · set reviews 60% · summary". It can add, edit, or remove deals, set your goal, reviews, commission, or mini, and summarize the month. A ✓/– recap shows what it did.',
+      },
+      {
         title: 'Log a deal',
         body: 'In "Log a deal", enter the customer (optional), model, New/Used, profit in dollars, and the sale date, then click "Add deal". It appears in Recent Deals and updates every metric.',
       },
