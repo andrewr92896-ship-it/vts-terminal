@@ -4,6 +4,7 @@ import { ApiError } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
+import { usePushNotifications } from '../push/usePushNotifications';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 
@@ -55,6 +56,9 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
   // server enforces this on every connection write too.
   const canManageBrokers =
     canAccessWorkspace(user.roles, 'trading') && !isWorkspaceReadOnly(user.roles, 'trading');
+  // Anyone on the trading desk (full or view-only) can turn on phone alerts for
+  // their own device. The demo is look-only and never subscribes.
+  const canUsePush = !isDemo && canAccessWorkspace(user.roles, 'trading');
 
   const profileChanged =
     displayName.trim() !== user.displayName || username.trim().toLowerCase() !== user.username;
@@ -266,6 +270,14 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
           </section>
           )}
 
+          {/* Phone notifications — any trading-desk user, their own device. */}
+          {canUsePush && (
+            <>
+              <div style={{ height: 1, background: '#1d3560' }} />
+              <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
+            </>
+          )}
+
           {/* Broker connections, for full trading users only. */}
           {canManageBrokers && (
             <>
@@ -279,6 +291,83 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
         </div>
       </div>
     </>
+  );
+}
+
+// Self-serve phone-alert opt-in, shown in settings so every trader can turn it
+// on for their own device (alerts + trade open/close). Push is per-device, so
+// each person enables it once on each phone/laptop they want buzzed.
+function PhoneNotificationsSection({ accent, accentText }: { accent: string; accentText: string }) {
+  const { state, busy, error, enable, disable, sendTest } = usePushNotifications();
+
+  const primaryBtn: React.CSSProperties = {
+    border: 'none',
+    background: accent,
+    color: accentText,
+    fontWeight: 600,
+    fontSize: 13,
+    padding: '10px 16px',
+    borderRadius: 8,
+    cursor: busy ? 'default' : 'pointer',
+    opacity: busy ? 0.6 : 1,
+    minHeight: 40,
+  };
+  const ghost: React.CSSProperties = {
+    background: 'rgba(255,255,255,.05)',
+    border: '1px solid #1d3560',
+    color: '#dfe7fa',
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: '10px 14px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    minHeight: 40,
+  };
+
+  return (
+    <section>
+      <div style={sectionLabel}>Phone notifications</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Get a push on this device when a trade opens or closes and when alerts fire — even with the
+        app closed.
+      </p>
+
+      {state === 'unsupported' ? (
+        <div style={hintStyle}>
+          This device can’t receive web push here. On iPhone, add the portal to your Home Screen
+          (Share → Add to Home Screen) and open it from that icon, then turn this on.
+        </div>
+      ) : state === 'unconfigured' ? (
+        <div style={hintStyle}>Push isn’t set up on the server yet.</div>
+      ) : state === 'denied' ? (
+        <div style={hintStyle}>
+          Notifications are blocked for this site. Turn them on in your browser or phone settings,
+          then reopen this panel.
+        </div>
+      ) : state === 'on' ? (
+        <>
+          <div style={{ fontSize: 12.5, color: '#7fd6a3', marginBottom: 10, fontWeight: 600 }}>
+            On for this device ✓
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => void sendTest()} style={ghost}>Send test</button>
+            <button onClick={() => void disable()} disabled={busy} style={{ ...ghost, color: '#ff9a9a' }}>
+              Turn off
+            </button>
+          </div>
+        </>
+      ) : (
+        <button onClick={() => void enable()} disabled={busy} style={primaryBtn}>
+          {busy ? 'Turning on…' : 'Turn on phone alerts'}
+        </button>
+      )}
+
+      <p style={{ ...hintStyle, marginTop: 12, marginBottom: 0 }}>
+        On iPhone this only works once the portal is installed to your Home Screen. Each device you
+        want buzzed needs to be turned on once.
+      </p>
+      {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
+    </section>
   );
 }
 
