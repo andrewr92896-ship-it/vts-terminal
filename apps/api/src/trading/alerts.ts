@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingAlerts,
@@ -14,7 +14,13 @@ import {
 } from '../db/schema.js';
 import { parseRoles } from '../auth/rbac.js';
 import { addTrade } from './trades.js';
-import { autoMatch, linkedTradeSummary, type LinkedTradeSummary } from './strategies.js';
+import {
+  autoMatch,
+  canonicalStrategy,
+  getIgnoreTokens,
+  linkedTradeSummary,
+  type LinkedTradeSummary,
+} from './strategies.js';
 import { aiConfigured, analyzeTradeScreenshot, type AnalyzeResult } from '../ai/claude.js';
 
 // TradingView alerts are the FTP/prop-trade replacement. The webhook is
@@ -133,12 +139,69 @@ export async function resolveOwnerId(): Promise<string | null> {
   return admins[0]?.id ?? null;
 }
 
+// A close/exit alert carries an explicit event marker. When one arrives it
+// should *resolve* the open entry alert for the same strategy rather than add a
+// second row.
+function isCloseEvent(body: Record<string, unknown>): boolean {
+  const e = typeof body.event === 'string' ? body.event.trim().toLowerCase() : '';
+  return e === 'close' || e === 'exit' || e === 'closed';
+}
+
+// Find the matching open (unresolved) entry alert for a close event and fill in
+// its exit/result, keeping the originally-logged entry as the planned price.
+// Returns the resolved alert id, or null if there is nothing to pair with (the
+// caller then logs the close as a standalone completed alert so nothing is lost).
+async function resolveCloseAlert(ownerId: string, body: Record<string, unknown>): Promise<string | null> {
+  const ignore = await getIgnoreTokens(ownerId);
+  const strat = canonicalStrategy(str(body.strategy ?? body.setup, 80), ignore);
+  if (strat === 'Unlabeled') return null; // can't tell which strategy to close
+  const symbol = str(body.instrument ?? body.ticker ?? body.symbol, 40)?.toLowerCase() ?? null;
+  const side = asSide(body.side ?? body.action ?? body.order);
+
+  // Open = no result recorded yet. Newest first; pyramiding is 0 per strategy,
+  // so at most one is genuinely open at a time.
+  const opens = await db
+    .select()
+    .from(tradingAlerts)
+    .where(and(eq(tradingAlerts.userId, ownerId), isNull(tradingAlerts.result)))
+    .orderBy(desc(tradingAlerts.receivedAt));
+  const match = opens.find(
+    (a) =>
+      a.status !== 'dismissed' &&
+      canonicalStrategy(a.strategy, ignore) === strat &&
+      (!symbol || !a.instrument || a.instrument.toLowerCase() === symbol) &&
+      (!side || !a.side || a.side === side),
+  );
+  if (!match) return null;
+
+  const exit = asNum(body.exitPrice ?? body.exit ?? body.close_price ?? body.price);
+  const { result, pnl } = deriveOutcome({
+    side: match.side ?? side,
+    entry: match.price, // keep the originally-logged planned entry
+    exit,
+    result: asResult(body.result ?? body.outcome),
+    pnl: asNum(body.pnl ?? body.profit ?? body.pl),
+  });
+  await db
+    .update(tradingAlerts)
+    .set({ exitPrice: exit, result, pnl, updatedAt: new Date() })
+    .where(eq(tradingAlerts.id, match.id));
+  return match.id;
+}
+
 // Store an inbound TradingView alert. `body` is whatever the webhook received
 // (an object from JSON, or { message } for a plain-text alert). Returns the new
 // alert id, or null if there is no owner to attribute it to.
 export async function ingestAlert(body: Record<string, unknown>, rawPayload: string): Promise<string | null> {
   const ownerId = await resolveOwnerId();
   if (!ownerId) return null;
+
+  // A close/exit event resolves the matching open entry alert in place.
+  if (isCloseEvent(body)) {
+    const resolved = await resolveCloseAlert(ownerId, body);
+    if (resolved) return resolved;
+    // else: no open trade to pair with — fall through and log it standalone.
+  }
 
   const now = new Date();
   const id = crypto.randomUUID();
