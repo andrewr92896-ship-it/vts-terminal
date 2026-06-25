@@ -5,6 +5,7 @@ import { tradingPositions, users, type TradeSide, type TradingPositionRow } from
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { sendToTradingDesk } from '../notifications/push.js';
+import { sendPushoverToDesk } from '../notifications/pushover.js';
 import type { LiveTrade } from './types.js';
 
 // A position opened within this window is treated as a fresh fill worth a push;
@@ -110,20 +111,36 @@ export async function reconcile(
   // though every viewer's poll calls reconcile.
   const who = ownerName ? `${ownerName} · ` : '';
   for (const t of opened) {
+    const body = `${who}${t.side.toUpperCase()} ${t.units}${t.entryPrice ? ` @ ${t.entryPrice}` : ''}`;
     void sendToTradingDesk({
       title: `Trade opened · ${t.instrument}`,
-      body: `${who}${t.side.toUpperCase()} ${t.units}${t.entryPrice ? ` @ ${t.entryPrice}` : ''}`,
+      body,
       url: '/?screen=live',
       tag: `vts-open-${t.id}`,
+    }).catch(() => {});
+    void sendPushoverToDesk({
+      title: `Trade opened · ${t.instrument}`,
+      message: body,
+      priority: 1,
+      url: '/?screen=live',
+      urlTitle: 'Open the Live Wall',
     }).catch(() => {});
   }
   for (const c of closed) {
     const pl = fmtPl(c.pl);
+    const body = `${who}${pl ? `${pl}` : 'position closed'}`;
     void sendToTradingDesk({
       title: `Trade closed · ${c.instrument}`,
-      body: `${who}${pl ? `${pl}` : 'position closed'}`,
+      body,
       url: '/?screen=history',
       tag: `vts-close-${c.instrument}`,
+    }).catch(() => {});
+    void sendPushoverToDesk({
+      title: `Trade closed · ${c.instrument}`,
+      message: body,
+      priority: 1,
+      url: '/?screen=history',
+      urlTitle: 'Open History',
     }).catch(() => {});
   }
 }

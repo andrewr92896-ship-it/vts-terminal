@@ -353,6 +353,19 @@ export const api = {
   pushTest(): Promise<{ ok: true }> {
     return request('/api/push/test', { method: 'POST', body: JSON.stringify({}) });
   },
+  // ---- Pushover (custom-sound notifications) ----
+  pushoverStatus(): Promise<{ configured: boolean; connected: boolean }> {
+    return request('/api/pushover/status');
+  },
+  pushoverConnect(userKey: string): Promise<{ ok: true }> {
+    return request('/api/pushover/connect', { method: 'POST', body: JSON.stringify({ userKey }) });
+  },
+  pushoverDisconnect(): Promise<{ ok: true }> {
+    return request('/api/pushover/connect', { method: 'DELETE' });
+  },
+  pushoverTest(): Promise<{ ok: true }> {
+    return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({}) });
+  },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');
   },
