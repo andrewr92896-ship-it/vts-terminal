@@ -30,6 +30,7 @@ import type {
   RemovedTrade,
   KiaDashboard,
   KiaDealParseResult,
+  LeaderboardEntry,
   RemovedKiaDeal,
   RemovedTodoItem,
   PracticeOverview,
@@ -299,6 +300,9 @@ export const api = {
   },
   saveStudyGame(state: string): Promise<{ ok: true }> {
     return request('/api/studies/game', { method: 'PUT', body: JSON.stringify({ state }) });
+  },
+  studyLeaderboard(): Promise<{ entries: LeaderboardEntry[] }> {
+    return request('/api/studies/leaderboard');
   },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');

@@ -12,6 +12,19 @@ export type RoleKey =
   | 'wealth'
   | 'finance';
 
+// One player's row in the Study Game high-score table. Mirrors the backend's
+// LeaderboardEntry (studies/game.ts).
+export interface LeaderboardEntry {
+  userId: string;
+  name: string;
+  score: number | null; // accuracy % over the last 100 answers
+  attempted: number; // lifetime questions answered
+  correct: number; // lifetime correct answers
+  accuracy: number | null; // lifetime correct / attempted, as a %
+  crowns: number; // total prestige crowns across all categories
+  isMe: boolean;
+}
+
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {
   id: string;
