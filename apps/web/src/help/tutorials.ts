@@ -124,28 +124,28 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
   metrics: {
-    title: 'Account Metrics',
-    intro: 'Your funded-account (prop) challenge dashboard — equity vs. profit target, plus daily and max drawdown limits. FTP has no API, so you keep equity current (or pull it from your Trade Log).',
+    title: 'Accounts',
+    intro: 'Every account in one place: your FTP prop challenge (equity vs. target + drawdown), your live broker capital (OANDA), and your funded/prop accounts tracked from screenshots — each with daily / weekly / 30-day trade P/L. Capital figures are shown to full traders only.',
     steps: [
       {
-        title: 'Set up the challenge',
-        body: 'Click Edit and enter your account size, profit target %, daily drawdown %, and max drawdown % (trailing or static). Defaults match a typical $200K / 10% / 4% / 6% trailing challenge.',
+        title: 'The FTP challenge',
+        body: 'The top section is your prop challenge. Click Edit to set account size, profit target %, and daily / max drawdown %. The card shows equity, progress to target, and two drawdown gauges; the status pill flips to Breached or Target Reached.',
       },
       {
-        title: 'Keep equity current',
-        body: 'Type your current equity from your prop dashboard, or click “Pull equity from Trade Log” to set it to account size + realized P/L of your closed trades since the start date.',
+        title: 'Keep challenge equity current',
+        body: 'FTP has no API — type your equity, or use “Update balance from a screenshot”: upload or paste (⌘/Ctrl+V) a screenshot of your account and Claude reads the balance and sets your equity.',
       },
       {
-        title: 'Progress to target',
-        body: 'The top card shows equity, profit, and a bar toward your profit target, with how much is left to reach it.',
+        title: 'Live brokers (OANDA)',
+        body: 'Your OANDA capital (NAV, balance, open P/L) is pulled live from the API, so it updates as trades are placed — with Today / This week / 30-day P/L from your closed trades (deposits don’t count).',
       },
       {
-        title: 'Drawdown buffers',
-        body: 'The two gauges show how much room you have before breaching the max drawdown (trailing from your peak equity) and the daily drawdown (from the day-start equity — reset it each trading day). The status pill flips to Breached if you cross a floor, or Target Reached when you hit the goal.',
+        title: 'Funded / prop accounts',
+        body: 'Add prop accounts with “+ Add account”. Log trades by pasting a trade-history screenshot — Claude reads the trades and the account equity, skips duplicates (by time + profit), and shows each account’s balance and Today / This week / 30-day P/L.',
       },
       {
         title: 'Hide dollar details',
-        body: 'Use “Hide $” or Privacy mode to mask figures. Dollar amounts only show if your account has the brokerage-view permission; percentages always show.',
+        body: 'Use “Hide $” or Privacy mode to mask every figure on the page at once. Percentages and drawdown buffers still show.',
       },
     ],
   },

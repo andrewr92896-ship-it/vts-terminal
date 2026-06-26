@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { usePrivacy } from '../../privacy/privacy';
 import { readClipboardImage } from '../../lib/clipboard';
 import type { FundedAccount, FundedData, FundedTrade, TradeSide } from '../../api/types';
 
@@ -41,17 +39,16 @@ const num = (s: string): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-export function Funded() {
+// The funded-accounts manager, embedded as a section of the Accounts screen
+// (Account Metrics). It owns its own data/state; the parent supplies the single
+// page-level money toggle (showMoney) and the viewer's write access (readOnly).
+export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; readOnly: boolean }) {
   const { isPhone } = useResponsive();
-  const { privacy } = usePrivacy();
-  const { user } = useAuth();
-  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
 
   const [data, setData] = useState<FundedData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [hideMoney, setHideMoney] = useState(false);
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -59,7 +56,7 @@ export function Funded() {
     api
       .funded()
       .then((d) => alive && setData(d))
-      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load Funded accounts'));
+      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load funded accounts'));
     return () => {
       alive = false;
     };
@@ -79,30 +76,23 @@ export function Funded() {
     }
   }
 
-  if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading Funded accounts…</div>;
-
-  const showMoney = !privacy && !hideMoney;
+  if (loadError) return <div style={{ color: RED, fontSize: 12.5 }}>{loadError}</div>;
+  if (!data) return <div style={{ color: MUTED, fontSize: 12.5 }}>Loading funded accounts…</div>;
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Funded Platforms</h2>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Prop accounts (FTP and other funded platforms), tracked by hand — keep the balance current, and log trades
-            by uploading or pasting a trade-history screenshot for Claude to read. Duplicate trades are skipped automatically.
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>Funded / Prop accounts</div>
+          <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4 }}>
+            Tracked by hand — keep the balance current and log trades by pasting a trade-history screenshot. Duplicates are skipped by time + profit.
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
-          {!readOnly && (
-            <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? 'Close' : '+ Add account'}</button>
-          )}
-        </div>
+        {!readOnly && (
+          <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? 'Close' : '+ Add account'}</button>
+        )}
       </div>
 
-      {readOnly && <div style={{ ...infoBanner, marginBottom: 14 }}>View-only access — you can browse Funded accounts but not edit them.</div>}
       {actionError && <div onClick={() => setActionError(null)} style={warnBanner}>{actionError} — click to dismiss.</div>}
 
       {!readOnly && adding && (
@@ -116,7 +106,7 @@ export function Funded() {
       )}
 
       {data.accounts.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
+        <div style={{ ...card, textAlign: 'center', padding: '28px 20px', color: MUTED, fontSize: 12.5 }}>
           No funded accounts yet.{!readOnly && ' Use “+ Add account” to track your first FTP or prop account.'}
         </div>
       ) : (
@@ -482,5 +472,4 @@ const miniGhost: CSSProperties = { ...ghostBtn, padding: '4px 9px', fontSize: 11
 const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', fontSize: 11.5, fontFamily: MONO };
 const col: CSSProperties = { flex: '0 0 64px' };
 const platformPill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: GOLD, background: 'rgba(235,203,116,.12)', border: '1px solid rgba(235,203,116,.4)', borderRadius: 4, padding: '2px 7px' };
-const infoBanner: CSSProperties = { fontSize: 12.5, color: '#f3e3b8', background: 'rgba(235,203,116,.08)', border: '1px solid rgba(235,203,116,.35)', borderRadius: 8, padding: '9px 12px' };
 const warnBanner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };

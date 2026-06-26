@@ -214,7 +214,7 @@ export function TradeLog() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Trade Log</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L. Funded/prop
-            trades are tracked separately in Funded — paste a screenshot below to log them there.
+            trades are tracked separately under Accounts — paste a screenshot below to log them there.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -404,7 +404,7 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
       if (res.skipped) parts.push(`${res.skipped} duplicate${res.skipped === 1 ? '' : 's'} skipped`);
       if (res.ignored) parts.push(`${res.ignored} ignored`);
       if (res.balanceSet != null) parts.push('balance updated');
-      setMsg(`${parts.join(' · ')} — view them in the Funded tab.`);
+      setMsg(`${parts.join(' · ')} — view them under Accounts.`);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Import failed');
     } finally {

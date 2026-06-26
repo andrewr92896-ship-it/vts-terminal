@@ -46,7 +46,6 @@ import { TradeLog } from '../workspaces/trading/TradeLog';
 import { Alerts } from '../workspaces/trading/Alerts';
 import { History } from '../workspaces/trading/History';
 import { AccountMetrics } from '../workspaces/trading/AccountMetrics';
-import { Funded } from '../workspaces/trading/Funded';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketNews } from '../workspaces/trading/MarketNews';
@@ -78,8 +77,6 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <History />;
     case 'metrics':
       return <AccountMetrics />;
-    case 'funded':
-      return <Funded />;
     case 'sessions':
       return <StrategySessions />;
     case 'news':
