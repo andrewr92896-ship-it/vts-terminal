@@ -144,7 +144,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.delete('/api/trading/history/:id', write, async (request) => {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    await removePosition(u.id, id);
+    await removePosition(u.id, id, isAdmin(parseRoles(u)));
     return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
   });
 
@@ -368,16 +368,18 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   app.delete('/api/trading/trades/:id', write, async (request) => {
     const u = request.currentUser!;
+    const admin = isAdmin(parseRoles(u));
     const id = (request.params as { id: string }).id;
     // A `pos:` id is a synced Live Wall position, not a hand-logged trade — remove
     // the underlying position (no undo for these). Everything else is a real
     // Trade Log row, which supports undo via the returned `removed` snapshot.
+    // Admins can remove any teammate's row on the shared desk.
     if (id.startsWith('pos:')) {
-      await removePosition(u.id, id.slice(4));
+      await removePosition(u.id, id.slice(4), admin);
       const data = await getTrades(u.id, isDemoUser(u));
       return { ...data, removed: null };
     }
-    const removed = await removeTrade(u.id, id);
+    const removed = await removeTrade(u.id, id, admin);
     const data = await getTrades(u.id, isDemoUser(u));
     return { ...data, removed };
   });

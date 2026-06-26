@@ -108,6 +108,9 @@ export function TradeLog() {
   const { privacy } = usePrivacy();
   const undo = useUndo<RemovedTrade>();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
+  // Admins manage the shared desk, so they can remove any teammate's trade
+  // (e.g. clear a test trade), not just their own.
+  const isAdmin = !!user?.roles.includes('admin');
 
   const [data, setData] = useState<TradeLogData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -148,6 +151,9 @@ export function TradeLog() {
   }
 
   async function removeWithUndo(id: string) {
+    const t = data?.trades.find((x) => x.id === id);
+    const who = t && !t.isMine ? ` (@${t.owner})` : '';
+    if (!window.confirm(`Remove this ${t?.instrument ?? ''} trade${who} from the log?`)) return;
     setBusy(true);
     try {
       const r = await api.removeTrade(id);
@@ -294,6 +300,7 @@ export function TradeLog() {
               showMoney={showMoney}
               canSeeBalances={canSeeBalances}
               readOnly={readOnly}
+              canRemove={t.isMine || isAdmin}
               busy={busy}
               onRemove={() => removeWithUndo(t.id)}
               onSave={(patch) => run(api.updateTrade(t.id, patch))}
@@ -306,6 +313,7 @@ export function TradeLog() {
           showMoney={showMoney}
           canSeeBalances={canSeeBalances}
           readOnly={readOnly}
+          isAdmin={isAdmin}
           busy={busy}
           isPhone={isPhone}
           onRemove={removeWithUndo}
@@ -323,6 +331,7 @@ function DeckCard({
   showMoney,
   canSeeBalances,
   readOnly,
+  canRemove,
   busy,
   onRemove,
   onSave,
@@ -331,6 +340,7 @@ function DeckCard({
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
+  canRemove: boolean;
   busy: boolean;
   onRemove: () => void;
   onSave: (patch: TradeInput) => void;
@@ -422,10 +432,12 @@ function DeckCard({
             </span>
           )}
         </div>
-        {!readOnly && t.isMine && (
+        {!readOnly && (t.isMine || canRemove) && (
           <div style={{ display: 'flex', gap: 6 }}>
-            {!synced && <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>}
-            <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, color: '#52668f', borderColor: 'transparent', fontSize: 16, padding: '2px 6px' }}>×</button>
+            {!synced && t.isMine && <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>}
+            {canRemove && (
+              <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, color: '#52668f', borderColor: 'transparent', fontSize: 16, padding: '2px 6px' }}>×</button>
+            )}
           </div>
         )}
       </div>
@@ -439,6 +451,7 @@ function Tape({
   showMoney,
   canSeeBalances,
   readOnly,
+  isAdmin,
   busy,
   isPhone,
   onRemove,
@@ -447,6 +460,7 @@ function Tape({
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
+  isAdmin: boolean;
   busy: boolean;
   isPhone: boolean;
   onRemove: (id: string) => void;
@@ -491,7 +505,7 @@ function Tape({
             </span>
             <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.openedAt)}</span>
             {!readOnly &&
-              (t.isMine ? (
+              (t.isMine || isAdmin ? (
                 <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
               ) : (
                 <span style={{ width: 24 }} />

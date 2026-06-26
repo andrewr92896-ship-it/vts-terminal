@@ -359,18 +359,18 @@ export interface RemovedTrade {
   createdAt: number;
 }
 
-export async function removeTrade(userId: string, id: string): Promise<RemovedTrade | null> {
-  const row = (
-    await db
-      .select()
-      .from(tradingTrades)
-      .where(and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId)))
-      .limit(1)
-  )[0];
+// Remove a hand-logged trade. Owner-scoped by default; an admin (admin=true) can
+// remove anyone's on the shared desk. An undo snapshot is returned only when the
+// caller removed their *own* trade — restoring re-creates it under the caller, so
+// admin-removed teammates' trades are not offered an undo (it would re-own them).
+export async function removeTrade(userId: string, id: string, admin = false): Promise<RemovedTrade | null> {
+  const where = admin
+    ? eq(tradingTrades.id, id)
+    : and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId));
+  const row = (await db.select().from(tradingTrades).where(where).limit(1))[0];
   if (!row) return null;
-  await db
-    .delete(tradingTrades)
-    .where(and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId)));
+  await db.delete(tradingTrades).where(where);
+  if (row.userId !== userId) return null; // admin removed a teammate's trade — no undo
   return {
     id: row.id,
     broker: row.broker,

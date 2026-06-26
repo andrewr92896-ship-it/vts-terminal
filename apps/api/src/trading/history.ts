@@ -251,23 +251,21 @@ function groupBy(
     .sort((a, b) => b.count - a.count);
 }
 
-// Delete a recorded position (open or closed) the caller owns. Used to clear a
-// test/old trade from History and the Trade Log. Owner-scoped so a trader can
-// only remove their own rows. Returns true when a row was deleted. Note: a
-// still-open position will reappear on the next Live Wall reconcile (it is still
-// live on the broker); deleting a closed one is permanent.
-export async function removePosition(userId: string, id: string): Promise<boolean> {
+// Delete a recorded position (open or closed). Used to clear a test/old trade
+// from History and the Trade Log. Owner-scoped by default so a trader can only
+// remove their own rows; an admin (admin=true) can remove anyone's, since the
+// desk is shared. Returns true when a row was deleted. Note: a still-open
+// position will reappear on the next Live Wall reconcile (it is still live on
+// the broker); deleting a closed one is permanent.
+export async function removePosition(userId: string, id: string, admin = false): Promise<boolean> {
+  const where = admin
+    ? eq(tradingPositions.id, id)
+    : and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId));
   const row = (
-    await db
-      .select({ id: tradingPositions.id })
-      .from(tradingPositions)
-      .where(and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId)))
-      .limit(1)
+    await db.select({ id: tradingPositions.id }).from(tradingPositions).where(where).limit(1)
   )[0];
   if (!row) return false;
-  await db
-    .delete(tradingPositions)
-    .where(and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId)));
+  await db.delete(tradingPositions).where(where);
   return true;
 }
 

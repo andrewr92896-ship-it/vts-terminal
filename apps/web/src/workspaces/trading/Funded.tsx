@@ -284,7 +284,18 @@ function AccountCard({
             </div>
           )}
           {a.trades.map((t) => (
-            <TradeRow key={t.id} t={t} ccy={ccy} isPhone={isPhone} showMoney={showMoney} readOnly={readOnly} busy={busy} onRemove={() => run(api.removeFundedTrade(t.id))} />
+            <TradeRow
+              key={t.id}
+              t={t}
+              ccy={ccy}
+              isPhone={isPhone}
+              showMoney={showMoney}
+              readOnly={readOnly}
+              busy={busy}
+              onRemove={() => {
+                if (window.confirm(`Remove this ${t.instrument} trade from ${a.label}?`)) void run(api.removeFundedTrade(t.id));
+              }}
+            />
           ))}
         </div>
       )}
