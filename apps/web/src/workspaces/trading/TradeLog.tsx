@@ -300,7 +300,7 @@ export function TradeLog() {
               showMoney={showMoney}
               canSeeBalances={canSeeBalances}
               readOnly={readOnly}
-              canRemove={(t.isMine || isAdmin) && t.editable}
+              canRemove={t.isMine || isAdmin}
               busy={busy}
               onRemove={() => removeWithUndo(t.id)}
               onSave={(patch) => run(api.updateTrade(t.id, patch))}
@@ -506,7 +506,7 @@ function Tape({
             </span>
             <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.openedAt)}</span>
             {!readOnly &&
-              ((t.isMine || isAdmin) && t.editable ? (
+              (t.isMine || isAdmin ? (
                 <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
               ) : (
                 <span style={{ width: 24 }} />
