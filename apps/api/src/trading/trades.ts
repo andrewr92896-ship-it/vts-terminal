@@ -3,12 +3,14 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingTrades,
+  tradingPositions,
   users,
   TRADE_SIDES,
   TRADE_STATUSES,
   type TradeSide,
   type TradeStatus,
   type TradingTradeRow,
+  type TradingPositionRow,
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
@@ -44,6 +46,11 @@ export interface TradeRecord {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  // Hand-logged trades are editable; broker-sourced positions (auto-imported
+  // from a connected broker like OANDA) are read-only here — they're managed on
+  // the Live Wall / History, so the Trade Log never offers Edit/Remove on them.
+  editable: boolean;
+  source: 'manual' | 'broker'; // where the row came from, for a small UI tag
 }
 
 export interface TradeSummary {
@@ -130,6 +137,44 @@ function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeR
     notes: row.notes,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
+    editable: true,
+    source: 'manual',
+  };
+}
+
+// Map an auto-recorded broker position (open or closed) into a Trade Log row.
+// These come from a connected broker (e.g. OANDA), so they're read-only here:
+// edits/closures happen on the broker and flow in through the Live Wall reconcile.
+function positionToRecord(row: TradingPositionRow, owner: string, viewerId: string): TradeRecord {
+  const opened = row.openedAt ?? row.firstSeenAt; // openedAt can be null; fall back to first sight
+  return {
+    id: row.id,
+    ownerId: row.userId,
+    owner,
+    isMine: row.userId === viewerId,
+    broker: row.broker,
+    instrument: row.instrument,
+    side: isSide(row.side) ? row.side : 'long',
+    status: row.status === 'closed' ? 'closed' : 'open',
+    plannedEntry: row.plannedEntry,
+    entryPrice: row.entryPrice,
+    exitPrice: row.exitPrice,
+    takeProfit: row.takeProfit,
+    stopLoss: row.stopLoss,
+    units: row.units,
+    slippage: slippageOf(row.plannedEntry, row.entryPrice),
+    // Realized P/L only once closed; an open position's P/L is unrealized and
+    // belongs on the Live Wall, so it stays null here (and out of the KPI total).
+    realizedPl: row.status === 'closed' ? row.realizedPl : null,
+    strategy: row.strategy,
+    timeframe: row.timeframe,
+    openedAt: opened.getTime(),
+    closedAt: row.closedAt ? row.closedAt.getTime() : null,
+    notes: null,
+    createdAt: row.firstSeenAt.getTime(),
+    updatedAt: row.lastSeenAt.getTime(),
+    editable: false,
+    source: 'broker',
   };
 }
 
@@ -192,10 +237,25 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
     return viewerIsDemo ? r.username === DEMO_USERNAME : r.username !== DEMO_USERNAME;
   });
 
-  // The Trade Log shows only hand-logged trades — it does NOT fold in Live Wall
-  // positions. (Funded/prop trades are tracked separately in the Funded section,
-  // logged from screenshots.)
   const records = visible.map((r) => toRecord(r.trade, r.username, viewerId));
+
+  // Fold in broker-sourced positions (open + closed) so a trader's OANDA (and
+  // other connected-broker) trades show up here automatically, not just on the
+  // Live Wall / History. They're read-only rows tagged with their broker. The
+  // public demo is sandboxed off real broker data, so it only ever sees its own
+  // hand-logged showcase.
+  if (!viewerIsDemo) {
+    const posRows = await db
+      .select({ pos: tradingPositions, username: users.username, roles: users.roles })
+      .from(tradingPositions)
+      .innerJoin(users, eq(users.id, tradingPositions.userId));
+    for (const r of posRows) {
+      if (r.username === DEMO_USERNAME) continue;
+      if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
+      records.push(positionToRecord(r.pos, r.username, viewerId));
+    }
+  }
+
   // Open trades first, then newest by open time — the order a trader scans in.
   const sorted = records.sort((a, b) => {
     if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
