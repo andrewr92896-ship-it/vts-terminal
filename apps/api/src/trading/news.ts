@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, gte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingNews,
@@ -94,9 +94,18 @@ function toEvent(row: TradingCalendarRow): CalendarEvent {
 }
 
 export async function getMarketNews(): Promise<MarketNewsData> {
+  // The calendar is forward-looking, and the Forex Factory poller keeps it
+  // densely populated, so window it to the last week plus everything upcoming —
+  // ordered earliest-first — rather than letting old events crowd out the cap.
+  const calWindowStart = new Date(Date.now() - 7 * 24 * 3600 * 1000);
   const [headRows, calRows] = await Promise.all([
     db.select().from(tradingNews).orderBy(desc(tradingNews.publishedAt)).limit(200),
-    db.select().from(tradingCalendar).orderBy(tradingCalendar.eventTime).limit(200),
+    db
+      .select()
+      .from(tradingCalendar)
+      .where(gte(tradingCalendar.eventTime, calWindowStart))
+      .orderBy(tradingCalendar.eventTime)
+      .limit(400),
   ]);
   return { headlines: headRows.map(toNews), calendar: calRows.map(toEvent) };
 }
