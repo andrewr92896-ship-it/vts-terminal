@@ -210,8 +210,8 @@ export function TradeLog() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Trade Log</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L. Funded/prop
-            trades are tracked separately on the Funded tab.
+            Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L. Trades from a
+            connected broker (e.g. OANDA) show up here automatically; funded/prop trades stay on the Funded tab.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -300,7 +300,7 @@ export function TradeLog() {
               showMoney={showMoney}
               canSeeBalances={canSeeBalances}
               readOnly={readOnly}
-              canRemove={t.isMine || isAdmin}
+              canRemove={(t.isMine || isAdmin) && t.editable}
               busy={busy}
               onRemove={() => removeWithUndo(t.id)}
               onSave={(patch) => run(api.updateTrade(t.id, patch))}
@@ -376,6 +376,9 @@ function DeckCard({
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
           {t.status === 'open' && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }}>OPEN</span>}
+          {t.source === 'broker' && t.broker && (
+            <span style={{ ...sideBadge, color: '#7fa8ff', border: '1px solid #3a5a9a' }} title="Imported automatically from your broker">{t.broker.toUpperCase()}</span>
+          )}
         </div>
         <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etDate(t.openedAt)}</span>
       </div>
@@ -429,9 +432,9 @@ function DeckCard({
             </span>
           )}
         </div>
-        {!readOnly && (t.isMine || canRemove) && (
+        {!readOnly && ((t.isMine && t.editable) || canRemove) && (
           <div style={{ display: 'flex', gap: 6 }}>
-            {t.isMine && <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>}
+            {t.isMine && t.editable && <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>}
             {canRemove && (
               <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, color: '#52668f', borderColor: 'transparent', fontSize: 16, padding: '2px 6px' }}>×</button>
             )}
@@ -488,6 +491,7 @@ function Tape({
             <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center' }}>
               {t.instrument}
               {t.status === 'open' && <span style={{ fontSize: 8.5, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 4px' }}>OPEN</span>}
+              {t.source === 'broker' && t.broker && <span style={{ fontSize: 8.5, color: '#7fa8ff', border: '1px solid #3a5a9a', borderRadius: 3, padding: '1px 4px' }} title="Imported automatically from your broker">{t.broker.toUpperCase()}</span>}
             </span>
             <span style={{ flex: '0 0 90px', color: t.isMine ? GOLD : MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
               @{t.owner}
@@ -502,7 +506,7 @@ function Tape({
             </span>
             <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.openedAt)}</span>
             {!readOnly &&
-              (t.isMine || isAdmin ? (
+              ((t.isMine || isAdmin) && t.editable ? (
                 <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
               ) : (
                 <span style={{ width: 24 }} />

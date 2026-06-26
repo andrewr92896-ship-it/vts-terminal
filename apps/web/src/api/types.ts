@@ -886,6 +886,8 @@ export interface TradeRecord {
   notes: string | null;
   createdAt: number;
   updatedAt: number;
+  editable: boolean; // hand-logged trades are editable; broker-imported rows are read-only
+  source: 'manual' | 'broker'; // where the row came from
 }
 
 export interface TradeSummary {
