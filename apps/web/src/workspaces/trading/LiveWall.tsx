@@ -22,7 +22,7 @@ const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 const MONO = "'IBM Plex Mono', monospace";
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 10_000;
 
 const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US');
 
