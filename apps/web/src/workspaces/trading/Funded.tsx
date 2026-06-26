@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
+import { readClipboardImage } from '../../lib/clipboard';
 import type { FundedAccount, FundedData, FundedTrade, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — self-contained, matching the Live Wall / Trade Log.
@@ -90,7 +91,7 @@ export function Funded() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Funded Platforms</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             Prop accounts (FTP and other funded platforms), tracked by hand — keep the balance current, and log trades
-            by posting a trade-history screenshot for Claude to read. Duplicate trades are skipped automatically.
+            by uploading or pasting a trade-history screenshot for Claude to read. Duplicate trades are skipped automatically.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -231,6 +232,18 @@ function AccountCard({
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <button onClick={() => fileRef.current?.click()} disabled={shotBusy} style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1 }}>
               {shotBusy ? 'Reading…' : 'Post screenshot'}
+            </button>
+            <button
+              onClick={async () => {
+                const file = await readClipboardImage();
+                if (file) importShot(file);
+                else onError('No image found on the clipboard — copy a screenshot first, or use Post screenshot.');
+              }}
+              disabled={shotBusy}
+              title="Paste a screenshot from your clipboard"
+              style={{ ...ghostBtn, opacity: shotBusy ? 0.6 : 1 }}
+            >
+              Paste
             </button>
             <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { importShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
             <button onClick={() => setAddingTrade((v) => !v)} style={ghostBtn}>{addingTrade ? 'Close' : '+ Trade'}</button>

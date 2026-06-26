@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
+import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
 import type { ChallengeData, ChallengeInput } from '../../api/types';
 
 const GOLD = '#EBCB74';
@@ -55,6 +56,18 @@ export function AccountMetrics() {
     api.tradingChallenge().then((d) => alive && setData(d)).catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load'));
     return () => { alive = false; };
   }, []);
+
+  // Ctrl/Cmd+V anywhere on this screen reads a balance off the pasted screenshot.
+  useEffect(() => {
+    if (readOnly) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const file = imageFromPasteEvent(e);
+      if (file) { e.preventDefault(); readBalanceShot(file); }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readOnly]);
 
   async function run(p: Promise<ChallengeData>) {
     setBusy(true);
@@ -132,20 +145,33 @@ export function AccountMetrics() {
           <div style={{ flex: '1 1 240px' }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: TEXT }}>Update balance from a screenshot</div>
             <div style={{ fontSize: 11, color: FAINT, marginTop: 3 }}>
-              FTP has no API. Drop a screenshot of your account and Claude reads the balance, then sets your equity here.
+              FTP has no API. Upload or paste (⌘/Ctrl+V) a screenshot of your account and Claude reads the balance, then sets your equity here.
             </div>
             {shotMsg && <div style={{ fontSize: 11.5, color: GREEN, marginTop: 6 }}>{shotMsg}</div>}
           </div>
-          <label style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1, cursor: shotBusy ? 'default' : 'pointer' }}>
-            {shotBusy ? 'Reading…' : 'Upload screenshot'}
-            <input
-              type="file"
-              accept="image/*"
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              onClick={async () => {
+                const file = await readClipboardImage();
+                if (file) readBalanceShot(file);
+                else setActionError('No image found on the clipboard — copy a screenshot first, or use Upload.');
+              }}
               disabled={shotBusy}
-              onChange={(e) => { readBalanceShot(e.target.files?.[0]); e.currentTarget.value = ''; }}
-              style={{ display: 'none' }}
-            />
-          </label>
+              style={{ ...ghostBtn, opacity: shotBusy ? 0.6 : 1 }}
+            >
+              Paste
+            </button>
+            <label style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1, cursor: shotBusy ? 'default' : 'pointer' }}>
+              {shotBusy ? 'Reading…' : 'Upload screenshot'}
+              <input
+                type="file"
+                accept="image/*"
+                disabled={shotBusy}
+                onChange={(e) => { readBalanceShot(e.target.files?.[0]); e.currentTarget.value = ''; }}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
         </div>
       )}
 
