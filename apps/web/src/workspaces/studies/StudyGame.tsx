@@ -440,13 +440,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
                 )}
               </div>
             </div>
-          ) : (
-            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={advance} style={ghostBtn(theme)} title="Skip without scoring">
-                Skip
-              </button>
-            </div>
-          )}
+          ) : null}
         </div>
 
         {/* Scoreboard + categories */}
