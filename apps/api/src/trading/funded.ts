@@ -90,10 +90,12 @@ function cleanText(v: string | null | undefined, max: number): string | null {
   return t ? t.slice(0, max) : null;
 }
 
-// A stable fingerprint of a trade's identifying fields, so re-posting the same
-// screenshot does not double-log a trade. Prices are rounded to keep tiny OCR
-// jitter from defeating the dedupe; the open/close day is used rather than the
-// exact timestamp for the same reason.
+// A stable fingerprint that decides whether a screenshot trade is a duplicate.
+// A trade is identified by its TIME and PROFIT (per the desk's rule): the close
+// time (to the minute, falling back to the open time) plus the realized P/L. So
+// re-posting the same screenshot — even if prices/size OCR slightly differently —
+// won't double-log. When neither a time nor a profit is readable, we fall back to
+// the instrument + prices so a re-paste of that row still dedupes best-effort.
 function dedupKeyOf(t: {
   instrument: string;
   side: TradeSide;
@@ -105,17 +107,15 @@ function dedupKeyOf(t: {
   closedAt: number | null;
 }): string {
   const r = (n: number | null, dp = 5) => (n == null ? '' : n.toFixed(dp));
-  const day = (ms: number | null) => (ms == null ? '' : Math.floor(ms / 86_400_000));
-  const basis = [
-    t.instrument.toUpperCase(),
-    t.side,
-    r(t.units, 4),
-    r(t.entryPrice),
-    r(t.exitPrice),
-    r(t.realizedPl, 2),
-    day(t.openedAt),
-    day(t.closedAt),
-  ].join('|');
+  const timeMs = t.closedAt ?? t.openedAt;
+  let basis: string;
+  if (timeMs != null && t.realizedPl != null) {
+    // Time + profit — the primary dedupe. Minute granularity tolerates seconds
+    // that a screenshot may not show.
+    basis = `tp|${Math.floor(timeMs / 60_000)}|${t.realizedPl.toFixed(2)}`;
+  } else {
+    basis = `fb|${t.instrument.toUpperCase()}|${r(t.entryPrice)}|${r(t.exitPrice)}|${r(t.realizedPl, 2)}|${timeMs ?? ''}`;
+  }
   return crypto.createHash('sha256').update(basis).digest('hex').slice(0, 32);
 }
 
@@ -313,11 +313,22 @@ export async function importFundedTrades(
   userId: string,
   accountId: string,
   parsed: ParsedHistoryTrade[],
-): Promise<{ data: FundedData; added: number; skipped: number; ignored: number }> {
+  newBalance?: number | null,
+): Promise<{ data: FundedData; added: number; skipped: number; ignored: number; balanceSet: number | null }> {
   if (!(await ownsAccount(userId, accountId))) throw new Error('Account not found');
   let added = 0;
   let skipped = 0;
   let ignored = 0;
+
+  // When the screenshot also shows the account equity/balance, set it — the desk
+  // now keeps funded equity from the same screenshots as the trades.
+  const balanceSet = cleanNum(newBalance);
+  if (balanceSet != null) {
+    await db
+      .update(fundedAccounts)
+      .set({ balance: balanceSet, updatedAt: new Date() })
+      .where(and(eq(fundedAccounts.id, accountId), eq(fundedAccounts.userId, userId)));
+  }
   // What's already on the account, so duplicates inside one screenshot — and
   // against prior imports — are both caught.
   const existing = await db
@@ -370,5 +381,5 @@ export async function importFundedTrades(
       .onConflictDoNothing();
     added += 1;
   }
-  return { data: await getFunded(userId), added, skipped, ignored };
+  return { data: await getFunded(userId), added, skipped, ignored, balanceSet };
 }

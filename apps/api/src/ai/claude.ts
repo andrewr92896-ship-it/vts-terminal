@@ -279,10 +279,12 @@ export interface ParsedHistoryTrade {
 }
 export interface ParsedHistory {
   trades: ParsedHistoryTrade[];
+  balance: number | null; // account balance, if the screenshot shows one
+  equity: number | null; // account equity (balance + open P/L), if shown
   summary: string;
 }
 
-const HISTORY_SYSTEM = `You read a list of TRADES from a funded-account trade-history / order-history screenshot (a blotter, closed-positions table, or statement). Extract every trade row you can see.
+const HISTORY_SYSTEM = `You read a funded-account screenshot. It may show a list of TRADES (a blotter, closed-positions table, or statement) and/or the account BALANCE/EQUITY. Extract every trade row you can see, plus the account balance/equity if shown.
 
 Respond with ONLY a JSON object (no prose, no code fences) of exactly this shape:
 {
@@ -298,9 +300,11 @@ Respond with ONLY a JSON object (no prose, no code fences) of exactly this shape
       "closedAt": string | null      // close date/time exactly as shown, else null
     }
   ],
+  "balance": number | null,          // account balance / cash, if shown, else null
+  "equity": number | null,           // account equity (balance + open P/L), if shown separately, else null
   "summary": string                  // 1 sentence: how many trades you read
 }
-Strip currency symbols and commas from numbers. Use null for any field you cannot read. Return an empty trades array if you can read none. Keep the summary under 160 characters.`;
+Strip currency symbols and commas from numbers ("$201,450.50" -> 201450.5). Use null for any field you cannot read. Return an empty trades array if you can read none. Keep the summary under 160 characters.`;
 
 function parseSide(v: unknown): 'long' | 'short' | 'unknown' {
   return v === 'long' || v === 'short' ? v : 'unknown';
@@ -328,7 +332,7 @@ export async function parseTradeHistoryScreenshot(
     ],
   });
   const raw = textOf(message);
-  const json = (extractJson(raw) ?? {}) as { trades?: unknown; summary?: unknown };
+  const json = (extractJson(raw) ?? {}) as { trades?: unknown; balance?: unknown; equity?: unknown; summary?: unknown };
   const rawTrades = Array.isArray(json.trades) ? json.trades : [];
   const trades: ParsedHistoryTrade[] = rawTrades.map((t) => {
     const o = (t ?? {}) as Record<string, unknown>;
@@ -345,6 +349,8 @@ export async function parseTradeHistoryScreenshot(
   });
   const parsed: ParsedHistory = {
     trades,
+    balance: num(json.balance),
+    equity: num(json.equity),
     summary: typeof json.summary === 'string' ? json.summary.slice(0, 160) : raw.slice(0, 160),
   };
   return { parsed, raw, model };

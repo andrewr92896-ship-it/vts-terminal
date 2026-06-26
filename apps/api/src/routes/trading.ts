@@ -379,15 +379,8 @@ export async function tradingRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
     const id = (request.params as { id: string }).id;
-    // A `pos:` id is a synced Live Wall position, not a hand-logged trade — remove
-    // the underlying position (no undo for these). Everything else is a real
-    // Trade Log row, which supports undo via the returned `removed` snapshot.
-    // Admins can remove any teammate's row on the shared desk.
-    if (id.startsWith('pos:')) {
-      await removePosition(u.id, id.slice(4), admin);
-      const data = await getTrades(u.id, isDemoUser(u));
-      return { ...data, removed: null };
-    }
+    // Admins can remove any teammate's row on the shared desk; the returned
+    // `removed` snapshot powers undo for the trader's own trades.
     const removed = await removeTrade(u.id, id, admin);
     const data = await getTrades(u.id, isDemoUser(u));
     return { ...data, removed };
@@ -699,8 +692,10 @@ export async function tradingRoutes(app: FastifyInstance) {
       try {
         await enforceAiLimit(uid, 'funded_screenshot');
         const { parsed: p, model } = await parseTradeHistoryScreenshot(data, media);
-        const { data: funded, added, skipped, ignored } = await importFundedTrades(uid, id, p.trades);
-        return { funded, added, skipped, ignored, summary: p.summary, model };
+        // Prefer equity (balance + open P/L) when shown, else the balance.
+        const balance = p.equity ?? p.balance;
+        const { data: funded, added, skipped, ignored, balanceSet } = await importFundedTrades(uid, id, p.trades, balance);
+        return { funded, added, skipped, ignored, balanceSet, summary: p.summary, model };
       } catch (err) {
         if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
         const msg = err instanceof Error ? err.message : 'Analysis failed';

@@ -5,7 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
-import type { ChallengeData, ChallengeInput, OandaCapital } from '../../api/types';
+import type { ChallengeData, ChallengeInput, OandaCapital, FundedAccount } from '../../api/types';
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -56,6 +56,7 @@ export function AccountMetrics() {
   const [shotBusy, setShotBusy] = useState(false);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
   const [oanda, setOanda] = useState<OandaCapital | null>(null);
+  const [funded, setFunded] = useState<FundedAccount[] | null>(null);
   const ai = useAiBrief(api.tradingMetricsBrief);
 
   useEffect(() => {
@@ -71,6 +72,7 @@ export function AccountMetrics() {
     if (readOnly) return;
     let alive = true;
     api.oandaCapital().then((c) => alive && setOanda(c)).catch(() => {});
+    api.funded().then((d) => alive && setFunded(d.accounts)).catch(() => {});
     return () => { alive = false; };
   }, [readOnly]);
 
@@ -218,6 +220,11 @@ export function AccountMetrics() {
         <OandaCapitalCard oanda={oanda} showMoney={showMoney} isPhone={isPhone} />
       )}
 
+      {/* Funded platforms — capital + trade P/L windows, same as OANDA */}
+      {!readOnly && funded?.map((a) => (
+        <FundedCapitalCard key={a.id} a={a} showMoney={showMoney} isPhone={isPhone} />
+      ))}
+
       {/* Drawdown gauges */}
       <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 14 }}>
         <Gauge title="Max Drawdown" subtitle={`${data.trailing ? 'Trailing' : 'Static'} · ${data.maxDdPct}%`} floorLabel="Floor" floor={dollars(m.maxFloor)} headroom={dollars(m.maxHeadroom)} headroomPct={m.maxHeadroomPct} breached={m.breaches.max} canSee={canSee} showMoney={showMoney} />
@@ -302,6 +309,41 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
       {anyError && !multi && (
         <div style={{ fontSize: 11, color: RED, marginTop: 8 }}>Couldn’t reach OANDA — showing the last figures available.</div>
       )}
+    </div>
+  );
+}
+
+// A funded platform's capital and trade-P/L windows on Account Metrics — same
+// shape as the OANDA card, but for screenshot-tracked accounts. No goals or
+// drawdown (those are only on the funded FTP challenge above).
+function FundedCapitalCard({ a, showMoney, isPhone }: { a: FundedAccount; showMoney: boolean; isPhone: boolean }) {
+  const ccy = a.currency || 'USD';
+  const m = (n: number | null) => (n == null ? '—' : showMoney ? fmtCcy(n, ccy) : '•••••');
+  return (
+    <div style={{ ...card, marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{a.label}</span>
+          <span style={{ ...pill, color: GOLD, border: `1px solid ${GOLD}` }}>{a.platform}</span>
+        </div>
+        <span style={{ fontSize: 10.5, color: FAINT }}>{a.tradeCount} trade{a.tradeCount === 1 ? '' : 's'} · from screenshots</span>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(2,1fr)', gap: 14 }}>
+        <Stat label="Balance" value={m(a.balance)} big />
+        <Stat label="Logged P/L" value={m(a.realizedPl)} color={a.realizedPl >= 0 ? GREEN : RED} />
+      </div>
+
+      <div style={{ marginTop: 14, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+        <div style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 }}>
+          Gained from trades <span style={{ color: FAINT, textTransform: 'none', letterSpacing: 0 }}>· deposits excluded</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr 1fr 1fr' : 'repeat(3,1fr)', gap: 14 }}>
+          <PnlStat label="Today" n={a.pnl.daily} m={m} />
+          <PnlStat label="This week" n={a.pnl.weekly} m={m} />
+          <PnlStat label="30 days" n={a.pnl.monthly} m={m} />
+        </div>
+      </div>
     </div>
   );
 }

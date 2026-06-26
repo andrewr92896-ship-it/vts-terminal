@@ -185,6 +185,7 @@ function AccountCard({
         const parts = [`${res.added} added`];
         if (res.skipped) parts.push(`${res.skipped} duplicate${res.skipped === 1 ? '' : 's'} skipped`);
         if (res.ignored) parts.push(`${res.ignored} ignored`);
+        if (res.balanceSet != null) parts.push(`balance set to ${money(res.balanceSet, ccy)}`);
         setShotMsg(parts.join(' · '));
       } catch (e) {
         onError(e instanceof ApiError ? e.message : 'Could not read that screenshot');

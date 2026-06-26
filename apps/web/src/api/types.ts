@@ -726,8 +726,9 @@ export interface FundedTradeInput {
 export interface FundedImportResult {
   funded: FundedData;
   added: number;
-  skipped: number; // duplicates of trades already on the account
+  skipped: number; // duplicates of trades already on the account (by time + profit)
   ignored: number; // rows that weren't real trades (no instrument/P/L)
+  balanceSet: number | null; // the account balance, when the screenshot showed one
   summary: string;
   model: string;
 }
