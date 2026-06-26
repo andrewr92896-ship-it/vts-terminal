@@ -5,7 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
-import type { ChallengeData, ChallengeInput } from '../../api/types';
+import type { ChallengeData, ChallengeInput, OandaCapital } from '../../api/types';
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -21,6 +21,12 @@ const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
 const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
+// Money in a given account currency (USD shows as "$"; others append the code).
+const fmtCcy = (n: number, ccy: string) => {
+  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sign = n < 0 ? '-' : '';
+  return ccy === 'USD' ? `${sign}$${abs}` : `${sign}${abs} ${ccy}`;
+};
 const pct1 = (f: number) => `${(f * 100).toFixed(1)}%`;
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 const ET = 'America/New_York';
@@ -49,6 +55,7 @@ export function AccountMetrics() {
   const [editing, setEditing] = useState(false);
   const [shotBusy, setShotBusy] = useState(false);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
+  const [oanda, setOanda] = useState<OandaCapital | null>(null);
   const ai = useAiBrief(api.tradingMetricsBrief);
 
   useEffect(() => {
@@ -56,6 +63,16 @@ export function AccountMetrics() {
     api.tradingChallenge().then((d) => alive && setData(d)).catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load'));
     return () => { alive = false; };
   }, []);
+
+  // Live OANDA capital — full traders only (the endpoint 403s for view-only, so
+  // skip the call entirely for read-only users). Errors are swallowed: a missing
+  // OANDA connection just means no capital card.
+  useEffect(() => {
+    if (readOnly) return;
+    let alive = true;
+    api.oandaCapital().then((c) => alive && setOanda(c)).catch(() => {});
+    return () => { alive = false; };
+  }, [readOnly]);
 
   // Ctrl/Cmd+V anywhere on this screen reads a balance off the pasted screenshot.
   useEffect(() => {
@@ -196,6 +213,11 @@ export function AccountMetrics() {
         </div>
       </div>
 
+      {/* Live OANDA capital — full traders only */}
+      {!readOnly && oanda?.configured && (
+        <OandaCapitalCard oanda={oanda} showMoney={showMoney} isPhone={isPhone} />
+      )}
+
       {/* Drawdown gauges */}
       <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 14 }}>
         <Gauge title="Max Drawdown" subtitle={`${data.trailing ? 'Trailing' : 'Static'} · ${data.maxDdPct}%`} floorLabel="Floor" floor={dollars(m.maxFloor)} headroom={dollars(m.maxHeadroom)} headroomPct={m.maxHeadroomPct} breached={m.breaches.max} canSee={canSee} showMoney={showMoney} />
@@ -207,6 +229,65 @@ export function AccountMetrics() {
           Dollar figures are hidden because your account doesn’t have the brokerage-view permission. Targets and drawdown buffers are still shown as percentages.
         </div>
       )}
+    </div>
+  );
+}
+
+function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; showMoney: boolean; isPhone: boolean }) {
+  const multi = oanda.accounts.length > 1;
+  const ccy = oanda.currency ?? oanda.accounts[0]?.currency ?? 'USD';
+  const m = (n: number | null, c = ccy) => (n == null ? '—' : showMoney ? fmtCcy(n, c) : '•••••');
+  const upPl = (oanda.unrealizedPl ?? 0) >= 0;
+  const anyError = oanda.accounts.some((a) => !a.ok);
+  return (
+    <div style={{ ...card, marginTop: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>OANDA Capital</span>
+          <span style={{ ...pill, color: GREEN, border: `1px solid ${GREEN}` }}>Live</span>
+        </div>
+        <span style={{ fontSize: 10.5, color: FAINT }}>From the OANDA API — updates as trades are placed</span>
+      </div>
+
+      {/* Headline NAV / balance / open P/L (combined when one currency) */}
+      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(3,1fr)', gap: 14 }}>
+        <Stat label="Capital (NAV)" value={m(oanda.nav)} big />
+        <Stat label="Balance" value={m(oanda.balance)} />
+        <Stat label="Open P/L" value={m(oanda.unrealizedPl)} color={oanda.unrealizedPl == null ? undefined : upPl ? GREEN : RED} />
+      </div>
+
+      {(multi || oanda.currency == null) && (
+        <div style={{ marginTop: 12, borderTop: `1px solid ${BORDER}` }}>
+          {oanda.accounts.map((a) => (
+            <div key={a.connectionId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 2px', borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>{a.label}</span>
+              {a.ok ? (
+                <span style={{ fontSize: 12, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>
+                  NAV <b style={{ color: '#fff' }}>{m(a.nav, a.currency)}</b> · Bal {m(a.balance, a.currency)} · P/L{' '}
+                  <b style={{ color: (a.unrealizedPl ?? 0) >= 0 ? GREEN : RED }}>{m(a.unrealizedPl, a.currency)}</b>
+                </span>
+              ) : (
+                <span style={{ fontSize: 11.5, color: RED }}>Couldn’t reach: {a.error}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      {oanda.currency == null && oanda.accounts.length > 1 && !multi && (
+        <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>Accounts use different currencies — shown separately.</div>
+      )}
+      {anyError && !multi && (
+        <div style={{ fontSize: 11, color: RED, marginTop: 8 }}>Couldn’t reach OANDA — showing the last figures available.</div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value, big, color }: { label: string; value: string; big?: boolean; color?: string }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</div>
+      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: big ? 26 : 18, fontWeight: 700, color: color ?? '#fff', marginTop: 4 }}>{value}</div>
     </div>
   );
 }

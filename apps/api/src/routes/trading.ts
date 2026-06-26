@@ -12,6 +12,7 @@ import {
 import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
 import { getHistory, removePosition } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
+import { getOandaCapital } from '../trading/capital.js';
 import {
   getFunded,
   addFundedAccount,
@@ -191,6 +192,14 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.post('/api/trading/challenge/sync-equity', write, async (request) => {
     const u = request.currentUser!;
     return syncEquityFromTradeLog(u.id, SEE_BALANCES);
+  });
+
+  // Live OANDA account capital (NAV/balance), pulled from the OANDA API so it
+  // reflects trades the moment they're placed. Behind the *write* guard so it is
+  // visible to full traders only — the trading_viewer (view-only) role is
+  // rejected, per the desk's request to keep capital off the view-only role.
+  app.get('/api/trading/oanda-capital', write, async (request) => {
+    return getOandaCapital(request.currentUser!.id);
   });
 
   // Read the current balance/equity off an FTP-account screenshot (Opus 4.8

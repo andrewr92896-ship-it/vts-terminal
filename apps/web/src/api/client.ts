@@ -10,6 +10,7 @@ import type {
   ChallengeData,
   ChallengeInput,
   AnalyzeAccountResult,
+  OandaCapital,
   FundedData,
   FundedAccountInput,
   FundedTradeInput,
@@ -247,6 +248,10 @@ export const api = {
   // Read the current balance off an FTP-account screenshot and set the equity.
   analyzeChallengeBalance(image: { imageBase64: string; mediaType: string }): Promise<AnalyzeAccountResult> {
     return request('/api/trading/challenge/analyze', { method: 'POST', body: JSON.stringify(image) });
+  },
+  // Live OANDA account capital (full traders only — 403 for view-only).
+  oandaCapital(): Promise<OandaCapital> {
+    return request('/api/trading/oanda-capital');
   },
   // ---- Funded platforms ----
   funded(): Promise<FundedData> {

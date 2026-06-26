@@ -637,6 +637,30 @@ export interface AnalyzeAccountResult {
   model: string;
 }
 
+// ---- Trading — live OANDA account capital (mirror of apps/api/src/trading/capital.ts) ----
+export interface OandaCapitalAccount {
+  connectionId: string;
+  label: string;
+  currency: string;
+  balance: number | null;
+  nav: number | null; // balance + open P/L — the "capital" figure
+  unrealizedPl: number | null;
+  marginUsed: number | null;
+  marginAvailable: number | null;
+  openTradeCount: number | null;
+  ok: boolean;
+  error: string | null;
+}
+export interface OandaCapital {
+  configured: boolean;
+  accounts: OandaCapitalAccount[];
+  currency: string | null;
+  balance: number | null;
+  nav: number | null;
+  unrealizedPl: number | null;
+  generatedAt: number;
+}
+
 // ---- Trading — Funded platforms (mirror of apps/api/src/trading/funded.ts) ----
 export interface FundedTrade {
   id: string;

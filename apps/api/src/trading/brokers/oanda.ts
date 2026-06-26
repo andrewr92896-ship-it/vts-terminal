@@ -43,7 +43,46 @@ interface OandaPricingResponse {
   prices?: OandaPrice[];
 }
 interface OandaAccountSummaryResponse {
-  account?: { currency?: string };
+  account?: {
+    currency?: string;
+    balance?: string;
+    NAV?: string;
+    unrealizedPL?: string;
+    marginUsed?: string;
+    marginAvailable?: string;
+    openTradeCount?: number;
+  };
+}
+
+// The live capital of an OANDA account, read from the account summary endpoint.
+// NAV (net asset value = balance + open P/L) is the "capital" shown on Account
+// Metrics; it moves in real time as positions are opened/closed.
+export interface OandaAccountCapital {
+  currency: string;
+  balance: number | null;
+  nav: number | null;
+  unrealizedPl: number | null;
+  marginUsed: number | null;
+  marginAvailable: number | null;
+  openTradeCount: number | null;
+}
+
+export async function fetchOandaAccountSummary(cfg: OandaConfig): Promise<OandaAccountCapital> {
+  const res = await fetch(`${cfg.base}/v3/accounts/${cfg.accountId}/summary`, {
+    headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`OANDA responded ${res.status}`);
+  const json = (await res.json()) as OandaAccountSummaryResponse;
+  const a = json.account ?? {};
+  return {
+    currency: a.currency ?? 'USD',
+    balance: num(a.balance),
+    nav: num(a.NAV),
+    unrealizedPl: num(a.unrealizedPL),
+    marginUsed: num(a.marginUsed),
+    marginAvailable: num(a.marginAvailable),
+    openTradeCount: typeof a.openTradeCount === 'number' ? a.openTradeCount : null,
+  };
 }
 
 function num(v: string | undefined): number | null {
