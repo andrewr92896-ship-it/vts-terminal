@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import type { OandaCapital } from '../../api/types';
 
+const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
 const RED = '#ef5468';
 const TEXT = '#eef3ff';
@@ -62,8 +63,8 @@ export function LiveBrokers() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Live Brokers</h2>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-            Your live brokerage capital, pulled from the broker API so it updates as trades are placed. The FTP
-            challenge and funded/prop accounts are on the Funded tab.
+            The whole desk’s live brokerage capital, each account tagged with its trader, pulled from the broker API
+            so it updates as trades are placed. The FTP challenge and funded/prop accounts are on the Funded tab.
           </div>
         </div>
         {!readOnly && oanda?.configured && (
@@ -101,6 +102,10 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>OANDA Capital</span>
           <span style={{ ...pill, color: GREEN, border: `1px solid ${GREEN}` }}>Live</span>
+          {multi && <span style={{ fontSize: 11, color: FAINT }}>· desk total</span>}
+          {oanda.accounts.length === 1 && (
+            <span style={{ fontSize: 11, color: GOLD }}>· @{oanda.accounts[0].owner}</span>
+          )}
         </div>
         <span style={{ fontSize: 10.5, color: FAINT }}>From the OANDA API — updates as trades are placed</span>
       </div>
@@ -130,7 +135,9 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
         <div style={{ marginTop: 12, borderTop: `1px solid ${BORDER}` }}>
           {oanda.accounts.map((a) => (
             <div key={a.connectionId} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '9px 2px', borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>{a.label}</span>
+              <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>
+                <span style={{ color: GOLD }}>@{a.owner}</span> · {a.label}
+              </span>
               {a.ok ? (
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', fontFamily: "'IBM Plex Mono', monospace" }}>
                   <span style={{ fontSize: 12, color: MUTED }}>

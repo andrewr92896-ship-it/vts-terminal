@@ -195,11 +195,13 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // Live OANDA account capital (NAV/balance), pulled from the OANDA API so it
-  // reflects trades the moment they're placed. Behind the *write* guard so it is
-  // visible to full traders only — the trading_viewer (view-only) role is
-  // rejected, per the desk's request to keep capital off the view-only role.
-  app.get('/api/trading/oanda-capital', write, async (request) => {
-    return getOandaCapital(request.currentUser!.id);
+  // reflects trades the moment they're placed. Desk-wide — every full trader
+  // sees the whole desk's capital, each account tagged with its owner. Behind
+  // the *write* guard so it is visible to full traders only; the trading_viewer
+  // (view-only) role is rejected, per the desk's request to keep capital off the
+  // view-only role.
+  app.get('/api/trading/oanda-capital', write, async () => {
+    return getOandaCapital();
   });
 
   // Read the current balance/equity off an FTP-account screenshot (Opus 4.8
