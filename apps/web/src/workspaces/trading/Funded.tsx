@@ -227,6 +227,12 @@ function AccountCard({
             Logged P/L <b style={{ color: a.realizedPl >= 0 ? GREEN : RED, fontFamily: MONO }}>{showMoney ? money(a.realizedPl, ccy) : '•••••'}</b> · {a.tradeCount} trade{a.tradeCount === 1 ? '' : 's'}
             {a.startingBalance != null && <> · funded at {dollars(a.startingBalance)}</>}
           </div>
+          {/* Capital gained from trades — deposits/withdrawals don't count */}
+          <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>
+            <PnlStat label="Today" n={a.pnl.daily} ccy={ccy} showMoney={showMoney} />
+            <PnlStat label="This week" n={a.pnl.weekly} ccy={ccy} showMoney={showMoney} />
+            <PnlStat label="30 days" n={a.pnl.monthly} ccy={ccy} showMoney={showMoney} />
+          </div>
         </div>
         {!readOnly && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -350,6 +356,19 @@ function TradeRow({
           <button onClick={() => !busy && onRemove()} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
         )}
     </div>
+  );
+}
+
+// One trade-P/L window (Today / This week / 30 days). Green for a gain, red for a
+// loss, with a leading + on gains. Built from logged trade P/L — deposits excluded.
+function PnlStat({ label, n, ccy, showMoney }: { label: string; n: number; ccy: string; showMoney: boolean }) {
+  const up = n >= 0;
+  const val = !showMoney ? '•••••' : n === 0 ? money(0, ccy) : `${up ? '+' : ''}${money(n, ccy)}`;
+  return (
+    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+      <span style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{label}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, fontFamily: MONO, color: showMoney ? (up ? GREEN : RED) : MUTED }}>{val}</span>
+    </span>
   );
 }
 

@@ -1,18 +1,14 @@
 import { getActiveDecrypted, type OandaCreds } from './connections.js';
-import { fetchOandaAccountSummary, fetchOandaClosedTrades, type OandaClosedTradePnl } from './brokers/oanda.js';
+import { fetchOandaAccountSummary, fetchOandaClosedTrades } from './brokers/oanda.js';
+import { pnlWindows, type PnlWindows } from './pnl.js';
+
+// Re-export under the legacy name so existing imports keep working.
+export type OandaPnl = PnlWindows;
 
 // Live capital from the broker accounts that actually report it (OANDA has a
 // real API, so its NAV/balance moves the moment a trade is placed or closed).
 // Shown on Account Metrics, gated to full traders (not the view-only role) at
 // the route. Scoped to the calling trader's own OANDA connections.
-
-// Capital gained from trades over rolling windows. Built from closed-trade
-// realized P/L only, so adding/withdrawing money never shows up as a "gain".
-export interface OandaPnl {
-  daily: number; // since the start of today (Eastern Time)
-  weekly: number; // last 7 days
-  monthly: number; // last 30 days
-}
 
 export interface OandaCapitalAccount {
   connectionId: string;
@@ -46,35 +42,6 @@ function oandaBase(env: OandaCreds['env']): string {
   return env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com';
 }
 
-// Start of "today" in Eastern Time as a UTC timestamp, robust to the server's
-// own timezone — we subtract the seconds elapsed since ET midnight from now.
-function etDayStart(now: number): number {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: 'America/New_York',
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).formatToParts(new Date(now));
-  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? '0');
-  const secsIntoDay = (get('hour') % 24) * 3600 + get('minute') * 60 + get('second');
-  return now - secsIntoDay * 1000 - (now % 1000);
-}
-
-// Total realized P/L of trades closed at/after `since`.
-function sumSince(trades: OandaClosedTradePnl[], since: number): number {
-  const total = trades.reduce((s, t) => (t.closeTimeMs >= since ? s + t.realizedPl : s), 0);
-  return Number(total.toFixed(2));
-}
-
-function pnlWindows(trades: OandaClosedTradePnl[], now: number): OandaPnl {
-  return {
-    daily: sumSince(trades, etDayStart(now)),
-    weekly: sumSince(trades, now - 7 * 86_400_000),
-    monthly: sumSince(trades, now - 30 * 86_400_000),
-  };
-}
-
 export async function getOandaCapital(userId: string): Promise<OandaCapital> {
   const conns = (await getActiveDecrypted(userId)).filter((c) => c.broker === 'oanda');
   const generatedAt = Date.now();
@@ -103,7 +70,7 @@ export async function getOandaCapital(userId: string): Promise<OandaCapital> {
           marginUsed: cap.marginUsed,
           marginAvailable: cap.marginAvailable,
           openTradeCount: cap.openTradeCount,
-          pnl: trades ? pnlWindows(trades, generatedAt) : null,
+          pnl: trades ? pnlWindows(trades.map((t) => ({ ms: t.closeTimeMs, pl: t.realizedPl })), generatedAt) : null,
           ok: true,
           error: null,
         };

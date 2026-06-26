@@ -695,6 +695,7 @@ export interface FundedAccount {
   notes: string | null;
   realizedPl: number;
   tradeCount: number;
+  pnl: OandaPnl; // capital gained from trades over today / 7d / 30d windows
   trades: FundedTrade[];
   createdAt: number;
   updatedAt: number;

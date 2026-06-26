@@ -10,6 +10,7 @@ import {
   type TradeSide,
 } from '../db/schema.js';
 import type { ParsedHistoryTrade } from '../ai/claude.js';
+import { pnlWindows, type PnlWindows } from './pnl.js';
 
 // Funded platforms (FTP and other prop accounts) are tracked separately from the
 // Live Wall / Trade Log: they have no usable API, so the trader keeps the balance
@@ -42,6 +43,10 @@ export interface FundedAccountView {
   // Derived: realized P/L summed across this account's logged trades.
   realizedPl: number;
   tradeCount: number;
+  // Capital gained from trades over rolling windows (today ET / 7d / 30d), built
+  // from logged trade P/L only — so editing the balance / adding money never
+  // counts as a gain.
+  pnl: PnlWindows;
   trades: FundedTradeView[];
   createdAt: number;
   updatedAt: number;
@@ -131,8 +136,13 @@ function toTradeView(row: FundedTradeRow): FundedTradeView {
   };
 }
 
-function toAccountView(row: FundedAccountRow, trades: FundedTradeView[]): FundedAccountView {
+function toAccountView(row: FundedAccountRow, trades: FundedTradeView[], now: number): FundedAccountView {
   const realizedPl = trades.reduce((sum, t) => sum + (t.realizedPl ?? 0), 0);
+  // Window P/L keyed off when each trade closed (fall back to its open time, then
+  // the time it was logged), counting only trades that carry a realized P/L.
+  const windowed = trades
+    .filter((t) => t.realizedPl != null)
+    .map((t) => ({ ms: t.closedAt ?? t.openedAt ?? t.createdAt, pl: t.realizedPl as number }));
   return {
     id: row.id,
     platform: row.platform,
@@ -143,6 +153,7 @@ function toAccountView(row: FundedAccountRow, trades: FundedTradeView[]): Funded
     notes: row.notes,
     realizedPl: Number(realizedPl.toFixed(2)),
     tradeCount: trades.length,
+    pnl: pnlWindows(windowed, now),
     trades,
     createdAt: row.createdAt.getTime(),
     updatedAt: row.updatedAt.getTime(),
@@ -166,7 +177,8 @@ export async function getFunded(userId: string): Promise<FundedData> {
     list.push(toTradeView(t));
     byAccount.set(t.accountId, list);
   }
-  return { accounts: accounts.map((a) => toAccountView(a, byAccount.get(a.id) ?? [])) };
+  const now = Date.now();
+  return { accounts: accounts.map((a) => toAccountView(a, byAccount.get(a.id) ?? [], now)) };
 }
 
 export async function addFundedAccount(userId: string, input: FundedAccountInput): Promise<FundedData> {
