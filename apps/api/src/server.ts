@@ -24,6 +24,7 @@ import { studiesRoutes } from './routes/studies.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
 import { runMigrations } from './db/migrate.js';
+import { waitForDatabase } from './db/index.js';
 import { seedAdmin, seedDemo } from './seed.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
@@ -109,6 +110,9 @@ export async function buildServer() {
 // On boot in production, bring the database (on the persistent volume) up to
 // date and ensure the admin user exists. Idempotent and safe to run every boot.
 async function bootstrapDatabase(): Promise<void> {
+  // Confirm the database (on the persistent volume) actually answers before
+  // migrating — tolerates a brief mount delay and gives a clear log otherwise.
+  await waitForDatabase();
   await runMigrations();
   await seedAdmin();
   await seedDemo();

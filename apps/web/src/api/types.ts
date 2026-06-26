@@ -648,6 +648,7 @@ export interface OandaPnl {
 export interface OandaCapitalAccount {
   connectionId: string;
   label: string;
+  owner: string; // the trader who owns this broker connection
   currency: string;
   balance: number | null;
   nav: number | null; // balance + open P/L — the "capital" figure

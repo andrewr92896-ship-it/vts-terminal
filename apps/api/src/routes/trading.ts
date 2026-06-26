@@ -195,11 +195,13 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // Live OANDA account capital (NAV/balance), pulled from the OANDA API so it
-  // reflects trades the moment they're placed. Behind the *write* guard so it is
-  // visible to full traders only — the trading_viewer (view-only) role is
-  // rejected, per the desk's request to keep capital off the view-only role.
-  app.get('/api/trading/oanda-capital', write, async (request) => {
-    return getOandaCapital(request.currentUser!.id);
+  // reflects trades the moment they're placed. Desk-wide — every full trader
+  // sees the whole desk's capital, each account tagged with its owner. Behind
+  // the *write* guard so it is visible to full traders only; the trading_viewer
+  // (view-only) role is rejected, per the desk's request to keep capital off the
+  // view-only role.
+  app.get('/api/trading/oanda-capital', write, async () => {
+    return getOandaCapital();
   });
 
   // Read the current balance/equity off an FTP-account screenshot (Opus 4.8
@@ -379,9 +381,18 @@ export async function tradingRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
     const id = (request.params as { id: string }).id;
-    // Admins can remove any teammate's row on the shared desk; the returned
-    // `removed` snapshot powers undo for the trader's own trades.
+    // A Trade Log row is either a hand-logged trade (trading_trades) or an
+    // auto-imported broker position (trading_positions). Try the hand-logged
+    // table first; the returned `removed` snapshot powers undo for the trader's
+    // own trades (admins can also clear any teammate's row on the shared desk).
     const removed = await removeTrade(u.id, id, admin);
+    // Nothing hand-logged matched → it's a broker-sourced row (e.g. a test trade
+    // from OANDA). Clear the matching position so it can be removed here too.
+    // Note: a still-open position will reappear on the next Live Wall sync (it's
+    // still live on the broker); clearing a closed one is permanent. Ids don't
+    // collide across the two tables, so this is a no-op when the id isn't a
+    // position.
+    if (!removed) await removePosition(u.id, id, admin);
     const data = await getTrades(u.id, isDemoUser(u));
     return { ...data, removed };
   });

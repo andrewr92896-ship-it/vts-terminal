@@ -1,4 +1,4 @@
-import { getActiveDecrypted, type OandaCreds } from './connections.js';
+import { getAllActiveDecrypted, type OandaCreds } from './connections.js';
 import { fetchOandaAccountSummary, fetchOandaClosedTrades } from './brokers/oanda.js';
 import { pnlWindows, type PnlWindows } from './pnl.js';
 
@@ -7,12 +7,14 @@ export type OandaPnl = PnlWindows;
 
 // Live capital from the broker accounts that actually report it (OANDA has a
 // real API, so its NAV/balance moves the moment a trade is placed or closed).
-// Shown on Account Metrics, gated to full traders (not the view-only role) at
-// the route. Scoped to the calling trader's own OANDA connections.
+// Shown on the Live Brokers screen, gated to full traders (not the view-only
+// role) at the route. Desk-wide: every full trader sees the whole desk's OANDA
+// capital, each account attributed to its owner.
 
 export interface OandaCapitalAccount {
   connectionId: string;
   label: string;
+  owner: string; // the trader who owns this broker connection
   currency: string;
   balance: number | null;
   nav: number | null; // balance + open P/L — the "capital" figure
@@ -42,8 +44,11 @@ function oandaBase(env: OandaCreds['env']): string {
   return env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com';
 }
 
-export async function getOandaCapital(userId: string): Promise<OandaCapital> {
-  const conns = (await getActiveDecrypted(userId)).filter((c) => c.broker === 'oanda');
+export async function getOandaCapital(): Promise<OandaCapital> {
+  // Desk-wide: pull every active OANDA connection across the trading team so the
+  // whole desk's capital is visible to any full trader (the route already keeps
+  // the view-only role out). Each account is tagged with its owner below.
+  const conns = (await getAllActiveDecrypted()).filter((c) => c.broker === 'oanda');
   const generatedAt = Date.now();
   if (conns.length === 0) {
     return { configured: false, accounts: [], currency: null, balance: null, nav: null, unrealizedPl: null, pnl: null, generatedAt };
@@ -63,6 +68,7 @@ export async function getOandaCapital(userId: string): Promise<OandaCapital> {
         return {
           connectionId: c.id,
           label: c.label,
+          owner: c.owner,
           currency: cap.currency,
           balance: cap.balance,
           nav: cap.nav,
@@ -78,6 +84,7 @@ export async function getOandaCapital(userId: string): Promise<OandaCapital> {
         return {
           connectionId: c.id,
           label: c.label,
+          owner: c.owner,
           currency: 'USD',
           balance: null,
           nav: null,
