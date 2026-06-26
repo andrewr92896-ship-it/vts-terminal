@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -6,7 +6,7 @@ import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
 import { FundedManager } from './Funded';
-import type { ChallengeData, ChallengeInput, OandaCapital } from '../../api/types';
+import type { ChallengeData, ChallengeInput, FundedAccount } from '../../api/types';
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -22,12 +22,6 @@ const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
 const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 0 });
-// Money in a given account currency (USD shows as "$"; others append the code).
-const fmtCcy = (n: number, ccy: string) => {
-  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const sign = n < 0 ? '-' : '';
-  return ccy === 'USD' ? `${sign}$${abs}` : `${sign}${abs} ${ccy}`;
-};
 const pct1 = (f: number) => `${(f * 100).toFixed(1)}%`;
 const clamp = (n: number) => Math.max(0, Math.min(1, n));
 function msToDateInput(ms: number): string {
@@ -41,7 +35,7 @@ const STATUS: Record<ChallengeData['metrics']['status'], { label: string; color:
   breached: { label: 'Breached', color: RED },
 };
 
-export function AccountMetrics() {
+export function FundedScreen() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
   const { user } = useAuth();
@@ -52,9 +46,9 @@ export function AccountMetrics() {
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [shotBusy, setShotBusy] = useState(false);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
-  const [oanda, setOanda] = useState<OandaCapital | null>(null);
   const ai = useAiBrief(api.tradingMetricsBrief);
 
   useEffect(() => {
@@ -62,16 +56,6 @@ export function AccountMetrics() {
     api.tradingChallenge().then((d) => alive && setData(d)).catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load'));
     return () => { alive = false; };
   }, []);
-
-  // Live OANDA capital — full traders only (the endpoint 403s for view-only, so
-  // skip the call entirely for read-only users). Errors are swallowed: a missing
-  // OANDA connection just means no capital card.
-  useEffect(() => {
-    if (readOnly) return;
-    let alive = true;
-    api.oandaCapital().then((c) => alive && setOanda(c)).catch(() => {});
-    return () => { alive = false; };
-  }, [readOnly]);
 
   // Ctrl/Cmd+V anywhere on this screen reads a balance off the pasted screenshot.
   useEffect(() => {
@@ -119,8 +103,8 @@ export function AccountMetrics() {
 
   const canSee = data.canSeeBalances;
   const showMoney = canSee && !privacy && !hideMoney; // FTP challenge figures (brokerage-view gated)
-  // Live broker + funded capital are a separate data source with no per-account
-  // brokerage permission — mask them off privacy + the page Hide-$ toggle only.
+  // Funded/prop capital is a separate data source with no per-account brokerage
+  // permission — mask it off privacy + the page Hide-$ toggle only.
   const showCapital = !privacy && !hideMoney;
   const m = data.metrics;
   const st = STATUS[m.status];
@@ -131,16 +115,20 @@ export function AccountMetrics() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Accounts</h2>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Funded</h2>
             <span style={{ ...pill, color: st.color, border: `1px solid ${st.color}` }}>{data.label} · {st.label}</span>
           </div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-            Your {data.label} ({canSee ? `${usd(data.accountSize ?? 0)} account` : 'funded account'} · {data.targetPct}% target · {data.dailyDdPct}% daily / {data.maxDdPct}% {data.trailing ? 'trailing' : 'max'} drawdown), live brokers, and funded accounts — all in one place.
+            Everything for your funded account in one place: your {data.label} prop challenge
+            ({canSee ? `${usd(data.accountSize ?? 0)} account` : 'funded account'} · {data.targetPct}% target · {data.dailyDdPct}% daily / {data.maxDdPct}% {data.trailing ? 'trailing' : 'max'} drawdown), plus your funded/prop accounts and their trades.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
+          {!readOnly && (
+            <button onClick={() => setImporting((v) => !v)} style={ghostBtn}>{importing ? 'Close' : 'Paste funded trades'}</button>
+          )}
           {!readOnly && <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? 'Close' : 'Edit'}</button>}
         </div>
       </div>
@@ -227,18 +215,12 @@ export function AccountMetrics() {
         </div>
       )}
 
-      {/* Other accounts — capital + trade P/L, full traders only (hidden from the
-          view-only role, like the rest of the capital figures). */}
-      {!readOnly && oanda?.configured && (
-        <>
-          <SectionLabel>Live brokers</SectionLabel>
-          <OandaCapitalCard oanda={oanda} showMoney={showCapital} isPhone={isPhone} />
-        </>
-      )}
-
+      {/* Funded / prop accounts — capital + trade P/L, full traders only (hidden
+          from the view-only role, like the rest of the capital figures). */}
       {!readOnly && (
         <>
           <SectionLabel>Funded / prop accounts</SectionLabel>
+          {importing && <FundedImportPanel onClose={() => setImporting(false)} />}
           <FundedManager showMoney={showCapital} readOnly={readOnly} />
         </>
       )}
@@ -246,7 +228,7 @@ export function AccountMetrics() {
   );
 }
 
-// A divider + label introducing a group of account cards on the Accounts screen.
+// A divider + label introducing a group of account cards on the Funded screen.
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '22px 0 12px' }}>
@@ -256,98 +238,122 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; showMoney: boolean; isPhone: boolean }) {
-  const multi = oanda.accounts.length > 1;
-  const ccy = oanda.currency ?? oanda.accounts[0]?.currency ?? 'USD';
-  const m = (n: number | null, c = ccy) => (n == null ? '—' : showMoney ? fmtCcy(n, c) : '•••••');
-  const upPl = (oanda.unrealizedPl ?? 0) >= 0;
-  const anyError = oanda.accounts.some((a) => !a.ok);
+// ---- Paste/upload completed funded-account trades ----
+// The trades are saved to the funded account; Claude reads the trades (and the
+// account equity, if shown) off the screenshot. Duplicates are skipped by time
+// + profit. This is the same importer that used to live on the Trade Log.
+function FundedImportPanel({ onClose }: { onClose: () => void }) {
+  const [accounts, setAccounts] = useState<FundedAccount[] | null>(null);
+  const [accountId, setAccountId] = useState('');
+  const [newName, setNewName] = useState('');
+  const [platform, setPlatform] = useState('FTP');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .funded()
+      .then((d) => {
+        if (!alive) return;
+        setAccounts(d.accounts);
+        if (d.accounts[0]) setAccountId(d.accounts[0].id);
+      })
+      .catch(() => alive && setAccounts([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const creatingNew = accountId === '';
+
+  async function ensureAccount(): Promise<string | null> {
+    if (accountId) return accountId;
+    const name = newName.trim();
+    if (!name) {
+      setError('Pick an account, or name a new one to create.');
+      return null;
+    }
+    const d = await api.addFundedAccount({ platform: platform.trim() || 'FTP', label: name });
+    const created = d.accounts.find((a) => a.label === name) ?? d.accounts[d.accounts.length - 1];
+    setAccounts(d.accounts);
+    setAccountId(created?.id ?? '');
+    return created?.id ?? null;
+  }
+
+  function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(new Error('Could not read the file'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  async function handleFile(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/')) return;
+    setBusy(true);
+    setError(null);
+    setMsg(null);
+    try {
+      const id = await ensureAccount();
+      if (!id) return;
+      const dataUrl = await fileToDataUrl(file);
+      const res = await api.importFundedTrades(id, { imageBase64: dataUrl, mediaType: file.type });
+      setAccounts(res.funded.accounts);
+      const parts = [`${res.added} added`];
+      if (res.skipped) parts.push(`${res.skipped} duplicate${res.skipped === 1 ? '' : 's'} skipped`);
+      if (res.ignored) parts.push(`${res.ignored} ignored`);
+      if (res.balanceSet != null) parts.push('balance updated');
+      setMsg(`${parts.join(' · ')} — added to the account below.`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Import failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function paste() {
+    const file = await readClipboardImage();
+    if (file) void handleFile(file);
+    else setError('No image found on the clipboard — copy a screenshot first, or use Upload.');
+  }
+
   return (
-    <div style={{ ...card, marginTop: 14 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>OANDA Capital</span>
-          <span style={{ ...pill, color: GREEN, border: `1px solid ${GREEN}` }}>Live</span>
-        </div>
-        <span style={{ fontSize: 10.5, color: FAINT }}>From the OANDA API — updates as trades are placed</span>
+    <div style={{ ...panel, marginBottom: 16 }}>
+      <div style={panelLabel}>Paste completed funded-account trades</div>
+      <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
+        Claude reads the trades (and the account equity, if shown) off the screenshot and logs them on a funded
+        account. Duplicates are skipped by time + profit.
       </div>
-
-      {/* Headline NAV / balance / open P/L (combined when one currency) */}
-      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(3,1fr)', gap: 14 }}>
-        <Stat label="Capital (NAV)" value={m(oanda.nav)} big />
-        <Stat label="Balance" value={m(oanda.balance)} />
-        <Stat label="Open P/L" value={m(oanda.unrealizedPl)} color={oanda.unrealizedPl == null ? undefined : upPl ? GREEN : RED} />
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {accounts === null ? (
+          <span style={{ fontSize: 12, color: MUTED }}>Loading accounts…</span>
+        ) : (
+          <select value={accountId} onChange={(e) => setAccountId(e.target.value)} style={{ ...input, flex: '0 0 200px', width: 'auto' }}>
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>{a.platform} · {a.label}</option>
+            ))}
+            <option value="">＋ New account…</option>
+          </select>
+        )}
+        {creatingNew && accounts !== null && (
+          <>
+            <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Platform" style={{ ...input, flex: '0 0 130px', width: 'auto' }} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New account name" style={{ ...input, flex: '1 1 160px', width: 'auto' }} />
+          </>
+        )}
+        <button onClick={paste} disabled={busy} style={{ ...ghostBtn, opacity: busy ? 0.6 : 1 }}>Paste</button>
+        <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>
+          {busy ? 'Reading…' : 'Upload screenshot'}
+        </button>
+        <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { void handleFile(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
+        <button onClick={onClose} style={ghostBtn}>Done</button>
       </div>
-
-      {/* Capital gained from trades — deposits/withdrawals don't count */}
-      {oanda.pnl && (
-        <div style={{ marginTop: 14, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
-          <div style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 }}>
-            Gained from trades <span style={{ color: FAINT, textTransform: 'none', letterSpacing: 0 }}>· deposits excluded</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr 1fr 1fr' : 'repeat(3,1fr)', gap: 14 }}>
-            <PnlStat label="Today" n={oanda.pnl.daily} m={m} />
-            <PnlStat label="This week" n={oanda.pnl.weekly} m={m} />
-            <PnlStat label="30 days" n={oanda.pnl.monthly} m={m} />
-          </div>
-        </div>
-      )}
-
-      {(multi || oanda.currency == null) && (
-        <div style={{ marginTop: 12, borderTop: `1px solid ${BORDER}` }}>
-          {oanda.accounts.map((a) => (
-            <div key={a.connectionId} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '9px 2px', borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>{a.label}</span>
-              {a.ok ? (
-                <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', fontFamily: "'IBM Plex Mono', monospace" }}>
-                  <span style={{ fontSize: 12, color: MUTED }}>
-                    NAV <b style={{ color: '#fff' }}>{m(a.nav, a.currency)}</b> · Bal {m(a.balance, a.currency)} · Open P/L{' '}
-                    <b style={{ color: (a.unrealizedPl ?? 0) >= 0 ? GREEN : RED }}>{m(a.unrealizedPl, a.currency)}</b>
-                  </span>
-                  {a.pnl && (
-                    <span style={{ fontSize: 11, color: FAINT }}>
-                      Trades · today <b style={{ color: a.pnl.daily >= 0 ? GREEN : RED }}>{m(a.pnl.daily, a.currency)}</b> · 7d{' '}
-                      <b style={{ color: a.pnl.weekly >= 0 ? GREEN : RED }}>{m(a.pnl.weekly, a.currency)}</b> · 30d{' '}
-                      <b style={{ color: a.pnl.monthly >= 0 ? GREEN : RED }}>{m(a.pnl.monthly, a.currency)}</b>
-                    </span>
-                  )}
-                </span>
-              ) : (
-                <span style={{ fontSize: 11.5, color: RED }}>Couldn’t reach: {a.error}</span>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-      {oanda.currency == null && oanda.accounts.length > 1 && !multi && (
-        <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>Accounts use different currencies — shown separately.</div>
-      )}
-      {anyError && !multi && (
-        <div style={{ fontSize: 11, color: RED, marginTop: 8 }}>Couldn’t reach OANDA — showing the last figures available.</div>
-      )}
-    </div>
-  );
-}
-
-function Stat({ label, value, big, color }: { label: string; value: string; big?: boolean; color?: string }) {
-  return (
-    <div>
-      <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</div>
-      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: big ? 26 : 18, fontWeight: 700, color: color ?? '#fff', marginTop: 4 }}>{value}</div>
-    </div>
-  );
-}
-
-// One trade-P/L window (Today / This week / 30 days). Green for a gain, red for a
-// loss, and a leading + on gains so the sign reads at a glance.
-function PnlStat({ label, n, m }: { label: string; n: number; m: (v: number | null) => string }) {
-  const up = n >= 0;
-  return (
-    <div>
-      <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</div>
-      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 18, fontWeight: 700, color: up ? GREEN : RED, marginTop: 4 }}>
-        {n === 0 ? m(0) : `${up ? '+' : ''}${m(n)}`}
-      </div>
+      {msg && <div style={{ fontSize: 12, color: GREEN, marginTop: 10 }}>{msg}</div>}
+      {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginTop: 10 }}>{error}</div>}
     </div>
   );
 }
@@ -452,6 +458,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 18 };
 const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' };
+const panelLabel: CSSProperties = { fontSize: 10.5, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 };
 const label: CSSProperties = { fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 4 };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const pill: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', borderRadius: 5, padding: '2px 8px' };

@@ -123,9 +123,9 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
-  metrics: {
-    title: 'Accounts',
-    intro: 'Every account in one place: your FTP prop challenge (equity vs. target + drawdown), your live broker capital (OANDA), and your funded/prop accounts tracked from screenshots — each with daily / weekly / 30-day trade P/L. Capital figures are shown to full traders only.',
+  funded: {
+    title: 'Funded',
+    intro: 'Everything for your funded account in one place: your FTP prop challenge (equity vs. target + drawdown) and your funded/prop accounts tracked from screenshots — each with daily / weekly / 30-day trade P/L. Capital figures are shown to full traders only.',
     steps: [
       {
         title: 'The FTP challenge',
@@ -136,16 +136,31 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'FTP has no API — type your equity, or use “Update balance from a screenshot”: upload or paste (⌘/Ctrl+V) a screenshot of your account and Claude reads the balance and sets your equity.',
       },
       {
-        title: 'Live brokers (OANDA)',
-        body: 'Your OANDA capital (NAV, balance, open P/L) is pulled live from the API, so it updates as trades are placed — with Today / This week / 30-day P/L from your closed trades (deposits don’t count).',
-      },
-      {
         title: 'Funded / prop accounts',
-        body: 'Add prop accounts with “+ Add account”. Log trades by pasting a trade-history screenshot — Claude reads the trades and the account equity, skips duplicates (by time + profit), and shows each account’s balance and Today / This week / 30-day P/L.',
+        body: 'Add prop accounts with “+ Add account”. Log trades by pasting a trade-history screenshot — Claude reads the trades and the account equity, skips duplicates (by time + profit), and shows each account’s balance and Today / This week / 30-day P/L. The “Paste funded trades” button at the top can create an account on the fly.',
       },
       {
         title: 'Hide dollar details',
         body: 'Use “Hide $” or Privacy mode to mask every figure on the page at once. Percentages and drawdown buffers still show.',
+      },
+    ],
+  },
+
+  metrics: {
+    title: 'Live Brokers',
+    intro: 'Your live broker capital, pulled from the broker API so it updates as trades are placed. Capital figures are shown to full traders only; the FTP challenge and funded/prop accounts live on the Funded tab.',
+    steps: [
+      {
+        title: 'Live brokers (OANDA)',
+        body: 'Your OANDA capital (NAV, balance, open P/L) is pulled live from the API, so it updates as trades are placed — with Today / This week / 30-day P/L from your closed trades (deposits don’t count).',
+      },
+      {
+        title: 'Connect a broker',
+        body: 'No broker connected yet? Connect an OANDA account from Admin → Broker connections and your live capital will appear here automatically.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Use “Hide $” or Privacy mode to mask every figure on the page at once.',
       },
     ],
   },

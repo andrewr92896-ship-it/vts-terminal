@@ -39,9 +39,9 @@ const num = (s: string): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-// The funded-accounts manager, embedded as a section of the Accounts screen
-// (Account Metrics). It owns its own data/state; the parent supplies the single
-// page-level money toggle (showMoney) and the viewer's write access (readOnly).
+// The funded-accounts manager, embedded as a section of the Funded screen.
+// It owns its own data/state; the parent supplies the single page-level money
+// toggle (showMoney) and the viewer's write access (readOnly).
 export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; readOnly: boolean }) {
   const { isPhone } = useResponsive();
 
