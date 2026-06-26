@@ -135,7 +135,7 @@ export function MarketNews() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Market News</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Market &amp; geopolitical headlines with impact and bias tags, plus the economic calendar (Eastern Time).
+            Market &amp; geopolitical headlines with impact and bias tags, plus a live economic calendar from Forex Factory — upcoming releases and actuals as they print (Eastern Time).
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -211,7 +211,7 @@ export function MarketNews() {
           <SectionLabel text={`Economic calendar · ${data.calendar.length}`} />
           {data.calendar.length === 0 ? (
             <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-              No events yet.{canWrite ? ' Add one with “+ Calendar event”.' : ''}
+              No events yet — the Forex Factory feed populates within a few minutes.{canWrite ? ' You can also add one with “+ Calendar event”.' : ''}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
