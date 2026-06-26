@@ -638,6 +638,13 @@ export interface AnalyzeAccountResult {
 }
 
 // ---- Trading — live OANDA account capital (mirror of apps/api/src/trading/capital.ts) ----
+// Capital gained from trades over rolling windows (trade-only, so deposits and
+// withdrawals never count as a gain).
+export interface OandaPnl {
+  daily: number; // since the start of today (Eastern Time)
+  weekly: number; // last 7 days
+  monthly: number; // last 30 days
+}
 export interface OandaCapitalAccount {
   connectionId: string;
   label: string;
@@ -648,6 +655,7 @@ export interface OandaCapitalAccount {
   marginUsed: number | null;
   marginAvailable: number | null;
   openTradeCount: number | null;
+  pnl: OandaPnl | null;
   ok: boolean;
   error: string | null;
 }
@@ -658,6 +666,7 @@ export interface OandaCapital {
   balance: number | null;
   nav: number | null;
   unrealizedPl: number | null;
+  pnl: OandaPnl | null;
   generatedAt: number;
 }
 

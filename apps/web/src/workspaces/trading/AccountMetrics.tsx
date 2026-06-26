@@ -256,15 +256,38 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
         <Stat label="Open P/L" value={m(oanda.unrealizedPl)} color={oanda.unrealizedPl == null ? undefined : upPl ? GREEN : RED} />
       </div>
 
+      {/* Capital gained from trades — deposits/withdrawals don't count */}
+      {oanda.pnl && (
+        <div style={{ marginTop: 14, borderTop: `1px solid ${BORDER}`, paddingTop: 12 }}>
+          <div style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 }}>
+            Gained from trades <span style={{ color: FAINT, textTransform: 'none', letterSpacing: 0 }}>· deposits excluded</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr 1fr 1fr' : 'repeat(3,1fr)', gap: 14 }}>
+            <PnlStat label="Today" n={oanda.pnl.daily} m={m} />
+            <PnlStat label="This week" n={oanda.pnl.weekly} m={m} />
+            <PnlStat label="30 days" n={oanda.pnl.monthly} m={m} />
+          </div>
+        </div>
+      )}
+
       {(multi || oanda.currency == null) && (
         <div style={{ marginTop: 12, borderTop: `1px solid ${BORDER}` }}>
           {oanda.accounts.map((a) => (
-            <div key={a.connectionId} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 2px', borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
+            <div key={a.connectionId} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '9px 2px', borderTop: `1px solid ${BORDER}`, gap: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>{a.label}</span>
               {a.ok ? (
-                <span style={{ fontSize: 12, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>
-                  NAV <b style={{ color: '#fff' }}>{m(a.nav, a.currency)}</b> · Bal {m(a.balance, a.currency)} · P/L{' '}
-                  <b style={{ color: (a.unrealizedPl ?? 0) >= 0 ? GREEN : RED }}>{m(a.unrealizedPl, a.currency)}</b>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', fontFamily: "'IBM Plex Mono', monospace" }}>
+                  <span style={{ fontSize: 12, color: MUTED }}>
+                    NAV <b style={{ color: '#fff' }}>{m(a.nav, a.currency)}</b> · Bal {m(a.balance, a.currency)} · Open P/L{' '}
+                    <b style={{ color: (a.unrealizedPl ?? 0) >= 0 ? GREEN : RED }}>{m(a.unrealizedPl, a.currency)}</b>
+                  </span>
+                  {a.pnl && (
+                    <span style={{ fontSize: 11, color: FAINT }}>
+                      Trades · today <b style={{ color: a.pnl.daily >= 0 ? GREEN : RED }}>{m(a.pnl.daily, a.currency)}</b> · 7d{' '}
+                      <b style={{ color: a.pnl.weekly >= 0 ? GREEN : RED }}>{m(a.pnl.weekly, a.currency)}</b> · 30d{' '}
+                      <b style={{ color: a.pnl.monthly >= 0 ? GREEN : RED }}>{m(a.pnl.monthly, a.currency)}</b>
+                    </span>
+                  )}
                 </span>
               ) : (
                 <span style={{ fontSize: 11.5, color: RED }}>Couldn’t reach: {a.error}</span>
@@ -288,6 +311,20 @@ function Stat({ label, value, big, color }: { label: string; value: string; big?
     <div>
       <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</div>
       <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: big ? 26 : 18, fontWeight: 700, color: color ?? '#fff', marginTop: 4 }}>{value}</div>
+    </div>
+  );
+}
+
+// One trade-P/L window (Today / This week / 30 days). Green for a gain, red for a
+// loss, and a leading + on gains so the sign reads at a glance.
+function PnlStat({ label, n, m }: { label: string; n: number; m: (v: number | null) => string }) {
+  const up = n >= 0;
+  return (
+    <div>
+      <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</div>
+      <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 18, fontWeight: 700, color: up ? GREEN : RED, marginTop: 4 }}>
+        {n === 0 ? m(0) : `${up ? '+' : ''}${m(n)}`}
+      </div>
     </div>
   );
 }

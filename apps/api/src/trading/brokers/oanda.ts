@@ -67,6 +67,40 @@ export interface OandaAccountCapital {
   openTradeCount: number | null;
 }
 
+// One closed trade's realized P/L and when it closed. Realized P/L is purely
+// trade profit — deposits/withdrawals are separate (non-trade) transactions and
+// never appear here, so P/L stats built from these exclude added capital.
+export interface OandaClosedTradePnl {
+  realizedPl: number;
+  closeTimeMs: number;
+}
+
+interface OandaClosedTrade {
+  realizedPL?: string;
+  closeTime?: string;
+  state?: string;
+}
+interface OandaTradesResponse {
+  trades?: OandaClosedTrade[];
+}
+
+// Recent closed trades for an account (up to 500, OANDA's max page). Used to
+// total trade-only P/L over rolling windows on Account Metrics.
+export async function fetchOandaClosedTrades(cfg: OandaConfig): Promise<OandaClosedTradePnl[]> {
+  const res = await fetch(`${cfg.base}/v3/accounts/${cfg.accountId}/trades?state=CLOSED&count=500`, {
+    headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`OANDA responded ${res.status}`);
+  const json = (await res.json()) as OandaTradesResponse;
+  const out: OandaClosedTradePnl[] = [];
+  for (const t of json.trades ?? []) {
+    const pl = num(t.realizedPL);
+    const ct = t.closeTime ? Date.parse(t.closeTime) : NaN;
+    if (pl != null && Number.isFinite(ct)) out.push({ realizedPl: pl, closeTimeMs: ct });
+  }
+  return out;
+}
+
 export async function fetchOandaAccountSummary(cfg: OandaConfig): Promise<OandaAccountCapital> {
   const res = await fetch(`${cfg.base}/v3/accounts/${cfg.accountId}/summary`, {
     headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
