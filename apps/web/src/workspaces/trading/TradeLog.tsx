@@ -31,8 +31,8 @@ const INPUT_BG = '#091633';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
-// FTP is intentionally absent — funded/FTP trades are tracked in the Funded
-// section, kept separate from the desk Trade Log.
+// FTP is intentionally absent — funded/FTP trades are tracked under Accounts
+// (the Funded subsection), kept separate from the desk Trade Log.
 const BROKERS: { key: string; label: string }[] = [
   { key: '', label: 'No broker' },
   { key: 'oanda', label: 'OANDA' },

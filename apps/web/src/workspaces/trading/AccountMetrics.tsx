@@ -118,7 +118,10 @@ export function AccountMetrics() {
   if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading challenge…</div>;
 
   const canSee = data.canSeeBalances;
-  const showMoney = canSee && !privacy && !hideMoney;
+  const showMoney = canSee && !privacy && !hideMoney; // FTP challenge figures (brokerage-view gated)
+  // Live broker + funded capital are a separate data source with no per-account
+  // brokerage permission — mask them off privacy + the page Hide-$ toggle only.
+  const showCapital = !privacy && !hideMoney;
   const m = data.metrics;
   const st = STATUS[m.status];
   const dollars = (n: number | null) => (n == null ? '—' : showMoney ? usd(n) : '•••••');
@@ -137,7 +140,7 @@ export function AccountMetrics() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
-          {canSee && <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>}
+          <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
           {!readOnly && <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? 'Close' : 'Edit'}</button>}
         </div>
       </div>
@@ -229,14 +232,14 @@ export function AccountMetrics() {
       {!readOnly && oanda?.configured && (
         <>
           <SectionLabel>Live brokers</SectionLabel>
-          <OandaCapitalCard oanda={oanda} showMoney={showMoney} isPhone={isPhone} />
+          <OandaCapitalCard oanda={oanda} showMoney={showCapital} isPhone={isPhone} />
         </>
       )}
 
       {!readOnly && (
         <>
           <SectionLabel>Funded / prop accounts</SectionLabel>
-          <FundedManager showMoney={showMoney} readOnly={readOnly} />
+          <FundedManager showMoney={showCapital} readOnly={readOnly} />
         </>
       )}
     </div>

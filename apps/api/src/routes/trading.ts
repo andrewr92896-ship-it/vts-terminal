@@ -624,8 +624,10 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   // ---- Funded platforms (manual / screenshot-tracked prop accounts) ----
   // Kept separate from the Live Wall / Trade Log: no API, hand-kept balance, and
-  // trades imported from screenshots with duplicate detection.
-  app.get('/api/trading/funded', read, async (request) => getFunded(request.currentUser!.id));
+  // trades imported from screenshots with duplicate detection. Behind the *write*
+  // guard so funded balances/P-L are full-trader-only, matching the OANDA capital
+  // endpoint — the view-only role never sees account capital, in the UI or the API.
+  app.get('/api/trading/funded', write, async (request) => getFunded(request.currentUser!.id));
 
   app.post('/api/trading/funded/accounts', write, async (request, reply) => {
     const parsed = fundedAccountSchema.safeParse(request.body);
