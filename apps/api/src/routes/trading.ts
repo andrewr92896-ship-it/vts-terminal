@@ -10,8 +10,17 @@ import {
   updateTrade,
 } from '../trading/trades.js';
 import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
-import { getHistory } from '../trading/history.js';
+import { getHistory, removePosition } from '../trading/history.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
+import {
+  getFunded,
+  addFundedAccount,
+  updateFundedAccount,
+  removeFundedAccount,
+  addFundedTrade,
+  removeFundedTrade,
+  importFundedTrades,
+} from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
 import {
   getMarketNews,
@@ -40,7 +49,13 @@ import {
   removeManualPosition,
   updateManualPosition,
 } from '../trading/manual.js';
-import { aiConfigured, askClaude, parsePositionScreenshot } from '../ai/claude.js';
+import {
+  aiConfigured,
+  askClaude,
+  parsePositionScreenshot,
+  parseAccountScreenshot,
+  parseTradeHistoryScreenshot,
+} from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
 import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
@@ -124,6 +139,15 @@ export async function tradingRoutes(app: FastifyInstance) {
     return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
   });
 
+  // Delete a recorded closed trade the caller owns (e.g. a test trade). Only the
+  // owner's own positions are removable; the refreshed History is returned.
+  app.delete('/api/trading/history/:id', write, async (request) => {
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    await removePosition(u.id, id);
+    return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
+  });
+
   // ---- Account Metrics (prop-firm challenge) ----
   app.get('/api/trading/challenge', read, async (request) => {
     const u = request.currentUser!;
@@ -168,6 +192,50 @@ export async function tradingRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     return syncEquityFromTradeLog(u.id, SEE_BALANCES);
   });
+
+  // Read the current balance/equity off an FTP-account screenshot (Opus 4.8
+  // vision) and set the challenge equity to it — FTP has no API, so this keeps
+  // Account Metrics current from the prop dashboard. Screenshots are sizeable.
+  app.post(
+    '/api/trading/challenge/analyze',
+    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const parsed = analyzeSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'A screenshot image is required' });
+      }
+      let data = parsed.data.imageBase64;
+      let media: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' = parsed.data.mediaType ?? 'image/png';
+      const m = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+      if (m) {
+        media = m[1] as typeof media;
+        data = m[2];
+      }
+      const u = request.currentUser!;
+      try {
+        await enforceAiLimit(u.id, 'account_screenshot');
+        const { parsed: p, model } = await parseAccountScreenshot(data, media);
+        // Equity (balance + open P/L) is the figure the drawdown math wants;
+        // fall back to balance when equity is not shown separately.
+        const value = p.equity ?? p.balance;
+        if (value == null) {
+          return reply.code(422).send({
+            error: "Couldn't read a balance from that screenshot. Type it in, or try a clearer image.",
+            parsed: p,
+          });
+        }
+        const challenge = await updateChallenge(u.id, { currentEquity: value }, SEE_BALANCES);
+        return { challenge, parsed: p, model };
+      } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+        const msg = err instanceof Error ? err.message : 'Analysis failed';
+        return reply.code(502).send({ error: msg });
+      }
+    },
+  );
 
   // ---- Strategy Sessions ----
   app.get('/api/trading/sessions', read, async (request) => ({ sessions: await listSessions(request.currentUser!.id) }));
@@ -301,6 +369,14 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.delete('/api/trading/trades/:id', write, async (request) => {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
+    // A `pos:` id is a synced Live Wall position, not a hand-logged trade — remove
+    // the underlying position (no undo for these). Everything else is a real
+    // Trade Log row, which supports undo via the returned `removed` snapshot.
+    if (id.startsWith('pos:')) {
+      await removePosition(u.id, id.slice(4));
+      const data = await getTrades(u.id, isDemoUser(u));
+      return { ...data, removed: null };
+    }
     const removed = await removeTrade(u.id, id);
     const data = await getTrades(u.id, isDemoUser(u));
     return { ...data, removed };
@@ -541,6 +617,86 @@ export async function tradingRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     return { positions: await removeManualPosition(uid, id) };
   });
+
+  // ---- Funded platforms (manual / screenshot-tracked prop accounts) ----
+  // Kept separate from the Live Wall / Trade Log: no API, hand-kept balance, and
+  // trades imported from screenshots with duplicate detection.
+  app.get('/api/trading/funded', read, async (request) => getFunded(request.currentUser!.id));
+
+  app.post('/api/trading/funded/accounts', write, async (request, reply) => {
+    const parsed = fundedAccountSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'An account name is required' });
+    try {
+      return await addFundedAccount(request.currentUser!.id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add account' });
+    }
+  });
+
+  app.patch('/api/trading/funded/accounts/:id', write, async (request, reply) => {
+    const parsed = editFundedAccountSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the account details and try again' });
+    const id = (request.params as { id: string }).id;
+    try {
+      return await updateFundedAccount(request.currentUser!.id, id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update account' });
+    }
+  });
+
+  app.delete('/api/trading/funded/accounts/:id', write, async (request) => {
+    const id = (request.params as { id: string }).id;
+    return removeFundedAccount(request.currentUser!.id, id);
+  });
+
+  app.post('/api/trading/funded/accounts/:id/trades', write, async (request, reply) => {
+    const parsed = fundedTradeSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the trade details and try again' });
+    const id = (request.params as { id: string }).id;
+    try {
+      return await addFundedTrade(request.currentUser!.id, id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add trade' });
+    }
+  });
+
+  app.delete('/api/trading/funded/trades/:id', write, async (request) => {
+    const id = (request.params as { id: string }).id;
+    return removeFundedTrade(request.currentUser!.id, id);
+  });
+
+  // Read trades off a funded-account trade-history screenshot (Opus 4.8 vision)
+  // and log them, skipping duplicates. Screenshots are sizeable.
+  app.post(
+    '/api/trading/funded/accounts/:id/import',
+    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const parsed = analyzeSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'A screenshot image is required' });
+      let data = parsed.data.imageBase64;
+      let media: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' = parsed.data.mediaType ?? 'image/png';
+      const mm = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+      if (mm) {
+        media = mm[1] as typeof media;
+        data = mm[2];
+      }
+      const uid = request.currentUser!.id;
+      const id = (request.params as { id: string }).id;
+      try {
+        await enforceAiLimit(uid, 'funded_screenshot');
+        const { parsed: p, model } = await parseTradeHistoryScreenshot(data, media);
+        const { data: funded, added, skipped, ignored } = await importFundedTrades(uid, id, p.trades);
+        return { funded, added, skipped, ignored, summary: p.summary, model };
+      } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+        const msg = err instanceof Error ? err.message : 'Analysis failed';
+        return reply.code(502).send({ error: msg });
+      }
+    },
+  );
 }
 
 const brokerKind = z.enum(BROKER_CONNECTION_KINDS);
@@ -603,6 +759,37 @@ const challengeSchema = z
 const analyzeSchema = z.object({
   imageBase64: z.string().min(1),
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
+});
+
+const fundedAccountSchema = z.object({
+  platform: z.string().trim().max(40).optional(),
+  label: z.string().trim().min(1).max(80),
+  currency: z.string().trim().max(8).optional(),
+  balance: z.number().finite().nullish(),
+  startingBalance: z.number().finite().nullish(),
+  notes: z.string().trim().max(2000).nullish(),
+});
+const editFundedAccountSchema = z
+  .object({
+    platform: z.string().trim().max(40).optional(),
+    label: z.string().trim().min(1).max(80).optional(),
+    currency: z.string().trim().max(8).optional(),
+    balance: z.number().finite().nullish(),
+    startingBalance: z.number().finite().nullish(),
+    notes: z.string().trim().max(2000).nullish(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const fundedTradeSchema = z.object({
+  instrument: z.string().trim().min(1).max(40),
+  side: side.optional(),
+  units: z.number().finite().min(0).nullish(),
+  entryPrice: price.nullish(),
+  exitPrice: price.nullish(),
+  realizedPl: price.nullish(),
+  openedAt: ts.nullish(),
+  closedAt: ts.nullish(),
+  notes: z.string().trim().max(2000).nullish(),
 });
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);

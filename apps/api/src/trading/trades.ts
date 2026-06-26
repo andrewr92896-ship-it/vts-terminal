@@ -3,12 +3,14 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingTrades,
+  tradingPositions,
   users,
   TRADE_SIDES,
   TRADE_STATUSES,
   type TradeSide,
   type TradeStatus,
   type TradingTradeRow,
+  type TradingPositionRow,
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
@@ -133,7 +135,42 @@ function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeR
   };
 }
 
-function summarize(rows: TradingTradeRow[]): TradeSummary {
+// A Live Wall position (open or closed) shown in the Trade Log as a synced row.
+// FTP positions are excluded by the caller — those are tracked in the Funded
+// section instead. The id is prefixed `pos:` so the remove route knows to delete
+// the underlying position rather than a hand-logged trade.
+function positionToRecord(row: TradingPositionRow, owner: string, viewerId: string): TradeRecord {
+  const closed = row.status === 'closed';
+  return {
+    id: `pos:${row.id}`,
+    ownerId: row.userId,
+    owner,
+    isMine: row.userId === viewerId,
+    broker: row.broker,
+    instrument: row.instrument,
+    side: isSide(row.side) ? row.side : 'long',
+    status: closed ? 'closed' : 'open',
+    plannedEntry: row.plannedEntry,
+    entryPrice: row.entryPrice,
+    exitPrice: row.exitPrice,
+    takeProfit: row.takeProfit,
+    stopLoss: row.stopLoss,
+    units: row.units,
+    slippage: slippageOf(row.plannedEntry, row.entryPrice),
+    realizedPl: closed ? row.realizedPl : null,
+    strategy: row.strategy,
+    timeframe: row.timeframe,
+    openedAt: (row.openedAt ?? row.firstSeenAt).getTime(),
+    closedAt: row.closedAt ? row.closedAt.getTime() : null,
+    notes: null,
+    createdAt: row.firstSeenAt.getTime(),
+    updatedAt: row.lastSeenAt.getTime(),
+  };
+}
+
+// Summary over the combined (manual + synced) record list, mirroring summarize()
+// below so the KPI cards read the same whatever the source of each row.
+function summarizeRecords(records: TradeRecord[]): TradeSummary {
   let open = 0;
   let closed = 0;
   let wins = 0;
@@ -141,9 +178,8 @@ function summarize(rows: TradingTradeRow[]): TradeSummary {
   let totalPl = 0;
   let slipSum = 0;
   let slipCount = 0;
-  let scored = 0; // closed trades with a known P/L
-
-  for (const r of rows) {
+  let scored = 0;
+  for (const r of records) {
     if (r.status === 'open') open += 1;
     else closed += 1;
     if (r.realizedPl != null) {
@@ -154,15 +190,13 @@ function summarize(rows: TradingTradeRow[]): TradeSummary {
         else losses += 1;
       }
     }
-    const slip = slippageOf(r.plannedEntry, r.entryPrice);
-    if (slip != null) {
-      slipSum += slip;
+    if (r.slippage != null) {
+      slipSum += r.slippage;
       slipCount += 1;
     }
   }
-
   return {
-    total: rows.length,
+    total: records.length,
     open,
     closed,
     wins,
@@ -194,15 +228,36 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
     return viewerIsDemo ? r.username === DEMO_USERNAME : r.username !== DEMO_USERNAME;
   });
 
+  const manualRecords = visible.map((r) => toRecord(r.trade, r.username, viewerId));
+
+  // The Trade Log also reflects the Live Wall automatically: every non-FTP
+  // recorded position (open or closed) is folded in as a synced, removable row.
+  // FTP positions are deliberately excluded — those live in the Funded section,
+  // tracked separately. The sandboxed demo never reaches the real desk's
+  // positions, so it only ever sees its own showcase trades.
+  let positionRecords: TradeRecord[] = [];
+  if (!viewerIsDemo) {
+    const posRows = await db
+      .select({ pos: tradingPositions, username: users.username, roles: users.roles })
+      .from(tradingPositions)
+      .innerJoin(users, eq(users.id, tradingPositions.userId));
+    positionRecords = posRows
+      .filter(
+        (r) =>
+          r.pos.broker !== 'ftp' &&
+          r.username !== DEMO_USERNAME &&
+          canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'),
+      )
+      .map((r) => positionToRecord(r.pos, r.username, viewerId));
+  }
+
+  const all = [...manualRecords, ...positionRecords];
   // Open trades first, then newest by open time — the order a trader scans in.
-  const sorted = [...visible].sort((a, b) => {
-    if (a.trade.status !== b.trade.status) return a.trade.status === 'open' ? -1 : 1;
-    return b.trade.openedAt.getTime() - a.trade.openedAt.getTime();
+  const sorted = all.sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
+    return b.openedAt - a.openedAt;
   });
-  return {
-    trades: sorted.map((r) => toRecord(r.trade, r.username, viewerId)),
-    summary: summarize(visible.map((r) => r.trade)),
-  };
+  return { trades: sorted, summary: summarizeRecords(sorted) };
 }
 
 export async function addTrade(userId: string, input: TradeInput): Promise<string> {

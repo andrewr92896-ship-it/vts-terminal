@@ -67,6 +67,7 @@ export function mapKrakenPositions(json: KrakenResponse): LiveTrade[] {
       currentPrice: null,
       takeProfit: null,
       stopLoss: null,
+      trailingStopLoss: null,
       slippage: null,
       unrealizedPl: num(p.net),
       strategy: null,

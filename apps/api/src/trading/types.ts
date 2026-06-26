@@ -27,6 +27,9 @@ export interface LiveTrade {
   currentPrice: number | null; // latest mark, when the broker provides it
   takeProfit: number | null;
   stopLoss: number | null;
+  // The current trigger price of a trailing stop, when the broker reports one.
+  // Distinct from stopLoss (a fixed price) — this one trails the market.
+  trailingStopLoss: number | null;
   // entryPrice - plannedEntry, in price terms; null when there is no plan.
   slippage: number | null;
   // Open P/L in account currency. Shared with the whole trading team; null only

@@ -308,6 +308,7 @@ export const tradingPositions = sqliteTable('trading_positions', {
   entryPrice: real('entry_price').notNull(),
   takeProfit: real('take_profit'),
   stopLoss: real('stop_loss'),
+  trailingStopLoss: real('trailing_stop_loss'), // trailing-stop trigger price, when the broker reports one
   currentPrice: real('current_price'), // last seen mark while open
   unrealizedPl: real('unrealized_pl'), // last seen open P/L while open
   exitPrice: real('exit_price'), // set on close (= last currentPrice)
@@ -376,6 +377,7 @@ export const manualPositions = sqliteTable('manual_positions', {
   currentPrice: real('current_price'), // latest mark, when the trader supplies it
   takeProfit: real('take_profit'),
   stopLoss: real('stop_loss'),
+  trailingStopLoss: real('trailing_stop_loss'), // trailing-stop trigger price, when supplied
   plannedEntry: real('planned_entry'), // the alert/intended price; null if none
   openedAt: integer('opened_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
@@ -408,6 +410,54 @@ export const tradingChallenges = sqliteTable('trading_challenges', {
 });
 
 export type TradingChallengeRow = typeof tradingChallenges.$inferSelect;
+
+// ---- Trading — Funded platforms (manual / screenshot-tracked prop accounts) ----
+// Funded prop accounts (FTP and other funded platforms) are tracked separately
+// from the Live Wall / Trade Log because they have no usable API: the trader
+// keeps the balance current by hand and logs trades from screenshots Claude
+// parses. Each account belongs to one user. Balance is a real in account
+// currency; null until the trader sets it.
+export const fundedAccounts = sqliteTable('funded_accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  platform: text('platform').notNull().default('FTP'), // e.g. "FTP", "Topstep", "Apex"
+  label: text('label').notNull(), // the trader's name for this account
+  currency: text('currency').notNull().default('USD'),
+  balance: real('balance'), // current account balance, kept current by hand
+  startingBalance: real('starting_balance'), // the account's funded size
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type FundedAccountRow = typeof fundedAccounts.$inferSelect;
+
+// One trade on a funded account, entered by hand or read off a screenshot by
+// Claude. `dedupKey` is a stable hash of the trade's identifying fields so
+// re-posting the same screenshot does not double-log a trade (a unique index on
+// (account_id, dedup_key) backs an upsert-ignore).
+export const fundedTrades = sqliteTable('funded_trades', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => fundedAccounts.id, { onDelete: 'cascade' }),
+  instrument: text('instrument').notNull(),
+  side: text('side', { enum: TRADE_SIDES }).notNull().default('long'),
+  units: real('units').notNull().default(0),
+  entryPrice: real('entry_price'),
+  exitPrice: real('exit_price'),
+  realizedPl: real('realized_pl'),
+  openedAt: integer('opened_at', { mode: 'timestamp_ms' }),
+  closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
+  dedupKey: text('dedup_key').notNull(),
+  notes: text('notes'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type FundedTradeRow = typeof fundedTrades.$inferSelect;
 
 // ---- Personal Finance ----
 // Per-user settings for how Funded Trading Plus (a simulation) earnings scale

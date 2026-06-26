@@ -211,6 +211,20 @@
    "when": 1782336136907,
    "tag": "0029_pushover_users",
    "breakpoints": true
+  },
+  {
+   "idx": 30,
+   "version": "6",
+   "when": 1782336236907,
+   "tag": "0030_trailing_stops",
+   "breakpoints": true
+  },
+  {
+   "idx": 31,
+   "version": "6",
+   "when": 1782336336907,
+   "tag": "0031_funded_platforms",
+   "breakpoints": true
   }
  ]
 }

@@ -20,6 +20,8 @@ interface MtPosition {
   currentPrice?: string | number;
   takeProfit?: string | number;
   stopLoss?: string | number;
+  trailingStopLoss?: string | number; // trailing-stop trigger price, when the gateway reports one
+  trailingStop?: string | number; // some gateways name it this
   profit?: string | number; // open P/L
   openTime?: string | number; // RFC3339 or ms epoch
 }
@@ -69,6 +71,7 @@ export function mapFtpPositions(json: MtOpenPositionsResponse): LiveTrade[] {
     currentPrice: num(p.currentPrice),
     takeProfit: num(p.takeProfit),
     stopLoss: num(p.stopLoss),
+    trailingStopLoss: num(p.trailingStopLoss ?? p.trailingStop),
     slippage: null,
     unrealizedPl: num(p.profit),
     strategy: null,

@@ -21,6 +21,7 @@ export interface ManualPositionView {
   currentPrice: number | null;
   takeProfit: number | null;
   stopLoss: number | null;
+  trailingStopLoss: number | null;
   plannedEntry: number | null;
   openedAt: number | null;
 }
@@ -33,6 +34,7 @@ export interface ManualPositionInput {
   currentPrice?: number | null;
   takeProfit?: number | null;
   stopLoss?: number | null;
+  trailingStopLoss?: number | null;
   plannedEntry?: number | null;
   openedAt?: number;
 }
@@ -58,6 +60,7 @@ function toView(row: ManualPositionRow): ManualPositionView {
     currentPrice: row.currentPrice,
     takeProfit: row.takeProfit,
     stopLoss: row.stopLoss,
+    trailingStopLoss: row.trailingStopLoss,
     plannedEntry: row.plannedEntry,
     openedAt: row.openedAt ? row.openedAt.getTime() : null,
   };
@@ -96,6 +99,7 @@ export async function addManualPosition(
     currentPrice: cleanNum(input.currentPrice),
     takeProfit: cleanNum(input.takeProfit),
     stopLoss: cleanNum(input.stopLoss),
+    trailingStopLoss: cleanNum(input.trailingStopLoss),
     plannedEntry: cleanNum(input.plannedEntry),
     openedAt: input.openedAt ? new Date(input.openedAt) : now,
     createdAt: now,
@@ -137,6 +141,7 @@ export async function updateManualPosition(
   if (input.currentPrice !== undefined) patch.currentPrice = cleanNum(input.currentPrice);
   if (input.takeProfit !== undefined) patch.takeProfit = cleanNum(input.takeProfit);
   if (input.stopLoss !== undefined) patch.stopLoss = cleanNum(input.stopLoss);
+  if (input.trailingStopLoss !== undefined) patch.trailingStopLoss = cleanNum(input.trailingStopLoss);
   if (input.plannedEntry !== undefined) patch.plannedEntry = cleanNum(input.plannedEntry);
   if (input.openedAt !== undefined) patch.openedAt = new Date(input.openedAt);
 
@@ -183,6 +188,7 @@ export async function getManualTrades(connectionId: string): Promise<LiveTrade[]
       currentPrice: p.currentPrice,
       takeProfit: p.takeProfit,
       stopLoss: p.stopLoss,
+      trailingStopLoss: p.trailingStopLoss,
       slippage: null,
       unrealizedPl: null,
       strategy: null,

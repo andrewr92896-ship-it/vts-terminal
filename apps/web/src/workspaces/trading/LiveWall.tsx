@@ -274,6 +274,7 @@ function TradeCard({
       <div style={{ display: 'flex', gap: 14, padding: '0 14px 10px', flexWrap: 'wrap' }}>
         <Field label="TP" value={fmtPrice(t.takeProfit)} color={GREEN} />
         <Field label="SL" value={fmtPrice(t.stopLoss)} color={RED} />
+        {t.trailingStopLoss != null && <Field label="Trail SL" value={fmtPrice(t.trailingStopLoss)} color={AMBER} />}
         {t.currentPrice != null && <Field label="Mark" value={fmtPrice(t.currentPrice)} />}
         <Field label="Size" value={String(t.units)} />
       </div>

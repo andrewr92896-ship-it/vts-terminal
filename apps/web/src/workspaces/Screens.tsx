@@ -18,6 +18,7 @@ const SCREENS: Record<string, ScreenInfo> = {
   log: { title: 'Trade Log', blurb: 'Full fill history with Deck and Tape layouts, computed slippage versus the alert price per trade.', stage: 2 },
   sessions: { title: 'Strategy Sessions', blurb: 'Active, opening, and closing strategy windows with bull and bear playbooks per instrument.', stage: 2 },
   metrics: { title: 'Account Metrics', blurb: 'FTP challenge dashboard: $200K account, 10% target, 4% daily and 6% trailing drawdown, live equity from the API.', stage: 2 },
+  funded: { title: 'Funded Platforms', blurb: 'Prop accounts (FTP and others) tracked by hand: keep the balance current and log trades from screenshots, with duplicate detection.', stage: 2 },
   news: { title: 'Market News', blurb: 'Market and geopolitical headlines with impact and bias tags, plus the economic calendar in ET.', stage: 2 },
   history: { title: 'History', blurb: 'Historical performance, closed trades, and per-strategy results over time.', stage: 2 },
   td_trading: { title: 'Trading To Do', blurb: 'Trading tasks, also visible in your full To Do List workspace.', stage: 3 },

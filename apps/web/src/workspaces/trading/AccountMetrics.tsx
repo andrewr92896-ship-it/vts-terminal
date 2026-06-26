@@ -46,6 +46,8 @@ export function AccountMetrics() {
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [shotBusy, setShotBusy] = useState(false);
+  const [shotMsg, setShotMsg] = useState<string | null>(null);
   const ai = useAiBrief(api.tradingMetricsBrief);
 
   useEffect(() => {
@@ -59,6 +61,28 @@ export function AccountMetrics() {
     try { setData(await p); setActionError(null); return true; }
     catch (e) { setActionError(e instanceof ApiError ? e.message : 'Action failed'); return false; }
     finally { setBusy(false); }
+  }
+
+  // Read the current balance off an FTP-account screenshot and set the equity.
+  function readBalanceShot(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/')) return;
+    setShotMsg(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setShotBusy(true);
+      setActionError(null);
+      try {
+        const res = await api.analyzeChallengeBalance({ imageBase64: reader.result as string, mediaType: file.type });
+        setData(res.challenge);
+        const read = res.parsed.equity ?? res.parsed.balance;
+        setShotMsg(read != null ? `Equity set to ${usd(read)} — ${res.parsed.summary}` : res.parsed.summary);
+      } catch (e) {
+        setActionError(e instanceof ApiError ? e.message : 'Could not read that screenshot');
+      } finally {
+        setShotBusy(false);
+      }
+    };
+    reader.readAsDataURL(file);
   }
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
@@ -101,6 +125,28 @@ export function AccountMetrics() {
           onSave={async (patch) => { if (await run(api.updateChallenge(patch))) setEditing(false); }}
           onSync={() => run(api.syncChallengeEquity())}
         />
+      )}
+
+      {!readOnly && (
+        <div style={{ ...panel, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 240px' }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: TEXT }}>Update balance from a screenshot</div>
+            <div style={{ fontSize: 11, color: FAINT, marginTop: 3 }}>
+              FTP has no API. Drop a screenshot of your account and Claude reads the balance, then sets your equity here.
+            </div>
+            {shotMsg && <div style={{ fontSize: 11.5, color: GREEN, marginTop: 6 }}>{shotMsg}</div>}
+          </div>
+          <label style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1, cursor: shotBusy ? 'default' : 'pointer' }}>
+            {shotBusy ? 'Reading…' : 'Upload screenshot'}
+            <input
+              type="file"
+              accept="image/*"
+              disabled={shotBusy}
+              onChange={(e) => { readBalanceShot(e.target.files?.[0]); e.currentTarget.value = ''; }}
+              style={{ display: 'none' }}
+            />
+          </label>
+        </div>
       )}
 
       {/* Equity + progress to target */}

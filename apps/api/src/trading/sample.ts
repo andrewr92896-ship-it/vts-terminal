@@ -23,6 +23,7 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       currentPrice: 1.0861,
       takeProfit: 1.0905,
       stopLoss: 1.0815,
+      trailingStopLoss: 1.0850, // trailing the market up behind the long
       slippage: null, // computed by the service
       unrealizedPl: 46,
       strategy: 'London breakout',
@@ -41,6 +42,7 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       currentPrice: 198.12,
       takeProfit: 197.30,
       stopLoss: 199.10,
+      trailingStopLoss: null,
       slippage: null,
       unrealizedPl: 28,
       strategy: 'Asian range fade',
@@ -59,6 +61,7 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       currentPrice: 39012,
       takeProfit: 39150,
       stopLoss: 38860,
+      trailingStopLoss: 38990, // trailing stop ratcheted up under the long
       slippage: null,
       unrealizedPl: 108,
       strategy: 'Trend continuation',
@@ -77,6 +80,7 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       currentPrice: 2330.8,
       takeProfit: 2345.0,
       stopLoss: 2326.0,
+      trailingStopLoss: null,
       slippage: null,
       unrealizedPl: -39,
       strategy: 'Liquidity sweep',
@@ -95,6 +99,7 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       currentPrice: 64980,
       takeProfit: 66500,
       stopLoss: 62800,
+      trailingStopLoss: null,
       slippage: null,
       unrealizedPl: 253,
       strategy: 'Range reclaim',
@@ -113,6 +118,7 @@ export function sampleLiveTrades(now = Date.now()): LiveTrade[] {
       currentPrice: 119.85,
       takeProfit: 124.0,
       stopLoss: 116.0,
+      trailingStopLoss: null,
       slippage: null,
       unrealizedPl: 60,
       strategy: 'Gap-and-go',

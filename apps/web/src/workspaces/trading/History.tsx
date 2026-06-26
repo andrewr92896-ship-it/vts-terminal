@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import type { HistoryData, HistoryGroup, HistoryRecord } from '../../api/types';
@@ -30,9 +31,12 @@ function etDate(ms: number | null): string {
 export function History() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
+  const { user } = useAuth();
+  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
   const [data, setData] = useState<HistoryData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [hideMoney, setHideMoney] = useState(false);
 
   async function load() {
@@ -51,6 +55,18 @@ export function History() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function remove(t: HistoryRecord) {
+    if (!window.confirm(`Delete this closed ${t.instrument} trade from History? This can't be undone.`)) return;
+    setRemovingId(t.id);
+    try {
+      setData(await api.removeHistoryTrade(t.id));
+    } catch (e) {
+      setLoadError(e instanceof ApiError ? e.message : 'Could not delete the trade');
+    } finally {
+      setRemovingId(null);
+    }
+  }
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
   if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading History…</div>;
@@ -73,6 +89,7 @@ export function History() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>History</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             Closed trades across the desk — recorded automatically when a Live Wall position closes, tagged by trader.
+            {!readOnly && ' Delete any of your own rows to clear out test trades.'}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -123,10 +140,20 @@ export function History() {
                 <span style={{ flex: '1 1 90px' }}>Strategy</span>
                 <span style={{ ...col, textAlign: 'right' }}>P/L</span>
                 <span style={{ ...col, textAlign: 'right' }}>Closed</span>
+                {!readOnly && <span style={{ width: 24 }} />}
               </div>
             )}
             {data.trades.map((t) => (
-              <TradeRow key={t.id} t={t} isPhone={isPhone} showMoney={showMoney} canSeeBalances={canSeeBalances} />
+              <TradeRow
+                key={t.id}
+                t={t}
+                isPhone={isPhone}
+                showMoney={showMoney}
+                canSeeBalances={canSeeBalances}
+                canRemove={!readOnly && t.isMine}
+                removing={removingId === t.id}
+                onRemove={() => remove(t)}
+              />
             ))}
           </div>
         </>
@@ -159,12 +186,12 @@ function Breakdown({ title, groups, money }: { title: string; groups: HistoryGro
   );
 }
 
-function TradeRow({ t, isPhone, showMoney, canSeeBalances }: { t: HistoryRecord; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean }) {
+function TradeRow({ t, isPhone, showMoney, canSeeBalances, canRemove, removing, onRemove }: { t: HistoryRecord; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean; canRemove: boolean; removing: boolean; onRemove: () => void }) {
   const long = t.side === 'long';
   const plUp = (t.realizedPl ?? 0) >= 0;
   const plText = !canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••';
   return (
-    <div style={{ ...row, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
+    <div style={{ ...row, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap', opacity: removing ? 0.5 : 1 }}>
       <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center' }}>
         {t.instrument}
         <span style={{ fontSize: 8.5, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 3, padding: '1px 4px' }}>{t.broker}</span>
@@ -178,6 +205,11 @@ function TradeRow({ t, isPhone, showMoney, canSeeBalances }: { t: HistoryRecord;
       <span style={{ flex: '1 1 90px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.strategy ?? '—'}</span>
       <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : plUp ? GREEN : RED }}>{plText}</span>
       <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.closedAt)}</span>
+      {canRemove ? (
+        <button onClick={onRemove} disabled={removing} title="Delete this trade" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: removing ? 'default' : 'pointer' }}>×</button>
+      ) : (
+        !isPhone && <span style={{ width: 24 }} />
+      )}
     </div>
   );
 }

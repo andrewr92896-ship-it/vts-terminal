@@ -9,6 +9,11 @@ import type {
   BrokerStatus,
   ChallengeData,
   ChallengeInput,
+  AnalyzeAccountResult,
+  FundedData,
+  FundedAccountInput,
+  FundedTradeInput,
+  FundedImportResult,
   ConnectionInput,
   ManualPosition,
   ManualPositionInput,
@@ -187,6 +192,10 @@ export const api = {
   tradingHistory(): Promise<HistoryData> {
     return request('/api/trading/history');
   },
+  // Delete a recorded closed trade (e.g. a test trade); returns refreshed History.
+  removeHistoryTrade(id: string): Promise<HistoryData> {
+    return request(`/api/trading/history/${id}`, { method: 'DELETE' });
+  },
   tradingSessions(): Promise<{ sessions: StrategySession[] }> {
     return request('/api/trading/sessions');
   },
@@ -234,6 +243,33 @@ export const api = {
   },
   syncChallengeEquity(): Promise<ChallengeData> {
     return request('/api/trading/challenge/sync-equity', { method: 'POST', body: JSON.stringify({}) });
+  },
+  // Read the current balance off an FTP-account screenshot and set the equity.
+  analyzeChallengeBalance(image: { imageBase64: string; mediaType: string }): Promise<AnalyzeAccountResult> {
+    return request('/api/trading/challenge/analyze', { method: 'POST', body: JSON.stringify(image) });
+  },
+  // ---- Funded platforms ----
+  funded(): Promise<FundedData> {
+    return request('/api/trading/funded');
+  },
+  addFundedAccount(input: FundedAccountInput): Promise<FundedData> {
+    return request('/api/trading/funded/accounts', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateFundedAccount(id: string, patch: FundedAccountInput): Promise<FundedData> {
+    return request(`/api/trading/funded/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removeFundedAccount(id: string): Promise<FundedData> {
+    return request(`/api/trading/funded/accounts/${id}`, { method: 'DELETE' });
+  },
+  addFundedTrade(accountId: string, input: FundedTradeInput): Promise<FundedData> {
+    return request(`/api/trading/funded/accounts/${accountId}/trades`, { method: 'POST', body: JSON.stringify(input) });
+  },
+  removeFundedTrade(id: string): Promise<FundedData> {
+    return request(`/api/trading/funded/trades/${id}`, { method: 'DELETE' });
+  },
+  // Import trades from a funded-account trade-history screenshot (dedup applied).
+  importFundedTrades(accountId: string, image: { imageBase64: string; mediaType: string }): Promise<FundedImportResult> {
+    return request(`/api/trading/funded/accounts/${accountId}/import`, { method: 'POST', body: JSON.stringify(image) });
   },
   tradingConnections(): Promise<{ connections: BrokerConnection[] }> {
     return request('/api/trading/connections');

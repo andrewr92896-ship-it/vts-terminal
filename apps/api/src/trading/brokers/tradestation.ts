@@ -48,6 +48,7 @@ export function mapTradeStationPositions(json: TsPositionsResponse): LiveTrade[]
       currentPrice: num(p.Last),
       takeProfit: null,
       stopLoss: null,
+      trailingStopLoss: null,
       slippage: null,
       unrealizedPl: num(p.UnrealizedProfitLoss),
       strategy: null,

@@ -24,6 +24,9 @@ interface OandaTrade {
   unrealizedPL?: string;
   takeProfitOrder?: OandaOrder;
   stopLossOrder?: OandaOrder;
+  // The trailing-stop order trails the market by `distance`; trailingStopValue
+  // is its current trigger price.
+  trailingStopLossOrder?: { distance?: string; trailingStopValue?: string };
 }
 interface OandaOpenTradesResponse {
   trades?: OandaTrade[];
@@ -76,6 +79,7 @@ export function mapOandaTrades(json: OandaOpenTradesResponse): LiveTrade[] {
       currentPrice: null, // filled from the pricing endpoint below
       takeProfit: num(t.takeProfitOrder?.price),
       stopLoss: num(t.stopLossOrder?.price),
+      trailingStopLoss: num(t.trailingStopLossOrder?.trailingStopValue),
       slippage: null,
       unrealizedPl: num(t.unrealizedPL),
       strategy: null,

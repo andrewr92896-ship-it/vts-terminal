@@ -29,9 +29,10 @@ const INPUT_BG = '#091633';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
+// FTP is intentionally absent — funded/FTP trades are tracked in the Funded
+// section, kept separate from the desk Trade Log.
 const BROKERS: { key: string; label: string }[] = [
   { key: '', label: 'No broker' },
-  { key: 'ftp', label: 'FTP' },
   { key: 'oanda', label: 'OANDA' },
   { key: 'kraken', label: 'Kraken' },
   { key: 'tradestation', label: 'TradeStation' },
@@ -203,7 +204,8 @@ export function TradeLog() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Trade Log</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L.
+            Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L. Live Wall
+            trades sync in automatically (marked <span style={{ color: '#7fc7ff', fontWeight: 700 }}>LIVE</span>); FTP is tracked in Funded.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -356,6 +358,8 @@ function DeckCard({
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
   const plUp = (t.realizedPl ?? 0) >= 0;
+  // Synced from the Live Wall (not hand-logged): no inline edit, but removable.
+  const synced = t.id.startsWith('pos:');
 
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${sideColor}` }}>
@@ -364,6 +368,7 @@ function DeckCard({
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
           {t.status === 'open' && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }}>OPEN</span>}
+          {synced && <span style={{ ...sideBadge, color: '#7fc7ff', border: '1px solid #7fc7ff' }} title="Synced from the Live Wall">LIVE</span>}
         </div>
         <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etDate(t.openedAt)}</span>
       </div>
@@ -419,7 +424,7 @@ function DeckCard({
         </div>
         {!readOnly && t.isMine && (
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>
+            {!synced && <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>}
             <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, color: '#52668f', borderColor: 'transparent', fontSize: 16, padding: '2px 6px' }}>×</button>
           </div>
         )}

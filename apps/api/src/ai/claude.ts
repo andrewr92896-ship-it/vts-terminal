@@ -216,6 +216,140 @@ export async function parsePositionScreenshot(
   return { parsed, raw, model };
 }
 
+// The account balance/equity read off a prop-firm dashboard screenshot, used to
+// keep the Account Metrics challenge equity current (FTP has no API). Fields are
+// null when they cannot be read with confidence.
+export interface ParsedAccount {
+  balance: number | null; // cash/account balance
+  equity: number | null; // balance + open P/L, when shown
+  summary: string;
+}
+
+const ACCOUNT_SYSTEM = `You read the current ACCOUNT BALANCE and EQUITY from a prop-firm / funded-account dashboard screenshot (e.g. FTP / Match-Trader, a broker account summary).
+
+Respond with ONLY a JSON object (no prose, no code fences) of exactly this shape:
+{
+  "balance": number | null,   // the account balance / cash, as a plain number (no currency symbol or thousands separators)
+  "equity": number | null,    // the account equity (balance + open P/L) if shown separately, else null
+  "summary": string           // 1 sentence describing what you read
+}
+Strip currency symbols and commas: "$201,450.50" becomes 201450.5. Use null for anything you cannot read with confidence. Keep the summary under 160 characters.`;
+
+// Opus 4.8 vision: read the balance/equity off a funded-account screenshot.
+export async function parseAccountScreenshot(
+  imageBase64: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+): Promise<{ parsed: ParsedAccount; raw: string; model: string }> {
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 1000,
+    thinking: { type: 'adaptive' },
+    system: ACCOUNT_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: 'Read the account balance and equity from this screenshot.' },
+        ],
+      },
+    ],
+  });
+  const raw = textOf(message);
+  const json = (extractJson(raw) ?? {}) as Partial<ParsedAccount>;
+  const parsed: ParsedAccount = {
+    balance: num(json.balance),
+    equity: num(json.equity),
+    summary: typeof json.summary === 'string' ? json.summary.slice(0, 160) : raw.slice(0, 160),
+  };
+  return { parsed, raw, model };
+}
+
+// One closed/open trade read off a funded-account trade-history screenshot.
+export interface ParsedHistoryTrade {
+  instrument: string | null;
+  side: 'long' | 'short' | 'unknown';
+  units: number | null;
+  entryPrice: number | null;
+  exitPrice: number | null;
+  realizedPl: number | null;
+  openedAt: string | null; // a date/time string as shown, parsed leniently by the caller
+  closedAt: string | null;
+}
+export interface ParsedHistory {
+  trades: ParsedHistoryTrade[];
+  summary: string;
+}
+
+const HISTORY_SYSTEM = `You read a list of TRADES from a funded-account trade-history / order-history screenshot (a blotter, closed-positions table, or statement). Extract every trade row you can see.
+
+Respond with ONLY a JSON object (no prose, no code fences) of exactly this shape:
+{
+  "trades": [
+    {
+      "instrument": string | null,   // e.g. "EUR/USD", "XAU/USD", "US30", "NVDA". Normalize forex to BASE/QUOTE with a slash.
+      "side": "long" | "short" | "unknown",   // buy = long, sell = short
+      "units": number | null,        // size in lots/contracts/shares as shown
+      "entryPrice": number | null,
+      "exitPrice": number | null,
+      "realizedPl": number | null,   // profit/loss for the trade, a plain number (negative for a loss)
+      "openedAt": string | null,     // open date/time exactly as shown, else null
+      "closedAt": string | null      // close date/time exactly as shown, else null
+    }
+  ],
+  "summary": string                  // 1 sentence: how many trades you read
+}
+Strip currency symbols and commas from numbers. Use null for any field you cannot read. Return an empty trades array if you can read none. Keep the summary under 160 characters.`;
+
+function parseSide(v: unknown): 'long' | 'short' | 'unknown' {
+  return v === 'long' || v === 'short' ? v : 'unknown';
+}
+
+// Opus 4.8 vision: read every trade off a trade-history screenshot.
+export async function parseTradeHistoryScreenshot(
+  imageBase64: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+): Promise<{ parsed: ParsedHistory; raw: string; model: string }> {
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 3000,
+    thinking: { type: 'adaptive' },
+    system: HISTORY_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: 'Extract every trade from this trade-history screenshot.' },
+        ],
+      },
+    ],
+  });
+  const raw = textOf(message);
+  const json = (extractJson(raw) ?? {}) as { trades?: unknown; summary?: unknown };
+  const rawTrades = Array.isArray(json.trades) ? json.trades : [];
+  const trades: ParsedHistoryTrade[] = rawTrades.map((t) => {
+    const o = (t ?? {}) as Record<string, unknown>;
+    return {
+      instrument: typeof o.instrument === 'string' && o.instrument.trim() ? o.instrument.trim() : null,
+      side: parseSide(o.side),
+      units: num(o.units),
+      entryPrice: num(o.entryPrice),
+      exitPrice: num(o.exitPrice),
+      realizedPl: num(o.realizedPl),
+      openedAt: typeof o.openedAt === 'string' ? o.openedAt.slice(0, 40) : null,
+      closedAt: typeof o.closedAt === 'string' ? o.closedAt.slice(0, 40) : null,
+    };
+  });
+  const parsed: ParsedHistory = {
+    trades,
+    summary: typeof json.summary === 'string' ? json.summary.slice(0, 160) : raw.slice(0, 160),
+  };
+  return { parsed, raw, model };
+}
+
 // Sonnet 4.6: the site-wide assistant (Ask Claude, product knowledge, parsing).
 export async function askClaude(prompt: string, system?: string): Promise<string> {
   const message = await getClient().messages.create({

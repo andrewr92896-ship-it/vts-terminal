@@ -467,6 +467,7 @@ export interface LiveTrade {
   currentPrice: number | null;
   takeProfit: number | null;
   stopLoss: number | null;
+  trailingStopLoss: number | null; // trailing-stop trigger price, when the broker reports one
   slippage: number | null;
   unrealizedPl: number | null; // null when balances are hidden
   strategy: string | null;
@@ -533,6 +534,7 @@ export interface ManualPosition {
   currentPrice: number | null;
   takeProfit: number | null;
   stopLoss: number | null;
+  trailingStopLoss: number | null;
   plannedEntry: number | null;
   openedAt: number | null;
 }
@@ -544,6 +546,7 @@ export interface ManualPositionInput {
   currentPrice?: number | null;
   takeProfit?: number | null;
   stopLoss?: number | null;
+  trailingStopLoss?: number | null;
   plannedEntry?: number | null;
   openedAt?: number;
 }
@@ -619,6 +622,80 @@ export interface ChallengeInput {
   peakEquity?: number;
   dayStartEquity?: number;
   startedAt?: number;
+}
+
+// What Claude read off an FTP/funded-account balance screenshot, returned with
+// the refreshed challenge after the equity is set from it.
+export interface ParsedAccount {
+  balance: number | null;
+  equity: number | null;
+  summary: string;
+}
+export interface AnalyzeAccountResult {
+  challenge: ChallengeData;
+  parsed: ParsedAccount;
+  model: string;
+}
+
+// ---- Trading — Funded platforms (mirror of apps/api/src/trading/funded.ts) ----
+export interface FundedTrade {
+  id: string;
+  accountId: string;
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  entryPrice: number | null;
+  exitPrice: number | null;
+  realizedPl: number | null;
+  openedAt: number | null;
+  closedAt: number | null;
+  notes: string | null;
+  createdAt: number;
+}
+export interface FundedAccount {
+  id: string;
+  platform: string;
+  label: string;
+  currency: string;
+  balance: number | null;
+  startingBalance: number | null;
+  notes: string | null;
+  realizedPl: number;
+  tradeCount: number;
+  trades: FundedTrade[];
+  createdAt: number;
+  updatedAt: number;
+}
+export interface FundedData {
+  accounts: FundedAccount[];
+}
+export interface FundedAccountInput {
+  platform?: string;
+  label?: string;
+  currency?: string;
+  balance?: number | null;
+  startingBalance?: number | null;
+  notes?: string | null;
+}
+export interface FundedTradeInput {
+  instrument: string;
+  side?: TradeSide;
+  units?: number | null;
+  entryPrice?: number | null;
+  exitPrice?: number | null;
+  realizedPl?: number | null;
+  openedAt?: number | null;
+  closedAt?: number | null;
+  notes?: string | null;
+}
+// Result of importing trades from a funded-account screenshot.
+export interface FundedImportResult {
+  funded: FundedData;
+  added: number;
+  skipped: number; // duplicates of trades already on the account
+  ignored: number; // rows that weren't real trades (no instrument/P/L)
+  summary: string;
+  model: string;
 }
 
 // ---- Personal Finance (mirror of apps/api/src/finance/service.ts) ----

@@ -56,6 +56,7 @@ export async function reconcile(
           unrealizedPl: t.unrealizedPl,
           takeProfit: t.takeProfit,
           stopLoss: t.stopLoss,
+          trailingStopLoss: t.trailingStopLoss,
           units: t.units,
           lastSeenAt: now,
         })
@@ -74,6 +75,7 @@ export async function reconcile(
         entryPrice: t.entryPrice,
         takeProfit: t.takeProfit,
         stopLoss: t.stopLoss,
+        trailingStopLoss: t.trailingStopLoss,
         currentPrice: t.currentPrice,
         unrealizedPl: t.unrealizedPl,
         strategy: t.strategy,
@@ -247,6 +249,26 @@ function groupBy(
       realizedPl: canSeeBalances ? g.pl : null,
     }))
     .sort((a, b) => b.count - a.count);
+}
+
+// Delete a recorded position (open or closed) the caller owns. Used to clear a
+// test/old trade from History and the Trade Log. Owner-scoped so a trader can
+// only remove their own rows. Returns true when a row was deleted. Note: a
+// still-open position will reappear on the next Live Wall reconcile (it is still
+// live on the broker); deleting a closed one is permanent.
+export async function removePosition(userId: string, id: string): Promise<boolean> {
+  const row = (
+    await db
+      .select({ id: tradingPositions.id })
+      .from(tradingPositions)
+      .where(and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!row) return false;
+  await db
+    .delete(tradingPositions)
+    .where(and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId)));
+  return true;
 }
 
 export async function getHistory(
