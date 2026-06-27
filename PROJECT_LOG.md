@@ -221,6 +221,19 @@ updated to 20, front/back persisted.
   detects chunk-load errors and offers a "Reload app" button (fetches the fresh
   build); other render errors get a "Try again".
 
+## Studies — star questions to revisit
+- **Star quiz questions:** each Study Game question now has a ☆/★ toggle in its
+  level HUD. Starred question ids are stored in a new per-user `study_starred`
+  table (migration `0033`, service `studies/starred.ts`, routes GET/POST/DELETE
+  `/api/studies/starred`) and cached in localStorage (`series65Game.ts`
+  `starredKey`/`loadStarred`/`saveStarred`), so the set loads instantly and
+  syncs across devices like learned terms.
+- **Revisit mode:** the category selector gains a "★ Starred (n)" chip that
+  draws only from starred questions (shuffled queue, skips ids unstarred mid-
+  session, reshuffles when exhausted). Answers still count toward the
+  question's real topic level/score. An empty-state prompts the user to star
+  some questions when the set is empty.
+
 ## What's next
 Build out the **Trading tab** until done — full plan and current (placeholder)
 state in `HANDOFF.md` §6.

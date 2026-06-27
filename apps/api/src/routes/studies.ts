@@ -4,12 +4,14 @@ import { requireWorkspace } from '../auth/middleware.js';
 import { addLearned, listLearned, removeLearned } from '../studies/learned.js';
 import { getGame, getLeaderboard, normalizeState, saveGame } from '../studies/game.js';
 import { addVocab, listVocab, removeVocab } from '../studies/vocab.js';
+import { addStarred, listStarred, removeStarred } from '../studies/starred.js';
 import { aiConfigured, defineSeries65Term } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
 const vocabAddSchema = z.object({ term: z.string().trim().min(1).max(200) });
+const starSchema = z.object({ id: z.number().int().nonnegative().max(100000) });
 
 export async function studiesRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
@@ -62,6 +64,28 @@ export async function studiesRoutes(app: FastifyInstance) {
     const q = request.query as { term?: string };
     const term = typeof q.term === 'string' ? q.term : '';
     return { cards: await removeVocab(request.currentUser!.id, term) };
+  });
+
+  // ---- Starred quiz questions ----
+  // Question ids the learner flagged to revisit, stored so the starred set syncs
+  // across devices. The question bank itself is static on the client; we only
+  // persist the ids.
+  app.get('/api/studies/starred', guard, async (request) => {
+    return { ids: await listStarred(request.currentUser!.id) };
+  });
+
+  app.post('/api/studies/starred', guard, async (request, reply) => {
+    const parsed = starSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A question id is required' });
+    return { ids: await addStarred(request.currentUser!.id, parsed.data.id) };
+  });
+
+  // The id travels as a query param to keep the DELETE body-less.
+  app.delete('/api/studies/starred', guard, async (request, reply) => {
+    const q = request.query as { id?: string };
+    const id = Number(q.id);
+    if (!Number.isInteger(id)) return reply.code(400).send({ error: 'A question id is required' });
+    return { ids: await removeStarred(request.currentUser!.id, id) };
   });
 
   // The Study Game state (levels, scores, per-category history) is stored as one

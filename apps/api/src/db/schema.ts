@@ -774,6 +774,20 @@ export const studyVocab = sqliteTable('study_vocab', {
 });
 export type StudyVocabRow = typeof studyVocab.$inferSelect;
 
+// ---- Studies: starred quiz questions (per user) ----
+// One row per Study Game question the learner flagged to revisit. The question
+// id refers to the static Series 65 question bank (series65Questions.ts). Synced
+// per user so the starred set follows the learner across devices.
+export const studyStarred = sqliteTable('study_starred', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  questionId: integer('question_id').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyStarredRow = typeof studyStarred.$inferSelect;
+
 // ---- Web Push subscriptions (per user, per device) ----
 // One row per browser/device the user has opted into phone push from. The
 // endpoint is the unique push URL; p256dh/auth are the client's encryption keys

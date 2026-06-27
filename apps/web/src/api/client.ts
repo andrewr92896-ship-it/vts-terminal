@@ -382,6 +382,16 @@ export const api = {
   removeVocabWord(term: string): Promise<{ cards: CustomVocabCard[] }> {
     return request(`/api/studies/vocab?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
   },
+  // Starred quiz questions (ids into the static Series 65 question bank).
+  studyStarred(): Promise<{ ids: number[] }> {
+    return request('/api/studies/starred');
+  },
+  addStarredQuestion(id: number): Promise<{ ids: number[] }> {
+    return request('/api/studies/starred', { method: 'POST', body: JSON.stringify({ id }) });
+  },
+  removeStarredQuestion(id: number): Promise<{ ids: number[] }> {
+    return request(`/api/studies/starred?id=${id}`, { method: 'DELETE' });
+  },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');
   },
