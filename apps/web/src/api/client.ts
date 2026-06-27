@@ -460,6 +460,7 @@ export const api = {
       profit?: number;
       frontProfit?: number;
       backProfit?: number;
+      spiff?: number;
       soldAt?: string;
     },
     month?: string,
@@ -478,6 +479,7 @@ export const api = {
       profit?: number;
       frontProfit?: number;
       backProfit?: number;
+      spiff?: number;
       soldAt?: string;
     },
     month?: string,

@@ -77,6 +77,7 @@ export interface RemovedKiaDeal {
   profit: number;
   frontProfit: number | null;
   backProfit: number | null;
+  spiff: number;
   soldAt: number;
 }
 
@@ -138,6 +139,7 @@ export interface KiaDeal {
   profit: number;
   frontProfit: number | null;
   backProfit: number | null;
+  spiff: number;
   dateLabel: string;
   soldAt: number;
 }
@@ -148,8 +150,9 @@ export interface KiaMetrics {
   toGoal: number;
   unitPct: number;
   totalProfit: number;
-  commission: number;
+  commission: number; // total payout: base commission + spiffs
   commissionRate: number;
+  totalSpiff: number; // extra dealership money earned this period
   reviewCount: number;
   reviewPct: number;
   reviewReq: number;

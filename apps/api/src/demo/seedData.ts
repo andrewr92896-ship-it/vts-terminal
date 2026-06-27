@@ -105,15 +105,16 @@ export async function seedDemoData(userId: string): Promise<void> {
       frontProfit?: number;
       backProfit?: number;
       profit?: number;
+      spiff?: number; // extra dealership money paid on top of profit
       day: number;
     }> = [
       { customer: 'Marcus Bell', model: 'Sportage LX', type: 'New', frontProfit: 1200, backProfit: 900, day: 3 },
       { customer: 'Dana Whitfield', model: 'Forte GT', type: 'New', frontProfit: 850, backProfit: 1400, day: 6 },
-      { customer: 'Priya Nair', model: 'Sorento EX', type: 'New', frontProfit: 1650, backProfit: 1100, day: 9 },
+      { customer: 'Priya Nair', model: 'Sorento EX', type: 'New', frontProfit: 1650, backProfit: 1100, spiff: 300, day: 9 },
       { customer: 'Walk-in', model: 'Optima (Used)', type: 'Used', profit: 1850, day: 12 },
       { customer: 'Elena Vasquez', model: 'Telluride SX', type: 'New', frontProfit: 2200, backProfit: 1300, day: 15 },
       { customer: 'Trevor Lang', model: 'Soul S (Used)', type: 'Used', frontProfit: 700, backProfit: 600, day: 18 },
-      { customer: 'Hannah Brooks', model: 'Carnival SX', type: 'New', frontProfit: 1500, backProfit: 1750, day: 21 },
+      { customer: 'Hannah Brooks', model: 'Carnival SX', type: 'New', frontProfit: 1500, backProfit: 1750, spiff: 500, day: 21 },
       { customer: 'Walk-in', model: 'Niro EV', type: 'New', frontProfit: 1300, backProfit: 800, day: 24 },
     ];
     for (const d of deals) {
@@ -124,6 +125,7 @@ export async function seedDemoData(userId: string): Promise<void> {
         profit: d.profit,
         frontProfit: d.frontProfit,
         backProfit: d.backProfit,
+        spiff: d.spiff,
         soldAt: dayOfThisMonth(d.day),
       });
     }

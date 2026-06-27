@@ -63,6 +63,18 @@ function commissionForDeals(deals: KiaDealRow[], plan: PayPlan): number {
   return Math.round(deals.reduce((sum, d) => sum + dealCommission(d, plan), 0));
 }
 
+// Total spiffs (extra dealership money) across the given deals, whole dollars.
+function spiffForDeals(deals: KiaDealRow[]): number {
+  return deals.reduce((sum, d) => sum + (d.spiff ?? 0), 0);
+}
+
+// What the salesperson actually takes home on these deals: commission plus any
+// spiffs paid on top. Used for the headline commission/payout figure and the
+// per-month history totals.
+function payoutForDeals(deals: KiaDealRow[], plan: PayPlan): number {
+  return commissionForDeals(deals, plan) + spiffForDeals(deals);
+}
+
 type KiaSettingsRow = typeof kiaSettings.$inferSelect;
 
 // Build a clean PayPlan from a settings row (or defaults). Tiers are sorted
@@ -223,6 +235,7 @@ export interface KiaDeal {
   profit: number;
   frontProfit: number | null;
   backProfit: number | null;
+  spiff: number;
   dateLabel: string;
   soldAt: number;
 }
@@ -233,8 +246,9 @@ export interface KiaMetrics {
   toGoal: number;
   unitPct: number;
   totalProfit: number;
-  commission: number;
+  commission: number; // total payout: base commission + spiffs
   commissionRate: number;
+  totalSpiff: number; // extra dealership money earned this period
   reviewCount: number;
   reviewPct: number;
   reviewReq: number;
@@ -298,11 +312,17 @@ function computeMetrics(
 ): KiaMetrics {
   const units = deals.length;
   const totalProfit = deals.reduce((a, d) => a + d.profit, 0);
-  const commission = commissionForDeals(deals, plan);
-  // Blended rate (commission ÷ total profit) used for the headline % and pace.
+  const baseCommission = commissionForDeals(deals, plan);
+  const totalSpiff = spiffForDeals(deals);
+  // The headline "commission" is the salesperson's total payout: the profit-based
+  // commission plus any spiffs the dealership paid on top.
+  const commission = baseCommission + totalSpiff;
+  // Blended rate (commission ÷ total profit) used for pace. Based on the
+  // profit-driven commission only — spiffs are flat add-ons, not a rate, so
+  // folding them in would distort the projection.
   const effectiveRate =
     totalProfit > 0
-      ? commission / totalProfit
+      ? baseCommission / totalProfit
       : plan.commissionMode === 'split'
         ? plan.frontRate
         : plan.commissionRate;
@@ -332,6 +352,7 @@ function computeMetrics(
     totalProfit,
     commission,
     commissionRate: effectiveRate,
+    totalSpiff,
     reviewCount,
     reviewPct,
     reviewReq: plan.reviewReqPct,
@@ -415,7 +436,7 @@ export async function getDashboard(
         label: monthLabel(k),
         units: rows.length,
         totalProfit,
-        commission: commissionForDeals(rows, payPlan),
+        commission: payoutForDeals(rows, payPlan),
       };
     })
     .sort((a, b) => (a.month < b.month ? 1 : -1));
@@ -435,6 +456,7 @@ export async function getDashboard(
     profit: r.profit,
     frontProfit: r.frontProfit,
     backProfit: r.backProfit,
+    spiff: r.spiff ?? 0,
     soldAt: r.soldAt.getTime(),
     dateLabel: dateLabelFmt.format(r.soldAt),
   }));
@@ -500,6 +522,7 @@ export async function addDeal(
     profit?: number;
     frontProfit?: number;
     backProfit?: number;
+    spiff?: number;
     soldAt?: string;
   },
 ): Promise<void> {
@@ -526,6 +549,7 @@ export async function addDeal(
     profit,
     frontProfit: front,
     backProfit: back,
+    spiff: input.spiff != null ? Math.max(0, Math.round(input.spiff)) : 0,
     soldAt,
     createdAt: new Date(),
   });
@@ -541,6 +565,7 @@ export async function updateDeal(
     profit?: number;
     frontProfit?: number;
     backProfit?: number;
+    spiff?: number;
     soldAt?: string;
   },
 ): Promise<void> {
@@ -576,6 +601,7 @@ export async function updateDeal(
     patch.frontProfit = null;
     patch.backProfit = null;
   }
+  if (input.spiff != null) patch.spiff = Math.max(0, Math.round(input.spiff));
   if (input.soldAt != null) {
     const [y, m, d] = input.soldAt.split('-').map(Number);
     patch.soldAt = dayAtNoonUtc(y, m, d);
@@ -596,6 +622,7 @@ export interface RemovedKiaDeal {
   profit: number;
   frontProfit: number | null;
   backProfit: number | null;
+  spiff: number;
   soldAt: number; // ms
 }
 
@@ -622,6 +649,7 @@ export async function removeDeal(
     profit: row.profit,
     frontProfit: row.frontProfit,
     backProfit: row.backProfit,
+    spiff: row.spiff ?? 0,
     soldAt: row.soldAt.getTime(),
   };
 }
@@ -640,6 +668,7 @@ export async function restoreDeal(userId: string, deal: RemovedKiaDeal): Promise
       profit: deal.profit,
       frontProfit: deal.frontProfit,
       backProfit: deal.backProfit,
+      spiff: deal.spiff ?? 0,
       soldAt: new Date(deal.soldAt),
       createdAt: new Date(),
     })

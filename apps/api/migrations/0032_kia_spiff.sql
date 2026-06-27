@@ -1,0 +1,1 @@
+ALTER TABLE `kia_deals` ADD `spiff` integer DEFAULT 0 NOT NULL;

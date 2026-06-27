@@ -27,6 +27,7 @@ interface AddDealAction {
   profit?: number;
   frontProfit?: number;
   backProfit?: number;
+  spiff?: number;
   soldAt?: string;
 }
 interface UpdateDealAction {
@@ -38,6 +39,7 @@ interface UpdateDealAction {
   profit?: number;
   frontProfit?: number;
   backProfit?: number;
+  spiff?: number;
   soldAt?: string;
 }
 interface RemoveDealAction {
@@ -103,7 +105,7 @@ function buildContext(dash: KiaDashboardData): string {
   const monthLabel = dash.months.find((mo) => mo.key === dash.month)?.label ?? dash.month;
   const dealLines = dash.deals.length
     ? dash.deals
-        .map((d, i) => `${i + 1}. ${d.model} (${d.type}) — ${d.customer} · ${usd(d.profit)} · ${d.dateLabel}`)
+        .map((d, i) => `${i + 1}. ${d.model} (${d.type}) — ${d.customer} · ${usd(d.profit)}${d.spiff ? ` (+${usd(d.spiff)} spiff)` : ''} · ${d.dateLabel}`)
         .join('\n')
     : '(no deals yet)';
   const metrics = [
@@ -127,8 +129,8 @@ const SYSTEM = (today: string) =>
     'You are given the VIEWED MONTH context (metrics + numbered DEALS). Respond with ONLY a JSON object, no prose:',
     '{"actions":[...],"reply":"<one short sentence, or the requested summary>"}',
     'Allowed actions:',
-    '- {"type":"add_deal","customer":string,"model":string,"saleType":"New"|"Used","profit":number,"frontProfit":number,"backProfit":number,"soldAt":"YYYY-MM-DD"} — log a new deal. "model" is the Kia model (Telluride, K5, Sportage, EV9…). "saleType" is New unless words like "used"/"pre-owned"/"CPO" appear. Use frontProfit+backProfit (omit profit) when a front/back or F&I split is given, else set profit. Whole US dollars.',
-    '- {"type":"update_deal","ref":<deal number>,"...any add_deal field...} — change an existing deal. Only include fields that change.',
+    '- {"type":"add_deal","customer":string,"model":string,"saleType":"New"|"Used","profit":number,"frontProfit":number,"backProfit":number,"spiff":number,"soldAt":"YYYY-MM-DD"} — log a new deal. "model" is the Kia model (Telluride, K5, Sportage, EV9…). "saleType" is New unless words like "used"/"pre-owned"/"CPO" appear. Use frontProfit+backProfit (omit profit) when a front/back or F&I split is given, else set profit. "spiff" is extra dealership money paid on top of profit — set it only when a spiff/incentive is mentioned. Whole US dollars.',
+    '- {"type":"update_deal","ref":<deal number>,"...any add_deal field...} — change an existing deal (including "spiff"). Only include fields that change.',
     '- {"type":"remove_deal","ref":<deal number>} — delete an existing deal.',
     '- {"type":"set_goal","goalUnits":number} — set this month\'s unit goal.',
     '- {"type":"set_reviews","reviewCount":number} OR {"type":"set_reviews","reviewPct":number} — set Google reviews. Use reviewPct only when the user gives a percentage.',
@@ -207,16 +209,19 @@ export async function runKiaCommand(
             break;
           }
           const fields = profitFields(a);
+          const spiff = num(a.spiff);
           await addDeal(userId, {
             customer: typeof a.customer === 'string' ? a.customer : undefined,
             model,
             type: saleType(a.saleType),
             ...fields,
+            spiff: spiff != null ? Math.max(0, spiff) : undefined,
             soldAt: isoDate(a.soldAt),
           });
           const total =
             fields.profit ?? (fields.frontProfit ?? 0) + (fields.backProfit ?? 0);
-          applied.push(`Logged ${saleType(a.saleType)} ${model}${total ? ` · ${usd(total)}` : ''}`);
+          const spiffNote = spiff ? ` (+${usd(spiff)} spiff)` : '';
+          applied.push(`Logged ${saleType(a.saleType)} ${model}${total ? ` · ${usd(total)}` : ''}${spiffNote}`);
           touched = true;
           break;
         }
@@ -230,6 +235,10 @@ export async function runKiaCommand(
           if (typeof a.customer === 'string') patch.customer = a.customer;
           if (typeof a.model === 'string' && a.model.trim()) patch.model = a.model.trim();
           if (a.saleType != null) patch.type = saleType(a.saleType);
+          if (a.spiff != null) {
+            const spiff = num(a.spiff);
+            if (spiff != null) patch.spiff = Math.max(0, spiff);
+          }
           if (isoDate(a.soldAt)) patch.soldAt = isoDate(a.soldAt);
           if (Object.keys(patch).length === 0) {
             skipped.push(`Update ${target.label} (nothing to change)`);

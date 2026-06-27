@@ -48,6 +48,7 @@ const dealSchema = z
     profit: money.optional(),
     frontProfit: money.optional(),
     backProfit: money.optional(),
+    spiff: money.optional(),
     soldAt: z
       .string()
       .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -70,6 +71,7 @@ const dealEditSchema = z
     profit: money.optional(),
     frontProfit: money.optional(),
     backProfit: money.optional(),
+    spiff: money.optional(),
     soldAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
@@ -93,6 +95,7 @@ const restoreSchema = z.object({
   profit: z.number().int().min(0).max(1_000_000),
   frontProfit: z.number().int().min(0).max(1_000_000).nullable(),
   backProfit: z.number().int().min(0).max(1_000_000).nullable(),
+  spiff: z.number().int().min(0).max(1_000_000),
   soldAt: z.number().int(),
 });
 

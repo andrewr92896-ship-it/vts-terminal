@@ -157,6 +157,10 @@ export const kiaDeals = sqliteTable('kia_deals', {
   // the deal was entered as a single total.
   frontProfit: integer('front_profit'),
   backProfit: integer('back_profit'),
+  // A "spiff": extra money the dealership pays the salesperson on this deal
+  // (manufacturer incentive, weekend push, aged-unit bonus, etc.). It is paid on
+  // top of the commission and is not part of the deal's profit. Whole US dollars.
+  spiff: integer('spiff').notNull().default(0),
   soldAt: integer('sold_at', { mode: 'timestamp_ms' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });

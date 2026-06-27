@@ -43,6 +43,7 @@ export function KiaDashboard() {
   const [profit, setProfit] = useState('');
   const [front, setFront] = useState('');
   const [back, setBack] = useState('');
+  const [spiff, setSpiff] = useState('');
   const [date, setDate] = useState(etToday());
 
   // Claude quick-log (plain-English deal note)
@@ -144,6 +145,9 @@ export function KiaDashboard() {
       if (!Number.isFinite(p) || p < 0) return;
       profitFields = { profit: p };
     }
+    // A spiff is optional extra dealership money; only send it when entered.
+    const spiffNum = Number(spiff || 0);
+    const spiffField = spiff !== '' && Number.isFinite(spiffNum) && spiffNum > 0 ? { spiff: spiffNum } : {};
     // Show the month the deal was logged into (which may differ from the one
     // currently on screen).
     const dealMonth = (date || etToday()).slice(0, 7);
@@ -154,6 +158,7 @@ export function KiaDashboard() {
           model: model.trim(),
           type: dtype,
           ...profitFields,
+          ...spiffField,
           soldAt: date || undefined,
         },
         dealMonth,
@@ -164,6 +169,7 @@ export function KiaDashboard() {
     setProfit('');
     setFront('');
     setBack('');
+    setSpiff('');
     setDtype('New');
     setDate(etToday());
   }
@@ -232,7 +238,14 @@ export function KiaDashboard() {
     ...(showComm
       ? [
           { label: 'Total Profit', val: usd(m.totalProfit), sub: 'front + back' },
-          { label: `Commission (${planRateLabel})`, val: usd(m.commission), sub: miniText ? `est. payout · ${miniText}` : 'est. payout' },
+          {
+            label: `Commission (${planRateLabel})`,
+            val: usd(m.commission),
+            sub: m.totalSpiff > 0 ? `incl. ${usd(m.totalSpiff)} spiff` : miniText ? `est. payout · ${miniText}` : 'est. payout',
+          },
+          ...(m.totalSpiff > 0
+            ? [{ label: 'Spiffs', val: usd(m.totalSpiff), sub: 'dealership extra · in payout' }]
+            : []),
           {
             label: 'Unit Bonus',
             val: usd(m.bonusEarned),
@@ -379,6 +392,7 @@ export function KiaDashboard() {
             ) : (
               <input value={profit} onChange={(e) => setProfit(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 110px' }} />
             )}
+            <input value={spiff} onChange={(e) => setSpiff(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addDeal()} type="number" min="0" placeholder="Spiff $" title="Extra money the dealership pays on top of profit (optional)" style={{ ...inputBase, flex: '0 0 100px' }} />
             <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
             <button onClick={addDeal} disabled={addDisabled} style={{ ...redBtn, opacity: addDisabled ? 0.6 : 1 }}>
               Add deal
@@ -468,6 +482,11 @@ export function KiaDashboard() {
               <div style={{ fontSize: 11, color: '#8b9098', marginTop: 6, lineHeight: 1.5 }}>
                 {planRateLabel} of profit per deal{miniText ? `, or the ${miniText} — whichever is higher` : ''}. {m.units} units · {usd(m.totalProfit)} total profit this month.
               </div>
+              {m.totalSpiff > 0 && (
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #25282e', fontSize: 11.5, color: '#9aa0a8' }}>
+                  Includes <span style={{ color: '#e07a86' }}>{usd(m.totalSpiff)}</span> in spiffs — extra dealership money paid on top of commission.
+                </div>
+              )}
             </div>
           )}
 
@@ -618,6 +637,7 @@ function DealRow({
     profit?: number;
     frontProfit?: number;
     backProfit?: number;
+    spiff?: number;
     soldAt?: string;
   }) => void;
 }) {
@@ -629,6 +649,7 @@ function DealRow({
   const [profit, setProfit] = useState(String(deal.profit));
   const [front, setFront] = useState(String(deal.frontProfit ?? deal.profit));
   const [back, setBack] = useState(String(deal.backProfit ?? 0));
+  const [spiff, setSpiff] = useState(String(deal.spiff || 0));
   const [date, setDate] = useState(isoFromMs(deal.soldAt));
 
   function start() {
@@ -638,13 +659,16 @@ function DealRow({
     setProfit(String(deal.profit));
     setFront(String(deal.frontProfit ?? deal.profit));
     setBack(String(deal.backProfit ?? 0));
+    setSpiff(String(deal.spiff || 0));
     setDate(isoFromMs(deal.soldAt));
     setEditing(true);
   }
 
   function save() {
     if (!model.trim()) return;
-    const base = { customer: customer.trim() || undefined, model: model.trim(), type: dtype, soldAt: date || undefined };
+    const s = Number(spiff || 0);
+    if (!Number.isFinite(s) || s < 0) return;
+    const base = { customer: customer.trim() || undefined, model: model.trim(), type: dtype, spiff: s, soldAt: date || undefined };
     if (split) {
       const f = Number(front || 0);
       const b = Number(back || 0);
@@ -675,6 +699,7 @@ function DealRow({
         ) : (
           <input value={profit} onChange={(e) => setProfit(e.target.value)} type="number" min="0" placeholder="Profit $" style={{ ...inputBase, flex: '0 0 100px' }} />
         )}
+        <input value={spiff} onChange={(e) => setSpiff(e.target.value)} type="number" min="0" placeholder="Spiff $" title="Extra dealership money (optional)" style={{ ...inputBase, flex: '0 0 92px' }} />
         <input value={date} onChange={(e) => setDate(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
         <button onClick={save} disabled={busy || !model.trim()} style={{ ...redBtn, opacity: busy || !model.trim() ? 0.6 : 1 }}>
           Save
@@ -697,7 +722,9 @@ function DealRow({
       {showComm && (
         <div style={{ textAlign: 'right', flex: 'none' }}>
           <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, color: '#eceef0' }}>{usd(deal.profit)}</div>
-          <div style={{ fontSize: 9.5, color: '#7d828a', letterSpacing: '0.4px', textTransform: 'uppercase', marginTop: 2 }}>profit</div>
+          <div style={{ fontSize: 9.5, color: '#7d828a', letterSpacing: '0.4px', textTransform: 'uppercase', marginTop: 2 }}>
+            profit{deal.spiff > 0 && <span style={{ color: GREEN, marginLeft: 5 }}>+{usd(deal.spiff)} spiff</span>}
+          </div>
         </div>
       )}
       {!readOnly && (

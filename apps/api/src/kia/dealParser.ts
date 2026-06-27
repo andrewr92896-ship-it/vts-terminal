@@ -18,6 +18,7 @@ interface ParsedDeal {
   profit?: number;
   frontProfit?: number;
   backProfit?: number;
+  spiff?: number;
   soldAt?: string;
 }
 
@@ -37,9 +38,10 @@ function num(v: unknown): number | undefined {
 const SYSTEM = (today: string) =>
   [
     'You extract a single car-sale deal from a salesperson\'s short note and return ONLY a JSON object.',
-    'Shape: {"deal":{"customer":string,"model":string,"type":"New"|"Used","profit":number,"frontProfit":number,"backProfit":number,"soldAt":"YYYY-MM-DD"},"reply":string}',
+    'Shape: {"deal":{"customer":string,"model":string,"type":"New"|"Used","profit":number,"frontProfit":number,"backProfit":number,"spiff":number,"soldAt":"YYYY-MM-DD"},"reply":string}',
     'Rules: "model" is the Kia model (e.g. Telluride, K5, Sportage, EV9). "type" is New or Used — infer from words like "used", "pre-owned", "CPO" (Used) else New.',
     'Profit is in whole US dollars; if the note gives front and back (or "F&I"/"backend") amounts, set frontProfit and backProfit and omit profit. Otherwise set profit to the single/total number.',
+    '"spiff" is extra money the dealership pays on top of profit (a "spiff", manufacturer/sales incentive, bonus). Set it only when a spiff is mentioned; omit it otherwise.',
     `Resolve relative dates against today = ${today} (America/New_York); omit soldAt if none is mentioned.`,
     'If no Kia model is identifiable, return {"deal":null,"reply":"<ask for the model>"}. Keep "reply" to one short sentence describing what you logged.',
   ].join('\n');
@@ -62,6 +64,7 @@ export async function parseDeal(userId: string, note: string): Promise<DealParse
   const front = num(deal.frontProfit);
   const back = num(deal.backProfit);
   const profit = num(deal.profit);
+  const spiff = num(deal.spiff);
   const soldAt = typeof deal.soldAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(deal.soldAt) ? deal.soldAt : undefined;
 
   await addDeal(userId, {
@@ -71,10 +74,12 @@ export async function parseDeal(userId: string, note: string): Promise<DealParse
     profit,
     frontProfit: front,
     backProfit: back,
+    spiff,
     soldAt,
   });
 
   const total = front != null || back != null ? (front ?? 0) + (back ?? 0) : profit ?? 0;
-  const summary = `Logged ${type} ${model}${total ? ` · $${total.toLocaleString('en-US')}` : ''}.`;
+  const spiffNote = spiff ? ` (+$${spiff.toLocaleString('en-US')} spiff)` : '';
+  const summary = `Logged ${type} ${model}${total ? ` · $${total.toLocaleString('en-US')}` : ''}${spiffNote}.`;
   return { dashboard: await getDashboard(userId), logged: true, reply: reply || summary };
 }
