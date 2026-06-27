@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useNowTick } from '../../hooks/useNowTick';
 import { useAuth } from '../../auth/AuthContext';
+import { affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
 import type {
   CalendarEvent,
   EventInput,
@@ -83,6 +84,9 @@ export function MarketNews() {
 
   const [data, setData] = useState<MarketNewsData | null>(null);
   const [truth, setTruth] = useState<TruthPost[]>([]);
+  // The instruments this trader actually trades, used to tag each headline with
+  // the positions it would affect. Best-effort: defaults until the log loads.
+  const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [composing, setComposing] = useState<'news' | 'event' | null>(null);
@@ -100,6 +104,14 @@ export function MarketNews() {
     const id = window.setInterval(() => void load(), REFRESH_MS);
     return () => window.clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Derive the watchlist from the trade log once on mount. Best-effort — on any
+  // failure (or an empty log) the default majors set keeps the tags working.
+  useEffect(() => {
+    api.tradeLog()
+      .then((r) => setWatchlist(deriveWatchlist(r.trades.map((t) => t.instrument))))
+      .catch(() => {});
   }, []);
 
   async function run(p: Promise<MarketNewsData>): Promise<boolean> {
@@ -198,7 +210,7 @@ export function MarketNews() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
               {headlines.map((h) => (
-                <HeadlineCard key={h.id} h={h} canWrite={canWrite} busy={busy}
+                <HeadlineCard key={h.id} h={h} canWrite={canWrite} busy={busy} watchlist={watchlist}
                   onSave={(p) => run(api.updateNews(h.id, p))}
                   onRemove={() => run(api.removeNews(h.id))} />
               ))}
@@ -234,8 +246,10 @@ function SectionLabel({ text }: { text: string }) {
   return <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, fontWeight: 600, margin: '0 0 10px' }}>{text}</div>;
 }
 
-function HeadlineCard({ h, canWrite, busy, onSave, onRemove }: { h: NewsItem; canWrite: boolean; busy: boolean; onSave: (p: NewsInput) => void; onRemove: () => void }) {
+function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: NewsItem; canWrite: boolean; busy: boolean; watchlist: string[]; onSave: (p: NewsInput) => void; onRemove: () => void }) {
   const [editing, setEditing] = useState(false);
+  // Which of the trader's instruments this headline is likely to move.
+  const affected = useMemo(() => affectedInstruments(h, watchlist), [h, watchlist]);
   if (editing) {
     return <NewsForm busy={busy} initial={h} submitLabel="Save" onSubmit={(p) => { onSave(p); setEditing(false); }} onCancel={() => setEditing(false)} />;
   }
@@ -247,6 +261,14 @@ function HeadlineCard({ h, canWrite, busy, onSave, onRemove }: { h: NewsItem; ca
         <span style={chip}>{CATEGORY[h.category]}</span>
         <span style={{ ...chip, color: im.color, borderColor: im.color }}>{im.label} impact</span>
         <span style={{ ...chip, color: bi.color, borderColor: bi.color }}>{bi.label}</span>
+        {affected.length > 0 && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 9.5, color: FAINT, letterSpacing: '0.3px' }}>affects</span>
+            {affected.slice(0, 5).map((sym) => (
+              <span key={sym} style={{ ...chip, color: GOLD, borderColor: 'rgba(235,203,116,.5)', background: 'rgba(235,203,116,.08)' }}>{sym}</span>
+            ))}
+          </span>
+        )}
         <span style={{ marginLeft: 'auto', fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(h.publishedAt)}</span>
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>{h.title}</div>
