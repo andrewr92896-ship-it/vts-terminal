@@ -61,6 +61,14 @@ import type {
   WealthClientsData,
 } from './types';
 
+// A flashcard the user added to their own deck; topic matches the Series 65
+// topics so it filters alongside the built-in cards.
+export interface CustomVocabCard {
+  term: string;
+  def: string;
+  topic: string;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -362,6 +370,17 @@ export const api = {
   },
   studyLeaderboard(): Promise<{ entries: LeaderboardEntry[] }> {
     return request('/api/studies/leaderboard');
+  },
+  // Custom flashcard deck (user-added words with AI-generated definitions).
+  studyVocab(): Promise<{ cards: CustomVocabCard[] }> {
+    return request('/api/studies/vocab');
+  },
+  // Add a word — the server generates its definition and topic with Claude.
+  addVocabWord(term: string): Promise<{ cards: CustomVocabCard[] }> {
+    return request('/api/studies/vocab', { method: 'POST', body: JSON.stringify({ term }) });
+  },
+  removeVocabWord(term: string): Promise<{ cards: CustomVocabCard[] }> {
+    return request(`/api/studies/vocab?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
   },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');

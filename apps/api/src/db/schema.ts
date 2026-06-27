@@ -757,6 +757,23 @@ export const studyLearned = sqliteTable('study_learned', {
 });
 export type StudyLearnedRow = typeof studyLearned.$inferSelect;
 
+// ---- Studies: custom flashcard terms (per user) ----
+// Words the user added to their own flashcard deck. The definition is generated
+// by the study tutor (Claude) when the word is added, and the topic places it
+// under one of the four Series 65 areas so the deck's topic filter still works.
+// Synced per user so a custom deck follows the learner across devices.
+export const studyVocab = sqliteTable('study_vocab', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  term: text('term').notNull(),
+  def: text('def').notNull(),
+  topic: text('topic').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyVocabRow = typeof studyVocab.$inferSelect;
+
 // ---- Web Push subscriptions (per user, per device) ----
 // One row per browser/device the user has opted into phone push from. The
 // endpoint is the unique push URL; p256dh/auth are the client's encryption keys

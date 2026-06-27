@@ -382,3 +382,44 @@ export async function chatClaude(messages: ChatMessage[], system?: string): Prom
   });
   return textOf(message);
 }
+
+// The four Series 65 topics, mirrored from the web client (series65Questions.ts)
+// so a generated card lands under the same filters the built-in deck uses.
+export const SERIES65_TOPICS = [
+  'Economics',
+  'Investments',
+  'Client Management',
+  'Regulations & Ethics',
+] as const;
+export type Series65Topic = (typeof SERIES65_TOPICS)[number];
+
+export interface Series65Definition {
+  def: string;
+  topic: Series65Topic;
+}
+
+// Generate a flashcard definition for a user-supplied Series 65 term: a concise
+// exam-style definition plus the topic it belongs to. Used when the learner adds
+// their own word to the flashcard deck.
+export async function defineSeries65Term(term: string): Promise<Series65Definition> {
+  const prompt = [
+    `Define the term "${term}" as it applies to the Series 65 (Uniform Investment Adviser Law Exam).`,
+    'Write a clear, exam-accurate definition of one to three sentences, the way a flashcard would phrase it.',
+    `Also classify the term into exactly one of these four topics: ${SERIES65_TOPICS.join(', ')}.`,
+    'Respond with ONLY a JSON object of the form {"def": "...", "topic": "..."} and nothing else.',
+    'If the term is not a real finance or securities concept, still give your best concise definition and pick the closest topic.',
+  ].join(' ');
+
+  const raw = await askClaude(prompt);
+  const parsed = extractJson(raw) as { def?: unknown; topic?: unknown } | null;
+
+  const def = parsed && typeof parsed.def === 'string' ? parsed.def.trim() : '';
+  if (!def) throw new Error('Could not generate a definition for that term');
+
+  const topicRaw = parsed && typeof parsed.topic === 'string' ? parsed.topic.trim() : '';
+  const topic =
+    (SERIES65_TOPICS as readonly string[]).find((t) => t.toLowerCase() === topicRaw.toLowerCase()) ??
+    'Investments';
+
+  return { def: def.slice(0, 1000), topic: topic as Series65Topic };
+}

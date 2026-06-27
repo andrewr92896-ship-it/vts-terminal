@@ -202,6 +202,25 @@ updated to 20, front/back persisted.
   a toggle; **Study Hub** + **Progress** screens. Persisted per user in
   `localStorage`. Studies screens are `React.lazy` code‑split.
 
+## Studies — custom flashcards + crash fix
+- **Add-your-own flashcards (AI definitions):** the Flashcards screen now has an
+  "Add a word" box. The server (`POST /api/studies/vocab`) asks Claude
+  (`defineSeries65Term`) for a concise Series 65 definition and classifies the
+  word into one of the four topics, then stores it in a new per-user
+  `study_vocab` table (migration `0032`, service `studies/vocab.ts`) so the
+  custom deck syncs across devices like learned terms. Custom cards merge into
+  the deck (deduped by term), carry a "✦ Your word" badge, and can be deleted.
+  AI calls are rate-limited under the `studies_vocab` bucket and return 503 when
+  no API key is configured.
+- **Study section crash fix:** the lazy-loaded Studies screens had a `Suspense`
+  but **no error boundary**, so a failed code-split chunk fetch (common after a
+  redeploy when the cached `index.html` points at stale chunk hashes, or on a
+  flaky connection) crashed the whole app to a blank page. Added a reusable
+  `ErrorBoundary` (`components/ErrorBoundary.tsx`) around the screen `Suspense`
+  in `Portal.tsx`, keyed by the active screen so navigating away clears it. It
+  detects chunk-load errors and offers a "Reload app" button (fetches the fresh
+  build); other render errors get a "Try again".
+
 ## What's next
 Build out the **Trading tab** until done — full plan and current (placeholder)
 state in `HANDOFF.md` §6.
