@@ -370,7 +370,7 @@ export function Portal() {
         }}
       >
         <span style={{ fontSize: 10.5, color: '#5d72a0', letterSpacing: '0.3px' }}>
-          Copyright 2024-2026 Vitalis Trading Systems LLC. Confidential.
+          2026 Vitalis Trading Systems LLC. Confidential.
         </span>
         <span
           style={{

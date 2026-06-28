@@ -199,7 +199,22 @@ export function Login() {
             letterSpacing: '0.3px',
           }}
         >
-          Copyright 2024-2026 Vitalis Trading Systems LLC. Confidential.
+          2026 Vitalis Trading Systems LLC. Confidential.
+        </p>
+        <p
+          style={{
+            textAlign: 'center',
+            marginTop: 6,
+            marginBottom: 0,
+            fontSize: 10.5,
+            color: '#5d72a0',
+            letterSpacing: '0.3px',
+          }}
+        >
+          Inquiries:{' '}
+          <a href="mailto:Andrew@vitalistradingsystems.com" style={{ color: '#7c9ce0' }}>
+            Andrew@vitalistradingsystems.com
+          </a>
         </p>
       </form>
     </div>
