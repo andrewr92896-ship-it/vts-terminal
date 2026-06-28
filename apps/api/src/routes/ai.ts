@@ -78,7 +78,9 @@ const tutorSchema = z.object({
       topic: z.string().trim().max(60).optional(),
     })
     .optional(),
-  ask: z.string().trim().min(1).max(500).optional(),
+  // Free-form question. Large enough to carry the surrounding question/term
+  // context the client prepends so the answer stays on-topic.
+  ask: z.string().trim().min(1).max(2000).optional(),
 }).refine((v) => v.explain || v.ask, { message: 'Provide a question to explain or ask' });
 
 const KIA_SYSTEM = [

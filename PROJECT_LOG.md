@@ -234,6 +234,18 @@ updated to 20, front/back persisted.
   question's real topic level/score. An empty-state prompts the user to star
   some questions when the set is empty.
 
+## Studies — "More Details" + Ask Claude
+- **Renamed "Explain with Claude" → "More Details"** on both the quiz and the
+  flashcards, and added an **"Ask Claude…"** text box beside it for free-form
+  follow-up questions. The quiz sends the question's stem/options/answer as
+  context; the flashcard sends the term + definition, so answers stay on-topic.
+  Both reuse the existing `studyTutor` (`ask`) endpoint; its `ask` max was raised
+  from 500 → 2000 chars to carry that context. Responses render in a single
+  Claude panel per card/question (reset on advance / card change).
+- **Version → Alpha V 1.16** with a patch-notes entry covering the custom
+  flashcards, starred questions, the More Details/Ask Claude change, and the
+  crash fix. (Bump the version pill so it's obvious in-app once this deploys.)
+
 ## What's next
 Build out the **Trading tab** until done — full plan and current (placeholder)
 state in `HANDOFF.md` §6.

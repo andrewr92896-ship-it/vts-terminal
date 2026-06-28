@@ -87,12 +87,15 @@ export function Flashcards({
   // step); auto-rotate then just moves between cards on one timer.
   const [alwaysDef, setAlwaysDef] = useState(false);
 
-  // Plain-language expanded explanations that clarify any jargon used inside a
-  // definition. Cached per term so re-opening a card does not call the AI again.
+  // Plain-language "More Details" text, cached per term so re-opening a card does
+  // not call the AI again.
   const [explanations, setExplanations] = useState<Record<string, string>>({});
-  const [explainBusy, setExplainBusy] = useState(false);
-  const [explainErr, setExplainErr] = useState(false);
-  const [showExplain, setShowExplain] = useState(false);
+  // The Claude response panel for the current card — fed by either "More Details"
+  // or a free-form "Ask Claude" question. Reset when the visible card changes.
+  const [panelText, setPanelText] = useState<string | null>(null);
+  const [panelBusy, setPanelBusy] = useState(false);
+  const [panelErr, setPanelErr] = useState(false);
+  const [askText, setAskText] = useState('');
 
   // Adding a custom word: the input, the in-flight state while Claude writes its
   // definition, any error, and the term to jump to once the deck updates.
@@ -145,22 +148,48 @@ export function Flashcards({
     void api.removeLearnedTerm(term).catch(() => {});
   }
 
-  // Ask the study tutor for a beginner-friendly explanation that breaks down any
-  // jargon used inside the definition itself (for example "stagnant growth").
+  // "More Details": a beginner-friendly explanation that breaks down any jargon
+  // used inside the definition itself (for example "stagnant growth"). Cached per
+  // term so re-opening the same card is instant and free.
   async function explainCard(term: string, def: string) {
-    setShowExplain(true);
-    if (explanations[term]) return; // already have it
-    setExplainBusy(true);
-    setExplainErr(false);
+    setPanelErr(false);
+    if (explanations[term]) {
+      setPanelText(explanations[term]); // already have it
+      return;
+    }
+    setPanelBusy(true);
+    setPanelText(null);
     try {
       const r = await api.studyTutor({
         ask: `Explain the Series 65 term "${term}" in plain, simple language for a complete beginner. Its textbook definition is: "${def}". Define any jargon or uncommon terms used inside that definition (for example economics phrases like "stagnant growth") in everyday words, then give a short plain-English summary. Keep it concise, a few short sentences.`,
       });
       setExplanations((prev) => ({ ...prev, [term]: r.reply }));
+      setPanelText(r.reply);
     } catch {
-      setExplainErr(true);
+      setPanelErr(true);
     } finally {
-      setExplainBusy(false);
+      setPanelBusy(false);
+    }
+  }
+
+  // Free-form question about the current word. The term and its definition are
+  // sent along so Claude's answer stays in context.
+  async function askCard(term: string, def: string) {
+    const question = askText.trim();
+    if (!question || panelBusy) return;
+    setPanelErr(false);
+    setPanelBusy(true);
+    setPanelText(null);
+    try {
+      const r = await api.studyTutor({
+        ask: `I'm studying the Series 65 term "${term}". Its definition is: "${def}". My question: ${question}. Answer in plain, concise language.`,
+      });
+      setPanelText(r.reply);
+      setAskText('');
+    } catch {
+      setPanelErr(true);
+    } finally {
+      setPanelBusy(false);
     }
   }
 
@@ -286,11 +315,13 @@ export function Flashcards({
   const card = cards.length ? cards[Math.min(i, cards.length - 1)] : null;
   const isCustom = !!card && customTerms.has(card.term);
 
-  // Collapse any open explanation when the visible card changes (manual nav,
+  // Collapse the Claude panel when the visible card changes (manual nav,
   // auto-rotate, or a topic switch); the cache keeps prior answers ready.
   useEffect(() => {
-    setShowExplain(false);
-    setExplainErr(false);
+    setPanelText(null);
+    setPanelBusy(false);
+    setPanelErr(false);
+    setAskText('');
   }, [card?.term]);
 
   const phaseTotal = alwaysDef ? defSecs : showDef ? defSecs : termSecs;
@@ -475,39 +506,61 @@ export function Flashcards({
                   <div style={{ fontSize: isPhone ? 14 : 15, lineHeight: 1.6, color: '#d7ccff', textAlign: 'center' }}>
                     {card.def}
                   </div>
-                  {!showExplain ? (
-                    <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void explainCard(card.term, card.def);
+                  {/* More Details + Ask Claude */}
+                  <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center' }}>
+                    <button
+                      onClick={() => void explainCard(card.term, card.def)}
+                      disabled={panelBusy}
+                      style={{ ...explainBtn(theme), opacity: panelBusy ? 0.6 : 1 }}
+                      title="Get a simpler explanation that defines any tricky words"
+                    >
+                      💡 More Details
+                    </button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, minWidth: 180 }}>
+                      <input
+                        value={askText}
+                        onChange={(e) => setAskText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void askCard(card.term, card.def);
+                          }
                         }}
-                        style={explainBtn(theme)}
-                        title="Get a simpler explanation that defines any tricky words"
+                        disabled={panelBusy}
+                        placeholder="Ask Claude…"
+                        aria-label={`Ask Claude about ${card.term}`}
+                        maxLength={500}
+                        style={{
+                          flex: 1,
+                          minWidth: 100,
+                          fontSize: 12.5,
+                          padding: '9px 12px',
+                          borderRadius: 8,
+                          border: `1px solid ${theme.navBorder}`,
+                          background: 'rgba(255,255,255,.05)',
+                          color: '#eef3ff',
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        onClick={() => void askCard(card.term, card.def)}
+                        disabled={panelBusy || !askText.trim()}
+                        aria-label="Send question to Claude"
+                        style={{ ...primaryBtn(theme, accentGrad), padding: '9px 13px', minHeight: 0, opacity: panelBusy || !askText.trim() ? 0.6 : 1 }}
                       >
-                        💡 Explain simply
+                        →
                       </button>
                     </div>
-                  ) : (
+                  </div>
+                  {(panelBusy || panelErr || panelText) && (
                     <div onClick={(e) => e.stopPropagation()} style={explainPanel(theme)}>
-                      {explainBusy && !explanations[card.term] ? (
+                      {panelBusy ? (
                         <span style={{ fontSize: 12.5, color: '#a99ff0' }}>Thinking…</span>
-                      ) : explainErr && !explanations[card.term] ? (
-                        <span style={{ fontSize: 12.5, color: '#ff9a9a' }}>
-                          Could not load an explanation.{' '}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void explainCard(card.term, card.def);
-                            }}
-                            style={{ background: 'none', border: 'none', color: theme.accent, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-                          >
-                            Try again
-                          </button>
-                        </span>
+                      ) : panelErr ? (
+                        <span style={{ fontSize: 12.5, color: '#ff9a9a' }}>Could not reach Claude. Please try again.</span>
                       ) : (
                         <div style={{ fontSize: isPhone ? 13 : 13.5, lineHeight: 1.65, color: '#e7deff', textAlign: 'left', whiteSpace: 'pre-wrap' }}>
-                          {explanations[card.term]}
+                          {panelText}
                         </div>
                       )}
                     </div>

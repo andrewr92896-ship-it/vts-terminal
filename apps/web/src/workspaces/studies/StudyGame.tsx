@@ -77,10 +77,11 @@ export function StudyGame({ theme }: { theme: Theme }) {
   const [outcome, setOutcome] = useState<boolean | null>(null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
-  // Claude tutor (per-question explanation)
+  // Claude tutor (per-question explanation + free-form questions)
   const [tutorText, setTutorText] = useState<string | null>(null);
   const [tutorBusy, setTutorBusy] = useState(false);
   const [tutorError, setTutorError] = useState<string | null>(null);
+  const [askQ, setAskQ] = useState('');
 
   // Whether the saved server copy has been pulled yet, and the last state we
   // pushed up (to skip redundant writes).
@@ -179,6 +180,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
     setLevelEvent(null);
     setTutorText(null);
     setTutorError(null);
+    setAskQ('');
   }
 
   function advance() {
@@ -248,6 +250,39 @@ export function StudyGame({ theme }: { theme: Theme }) {
         explain: { stem: current.q.stem, options: current.q.options, answer: current.q.answer, topic: current.topic },
       });
       setTutorText(reply);
+    } catch (e) {
+      setTutorError(
+        e instanceof ApiError
+          ? e.status === 503
+            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            : e.message
+          : 'Could not reach the tutor',
+      );
+    } finally {
+      setTutorBusy(false);
+    }
+  }
+
+  // Free-form question about the current quiz question. The question's stem,
+  // options, and answer are sent along so Claude's reply stays in context.
+  async function askAboutQuestion() {
+    const question = askQ.trim();
+    if (!current || tutorBusy || !question) return;
+    setTutorBusy(true);
+    setTutorError(null);
+    try {
+      const opts = current.q.options.map((o) => `${o.label}) ${o.text}`).join('\n');
+      const ask = [
+        'Here is a Series 65 practice question I am studying:',
+        current.q.stem,
+        opts,
+        `The correct answer is ${current.q.answer}.`,
+        '',
+        `My question: ${question}`,
+      ].join('\n');
+      const { reply } = await api.studyTutor({ ask });
+      setTutorText(reply);
+      setAskQ('');
     } catch (e) {
       setTutorError(
         e instanceof ApiError
@@ -582,15 +617,38 @@ export function StudyGame({ theme }: { theme: Theme }) {
                   {tutorError} — click to dismiss.
                 </div>
               )}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                 <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
                   Next question ›
                 </button>
-                {!tutorText && (
-                  <button onClick={explainWithClaude} disabled={tutorBusy} style={{ ...ghostBtn(theme), opacity: tutorBusy ? 0.6 : 1 }}>
-                    {tutorBusy ? 'Asking Claude…' : '✦ Explain with Claude'}
+                <button onClick={explainWithClaude} disabled={tutorBusy} style={{ ...ghostBtn(theme), opacity: tutorBusy ? 0.6 : 1 }}>
+                  {tutorBusy ? 'Asking Claude…' : '✦ More Details'}
+                </button>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, minWidth: 200 }}>
+                  <input
+                    value={askQ}
+                    onChange={(e) => setAskQ(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        void askAboutQuestion();
+                      }
+                    }}
+                    disabled={tutorBusy}
+                    placeholder="Ask Claude…"
+                    aria-label="Ask Claude about this question"
+                    maxLength={500}
+                    style={askInput(theme)}
+                  />
+                  <button
+                    onClick={() => void askAboutQuestion()}
+                    disabled={tutorBusy || !askQ.trim()}
+                    aria-label="Send question to Claude"
+                    style={{ ...primaryBtn(theme, accentGrad), padding: '10px 14px', opacity: tutorBusy || !askQ.trim() ? 0.6 : 1 }}
+                  >
+                    →
                   </button>
-                )}
+                </div>
               </div>
             </div>
           ) : null}
@@ -674,6 +732,21 @@ const statLabel: CSSProperties = {
   textTransform: 'uppercase',
   color: '#a99ff0',
 };
+
+function askInput(theme: Theme): CSSProperties {
+  return {
+    flex: 1,
+    minWidth: 120,
+    fontSize: 12.5,
+    padding: '10px 13px',
+    borderRadius: 8,
+    border: `1px solid ${theme.navBorder}`,
+    background: 'rgba(255,255,255,.04)',
+    color: '#eef3ff',
+    outline: 'none',
+    minHeight: 42,
+  };
+}
 
 function primaryBtn(theme: Theme, grad: string): CSSProperties {
   return {
