@@ -225,6 +225,20 @@
    "when": 1782336336907,
    "tag": "0031_funded_platforms",
    "breakpoints": true
+  },
+  {
+   "idx": 32,
+   "version": "6",
+   "when": 1782336436907,
+   "tag": "0032_study_vocab",
+   "breakpoints": true
+  },
+  {
+   "idx": 33,
+   "version": "6",
+   "when": 1782336536907,
+   "tag": "0033_study_starred",
+   "breakpoints": true
   }
  ]
 }

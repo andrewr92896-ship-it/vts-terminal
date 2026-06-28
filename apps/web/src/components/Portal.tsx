@@ -18,6 +18,7 @@ import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
 import { DemoTour } from './DemoTour';
+import { ErrorBoundary } from './ErrorBoundary';
 import { TopBar } from './TopBar';
 import { TabBar } from './TabBar';
 import { InstallPrompt } from './InstallPrompt';
@@ -348,9 +349,11 @@ export function Portal() {
           padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
         }}
       >
-        <Suspense fallback={<div style={{ padding: 24, color: '#8ea3cc', fontSize: 13 }}>Loading…</div>}>
-          {renderScreen(screen, theme, setScreen) ?? <Screen screen={screen} theme={theme} />}
-        </Suspense>
+        <ErrorBoundary resetKey={screen}>
+          <Suspense fallback={<div style={{ padding: 24, color: '#8ea3cc', fontSize: 13 }}>Loading…</div>}>
+            {renderScreen(screen, theme, setScreen) ?? <Screen screen={screen} theme={theme} />}
+          </Suspense>
+        </ErrorBoundary>
       </main>
 
       <footer

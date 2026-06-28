@@ -202,6 +202,50 @@ updated to 20, front/back persisted.
   a toggle; **Study Hub** + **Progress** screens. Persisted per user in
   `localStorage`. Studies screens are `React.lazy` code‑split.
 
+## Studies — custom flashcards + crash fix
+- **Add-your-own flashcards (AI definitions):** the Flashcards screen now has an
+  "Add a word" box. The server (`POST /api/studies/vocab`) asks Claude
+  (`defineSeries65Term`) for a concise Series 65 definition and classifies the
+  word into one of the four topics, then stores it in a new per-user
+  `study_vocab` table (migration `0032`, service `studies/vocab.ts`) so the
+  custom deck syncs across devices like learned terms. Custom cards merge into
+  the deck (deduped by term), carry a "✦ Your word" badge, and can be deleted.
+  AI calls are rate-limited under the `studies_vocab` bucket and return 503 when
+  no API key is configured.
+- **Study section crash fix:** the lazy-loaded Studies screens had a `Suspense`
+  but **no error boundary**, so a failed code-split chunk fetch (common after a
+  redeploy when the cached `index.html` points at stale chunk hashes, or on a
+  flaky connection) crashed the whole app to a blank page. Added a reusable
+  `ErrorBoundary` (`components/ErrorBoundary.tsx`) around the screen `Suspense`
+  in `Portal.tsx`, keyed by the active screen so navigating away clears it. It
+  detects chunk-load errors and offers a "Reload app" button (fetches the fresh
+  build); other render errors get a "Try again".
+
+## Studies — star questions to revisit
+- **Star quiz questions:** each Study Game question now has a ☆/★ toggle in its
+  level HUD. Starred question ids are stored in a new per-user `study_starred`
+  table (migration `0033`, service `studies/starred.ts`, routes GET/POST/DELETE
+  `/api/studies/starred`) and cached in localStorage (`series65Game.ts`
+  `starredKey`/`loadStarred`/`saveStarred`), so the set loads instantly and
+  syncs across devices like learned terms.
+- **Revisit mode:** the category selector gains a "★ Starred (n)" chip that
+  draws only from starred questions (shuffled queue, skips ids unstarred mid-
+  session, reshuffles when exhausted). Answers still count toward the
+  question's real topic level/score. An empty-state prompts the user to star
+  some questions when the set is empty.
+
+## Studies — "More Details" + Ask Claude
+- **Renamed "Explain with Claude" → "More Details"** on both the quiz and the
+  flashcards, and added an **"Ask Claude…"** text box beside it for free-form
+  follow-up questions. The quiz sends the question's stem/options/answer as
+  context; the flashcard sends the term + definition, so answers stay on-topic.
+  Both reuse the existing `studyTutor` (`ask`) endpoint; its `ask` max was raised
+  from 500 → 2000 chars to carry that context. Responses render in a single
+  Claude panel per card/question (reset on advance / card change).
+- **Version → Alpha V 1.16** with a patch-notes entry covering the custom
+  flashcards, starred questions, the More Details/Ask Claude change, and the
+  crash fix. (Bump the version pill so it's obvious in-app once this deploys.)
+
 ## What's next
 Build out the **Trading tab** until done — full plan and current (placeholder)
 state in `HANDOFF.md` §6.

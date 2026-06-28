@@ -98,6 +98,32 @@ export function gameKey(userId: string | undefined): string {
   return `vts_series65_game_${userId ?? 'anon'}`;
 }
 
+// Per-user set of starred question ids (kept in localStorage for instant load
+// and offline use; also synced to the account so it follows the learner).
+export function starredKey(userId: string | undefined): string {
+  return `vts_series65_starred_${userId ?? 'anon'}`;
+}
+
+export function loadStarred(userId: string | undefined): Set<number> {
+  try {
+    const raw = localStorage.getItem(starredKey(userId));
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr)
+      ? new Set(arr.filter((x: unknown): x is number => typeof x === 'number' && Number.isInteger(x)))
+      : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+export function saveStarred(userId: string | undefined, ids: Set<number>): void {
+  try {
+    localStorage.setItem(starredKey(userId), JSON.stringify([...ids]));
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
 // Coerce an arbitrary parsed object into a valid GameState, dropping anything
 // malformed. Shared by the localStorage and server-synced load paths.
 export function normalizeGame(p: unknown): GameState {

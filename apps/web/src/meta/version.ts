@@ -9,9 +9,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.15';
+export const APP_VERSION = 'Alpha V 1.16';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.16',
+    date: 'June 28, 2026',
+    notes: [
+      'Flashcards: add your own words — type a term and Claude writes a Series 65 definition and files it under the right topic. Your custom words sync across devices and can be removed anytime.',
+      'Study Game: star any question (☆) to save it, then switch to the new "Starred" tab to drill just the ones you flagged. Your starred set syncs across devices.',
+      'Ask Claude about a question or a flashcard: the "Explain with Claude" button is now "More Details", with an "Ask Claude…" box next to it for your own follow-up questions.',
+      'Fixed an occasional crash when opening the Studies section after an app update.',
+    ],
+  },
   {
     version: 'Alpha V 1.15',
     date: 'June 24, 2026',
