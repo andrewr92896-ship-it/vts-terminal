@@ -192,6 +192,10 @@ export const api = {
   }): Promise<{ reply: string }> {
     return request('/api/ai/tutor', { method: 'POST', body: JSON.stringify(body) });
   },
+  // Multi-turn study tutor chat (back-and-forth about a question or term).
+  studyTutorChat(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<{ reply: string }> {
+    return request('/api/ai/tutor', { method: 'POST', body: JSON.stringify({ messages }) });
+  },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');
   },

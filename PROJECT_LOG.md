@@ -246,6 +246,20 @@ updated to 20, front/back persisted.
   flashcards, starred questions, the More Details/Ask Claude change, and the
   crash fix. (Bump the version pill so it's obvious in-app once this deploys.)
 
+## Studies — Ask Claude is a multi-turn chat
+- Replaced the one-shot "Ask Claude" with a real back-and-forth conversation on
+  both the quiz and the flashcards, via a shared `TutorChat` component
+  (`workspaces/studies/TutorChat.tsx`). It keeps a running message thread and the
+  tutor remembers the context across turns.
+- The tutor endpoint (`/api/ai/tutor`) now accepts an optional `messages` array
+  (multi-turn) and routes it to `chatClaude(messages, TUTOR_SYSTEM)`; the single
+  `explain`/`ask` paths still work. Client method `studyTutorChat(messages)`.
+- The question/term context is folded into the first user turn only (the user
+  just sees what they typed). "More Details" is now the one-tap opener of the
+  chat, so follow-ups continue the same thread. The chat remounts per question
+  id / term (via React `key`), so moving on starts fresh.
+- Version → **Alpha V 1.17**.
+
 ## What's next
 Build out the **Trading tab** until done — full plan and current (placeholder)
 state in `HANDOFF.md` §6.

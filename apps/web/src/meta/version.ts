@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.16';
+export const APP_VERSION = 'Alpha V 1.17';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Alpha V 1.17',
+    date: 'June 28, 2026',
+    notes: [
+      'Ask Claude is now a real back-and-forth chat — ask follow-up questions about a quiz question or a flashcard and Claude keeps the context. "More Details" starts the conversation, and you can keep going from there.',
+    ],
+  },
   {
     version: 'Alpha V 1.16',
     date: 'June 28, 2026',
