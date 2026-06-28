@@ -13,6 +13,7 @@ import {
 import { toPublicUser } from '../auth/rbac.js';
 import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
+import { ensureDemoAccount } from '../seed.js';
 
 const loginSchema = z.object({
   username: z.string().trim().min(1).max(64),
@@ -71,6 +72,15 @@ export async function authRoutes(app: FastifyInstance) {
   // visitor into the pre-seeded demo account. Everything it can do is read-only
   // (enforced by the demo guard), so this is safe to expose.
   app.post('/api/auth/demo', async (request, reply) => {
+    // Self-heal: make sure the demo account exists and is active before signing
+    // in, so the public demo stays reachable even if boot seeding never ran or
+    // the row was deactivated. Best-effort — a failure here just falls through
+    // to the same 503 the absence of a usable demo user would produce.
+    try {
+      await ensureDemoAccount();
+    } catch (err) {
+      request.log.error({ err }, 'demo account ensure failed');
+    }
     const rows = await db
       .select()
       .from(users)
