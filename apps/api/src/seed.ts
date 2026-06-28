@@ -83,41 +83,66 @@ export async function seedAdmin(): Promise<void> {
 // demo guard blocks all writes. The applied seed version is stored in the demo
 // user's (otherwise unused) email column; when DEMO_SEED_VERSION changes, the
 // data is wiped and re-seeded on boot so tweaks ship on the next deploy.
-export async function seedDemo(): Promise<void> {
-  const marker = `seed-v${DEMO_SEED_VERSION}`;
+// Make sure the public demo *account* exists and is usable: present, active,
+// no forced password change, and able to see brokerage figures. Cheap and
+// idempotent — safe to call on boot and lazily from the demo-login route, so
+// the demo never goes dark just because the row was deactivated or never got
+// seeded. Returns the demo user's id and whether it was just created. Demo
+// *data* (alerts, portfolios, etc.) is handled separately by seedDemo().
+export async function ensureDemoAccount(): Promise<{ id: string; created: boolean }> {
   const existing = (
     await db.select().from(users).where(eq(users.username, DEMO_USERNAME)).limit(1)
   )[0];
 
-  let demoId: string;
   if (existing) {
-    if (existing.email === marker) {
+    // Repair anything that would make the one-click demo unreachable, but only
+    // write when something is actually off so a healthy demo is left untouched.
+    if (!existing.active || existing.mustChangePassword || !existing.viewBrokerage) {
+      await db
+        .update(users)
+        .set({ active: true, mustChangePassword: false, viewBrokerage: true, updatedAt: new Date() })
+        .where(eq(users.id, existing.id));
+      console.log('Demo account repaired (reactivated / unlocked).');
+    }
+    return { id: existing.id, created: false };
+  }
+
+  const now = new Date();
+  const demoId = crypto.randomUUID();
+  await db.insert(users).values({
+    id: demoId,
+    username: DEMO_USERNAME,
+    createdUsername: DEMO_USERNAME,
+    displayName: DEMO_DISPLAY_NAME,
+    email: null,
+    // A random, unused password: the demo is entered through the one-click button.
+    passwordHash: await hashPassword(crypto.randomBytes(18).toString('base64url')),
+    role: 'Viewer', // legacy column
+    roles: JSON.stringify([...DEMO_ROLES]),
+    viewBrokerage: true, // so balances and the forex pip money show in the demo
+    active: true,
+    mustChangePassword: false,
+    createdAt: now,
+    updatedAt: now,
+  });
+  console.log('Demo user created.');
+  return { id: demoId, created: true };
+}
+
+export async function seedDemo(): Promise<void> {
+  const marker = `seed-v${DEMO_SEED_VERSION}`;
+  // Always make sure the account itself is present and active first, even when
+  // the data is already current — an inactive demo must never be left as-is.
+  const { id: demoId, created } = await ensureDemoAccount();
+
+  if (!created) {
+    const current = (await db.select().from(users).where(eq(users.id, demoId)).limit(1))[0];
+    if (current?.email === marker) {
       console.log(`Demo data is current (${marker}).`);
       return;
     }
-    demoId = existing.id;
-    console.log(`Refreshing demo data (${existing.email ?? 'unversioned'} -> ${marker}).`);
+    console.log(`Refreshing demo data (${current?.email ?? 'unversioned'} -> ${marker}).`);
     await clearDemoData(demoId);
-  } else {
-    const now = new Date();
-    demoId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: demoId,
-      username: DEMO_USERNAME,
-      createdUsername: DEMO_USERNAME,
-      displayName: DEMO_DISPLAY_NAME,
-      email: null,
-      // A random, unused password: the demo is entered through the one-click button.
-      passwordHash: await hashPassword(crypto.randomBytes(18).toString('base64url')),
-      role: 'Viewer', // legacy column
-      roles: JSON.stringify([...DEMO_ROLES]),
-      viewBrokerage: true, // so balances and the forex pip money show in the demo
-      active: true,
-      mustChangePassword: false,
-      createdAt: now,
-      updatedAt: now,
-    });
-    console.log('Demo user created.');
   }
 
   try {
