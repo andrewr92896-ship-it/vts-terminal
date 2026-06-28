@@ -81,7 +81,14 @@ const tutorSchema = z.object({
   // Free-form question. Large enough to carry the surrounding question/term
   // context the client prepends so the answer stays on-topic.
   ask: z.string().trim().min(1).max(2000).optional(),
-}).refine((v) => v.explain || v.ask, { message: 'Provide a question to explain or ask' });
+  // Multi-turn chat: the running conversation for a back-and-forth with the
+  // tutor. The client carries the question/term context in the first message.
+  messages: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(4000) }))
+    .min(1)
+    .max(40)
+    .optional(),
+}).refine((v) => v.explain || v.ask || v.messages, { message: 'Provide a question to explain or ask' });
 
 const KIA_SYSTEM = [
   'You are a Kia product expert helping a salesperson on the floor at a Kia dealership.',
@@ -131,23 +138,31 @@ export async function aiRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Provide a question to explain or ask' });
     }
-    let prompt: string;
-    if (parsed.data.explain) {
-      const e = parsed.data.explain;
-      const opts = e.options.map((o) => `${o.label}) ${o.text}`).join('\n');
-      prompt = [
-        e.topic ? `Topic: ${e.topic}.` : '',
-        `Question: ${e.stem}`,
-        `Options:\n${opts}`,
-        `The correct answer is ${e.answer}.`,
-        'Explain why that answer is correct and why the others are wrong.',
-      ].filter(Boolean).join('\n');
+    // A running chat takes precedence; otherwise build a single user turn from
+    // the structured "explain" request or the free-form "ask".
+    let messages: { role: 'user' | 'assistant'; content: string }[];
+    if (parsed.data.messages) {
+      messages = parsed.data.messages;
     } else {
-      prompt = parsed.data.ask!;
+      let prompt: string;
+      if (parsed.data.explain) {
+        const e = parsed.data.explain;
+        const opts = e.options.map((o) => `${o.label}) ${o.text}`).join('\n');
+        prompt = [
+          e.topic ? `Topic: ${e.topic}.` : '',
+          `Question: ${e.stem}`,
+          `Options:\n${opts}`,
+          `The correct answer is ${e.answer}.`,
+          'Explain why that answer is correct and why the others are wrong.',
+        ].filter(Boolean).join('\n');
+      } else {
+        prompt = parsed.data.ask!;
+      }
+      messages = [{ role: 'user', content: prompt }];
     }
     try {
       await enforceAiLimit(request.currentUser!.id, 'studies_tutor');
-      return { reply: await chatClaude([{ role: 'user', content: prompt }], TUTOR_SYSTEM) };
+      return { reply: await chatClaude(messages, TUTOR_SYSTEM) };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
