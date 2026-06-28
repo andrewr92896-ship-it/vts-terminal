@@ -199,7 +199,7 @@ export function Login() {
             letterSpacing: '0.3px',
           }}
         >
-          2026 Vitalis Trading Systems LLC. Confidential.
+          © 2026 Vitalis Trading Systems LLC. All rights reserved. Confidential.
         </p>
         <p
           style={{
