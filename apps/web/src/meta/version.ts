@@ -9,9 +9,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Alpha V 1.17';
+export const APP_VERSION = 'Beta V 2.0';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.0',
+    date: 'June 28, 2026',
+    notes: [
+      'The portal is now in Beta (V2.0) — thanks for helping shape it through Alpha.',
+      'Flashcards: a new "All terms" list below the card gives every term its own Reveal button, so you can check any definition without flipping through the whole deck.',
+      'Flashcards: opening "More Details" or asking Claude a question now stops auto-rotate, so the card stays put while you read the reply.',
+    ],
+  },
   {
     version: 'Alpha V 1.17',
     date: 'June 28, 2026',
