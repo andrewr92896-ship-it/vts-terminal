@@ -80,6 +80,9 @@ export function Flashcards({
   const [showDef, setShowDef] = useState(false);
   const [auto, setAuto] = useState(false);
   const [secs, setSecs] = useState(DEFAULT_TERM_SECS);
+  // Terms whose definition the user has revealed in the browse-all list below
+  // the card. Independent of the deck's current card.
+  const [revealedTerms, setRevealedTerms] = useState<Set<string>>(new Set());
 
   // Adjustable rotation timing.
   const [termSecs, setTermSecs] = useState(DEFAULT_TERM_SECS);
@@ -264,6 +267,15 @@ export function Flashcards({
 
   const phaseTotal = alwaysDef ? defSecs : showDef ? defSecs : termSecs;
   const learnedList = useMemo(() => [...learned].sort((a, b) => a.localeCompare(b)), [learned]);
+
+  function toggleRevealed(term: string) {
+    setRevealedTerms((prev) => {
+      const next = new Set(prev);
+      if (next.has(term)) next.delete(term);
+      else next.add(term);
+      return next;
+    });
+  }
 
   function go(delta: number) {
     if (cards.length === 0) return;
@@ -453,6 +465,9 @@ export function Flashcards({
                     seedPrompt="Explain this in plain, simple terms and define any tricky words used in the definition."
                     placeholder={`Ask Claude about “${card.term}”…`}
                     context={`I'm studying the Series 65 term "${card.term}". Its definition is: "${card.def}".`}
+                    // More Details or any question stops the rotation so the card
+                    // does not flip away while the user is reading the reply.
+                    onActivity={() => setAuto(false)}
                   />
                 </div>
               ) : (
@@ -504,6 +519,70 @@ export function Flashcards({
                 </button>
               )}
               <button onClick={() => go(1)} style={navBtn(theme)}>Next ›</button>
+            </div>
+          )}
+
+          {/* Browse all terms — a reveal button per term so the user can check
+              any definition without flipping through the whole deck. */}
+          {cards.length > 0 && (
+            <div style={{ marginTop: 26 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, marginBottom: 10 }}>
+                All terms · {cards.length}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {cards.map((c) => {
+                  const open = revealedTerms.has(c.term);
+                  return (
+                    <div
+                      key={c.term}
+                      style={{
+                        border: `1px solid ${theme.navBorder}`,
+                        borderRadius: 10,
+                        background: 'rgba(255,255,255,.03)',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <button
+                        onClick={() => toggleRevealed(c.term)}
+                        aria-expanded={open}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 10,
+                          textAlign: 'left',
+                          padding: '11px 14px',
+                          background: 'none',
+                          border: 'none',
+                          color: '#fff',
+                          fontSize: 13.5,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.term}</span>
+                        <span style={{ flex: 'none', color: theme.accent, fontSize: 12, fontWeight: 700 }}>
+                          {open ? 'Hide' : 'Reveal'}
+                        </span>
+                      </button>
+                      {open && (
+                        <div
+                          style={{
+                            padding: '10px 14px 12px',
+                            fontSize: 13,
+                            lineHeight: 1.55,
+                            color: '#d7ccff',
+                            borderTop: `1px solid ${theme.navBorder}`,
+                          }}
+                        >
+                          {c.def}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>

@@ -17,6 +17,7 @@ export function TutorChat({
   seedPrompt,
   placeholder = 'Ask Claude…',
   isPhone = false,
+  onActivity,
 }: {
   theme: Theme;
   context: string;
@@ -25,6 +26,10 @@ export function TutorChat({
   seedPrompt?: string;
   placeholder?: string;
   isPhone?: boolean;
+  // Fired when the user actually sends something (the seed opener or a typed
+  // message), so a parent can react — e.g. pause flashcard auto-rotation so the
+  // card does not flip away mid-conversation.
+  onActivity?: () => void;
 }) {
   const accentGrad = accentGradient(theme);
   const [chat, setChat] = useState<Msg[]>([]);
@@ -42,6 +47,7 @@ export function TutorChat({
   async function send(text: string) {
     const t = text.trim();
     if (!t || busy) return;
+    onActivity?.();
     const nextDisplay: Msg[] = [...chat, { role: 'user', content: t }];
     setChat(nextDisplay);
     setInput('');
