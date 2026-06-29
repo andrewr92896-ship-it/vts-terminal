@@ -248,7 +248,9 @@ export function StudyGame({ theme }: { theme: Theme }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [starred, mode]);
 
-  function answer(label: Letter) {
+  // `label` is null when the user taps "I Don't Know" — counted as wrong with
+  // no option highlighted as chosen.
+  function answer(label: Letter | null) {
     if (!current || revealed) return;
     const { q, topic } = current;
     const correct = label === q.answer;
@@ -522,6 +524,27 @@ export function StudyGame({ theme }: { theme: Theme }) {
               );
             })}
           </div>
+
+          {!revealed && (
+            <div style={{ marginTop: 12 }}>
+              <button
+                onClick={() => answer(null)}
+                style={{
+                  width: '100%',
+                  padding: '11px 14px',
+                  borderRadius: 10,
+                  border: `1px dashed ${theme.navBorder}`,
+                  background: 'rgba(255,255,255,.03)',
+                  color: muted,
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                }}
+              >
+                I Don't Know
+              </button>
+            </div>
+          )}
 
           {revealed ? (
             <div style={{ marginTop: 16 }}>
