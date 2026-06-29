@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { readClipboardImage } from '../../lib/clipboard';
+import { useLivePrices, type LiveMark } from './useLivePrices';
 import type { FundedAccount, FundedData, FundedTrade, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — self-contained, matching the Live Wall / Trade Log.
@@ -44,6 +45,7 @@ const num = (s: string): number | undefined => {
 // toggle (showMoney) and the viewer's write access (readOnly).
 export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; readOnly: boolean }) {
   const { isPhone } = useResponsive();
+  const live = useLivePrices();
 
   const [data, setData] = useState<FundedData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>Funded / Prop accounts</div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4 }}>
-            Tracked by hand — keep the balance current and log trades by pasting a trade-history screenshot. Duplicates are skipped by time + profit.
+            Tracked by hand — keep the balance current and log trades by pasting or uploading a trade-history photo. Current prices come from the Live Wall. Duplicates are skipped by time + profit.
           </div>
         </div>
         {!readOnly && (
@@ -123,6 +125,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
               onData={setData}
               onError={setActionError}
               run={run}
+              priceFor={live.priceFor}
             />
           ))}
         </div>
@@ -141,6 +144,7 @@ function AccountCard({
   onData,
   onError,
   run,
+  priceFor,
 }: {
   a: FundedAccount;
   isPhone: boolean;
@@ -151,6 +155,7 @@ function AccountCard({
   onData: (d: FundedData) => void;
   onError: (e: string | null) => void;
   run: (p: Promise<FundedData>) => Promise<boolean>;
+  priceFor: (instrument: string | null | undefined) => LiveMark | null;
 }) {
   const [editingBalance, setEditingBalance] = useState(false);
   const [balanceInput, setBalanceInput] = useState(String(a.balance ?? ''));
@@ -227,8 +232,8 @@ function AccountCard({
         </div>
         {!readOnly && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button onClick={() => fileRef.current?.click()} disabled={shotBusy} style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1 }}>
-              {shotBusy ? 'Reading…' : 'Post screenshot'}
+            <button onClick={() => fileRef.current?.click()} disabled={shotBusy} title="Upload a photo or screenshot of your trade history" style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1 }}>
+              {shotBusy ? 'Reading…' : 'Upload photo'}
             </button>
             <button
               onClick={async () => {
@@ -266,6 +271,7 @@ function AccountCard({
         <div style={{ padding: '0 16px 12px' }}>
           <TradeForm
             busy={busy}
+            priceFor={priceFor}
             onSubmit={async (input) => {
               if (await run(api.addFundedTrade(a.id, input))) setAddingTrade(false);
             }}
@@ -302,6 +308,7 @@ function AccountCard({
               showMoney={showMoney}
               readOnly={readOnly}
               busy={busy}
+              liveMark={priceFor(t.instrument)}
               onRemove={() => {
                 if (window.confirm(`Remove this ${t.instrument} trade from ${a.label}?`)) void run(api.removeFundedTrade(t.id));
               }}
@@ -320,6 +327,7 @@ function TradeRow({
   showMoney,
   readOnly,
   busy,
+  liveMark,
   onRemove,
 }: {
   t: FundedTrade;
@@ -328,17 +336,30 @@ function TradeRow({
   showMoney: boolean;
   readOnly: boolean;
   busy: boolean;
+  liveMark: LiveMark | null;
   onRemove: () => void;
 }) {
   const long = t.side === 'long';
   const plUp = (t.realizedPl ?? 0) >= 0;
   const plText = t.realizedPl == null ? '—' : showMoney ? `${plUp ? '+' : ''}${money(t.realizedPl, ccy)}` : '•••';
+  // An open trade has no exit yet: borrow the Live Wall mark for its instrument so
+  // the Exit column shows the current price instead of a dash.
+  const isOpen = t.exitPrice == null && t.realizedPl == null;
+  const showLive = isOpen && liveMark != null;
   return (
     <div style={{ ...row, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
       <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT }}>{t.instrument}</span>
       <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
       <span style={col}>{fmtPrice(t.entryPrice)}</span>
-      <span style={col}>{fmtPrice(t.exitPrice)}</span>
+      <span style={col}>
+        {showLive ? (
+          <span title={`Live mark from the Live Wall — ${liveMark!.instrument} @ ${liveMark!.owner}`} style={{ color: GOLD, fontWeight: 700 }}>
+            {fmtPrice(liveMark!.price)}<span style={{ fontSize: 8, marginLeft: 3, verticalAlign: 'top' }}>●</span>
+          </span>
+        ) : (
+          fmtPrice(t.exitPrice)
+        )}
+      </span>
       <span style={col}>{t.units || '—'}</span>
       <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: t.realizedPl == null ? MUTED : plUp ? GREEN : RED }}>{plText}</span>
       <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.closedAt ?? t.openedAt)}</span>
@@ -417,10 +438,12 @@ function AccountForm({
 
 function TradeForm({
   busy,
+  priceFor,
   onSubmit,
   onCancel,
 }: {
   busy: boolean;
+  priceFor: (instrument: string | null | undefined) => LiveMark | null;
   onSubmit: (input: { instrument: string; side: TradeSide; units?: number; entryPrice?: number; exitPrice?: number; realizedPl?: number }) => void;
   onCancel: () => void;
 }) {
@@ -432,6 +455,8 @@ function TradeForm({
   const [pl, setPl] = useState('');
 
   const disabled = busy || !instrument.trim();
+  // Current mark for the typed instrument, borrowed from the Live Wall.
+  const mark = priceFor(instrument);
 
   return (
     <div style={panel}>
@@ -447,6 +472,15 @@ function TradeForm({
         <input value={exit} onChange={(e) => setExit(e.target.value)} type="number" step="any" placeholder="Exit" style={{ ...inputBase, flex: '0 0 130px' }} />
         <input value={pl} onChange={(e) => setPl(e.target.value)} type="number" step="any" placeholder="Realized P/L" style={{ ...inputBase, flex: '0 0 140px' }} />
       </div>
+      {mark && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap', fontSize: 11.5 }}>
+          <span style={{ color: GOLD, fontWeight: 700 }}>● Live {mark.instrument}</span>
+          <span style={{ fontFamily: MONO, color: TEXT, fontWeight: 700 }}>{fmtPrice(mark.price)}</span>
+          <span style={{ color: FAINT }}>from the Live Wall · @{mark.owner}</span>
+          <button type="button" onClick={() => setEntry(String(mark.price))} style={miniGhost}>Use as entry</button>
+          <button type="button" onClick={() => setExit(String(mark.price))} style={miniGhost}>Use as exit</button>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button
           onClick={() => onSubmit({ instrument: instrument.trim(), side, units: num(units), entryPrice: num(entry), exitPrice: num(exit), realizedPl: num(pl) })}
