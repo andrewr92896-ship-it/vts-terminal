@@ -124,6 +124,10 @@ export const kiaSettings = sqliteTable('kia_settings', {
   reviewReqPct: integer('review_req_pct').notNull().default(50),
   // JSON array of { units, amount } bonus tiers; null falls back to defaults.
   bonusTiers: text('bonus_tiers'),
+  // UI preference: whether the salesperson has hidden the dollar figures
+  // (profit/commission) on their dashboard. Stored per account so the choice
+  // follows them across devices and survives tab switches.
+  hideComm: integer('hide_comm', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

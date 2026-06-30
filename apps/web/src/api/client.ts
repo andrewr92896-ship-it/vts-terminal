@@ -559,6 +559,12 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
+  kiaSetHideComm(hideComm: boolean, month?: string): Promise<KiaDashboard> {
+    return request(`/api/kia/prefs${monthQuery(month)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ hideComm }),
+    });
+  },
   // ---- Personal Finance ----
   financeOverview(): Promise<FinanceOverview> {
     return request('/api/finance/overview');
