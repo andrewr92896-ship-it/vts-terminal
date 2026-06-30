@@ -205,6 +205,7 @@ export interface KiaDashboard {
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };
   payPlan: KiaPayPlan;
+  hideComm: boolean; // per-account: dollar figures hidden on the dashboard
 }
 
 // Result of logging a deal from a plain-English note via Claude.

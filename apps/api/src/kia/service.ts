@@ -374,6 +374,8 @@ export interface KiaDashboardData {
   metrics: KiaMetrics;
   settings: { goalUnits: number; reviewCount: number };
   payPlan: PayPlan;
+  // Per-account UI preference: dollar figures hidden on the dashboard.
+  hideComm: boolean;
 }
 
 export async function getDashboard(
@@ -447,7 +449,17 @@ export async function getDashboard(
     metrics: computeMetrics(rows, goalUnits, reviewCount, monthContext(month), payPlan),
     settings: { goalUnits, reviewCount },
     payPlan,
+    hideComm: settingsRow?.hideComm ?? false,
   };
+}
+
+// Persist the per-account "hide $ details" toggle.
+export async function updateHideComm(userId: string, hideComm: boolean): Promise<void> {
+  await ensureKiaSeed(userId);
+  await db
+    .update(kiaSettings)
+    .set({ hideComm, updatedAt: new Date() })
+    .where(eq(kiaSettings.userId, userId));
 }
 
 // Update the user's pay plan. Any field can be changed; current values are the

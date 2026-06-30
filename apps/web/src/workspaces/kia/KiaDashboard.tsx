@@ -35,8 +35,9 @@ export function KiaDashboard() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // Persist the manual "hide $ details" toggle so it survives tab switches
-  // (which unmount this component) and reloads.
+  // The manual "hide $ details" toggle. Persisted per account (see the load
+  // effect below) so it follows the user across devices; the localStorage copy
+  // is a fast/offline fallback and the initial value before the dashboard loads.
   const [hideComm, setHideComm] = useState<boolean>(() => {
     try {
       return localStorage.getItem(HIDE_COMM_KEY) === '1';
@@ -77,12 +78,33 @@ export function KiaDashboard() {
     let alive = true;
     api
       .kiaDashboard()
-      .then((d) => alive && setDash(d))
+      .then((d) => {
+        if (!alive) return;
+        setDash(d);
+        // The account is the source of truth for the hide-$ preference; the
+        // localStorage value is only a fast/offline fallback (and the demo
+        // account, which can't write, keeps using it).
+        if (!readOnly) setHideComm(d.hideComm);
+      })
       .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load dashboard'));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [readOnly]);
+
+  // Flip the hide-$ toggle: update locally at once, then persist to the account
+  // (skipped for the read-only demo, which only keeps the localStorage copy).
+  function toggleHideComm() {
+    setHideComm((prev) => {
+      const next = !prev;
+      if (!readOnly) {
+        api.kiaSetHideComm(next, dash?.month).then(setDash).catch(() => {
+          /* the localStorage copy still reflects the choice on this device */
+        });
+      }
+      return next;
+    });
+  }
 
   async function run(action: Promise<Dash>) {
     setBusy(true);
@@ -299,7 +321,7 @@ export function KiaDashboard() {
               Pay plan
             </button>
           )}
-          <button onClick={() => setHideComm((v) => !v)} style={ghostBtn}>
+          <button onClick={toggleHideComm} style={ghostBtn}>
             {hideComm ? 'Show $ details' : 'Hide $ details'}
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: '#9aa0a8' }}>

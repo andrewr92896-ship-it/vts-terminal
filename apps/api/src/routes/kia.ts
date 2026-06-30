@@ -7,6 +7,7 @@ import {
   removeDeal,
   restoreDeal,
   updateDeal,
+  updateHideComm,
   updatePayPlan,
   updateSettings,
 } from '../kia/service.js';
@@ -75,6 +76,8 @@ const dealEditSchema = z
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: 'Nothing to update',
   });
+
+const prefsSchema = z.object({ hideComm: z.boolean() });
 
 const settingsSchema = z
   .object({
@@ -195,6 +198,17 @@ export async function kiaRoutes(app: FastifyInstance) {
     const month = monthOf(request);
     await updateSettings(userId, month, parsed.data);
     return getDashboard(userId, month);
+  });
+
+  // Per-account UI preference: hide/show dollar figures on the dashboard.
+  app.patch('/api/kia/prefs', guard, async (request, reply) => {
+    const parsed = prefsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Provide hideComm' });
+    }
+    const userId = request.currentUser!.id;
+    await updateHideComm(userId, parsed.data.hideComm);
+    return getDashboard(userId, monthOf(request));
   });
 
   app.patch('/api/kia/payplan', guard, async (request, reply) => {

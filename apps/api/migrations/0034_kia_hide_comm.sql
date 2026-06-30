@@ -1,0 +1,1 @@
+ALTER TABLE `kia_settings` ADD `hide_comm` integer DEFAULT false NOT NULL;
