@@ -18,6 +18,8 @@ const AMBER = '#e0a23a';
 
 const usd = (n: number) => '$' + n.toLocaleString('en-US');
 
+const HIDE_COMM_KEY = 'vts_kia_hide_comm';
+
 function etToday(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date());
 }
@@ -33,8 +35,24 @@ export function KiaDashboard() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [hideComm, setHideComm] = useState(false);
+  // Persist the manual "hide $ details" toggle so it survives tab switches
+  // (which unmount this component) and reloads.
+  const [hideComm, setHideComm] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(HIDE_COMM_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
   const [payPlanOpen, setPayPlanOpen] = useState(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(HIDE_COMM_KEY, hideComm ? '1' : '0');
+    } catch {
+      /* ignore storage failures */
+    }
+  }, [hideComm]);
 
   // Manual deal entry form
   const [customer, setCustomer] = useState('');
