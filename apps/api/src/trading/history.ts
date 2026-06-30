@@ -19,6 +19,19 @@ function fmtPl(n: number | null): string {
   return `${sign}$${Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
 }
 
+// Render a stop/target level for a notification line; null reads as "none" so a
+// trader can tell an added level apart from a removed one.
+function fmtLevel(n: number | null): string {
+  return n == null ? 'none' : String(n);
+}
+
+// TP/SL are stored as floats, so compare with a small tolerance to ignore the
+// last-bit noise of a round-trip through the DB and only flag a deliberate move.
+function levelChanged(a: number | null, b: number | null): boolean {
+  if (a == null || b == null) return a !== b; // added or removed a level
+  return Math.abs(a - b) > 1e-9;
+}
+
 // Reconcile the Live Wall's open positions against what we last stored, so that
 // closures can be detected and auto-recorded to History.
 //
@@ -44,11 +57,29 @@ export async function reconcile(
   // positions that just closed (TP/SL/manual exit). Collected here, pushed once.
   const opened: LiveTrade[] = [];
   const closed: { instrument: string; pl: number | null }[] = [];
+  // Live trades whose TP or SL just moved (added, removed, or repriced), so the
+  // desk hears about a stop/target adjustment the same way it hears open/close.
+  const retargeted: {
+    trade: LiveTrade;
+    tp?: { from: number | null; to: number | null };
+    sl?: { from: number | null; to: number | null };
+  }[] = [];
 
   // Upsert every currently-open position (refresh mark + P/L, or insert new).
   for (const t of liveTrades) {
     const existing = byKey.get(t.id);
     if (existing) {
+      // Trailing stops trail the market every tick, so they're deliberately not
+      // compared here — only the fixed TP/SL prices, which move on a real edit.
+      const tpMoved = levelChanged(existing.takeProfit, t.takeProfit);
+      const slMoved = levelChanged(existing.stopLoss, t.stopLoss);
+      if (tpMoved || slMoved) {
+        retargeted.push({
+          trade: t,
+          ...(tpMoved ? { tp: { from: existing.takeProfit, to: t.takeProfit } } : {}),
+          ...(slMoved ? { sl: { from: existing.stopLoss, to: t.stopLoss } } : {}),
+        });
+      }
       await db
         .update(tradingPositions)
         .set({
@@ -143,6 +174,27 @@ export async function reconcile(
       priority: 1,
       url: '/?screen=history',
       urlTitle: 'Open History',
+    }).catch(() => {});
+  }
+  for (const m of retargeted) {
+    const t = m.trade;
+    const parts: string[] = [];
+    if (m.tp) parts.push(`TP ${fmtLevel(m.tp.from)} → ${fmtLevel(m.tp.to)}`);
+    if (m.sl) parts.push(`SL ${fmtLevel(m.sl.from)} → ${fmtLevel(m.sl.to)}`);
+    const body = `${who}${parts.join(' · ')}`;
+    void sendToTradingDesk({
+      title: `Trade updated · ${t.instrument}`,
+      body,
+      url: '/?screen=live',
+      // Re-use the tag per trade so a rapid re-edit collapses onto the last one.
+      tag: `vts-tpsl-${t.id}`,
+    }).catch(() => {});
+    void sendPushoverToDesk({
+      title: `Trade updated · ${t.instrument}`,
+      message: body,
+      priority: 1,
+      url: '/?screen=live',
+      urlTitle: 'Open the Live Wall',
     }).catch(() => {});
   }
 }
