@@ -34,22 +34,25 @@ export interface LevelDef {
   at: number;
 }
 
+// Every level is reached 15 questions after the previous one, so each level-up
+// costs a consistent 15 answered questions in the category.
+export const LEVEL_STEP = 15;
+
 export const LEVELS: LevelDef[] = [
   { icon: '🌱', name: 'Novice', at: 0 },
-  { icon: '📖', name: 'Student', at: 25 },
-  { icon: '✏️', name: 'Apprentice', at: 50 },
-  { icon: '🧠', name: 'Adept', at: 75 },
-  { icon: '🔬', name: 'Specialist', at: 100 },
-  { icon: '🎓', name: 'Scholar', at: 125 },
-  { icon: '🏅', name: 'Expert', at: 175 },
-  { icon: '⭐', name: 'Master', at: 225 },
-  { icon: '👑', name: 'Grandmaster', at: 300 },
+  { icon: '📖', name: 'Student', at: 15 },
+  { icon: '✏️', name: 'Apprentice', at: 30 },
+  { icon: '🧠', name: 'Adept', at: 45 },
+  { icon: '🔬', name: 'Specialist', at: 60 },
+  { icon: '🎓', name: 'Scholar', at: 75 },
+  { icon: '🏅', name: 'Expert', at: 90 },
+  { icon: '⭐', name: 'Master', at: 105 },
+  { icon: '👑', name: 'Grandmaster', at: 120 },
 ];
 
-// Reaching Grandmaster (300) holds for a 75-question band, then the category
-// prestiges: a crown is added and the ladder restarts at Novice. (The spec
-// leaves the prestige point open; 375 keeps the band consistent with the others.)
-export const PRESTIGE_AT = 375;
+// Reaching Grandmaster (120) holds for one more 15-question band, then the
+// category prestiges: a crown is added and the ladder restarts at Novice.
+export const PRESTIGE_AT = 135;
 
 export interface LevelInfo {
   prestige: number; // crowns earned (completed cycles)

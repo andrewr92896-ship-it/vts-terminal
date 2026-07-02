@@ -97,3 +97,37 @@ a {
     transform: none;
   }
 }
+
+/* Level-up celebration: the banner springs in with a little overshoot. */
+@keyframes celebratePop {
+  0% {
+    opacity: 0;
+    transform: scale(0.8) translateY(-6px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* A single confetti piece falling and tumbling from the top of the screen. */
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translateY(-20px) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(90vh) rotate(720deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confetti-piece {
+    display: none;
+  }
+}

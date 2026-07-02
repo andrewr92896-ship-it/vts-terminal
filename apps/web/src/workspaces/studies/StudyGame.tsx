@@ -411,7 +411,10 @@ export function StudyGame({ theme }: { theme: Theme }) {
 
       {categorySelector}
 
-      {/* Level-up / prestige banner */}
+      {/* Level-up / prestige banner + a burst of confetti */}
+      {levelEvent && (
+        <Confetti key={`${levelEvent.category}-${levelEvent.answered}`} prestige={levelEvent.prestige} accent={theme.accent} />
+      )}
       {levelEvent && (
         <div
           style={{
@@ -421,6 +424,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
             padding: '12px 16px',
             marginBottom: 14,
             textAlign: 'center',
+            animation: 'celebratePop .45s ease-out',
           }}
         >
           <div style={{ fontSize: 13, fontWeight: 700, color: levelEvent.prestige ? AMBER : GREEN, letterSpacing: '0.5px' }}>
@@ -648,6 +652,56 @@ export function StudyGame({ theme }: { theme: Theme }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// A short confetti burst shown on level-up. Pieces are generated once when the
+// component mounts (the caller remounts it per event via a changing `key`), fall
+// from the top of the screen, and fade out — a purely decorative overlay that
+// ignores pointer events and hides itself for reduced-motion users (via CSS).
+function Confetti({ prestige, accent }: { prestige: boolean; accent: string }) {
+  const palette = prestige
+    ? ['#e0a23a', '#f5c451', '#fff2c2', '#ffd76a']
+    : ['#35c47b', accent, '#7fe0c0', '#f5c451', '#8ab4ff'];
+  const [pieces] = useState(() =>
+    Array.from({ length: 40 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 0.4,
+      duration: 1.4 + Math.random() * 1.1,
+      size: 6 + Math.random() * 6,
+      color: palette[Math.floor(Math.random() * palette.length)],
+      round: Math.random() > 0.5,
+    })),
+  );
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'fixed',
+        inset: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+        zIndex: 60,
+      }}
+    >
+      {pieces.map((p) => (
+        <span
+          key={p.id}
+          className="confetti-piece"
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: `${p.left}%`,
+            width: p.size,
+            height: p.size * (p.round ? 1 : 1.6),
+            background: p.color,
+            borderRadius: p.round ? '50%' : 2,
+            animation: `confettiFall ${p.duration}s ${p.delay}s ease-in forwards`,
+          }}
+        />
+      ))}
     </div>
   );
 }
