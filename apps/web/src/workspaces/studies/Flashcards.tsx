@@ -92,9 +92,11 @@ export function Flashcards({
   const [alwaysDef, setAlwaysDef] = useState(false);
 
 
-  // Adding a custom word: the input, the in-flight state while Claude writes its
-  // definition, any error, and the term to jump to once the deck updates.
+  // Adding a custom word: the word and an optional definition the user types
+  // themselves, the in-flight state while the card saves (or Claude writes a
+  // definition), any error, and the term to jump to once the deck updates.
   const [newWord, setNewWord] = useState('');
+  const [newDef, setNewDef] = useState('');
   const [adding, setAdding] = useState(false);
   const [addErr, setAddErr] = useState<string | null>(null);
   const [focusTerm, setFocusTerm] = useState<string | null>(null);
@@ -181,17 +183,19 @@ export function Flashcards({
     };
   }, []);
 
-  // Add a word: the server asks Claude for a definition and topic, stores it, and
-  // returns the updated deck. We then jump to the new card so the user sees it.
+  // Add a word. If the user typed their own definition it is stored as-is;
+  // otherwise the server asks Claude for a definition and topic. Either way it
+  // returns the updated deck, and we jump to the new card so the user sees it.
   async function addWord() {
     const term = newWord.trim();
     if (!term || adding) return;
     setAdding(true);
     setAddErr(null);
     try {
-      const r = await api.addVocabWord(term);
+      const r = await api.addVocabWord(term, newDef);
       setCustom(r.cards);
       setNewWord('');
+      setNewDef('');
       setFilter('All');
       setFocusTerm(term);
     } catch (e) {
@@ -324,43 +328,65 @@ export function Flashcards({
             })}
           </div>
 
-          {/* Add your own word (AI writes the definition) */}
+          {/* Add your own card: one box for the word, one for your own
+              definition. Leave the definition blank to let Claude write it. */}
           {!readOnly && (
             <div style={{ marginBottom: 14 }}>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <input
                   value={newWord}
                   onChange={(e) => setNewWord(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                       e.preventDefault();
                       void addWord();
                     }
                   }}
                   disabled={adding}
-                  placeholder="Add a word — e.g. “Sharpe Ratio”"
-                  aria-label="Add a vocabulary word"
+                  placeholder="Word — e.g. “Sharpe Ratio”"
+                  aria-label="Word"
                   maxLength={200}
-                  style={{
-                    flex: 1,
-                    minWidth: 180,
-                    fontSize: 13,
-                    padding: '10px 13px',
-                    borderRadius: 8,
-                    border: `1px solid ${theme.navBorder}`,
-                    background: 'rgba(255,255,255,.04)',
-                    color: '#eef3ff',
-                    outline: 'none',
-                  }}
+                  style={fieldStyle(theme)}
                 />
-                <button
-                  onClick={() => void addWord()}
-                  disabled={adding || !newWord.trim()}
-                  style={{ ...primaryBtn(theme, accentGrad), opacity: adding || !newWord.trim() ? 0.6 : 1 }}
-                  title="Claude writes a Series 65 definition and adds it to your deck"
-                >
-                  {adding ? 'Defining…' : '+ Add with AI'}
-                </button>
+                <textarea
+                  value={newDef}
+                  onChange={(e) => setNewDef(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                      e.preventDefault();
+                      void addWord();
+                    }
+                  }}
+                  disabled={adding}
+                  placeholder="Definition — type your own, or leave blank to have AI write it"
+                  aria-label="Definition"
+                  maxLength={1000}
+                  rows={3}
+                  style={{ ...fieldStyle(theme), resize: 'vertical', minHeight: 64, fontFamily: 'inherit' }}
+                />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <button
+                    onClick={() => void addWord()}
+                    disabled={adding || !newWord.trim()}
+                    style={{ ...primaryBtn(theme, accentGrad), opacity: adding || !newWord.trim() ? 0.6 : 1 }}
+                    title={
+                      newDef.trim()
+                        ? 'Add this word with your own definition'
+                        : 'Claude writes a Series 65 definition and adds it to your deck'
+                    }
+                  >
+                    {adding
+                      ? newDef.trim()
+                        ? 'Adding…'
+                        : 'Defining…'
+                      : newDef.trim()
+                        ? '+ Add card'
+                        : '+ Add with AI'}
+                  </button>
+                  <span style={{ fontSize: 11.5, color: '#8a7fc8' }}>
+                    {newDef.trim() ? 'Saved with your definition.' : 'No definition? AI will write one.'}
+                  </span>
+                </div>
               </div>
               {addErr && (
                 <div
@@ -658,6 +684,20 @@ function Stepper({ label, value, onChange, theme }: { label: string; value: numb
       <button onClick={() => onChange(clampSecs(value + STEP_SECS))} style={btn} aria-label={`Increase ${label}`}>+</button>
     </div>
   );
+}
+
+function fieldStyle(theme: Theme): CSSProperties {
+  return {
+    width: '100%',
+    fontSize: 13,
+    padding: '10px 13px',
+    borderRadius: 8,
+    border: `1px solid ${theme.navBorder}`,
+    background: 'rgba(255,255,255,.04)',
+    color: '#eef3ff',
+    outline: 'none',
+    boxSizing: 'border-box',
+  };
 }
 
 const checkLabel: CSSProperties = {

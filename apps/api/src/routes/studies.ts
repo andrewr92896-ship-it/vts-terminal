@@ -10,7 +10,12 @@ import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
-const vocabAddSchema = z.object({ term: z.string().trim().min(1).max(200) });
+const vocabAddSchema = z.object({
+  term: z.string().trim().min(1).max(200),
+  // Optional: the learner's own definition. When present we store it as-is and
+  // skip the AI writer; when absent the tutor (Claude) writes one.
+  def: z.string().trim().min(1).max(1000).optional(),
+});
 const starSchema = z.object({ id: z.number().int().nonnegative().max(100000) });
 
 export async function studiesRoutes(app: FastifyInstance) {
@@ -45,6 +50,11 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.post('/api/studies/vocab', guard, async (request, reply) => {
     const parsed = vocabAddSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A word is required' });
+    // The learner supplied their own definition: store it directly, no AI call.
+    if (parsed.data.def) {
+      const cards = await addVocab(request.currentUser!.id, parsed.data.term, parsed.data.def, 'Custom');
+      return { cards };
+    }
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }
