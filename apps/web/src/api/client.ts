@@ -379,9 +379,11 @@ export const api = {
   studyVocab(): Promise<{ cards: CustomVocabCard[] }> {
     return request('/api/studies/vocab');
   },
-  // Add a word — the server generates its definition and topic with Claude.
-  addVocabWord(term: string): Promise<{ cards: CustomVocabCard[] }> {
-    return request('/api/studies/vocab', { method: 'POST', body: JSON.stringify({ term }) });
+  // Add a word. With a definition, it is stored as typed; without one, the
+  // server generates the definition and topic with Claude.
+  addVocabWord(term: string, def?: string): Promise<{ cards: CustomVocabCard[] }> {
+    const body = def && def.trim() ? { term, def: def.trim() } : { term };
+    return request('/api/studies/vocab', { method: 'POST', body: JSON.stringify(body) });
   },
   removeVocabWord(term: string): Promise<{ cards: CustomVocabCard[] }> {
     return request(`/api/studies/vocab?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
