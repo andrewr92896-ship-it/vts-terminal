@@ -18,6 +18,7 @@ import {
   CATEGORY_META,
   PASS_THRESHOLD,
   buildPools,
+  INITIAL_SCORE,
   emptyGame,
   gameKey,
   levelInfo,
@@ -255,10 +256,12 @@ export function StudyGame({ theme }: { theme: Theme }) {
     const { q, topic } = current;
     const correct = label === q.answer;
 
-    const prevScore = scorePct(game.recent) ?? 0;
+    // The live score moves on every answer, so the change is always non-zero.
+    // Before the first answer there is no prior, so measure from the neutral seed.
+    const prevScore = game.score ?? INITIAL_SCORE;
     const prevLevel = levelInfo(game.cats[topic].answered);
     const next = recordAnswer(game, topic, correct);
-    const newScore = scorePct(next.recent) ?? 0;
+    const newScore = next.score ?? INITIAL_SCORE;
     const newLevel = levelInfo(next.cats[topic].answered);
 
     setScoreChange(round1(newScore - prevScore));
@@ -280,7 +283,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
     advance();
   }
 
-  const overallScore = scorePct(game.recent);
+  const overallScore = game.score;
   const muted = '#a99ff0';
 
   // Shared header with the Quiz / Flashcards view toggle.
@@ -596,7 +599,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
         {/* Scoreboard + categories */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={card(theme)}>
-            <div style={statLabel}>Current score · last {Math.min(100, game.recent.length)}</div>
+            <div style={statLabel}>Live score · moves every answer</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 30, fontWeight: 700, color: '#fff' }}>
                 {overallScore == null ? '—' : `${overallScore.toFixed(1)}%`}
