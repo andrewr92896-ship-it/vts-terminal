@@ -32,8 +32,8 @@ export async function saveGame(userId: string, state: string): Promise<void> {
 // few headline numbers needed to rank players are simple enough to read here
 // without pulling in the whole client model. Keep these two constants in step
 // with that file: the score window and the per-category prestige interval.
-const SCORE_WINDOW = 100; // score is accuracy over the last 100 answers
-const PRESTIGE_AT = 375; // questions answered in a category before a crown
+const SCORE_WINDOW = 100; // leaderboard score is accuracy over the last 100 answers
+const PRESTIGE_AT = 135; // questions answered in a category before a crown
 
 export interface LeaderboardEntry {
   userId: string;
