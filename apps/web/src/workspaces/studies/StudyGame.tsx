@@ -381,6 +381,67 @@ export function StudyGame({ theme }: { theme: Theme }) {
     );
   }
 
+  // Starred is a review deck: show every favorited question on one screen. Each
+  // can be answered inline for practice, which never touches the score, levels,
+  // or totals (that state lives in `game` and is only written from the quiz).
+  if (view === 'quiz' && mode === 'starred') {
+    const starredQuestions = [...starred]
+      .map((id) => idToIndex.current.get(id))
+      .filter((idx): idx is number => idx != null)
+      .map((idx) => SERIES65_QUESTIONS[idx]);
+    return (
+      <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+        {header}
+        {categorySelector}
+        {starredQuestions.length === 0 ? (
+          <div style={{ ...card(theme), textAlign: 'center' }}>
+            <div style={{ fontSize: 28, marginBottom: 6 }}>☆</div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No starred questions yet</div>
+            <div style={{ fontSize: 12.5, color: muted, maxWidth: 360, margin: '0 auto 16px', lineHeight: 1.5 }}>
+              Tap the ☆ on any quiz question to save it here, then come back to review them all in one place.
+            </div>
+            <button onClick={() => setMode('mix')} style={primaryBtn(theme, accentGrad)}>
+              Back to the quiz
+            </button>
+          </div>
+        ) : (
+          <>
+            <div
+              style={{
+                background: 'rgba(245,196,81,.1)',
+                border: `1px solid ${STAR}`,
+                borderRadius: 12,
+                padding: '10px 14px',
+                marginBottom: 14,
+                fontSize: 12.5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                flexWrap: 'wrap',
+              }}
+            >
+              <span style={{ fontWeight: 700, color: '#f3d38a' }}>★ Starred review</span>
+              <span style={{ color: muted }}>
+                {starredQuestions.length} saved · answer freely — nothing here affects your score.
+              </span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {starredQuestions.map((sq) => (
+                <StarredQuestionCard
+                  key={sq.id}
+                  q={sq}
+                  theme={theme}
+                  isPhone={isPhone}
+                  onUnstar={() => toggleStar(sq.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
   if (!current) {
     const noStarred = mode === 'starred' && starred.size === 0;
     return (
@@ -420,30 +481,6 @@ export function StudyGame({ theme }: { theme: Theme }) {
       {header}
 
       {categorySelector}
-
-      {/* Starred is a review deck: flag that answers here don't count. */}
-      {mode === 'starred' && (
-        <div
-          style={{
-            background: 'rgba(245,196,81,.1)',
-            border: `1px solid ${STAR}`,
-            borderRadius: 12,
-            padding: '10px 14px',
-            marginBottom: 14,
-            fontSize: 12.5,
-            color: '#f3d38a',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            flexWrap: 'wrap',
-          }}
-        >
-          <span style={{ fontWeight: 700 }}>★ Starred practice</span>
-          <span style={{ color: muted }}>
-            {starred.size} saved · answers here don't affect your score, levels, or totals.
-          </span>
-        </div>
-      )}
 
       {/* Level-up / prestige banner + a burst of confetti */}
       {levelEvent && (
@@ -736,6 +773,115 @@ function Confetti({ prestige, accent }: { prestige: boolean; accent: string }) {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+// One starred question in the review list: shows the stem and options, reveals
+// the correct answer (and explanation) when an option is picked or "Show answer"
+// is tapped, and can be unstarred. Its answer state is local — it never touches
+// the Study Game score, so reviewing favorites is consequence-free.
+function StarredQuestionCard({
+  q,
+  theme,
+  isPhone,
+  onUnstar,
+}: {
+  q: Series65Question;
+  theme: Theme;
+  isPhone: boolean;
+  onUnstar: () => void;
+}) {
+  const [selected, setSelected] = useState<Letter | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const muted = '#a99ff0';
+  const explanation = revealed ? SERIES65_EXPLANATIONS[q.id] : undefined;
+
+  function pick(label: Letter) {
+    if (revealed) return;
+    setSelected(label);
+    setRevealed(true);
+  }
+
+  return (
+    <div style={card(theme)}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '3px 9px', opacity: 0.85 }}>
+          {q.topic}
+        </span>
+        <button
+          onClick={onUnstar}
+          title="Remove from starred"
+          aria-label="Remove this question from starred"
+          style={{ flex: 'none', border: `1px solid ${STAR}`, background: 'rgba(245,196,81,.14)', color: STAR, fontSize: 14, lineHeight: 1, borderRadius: 8, cursor: 'pointer', padding: '6px 10px', minHeight: 32 }}
+        >
+          ★
+        </button>
+      </div>
+      <div style={{ fontSize: isPhone ? 14 : 15, lineHeight: 1.5, color: '#fff', fontWeight: 600, marginBottom: 12 }}>
+        {q.stem}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {q.options.map((o) => {
+          const isCorrect = o.label === q.answer;
+          const isChosen = selected === o.label;
+          let border = theme.navBorder;
+          let bg = 'rgba(255,255,255,.04)';
+          let mark = '';
+          if (revealed) {
+            if (isCorrect) { border = GREEN; bg = 'rgba(53,196,123,.12)'; mark = '✓'; }
+            else if (isChosen) { border = RED; bg = 'rgba(239,84,104,.12)'; mark = '✗'; }
+          }
+          return (
+            <button
+              key={o.label}
+              onClick={() => pick(o.label)}
+              disabled={revealed}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 10,
+                textAlign: 'left',
+                padding: '10px 13px',
+                borderRadius: 10,
+                border: `1px solid ${border}`,
+                background: bg,
+                color: '#e7e0ff',
+                cursor: revealed ? 'default' : 'pointer',
+                fontSize: 13,
+                lineHeight: 1.45,
+              }}
+            >
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: revealed && isCorrect ? GREEN : revealed && isChosen ? RED : theme.accent }}>
+                {o.label}
+              </span>
+              <span style={{ flex: 1 }}>{o.text}</span>
+              {mark && <span style={{ color: isCorrect ? GREEN : RED, fontWeight: 700 }}>{mark}</span>}
+            </button>
+          );
+        })}
+      </div>
+      {revealed ? (
+        <div style={{ marginTop: 12 }}>
+          {selected != null && (
+            <div style={{ fontSize: 13, fontWeight: 700, color: selected === q.answer ? GREEN : RED, marginBottom: 6 }}>
+              {selected === q.answer ? 'Correct' : 'Incorrect'}
+            </div>
+          )}
+          {explanation && (
+            <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.55, paddingLeft: 10, borderLeft: `2px solid ${theme.accent}` }}>
+              {explanation}
+            </div>
+          )}
+        </div>
+      ) : (
+        <button
+          onClick={() => setRevealed(true)}
+          style={{ marginTop: 10, background: 'none', border: 'none', color: theme.accent, fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+        >
+          Show answer
+        </button>
+      )}
     </div>
   );
 }
