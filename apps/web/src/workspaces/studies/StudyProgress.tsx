@@ -21,7 +21,7 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
   const game = useMemo(() => loadGame(gameKey(user?.id)), [user?.id]);
   const muted = '#a99ff0';
 
-  const overall = scorePct(game.recent);
+  const overall = game.score;
   const passing = overall != null && overall >= PASS_THRESHOLD;
   const delta = overall == null ? 0 : round1(overall - PASS_THRESHOLD);
 
@@ -47,7 +47,7 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
       ) : (
         <>
           <div style={{ ...card(theme), marginBottom: 14 }}>
-            <div style={statLabel}>Overall score · last {Math.min(100, game.recent.length)}</div>
+            <div style={statLabel}>Live score · moves every answer</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 700, color: '#fff' }}>
                 {overall == null ? '—' : `${overall.toFixed(1)}%`}

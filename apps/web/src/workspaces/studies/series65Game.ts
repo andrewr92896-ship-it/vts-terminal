@@ -5,7 +5,33 @@
 import { SERIES65_QUESTIONS, SERIES65_TOPICS, type Series65Topic } from './series65Questions';
 
 export const PASS_THRESHOLD = 72; // Series 65 passing score (~72%)
-export const WINDOW = 100; // score is accuracy over the last 100 answers
+export const WINDOW = 100; // per-category accuracy is measured over the last 100 answers
+
+// ---- Live score ----
+// The headline score is a smoothed, recency-weighted read of how you are doing
+// that nudges on *every* answer (a plain last-100 accuracy sits still once you
+// hit 100%). It is an exponential moving average toward 100 (correct) or 0
+// (wrong), kept just inside the 0/100 rails so a correct answer can always rise
+// and a wrong one can always fall, with a guaranteed minimum step so the number
+// visibly moves each time. It tracks true accuracy closely over a run of
+// answers while never getting stuck.
+export const INITIAL_SCORE = 60; // neutral starting point before the first answer
+const SCORE_ALPHA = 0.08; // how hard each answer pulls the score (recency weight)
+const SCORE_MIN_STEP = 0.1; // smallest visible move per answer
+const SCORE_FLOOR = 0.1;
+const SCORE_CEIL = 99.9;
+
+// Fold one answer into the live score. `prev` is null before the first answer,
+// in which case we start from the neutral prior so early answers read sensibly.
+export function nextScore(prev: number | null, correct: boolean): number {
+  const base = prev ?? INITIAL_SCORE;
+  const target = correct ? 100 : 0;
+  let raw = base + SCORE_ALPHA * (target - base);
+  // Guarantee the number moves in the answer's direction, even near the rails
+  // where the raw EMA step rounds to nothing.
+  raw = correct ? Math.max(raw, base + SCORE_MIN_STEP) : Math.min(raw, base - SCORE_MIN_STEP);
+  return round1(Math.min(SCORE_CEIL, Math.max(SCORE_FLOOR, raw)));
+}
 
 // Official NASAA Series 65 content areas and their exam weightings, mapped to
 // our four topics. Used to weight the question mix and shown in the HUD.
@@ -88,13 +114,14 @@ export interface GameState {
   recent: boolean[]; // last WINDOW outcomes overall
   totalAttempted: number;
   totalCorrect: number;
+  score: number | null; // smoothed live score; null until the first answer
   cats: Record<Series65Topic, CatState>;
 }
 
 export function emptyGame(): GameState {
   const cats = {} as Record<Series65Topic, CatState>;
   for (const t of SERIES65_TOPICS) cats[t] = { answered: 0, correct: 0, recent: [] };
-  return { recent: [], totalAttempted: 0, totalCorrect: 0, cats };
+  return { recent: [], totalAttempted: 0, totalCorrect: 0, score: null, cats };
 }
 
 export function gameKey(userId: string | undefined): string {
@@ -137,8 +164,18 @@ export function normalizeGame(p: unknown): GameState {
     recent: Array.isArray(src.recent) ? src.recent.filter((x: unknown) => typeof x === 'boolean').slice(-WINDOW) : [],
     totalAttempted: Number(src.totalAttempted) || 0,
     totalCorrect: Number(src.totalCorrect) || 0,
+    score: null,
     cats: fresh.cats,
   };
+  // Live score: use the stored value when present. Older saves predate it, so
+  // seed from the player's existing accuracy — the number stays continuous with
+  // what they last saw, and no progress is lost.
+  if (typeof src.score === 'number' && Number.isFinite(src.score)) {
+    g.score = Math.min(SCORE_CEIL, Math.max(SCORE_FLOOR, round1(src.score)));
+  } else {
+    const acc = scorePct(g.recent);
+    g.score = acc == null ? null : Math.min(SCORE_CEIL, Math.max(SCORE_FLOOR, round1(acc)));
+  }
   const cats = (src.cats ?? {}) as Record<string, { answered?: unknown; correct?: unknown; recent?: unknown }>;
   for (const t of SERIES65_TOPICS) {
     const c = cats[t];
@@ -188,6 +225,7 @@ export function recordAnswer(g: GameState, topic: Series65Topic, correct: boolea
     recent: [...g.recent, correct].slice(-WINDOW),
     totalAttempted: g.totalAttempted + 1,
     totalCorrect: g.totalCorrect + (correct ? 1 : 0),
+    score: nextScore(g.score, correct),
     cats: {
       ...g.cats,
       [topic]: {
