@@ -256,6 +256,16 @@ export function StudyGame({ theme }: { theme: Theme }) {
     const { q, topic } = current;
     const correct = label === q.answer;
 
+    // Reveal the outcome in every mode so the user always sees if they were right.
+    setSelected(label);
+    setRevealed(true);
+    setOutcome(correct);
+
+    // Starred is a practice deck: answering there never changes the score,
+    // levels, or lifetime totals, so drilling your favorites can't hurt (or
+    // inflate) your stats.
+    if (mode === 'starred') return;
+
     // The live score moves on every answer, so the change is always non-zero.
     // Before the first answer there is no prior, so measure from the neutral seed.
     const prevScore = game.score ?? INITIAL_SCORE;
@@ -272,9 +282,6 @@ export function StudyGame({ theme }: { theme: Theme }) {
     }
 
     setGame(next);
-    setSelected(label);
-    setRevealed(true);
-    setOutcome(correct);
   }
 
   function resetProgress() {
@@ -413,6 +420,30 @@ export function StudyGame({ theme }: { theme: Theme }) {
       {header}
 
       {categorySelector}
+
+      {/* Starred is a review deck: flag that answers here don't count. */}
+      {mode === 'starred' && (
+        <div
+          style={{
+            background: 'rgba(245,196,81,.1)',
+            border: `1px solid ${STAR}`,
+            borderRadius: 12,
+            padding: '10px 14px',
+            marginBottom: 14,
+            fontSize: 12.5,
+            color: '#f3d38a',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontWeight: 700 }}>★ Starred practice</span>
+          <span style={{ color: muted }}>
+            {starred.size} saved · answers here don't affect your score, levels, or totals.
+          </span>
+        </div>
+      )}
 
       {/* Level-up / prestige banner + a burst of confetti */}
       {levelEvent && (
