@@ -402,6 +402,14 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Use the chips at the top to drill one area, or choose “Mix (weighted)” to get questions across all four areas in the same proportions as the real exam.',
       },
       {
+        title: 'Build your own subsection',
+        body: 'Want to drill something narrower, like Bonds or Compliance? Click “✦ New subsection”, type a topic name, and Claude scans the whole question bank and gathers every question that fits into its own chip. Delete a subsection anytime with the × on its chip.',
+      },
+      {
+        title: 'Practice mode (no scoring)',
+        body: 'Flip on “Practice mode” to answer freely without touching your score, levels, or lifetime totals — ideal for grinding a specific subsection. Turn it off to have answers count again. (Starred review is always practice-only.)',
+      },
+      {
         title: 'Answer the question',
         body: 'Click the option you think is right. The correct choice is highlighted; if you missed it, the correct answer (and a quick definition when available) is shown.',
       },

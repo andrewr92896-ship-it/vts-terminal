@@ -792,6 +792,24 @@ export const studyStarred = sqliteTable('study_starred', {
 });
 export type StudyStarredRow = typeof studyStarred.$inferSelect;
 
+// ---- Studies: custom quiz subsections (per user) ----
+// A learner-defined focus area within the Study Game (e.g. "Bonds",
+// "Compliance"). When the subsection is created, Claude classifies the static
+// Series 65 question bank and the matching question ids are stored here as a
+// JSON array of integers, so the subsection can be drilled like any built-in
+// category and syncs across devices. `questionIds` refers to ids in the static
+// bank (web: series65Questions.ts).
+export const studySections = sqliteTable('study_sections', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  questionIds: text('question_ids').notNull(), // JSON array of ints
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudySectionRow = typeof studySections.$inferSelect;
+
 // ---- Web Push subscriptions (per user, per device) ----
 // One row per browser/device the user has opted into phone push from. The
 // endpoint is the unique push URL; p256dh/auth are the client's encryption keys

@@ -5,7 +5,8 @@ import { addLearned, listLearned, removeLearned } from '../studies/learned.js';
 import { getGame, getLeaderboard, normalizeState, saveGame } from '../studies/game.js';
 import { addVocab, listVocab, removeVocab } from '../studies/vocab.js';
 import { addStarred, listStarred, removeStarred } from '../studies/starred.js';
-import { aiConfigured, defineSeries65Term } from '../ai/claude.js';
+import { addSection, listSections, removeSection } from '../studies/sections.js';
+import { aiConfigured, classifyQuestionsIntoSection, defineSeries65Term } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
@@ -17,6 +18,22 @@ const vocabAddSchema = z.object({
   def: z.string().trim().min(1).max(1000).optional(),
 });
 const starSchema = z.object({ id: z.number().int().nonnegative().max(100000) });
+
+// Creating a custom subsection: the client sends its name plus a condensed copy
+// of the question bank (id + stem + broad topic). Claude picks the matching ids.
+const sectionCreateSchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  questions: z
+    .array(
+      z.object({
+        id: z.number().int().nonnegative().max(100000),
+        stem: z.string().trim().min(1).max(1000),
+        topic: z.string().trim().max(60).optional(),
+      }),
+    )
+    .min(1)
+    .max(1000),
+});
 
 export async function studiesRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
@@ -96,6 +113,47 @@ export async function studiesRoutes(app: FastifyInstance) {
     const id = Number(q.id);
     if (!Number.isInteger(id)) return reply.code(400).send({ error: 'A question id is required' });
     return { ids: await removeStarred(request.currentUser!.id, id) };
+  });
+
+  // ---- Custom quiz subsections ----
+  // Learner-defined focus areas (e.g. "Bonds"). On create, Claude classifies the
+  // question bank the client sends and we store the matching ids; the subsection
+  // then behaves like any built-in category. Synced per user across devices.
+  app.get('/api/studies/sections', guard, async (request) => {
+    return { sections: await listSections(request.currentUser!.id) };
+  });
+
+  app.post('/api/studies/sections', guard, async (request, reply) => {
+    const parsed = sectionCreateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'A subsection name and questions are required' });
+    }
+    if (!aiConfigured()) {
+      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    }
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_section');
+      const ids = await classifyQuestionsIntoSection(parsed.data.name, parsed.data.questions);
+      if (ids.length === 0) {
+        return reply.code(422).send({
+          error: `No questions matched “${parsed.data.name}”. Try a broader or more common topic name.`,
+        });
+      }
+      const section = await addSection(request.currentUser!.id, parsed.data.name, ids);
+      return { section, sections: await listSections(request.currentUser!.id) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the subsection' });
+    }
+  });
+
+  // The id travels as a query param to keep the DELETE body-less.
+  app.delete('/api/studies/sections', guard, async (request, reply) => {
+    const q = request.query as { id?: string };
+    const id = typeof q.id === 'string' ? q.id : '';
+    if (!id) return reply.code(400).send({ error: 'A subsection id is required' });
+    await removeSection(request.currentUser!.id, id);
+    return { sections: await listSections(request.currentUser!.id) };
   });
 
   // The Study Game state (levels, scores, per-category history) is stored as one

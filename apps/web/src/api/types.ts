@@ -117,6 +117,14 @@ export interface TodoItem {
   dueToday: boolean;
 }
 
+// A learner-defined Study Game subsection: a named focus area backed by the
+// question ids Claude classified into it from the static Series 65 bank.
+export interface StudySection {
+  id: string;
+  name: string;
+  questionIds: number[];
+}
+
 export interface TodoSection {
   id: string;
   n: number;

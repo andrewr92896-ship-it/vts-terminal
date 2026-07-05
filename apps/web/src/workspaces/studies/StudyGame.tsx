@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { api } from '../../api/client';
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { api, ApiError } from '../../api/client';
+import type { StudySection } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -40,7 +41,11 @@ const RED = '#ef5468';
 const AMBER = '#e0a23a';
 const STAR = '#f5c451';
 type Letter = 'A' | 'B' | 'C' | 'D';
-type Mode = 'mix' | 'starred' | Series65Topic;
+type Mode = 'mix' | 'starred' | Series65Topic | `sec:${string}`;
+
+const isSectionMode = (m: Mode): m is `sec:${string}` =>
+  typeof m === 'string' && m.startsWith('sec:');
+const sectionIdOf = (m: string): string => m.slice(4);
 
 interface LevelEvent {
   prestige: boolean;
@@ -73,6 +78,19 @@ export function StudyGame({ theme }: { theme: Theme }) {
   // Shuffled queue of starred ids to serve from in "Starred" mode, rebuilt from
   // the current starred set when it empties.
   const starredQueueRef = useRef<number[]>([]);
+  // Learner-defined subsections (e.g. "Bonds"), synced from the account. Each is
+  // a named set of question ids Claude classified from the static bank.
+  const [sections, setSections] = useState<StudySection[]>([]);
+  // Practice mode: while on, answering never touches the score, levels, or
+  // lifetime totals — so drilling a specific subsection can't hurt your stats.
+  const [practice, setPractice] = useState(false);
+  // The "new subsection" composer.
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [newSectionName, setNewSectionName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  // Shuffled index queues per subsection id, refilled from its ids when empty.
+  const sectionQueuesRef = useRef<Map<string, number[]>>(new Map());
   const [current, setCurrent] = useState<{ q: Series65Question; topic: Series65Topic } | null>(null);
   const [selected, setSelected] = useState<Letter | null>(null);
   const [revealed, setRevealed] = useState(false);
@@ -169,12 +187,82 @@ export function StudyGame({ theme }: { theme: Theme }) {
     return null;
   }
 
+  // Build a freshly shuffled queue of bank indices for a subsection's ids.
+  function buildSectionQueue(sectionId: string): number[] {
+    const sec = sections.find((s) => s.id === sectionId);
+    if (!sec) return [];
+    const idxs = sec.questionIds
+      .map((qid) => idToIndex.current.get(qid))
+      .filter((x): x is number => x != null);
+    for (let i = idxs.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [idxs[i], idxs[j]] = [idxs[j], idxs[i]];
+    }
+    return idxs;
+  }
+
+  // Pull the next question index for a subsection, reshuffling when it runs dry.
+  function drawSection(sectionId: string): number | null {
+    let queue = sectionQueuesRef.current.get(sectionId) ?? [];
+    if (!queue.length) queue = buildSectionQueue(sectionId);
+    if (!queue.length) return null;
+    const qi = queue.pop()!;
+    sectionQueuesRef.current.set(sectionId, queue);
+    return qi;
+  }
+
   function resetQuestionState() {
     setSelected(null);
     setRevealed(false);
     setOutcome(null);
     setScoreChange(null);
     setLevelEvent(null);
+  }
+
+  // Pull the learner's custom subsections once so they follow across devices.
+  useEffect(() => {
+    let alive = true;
+    api
+      .studySections()
+      .then((r) => alive && setSections(r.sections))
+      .catch(() => {
+        /* offline / demo: no custom subsections */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Ask Claude to build a subsection from the whole bank, then switch to it.
+  async function createSection() {
+    const name = newSectionName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      const compact = SERIES65_QUESTIONS.map((q) => ({ id: q.id, stem: q.stem, topic: q.topic }));
+      const r = await api.createStudySection(name, compact);
+      setSections(r.sections);
+      sectionQueuesRef.current.delete(r.section.id);
+      setNewSectionName('');
+      setComposerOpen(false);
+      setMode(`sec:${r.section.id}`);
+    } catch (e) {
+      setCreateError(e instanceof ApiError ? e.message : 'Could not build the subsection');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function deleteSection(id: string) {
+    try {
+      const r = await api.deleteStudySection(id);
+      setSections(r.sections);
+      sectionQueuesRef.current.delete(id);
+      if (mode === `sec:${id}`) setMode('mix');
+    } catch {
+      /* best-effort */
+    }
   }
 
   function advance() {
@@ -189,6 +277,15 @@ export function StudyGame({ theme }: { theme: Theme }) {
       }
       qi = drawn;
       cat = SERIES65_QUESTIONS[qi].topic; // a starred question keeps its own topic
+    } else if (isSectionMode(mode)) {
+      const drawn = drawSection(sectionIdOf(mode));
+      if (drawn == null) {
+        setCurrent(null);
+        resetQuestionState();
+        return;
+      }
+      qi = drawn;
+      cat = SERIES65_QUESTIONS[qi].topic; // a subsection question keeps its own topic
     } else {
       cat = mode === 'mix' ? weightedCategory() : mode;
       qi = draw(cat);
@@ -261,10 +358,10 @@ export function StudyGame({ theme }: { theme: Theme }) {
     setRevealed(true);
     setOutcome(correct);
 
-    // Starred is a practice deck: answering there never changes the score,
-    // levels, or lifetime totals, so drilling your favorites can't hurt (or
-    // inflate) your stats.
-    if (mode === 'starred') return;
+    // Starred is a practice deck, and Practice mode makes any category
+    // consequence-free: answering never changes the score, levels, or lifetime
+    // totals, so drilling a specific subsection can't hurt (or inflate) stats.
+    if (mode === 'starred' || practice) return;
 
     // The live score moves on every answer, so the change is always non-zero.
     // Before the first answer there is no prior, so measure from the neutral seed.
@@ -331,35 +428,208 @@ export function StudyGame({ theme }: { theme: Theme }) {
     </div>
   );
 
-  // Category selector (Mix · Starred · the four topics). Shared between the empty
-  // and active states so the user can always switch modes.
+  // Category selector: Mix · Starred · the four topics · the learner's custom
+  // subsections · a "New subsection" builder, plus the Practice toggle. Shared
+  // between the empty and active states so the user can always switch modes.
+  const chip = (m: Mode, label: string, on: boolean, accent: string, extra?: ReactNode, onDelete?: () => void) => (
+    <span
+      key={m}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        borderRadius: 999,
+        border: `1px solid ${on ? accent : theme.navBorder}`,
+        background: on ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)',
+        overflow: 'hidden',
+      }}
+    >
+      <button
+        onClick={() => setMode(m)}
+        style={{
+          fontSize: 11.5,
+          fontWeight: 600,
+          padding: '7px 12px',
+          cursor: 'pointer',
+          border: 'none',
+          background: 'transparent',
+          color: on ? (accent === STAR ? STAR : '#fff') : muted,
+        }}
+      >
+        {label}
+        {extra}
+      </button>
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          title="Delete this subsection"
+          aria-label={`Delete subsection ${label}`}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: muted,
+            cursor: 'pointer',
+            fontSize: 13,
+            lineHeight: 1,
+            padding: '7px 9px 7px 2px',
+          }}
+        >
+          ×
+        </button>
+      )}
+    </span>
+  );
+
   const categorySelector = (
-    <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 14 }}>
-      {(['mix', 'starred', ...CATEGORY_META.map((c) => c.topic)] as Mode[]).map((m) => {
-        const on = mode === m;
-        const isStar = m === 'starred';
-        const label = m === 'mix' ? 'Mix (weighted)' : isStar ? '★ Starred' : metaFor(m as Series65Topic).topic;
-        return (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+        {chip('mix', 'Mix (weighted)', mode === 'mix', theme.accent)}
+        {chip('starred', '★ Starred', mode === 'starred', STAR, <span style={{ color: muted, marginLeft: 6 }}>{starred.size}</span>)}
+        {CATEGORY_META.map((c) =>
+          chip(c.topic, c.topic, mode === c.topic, theme.accent, <span style={{ color: muted, marginLeft: 6 }}>{c.weight}%</span>),
+        )}
+        {sections.map((s) => {
+          const m: Mode = `sec:${s.id}`;
+          return chip(
+            m,
+            s.name,
+            mode === m,
+            theme.accent,
+            <span style={{ color: muted, marginLeft: 6 }}>{s.questionIds.length}</span>,
+            readOnly ? undefined : () => void deleteSection(s.id),
+          );
+        })}
+        {!readOnly && (
           <button
-            key={m}
-            onClick={() => setMode(m)}
+            onClick={() => {
+              setComposerOpen((v) => !v);
+              setCreateError(null);
+            }}
             style={{
               fontSize: 11.5,
-              fontWeight: 600,
+              fontWeight: 700,
               padding: '7px 12px',
               borderRadius: 999,
               cursor: 'pointer',
-              border: `1px solid ${on ? (isStar ? STAR : theme.accent) : theme.navBorder}`,
-              background: on ? 'rgba(255,255,255,.08)' : 'rgba(255,255,255,.03)',
-              color: on ? (isStar ? STAR : '#fff') : muted,
+              border: `1px dashed ${composerOpen ? theme.accent : theme.navBorder}`,
+              background: 'rgba(255,255,255,.03)',
+              color: composerOpen ? '#fff' : muted,
             }}
           >
-            {label}
-            {isStar && <span style={{ color: muted, marginLeft: 6 }}>{starred.size}</span>}
-            {m !== 'mix' && !isStar && <span style={{ color: muted, marginLeft: 6 }}>{metaFor(m as Series65Topic).weight}%</span>}
+            ✦ New subsection
           </button>
-        );
-      })}
+        )}
+      </div>
+
+      {/* Practice toggle + subsection composer */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginTop: 10 }}>
+        <button
+          onClick={() => setPractice((v) => !v)}
+          aria-pressed={practice}
+          title="While on, answering doesn't change your score, levels, or totals"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 11.5,
+            fontWeight: 600,
+            padding: '7px 12px',
+            borderRadius: 999,
+            cursor: 'pointer',
+            border: `1px solid ${practice ? AMBER : theme.navBorder}`,
+            background: practice ? 'rgba(224,162,58,.14)' : 'rgba(255,255,255,.03)',
+            color: practice ? AMBER : muted,
+          }}
+        >
+          <span
+            aria-hidden
+            style={{
+              width: 26,
+              height: 15,
+              borderRadius: 999,
+              background: practice ? AMBER : theme.navBorder,
+              position: 'relative',
+              flex: 'none',
+              transition: 'background .15s',
+            }}
+          >
+            <span
+              style={{
+                position: 'absolute',
+                top: 2,
+                left: practice ? 13 : 2,
+                width: 11,
+                height: 11,
+                borderRadius: '50%',
+                background: '#fff',
+                transition: 'left .15s',
+              }}
+            />
+          </span>
+          Practice mode {practice ? '· not scoring' : '· off'}
+        </button>
+        {mode === 'starred' && (
+          <span style={{ fontSize: 11, color: muted }}>Starred review never affects your score.</span>
+        )}
+      </div>
+
+      {composerOpen && !readOnly && (
+        <div
+          style={{
+            marginTop: 10,
+            padding: '12px 14px',
+            borderRadius: 12,
+            border: `1px solid ${theme.navBorder}`,
+            background: 'rgba(255,255,255,.03)',
+          }}
+        >
+          <div style={{ fontSize: 12, color: '#e7e0ff', marginBottom: 8, lineHeight: 1.5 }}>
+            Name a topic and Claude will scan all {SERIES65_QUESTIONS.length} questions and gather the ones that fit — e.g. <em>Bonds</em>, <em>Compliance</em>, <em>Options</em>, <em>Retirement plans</em>.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
+            <input
+              value={newSectionName}
+              onChange={(e) => setNewSectionName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && createSection()}
+              placeholder="Subsection name (e.g. Bonds)"
+              maxLength={60}
+              disabled={creating}
+              style={{
+                flex: 1,
+                minWidth: isPhone ? '100%' : 0,
+                background: 'rgba(10,8,26,.6)',
+                border: `1px solid ${theme.navBorder}`,
+                borderRadius: 8,
+                color: '#fff',
+                fontSize: 13,
+                padding: '9px 12px',
+                outline: 'none',
+              }}
+            />
+            <button
+              onClick={createSection}
+              disabled={creating || !newSectionName.trim()}
+              style={{
+                border: 'none',
+                background: accentGrad,
+                color: theme.accentText,
+                fontWeight: 700,
+                fontSize: 12.5,
+                padding: '0 16px',
+                borderRadius: 8,
+                minHeight: 40,
+                cursor: creating || !newSectionName.trim() ? 'default' : 'pointer',
+                opacity: creating || !newSectionName.trim() ? 0.6 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {creating ? 'Building…' : '✦ Build with Claude'}
+            </button>
+          </div>
+          {createError && (
+            <div style={{ marginTop: 8, fontSize: 11.5, color: '#ffb4ab' }}>{createError}</div>
+          )}
+        </div>
+      )}
     </div>
   );
 
@@ -667,7 +937,25 @@ export function StudyGame({ theme }: { theme: Theme }) {
         {/* Scoreboard + categories */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={card(theme)}>
-            <div style={statLabel}>Live score · moves every answer</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={statLabel}>Live score · moves every answer</span>
+              {practice && (
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    fontWeight: 700,
+                    letterSpacing: '0.5px',
+                    textTransform: 'uppercase',
+                    color: AMBER,
+                    border: `1px solid ${AMBER}`,
+                    borderRadius: 5,
+                    padding: '2px 7px',
+                  }}
+                >
+                  Practice · paused
+                </span>
+              )}
+            </div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 30, fontWeight: 700, color: '#fff' }}>
                 {overallScore == null ? '—' : `${overallScore.toFixed(1)}%`}

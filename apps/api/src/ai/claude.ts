@@ -423,3 +423,49 @@ export async function defineSeries65Term(term: string): Promise<Series65Definiti
 
   return { def: def.slice(0, 1000), topic: topic as Series65Topic };
 }
+
+// One question, condensed to what Claude needs to judge topical fit.
+export interface ClassifyQuestion {
+  id: number;
+  stem: string;
+  topic?: string;
+}
+
+// Build a custom Study Game subsection: given a learner-chosen name (e.g.
+// "Bonds", "Compliance") and the question bank, ask Claude which questions
+// belong in that subsection. Returns the matching ids, filtered to ones that
+// were actually in the supplied bank so the model can't invent references.
+export async function classifyQuestionsIntoSection(
+  name: string,
+  questions: ClassifyQuestion[],
+): Promise<number[]> {
+  const list = questions
+    .map((q) => `${q.id}\t${q.topic ? `[${q.topic}] ` : ''}${q.stem}`)
+    .join('\n');
+  const prompt = [
+    `A learner preparing for the Series 65 exam wants a focused practice subsection called "${name}".`,
+    `From the numbered question bank below, choose the id of EVERY question whose subject matter fits "${name}".`,
+    'Include closely related concepts, but exclude questions that are clearly about something else.',
+    'Each line is: id<TAB>[broad topic] question stem.',
+    'Respond with ONLY a JSON object of the form {"ids":[1,2,3]} listing the matching ids, and nothing else. If none fit, return {"ids":[]}.',
+    '',
+    'QUESTION BANK:',
+    list,
+  ].join('\n');
+
+  const raw = await askClaude(prompt);
+  const parsed = extractJson(raw) as { ids?: unknown } | null;
+  const rawIds = Array.isArray(parsed?.ids) ? (parsed!.ids as unknown[]) : [];
+
+  const valid = new Set(questions.map((q) => q.id));
+  const seen = new Set<number>();
+  const out: number[] = [];
+  for (const v of rawIds) {
+    const n = typeof v === 'number' ? v : Number(v);
+    if (Number.isInteger(n) && valid.has(n) && !seen.has(n)) {
+      seen.add(n);
+      out.push(n);
+    }
+  }
+  return out;
+}
