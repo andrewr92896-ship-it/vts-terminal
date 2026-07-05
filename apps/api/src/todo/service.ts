@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import {
   todoSections,
   todoItems,
+  type SectionType,
   type TodoItemRow,
   type TodoSectionRow,
 } from '../db/schema.js';
@@ -267,6 +268,55 @@ export async function getTodo(userId: string): Promise<DecoratedSection[]> {
   });
 }
 
+// A sensible default icon per section type, used when the caller doesn't
+// supply one. Keeps user-created categories visually consistent with the
+// seeded starter sections.
+const DEFAULT_SECTION_ICON: Record<SectionType, string> = {
+  one: '📌',
+  note: '🌱',
+  daily: '📋',
+  routine: '📋',
+  deals: '🤝',
+};
+
+// Create a new (empty) section for a user. `n` and `position` are placed after
+// the user's current highest so the section appears at the end of the list.
+// Returns the new section's id and number so callers can reference it (e.g. to
+// add tasks into it within the same command).
+export async function addSection(
+  userId: string,
+  title: string,
+  type: SectionType = 'one',
+  icon?: string,
+): Promise<{ id: string; n: number }> {
+  const trimmed = title.trim();
+  if (!trimmed) throw new Error('Empty section title');
+  await ensureSeed(userId);
+
+  const existing = await db
+    .select({ n: todoSections.n, position: todoSections.position })
+    .from(todoSections)
+    .where(eq(todoSections.userId, userId));
+
+  const nextN = existing.reduce((m, s) => Math.max(m, s.n), 0) + 1;
+  const nextPosition = existing.reduce((m, s) => Math.max(m, s.position), -1) + 1;
+
+  const id = crypto.randomUUID();
+  await db.insert(todoSections).values({
+    id,
+    userId,
+    n: nextN,
+    icon: icon?.trim() || DEFAULT_SECTION_ICON[type],
+    title: trimmed.slice(0, 80),
+    type,
+    tag: null,
+    life: false,
+    position: nextPosition,
+    createdAt: new Date(),
+  });
+  return { id, n: nextN };
+}
+
 export async function addItem(
   userId: string,
   sectionId: string,
@@ -297,6 +347,93 @@ export async function addItem(
     intervalDays: null,
     createdAt: new Date(),
   });
+}
+
+// Where to move an item within its section. "up"/"down" are relative by N
+// slots; "top"/"bottom" jump to the ends; "to" is an absolute 1-based slot.
+export type MoveTarget =
+  | { kind: 'top' }
+  | { kind: 'bottom' }
+  | { kind: 'up'; by: number }
+  | { kind: 'down'; by: number }
+  | { kind: 'to'; index: number };
+
+// Reorder an item within its section. Positions are rewritten as a clean
+// contiguous sequence in the resulting display order, so codes and future
+// moves stay consistent. Ordering mirrors getTodo (completed checkable items
+// float first), so "up 2" moves two slots in the list the user actually sees.
+export async function moveItem(
+  userId: string,
+  itemId: string,
+  target: MoveTarget,
+): Promise<void> {
+  const item = (
+    await db
+      .select()
+      .from(todoItems)
+      .where(and(eq(todoItems.id, itemId), eq(todoItems.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!item) throw new Error('Item not found');
+
+  const sec = (
+    await db
+      .select({ type: todoSections.type })
+      .from(todoSections)
+      .where(eq(todoSections.id, item.sectionId))
+      .limit(1)
+  )[0];
+  const sectionType = sec?.type ?? 'one';
+  const todayMs = etTodayMs();
+
+  const rows = await db
+    .select()
+    .from(todoItems)
+    .where(and(eq(todoItems.sectionId, item.sectionId), eq(todoItems.userId, userId)));
+
+  const doneNow = (r: TodoItemRow) =>
+    sectionType === 'daily'
+      ? dailyDone(r, todayMs)
+      : markerFor(sectionType, r.hyphen) === 'check' && applyReset(r, todayMs).item.done;
+  const ordered = rows.slice().sort((a, b) => {
+    const ad = doneNow(a);
+    const bd = doneNow(b);
+    if (ad !== bd) return ad ? -1 : 1;
+    return a.position - b.position;
+  });
+
+  const from = ordered.findIndex((r) => r.id === itemId);
+  if (from < 0) throw new Error('Item not found');
+
+  let to: number;
+  switch (target.kind) {
+    case 'top':
+      to = 0;
+      break;
+    case 'bottom':
+      to = ordered.length - 1;
+      break;
+    case 'up':
+      to = from - Math.max(1, Math.floor(target.by));
+      break;
+    case 'down':
+      to = from + Math.max(1, Math.floor(target.by));
+      break;
+    case 'to':
+      to = Math.floor(target.index) - 1;
+      break;
+  }
+  to = Math.max(0, Math.min(ordered.length - 1, to));
+  if (to === from) return;
+
+  const [moved] = ordered.splice(from, 1);
+  ordered.splice(to, 0, moved);
+
+  for (let i = 0; i < ordered.length; i++) {
+    if (ordered[i].position !== i) {
+      await db.update(todoItems).set({ position: i }).where(eq(todoItems.id, ordered[i].id));
+    }
+  }
 }
 
 // The persisted state of an item before a toggle, so the client can undo a

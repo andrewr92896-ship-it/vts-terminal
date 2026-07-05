@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.0';
+export const APP_VERSION = 'Beta V 2.1';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.1',
+    date: 'July 5, 2026',
+    notes: [
+      'To Do: create your own sections. Use the new "Add a section" box — name it and pick Checklist, Daily routine, or Notes — or just tell the command bar "new section Garden".',
+      'To Do: reorder tasks. Use the ▲ / ▼ arrows on each task, or ask the command bar to "move 1.2 to the top" or "move 3.1 up 2".',
+    ],
+  },
   {
     version: 'Beta V 2.0',
     date: 'June 28, 2026',

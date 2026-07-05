@@ -3,11 +3,14 @@ import { z } from 'zod';
 import { requireWorkspace } from '../auth/middleware.js';
 import {
   addItem,
+  addSection,
   getTodo,
+  moveItem,
   removeItem,
   restoreItem,
   setItemState,
   toggleItem,
+  type MoveTarget,
 } from '../todo/service.js';
 import { runCommand } from '../todo/command.js';
 import { aiConfigured } from '../ai/claude.js';
@@ -16,6 +19,20 @@ import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 const addSchema = z.object({
   sectionId: z.string().min(1),
   text: z.string().trim().min(1).max(500),
+});
+
+// Users can create their own categories. Recurring-interval types are excluded
+// here because a user-created section has no per-item interval configured yet;
+// the three offered types work correctly with manually-added tasks.
+const addSectionSchema = z.object({
+  title: z.string().trim().min(1).max(80),
+  type: z.enum(['one', 'daily', 'note']).optional(),
+  icon: z.string().trim().max(8).optional(),
+});
+
+const moveSchema = z.object({
+  to: z.enum(['top', 'bottom', 'up', 'down']),
+  by: z.number().int().min(1).max(500).optional(),
 });
 
 const stateSchema = z.object({
@@ -57,6 +74,42 @@ export async function todoRoutes(app: FastifyInstance) {
       await addItem(userId, parsed.data.sectionId, parsed.data.text);
     } catch {
       return reply.code(400).send({ error: 'Could not add task' });
+    }
+    return { sections: await getTodo(userId) };
+  });
+
+  app.post('/api/todo/sections', guard, async (request, reply) => {
+    const parsed = addSectionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'A section title is required' });
+    }
+    const userId = request.currentUser!.id;
+    try {
+      await addSection(userId, parsed.data.title, parsed.data.type ?? 'one', parsed.data.icon);
+    } catch {
+      return reply.code(400).send({ error: 'Could not add section' });
+    }
+    return { sections: await getTodo(userId) };
+  });
+
+  app.patch('/api/todo/items/:id/move', guard, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const parsed = moveSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Could not move task' });
+    }
+    const { to, by } = parsed.data;
+    const target: MoveTarget =
+      to === 'top'
+        ? { kind: 'top' }
+        : to === 'bottom'
+          ? { kind: 'bottom' }
+          : { kind: to, by: by ?? 1 };
+    const userId = request.currentUser!.id;
+    try {
+      await moveItem(userId, id, target);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not move task' });
     }
     return { sections: await getTodo(userId) };
   });
