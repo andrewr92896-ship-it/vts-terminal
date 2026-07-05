@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.1';
+export const APP_VERSION = 'Beta V 2.2';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.2',
+    date: 'July 5, 2026',
+    notes: [
+      'Study Game: build your own subsections. Click “✦ New subsection”, name a topic like Bonds or Compliance, and Claude scans all questions and gathers the ones that fit into a chip you can drill.',
+      'Study Game: new Practice mode toggle — answer freely without affecting your score, levels, or totals, so you can grind a specific subsection with no risk to your stats.',
+    ],
+  },
   {
     version: 'Beta V 2.1',
     date: 'July 5, 2026',

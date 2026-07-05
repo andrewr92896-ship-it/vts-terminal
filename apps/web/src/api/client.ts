@@ -55,6 +55,7 @@ import type {
   TodoItemState,
   TodoCommandResult,
   TodoSection,
+  StudySection,
   TradingSignals,
   User,
   WealthClientStatus,
@@ -397,6 +398,22 @@ export const api = {
   },
   removeStarredQuestion(id: number): Promise<{ ids: number[] }> {
     return request(`/api/studies/starred?id=${id}`, { method: 'DELETE' });
+  },
+  // Custom quiz subsections (learner-defined focus areas classified by Claude).
+  studySections(): Promise<{ sections: StudySection[] }> {
+    return request('/api/studies/sections');
+  },
+  createStudySection(
+    name: string,
+    questions: { id: number; stem: string; topic: string }[],
+  ): Promise<{ section: StudySection; sections: StudySection[] }> {
+    return request('/api/studies/sections', {
+      method: 'POST',
+      body: JSON.stringify({ name, questions }),
+    });
+  },
+  deleteStudySection(id: string): Promise<{ sections: StudySection[] }> {
+    return request(`/api/studies/sections?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');
