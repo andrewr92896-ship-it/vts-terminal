@@ -267,6 +267,14 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'In the "Add a task" box, choose a category from the dropdown, type your task, and press Enter or click Add. New tasks appear at the top of their category.',
       },
       {
+        title: 'Add a section',
+        body: 'Use the "Add a section" box to create your own category. Type a name, pick a type — Checklist (tickable tasks), Daily routine (resets each day), or Notes (bullet points) — and click Add. It appears at the end of your list, ready for tasks.',
+      },
+      {
+        title: 'Reorder tasks',
+        body: 'Use the ▲ / ▼ arrows on the right of a task to move it up or down within its category. You can also tell the command bar things like "move 1.2 to the top" or "move 3.1 up 2".',
+      },
+      {
         title: 'Check things off',
         body: 'Click the square checkbox to mark a task done. Completed tasks get a line through them and float to the top of the section.',
       },
@@ -288,7 +296,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Ask Claude / command',
-        body: 'Type a plain-English instruction in the "Ask Claude / command" box and click Run. Claude (Sonnet) updates the list for you — e.g. "add to Finance: pay rent", "done 1.2", "remove 3.1", or several at once separated by "·". It shows what it changed and skips anything it can\'t match.',
+        body: 'Type a plain-English instruction in the "Ask Claude / command" box and click Run. Claude (Sonnet) updates the list for you — e.g. "add to Finance: pay rent", "new section Garden", "move 1.2 to top", "done 1.2", "remove 3.1", or several at once separated by "·". It shows what it changed and skips anything it can\'t match.',
       },
       {
         title: 'Life Changes',

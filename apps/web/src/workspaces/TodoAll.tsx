@@ -27,6 +27,8 @@ export function TodoAll() {
   const [showLife, setShowLife] = useState(false);
   const [draft, setDraft] = useState('');
   const [sectionId, setSectionId] = useState('');
+  const [newSection, setNewSection] = useState('');
+  const [newSectionType, setNewSectionType] = useState<'one' | 'daily' | 'note'>('one');
   const [busy, setBusy] = useState(false);
   const [command, setCommand] = useState('');
   const [cmdBusy, setCmdBusy] = useState(false);
@@ -125,6 +127,19 @@ export function TodoAll() {
     await run(api.addTodoItem(sectionId, text));
   }
 
+  async function addSection() {
+    const title = newSection.trim();
+    if (!title || busy) return;
+    setNewSection('');
+    await run(api.addTodoSection(title, newSectionType));
+  }
+
+  // Reorder a task within its section (used by the ▲/▼ row controls).
+  async function move(id: string, to: 'up' | 'down' | 'top' | 'bottom') {
+    if (busy) return;
+    await run(api.moveTodoItem(id, to));
+  }
+
   async function sendCommand() {
     const text = command.trim();
     if (!text || cmdBusy) return;
@@ -211,14 +226,15 @@ export function TodoAll() {
         </div>
       )}
 
-      {/* Add a task */}
+      {/* Add a task, run a command, and create sections */}
       {!readOnly && (
+      <>
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr',
           gap: 14,
-          marginBottom: 18,
+          marginBottom: 14,
         }}
       >
         <div style={panelStyle}>
@@ -309,7 +325,7 @@ export function TodoAll() {
               value={command}
               onChange={(e) => setCommand(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && sendCommand()}
-              placeholder='e.g. "add to Finance: pay rent · done 1.2 · remove 3.1"'
+              placeholder='e.g. "new section Garden · add to Finance: pay rent · move 1.2 to top"'
               style={{
                 flex: 1,
                 background: '#0d1620',
@@ -359,12 +375,75 @@ export function TodoAll() {
           )}
         </div>
       </div>
+
+      {/* Add a section (category) */}
+      <div style={{ ...panelStyle, marginBottom: 18 }}>
+        <div style={panelLabelStyle}>Add a section</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
+          <input
+            value={newSection}
+            onChange={(e) => setNewSection(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && addSection()}
+            placeholder="New section name..."
+            maxLength={80}
+            style={{
+              flex: 1,
+              minWidth: isPhone ? '100%' : 0,
+              background: '#0d1620',
+              border: '1px solid #284158',
+              borderRadius: 7,
+              color: '#dfeaf0',
+              fontSize: 12.5,
+              padding: '9px 11px',
+              outline: 'none',
+            }}
+          />
+          <select
+            value={newSectionType}
+            onChange={(e) => setNewSectionType(e.target.value as 'one' | 'daily' | 'note')}
+            title="Section type"
+            style={{
+              flex: 'none',
+              width: isPhone ? '100%' : 150,
+              background: '#0d1620',
+              border: '1px solid #284158',
+              borderRadius: 7,
+              color: '#dfeaf0',
+              fontSize: 12,
+              padding: '9px 8px',
+              outline: 'none',
+            }}
+          >
+            <option value="one">Checklist</option>
+            <option value="daily">Daily routine</option>
+            <option value="note">Notes</option>
+          </select>
+          <button
+            onClick={addSection}
+            disabled={busy || !newSection.trim()}
+            style={{
+              border: 'none',
+              background: `linear-gradient(180deg,${ACCENT},${ACCENT2})`,
+              color: '#06231d',
+              fontWeight: 600,
+              fontSize: 12.5,
+              padding: '0 15px',
+              borderRadius: 7,
+              cursor: busy || !newSection.trim() ? 'default' : 'pointer',
+              opacity: busy || !newSection.trim() ? 0.6 : 1,
+            }}
+          >
+            Add
+          </button>
+        </div>
+      </div>
+      </>
       )}
 
       {/* Sections — masonry columns (single column on phones) */}
       <div style={isPhone ? { columnCount: 1, columnGap: 16 } : { columnWidth: 360, columnGap: 16 }}>
         {visible.map((sec) => (
-          <SectionCard key={sec.id} section={sec} busy={busy} readOnly={readOnly} onToggle={toggleWithUndo} onRemove={removeWithUndo} />
+          <SectionCard key={sec.id} section={sec} busy={busy} readOnly={readOnly} onToggle={toggleWithUndo} onRemove={removeWithUndo} onMove={move} />
         ))}
       </div>
 
@@ -385,12 +464,14 @@ function SectionCard({
   readOnly = false,
   onToggle,
   onRemove,
+  onMove,
 }: {
   section: TodoSection;
   busy: boolean;
   readOnly?: boolean;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
+  onMove: (id: string, to: 'up' | 'down' | 'top' | 'bottom') => void;
 }) {
   return (
     <div
@@ -419,8 +500,18 @@ function SectionCard({
           — empty —
         </div>
       )}
-      {section.items.map((item) => (
-        <Row key={item.id} item={item} busy={busy} readOnly={readOnly} onToggle={onToggle} onRemove={onRemove} />
+      {section.items.map((item, idx) => (
+        <Row
+          key={item.id}
+          item={item}
+          busy={busy}
+          readOnly={readOnly}
+          isFirst={idx === 0}
+          isLast={idx === section.items.length - 1}
+          onToggle={onToggle}
+          onRemove={onRemove}
+          onMove={onMove}
+        />
       ))}
     </div>
   );
@@ -430,14 +521,20 @@ function Row({
   item,
   busy,
   readOnly = false,
+  isFirst = false,
+  isLast = false,
   onToggle,
   onRemove,
+  onMove,
 }: {
   item: TodoItem;
   busy: boolean;
   readOnly?: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
   onToggle: (id: string) => void;
   onRemove: (id: string) => void;
+  onMove: (id: string, to: 'up' | 'down' | 'top' | 'bottom') => void;
 }) {
   return (
     <div
@@ -532,24 +629,53 @@ function Row({
       </div>
 
       {!readOnly && (
-        <button
-          onClick={() => !busy && onRemove(item.id)}
-          title="Remove"
-          style={{
-            flex: 'none',
-            background: 'none',
-            border: 'none',
-            color: '#3f5b6c',
-            fontSize: 15,
-            lineHeight: 1,
-            cursor: busy ? 'default' : 'pointer',
-          }}
-        >
-          ×
-        </button>
+        <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 2 }}>
+          <button
+            onClick={() => !busy && !isFirst && onMove(item.id, 'up')}
+            disabled={busy || isFirst}
+            title="Move up"
+            style={moveBtn(busy || isFirst)}
+          >
+            ▲
+          </button>
+          <button
+            onClick={() => !busy && !isLast && onMove(item.id, 'down')}
+            disabled={busy || isLast}
+            title="Move down"
+            style={moveBtn(busy || isLast)}
+          >
+            ▼
+          </button>
+          <button
+            onClick={() => !busy && onRemove(item.id)}
+            title="Remove"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#3f5b6c',
+              fontSize: 15,
+              lineHeight: 1,
+              cursor: busy ? 'default' : 'pointer',
+            }}
+          >
+            ×
+          </button>
+        </div>
       )}
     </div>
   );
+}
+
+function moveBtn(disabled: boolean): CSSProperties {
+  return {
+    background: 'none',
+    border: 'none',
+    color: disabled ? '#26333f' : '#4f7488',
+    fontSize: 8.5,
+    lineHeight: 1,
+    padding: '2px 1px',
+    cursor: disabled ? 'default' : 'pointer',
+  };
 }
 
 const panelStyle: CSSProperties = {

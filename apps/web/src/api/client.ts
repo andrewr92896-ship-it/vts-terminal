@@ -451,6 +451,26 @@ export const api = {
       body: JSON.stringify({ sectionId, text }),
     });
   },
+  addTodoSection(
+    title: string,
+    type?: 'one' | 'daily' | 'note',
+    icon?: string,
+  ): Promise<{ sections: TodoSection[] }> {
+    return request('/api/todo/sections', {
+      method: 'POST',
+      body: JSON.stringify({ title, type, icon }),
+    });
+  },
+  moveTodoItem(
+    id: string,
+    to: 'top' | 'bottom' | 'up' | 'down',
+    by?: number,
+  ): Promise<{ sections: TodoSection[] }> {
+    return request(`/api/todo/items/${id}/move`, {
+      method: 'PATCH',
+      body: JSON.stringify({ to, by }),
+    });
+  },
   toggleTodoItem(id: string): Promise<{ sections: TodoSection[]; previous: TodoItemState }> {
     return request(`/api/todo/items/${id}/toggle`, { method: 'PATCH' });
   },
