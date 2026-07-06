@@ -1,13 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="VTS Portal">
   <defs>
-    <linearGradient id="vtsGold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#EBCB74"/>
-      <stop offset="1" stop-color="#C9A24B"/>
+    <linearGradient id="vtsNavy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0D2F79"/>
+      <stop offset="1" stop-color="#143C98"/>
     </linearGradient>
   </defs>
-  <!-- Solid navy brand background -->
-  <rect x="0" y="0" width="512" height="512" fill="#0A2A6B"/>
-  <!-- Centered gold "V" formed by two diagonal strokes -->
-  <polyline points="140,150 256,372 372,150" fill="none" stroke="url(#vtsGold)"
-            stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Navy gradient brand background -->
+  <rect x="0" y="0" width="512" height="512" fill="url(#vtsNavy)"/>
+  <!-- Gold VTS wordmark -->
+  <text x="256" y="268" text-anchor="middle" dominant-baseline="middle"
+        font-family="'Arial Black', 'Helvetica Neue', Arial, sans-serif"
+        font-weight="700" font-size="150" letter-spacing="6" fill="#E1BE6D">VTS</text>
+  <!-- Gold divider: line — diamond — line -->
+  <g fill="#E1BE6D">
+    <rect x="168" y="326" width="52" height="6" rx="3"/>
+    <rect x="292" y="326" width="52" height="6" rx="3"/>
+    <rect x="244" y="317" width="24" height="24" transform="rotate(45 256 329)"/>
+  </g>
 </svg>
