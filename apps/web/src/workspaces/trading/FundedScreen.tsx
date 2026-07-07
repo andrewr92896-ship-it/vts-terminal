@@ -127,7 +127,7 @@ export function FundedScreen() {
           <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
           {!readOnly && (
-            <button onClick={() => setImporting((v) => !v)} style={ghostBtn}>{importing ? 'Close' : 'Paste funded trades'}</button>
+            <button onClick={() => setImporting((v) => !v)} style={ghostBtn}>{importing ? 'Close' : 'Add funded trades'}</button>
           )}
           {!readOnly && <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? 'Close' : 'Edit'}</button>}
         </div>
@@ -323,10 +323,10 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={panelLabel}>Paste completed funded-account trades</div>
+      <div style={panelLabel}>Add completed funded-account trades</div>
       <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
-        Claude reads the trades (and the account equity, if shown) off the screenshot and logs them on a funded
-        account. Duplicates are skipped by time + profit.
+        Paste or upload a photo of your trade history. Claude reads the trades (and the account equity, if shown)
+        off the image and logs them on a funded account. Duplicates are skipped by time + profit.
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {accounts === null ? (

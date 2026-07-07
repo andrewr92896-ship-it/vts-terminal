@@ -15,6 +15,7 @@ import type {
   FundedAccountInput,
   FundedTradeInput,
   FundedImportResult,
+  FundedPositionResult,
   ConnectionInput,
   ManualPosition,
   ManualPositionInput,
@@ -288,6 +289,11 @@ export const api = {
   // Import trades from a funded-account trade-history screenshot (dedup applied).
   importFundedTrades(accountId: string, image: { imageBase64: string; mediaType: string }): Promise<FundedImportResult> {
     return request(`/api/trading/funded/accounts/${accountId}/import`, { method: 'POST', body: JSON.stringify(image) });
+  },
+  // Read a single OPEN position off an active-trade screenshot and track it live
+  // on the Live Wall (fill price + lot size + side), marked against OANDA prices.
+  analyzeFundedPosition(accountId: string, image: { imageBase64: string; mediaType: string }): Promise<FundedPositionResult> {
+    return request(`/api/trading/funded/accounts/${accountId}/positions/analyze`, { method: 'POST', body: JSON.stringify(image) });
   },
   tradingConnections(): Promise<{ connections: BrokerConnection[] }> {
     return request('/api/trading/connections');
