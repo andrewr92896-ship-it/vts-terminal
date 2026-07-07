@@ -681,6 +681,7 @@ export interface OandaCapital {
 }
 
 // ---- Trading — Funded platforms (mirror of apps/api/src/trading/funded.ts) ----
+export type FundedTradeStatus = 'open' | 'closed';
 export interface FundedTrade {
   id: string;
   accountId: string;
@@ -690,6 +691,7 @@ export interface FundedTrade {
   entryPrice: number | null;
   exitPrice: number | null;
   realizedPl: number | null;
+  status: FundedTradeStatus; // 'open' = a live position shown on the Live Wall
   openedAt: number | null;
   closedAt: number | null;
   notes: string | null;
@@ -740,6 +742,22 @@ export interface FundedImportResult {
   ignored: number; // rows that weren't real trades (no instrument/P/L)
   balanceSet: number | null; // the account balance, when the screenshot showed one
   summary: string;
+  model: string;
+}
+// Result of reading a single OPEN position off an active-trade screenshot and
+// logging it as a live funded position (shown on the Live Wall).
+export interface FundedPositionResult {
+  funded: FundedData;
+  parsed: {
+    instrument: string | null;
+    side: 'long' | 'short' | 'unknown';
+    units: number | null;
+    entryPrice: number | null;
+    currentPrice: number | null;
+    takeProfit: number | null;
+    stopLoss: number | null;
+    summary: string;
+  };
   model: string;
 }
 

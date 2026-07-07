@@ -162,6 +162,27 @@ export function mapOandaTrades(json: OandaOpenTradesResponse): LiveTrade[] {
   });
 }
 
+// Live mid prices for an arbitrary set of instruments (display form "EUR/USD"),
+// independent of whether any position is open on the account. Used to mark
+// funded/prop positions that have no API of their own against real OANDA prices.
+// Best-effort: a failed request or an unpriceable symbol is simply absent from
+// the map. Returned keyed by display form ("EUR/USD") to match callers.
+export async function fetchOandaPrices(
+  cfg: OandaConfig,
+  instruments: string[],
+): Promise<Map<string, number>> {
+  const symbols = [...new Set(instruments.map(toOandaSymbol))].filter(Boolean);
+  if (symbols.length === 0) return new Map();
+  const json = await getJson<OandaPricingResponse>(
+    `${cfg.base}/v3/accounts/${cfg.accountId}/pricing?instruments=${encodeURIComponent(symbols.join(','))}`,
+    cfg.token,
+  );
+  if (!json) return new Map();
+  const out = new Map<string, number>();
+  for (const [sym, mid] of mapOandaPrices(json)) out.set(sym.replace('_', '/'), mid);
+  return out;
+}
+
 // Mid price per OANDA instrument symbol ("EUR_USD") from a pricing response.
 export function mapOandaPrices(json: OandaPricingResponse): Map<string, number> {
   const out = new Map<string, number>();

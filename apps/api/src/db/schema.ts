@@ -437,6 +437,13 @@ export const fundedAccounts = sqliteTable('funded_accounts', {
 });
 export type FundedAccountRow = typeof fundedAccounts.$inferSelect;
 
+// A funded trade is either a completed/closed trade (the default — logged from a
+// trade-history screenshot or by hand) or a still-OPEN position (read off an
+// active-trade screenshot) that we mark live on the Live Wall against the desk's
+// OANDA price until it's closed.
+export const FUNDED_TRADE_STATUSES = ['open', 'closed'] as const;
+export type FundedTradeStatus = (typeof FUNDED_TRADE_STATUSES)[number];
+
 // One trade on a funded account, entered by hand or read off a screenshot by
 // Claude. `dedupKey` is a stable hash of the trade's identifying fields so
 // re-posting the same screenshot does not double-log a trade (a unique index on
@@ -455,6 +462,9 @@ export const fundedTrades = sqliteTable('funded_trades', {
   entryPrice: real('entry_price'),
   exitPrice: real('exit_price'),
   realizedPl: real('realized_pl'),
+  // 'open' = a live position tracked on the Live Wall; 'closed' = a completed
+  // trade. Defaults to 'closed' so every existing row stays a historical trade.
+  status: text('status', { enum: FUNDED_TRADE_STATUSES }).notNull().default('closed'),
   openedAt: integer('opened_at', { mode: 'timestamp_ms' }),
   closedAt: integer('closed_at', { mode: 'timestamp_ms' }),
   dedupKey: text('dedup_key').notNull(),

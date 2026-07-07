@@ -87,7 +87,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
         <div>
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>Funded / Prop accounts</div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4 }}>
-            Tracked by hand — keep the balance current and log trades by pasting or uploading a trade-history photo. Current prices come from the Live Wall. Duplicates are skipped by time + profit.
+            Tracked by hand — keep the balance current and log trades by pasting or uploading a trade-history photo. “Track live trade” posts an active position to the Live Wall with OANDA-priced P/L (kept off the Trade Log and Live Brokers). Duplicates are skipped by time + profit.
           </div>
         </div>
         {!readOnly && (
@@ -163,9 +163,37 @@ function AccountCard({
   const [shotBusy, setShotBusy] = useState(false);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+  // Separate flow for reading a single OPEN position off an active-trade
+  // screenshot and tracking it live on the Live Wall.
+  const [trackingLive, setTrackingLive] = useState(false);
+  const [posBusy, setPosBusy] = useState(false);
+  const [posMsg, setPosMsg] = useState<string | null>(null);
+  const posFileRef = useRef<HTMLInputElement | null>(null);
 
   const ccy = a.currency || 'USD';
   const dollars = (n: number | null) => (n == null ? '—' : showMoney ? money(n, ccy) : '•••••');
+
+  function importPosition(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/')) return;
+    setPosMsg(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setPosBusy(true);
+      onError(null);
+      try {
+        const res = await api.analyzeFundedPosition(a.id, { imageBase64: reader.result as string, mediaType: file.type });
+        onData(res.funded);
+        const p = res.parsed;
+        const side = p.side === 'short' ? 'Short' : 'Long';
+        setPosMsg(`Tracking ${side} ${p.instrument ?? ''}${p.entryPrice != null ? ` @ ${fmtPrice(p.entryPrice)}` : ''} — now live on the Live Wall.`);
+      } catch (e) {
+        onError(e instanceof ApiError ? e.message : 'Could not read that active-trade screenshot');
+      } finally {
+        setPosBusy(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
 
   function importShot(file: File | null | undefined) {
     if (!file || !file.type.startsWith('image/')) return;
@@ -248,6 +276,7 @@ function AccountCard({
               Paste
             </button>
             <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { importShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
+            <button onClick={() => setTrackingLive((v) => !v)} title="Track an active/open trade live on the Live Wall" style={{ ...ghostBtn, borderColor: 'rgba(53,196,123,.5)', color: '#bff0d4' }}>{trackingLive ? 'Close' : '📈 Track live trade'}</button>
             <button onClick={() => setAddingTrade((v) => !v)} style={ghostBtn}>{addingTrade ? 'Close' : '+ Trade'}</button>
             <button
               onClick={async () => {
@@ -266,6 +295,37 @@ function AccountCard({
       </div>
 
       {shotMsg && <div style={{ fontSize: 11.5, color: GREEN, padding: '0 16px 10px' }}>{shotMsg}</div>}
+
+      {!readOnly && trackingLive && (
+        <div style={{ padding: '0 16px 12px' }}>
+          <div style={panel}>
+            <div style={panelLabel}>Track an active trade on the Live Wall</div>
+            <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
+              Paste or upload a photo of an <b>open</b> position. Claude reads the fill price and lot size, and it shows on the
+              Live Wall with live P/L marked against the desk’s OANDA price — while staying off the Trade Log and Live Brokers totals.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={async () => {
+                  const file = await readClipboardImage();
+                  if (file) importPosition(file);
+                  else onError('No image found on the clipboard — copy a screenshot first, or use Upload photo.');
+                }}
+                disabled={posBusy}
+                title="Paste an active-trade screenshot from your clipboard"
+                style={{ ...ghostBtn, opacity: posBusy ? 0.6 : 1 }}
+              >
+                Paste
+              </button>
+              <button onClick={() => posFileRef.current?.click()} disabled={posBusy} title="Upload a photo or screenshot of your active trade" style={{ ...goldBtn, opacity: posBusy ? 0.6 : 1 }}>
+                {posBusy ? 'Reading…' : 'Upload photo'}
+              </button>
+              <input ref={posFileRef} type="file" accept="image/*" onChange={(e) => { importPosition(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
+            </div>
+            {posMsg && <div style={{ fontSize: 11.5, color: GREEN, marginTop: 10 }}>{posMsg}</div>}
+          </div>
+        </div>
+      )}
 
       {!readOnly && addingTrade && (
         <div style={{ padding: '0 16px 12px' }}>
@@ -342,13 +402,16 @@ function TradeRow({
   const long = t.side === 'long';
   const plUp = (t.realizedPl ?? 0) >= 0;
   const plText = t.realizedPl == null ? '—' : showMoney ? `${plUp ? '+' : ''}${money(t.realizedPl, ccy)}` : '•••';
-  // An open trade has no exit yet: borrow the Live Wall mark for its instrument so
-  // the Exit column shows the current price instead of a dash.
-  const isOpen = t.exitPrice == null && t.realizedPl == null;
+  // An open position is tracked live on the Live Wall: borrow the mark for its
+  // instrument so the Exit column shows the current price instead of a dash.
+  const isOpen = t.status === 'open';
   const showLive = isOpen && liveMark != null;
   return (
     <div style={{ ...row, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
-      <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT }}>{t.instrument}</span>
+      <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        {t.instrument}
+        {isOpen && <span style={openPill} title="Open position — tracked live on the Live Wall">OPEN</span>}
+      </span>
       <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
       <span style={col}>{fmtPrice(t.entryPrice)}</span>
       <span style={col}>
@@ -506,4 +569,5 @@ const miniGhost: CSSProperties = { ...ghostBtn, padding: '4px 9px', fontSize: 11
 const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', fontSize: 11.5, fontFamily: MONO };
 const col: CSSProperties = { flex: '0 0 64px' };
 const platformPill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: GOLD, background: 'rgba(235,203,116,.12)', border: '1px solid rgba(235,203,116,.4)', borderRadius: 4, padding: '2px 7px' };
+const openPill: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.5px', color: GREEN, background: 'rgba(53,196,123,.12)', border: '1px solid rgba(53,196,123,.45)', borderRadius: 4, padding: '1px 5px' };
 const warnBanner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };

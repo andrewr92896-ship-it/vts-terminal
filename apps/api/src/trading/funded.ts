@@ -1,14 +1,18 @@
 import crypto from 'node:crypto';
-import { and, asc, desc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   fundedAccounts,
   fundedTrades,
+  users,
   TRADE_SIDES,
   type FundedAccountRow,
   type FundedTradeRow,
+  type FundedTradeStatus,
   type TradeSide,
 } from '../db/schema.js';
+import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
+import { DEMO_USERNAME } from '../demo/identity.js';
 import type { ParsedHistoryTrade } from '../ai/claude.js';
 import { pnlWindows, type PnlWindows } from './pnl.js';
 
@@ -26,6 +30,7 @@ export interface FundedTradeView {
   entryPrice: number | null;
   exitPrice: number | null;
   realizedPl: number | null;
+  status: FundedTradeStatus;
   openedAt: number | null;
   closedAt: number | null;
   notes: string | null;
@@ -72,6 +77,7 @@ export interface FundedTradeInput {
   entryPrice?: number | null;
   exitPrice?: number | null;
   realizedPl?: number | null;
+  status?: FundedTradeStatus;
   openedAt?: number | null;
   closedAt?: number | null;
   notes?: string | null;
@@ -107,6 +113,13 @@ function dedupKeyOf(t: {
   closedAt: number | null;
 }): string {
   const r = (n: number | null, dp = 5) => (n == null ? '' : n.toFixed(dp));
+  // An open position (no exit, no realized P/L) is identified by its instrument,
+  // side and fill price — not its time — so re-posting the same active-trade
+  // screenshot doesn't stack a second live position on the wall.
+  if (t.exitPrice == null && t.realizedPl == null) {
+    const basis = `op|${t.instrument.toUpperCase()}|${t.side}|${r(t.entryPrice)}`;
+    return crypto.createHash('sha256').update(basis).digest('hex').slice(0, 32);
+  }
   const timeMs = t.closedAt ?? t.openedAt;
   let basis: string;
   if (timeMs != null && t.realizedPl != null) {
@@ -129,6 +142,7 @@ function toTradeView(row: FundedTradeRow): FundedTradeView {
     entryPrice: row.entryPrice,
     exitPrice: row.exitPrice,
     realizedPl: row.realizedPl,
+    status: row.status,
     openedAt: row.openedAt ? row.openedAt.getTime() : null,
     closedAt: row.closedAt ? row.closedAt.getTime() : null,
     notes: row.notes,
@@ -260,6 +274,7 @@ export async function addFundedTrade(
   if (!instrument) throw new Error('Instrument is required');
   const side: TradeSide = isSide(input.side) ? input.side : 'long';
   const units = cleanNum(input.units) ?? 0;
+  const status: FundedTradeStatus = input.status === 'open' ? 'open' : 'closed';
   const fields = {
     instrument: instrument.slice(0, 40),
     side,
@@ -282,6 +297,7 @@ export async function addFundedTrade(
       entryPrice: fields.entryPrice,
       exitPrice: fields.exitPrice,
       realizedPl: fields.realizedPl,
+      status,
       openedAt: fields.openedAt != null ? new Date(fields.openedAt) : null,
       closedAt: fields.closedAt != null ? new Date(fields.closedAt) : null,
       dedupKey: dedupKeyOf(fields),
@@ -297,6 +313,53 @@ export async function removeFundedTrade(userId: string, tradeId: string): Promis
     .delete(fundedTrades)
     .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)));
   return getFunded(userId);
+}
+
+// A still-open funded position, tagged with the trader who owns it, for the Live
+// Wall. These are prop-account positions (no broker API): the wall marks them
+// against the desk's OANDA price. They never touch tradingPositions, so they
+// stay off the Trade Log, History, and Live Brokers capital by construction.
+export interface FundedOpenPosition {
+  id: string;
+  userId: string;
+  owner: string; // that trader's username
+  platform: string; // e.g. "FTP"
+  accountLabel: string;
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  entryPrice: number;
+  openedAt: number | null;
+}
+
+// Every open funded position across the trading desk (owner-tagged), for the
+// shared Live Wall. Demo and non-trading users are excluded, mirroring the wall.
+export async function getDeskFundedOpenPositions(): Promise<FundedOpenPosition[]> {
+  const rows = await db
+    .select({ t: fundedTrades, acct: fundedAccounts, username: users.username, roles: users.roles })
+    .from(fundedTrades)
+    .innerJoin(fundedAccounts, eq(fundedAccounts.id, fundedTrades.accountId))
+    .innerJoin(users, eq(users.id, fundedTrades.userId))
+    .where(and(eq(fundedTrades.status, 'open'), isNull(fundedTrades.exitPrice)));
+  const out: FundedOpenPosition[] = [];
+  for (const r of rows) {
+    if (r.username === DEMO_USERNAME) continue;
+    if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
+    if (r.t.entryPrice == null) continue; // need a fill price to mark it
+    out.push({
+      id: r.t.id,
+      userId: r.t.userId,
+      owner: r.username,
+      platform: r.acct.platform,
+      accountLabel: r.acct.label,
+      instrument: r.t.instrument,
+      side: isSide(r.t.side) ? r.t.side : 'long',
+      units: r.t.units,
+      entryPrice: r.t.entryPrice,
+      openedAt: r.t.openedAt ? r.t.openedAt.getTime() : null,
+    });
+  }
+  return out;
 }
 
 // Lenient date parse for the date/time strings Claude reads off a screenshot.

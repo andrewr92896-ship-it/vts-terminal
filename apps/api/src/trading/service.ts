@@ -1,10 +1,11 @@
 import type { UserRow } from '../db/schema.js';
 import { BROKER_META, brokerMeta } from './config.js';
-import { fetchOandaTrades } from './brokers/oanda.js';
+import { fetchOandaTrades, fetchOandaPrices } from './brokers/oanda.js';
 import { fetchKrakenPositions } from './brokers/kraken.js';
 import { getManualTrades } from './manual.js';
+import { getDeskFundedOpenPositions } from './funded.js';
 import { sampleLiveTrades } from './sample.js';
-import { computeForex } from './forex.js';
+import { computeForex, forexPair } from './forex.js';
 import { reconcile } from './history.js';
 import {
   getAllActiveDecrypted,
@@ -86,6 +87,82 @@ function fillManualMarks(trades: LiveTrade[]): LiveTrade[] {
   });
 }
 
+// Normalize an instrument symbol for matching across notations ("EUR/USD",
+// "eur_usd", "EURUSD" all collapse to the same key).
+function normSym(s: string): string {
+  return s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+// Open funded/prop positions (FTP etc.) rendered as Live Wall trades, marked
+// against the desk's OANDA price. These carry no connectionId, so the reconcile
+// step never persists them — keeping them off the Trade Log, History, and Live
+// Brokers capital while still showing live P/L on the wall. Best-effort: if no
+// OANDA connection is available (or a symbol isn't priceable) the position still
+// shows with its fill, just without a live mark.
+async function loadFundedLiveTrades(conns: OwnedConnection[]): Promise<LiveTrade[]> {
+  const positions = await getDeskFundedOpenPositions();
+  if (positions.length === 0) return [];
+
+  const marks = new Map<string, number>();
+  const oanda = conns.find((c) => c.broker === 'oanda');
+  if (oanda) {
+    const cr = oanda.creds as OandaCreds;
+    const base = cr.env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com';
+    try {
+      const priced = await fetchOandaPrices(
+        { token: cr.token, accountId: cr.accountId, base },
+        positions.map((p) => p.instrument),
+      );
+      for (const [inst, mid] of priced) marks.set(normSym(inst), mid);
+    } catch {
+      /* leave marks empty — positions still render with their fill price */
+    }
+  }
+
+  return positions.map((p) => {
+    const mark = marks.get(normSym(p.instrument)) ?? null;
+    // FTP/Match-Trader reports forex size in LOTS (e.g. 0.50), but the pip-money
+    // math needs raw currency units (1 standard lot = 100,000). A forex size of
+    // 100 or less is a lot count, not raw units (nobody holds 0.5 units of a
+    // pair), so scale it up; larger values are already in units. Non-forex sizes
+    // are left as-is (they get no pip-money anyway).
+    const isForex = forexPair(p.instrument) != null;
+    const units = isForex && p.units > 0 && p.units <= 100 ? p.units * 100_000 : p.units;
+    const trade: LiveTrade = {
+      id: `funded:${p.id}`,
+      connectionId: '', // no broker connection → never reconciled into History/Trade Log
+      ownerId: p.userId,
+      owner: p.owner,
+      broker: 'ftp',
+      brokerName: p.platform || 'Funded Trading Plus',
+      instrument: p.instrument,
+      side: p.side,
+      units,
+      plannedEntry: null,
+      entryPrice: p.entryPrice,
+      currentPrice: mark,
+      takeProfit: null,
+      stopLoss: null,
+      trailingStopLoss: null,
+      slippage: null,
+      unrealizedPl: null,
+      strategy: null,
+      timeframe: null,
+      openedAt: p.openedAt,
+      forex: null,
+    };
+    const forex = computeForex(trade, 'USD');
+    trade.forex = forex;
+    // Derive open P/L from the pip math once we have a mark (forex only; other
+    // instruments keep a null P/L rather than guess a contract size).
+    trade.unrealizedPl =
+      forex && forex.pipsOpen != null && forex.moneyPerPip != null
+        ? Number((forex.pipsOpen * forex.moneyPerPip).toFixed(2))
+        : null;
+    return trade;
+  });
+}
+
 // Fetch open positions for a single broker connection. Never throws — a failed
 // connection just reports ok:false so one bad connection can't blank the wall.
 // Trade ids are re-keyed with the connection id so two accounts on the same
@@ -150,6 +227,11 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   // money positions to anyone who opens the demo.
   const conns = isDemoUser(user) ? [] : await getAllActiveDecrypted();
 
+  // Open funded/prop positions (e.g. FTP), marked against the desk's OANDA
+  // price. Kept separate from the broker feed so they never reconcile into the
+  // Trade Log / History / Live Brokers capital. Demo users never see them.
+  const fundedLive = isDemoUser(user) ? [] : await loadFundedLiveTrades(conns);
+
   // No connection anywhere on the desk → show the sample feed so the wall is
   // never blank. The sample is attributed to the viewer.
   if (conns.length === 0) {
@@ -158,7 +240,10 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
       ownerId: user.id,
       owner: user.username,
     }));
-    const trades = gateBalances(enrichForex(withSlippage(sample), 'USD'), canSeeBalances).sort(newestFirst);
+    const trades = gateBalances(
+      enrichForex(withSlippage([...sample, ...fundedLive]), 'USD'),
+      canSeeBalances,
+    ).sort(newestFirst);
     const brokers: BrokerLiveResult[] = BROKER_META.map((m) => ({
       connectionId: `sample-${m.key}`,
       ownerId: user.id,
@@ -195,7 +280,9 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   const withSlip = withSlippage(raw);
   await reconcilePerOwner(conns, brokers, withSlip);
 
-  const trades = gateBalances(withSlip, canSeeBalances).sort(newestFirst);
+  // Fold funded/prop positions in only after reconcile, so they show on the wall
+  // but never land in tradingPositions (Trade Log / History / Live Brokers).
+  const trades = gateBalances([...withSlip, ...fundedLive], canSeeBalances).sort(newestFirst);
   const failed = brokers.filter((b) => !b.ok);
   const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
 

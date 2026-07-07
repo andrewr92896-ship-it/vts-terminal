@@ -251,7 +251,11 @@ function TradeCard({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={ownerTag(mine)} title={mine ? `${t.owner} (you)` : t.owner}>@{t.owner}{mine ? ' · you' : ''}</span>
-          <span style={brokerTag}>{t.brokerName}</span>
+          {t.broker === 'ftp' ? (
+            <span style={ftpTag} title="Funded / prop position — priced off OANDA, and kept off the Trade Log & Live Brokers capital">{t.brokerName} · off-book</span>
+          ) : (
+            <span style={brokerTag}>{t.brokerName}</span>
+          )}
         </div>
       </div>
 
@@ -411,6 +415,17 @@ const brokerTag: CSSProperties = {
   color: MUTED,
   background: 'rgba(255,255,255,.04)',
   border: `1px solid ${BORDER2}`,
+  borderRadius: 5,
+  padding: '3px 7px',
+};
+// Funded/prop (FTP) positions are marked off OANDA but never count toward the
+// desk's broker capital — tag them so that's unmistakable on the wall.
+const ftpTag: CSSProperties = {
+  fontSize: 10,
+  fontWeight: 700,
+  color: GOLD,
+  background: 'rgba(235,203,116,.1)',
+  border: '1px solid rgba(235,203,116,.4)',
   borderRadius: 5,
   padding: '3px 7px',
 };

@@ -1,258 +1,265 @@
 {
- "version": "7",
- "dialect": "sqlite",
- "entries": [
-  {
-   "idx": 0,
-   "version": "6",
-   "when": 1781872491474,
-   "tag": "0000_remarkable_richard_fisk",
-   "breakpoints": true
-  },
-  {
-   "idx": 1,
-   "version": "6",
-   "when": 1781872491475,
-   "tag": "0001_todo_tables",
-   "breakpoints": true
-  },
-  {
-   "idx": 2,
-   "version": "6",
-   "when": 1781872491476,
-   "tag": "0002_kia_tables",
-   "breakpoints": true
-  },
-  {
-   "idx": 3,
-   "version": "6",
-   "when": 1781872491477,
-   "tag": "0003_account_username",
-   "breakpoints": true
-  },
-  {
-   "idx": 4,
-   "version": "6",
-   "when": 1781872491478,
-   "tag": "0004_user_roles",
-   "breakpoints": true
-  },
-  {
-   "idx": 5,
-   "version": "6",
-   "when": 1781872491479,
-   "tag": "0005_kia_month_settings",
-   "breakpoints": true
-  },
-  {
-   "idx": 6,
-   "version": "6",
-   "when": 1781872491480,
-   "tag": "0006_kia_pay_plan",
-   "breakpoints": true
-  },
-  {
-   "idx": 7,
-   "version": "6",
-   "when": 1781872491481,
-   "tag": "0007_kia_commission_split",
-   "breakpoints": true
-  },
-  {
-   "idx": 8,
-   "version": "6",
-   "when": 1781872491482,
-   "tag": "0008_wealth_clients",
-   "breakpoints": true
-  },
-  {
-   "idx": 9,
-   "version": "6",
-   "when": 1781872491483,
-   "tag": "0009_trading_trades",
-   "breakpoints": true
-  },
-  {
-   "idx": 10,
-   "version": "6",
-   "when": 1781872491484,
-   "tag": "0010_trading_alerts",
-   "breakpoints": true
-  },
-  {
-   "idx": 11,
-   "version": "6",
-   "when": 1781872491485,
-   "tag": "0011_tv_alerts",
-   "breakpoints": true
-  },
-  {
-   "idx": 12,
-   "version": "6",
-   "when": 1781872491486,
-   "tag": "0012_trading_positions",
-   "breakpoints": true
-  },
-  {
-   "idx": 13,
-   "version": "6",
-   "when": 1781872491487,
-   "tag": "0013_broker_connections",
-   "breakpoints": true
-  },
-  {
-   "idx": 14,
-   "version": "6",
-   "when": 1781872491488,
-   "tag": "0014_trading_challenges",
-   "breakpoints": true
-  },
-  {
-   "idx": 15,
-   "version": "6",
-   "when": 1781872491489,
-   "tag": "0015_personal_finance",
-   "breakpoints": true
-  },
-  {
-   "idx": 16,
-   "version": "6",
-   "when": 1781872491490,
-   "tag": "0016_trading_sessions",
-   "breakpoints": true
-  },
-  {
-   "idx": 17,
-   "version": "6",
-   "when": 1781872491491,
-   "tag": "0017_market_news",
-   "breakpoints": true
-  },
-  {
-   "idx": 18,
-   "version": "6",
-   "when": 1781872491492,
-   "tag": "0018_wealth_portfolios",
-   "breakpoints": true
-  },
-  {
-   "idx": 19,
-   "version": "6",
-   "when": 1781872491493,
-   "tag": "0019_wealth_plans",
-   "breakpoints": true
-  },
-  {
-   "idx": 20,
-   "version": "6",
-   "when": 1781872491494,
-   "tag": "0020_wealth_compliance",
-   "breakpoints": true
-  },
-  {
-   "idx": 21,
-   "version": "6",
-   "when": 1781872491495,
-   "tag": "0021_ai_usage",
-   "breakpoints": true
-  },
-  {
-   "idx": 22,
-   "version": "6",
-   "when": 1781872491496,
-   "tag": "0022_kia_mini",
-   "breakpoints": true
-  },
-  {
-   "idx": 23,
-   "version": "6",
-   "when": 1782269758913,
-   "tag": "0023_last_ravenous",
-   "breakpoints": true
-  },
-  {
-   "idx": 24,
-   "version": "6",
-   "when": 1782316992207,
-   "tag": "0024_glorious_salo",
-   "breakpoints": true
-  },
-  {
-   "idx": 25,
-   "version": "6",
-   "when": 1782321432253,
-   "tag": "0025_wealthy_excalibur",
-   "breakpoints": true
-  },
-  {
-   "idx": 26,
-   "version": "6",
-   "when": 1782334784747,
-   "tag": "0026_brown_william_stryker",
-   "breakpoints": true
-  },
-  {
-   "idx": 27,
-   "version": "6",
-   "when": 1782335936907,
-   "tag": "0027_overjoyed_eternals",
-   "breakpoints": true
-  },
-  {
-   "idx": 28,
-   "version": "6",
-   "when": 1782336036907,
-   "tag": "0028_push_subscriptions",
-   "breakpoints": true
-  },
-  {
-   "idx": 29,
-   "version": "6",
-   "when": 1782336136907,
-   "tag": "0029_pushover_users",
-   "breakpoints": true
-  },
-  {
-   "idx": 30,
-   "version": "6",
-   "when": 1782336236907,
-   "tag": "0030_trailing_stops",
-   "breakpoints": true
-  },
-  {
-   "idx": 31,
-   "version": "6",
-   "when": 1782336336907,
-   "tag": "0031_funded_platforms",
-   "breakpoints": true
-  },
-  {
-   "idx": 32,
-   "version": "6",
-   "when": 1782336436907,
-   "tag": "0032_study_vocab",
-   "breakpoints": true
-  },
-  {
-   "idx": 33,
-   "version": "6",
-   "when": 1782336536907,
-   "tag": "0033_study_starred",
-   "breakpoints": true
-  },
-  {
-   "idx": 34,
-   "version": "6",
-   "when": 1782336636908,
-   "tag": "0034_kia_hide_comm",
-   "breakpoints": true
-  },
-  {
-   "idx": 35,
-   "version": "6",
-   "when": 1782336736908,
-   "tag": "0035_study_sections",
-   "breakpoints": true
-  }
- ]
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1781872491474,
+      "tag": "0000_remarkable_richard_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781872491475,
+      "tag": "0001_todo_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781872491476,
+      "tag": "0002_kia_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1781872491477,
+      "tag": "0003_account_username",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1781872491478,
+      "tag": "0004_user_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781872491479,
+      "tag": "0005_kia_month_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781872491480,
+      "tag": "0006_kia_pay_plan",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781872491481,
+      "tag": "0007_kia_commission_split",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781872491482,
+      "tag": "0008_wealth_clients",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781872491483,
+      "tag": "0009_trading_trades",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781872491484,
+      "tag": "0010_trading_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1781872491485,
+      "tag": "0011_tv_alerts",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1781872491486,
+      "tag": "0012_trading_positions",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1781872491487,
+      "tag": "0013_broker_connections",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1781872491488,
+      "tag": "0014_trading_challenges",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1781872491489,
+      "tag": "0015_personal_finance",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1781872491490,
+      "tag": "0016_trading_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1781872491491,
+      "tag": "0017_market_news",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1781872491492,
+      "tag": "0018_wealth_portfolios",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1781872491493,
+      "tag": "0019_wealth_plans",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1781872491494,
+      "tag": "0020_wealth_compliance",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1781872491495,
+      "tag": "0021_ai_usage",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1781872491496,
+      "tag": "0022_kia_mini",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1782269758913,
+      "tag": "0023_last_ravenous",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1782316992207,
+      "tag": "0024_glorious_salo",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1782321432253,
+      "tag": "0025_wealthy_excalibur",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1782334784747,
+      "tag": "0026_brown_william_stryker",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "6",
+      "when": 1782335936907,
+      "tag": "0027_overjoyed_eternals",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "6",
+      "when": 1782336036907,
+      "tag": "0028_push_subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1782336136907,
+      "tag": "0029_pushover_users",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "6",
+      "when": 1782336236907,
+      "tag": "0030_trailing_stops",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "6",
+      "when": 1782336336907,
+      "tag": "0031_funded_platforms",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "6",
+      "when": 1782336436907,
+      "tag": "0032_study_vocab",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "6",
+      "when": 1782336536907,
+      "tag": "0033_study_starred",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "6",
+      "when": 1782336636908,
+      "tag": "0034_kia_hide_comm",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "6",
+      "when": 1782336736908,
+      "tag": "0035_study_sections",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "6",
+      "when": 1782336836908,
+      "tag": "0036_funded_trade_status",
+      "breakpoints": true
+    }
+  ]
 }

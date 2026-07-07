@@ -716,6 +716,54 @@ export async function tradingRoutes(app: FastifyInstance) {
       }
     },
   );
+
+  // Read a single OPEN position off an active-trade screenshot (Opus 4.8 vision)
+  // and log it as a live funded position: fill price + lot size + side. It then
+  // shows on the Live Wall, marked against the desk's OANDA price, without ever
+  // touching the Trade Log / History / Live Brokers capital.
+  app.post(
+    '/api/trading/funded/accounts/:id/positions/analyze',
+    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const parsed = analyzeSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'A screenshot image is required' });
+      let data = parsed.data.imageBase64;
+      let media: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' = parsed.data.mediaType ?? 'image/png';
+      const mm = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+      if (mm) {
+        media = mm[1] as typeof media;
+        data = mm[2];
+      }
+      const uid = request.currentUser!.id;
+      const id = (request.params as { id: string }).id;
+      try {
+        await enforceAiLimit(uid, 'funded_screenshot');
+        const { parsed: p, model } = await parsePositionScreenshot(data, media);
+        if (p.entryPrice == null || !p.instrument) {
+          return reply.code(422).send({
+            error: "Couldn't read an entry price and instrument from that screenshot. Add it by hand, or try a clearer image.",
+            parsed: p,
+          });
+        }
+        const funded = await addFundedTrade(uid, id, {
+          instrument: p.instrument,
+          side: p.side === 'short' ? 'short' : 'long',
+          units: p.units ?? 0,
+          entryPrice: p.entryPrice,
+          status: 'open',
+          openedAt: Date.now(),
+        });
+        return { funded, parsed: p, model };
+      } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+        const msg = err instanceof Error ? err.message : 'Analysis failed';
+        return reply.code(502).send({ error: msg });
+      }
+    },
+  );
 }
 
 const brokerKind = z.enum(BROKER_CONNECTION_KINDS);
