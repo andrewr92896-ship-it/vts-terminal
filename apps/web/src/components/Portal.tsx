@@ -43,11 +43,9 @@ import { FinanceOverview } from '../workspaces/finance/FinanceOverview';
 import { FinanceExpenses } from '../workspaces/finance/FinanceExpenses';
 import { FinanceNetWorth } from '../workspaces/finance/FinanceNetWorth';
 import { LiveWall } from '../workspaces/trading/LiveWall';
-import { TradeLog } from '../workspaces/trading/TradeLog';
+import { TradingDesk } from '../workspaces/trading/TradingDesk';
 import { Alerts } from '../workspaces/trading/Alerts';
-import { History } from '../workspaces/trading/History';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
-import { LiveBrokers } from '../workspaces/trading/LiveBrokers';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketNews } from '../workspaces/trading/MarketNews';
@@ -73,14 +71,19 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <LiveWall />;
     case 'alerts':
       return <Alerts onNavigate={onNavigate} />;
+    case 'desk':
+      return <TradingDesk />;
+    // Legacy screen keys — the Trade Log, History, and Live Brokers screens are
+    // now views inside the consolidated Trade Desk tab. Kept so deep links and
+    // in-app navigation (e.g. Alerts, the demo tour) still land on the right view.
     case 'log':
-      return <TradeLog />;
+      return <TradingDesk initialView="log" />;
     case 'history':
-      return <History />;
+      return <TradingDesk initialView="history" />;
+    case 'metrics':
+      return <TradingDesk initialView="brokers" />;
     case 'funded':
       return <FundedScreen />;
-    case 'metrics':
-      return <LiveBrokers />;
     case 'sessions':
       return <StrategySessions />;
     case 'news':

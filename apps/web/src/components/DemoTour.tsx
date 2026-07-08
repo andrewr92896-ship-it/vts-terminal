@@ -36,9 +36,9 @@ export const DEMO_STEPS: TourStep[] = [
   },
   {
     workspace: 'trading',
-    screen: 'log',
-    title: 'Trade Log',
-    body: 'A full journal of every trade with slippage, strategy tags, and realized P/L. Plain-English logging and recaps are powered by Claude.',
+    screen: 'desk',
+    title: 'Trade Desk',
+    body: 'The Trade Log, Live Brokers, and History views in one place: a full journal of every trade with slippage and realized P/L, live broker capital, and a breakdown of closed results. Plain-English logging and recaps are powered by Claude.',
   },
   {
     workspace: 'trading',
