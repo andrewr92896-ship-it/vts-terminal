@@ -109,7 +109,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
               aiConfigured={data.aiConfigured}
               readOnly={readOnly}
               onChanged={setData}
-              onViewTrade={() => onNavigate('log')}
+              onViewTrade={() => onNavigate('desk')}
             />
           ))}
         </div>

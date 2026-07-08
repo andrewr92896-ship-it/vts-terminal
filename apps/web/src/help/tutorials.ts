@@ -211,6 +211,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  desk: {
+    title: 'The Trade Desk',
+    intro: 'The Trade Log, Live Brokers, and History views in one place. Use the switch at the top to move between them — logging and reviewing trades, and your live broker capital, all under one tab.',
+    steps: [
+      {
+        title: 'Trade Log',
+        body: 'Your record of every trade — planned vs. actual entry, slippage, and realized P/L, with a per-trader filter and Deck / Tape layouts. Click “+ Log a trade” to add one; trades from a connected broker show up automatically.',
+      },
+      {
+        title: 'Live Brokers',
+        body: 'Your live broker capital (OANDA NAV, balance, open P/L), pulled from the broker API so it updates as trades are placed, with Today / This week / 30-day P/L. Shown to full traders only.',
+      },
+      {
+        title: 'History',
+        body: 'Closed trades across the desk, recorded automatically when a Live Wall position closes, with “By Strategy” and “By Instrument” breakdowns so you can see what’s working.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Each view has a “Hide $” toggle, and Privacy mode masks every figure at once — handy on a screen-share.',
+      },
+    ],
+  },
+
   log: {
     title: 'Using the Trade Log',
     intro: 'Your record of every trade — planned vs. actual entry, slippage, and realized P/L. New accounts start empty; log trades as you take them. Each log is private to your login.',
