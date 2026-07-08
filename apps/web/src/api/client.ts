@@ -161,6 +161,7 @@ export const api = {
   adminUpdateUser(
     id: string,
     patch: {
+      username?: string;
       displayName?: string;
       roles?: RoleKey[];
       active?: boolean;

@@ -13,6 +13,7 @@ const createSchema = z.object({
 });
 
 const updateSchema = z.object({
+  username: z.string().trim().min(1).max(64).optional(),
   displayName: z.string().trim().min(1).max(120).optional(),
   roles: z.array(z.enum(ROLE_KEYS)).optional(),
   active: z.boolean().optional(),

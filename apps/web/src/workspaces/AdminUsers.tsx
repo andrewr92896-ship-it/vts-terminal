@@ -45,6 +45,11 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [resetPw, setResetPw] = useState('');
 
+  // Inline edit state (display name + login) for one user at a time.
+  const [editFor, setEditFor] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
+
   // Two-step delete confirmation: holds the id of the user awaiting confirm.
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -97,14 +102,16 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     }
   }
 
-  async function patch(id: string, body: Parameters<typeof api.adminUpdateUser>[1]) {
+  async function patch(id: string, body: Parameters<typeof api.adminUpdateUser>[1]): Promise<boolean> {
     setBusyId(id);
     setActionError(null);
     try {
       await api.adminUpdateUser(id, body);
       await refresh();
+      return true;
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Action failed.');
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -115,9 +122,35 @@ export function AdminUsers({ theme }: { theme: Theme }) {
       setActionError('Temporary password must be at least 8 characters.');
       return;
     }
-    await patch(id, { password: resetPw });
-    setResetFor(null);
-    setResetPw('');
+    if (await patch(id, { password: resetPw })) {
+      setResetFor(null);
+      setResetPw('');
+    }
+  }
+
+  function startEdit(u: AdminUser) {
+    setEditFor(editFor === u.id ? null : u.id);
+    setEditName(u.displayName);
+    setEditUsername(u.username);
+    setActionError(null);
+  }
+
+  async function applyEdit(u: AdminUser) {
+    const dn = editName.trim();
+    const un = editUsername.trim();
+    if (!dn || !un) {
+      setActionError('Display name and username are required.');
+      return;
+    }
+    const body: Parameters<typeof api.adminUpdateUser>[1] = {};
+    if (dn !== u.displayName) body.displayName = dn;
+    if (un.toLowerCase() !== u.username) body.username = un;
+    // Nothing actually changed — just close the editor.
+    if (Object.keys(body).length === 0) {
+      setEditFor(null);
+      return;
+    }
+    if (await patch(u.id, body)) setEditFor(null);
   }
 
   async function remove(id: string) {
@@ -250,6 +283,14 @@ export function AdminUsers({ theme }: { theme: Theme }) {
 
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   <button
+                    onClick={() => startEdit(u)}
+                    disabled={busyId === u.id}
+                    style={editFor === u.id ? ghostActiveBtn(theme) : ghostBtn}
+                  >
+                    Edit
+                  </button>
+
+                  <button
                     onClick={() => {
                       setResetFor(resetFor === u.id ? null : u.id);
                       setResetPw('');
@@ -303,6 +344,55 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                     ))}
                 </div>
               </div>
+
+              {editFor === u.id && (
+                <div style={{ marginTop: 12 }}>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr',
+                      gap: 10,
+                    }}
+                  >
+                    <div>
+                      <label style={fieldLabel}>Display name</label>
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Jane Smith"
+                        style={inputStyle}
+                      />
+                    </div>
+                    <div>
+                      <label style={fieldLabel}>Login (username)</label>
+                      <input
+                        value={editUsername}
+                        onChange={(e) => setEditUsername(e.target.value)}
+                        placeholder="jsmith"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        style={inputStyle}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button
+                      onClick={() => applyEdit(u)}
+                      disabled={busyId === u.id}
+                      style={{ ...primaryBtn(theme, accentGrad), opacity: busyId === u.id ? 0.6 : 1 }}
+                    >
+                      {busyId === u.id ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      onClick={() => setEditFor(null)}
+                      disabled={busyId === u.id}
+                      style={ghostBtn}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {confirmDeleteId === u.id && (
                 <div style={{ ...msgStyle(false), marginTop: 10 }}>
@@ -502,6 +592,16 @@ const ghostBtn: CSSProperties = {
   cursor: 'pointer',
   minHeight: 40,
 };
+
+// Ghost button in its "open" state — used to show the Edit panel is active.
+function ghostActiveBtn(theme: Theme): CSSProperties {
+  return {
+    ...ghostBtn,
+    border: `1px solid ${theme.accent}`,
+    background: 'rgba(255,255,255,.06)',
+    color: '#eef3ff',
+  };
+}
 
 const dangerBtn: CSSProperties = {
   border: '1px solid rgba(239,84,104,.4)',

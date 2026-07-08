@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   users,
@@ -123,6 +123,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
 }
 
 export interface UpdateUserInput {
+  username?: string;
   displayName?: string;
   roles?: string[];
   active?: boolean;
@@ -153,6 +154,19 @@ export async function updateUser(
 
   const patch: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
 
+  if (input.username != null) {
+    const username = input.username.trim().toLowerCase();
+    if (!username) throw new AdminError('Username cannot be empty');
+    // Renaming only changes the login; `createdUsername` stays as-is so the
+    // account is still recognizable in this admin view.
+    const clash = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.username, username), ne(users.id, targetId)))
+      .limit(1);
+    if (clash[0]) throw new AdminError('That username is already taken');
+    patch.username = username;
+  }
   if (input.displayName != null) {
     const dn = input.displayName.trim();
     if (!dn) throw new AdminError('Display name cannot be empty');
