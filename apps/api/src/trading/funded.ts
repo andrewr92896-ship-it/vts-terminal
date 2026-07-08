@@ -315,6 +315,70 @@ export async function removeFundedTrade(userId: string, tradeId: string): Promis
   return getFunded(userId);
 }
 
+// Close an OPEN funded position: stamp its exit price and realized P/L and flip
+// it to 'closed', which also drops it off the Live Wall. Used by the "post the
+// result screenshot" flow (and works for a hand close too). At least an exit
+// price or a realized P/L is required. When the result screenshot also shows the
+// account balance/equity, `newBalance` keeps the account's balance current, the
+// same way importing trades does.
+export async function closeFundedTrade(
+  userId: string,
+  tradeId: string,
+  input: { exitPrice?: number | null; realizedPl?: number | null; closedAt?: number | null; newBalance?: number | null },
+): Promise<FundedData> {
+  const existing = (
+    await db
+      .select()
+      .from(fundedTrades)
+      .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!existing) throw new Error('Trade not found');
+  const exitPrice = cleanNum(input.exitPrice);
+  const realizedPl = cleanNum(input.realizedPl);
+  if (exitPrice == null && realizedPl == null) {
+    throw new Error('An exit price or realized P/L is required to close the trade');
+  }
+  const closedAt = cleanNum(input.closedAt) ?? Date.now();
+
+  // Recompute the fingerprint to the closed form (time + profit), so if this same
+  // trade later appears in an imported history screenshot it dedupes instead of
+  // double-logging. Fall back to the original key if that would collide with an
+  // already-closed trade on the account (the unique (account_id, dedup_key)).
+  const side: TradeSide = isSide(existing.side) ? existing.side : 'long';
+  const newKey = dedupKeyOf({
+    instrument: existing.instrument,
+    side,
+    units: existing.units,
+    entryPrice: existing.entryPrice,
+    exitPrice,
+    realizedPl,
+    openedAt: existing.openedAt ? existing.openedAt.getTime() : null,
+    closedAt,
+  });
+  const base = { exitPrice, realizedPl, status: 'closed' as const, closedAt: new Date(closedAt) };
+  try {
+    await db
+      .update(fundedTrades)
+      .set({ ...base, dedupKey: newKey })
+      .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)));
+  } catch {
+    await db
+      .update(fundedTrades)
+      .set(base)
+      .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)));
+  }
+
+  const balance = cleanNum(input.newBalance);
+  if (balance != null) {
+    await db
+      .update(fundedAccounts)
+      .set({ balance, updatedAt: new Date() })
+      .where(and(eq(fundedAccounts.id, existing.accountId), eq(fundedAccounts.userId, userId)));
+  }
+  return getFunded(userId);
+}
+
 // A still-open funded position, tagged with the trader who owns it, for the Live
 // Wall. These are prop-account positions (no broker API): the wall marks them
 // against the desk's OANDA price. They never touch tradingPositions, so they

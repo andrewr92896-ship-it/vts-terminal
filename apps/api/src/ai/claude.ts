@@ -356,6 +356,71 @@ export async function parseTradeHistoryScreenshot(
   return { parsed, raw, model };
 }
 
+// The RESULT of a single trade that has just closed, read off a screenshot, so
+// an open funded position can be marked closed with its exit and P/L.
+export interface ParsedTradeResult {
+  instrument: string | null;
+  side: 'long' | 'short' | 'unknown';
+  exitPrice: number | null;
+  realizedPl: number | null;
+  closedAt: string | null; // a date/time string as shown, parsed leniently by the caller
+  balance: number | null; // account balance after the trade, if shown
+  equity: number | null; // account equity, if shown
+  summary: string;
+}
+
+const RESULT_SYSTEM = `You read the RESULT of a SINGLE trade that has just CLOSED, from a broker or prop-firm screenshot (a closed-position confirmation, a filled closing order, a trade result / receipt card, or a highlighted row in a closed-trades list). Extract the outcome so the trade can be marked closed.
+
+Respond with ONLY a JSON object (no prose, no code fences) of exactly this shape:
+{
+  "instrument": string | null,   // e.g. "EUR/USD", "XAU/USD", "US30", "NVDA". Normalize forex to BASE/QUOTE with a slash.
+  "side": "long" | "short" | "unknown",   // buy = long, sell = short
+  "exitPrice": number | null,    // the close / exit / fill-out price
+  "realizedPl": number | null,   // the trade's profit or loss, a plain number (NEGATIVE for a loss)
+  "closedAt": string | null,     // the close date/time exactly as shown, else null
+  "balance": number | null,      // the account balance after the trade, if shown, else null
+  "equity": number | null,       // the account equity (balance + open P/L), if shown, else null
+  "summary": string              // 1 sentence describing the result you read
+}
+Strip currency symbols and commas from numbers ("$1,250.50" -> 1250.5; a loss shown as "-$300" or "(300)" -> -300). Use null for anything you cannot read with confidence. Keep the summary under 200 characters.`;
+
+// Opus 4.8 vision: read a closed-trade result screenshot (exit price + P/L) so a
+// live funded position can be closed out.
+export async function parseTradeResultScreenshot(
+  imageBase64: string,
+  mediaType: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp',
+): Promise<{ parsed: ParsedTradeResult; raw: string; model: string }> {
+  const model = config.ANTHROPIC_MODEL_ANALYSIS;
+  const message = await getClient().messages.create({
+    model,
+    max_tokens: 1500,
+    thinking: { type: 'adaptive' },
+    system: RESULT_SYSTEM,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
+          { type: 'text', text: 'Read the closed-trade result (exit price and profit/loss) from this screenshot.' },
+        ],
+      },
+    ],
+  });
+  const raw = textOf(message);
+  const json = (extractJson(raw) ?? {}) as Partial<ParsedTradeResult>;
+  const parsed: ParsedTradeResult = {
+    instrument: typeof json.instrument === 'string' && json.instrument.trim() ? json.instrument.trim() : null,
+    side: json.side === 'long' || json.side === 'short' ? json.side : 'unknown',
+    exitPrice: num(json.exitPrice),
+    realizedPl: num(json.realizedPl),
+    closedAt: typeof json.closedAt === 'string' ? json.closedAt.slice(0, 40) : null,
+    balance: num(json.balance),
+    equity: num(json.equity),
+    summary: typeof json.summary === 'string' ? json.summary.slice(0, 200) : raw.slice(0, 200),
+  };
+  return { parsed, raw, model };
+}
+
 // Sonnet 4.6: the site-wide assistant (Ask Claude, product knowledge, parsing).
 export async function askClaude(prompt: string, system?: string): Promise<string> {
   const message = await getClient().messages.create({

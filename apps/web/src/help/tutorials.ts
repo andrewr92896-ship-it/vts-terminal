@@ -140,6 +140,14 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Add prop accounts with “+ Add account”. Log trades by pasting a trade-history screenshot — Claude reads the trades and the account equity, skips duplicates (by time + profit), and shows each account’s balance and Today / This week / 30-day P/L. The “Paste funded trades” button at the top can create an account on the fly.',
       },
       {
+        title: 'Close a trade by its result',
+        body: 'An OPEN position (tracked live on the Live Wall) has a “Close” button on its row. Click it, then paste or upload the trade-result screenshot — Claude reads the exit price and realized P/L, marks the trade closed, and it comes off the Live Wall. The account balance updates too if the screenshot shows it.',
+      },
+      {
+        title: 'Deleting an account',
+        body: 'The “Delete” button asks you to confirm in a pop-up first — deleting an account removes it and all of its trades, and can’t be undone.',
+      },
+      {
         title: 'Hide dollar details',
         body: 'Use “Hide $” or Privacy mode to mask every figure on the page at once. Percentages and drawdown buffers still show.',
       },

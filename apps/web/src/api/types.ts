@@ -744,6 +744,21 @@ export interface FundedImportResult {
   summary: string;
   model: string;
 }
+// Result of closing an open funded position from a trade-result screenshot.
+export interface FundedCloseResult {
+  funded: FundedData;
+  parsed: {
+    instrument: string | null;
+    side: 'long' | 'short' | 'unknown';
+    exitPrice: number | null;
+    realizedPl: number | null;
+    closedAt: string | null;
+    balance: number | null;
+    equity: number | null;
+    summary: string;
+  };
+  model: string;
+}
 // Result of reading a single OPEN position off an active-trade screenshot and
 // logging it as a live funded position (shown on the Live Wall).
 export interface FundedPositionResult {

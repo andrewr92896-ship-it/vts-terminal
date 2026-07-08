@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.3';
+export const APP_VERSION = 'Beta V 2.4';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.4',
+    date: 'July 8, 2026',
+    notes: [
+      'Funded: close an open (live-tracked) position by posting its result. Each open trade now has a “Close” button — paste or upload the trade-result screenshot and Claude reads the exit price and realized P/L, marks it closed, and takes it off the Live Wall.',
+      'Funded: deleting an account now asks you to confirm in a clear pop-up first, so you can’t remove an account and all its trades by accident.',
+    ],
+  },
   {
     version: 'Beta V 2.3',
     date: 'July 8, 2026',

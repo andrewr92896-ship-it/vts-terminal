@@ -20,6 +20,7 @@ import {
   removeFundedAccount,
   addFundedTrade,
   removeFundedTrade,
+  closeFundedTrade,
   importFundedTrades,
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
@@ -56,6 +57,7 @@ import {
   parsePositionScreenshot,
   parseAccountScreenshot,
   parseTradeHistoryScreenshot,
+  parseTradeResultScreenshot,
 } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
@@ -755,6 +757,53 @@ export async function tradingRoutes(app: FastifyInstance) {
           entryPrice: p.entryPrice,
           status: 'open',
           openedAt: Date.now(),
+        });
+        return { funded, parsed: p, model };
+      } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+        const msg = err instanceof Error ? err.message : 'Analysis failed';
+        return reply.code(502).send({ error: msg });
+      }
+    },
+  );
+
+  // Close an OPEN funded position by posting a trade-RESULT screenshot (Opus 4.8
+  // vision): read the exit price and realized P/L, mark the trade closed (which
+  // drops it off the Live Wall), and keep the account balance current if shown.
+  app.post(
+    '/api/trading/funded/trades/:id/close',
+    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const parsed = analyzeSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'A screenshot image is required' });
+      let data = parsed.data.imageBase64;
+      let media: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' = parsed.data.mediaType ?? 'image/png';
+      const mm = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+      if (mm) {
+        media = mm[1] as typeof media;
+        data = mm[2];
+      }
+      const uid = request.currentUser!.id;
+      const id = (request.params as { id: string }).id;
+      try {
+        await enforceAiLimit(uid, 'funded_screenshot');
+        const { parsed: p, model } = await parseTradeResultScreenshot(data, media);
+        if (p.exitPrice == null && p.realizedPl == null) {
+          return reply.code(422).send({
+            error: "Couldn't read an exit price or profit/loss from that screenshot. Close it by hand, or try a clearer image.",
+            parsed: p,
+          });
+        }
+        const closedMs = p.closedAt ? Date.parse(p.closedAt) : NaN;
+        const funded = await closeFundedTrade(uid, id, {
+          exitPrice: p.exitPrice,
+          realizedPl: p.realizedPl,
+          closedAt: Number.isNaN(closedMs) ? undefined : closedMs,
+          // Prefer equity (balance + open P/L) when shown, else the balance.
+          newBalance: p.equity ?? p.balance,
         });
         return { funded, parsed: p, model };
       } catch (err) {
