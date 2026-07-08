@@ -1,5 +1,13 @@
-// Per-workspace themes, brand, and tabs — values taken verbatim from the
-// prototype so the look matches exactly.
+// Per-workspace themes, brand, and tabs.
+//
+// The portal is unified onto one calm, warm-neutral dark palette ("Claude-clean")
+// defined in `tokens.ts`. Every workspace now shares the same flat surfaces,
+// hairline borders, and clay accent — the only per-workspace difference is a
+// subtle `identity` color (active-tab underline + wordmark) for wayfinding.
+// The `Theme` shape is kept intact so existing screens keep compiling; the
+// values just point at the shared tokens now.
+
+import { color, workspaceIdentity } from './tokens';
 
 export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'wealth' | 'finance';
 
@@ -9,74 +17,38 @@ export interface Theme {
   headerBorder: string; // prototype "hb"
   navBg: string;
   navBorder: string;
-  accent: string;
-  accent2: string;
-  accentText: string;
+  accent: string; // primary action / active color (clay, shared)
+  accent2: string; // accent hover / gradient stop
+  accentText: string; // text on a solid accent fill
+  identity: string; // subtle per-workspace wayfinding color
+}
+
+// One shared surface set for every workspace — flat, warm, no gradient washes.
+function makeTheme(identity: string): Theme {
+  return {
+    pageBg: color.bg,
+    headerBg: color.surface,
+    headerBorder: color.border,
+    navBg: color.bg,
+    navBorder: color.border,
+    accent: color.accent,
+    accent2: color.accentHover,
+    accentText: color.onAccent,
+    identity,
+  };
 }
 
 export const THEMES: Record<WorkspaceKey, Theme> = {
-  wealth: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0c2a20 0%,#06140e 60%)',
-    headerBg: 'linear-gradient(90deg,#0a241b 0%,#0f3527 100%)',
-    headerBorder: '#1d4a38',
-    navBg: '#0a201a',
-    navBorder: '#173f30',
-    accent: '#34b87a',
-    accent2: '#239160',
-    accentText: '#05231a',
-  },
-  studies: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#241a3d 0%,#120d22 60%)',
-    headerBg: 'linear-gradient(90deg,#1c1436 0%,#2a1f4e 100%)',
-    headerBorder: '#3a2d63',
-    navBg: '#171029',
-    navBorder: '#2a1f4e',
-    accent: '#b69cff',
-    accent2: '#8a6fe0',
-    accentText: '#1a1030',
-  },
-  trading: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0d2150 0%,#060f24 55%)',
-    headerBg: 'linear-gradient(90deg,#0a1f4d 0%,#0c2768 100%)',
-    headerBorder: '#1c3a7a',
-    navBg: '#0a1834',
-    navBorder: '#16294f',
-    accent: '#EBCB74',
-    accent2: '#C9A24B',
-    accentText: '#0c2768',
-  },
-  kia: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1c1f25 0%,#0a0b0d 60%)',
-    headerBg: 'linear-gradient(90deg,#141518 0%,#202227 100%)',
-    headerBorder: '#2c2f36',
-    navBg: '#141518',
-    navBorder: '#26282e',
-    accent: '#BB162B',
-    accent2: '#8d0f20',
-    accentText: '#ffffff',
-  },
-  todo: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1b2c3b 0%,#0d1620 60%)',
-    headerBg: 'linear-gradient(90deg,#15212e 0%,#1d3344 100%)',
-    headerBorder: '#284158',
-    navBg: '#15212e',
-    navBorder: '#1d3344',
-    accent: '#46c2a8',
-    accent2: '#2f9e86',
-    accentText: '#06231d',
-  },
-  finance: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1a1f44 0%,#0a0e22 60%)',
-    headerBg: 'linear-gradient(90deg,#15193a 0%,#222a5e 100%)',
-    headerBorder: '#2e3766',
-    navBg: '#12162f',
-    navBorder: '#262e57',
-    accent: '#6f8bff',
-    accent2: '#4f63d6',
-    accentText: '#0a0e22',
-  },
+  trading: makeTheme(workspaceIdentity.trading),
+  kia: makeTheme(workspaceIdentity.kia),
+  studies: makeTheme(workspaceIdentity.studies),
+  todo: makeTheme(workspaceIdentity.todo),
+  wealth: makeTheme(workspaceIdentity.wealth),
+  finance: makeTheme(workspaceIdentity.finance),
 };
 
+// Kept for backward compatibility with callers. Now a near-flat clay fill
+// (restraint over glow); the old signature (accent → accent2) is preserved.
 export function accentGradient(t: Theme): string {
   return `linear-gradient(180deg,${t.accent},${t.accent2})`;
 }
