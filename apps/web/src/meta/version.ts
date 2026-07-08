@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.2';
+export const APP_VERSION = 'Beta V 2.3';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.3',
+    date: 'July 8, 2026',
+    notes: [
+      'Updates now pop up an “Update available” prompt on any screen the moment a new version is deployed — click “Relaunch to update” to apply it, instead of only noticing when you opened the Studies tab.',
+      'Trading: the Trade Log, Live Brokers, and History sections are combined into one “Trade Desk” tab, with a switch at the top to move between them.',
+    ],
+  },
   {
     version: 'Beta V 2.2',
     date: 'July 5, 2026',

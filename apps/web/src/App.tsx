@@ -1,13 +1,16 @@
+import type { ReactNode } from 'react';
 import { useAuth } from './auth/AuthContext';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
 import { Portal } from './components/Portal';
+import { UpdatePrompt } from './components/UpdatePrompt';
 
 export function App() {
   const { user, loading } = useAuth();
 
+  let content: ReactNode;
   if (loading) {
-    return (
+    content = (
       <div
         style={{
           minHeight: '100vh',
@@ -24,10 +27,21 @@ export function App() {
         Loading portal...
       </div>
     );
+  } else if (!user) {
+    content = <Login />;
+  } else if (user.mustChangePassword) {
+    // Accounts created or reset by an admin must set a new password first.
+    content = <ChangePassword />;
+  } else {
+    content = <Portal />;
   }
 
-  if (!user) return <Login />;
-  // Accounts created or reset by an admin must set a new password first.
-  if (user.mustChangePassword) return <ChangePassword />;
-  return <Portal />;
+  // The "Update available" popup lives outside the auth branches so it can show
+  // on every screen — the loading splash, the login page, and any workspace.
+  return (
+    <>
+      {content}
+      <UpdatePrompt />
+    </>
+  );
 }

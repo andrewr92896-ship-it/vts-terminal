@@ -11,11 +11,15 @@ export default defineConfig({
     // This is additive: it only adds a manifest, icons, and a service worker,
     // and never touches app features, layout, or the desktop experience.
     VitePWA({
-      // The portal deploys often, so the worker must update itself and take
-      // control automatically. A returning user never gets a stale bundle.
-      registerType: 'autoUpdate',
-      // Let the plugin inject the registration for us, with no hand-written
-      // service worker file to maintain.
+      // The portal deploys often. We surface a visible "Update available"
+      // prompt (see UpdatePrompt) rather than swapping the worker silently:
+      // in prompt mode the new worker waits until the user clicks Relaunch,
+      // so the running page keeps serving its own chunks (no broken lazy
+      // imports) until they choose to apply the update.
+      registerType: 'prompt',
+      // Registration is handled by the useRegisterSW() hook in UpdatePrompt;
+      // 'auto' skips injecting a duplicate registration script when that
+      // virtual module is imported.
       injectRegister: 'auto',
       manifest: {
         name: 'VTS Portal',
