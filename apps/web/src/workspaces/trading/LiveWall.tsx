@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
+import { readClipboardImage } from '../../lib/clipboard';
 import { BrokerConnections } from './BrokerConnections';
 import type { ForexMetrics, LiveTrade, LiveWall as LiveWallData } from '../../api/types';
 
@@ -196,9 +197,11 @@ export function LiveWall() {
               key={t.id}
               t={t}
               mine={t.ownerId === user?.id}
+              readOnly={readOnly}
               showMoney={showMoney}
               showFxMoney={!privacy && !hideMoney}
               canSeeBalances={data.canSeeBalances}
+              onClosed={() => void load()}
             />
           ))}
         </div>
@@ -210,22 +213,55 @@ export function LiveWall() {
 function TradeCard({
   t,
   mine,
+  readOnly,
   showMoney,
   showFxMoney,
   canSeeBalances,
+  onClosed,
 }: {
   t: LiveTrade;
   mine: boolean; // the position is on the viewer's own broker account
+  readOnly: boolean;
   showMoney: boolean;
   // Forex pip money is shown to every trader (not balance-gated), but still
   // hidden by the privacy and Hide-$ toggles.
   showFxMoney: boolean;
   canSeeBalances: boolean;
+  onClosed: () => void;
 }) {
   const long = t.side === 'long';
   const sideColor = long ? GREEN : RED;
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
+
+  // A funded (FTP off-book) position the viewer owns can be closed right here on
+  // the wall: its id is `funded:<tradeId>`. Closing reads a trade-result
+  // screenshot to stamp the exit/P-L and drop it off the wall.
+  const fundedTradeId = t.broker === 'ftp' && t.id.startsWith('funded:') ? t.id.slice('funded:'.length) : null;
+  const canClose = mine && !readOnly && fundedTradeId != null;
+  const [closing, setClosing] = useState(false);
+  const [closeBusy, setCloseBusy] = useState(false);
+  const [closeErr, setCloseErr] = useState<string | null>(null);
+  const closeFileRef = useRef<HTMLInputElement | null>(null);
+
+  function closeFromShot(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/') || !fundedTradeId) return;
+    setCloseErr(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setCloseBusy(true);
+      try {
+        await api.closeFundedTrade(fundedTradeId, { imageBase64: reader.result as string, mediaType: file.type });
+        setClosing(false);
+        onClosed(); // reload the wall — the position drops off once it's closed
+      } catch (e) {
+        setCloseErr(e instanceof ApiError ? e.message : 'Could not read that trade-result screenshot');
+      } finally {
+        setCloseBusy(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
 
   let plNode: React.ReactNode;
   if (!canSeeBalances) {
@@ -311,6 +347,41 @@ function TradeCard({
           {etSince(t.openedAt)}
         </span>
       </div>
+
+      {/* Close trade — funded (off-book) positions the viewer owns */}
+      {canClose && (
+        <div style={{ borderTop: `1px solid ${BORDER}`, padding: '10px 14px', background: PANEL }}>
+          {!closing ? (
+            <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}>Close trade</button>
+          ) : (
+            <div>
+              <div style={{ fontSize: 11, color: MUTED, marginBottom: 9, lineHeight: 1.45 }}>
+                Paste or upload a screenshot of the <b>closed</b> trade — Claude reads the exit price and P/L to finalize it, and
+                it drops off the wall into your funded account’s logged P/L. Or cancel to leave it open.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={async () => {
+                    const file = await readClipboardImage();
+                    if (file) closeFromShot(file);
+                    else setCloseErr('No image found on the clipboard — copy a screenshot first, or use Upload photo.');
+                  }}
+                  disabled={closeBusy}
+                  style={{ ...ghostBtnSm, opacity: closeBusy ? 0.6 : 1 }}
+                >
+                  Paste screenshot
+                </button>
+                <button onClick={() => closeFileRef.current?.click()} disabled={closeBusy} style={{ ...goldBtnSm, opacity: closeBusy ? 0.6 : 1 }}>
+                  {closeBusy ? 'Reading…' : 'Upload photo'}
+                </button>
+                <input ref={closeFileRef} type="file" accept="image/*" onChange={(e) => { closeFromShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
+                <button onClick={() => setClosing(false)} disabled={closeBusy} style={ghostBtnSm}>Cancel</button>
+              </div>
+              {closeErr && <div style={{ fontSize: 11, color: RED, marginTop: 9 }}>{closeErr}</div>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -399,6 +470,19 @@ const goldBtn: CSSProperties = {
   fontWeight: 700,
   fontSize: 11.5,
   padding: '8px 14px',
+  borderRadius: 7,
+  cursor: 'pointer',
+};
+const ghostBtnSm: CSSProperties = { ...ghostBtn, fontSize: 11, padding: '6px 10px' };
+const goldBtnSm: CSSProperties = { ...goldBtn, fontSize: 11, padding: '6px 11px' };
+// Close-trade CTA on a funded card — green to echo the "off-book / live" accent.
+const closeTradeBtn: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  color: '#bff0d4',
+  background: 'rgba(53,196,123,.1)',
+  border: '1px solid rgba(53,196,123,.5)',
+  padding: '7px 13px',
   borderRadius: 7,
   cursor: 'pointer',
 };
