@@ -274,6 +274,13 @@
       "when": 1782337036908,
       "tag": "0038_study_tests",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "6",
+      "when": 1782337136908,
+      "tag": "0039_study_test_progress",
+      "breakpoints": true
     }
   ]
 }
