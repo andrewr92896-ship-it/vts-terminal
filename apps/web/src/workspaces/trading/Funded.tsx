@@ -369,6 +369,8 @@ function AccountCard({
               readOnly={readOnly}
               busy={busy}
               liveMark={priceFor(t.instrument)}
+              onData={onData}
+              onError={onError}
               onRemove={() => {
                 if (window.confirm(`Remove this ${t.instrument} trade from ${a.label}?`)) void run(api.removeFundedTrade(t.id));
               }}
@@ -388,6 +390,8 @@ function TradeRow({
   readOnly,
   busy,
   liveMark,
+  onData,
+  onError,
   onRemove,
 }: {
   t: FundedTrade;
@@ -397,6 +401,8 @@ function TradeRow({
   readOnly: boolean;
   busy: boolean;
   liveMark: LiveMark | null;
+  onData: (d: FundedData) => void;
+  onError: (e: string | null) => void;
   onRemove: () => void;
 }) {
   const long = t.side === 'long';
@@ -406,31 +412,108 @@ function TradeRow({
   // instrument so the Exit column shows the current price instead of a dash.
   const isOpen = t.status === 'open';
   const showLive = isOpen && liveMark != null;
+
+  // Close flow for an OPEN position: paste/upload a trade-result screenshot that
+  // Claude reads to finalize this trade (exit + P/L), or cancel and change nothing.
+  const [closing, setClosing] = useState(false);
+  const [closeBusy, setCloseBusy] = useState(false);
+  const [closeMsg, setCloseMsg] = useState<string | null>(null);
+  const closeFileRef = useRef<HTMLInputElement | null>(null);
+
+  function closeFromShot(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/')) return;
+    setCloseMsg(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setCloseBusy(true);
+      onError(null);
+      try {
+        const res = await api.closeFundedTrade(t.id, { imageBase64: reader.result as string, mediaType: file.type });
+        onData(res.funded);
+        setClosing(false);
+        const pl = res.result?.realizedPl;
+        setCloseMsg(pl != null ? `Trade closed — P/L ${money(pl, ccy)}.` : 'Trade closed.');
+      } catch (e) {
+        onError(e instanceof ApiError ? e.message : 'Could not read that trade-result screenshot');
+      } finally {
+        setCloseBusy(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
   return (
-    <div style={{ ...row, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
-      <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        {t.instrument}
-        {isOpen && <span style={openPill} title="Open position — tracked live on the Live Wall">OPEN</span>}
-      </span>
-      <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
-      <span style={col}>{fmtPrice(t.entryPrice)}</span>
-      <span style={col}>
-        {showLive ? (
-          <span title={`Live mark from the Live Wall — ${liveMark!.instrument} @ ${liveMark!.owner}`} style={{ color: GOLD, fontWeight: 700 }}>
-            {fmtPrice(liveMark!.price)}<span style={{ fontSize: 8, marginLeft: 3, verticalAlign: 'top' }}>●</span>
+    <>
+      <div style={{ ...row, borderBottom: closing ? 'none' : `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
+        <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {t.instrument}
+          {isOpen && <span style={openPill} title="Open position — tracked live on the Live Wall">OPEN</span>}
+        </span>
+        <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
+        <span style={col}>{fmtPrice(t.entryPrice)}</span>
+        <span style={col}>
+          {showLive ? (
+            <span title={`Live mark from the Live Wall — ${liveMark!.instrument} @ ${liveMark!.owner}`} style={{ color: GOLD, fontWeight: 700 }}>
+              {fmtPrice(liveMark!.price)}<span style={{ fontSize: 8, marginLeft: 3, verticalAlign: 'top' }}>●</span>
+            </span>
+          ) : (
+            fmtPrice(t.exitPrice)
+          )}
+        </span>
+        <span style={col}>{t.units || '—'}</span>
+        <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: t.realizedPl == null ? MUTED : plUp ? GREEN : RED }}>{plText}</span>
+        <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.closedAt ?? t.openedAt)}</span>
+        {!readOnly && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {isOpen && (
+              <button
+                onClick={() => { setCloseMsg(null); setClosing((v) => !v); }}
+                title="Close this trade using its result screenshot"
+                style={closeTradeBtn}
+              >
+                {closing ? 'Cancel' : 'Close trade'}
+              </button>
+            )}
+            <button onClick={() => !busy && !closeBusy && onRemove()} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
           </span>
-        ) : (
-          fmtPrice(t.exitPrice)
         )}
-      </span>
-      <span style={col}>{t.units || '—'}</span>
-      <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: t.realizedPl == null ? MUTED : plUp ? GREEN : RED }}>{plText}</span>
-      <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.closedAt ?? t.openedAt)}</span>
-      {!readOnly &&
-        (
-          <button onClick={() => !busy && onRemove()} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
-        )}
-    </div>
+      </div>
+
+      {!readOnly && isOpen && closing && (
+        <div style={{ padding: '0 16px 12px', borderBottom: `1px solid ${BORDER}` }}>
+          <div style={panel}>
+            <div style={panelLabel}>Close {t.instrument} — paste the trade result</div>
+            <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
+              Paste or upload a screenshot of the <b>closed</b> trade. Claude reads the exit price and P/L and finalizes it — the
+              position drops off the Live Wall and lands in this account’s logged P/L. Or cancel to leave the trade open.
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={async () => {
+                  const file = await readClipboardImage();
+                  if (file) closeFromShot(file);
+                  else onError('No image found on the clipboard — copy a screenshot first, or use Upload photo.');
+                }}
+                disabled={closeBusy}
+                title="Paste a trade-result screenshot from your clipboard"
+                style={{ ...ghostBtn, opacity: closeBusy ? 0.6 : 1 }}
+              >
+                Paste screenshot
+              </button>
+              <button onClick={() => closeFileRef.current?.click()} disabled={closeBusy} title="Upload a photo or screenshot of the closed trade" style={{ ...goldBtn, opacity: closeBusy ? 0.6 : 1 }}>
+                {closeBusy ? 'Reading…' : 'Upload photo'}
+              </button>
+              <input ref={closeFileRef} type="file" accept="image/*" onChange={(e) => { closeFromShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
+              <button onClick={() => setClosing(false)} disabled={closeBusy} style={ghostBtn}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {closeMsg && !closing && (
+        <div style={{ fontSize: 11.5, color: GREEN, padding: '0 16px 10px', borderBottom: `1px solid ${BORDER}` }}>{closeMsg}</div>
+      )}
+    </>
   );
 }
 
@@ -566,6 +649,7 @@ const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(18
 const miniGold: CSSProperties = { ...goldBtn, fontSize: 11, padding: '6px 11px' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const miniGhost: CSSProperties = { ...ghostBtn, padding: '4px 9px', fontSize: 11 };
+const closeTradeBtn: CSSProperties = { fontSize: 10.5, fontWeight: 700, color: '#bff0d4', background: 'rgba(53,196,123,.1)', border: '1px solid rgba(53,196,123,.5)', padding: '4px 9px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' };
 const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', fontSize: 11.5, fontFamily: MONO };
 const col: CSSProperties = { flex: '0 0 64px' };
 const platformPill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: GOLD, background: 'rgba(235,203,116,.12)', border: '1px solid rgba(235,203,116,.4)', borderRadius: 4, padding: '2px 7px' };
