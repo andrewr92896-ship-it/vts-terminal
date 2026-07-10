@@ -34,6 +34,7 @@ const SCREENS: Record<string, ScreenInfo> = {
   st_home: { title: 'Study Hub', blurb: 'Pick a subject (Series 65 first). Each track has its own flashcards, quizzes, and progress.', stage: 3 },
   st_quiz: { title: 'Practice Quiz', blurb: 'One question at a time, rotating topics, with scoring.', stage: 3 },
   st_cards: { title: 'Flashcards', blurb: 'Topic-filtered flashcards with a known/review pile.', stage: 3 },
+  st_test: { title: 'Test Mode', blurb: 'A full 100-question mock exam drawn to the real Series 65 mix, each question asked once. Scores go on the leaderboard.', stage: 3 },
   st_progress: { title: 'Progress', blurb: 'Overall and per-topic accuracy over time.', stage: 3 },
   // Vitalis Retirement & Wealth Management — the client-management portal for
   // the future advisory firm (launches after the Series 65).

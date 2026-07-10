@@ -267,6 +267,13 @@
       "when": 1782336936908,
       "tag": "0037_trading_desk_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "6",
+      "when": 1782337036908,
+      "tag": "0038_study_tests",
+      "breakpoints": true
     }
   ]
 }

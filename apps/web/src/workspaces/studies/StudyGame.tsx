@@ -13,6 +13,7 @@ import {
 import { SERIES65_EXPLANATIONS } from './series65Explanations';
 import { Flashcards } from './Flashcards';
 import { Leaderboard } from './Leaderboard';
+import { TestMode } from './TestMode';
 import { TutorChat } from './TutorChat';
 import { consumeStudyView, type StudyView } from './studiesNav';
 import {
@@ -56,7 +57,7 @@ interface LevelEvent {
   crowns: number;
 }
 
-export function StudyGame({ theme }: { theme: Theme }) {
+export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: StudyView }) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
@@ -65,7 +66,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
 
   const poolsRef = useRef(buildPools());
   const [game, setGame] = useState<GameState>(() => loadGame(storageKey));
-  const [view, setView] = useState<StudyView>(() => consumeStudyView() ?? 'quiz');
+  const [view, setView] = useState<StudyView>(() => initialView ?? consumeStudyView() ?? 'quiz');
   const [mode, setMode] = useState<Mode>('mix');
   // Question ids the user flagged to revisit. Loaded from localStorage for an
   // instant render, then reconciled with the account copy on mount.
@@ -401,7 +402,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden' }}>
-          {(['quiz', 'cards', 'leaderboard'] as const).map((v) => (
+          {(['quiz', 'test', 'cards', 'leaderboard'] as const).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
@@ -415,7 +416,7 @@ export function StudyGame({ theme }: { theme: Theme }) {
                 color: view === v ? theme.accentText : muted,
               }}
             >
-              {v === 'quiz' ? 'Quiz' : v === 'cards' ? 'Flashcards' : 'Leaderboard'}
+              {v === 'quiz' ? 'Quiz' : v === 'test' ? 'Test' : v === 'cards' ? 'Flashcards' : 'Leaderboard'}
             </button>
           ))}
         </div>
@@ -638,6 +639,15 @@ export function StudyGame({ theme }: { theme: Theme }) {
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
         <Flashcards theme={theme} embedded readOnly={readOnly} />
+      </div>
+    );
+  }
+
+  if (view === 'test') {
+    return (
+      <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+        {header}
+        <TestMode theme={theme} />
       </div>
     );
   }

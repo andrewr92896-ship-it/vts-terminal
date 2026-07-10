@@ -876,3 +876,26 @@ export const studyGame = sqliteTable('study_game', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type StudyGameRow = typeof studyGame.$inferSelect;
+
+// ---- Studies: completed mock tests (per user) ----
+// One row per finished Series 65 mock test (a fixed 100-question exam drawn to
+// the real exam blueprint: 25 Investments, 30 Client Management, 30 Regulations
+// & Ethics, 15 Economics). Each row records the final score and the learner's
+// attempt number (their Nth completed test), so the test leaderboard can show a
+// player's best run and at which attempt they got it. `breakdown` is a JSON map
+// of per-topic { correct, total }.
+export const studyTests = sqliteTable('study_tests', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  attempt: integer('attempt').notNull(), // 1-indexed: this user's Nth completed test
+  score: integer('score').notNull(), // percent correct, 0..100
+  correct: integer('correct').notNull(),
+  total: integer('total').notNull(),
+  breakdown: text('breakdown').notNull(), // JSON: { [topic]: { correct, total } }
+  passed: integer('passed', { mode: 'boolean' }).notNull(),
+  durationMs: integer('duration_ms'), // wall-clock time to complete, when recorded
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyTestRow = typeof studyTests.$inferSelect;
