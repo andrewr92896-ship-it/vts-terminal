@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { studyTests, users } from '../db/schema.js';
+import { studyTestProgress, studyTests, users } from '../db/schema.js';
 
 // Per-user completed Series 65 mock tests. Each finished 100-question exam is
 // recorded with its final score and the learner's attempt number (their Nth
@@ -173,4 +173,49 @@ export async function getTestLeaderboard(
     return a.createdAt - b.createdAt;
   });
   return entries;
+}
+
+// ---- In-progress test (account-synced) ----
+// A test still in flight is stored as one opaque JSON blob per user, so an
+// unfinished sitting follows the learner across devices. The shape is owned by
+// the web client (series65Test.ts); the server persists and returns it verbatim,
+// and drops the row when the test is submitted or abandoned.
+
+const MAX_PROGRESS_BYTES = 64 * 1024;
+
+export async function getTestProgress(userId: string): Promise<string | null> {
+  const rows = await db
+    .select({ state: studyTestProgress.state })
+    .from(studyTestProgress)
+    .where(eq(studyTestProgress.userId, userId))
+    .limit(1);
+  return rows[0]?.state ?? null;
+}
+
+export async function saveTestProgress(userId: string, state: string): Promise<void> {
+  await db
+    .insert(studyTestProgress)
+    .values({ userId, state, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: studyTestProgress.userId,
+      set: { state, updatedAt: new Date() },
+    });
+}
+
+export async function clearTestProgress(userId: string): Promise<void> {
+  await db.delete(studyTestProgress).where(eq(studyTestProgress.userId, userId));
+}
+
+// Validate that the body is a JSON string within our size ceiling, returning the
+// canonical string to store or null when unusable. Mirrors game.ts normalizeState.
+export function normalizeProgress(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  if (raw.length === 0 || raw.length > MAX_PROGRESS_BYTES) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return raw;
+  } catch {
+    return null;
+  }
 }

@@ -11,13 +11,16 @@ import {
   TEST_BLUEPRINT,
   TEST_PASS,
   TEST_SIZE,
+  answeredCount as countAnswered,
   buildTest,
   clearTestProgress,
   gradeTest,
   loadTestProgress,
+  parseTestProgress,
   questionsFromIds,
   saveTestProgress,
   type Letter,
+  type TestProgress,
   type TestScore,
 } from './series65Test';
 
@@ -47,6 +50,14 @@ export function TestMode({ theme }: { theme: Theme }) {
   const startedAtRef = useRef<number>(0);
   const [resumed, setResumed] = useState(false);
 
+  // Account sync: whether the server copy has been reconciled yet, the last
+  // state we pushed up (to skip redundant writes), and whether the learner has
+  // manually started a fresh test this mount (so a late server reconcile doesn't
+  // yank them out of it).
+  const [hydrated, setHydrated] = useState(false);
+  const lastSavedRef = useRef<string | null>(null);
+  const freshStartRef = useRef(false);
+
   // Final grade + the server-recorded result (with its attempt number).
   const [graded, setGraded] = useState<TestScore | null>(null);
   const [result, setResult] = useState<TestResult | null>(null);
@@ -69,28 +80,54 @@ export function TestMode({ theme }: { theme: Theme }) {
       .catch(() => setBoardError('Could not load the test leaderboard right now.'));
   };
 
-  // On mount: pull the board, and resume an in-progress sitting if one was saved
-  // (a refresh or an accidental tab switch shouldn't wipe a test).
+  // Adopt a saved in-progress test (from localStorage or the account) into the
+  // running view.
+  function applyProgress(qs: Series65Question[], p: TestProgress) {
+    setQuestions(qs);
+    setAnswers(p.answers);
+    setIndex(p.index);
+    startedAtRef.current = p.startedAt || Date.now();
+    setResumed(true);
+    setPhase('running');
+  }
+
+  // On mount: pull the board and resume an in-progress sitting. The localStorage
+  // copy resumes instantly; the account copy (synced from other devices) is then
+  // reconciled in — whichever has more answered questions wins, so a resume never
+  // loses work and a test started on another device follows the learner here.
   useEffect(() => {
     refreshBoard();
-    const saved = loadTestProgress(user?.id);
-    if (saved) {
-      const qs = questionsFromIds(saved.ids);
+    const local = loadTestProgress(user?.id);
+    let localAnswered = -1;
+    if (local) {
+      const qs = questionsFromIds(local.ids);
       if (qs) {
-        setQuestions(qs);
-        setAnswers(saved.answers);
-        setIndex(saved.index);
-        startedAtRef.current = saved.startedAt;
-        setResumed(true);
-        setPhase('running');
+        applyProgress(qs, local);
+        localAnswered = countAnswered(local);
       } else {
         clearTestProgress(user?.id);
       }
     }
+    api
+      .studyTestProgress()
+      .then((r) => {
+        const remote = parseTestProgress(r.state);
+        if (remote && !freshStartRef.current) {
+          const qs = questionsFromIds(remote.ids);
+          if (qs && countAnswered(remote) >= localAnswered) {
+            applyProgress(qs, remote);
+            saveTestProgress(user?.id, remote); // keep the local copy in step
+            lastSavedRef.current = JSON.stringify(remote);
+          }
+        }
+        setHydrated(true);
+      })
+      .catch(() => setHydrated(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist the in-progress test on every change while it's running.
+  // Persist the in-progress test to localStorage on every change while it's
+  // running (instant, offline-safe local copy).
   useEffect(() => {
     if (phase !== 'running' || questions.length !== TEST_SIZE) return;
     saveTestProgress(user?.id, {
@@ -101,8 +138,31 @@ export function TestMode({ theme }: { theme: Theme }) {
     });
   }, [phase, questions, answers, index, user?.id]);
 
+  // Sync the in-progress test to the account (debounced) so it follows the
+  // learner across devices. Gated on hydration so we never clobber the server
+  // copy before reconciling it, skipped for the read-only demo account, and
+  // skipped when the state matches what we last pushed.
+  useEffect(() => {
+    if (!hydrated || readOnly) return;
+    if (phase !== 'running' || questions.length !== TEST_SIZE) return;
+    const json = JSON.stringify({
+      ids: questions.map((q) => q.id),
+      answers,
+      index,
+      startedAt: startedAtRef.current,
+    });
+    if (json === lastSavedRef.current) return;
+    const id = setTimeout(() => {
+      lastSavedRef.current = json;
+      void api.saveStudyTestProgress(json).catch(() => {});
+    }, 800);
+    return () => clearTimeout(id);
+  }, [phase, questions, answers, index, hydrated, readOnly]);
+
   function startTest() {
     const qs = buildTest();
+    freshStartRef.current = true; // a late server reconcile must not replace this
+    lastSavedRef.current = null; // force the new sitting to be pushed up
     setQuestions(qs);
     setAnswers(new Array(qs.length).fill(null));
     setIndex(0);
@@ -129,10 +189,12 @@ export function TestMode({ theme }: { theme: Theme }) {
     const score = gradeTest(questions, answers);
     setGraded(score);
     setPhase('done');
-    clearTestProgress(user?.id);
+    clearTestProgress(user?.id); // clear the local in-progress copy
+    lastSavedRef.current = null;
     const durationMs = startedAtRef.current ? Date.now() - startedAtRef.current : null;
 
     if (readOnly) return; // demo account: show the grade, don't record it
+    void api.clearStudyTestProgress().catch(() => {}); // clear the account copy
     setRecording(true);
     setRecordError(null);
     try {
@@ -155,6 +217,9 @@ export function TestMode({ theme }: { theme: Theme }) {
 
   function abandon() {
     clearTestProgress(user?.id);
+    lastSavedRef.current = null;
+    freshStartRef.current = false;
+    if (!readOnly) void api.clearStudyTestProgress().catch(() => {});
     setPhase('intro');
     setQuestions([]);
     setAnswers([]);

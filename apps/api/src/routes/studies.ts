@@ -6,7 +6,15 @@ import { getGame, getLeaderboard, normalizeState, saveGame } from '../studies/ga
 import { addVocab, listVocab, removeVocab } from '../studies/vocab.js';
 import { addStarred, listStarred, removeStarred } from '../studies/starred.js';
 import { addSection, listSections, removeSection } from '../studies/sections.js';
-import { getTestLeaderboard, listMyTests, recordTest } from '../studies/tests.js';
+import {
+  clearTestProgress,
+  getTestLeaderboard,
+  getTestProgress,
+  listMyTests,
+  normalizeProgress,
+  recordTest,
+  saveTestProgress,
+} from '../studies/tests.js';
 import { aiConfigured, classifyQuestionsIntoSection, defineSeries65Term } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
@@ -220,5 +228,25 @@ export async function studiesRoutes(app: FastifyInstance) {
       listMyTests(request.currentUser!.id),
     ]);
     return { entries, mine };
+  });
+
+  // In-progress test state, stored as one JSON blob per user so an unfinished
+  // sitting follows the learner across devices (like the Study Game state).
+  app.get('/api/studies/tests/progress', guard, async (request) => {
+    return { state: await getTestProgress(request.currentUser!.id) };
+  });
+
+  app.put('/api/studies/tests/progress', guard, async (request, reply) => {
+    const parsed = gameSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
+    const state = normalizeProgress(parsed.data.state);
+    if (state == null) return reply.code(400).send({ error: 'Invalid test progress' });
+    await saveTestProgress(request.currentUser!.id, state);
+    return { ok: true };
+  });
+
+  app.delete('/api/studies/tests/progress', guard, async (request) => {
+    await clearTestProgress(request.currentUser!.id);
+    return { ok: true };
   });
 }

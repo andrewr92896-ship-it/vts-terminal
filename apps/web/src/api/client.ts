@@ -425,6 +425,17 @@ export const api = {
   studyTestLeaderboard(): Promise<{ entries: TestLeaderboardEntry[]; mine: TestResult[] }> {
     return request('/api/studies/tests/leaderboard');
   },
+  // In-progress test state, synced to the account so an unfinished sitting
+  // follows the learner across devices.
+  studyTestProgress(): Promise<{ state: string | null }> {
+    return request('/api/studies/tests/progress');
+  },
+  saveStudyTestProgress(state: string): Promise<{ ok: true }> {
+    return request('/api/studies/tests/progress', { method: 'PUT', body: JSON.stringify({ state }) });
+  },
+  clearStudyTestProgress(): Promise<{ ok: true }> {
+    return request('/api/studies/tests/progress', { method: 'DELETE' });
+  },
   // Custom flashcard deck (user-added words with AI-generated definitions).
   studyVocab(): Promise<{ cards: CustomVocabCard[] }> {
     return request('/api/studies/vocab');

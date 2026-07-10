@@ -899,3 +899,19 @@ export const studyTests = sqliteTable('study_tests', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type StudyTestRow = typeof studyTests.$inferSelect;
+
+// ---- Studies: in-progress mock test (per user) ----
+// At most one row per user holding the serialized state of a test currently in
+// progress (the drawn question ids, answers so far, the current index, and the
+// start time), so an unfinished sitting follows the learner across devices just
+// like the Study Game state. The row is deleted when the test is submitted or
+// abandoned. The shape is owned by the web client (series65Test.ts); the server
+// stores and returns it verbatim.
+export const studyTestProgress = sqliteTable('study_test_progress', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  state: text('state').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyTestProgressRow = typeof studyTestProgress.$inferSelect;

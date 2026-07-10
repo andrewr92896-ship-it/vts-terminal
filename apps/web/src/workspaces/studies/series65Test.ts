@@ -93,10 +93,12 @@ export function testKey(userId: string | undefined): string {
   return `vts_series65_test_${userId ?? 'anon'}`;
 }
 
-export function loadTestProgress(userId: string | undefined): TestProgress | null {
+// Coerce a stored JSON string (from localStorage or the account) into a valid
+// TestProgress, or null when it is absent/malformed. Shared by the local and
+// server-synced load paths.
+export function parseTestProgress(raw: string | null): TestProgress | null {
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(testKey(userId));
-    if (!raw) return null;
     const p = JSON.parse(raw);
     if (
       !p ||
@@ -111,11 +113,25 @@ export function loadTestProgress(userId: string | undefined): TestProgress | nul
       ids: p.ids.map((n: unknown) => Number(n)),
       answers: p.answers.map((a: unknown) => (a === 'A' || a === 'B' || a === 'C' || a === 'D' ? a : null)),
       index: Math.max(0, Math.min(TEST_SIZE - 1, Number(p.index) || 0)),
-      startedAt: Number(p.startedAt) || Date.now(),
+      startedAt: Number(p.startedAt) || 0,
     };
   } catch {
     return null;
   }
+}
+
+export function loadTestProgress(userId: string | undefined): TestProgress | null {
+  try {
+    return parseTestProgress(localStorage.getItem(testKey(userId)));
+  } catch {
+    return null;
+  }
+}
+
+// Count answered questions in a progress snapshot, used to pick the more
+// advanced of a local vs account copy so a resume never loses work.
+export function answeredCount(p: TestProgress): number {
+  return p.answers.filter((a) => a != null).length;
 }
 
 export function saveTestProgress(userId: string | undefined, p: TestProgress): void {
