@@ -415,6 +415,19 @@ export const tradingChallenges = sqliteTable('trading_challenges', {
 
 export type TradingChallengeRow = typeof tradingChallenges.$inferSelect;
 
+// ---- Trading — desk-wide settings (shared across the whole trading team) ----
+// A single-row table (id = 'desk') holding settings that apply to the shared
+// desk, not to one trader. `breakEvenPct` is the break-even band as a percent of
+// price move (entry → exit): a closed trade whose move is within ±breakEvenPct
+// counts as a break-even trade — neither a win nor a loss. 0 disables the band,
+// so every scored trade is a win or a loss exactly as before.
+export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
+  id: text('id').primaryKey(),
+  breakEvenPct: real('break_even_pct').notNull().default(0),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;
+
 // ---- Trading — Funded platforms (manual / screenshot-tracked prop accounts) ----
 // Funded prop accounts (FTP and other funded platforms) are tracked separately
 // from the Live Wall / Trade Log because they have no usable API: the trader

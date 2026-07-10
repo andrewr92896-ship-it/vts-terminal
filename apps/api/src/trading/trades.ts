@@ -14,6 +14,9 @@ import {
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
+import { classifyOutcome } from './outcome.js';
+import { deskTradeCodeIndex } from './codes.js';
+import { getDeskSettings } from './settings.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
 // (full or view-only) sees every other trading user's trades in full — capital
@@ -51,6 +54,9 @@ export interface TradeRecord {
   // the Live Wall / History, so the Trade Log never offers Edit/Remove on them.
   editable: boolean;
   source: 'manual' | 'broker'; // where the row came from, for a small UI tag
+  // Human-friendly desk code, MMDDYY-N (N = order within the ET day). Stable and
+  // shared with History. Null only for a sandboxed demo trade (no desk code).
+  code: string | null;
 }
 
 export interface TradeSummary {
@@ -59,7 +65,8 @@ export interface TradeSummary {
   closed: number;
   wins: number;
   losses: number;
-  winRate: number; // 0..1 over closed trades with a known P/L
+  breakeven: number; // closed, known-P/L trades inside the break-even band
+  winRate: number; // 0..1 over decided (win/loss) trades — break-even excluded
   totalRealizedPl: number; // desk-wide realized P/L across closed trades
   avgSlippage: number | null; // over trades that have a planned entry
 }
@@ -67,6 +74,7 @@ export interface TradeSummary {
 export interface TradeLogData {
   trades: TradeRecord[];
   summary: TradeSummary;
+  breakEvenPct: number; // the desk-wide break-even band applied to the summary
 }
 
 export interface TradeInput {
@@ -139,6 +147,7 @@ function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeR
     updatedAt: row.updatedAt.getTime(),
     editable: true,
     source: 'manual',
+    code: null, // filled in by getTrades from the desk-wide code index
   };
 }
 
@@ -175,28 +184,32 @@ function positionToRecord(row: TradingPositionRow, owner: string, viewerId: stri
     updatedAt: row.lastSeenAt.getTime(),
     editable: false,
     source: 'broker',
+    code: null, // filled in by getTrades from the desk-wide code index
   };
 }
 
-// Summary over the trade record list.
-function summarizeRecords(records: TradeRecord[]): TradeSummary {
+// Summary over the trade record list. `breakEvenPct` is the desk-wide band: a
+// scored trade whose entry→exit move is within ±band counts as break-even, kept
+// out of both the win and loss tallies (and out of the win-rate denominator).
+function summarizeRecords(records: TradeRecord[], breakEvenPct: number): TradeSummary {
   let open = 0;
   let closed = 0;
   let wins = 0;
   let losses = 0;
+  let breakeven = 0;
   let totalPl = 0;
   let slipSum = 0;
   let slipCount = 0;
-  let scored = 0;
   for (const r of records) {
     if (r.status === 'open') open += 1;
     else closed += 1;
     if (r.realizedPl != null) {
       totalPl += r.realizedPl;
       if (r.status === 'closed') {
-        scored += 1;
-        if (r.realizedPl >= 0) wins += 1;
-        else losses += 1;
+        const outcome = classifyOutcome(r.side, r.entryPrice, r.exitPrice, r.realizedPl, breakEvenPct);
+        if (outcome === 'win') wins += 1;
+        else if (outcome === 'loss') losses += 1;
+        else breakeven += 1;
       }
     }
     if (r.slippage != null) {
@@ -204,13 +217,15 @@ function summarizeRecords(records: TradeRecord[]): TradeSummary {
       slipCount += 1;
     }
   }
+  const decided = wins + losses;
   return {
     total: records.length,
     open,
     closed,
     wins,
     losses,
-    winRate: scored > 0 ? wins / scored : 0,
+    breakeven,
+    winRate: decided > 0 ? wins / decided : 0,
     totalRealizedPl: totalPl,
     avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
   };
@@ -261,7 +276,16 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
     if (a.status !== b.status) return a.status === 'open' ? -1 : 1;
     return b.openedAt - a.openedAt;
   });
-  return { trades: sorted, summary: summarizeRecords(sorted) };
+
+  // Stamp each row with its desk code and score against the desk-wide break-even
+  // band. The demo is sandboxed off the shared code index, so its rows keep the
+  // null code set in the mappers.
+  const { breakEvenPct } = await getDeskSettings();
+  if (!viewerIsDemo) {
+    const codes = await deskTradeCodeIndex();
+    for (const r of sorted) r.code = codes.get(r.id) ?? null;
+  }
+  return { trades: sorted, summary: summarizeRecords(sorted, breakEvenPct), breakEvenPct };
 }
 
 export async function addTrade(userId: string, input: TradeInput): Promise<string> {

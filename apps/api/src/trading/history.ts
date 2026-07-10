@@ -1,11 +1,14 @@
 import crypto from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingPositions, users, type TradeSide, type TradingPositionRow } from '../db/schema.js';
+import { tradingPositions, users, TRADE_SIDES, type TradeSide, type TradingPositionRow } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { sendToTradingDesk } from '../notifications/push.js';
 import { sendPushoverToDesk } from '../notifications/pushover.js';
+import { classifyOutcome } from './outcome.js';
+import { deskTradeCodeIndex } from './codes.js';
+import { getDeskSettings } from './settings.js';
 import type { LiveTrade } from './types.js';
 
 // A position opened within this window is treated as a fresh fill worth a push;
@@ -218,6 +221,7 @@ export interface HistoryRecord {
   timeframe: string | null;
   openedAt: number | null;
   closedAt: number | null;
+  code: string | null; // desk code MMDDYY-N, shared with the Trade Log
 }
 
 export interface HistoryGroup {
@@ -225,6 +229,7 @@ export interface HistoryGroup {
   count: number;
   wins: number;
   losses: number;
+  breakeven: number; // trades inside the desk's break-even band
   realizedPl: number | null; // gated
 }
 
@@ -232,7 +237,8 @@ export interface HistorySummary {
   closed: number;
   wins: number;
   losses: number;
-  winRate: number; // 0..1 over closed trades with a known P/L
+  breakeven: number; // closed trades inside the break-even band
+  winRate: number; // 0..1 over decided (win/loss) trades — break-even excluded
   totalRealizedPl: number | null; // gated
   byStrategy: HistoryGroup[];
   byInstrument: HistoryGroup[];
@@ -241,6 +247,7 @@ export interface HistorySummary {
 export interface HistoryData {
   trades: HistoryRecord[];
   summary: HistorySummary;
+  breakEvenPct: number; // the desk-wide break-even band applied to the summary
 }
 
 function slippageOf(planned: number | null, entry: number): number | null {
@@ -272,6 +279,7 @@ function toRecord(
     timeframe: row.timeframe,
     openedAt: row.openedAt ? row.openedAt.getTime() : null,
     closedAt: row.closedAt ? row.closedAt.getTime() : null,
+    code: null, // filled in by getHistory from the desk-wide code index
   };
 }
 
@@ -279,16 +287,19 @@ function groupBy(
   rows: TradingPositionRow[],
   pick: (r: TradingPositionRow) => string | null,
   canSeeBalances: boolean,
+  breakEvenPct: number,
 ): HistoryGroup[] {
-  const map = new Map<string, { count: number; wins: number; losses: number; pl: number }>();
+  const map = new Map<string, { count: number; wins: number; losses: number; breakeven: number; pl: number }>();
   for (const r of rows) {
     const label = (pick(r) ?? '—').trim() || '—';
-    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, pl: 0 };
+    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0 };
     g.count += 1;
     if (r.realizedPl != null) {
       g.pl += r.realizedPl;
-      if (r.realizedPl >= 0) g.wins += 1;
-      else g.losses += 1;
+      const outcome = classifyOutcome(r.side as TradeSide, r.entryPrice, r.exitPrice, r.realizedPl, breakEvenPct);
+      if (outcome === 'win') g.wins += 1;
+      else if (outcome === 'loss') g.losses += 1;
+      else g.breakeven += 1;
     }
     map.set(label, g);
   }
@@ -298,6 +309,7 @@ function groupBy(
       count: g.count,
       wins: g.wins,
       losses: g.losses,
+      breakeven: g.breakeven,
       realizedPl: canSeeBalances ? g.pl : null,
     }))
     .sort((a, b) => b.count - a.count);
@@ -321,6 +333,74 @@ export async function removePosition(userId: string, id: string, admin = false):
   return true;
 }
 
+// Fields a trader can correct on a closed trade in History. Kept to the trade's
+// own facts (levels, size, P/L, tags, dates); connection/broker identity and the
+// live-sync bookkeeping columns are never editable here.
+export interface ClosedPositionEdit {
+  instrument?: string;
+  side?: TradeSide;
+  units?: number | null;
+  plannedEntry?: number | null;
+  entryPrice?: number;
+  exitPrice?: number | null;
+  realizedPl?: number | null;
+  strategy?: string | null;
+  timeframe?: string | null;
+  openedAt?: number | null;
+  closedAt?: number | null;
+}
+
+function cleanNum(v: number | null | undefined): number | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  return v;
+}
+function cleanText(v: string | null | undefined, max: number): string | null {
+  if (v == null) return null;
+  const t = v.trim();
+  return t ? t.slice(0, max) : null;
+}
+
+// Edit a CLOSED recorded trade. Owner-scoped by default; an admin can correct
+// anyone's on the shared desk (mirrors removePosition). Only closed rows are
+// editable — an open position is still live on the broker and the next Live Wall
+// reconcile would overwrite hand-edits, so those stay read-only. Returns true
+// when a row was updated.
+export async function updateClosedPosition(
+  userId: string,
+  id: string,
+  input: ClosedPositionEdit,
+  admin = false,
+): Promise<boolean> {
+  const where = admin
+    ? and(eq(tradingPositions.id, id), eq(tradingPositions.status, 'closed'))
+    : and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId), eq(tradingPositions.status, 'closed'));
+  const row = (await db.select().from(tradingPositions).where(where).limit(1))[0];
+  if (!row) return false;
+
+  const patch: Partial<typeof tradingPositions.$inferInsert> = { lastSeenAt: new Date() };
+  if (input.instrument !== undefined) {
+    const inst = input.instrument.trim();
+    if (!inst) throw new Error('Instrument is required');
+    patch.instrument = inst.slice(0, 40);
+  }
+  if (input.side !== undefined && (TRADE_SIDES as readonly string[]).includes(input.side)) patch.side = input.side;
+  if (input.units !== undefined) patch.units = cleanNum(input.units) ?? 0;
+  if (input.plannedEntry !== undefined) patch.plannedEntry = cleanNum(input.plannedEntry);
+  if (input.entryPrice !== undefined) {
+    if (!Number.isFinite(input.entryPrice)) throw new Error('A valid entry price is required');
+    patch.entryPrice = input.entryPrice;
+  }
+  if (input.exitPrice !== undefined) patch.exitPrice = cleanNum(input.exitPrice);
+  if (input.realizedPl !== undefined) patch.realizedPl = cleanNum(input.realizedPl);
+  if (input.strategy !== undefined) patch.strategy = cleanText(input.strategy, 80);
+  if (input.timeframe !== undefined) patch.timeframe = cleanText(input.timeframe, 16);
+  if (input.openedAt !== undefined) patch.openedAt = input.openedAt == null ? null : new Date(input.openedAt);
+  if (input.closedAt !== undefined) patch.closedAt = input.closedAt == null ? null : new Date(input.closedAt);
+
+  await db.update(tradingPositions).set(patch).where(where);
+  return true;
+}
+
 export async function getHistory(
   viewerId: string,
   canSeeBalances: boolean,
@@ -329,10 +409,12 @@ export async function getHistory(
   // The public demo is sandboxed off the real desk: it never sees teammates'
   // closed trades (and its own showcase has no closed positions), so its History
   // is empty rather than a window into real accounts.
+  const { breakEvenPct } = await getDeskSettings();
   if (viewerIsDemo) {
     return {
       trades: [],
-      summary: { closed: 0, wins: 0, losses: 0, winRate: 0, totalRealizedPl: canSeeBalances ? 0 : null, byStrategy: [], byInstrument: [] },
+      summary: { closed: 0, wins: 0, losses: 0, breakeven: 0, winRate: 0, totalRealizedPl: canSeeBalances ? 0 : null, byStrategy: [], byInstrument: [] },
+      breakEvenPct,
     };
   }
 
@@ -357,27 +439,38 @@ export async function getHistory(
 
   let wins = 0;
   let losses = 0;
-  let scored = 0;
+  let breakeven = 0;
   let totalPl = 0;
   for (const r of rows) {
     if (r.realizedPl != null) {
       totalPl += r.realizedPl;
-      scored += 1;
-      if (r.realizedPl >= 0) wins += 1;
-      else losses += 1;
+      const outcome = classifyOutcome(r.side as TradeSide, r.entryPrice, r.exitPrice, r.realizedPl, breakEvenPct);
+      if (outcome === 'win') wins += 1;
+      else if (outcome === 'loss') losses += 1;
+      else breakeven += 1;
     }
   }
+  const decided = wins + losses;
+
+  const codes = await deskTradeCodeIndex();
+  const trades = rows.map((r) => {
+    const rec = toRecord(r, ownerOf.get(r.id) ?? '', viewerId, canSeeBalances);
+    rec.code = codes.get(r.id) ?? null;
+    return rec;
+  });
 
   return {
-    trades: rows.map((r) => toRecord(r, ownerOf.get(r.id) ?? '', viewerId, canSeeBalances)),
+    trades,
     summary: {
       closed: rows.length,
       wins,
       losses,
-      winRate: scored > 0 ? wins / scored : 0,
+      breakeven,
+      winRate: decided > 0 ? wins / decided : 0,
       totalRealizedPl: canSeeBalances ? totalPl : null,
-      byStrategy: groupBy(rows, (r) => r.strategy, canSeeBalances),
-      byInstrument: groupBy(rows, (r) => r.instrument, canSeeBalances),
+      byStrategy: groupBy(rows, (r) => r.strategy, canSeeBalances, breakEvenPct),
+      byInstrument: groupBy(rows, (r) => r.instrument, canSeeBalances, breakEvenPct),
     },
+    breakEvenPct,
   };
 }

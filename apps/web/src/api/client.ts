@@ -18,6 +18,7 @@ import type {
   FundedPositionResult,
   FundedCloseResult,
   ConnectionInput,
+  DeskSettings,
   ManualPosition,
   ManualPositionInput,
   AnalyzePositionResult,
@@ -217,6 +218,17 @@ export const api = {
   // Delete a recorded closed trade (e.g. a test trade); returns refreshed History.
   removeHistoryTrade(id: string): Promise<HistoryData> {
     return request(`/api/trading/history/${id}`, { method: 'DELETE' });
+  },
+  // Edit a recorded closed trade (correct exit/P-L/strategy/dates); returns History.
+  updateHistoryTrade(id: string, patch: Partial<TradeInput>): Promise<HistoryData> {
+    return request(`/api/trading/history/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  // Desk-wide trading settings (shared across the team).
+  deskSettings(): Promise<DeskSettings> {
+    return request('/api/trading/desk-settings');
+  },
+  updateDeskSettings(patch: Partial<DeskSettings>): Promise<DeskSettings> {
+    return request('/api/trading/desk-settings', { method: 'PATCH', body: JSON.stringify(patch) });
   },
   tradingSessions(): Promise<{ sessions: StrategySession[] }> {
     return request('/api/trading/sessions');

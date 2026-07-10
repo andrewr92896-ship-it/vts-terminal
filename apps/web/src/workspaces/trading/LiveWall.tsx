@@ -5,6 +5,8 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { readClipboardImage } from '../../lib/clipboard';
 import { BrokerConnections } from './BrokerConnections';
+import { DeskSettingsModal } from './DeskSettingsModal';
+import { classifyOutcome } from './outcome';
 import type { ForexMetrics, LiveTrade, LiveWall as LiveWallData } from '../../api/types';
 
 // Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
@@ -87,6 +89,7 @@ export function LiveWall() {
   const [refreshing, setRefreshing] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const firstLoad = useRef(true);
 
   const load = useCallback(async () => {
@@ -148,6 +151,7 @@ export function LiveWall() {
           {!readOnly && (
             <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
           )}
+          <button onClick={() => setSettingsOpen(true)} style={ghostBtn} title="Trade desk settings">⚙ Settings</button>
           <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
             {refreshing ? 'Refreshing…' : 'Refresh'}
           </button>
@@ -155,6 +159,7 @@ export function LiveWall() {
       </div>
 
       <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={() => void load()} />
+      <DeskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} readOnly={readOnly} onSaved={() => void load()} />
 
       {staleError && (
         <div style={warnBanner}>
@@ -196,6 +201,7 @@ export function LiveWall() {
             <TradeCard
               key={t.id}
               t={t}
+              breakEvenPct={data.breakEvenPct}
               mine={t.ownerId === user?.id}
               readOnly={readOnly}
               showMoney={showMoney}
@@ -212,6 +218,7 @@ export function LiveWall() {
 
 function TradeCard({
   t,
+  breakEvenPct,
   mine,
   readOnly,
   showMoney,
@@ -220,6 +227,7 @@ function TradeCard({
   onClosed,
 }: {
   t: LiveTrade;
+  breakEvenPct: number;
   mine: boolean; // the position is on the viewer's own broker account
   readOnly: boolean;
   showMoney: boolean;
@@ -233,6 +241,11 @@ function TradeCard({
   const sideColor = long ? GREEN : RED;
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
+  // While open, a position sitting inside the desk's break-even band (its move
+  // from entry to the current mark) is flagged flat rather than a slim win/loss.
+  const isBreakeven =
+    t.currentPrice != null &&
+    classifyOutcome(t.side, t.entryPrice, t.currentPrice, t.unrealizedPl, breakEvenPct) === 'breakeven';
 
   // A funded (FTP off-book) position the viewer owns can be closed right here on
   // the wall: its id is `funded:<tradeId>`. Closing reads a trade-result
@@ -270,9 +283,10 @@ function TradeCard({
     plNode = <span style={{ fontSize: 13, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>—</span>;
   } else {
     const up = t.unrealizedPl >= 0;
+    const plColor = isBreakeven ? GOLD : up ? GREEN : RED;
     plNode = (
-      <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: up ? GREEN : RED }}>
-        {showMoney ? `${up ? '+' : ''}${usd(t.unrealizedPl)}` : '•••••'}
+      <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: plColor }}>
+        {showMoney ? `${isBreakeven ? '' : up ? '+' : ''}${usd(t.unrealizedPl)}` : '•••••'}
       </span>
     );
   }
@@ -284,6 +298,7 @@ function TradeCard({
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
+          {isBreakeven && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }} title="Break-even — inside the desk's break-even band">B/E</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={ownerTag(mine)} title={mine ? `${t.owner} (you)` : t.owner}>@{t.owner}{mine ? ' · you' : ''}</span>

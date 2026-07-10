@@ -506,6 +506,12 @@ export interface LiveWall {
   brokers: BrokerLiveResult[];
   trades: LiveTrade[];
   note: string | null;
+  breakEvenPct: number; // desk-wide break-even band (percent of price move)
+}
+
+// Desk-wide trading settings, shared across the whole team.
+export interface DeskSettings {
+  breakEvenPct: number;
 }
 
 // ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----
@@ -925,6 +931,7 @@ export interface TradeRecord {
   updatedAt: number;
   editable: boolean; // hand-logged trades are editable; broker-imported rows are read-only
   source: 'manual' | 'broker'; // where the row came from
+  code: string | null; // desk code MMDDYY-N
 }
 
 export interface TradeSummary {
@@ -933,6 +940,7 @@ export interface TradeSummary {
   closed: number;
   wins: number;
   losses: number;
+  breakeven: number;
   winRate: number;
   totalRealizedPl: number | null;
   avgSlippage: number | null;
@@ -941,6 +949,7 @@ export interface TradeSummary {
 export interface TradeLogData {
   trades: TradeRecord[];
   summary: TradeSummary;
+  breakEvenPct: number;
 }
 
 // Raw data returned when a trade is removed, so the client can offer undo.
@@ -1062,6 +1071,7 @@ export interface HistoryRecord {
   timeframe: string | null;
   openedAt: number | null;
   closedAt: number | null;
+  code: string | null; // desk code MMDDYY-N
 }
 
 export interface HistoryGroup {
@@ -1069,6 +1079,7 @@ export interface HistoryGroup {
   count: number;
   wins: number;
   losses: number;
+  breakeven: number;
   realizedPl: number | null;
 }
 
@@ -1076,6 +1087,7 @@ export interface HistorySummary {
   closed: number;
   wins: number;
   losses: number;
+  breakeven: number;
   winRate: number;
   totalRealizedPl: number | null;
   byStrategy: HistoryGroup[];
@@ -1085,6 +1097,7 @@ export interface HistorySummary {
 export interface HistoryData {
   trades: HistoryRecord[];
   summary: HistorySummary;
+  breakEvenPct: number;
 }
 
 // Fields accepted when creating/editing a trade.
