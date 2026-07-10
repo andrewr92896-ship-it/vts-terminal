@@ -315,6 +315,84 @@ export async function removeFundedTrade(userId: string, tradeId: string): Promis
   return getFunded(userId);
 }
 
+// Pick the result row from a closed-trade screenshot that finalizes a given open
+// position. Prefer a row whose instrument matches; otherwise take the first row
+// carrying a P/L or exit price. Rows with neither aren't usable outcomes.
+function pickResultRow(
+  candidates: ParsedHistoryTrade[],
+  instrument: string,
+): { exitPrice: number | null; realizedPl: number | null; closedAt: number | null; units: number | null } | null {
+  const usable = candidates.filter((c) => c.realizedPl != null || c.exitPrice != null);
+  if (usable.length === 0) return null;
+  const want = instrument.trim().toUpperCase();
+  const match = usable.find((c) => (c.instrument ?? '').trim().toUpperCase() === want) ?? usable[0];
+  return {
+    exitPrice: cleanNum(match.exitPrice),
+    realizedPl: cleanNum(match.realizedPl),
+    closedAt: parseLooseDate(match.closedAt),
+    units: cleanNum(match.units),
+  };
+}
+
+// Finalize an OPEN funded position from a trade-result screenshot: stamp the exit
+// price, realized P/L and close time, and flip the trade to 'closed' so it drops
+// off the Live Wall and lands in the account's logged P/L and history. Returns
+// closed:false (with data untouched) when no usable outcome could be read, so the
+// caller can tell the trader to try a clearer screenshot.
+export async function closeFundedTrade(
+  userId: string,
+  tradeId: string,
+  candidates: ParsedHistoryTrade[],
+): Promise<{
+  data: FundedData;
+  closed: boolean;
+  result: { exitPrice: number | null; realizedPl: number | null; closedAt: number | null } | null;
+}> {
+  const existing = (
+    await db
+      .select()
+      .from(fundedTrades)
+      .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!existing) throw new Error('Trade not found');
+
+  const picked = pickResultRow(candidates, existing.instrument);
+  if (!picked) return { data: await getFunded(userId), closed: false, result: null };
+
+  const closedAt = picked.closedAt ?? Date.now();
+  const units = picked.units ?? existing.units;
+  const side: TradeSide = isSide(existing.side) ? existing.side : 'long';
+  // Recompute the dedupe fingerprint now that the trade carries an exit/P/L, so a
+  // later history import of this same closed trade doesn't double-log it.
+  const dedupKey = dedupKeyOf({
+    instrument: existing.instrument,
+    side,
+    units,
+    entryPrice: existing.entryPrice,
+    exitPrice: picked.exitPrice,
+    realizedPl: picked.realizedPl,
+    openedAt: existing.openedAt ? existing.openedAt.getTime() : null,
+    closedAt,
+  });
+  await db
+    .update(fundedTrades)
+    .set({
+      units,
+      exitPrice: picked.exitPrice,
+      realizedPl: picked.realizedPl,
+      status: 'closed',
+      closedAt: new Date(closedAt),
+      dedupKey,
+    })
+    .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)));
+  return {
+    data: await getFunded(userId),
+    closed: true,
+    result: { exitPrice: picked.exitPrice, realizedPl: picked.realizedPl, closedAt },
+  };
+}
+
 // A still-open funded position, tagged with the trader who owns it, for the Live
 // Wall. These are prop-account positions (no broker API): the wall marks them
 // against the desk's OANDA price. They never touch tradingPositions, so they

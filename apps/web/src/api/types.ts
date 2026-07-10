@@ -760,6 +760,15 @@ export interface FundedPositionResult {
   };
   model: string;
 }
+// Result of closing an OPEN funded position from a trade-result screenshot: the
+// trade is finalized with the exit price / P/L read off the image.
+export interface FundedCloseResult {
+  funded: FundedData;
+  closed: boolean;
+  result: { exitPrice: number | null; realizedPl: number | null; closedAt: number | null } | null;
+  summary: string;
+  model: string;
+}
 
 // ---- Personal Finance (mirror of apps/api/src/finance/service.ts) ----
 export type FtpPhase = 'testing' | 'funded';

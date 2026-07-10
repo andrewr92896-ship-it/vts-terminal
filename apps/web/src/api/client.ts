@@ -16,6 +16,7 @@ import type {
   FundedTradeInput,
   FundedImportResult,
   FundedPositionResult,
+  FundedCloseResult,
   ConnectionInput,
   ManualPosition,
   ManualPositionInput,
@@ -285,6 +286,11 @@ export const api = {
   },
   removeFundedTrade(id: string): Promise<FundedData> {
     return request(`/api/trading/funded/trades/${id}`, { method: 'DELETE' });
+  },
+  // Close an open funded position from a trade-result screenshot: Claude reads the
+  // exit price / P/L and finalizes that one trade (dropping it off the Live Wall).
+  closeFundedTrade(tradeId: string, image: { imageBase64: string; mediaType: string }): Promise<FundedCloseResult> {
+    return request(`/api/trading/funded/trades/${tradeId}/close`, { method: 'POST', body: JSON.stringify(image) });
   },
   // Import trades from a funded-account trade-history screenshot (dedup applied).
   importFundedTrades(accountId: string, image: { imageBase64: string; mediaType: string }): Promise<FundedImportResult> {

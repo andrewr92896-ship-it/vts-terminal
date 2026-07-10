@@ -20,6 +20,7 @@ import {
   removeFundedAccount,
   addFundedTrade,
   removeFundedTrade,
+  closeFundedTrade,
   importFundedTrades,
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
@@ -757,6 +758,47 @@ export async function tradingRoutes(app: FastifyInstance) {
           openedAt: Date.now(),
         });
         return { funded, parsed: p, model };
+      } catch (err) {
+        if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+        const msg = err instanceof Error ? err.message : 'Analysis failed';
+        return reply.code(502).send({ error: msg });
+      }
+    },
+  );
+
+  // Close an OPEN funded position from a trade-result screenshot (Opus 4.8 vision):
+  // read the exit price + realized P/L off the closed trade and finalize this one
+  // position, flipping it to 'closed' so it drops off the Live Wall and lands in
+  // the account's logged P/L. Cancelling the flow client-side updates nothing.
+  app.post(
+    '/api/trading/funded/trades/:id/close',
+    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    async (request, reply) => {
+      if (!aiConfigured()) {
+        return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+      }
+      const parsed = analyzeSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'A screenshot image is required' });
+      let data = parsed.data.imageBase64;
+      let media: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' = parsed.data.mediaType ?? 'image/png';
+      const mm = /^data:(image\/(?:png|jpeg|gif|webp));base64,(.*)$/s.exec(data);
+      if (mm) {
+        media = mm[1] as typeof media;
+        data = mm[2];
+      }
+      const uid = request.currentUser!.id;
+      const id = (request.params as { id: string }).id;
+      try {
+        await enforceAiLimit(uid, 'funded_screenshot');
+        const { parsed: p, model } = await parseTradeHistoryScreenshot(data, media);
+        const { data: funded, closed, result } = await closeFundedTrade(uid, id, p.trades);
+        if (!closed) {
+          return reply.code(422).send({
+            error:
+              "Couldn't read a trade result (exit price or P/L) from that screenshot. Try a clearer image, or remove the trade and log it by hand.",
+          });
+        }
+        return { funded, closed, result, summary: p.summary, model };
       } catch (err) {
         if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
         const msg = err instanceof Error ? err.message : 'Analysis failed';
