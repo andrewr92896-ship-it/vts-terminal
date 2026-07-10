@@ -12,12 +12,12 @@ import type { User } from '../api/types';
 interface AuthState {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   demoLogin: () => Promise<void>;
   logout: () => Promise<void>;
   // Self-service account actions; each updates the cached user on success.
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  updateProfile: (patch: { username?: string; displayName?: string }) => Promise<void>;
+  updateProfile: (patch: { username?: string; displayName?: string; email?: string }) => Promise<void>;
 }
 
 const AuthCtx = createContext<AuthState | null>(null);
@@ -44,8 +44,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const r = await api.login(username, password);
+  const login = useCallback(async (email: string, password: string) => {
+    const r = await api.login(email, password);
     setUser(r.user);
   }, []);
 
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    async (patch: { username?: string; displayName?: string }) => {
+    async (patch: { username?: string; displayName?: string; email?: string }) => {
       const r = await api.updateProfile(patch);
       setUser(r.user);
     },

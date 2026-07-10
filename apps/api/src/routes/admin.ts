@@ -7,6 +7,7 @@ import { AdminError, createUser, deleteUser, listUsers, updateUser } from '../ad
 const createSchema = z.object({
   username: z.string().trim().min(1).max(64),
   displayName: z.string().trim().min(1).max(120),
+  email: z.string().trim().email().max(255),
   password: z.string().min(8).max(256),
   roles: z.array(z.enum(ROLE_KEYS)),
   viewBrokerage: z.boolean().optional(),
@@ -14,6 +15,7 @@ const createSchema = z.object({
 
 const updateSchema = z.object({
   displayName: z.string().trim().min(1).max(120).optional(),
+  email: z.string().trim().email().max(255).optional(),
   roles: z.array(z.enum(ROLE_KEYS)).optional(),
   active: z.boolean().optional(),
   viewBrokerage: z.boolean().optional(),

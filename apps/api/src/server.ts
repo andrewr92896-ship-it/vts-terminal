@@ -25,7 +25,7 @@ import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
 import { runMigrations } from './db/migrate.js';
 import { waitForDatabase } from './db/index.js';
-import { seedAdmin, seedDemo } from './seed.js';
+import { seedAdmin, seedDemo, backfillEmails } from './seed.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
@@ -115,6 +115,8 @@ async function bootstrapDatabase(): Promise<void> {
   await waitForDatabase();
   await runMigrations();
   await seedAdmin();
+  // Give any pre-email accounts a sign-in email before email login goes live.
+  await backfillEmails();
   await seedDemo();
   await seedWelcome();
 }

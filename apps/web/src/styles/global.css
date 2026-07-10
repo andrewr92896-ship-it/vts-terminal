@@ -5,6 +5,33 @@
 @import '@fontsource/ibm-plex-mono/400.css';
 @import '@fontsource/ibm-plex-mono/600.css';
 
+/* Meridian design tokens — mirrored in theme/tokens.ts (C) so inline styles
+   and CSS share one palette. The shell is a unified blue-tinted navy; each
+   workspace is signalled only by its accent, never by a themed background. */
+:root {
+  --bg: #050b18; /* app background */
+  --side: #071021; /* sidebar */
+  --panel: #0a1426; /* cards */
+  --panel-2: #0c1930; /* nested / footer strips */
+
+  --line: #152139; /* default card border / dividers */
+  --line-2: #1e2e52; /* stronger border, inputs, chips */
+  --hover: #24365f; /* card border on hover */
+
+  --text: #e9effb; /* primary text */
+  --muted: #93a5c9; /* secondary text */
+  --faint: #5e7098; /* labels, metadata */
+
+  --gold: #ebcb74; /* primary actions, active nav, accents */
+  --gold-2: #c9a24b; /* gold gradient bottom stop */
+  --gold-text: #241a05; /* text on a gold button */
+  --green: #2fc77e; /* long / positive / live */
+  --red: #f0596e; /* short / negative / high impact */
+  --amber: #e5a43b; /* warnings, privacy banner */
+  --info: #6c9eff; /* LLC workspace accent */
+  --violet: #b69cff; /* Studies workspace accent */
+}
+
 * {
   box-sizing: border-box;
 }
@@ -13,8 +40,8 @@ html,
 body {
   margin: 0;
   padding: 0;
-  background: #060f24;
-  color: #dfe7fa;
+  background: var(--bg);
+  color: var(--text);
   font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
@@ -82,6 +109,14 @@ a {
 @keyframes slideIn {
   from {
     transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-100%);
   }
   to {
     transform: none;

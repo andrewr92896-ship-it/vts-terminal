@@ -1,30 +1,29 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
 import type { BrokerStatus, RoleKey } from '../api/types';
 import {
   THEMES,
-  BRAND,
-  TABS,
   DEFAULT_SCREEN,
   WORKSPACE_LABELS,
-  accentGradient,
   type WorkspaceKey,
-  type TabDef,
   type Theme,
 } from '../theme/themes';
+import { navFor, accentFor } from '../theme/nav';
+import { C } from '../theme/tokens';
 import { canAccessWorkspace, workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
 import { DemoTour } from './DemoTour';
 import { ErrorBoundary } from './ErrorBoundary';
+import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
-import { TabBar } from './TabBar';
+import { Icon } from './Icon';
 import { InstallPrompt } from './InstallPrompt';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
-import { PrivacyProvider } from '../privacy/privacy';
+import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
 import { DealershipProvider } from '../workspaces/kia/dealership';
 import { HelpHub } from './HelpHub';
 import { Screen } from '../workspaces/Screens';
@@ -34,14 +33,7 @@ import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
 import { KiaNews } from '../workspaces/kia/KiaNews';
 import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
 import { KiaTodo } from '../workspaces/kia/KiaTodo';
-import { WealthClients } from '../workspaces/wealth/WealthClients';
-import { WealthOverview } from '../workspaces/wealth/WealthOverview';
-import { WealthPortfolios } from '../workspaces/wealth/WealthPortfolios';
-import { WealthPlanning } from '../workspaces/wealth/WealthPlanning';
-import { WealthCompliance } from '../workspaces/wealth/WealthCompliance';
-import { FinanceOverview } from '../workspaces/finance/FinanceOverview';
-import { FinanceExpenses } from '../workspaces/finance/FinanceExpenses';
-import { FinanceNetWorth } from '../workspaces/finance/FinanceNetWorth';
+import { LlcWorkspace } from '../workspaces/llc/LlcWorkspace';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
 import { Alerts } from '../workspaces/trading/Alerts';
@@ -100,22 +92,6 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <KiaProductKnowledge />;
     case 'kia_todo':
       return <KiaTodo />;
-    case 'wm_home':
-      return <WealthOverview onNavigate={onNavigate} />;
-    case 'wm_clients':
-      return <WealthClients />;
-    case 'wm_portfolios':
-      return <WealthPortfolios />;
-    case 'wm_planning':
-      return <WealthPlanning />;
-    case 'wm_compliance':
-      return <WealthCompliance />;
-    case 'fin_overview':
-      return <FinanceOverview />;
-    case 'fin_expenses':
-      return <FinanceExpenses />;
-    case 'fin_networth':
-      return <FinanceNetWorth />;
     case 'st_home':
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
     case 'st_game':
@@ -123,6 +99,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
     case 'st_progress':
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     default:
+      // The Vitalis LLC workspace's sections all share one router.
+      if (screen.startsWith('llc_')) return <LlcWorkspace screen={screen} />;
       return null;
   }
 }
@@ -132,9 +110,19 @@ function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
   return allowed[0] ?? 'studies';
 }
 
+// The breadcrumb label for the current section (uses the nav config, with a
+// small fallback for legacy Trade Desk sub-views).
+function sectionLabelFor(workspace: WorkspaceKey, screen: string): string {
+  const nav = navFor(workspace);
+  const match = nav?.sections.find((s) => s.key === screen);
+  if (match) return match.label;
+  if (screen === 'log' || screen === 'history' || screen === 'metrics') return 'Trade Desk';
+  return nav?.sections[0]?.label ?? '';
+}
+
 export function Portal() {
   const { user, logout } = useAuth();
-  const { isPhone, isTablet } = useResponsive();
+  const { isPhone } = useResponsive();
 
   // Admin-only "view as role" preview: emulate someone who holds only the one
   // selected role. Pure UI gating; the server still enforces real roles.
@@ -155,16 +143,35 @@ export function Portal() {
   const [adminOpen, setAdminOpen] = useState(false);
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
+  // Sidebar collapse (desktop) — persisted per the design handoff.
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('vts_sidebar_collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem('vts_sidebar_collapsed', next ? '1' : '0');
+      } catch {
+        /* private mode can block storage */
+      }
+      return next;
+    });
+  }, []);
+
+  // Mobile off-canvas nav drawer.
+  const [navOpen, setNavOpen] = useState(false);
+
   const theme = THEMES[workspace];
-  const brand = BRAND[workspace];
+  const accent = accentFor(workspace);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Workspace sub-tabs. User management is opened from the top bar (not a tab).
-  const tabs: TabDef[] = TABS[workspace];
-
-  // Broker status drives the top-bar dots (Trading only).
+  // Broker status drives the settings-menu dots (Trading only).
   useEffect(() => {
-    // Clear any previously loaded dots so an admin previewing a non-trading role
-    // never sees stale broker status leak into that workspace.
     if (!allowed.includes('trading')) {
       setBrokers([]);
       return;
@@ -181,20 +188,36 @@ export function Portal() {
     };
   }, [allowed]);
 
-  function switchWorkspace(ws: WorkspaceKey) {
-    setWorkspace(ws);
-    setScreen(DEFAULT_SCREEN[ws]);
-  }
+  const resetScroll = useCallback(() => {
+    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+  }, []);
 
-  // Demo mode: a one-click, read-only showcase with a guided tour. The tour
-  // drives the portal to a specific workspace + screen, so it needs to set both.
+  const selectWorkspace = useCallback(
+    (ws: WorkspaceKey) => {
+      setWorkspace(ws);
+      setScreen(DEFAULT_SCREEN[ws]);
+      setNavOpen(false);
+      resetScroll();
+    },
+    [resetScroll],
+  );
+
+  const selectScreen = useCallback(
+    (scr: string) => {
+      setScreen(scr);
+      setNavOpen(false);
+      resetScroll();
+    },
+    [resetScroll],
+  );
+
+  // Demo mode: a one-click, read-only showcase with a guided tour.
   const isDemo = !!user?.isDemo;
   const [tourOpen, setTourOpen] = useState(false);
   const goTo = useCallback((ws: WorkspaceKey, scr: string) => {
     setWorkspace(ws);
     setScreen(scr);
   }, []);
-  // Open the tour automatically the first time a demo session loads.
   useEffect(() => {
     if (isDemo && sessionStorage.getItem('vts-demo-tour') !== 'seen') {
       setTourOpen(true);
@@ -205,7 +228,7 @@ export function Portal() {
     try {
       sessionStorage.setItem('vts-demo-tour', 'seen');
     } catch {
-      // Private mode can block storage; the tour just may reopen next load.
+      /* private mode can block storage */
     }
   }
 
@@ -219,245 +242,281 @@ export function Portal() {
     }
   }
 
-  // Keep the selected screen valid for the current workspace's tabs.
+  // Keep the selected screen valid for the current workspace.
   useEffect(() => {
-    if (!tabs.some((t) => t.key === screen)) {
+    const nav = navFor(workspace);
+    if (!nav) return;
+    const legacyTradeDesk = screen === 'log' || screen === 'history' || screen === 'metrics';
+    if (!nav.sections.some((s) => s.key === screen) && !legacyTradeDesk) {
       setScreen(DEFAULT_SCREEN[workspace]);
     }
-  }, [tabs, screen, workspace]);
+  }, [workspace, screen]);
+
+  const canTrade = canAccessWorkspace(effectiveRoles, 'trading');
+
+  const sidebar = (
+    <Sidebar
+      workspace={workspace}
+      screen={screen}
+      workspaces={allowed}
+      collapsed={isPhone ? false : collapsed}
+      onToggle={isPhone ? () => setNavOpen(false) : toggleCollapsed}
+      onSelectWorkspace={selectWorkspace}
+      onSelectScreen={selectScreen}
+    />
+  );
+
+  const topBar = (
+    <TopBar
+      user={user!}
+      effectiveRoles={effectiveRoles}
+      actingRole={actingRole}
+      workspaceLabel={WORKSPACE_LABELS[workspace]}
+      sectionLabel={sectionLabelFor(workspace, screen)}
+      accent={accent}
+      brokers={brokers}
+      canTrade={canTrade}
+      showMenuButton={isPhone}
+      onOpenNav={() => setNavOpen(true)}
+      onOpenClaude={() => setAiOpen(true)}
+      onOpenAccount={() => setAccountOpen(true)}
+      onOpenAdmin={() => setAdminOpen(true)}
+      onSetActingRole={changeActingRole}
+      onLogout={logout}
+    />
+  );
+
+  const main = (
+    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
+      {isDemo && <DemoBanner accent={accent} onTour={() => setTourOpen(true)} onExit={logout} />}
+      {topBar}
+      <PrivacyBanner />
+      <InstallPrompt theme={theme} />
+      <main ref={scrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+        <ErrorBoundary resetKey={screen}>
+          <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
+            {renderScreen(screen, theme, selectScreen) ?? <Screen screen={screen} theme={theme} />}
+          </Suspense>
+        </ErrorBoundary>
+        <footer
+          style={{
+            padding: isPhone ? '14px' : '16px 32px',
+            borderTop: `1px solid ${C.line}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 8,
+          }}
+        >
+          <span style={{ fontSize: 10.5, color: C.faint, letterSpacing: '0.3px' }}>
+            © 2026 Vitalis Trading Systems LLC. All rights reserved. Confidential.
+          </span>
+          <span style={{ fontSize: 10.5, color: C.faint, fontFamily: C.mono }}>{user!.access.label}</span>
+        </footer>
+      </main>
+    </div>
+  );
 
   return (
     <PrivacyProvider>
-    <DealershipProvider>
-    <AlertSoundProvider>
-    {/* Trade-alert sound: only watch (and chime) for users who can see the
-        Trading workspace. Renders nothing. */}
-    {canAccessWorkspace(effectiveRoles, 'trading') && <AlertSoundWatcher />}
-    <div
-      style={{
-        position: 'relative',
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        background: theme.pageBg,
-        color: '#dfe7fa',
-      }}
-    >
-      {/* Demo banner: makes the read-only showcase obvious and offers the tour. */}
-      {isDemo && (
-        <div
-          style={{
-            position: 'relative',
-            zIndex: 2,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexWrap: 'wrap',
-            gap: 12,
-            padding: '8px 16px',
-            background: 'linear-gradient(90deg,#0a1f4d,#0c2768)',
-            borderBottom: '1px solid #243f74',
-            fontSize: 12,
-          }}
-        >
-          <span style={{ color: '#eaf1ff' }}>
-            <strong style={{ color: theme.accent }}>Demo mode</strong>
-            <span style={{ color: '#9fb0d6' }}> · read-only · simulated data. The live portal is available on request.</span>
-          </span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button
-              onClick={() => setTourOpen(true)}
-              style={{
-                fontSize: 11.5,
-                fontWeight: 700,
-                color: theme.accentText,
-                background: accentGradient(theme),
-                border: 'none',
-                padding: '6px 12px',
-                borderRadius: 6,
-                cursor: 'pointer',
-              }}
-            >
-              Take the tour
-            </button>
-            <button
-              onClick={logout}
-              style={{
-                fontSize: 11.5,
-                fontWeight: 600,
-                color: '#cfe0ff',
-                background: 'rgba(255,255,255,.05)',
-                border: '1px solid #2a4170',
-                padding: '6px 12px',
-                borderRadius: 6,
-                cursor: 'pointer',
-              }}
-            >
-              Exit demo
-            </button>
-          </div>
-        </div>
-      )}
+      <DealershipProvider>
+        <AlertSoundProvider>
+          {canAccessWorkspace(effectiveRoles, 'trading') && <AlertSoundWatcher />}
 
-      {/* Background wordmark watermark — for workspaces with a wordmark logo. */}
-      {brand.wordmark && (
-        <img
-          src={brand.wordmark}
-          alt=""
-          aria-hidden
-          style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%,-50%)',
-            width: '66vw',
-            maxWidth: 980,
-            opacity: 0.06,
-            pointerEvents: 'none',
-            zIndex: 0,
-            filter: 'drop-shadow(0 0 70px rgba(235,203,116,.3))',
-            userSelect: 'none',
-          }}
-        />
-      )}
-
-      <TopBar
-        user={user!}
-        effectiveRoles={effectiveRoles}
-        actingRole={actingRole}
-        workspace={workspace}
-        workspaces={allowed}
-        theme={theme}
-        brand={brand}
-        brokers={brokers}
-        onSwitchWorkspace={switchWorkspace}
-        onOpenClaude={() => setAiOpen(true)}
-        onOpenAccount={() => setAccountOpen(true)}
-        onOpenAdmin={() => setAdminOpen(true)}
-        onSetActingRole={changeActingRole}
-        onLogout={logout}
-      />
-
-      <TabBar tabs={tabs} screen={screen} theme={theme} onSelect={setScreen} />
-
-      {/* Mobile-only "Install app" banner. Self-gating: hidden on desktop, when
-          already installed, when dismissed, or when install is not possible. */}
-      <InstallPrompt theme={theme} />
-
-      <main
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          flex: 1,
-          padding: isPhone ? '16px 14px 28px' : isTablet ? '20px 18px 36px' : '22px 26px 40px',
-        }}
-      >
-        <ErrorBoundary resetKey={screen}>
-          <Suspense fallback={<div style={{ padding: 24, color: '#8ea3cc', fontSize: 13 }}>Loading…</div>}>
-            {renderScreen(screen, theme, setScreen) ?? <Screen screen={screen} theme={theme} />}
-          </Suspense>
-        </ErrorBoundary>
-      </main>
-
-      <footer
-        style={{
-          position: 'relative',
-          zIndex: 1,
-          padding: isPhone ? '14px 14px' : '16px 26px',
-          borderTop: `1px solid ${theme.navBorder}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 8,
-        }}
-      >
-        <span style={{ fontSize: 10.5, color: '#5d72a0', letterSpacing: '0.3px' }}>
-          © 2026 Vitalis Trading Systems LLC. All rights reserved. Confidential.
-        </span>
-        <span
-          style={{
-            fontSize: 10.5,
-            color: '#5d72a0',
-            fontFamily: "'IBM Plex Mono', monospace",
-          }}
-        >
-          {user!.access.label}
-        </span>
-      </footer>
-
-      <AskClaudePanel open={aiOpen} theme={theme} workspace={workspace} workspaceLabel={WORKSPACE_LABELS[workspace]} onClose={() => setAiOpen(false)} />
-      <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
-
-      {/* User management — opened from the top-bar Admin button (admins only). */}
-      {adminOpen && (
-        <>
-          <div
-            onClick={() => setAdminOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 60, animation: 'fadeIn .2s ease' }}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            style={{
-              position: 'fixed',
-              top: isPhone ? 0 : '4vh',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              width: isPhone ? '100%' : 'min(1040px, 94vw)',
-              height: isPhone ? '100%' : '92vh',
-              overflowY: 'auto',
-              background: theme.pageBg,
-              border: isPhone ? 'none' : `1px solid ${theme.navBorder}`,
-              borderRadius: isPhone ? 0 : 14,
-              boxShadow: '0 24px 60px rgba(0,0,0,.55)',
-              zIndex: 61,
-              animation: 'popIn .25s ease',
-            }}
-          >
+          {isPhone ? (
+            <div style={{ height: '100vh', overflow: 'hidden', background: C.bg, color: C.text }}>
+              {main}
+              {/* Off-canvas nav drawer */}
+              {navOpen && (
+                <>
+                  <div
+                    onClick={() => setNavOpen(false)}
+                    style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 55, animation: 'fadeIn .2s ease' }}
+                  />
+                  <div
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      bottom: 0,
+                      width: 264,
+                      zIndex: 56,
+                      animation: 'slideInLeft .2s ease',
+                    }}
+                  >
+                    {sidebar}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
             <div
               style={{
-                position: 'sticky',
-                top: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '14px 18px',
-                background: theme.headerBg,
-                borderBottom: `1px solid ${theme.headerBorder}`,
+                display: 'grid',
+                gridTemplateColumns: `${collapsed ? 72 : 248}px 1fr`,
+                height: '100vh',
+                overflow: 'hidden',
+                background: C.bg,
+                color: C.text,
+                transition: 'grid-template-columns .18s ease',
               }}
             >
-              <strong style={{ fontSize: 15, color: '#eef3ff' }}>User Management</strong>
-              <button
+              {sidebar}
+              {main}
+            </div>
+          )}
+
+          <AskClaudePanel
+            open={aiOpen}
+            theme={theme}
+            workspace={workspace}
+            workspaceLabel={WORKSPACE_LABELS[workspace]}
+            onClose={() => setAiOpen(false)}
+          />
+          <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
+
+          {/* User management — opened from the avatar menu (admins only). */}
+          {adminOpen && (
+            <>
+              <div
                 onClick={() => setAdminOpen(false)}
-                aria-label="Close"
-                style={{ background: 'none', border: 'none', color: '#9fb0d6', fontSize: 22, lineHeight: 1, cursor: 'pointer' }}
+                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 60, animation: 'fadeIn .2s ease' }}
+              />
+              <div
+                role="dialog"
+                aria-modal="true"
+                style={{
+                  position: 'fixed',
+                  top: isPhone ? 0 : '4vh',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: isPhone ? '100%' : 'min(1040px, 94vw)',
+                  height: isPhone ? '100%' : '92vh',
+                  overflowY: 'auto',
+                  background: C.bg,
+                  border: isPhone ? 'none' : `1px solid ${C.line2}`,
+                  borderRadius: isPhone ? 0 : 14,
+                  boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+                  zIndex: 61,
+                  animation: 'popIn .25s ease',
+                }}
               >
-                ×
-              </button>
-            </div>
-            <div style={{ padding: isPhone ? '16px 14px' : '20px 22px' }}>
-              <AdminUsers theme={theme} />
-            </div>
-          </div>
-        </>
-      )}
+                <div
+                  style={{
+                    position: 'sticky',
+                    top: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 18px',
+                    background: C.side,
+                    borderBottom: `1px solid ${C.line}`,
+                  }}
+                >
+                  <strong style={{ fontSize: 15, color: C.text }}>User Management</strong>
+                  <button
+                    onClick={() => setAdminOpen(false)}
+                    aria-label="Close"
+                    style={{ background: 'none', border: 'none', color: C.muted, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div style={{ padding: isPhone ? '16px 14px' : '20px 22px' }}>
+                  <AdminUsers theme={theme} />
+                </div>
+              </div>
+            </>
+          )}
 
-      {/* Corner hub: per-screen how-to, the chats, patch notes, and announcements. */}
-      <HelpHub screen={screen} theme={theme} user={user!} />
+          <HelpHub screen={screen} theme={theme} user={user!} />
 
-      {/* Guided demo tour: drives the portal screen-by-screen for reviewers. */}
-      {isDemo && tourOpen && (
-        <DemoTour
-          theme={theme}
-          onGo={goTo}
-          onOpenClaude={() => setAiOpen(true)}
-          onClose={closeTour}
-        />
-      )}
-    </div>
-    </AlertSoundProvider>
-    </DealershipProvider>
+          {isDemo && tourOpen && (
+            <DemoTour theme={theme} onGo={goTo} onOpenClaude={() => setAiOpen(true)} onClose={closeTour} />
+          )}
+        </AlertSoundProvider>
+      </DealershipProvider>
     </PrivacyProvider>
+  );
+}
+
+// Amber "Privacy mode on" banner shown under the top bar when masking is active.
+function PrivacyBanner() {
+  const { privacy } = usePrivacy();
+  if (!privacy) return null;
+  return (
+    <div
+      style={{
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '7px 32px',
+        background: 'rgba(229,164,59,.08)',
+        borderBottom: '1px solid rgba(229,164,59,.25)',
+        fontSize: 12,
+        color: C.amber,
+      }}
+    >
+      <Icon name="eye-off" size={14} />
+      Privacy mode on — names and dollar amounts are hidden.
+    </div>
+  );
+}
+
+function DemoBanner({ accent, onTour, onExit }: { accent: string; onTour: () => void; onExit: () => void }) {
+  return (
+    <div
+      style={{
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+        gap: 12,
+        padding: '8px 16px',
+        background: C.panel2,
+        borderBottom: `1px solid ${C.line2}`,
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: C.text }}>
+        <strong style={{ color: accent }}>Demo mode</strong>
+        <span style={{ color: C.muted }}> · read-only · simulated data. The live portal is available on request.</span>
+      </span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button
+          onClick={onTour}
+          style={{
+            fontSize: 11.5,
+            fontWeight: 700,
+            color: C.goldText,
+            background: 'linear-gradient(180deg, #EBCB74, #C9A24B)',
+            border: 'none',
+            padding: '6px 12px',
+            borderRadius: 6,
+            cursor: 'pointer',
+          }}
+        >
+          Take the tour
+        </button>
+        <button
+          onClick={onExit}
+          style={{
+            fontSize: 11.5,
+            fontWeight: 600,
+            color: C.muted,
+            background: 'rgba(255,255,255,.05)',
+            border: `1px solid ${C.line2}`,
+            padding: '6px 12px',
+            borderRadius: 6,
+            cursor: 'pointer',
+          }}
+        >
+          Exit demo
+        </button>
+      </div>
+    </div>
   );
 }

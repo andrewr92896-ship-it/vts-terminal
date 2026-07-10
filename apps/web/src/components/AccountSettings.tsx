@@ -28,6 +28,7 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
 
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [profileMsg, setProfileMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
 
@@ -42,6 +43,7 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
     if (open && user) {
       setDisplayName(user.displayName);
       setUsername(user.username);
+      setEmail(user.email ?? '');
       setProfileMsg(null);
       setPwMsg(null);
       setCurrentPassword('');
@@ -60,16 +62,20 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
   // their own device. The demo is look-only and never subscribes.
   const canUsePush = !isDemo && canAccessWorkspace(user.roles, 'trading');
 
+  const emailChanged = email.trim().toLowerCase() !== (user.email ?? '').toLowerCase();
   const profileChanged =
-    displayName.trim() !== user.displayName || username.trim().toLowerCase() !== user.username;
+    displayName.trim() !== user.displayName ||
+    username.trim().toLowerCase() !== user.username ||
+    emailChanged;
 
   async function saveProfile() {
     if (!user) return;
     setProfileMsg(null);
-    const patch: { username?: string; displayName?: string } = {};
+    const patch: { username?: string; displayName?: string; email?: string } = {};
     if (displayName.trim() !== user.displayName) patch.displayName = displayName.trim();
     if (username.trim().toLowerCase() !== user.username) patch.username = username.trim();
-    if (!patch.username && !patch.displayName) return;
+    if (emailChanged) patch.email = email.trim();
+    if (!patch.username && !patch.displayName && !patch.email) return;
     setProfileBusy(true);
     try {
       await updateProfile(patch);
@@ -196,6 +202,18 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
               readOnly={isDemo}
               style={inputStyle}
             />
+            <label style={{ ...fieldLabel, marginTop: 14 }}>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoCapitalize="none"
+              autoCorrect="off"
+              autoComplete="email"
+              readOnly={isDemo}
+              style={inputStyle}
+            />
+            <p style={hintStyle}>Your email is what you sign in with.</p>
             <label style={{ ...fieldLabel, marginTop: 14 }}>Username</label>
             <input
               value={username}
@@ -206,7 +224,7 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
               style={inputStyle}
             />
             <p style={hintStyle}>
-              Your username is what you sign in with. Changing it won't affect how your
+              A short handle shown around the portal. Changing it won't affect how your
               account appears to the admin.
             </p>
             {profileMsg && (
@@ -216,9 +234,19 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
               <div style={{ marginTop: 12 }}>
                 <button
                   onClick={saveProfile}
-                  disabled={profileBusy || !profileChanged || !displayName.trim() || !username.trim()}
+                  disabled={
+                    profileBusy ||
+                    !profileChanged ||
+                    !displayName.trim() ||
+                    !username.trim() ||
+                    !email.trim()
+                  }
                   style={saveBtn(
-                    profileBusy || !profileChanged || !displayName.trim() || !username.trim(),
+                    profileBusy ||
+                      !profileChanged ||
+                      !displayName.trim() ||
+                      !username.trim() ||
+                      !email.trim(),
                   )}
                 >
                   {profileBusy ? 'Saving...' : 'Save profile'}

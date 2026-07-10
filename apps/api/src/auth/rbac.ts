@@ -1,7 +1,7 @@
 import type { UserRow } from '../db/schema.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 
-export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'wealth' | 'finance';
+export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'llc' | 'wealth' | 'finance';
 
 // Granular, admin-assigned roles. A user can hold any combination. `admin`
 // grants everything (including user management); `trading_viewer` is read-only
@@ -55,6 +55,8 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   kia: ['sales'],
   todo: ['todo'],
   studies: ['studies'],
+  // Owner-only business workspace: no role grants it, so only admins see it.
+  llc: [],
   wealth: ['wealth'],
   finance: ['finance'],
 };
@@ -72,9 +74,10 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
   return roles.includes('trading_viewer');
 }
 
-// Ordered as the top-bar switcher shows them.
+// Ordered as the sidebar shows them. Wealth Management and Finance are removed
+// from the Meridian nav; the LLC business workspace is added (admin-only).
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'wealth', 'finance', 'studies'];
+  const order: WorkspaceKey[] = ['trading', 'kia', 'studies', 'todo', 'llc'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 

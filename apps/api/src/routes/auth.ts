@@ -15,10 +15,18 @@ import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { ensureDemoAccount } from '../seed.js';
 
-const loginSchema = z.object({
-  username: z.string().trim().min(1).max(64),
-  password: z.string().min(1).max(256),
-});
+// Sign-in is by email. `username` is still accepted as an optional fallback
+// identifier so a legacy credential (or an account whose email is not yet set)
+// keeps working during the transition; both are matched case-insensitively.
+const loginSchema = z
+  .object({
+    email: z.string().trim().min(1).max(255).optional(),
+    username: z.string().trim().min(1).max(64).optional(),
+    password: z.string().min(1).max(256),
+  })
+  .refine((v) => !!(v.email || v.username), {
+    message: 'Email and password required',
+  });
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(256),
@@ -29,8 +37,9 @@ const profileSchema = z
   .object({
     username: z.string().trim().min(1).max(64).optional(),
     displayName: z.string().trim().min(1).max(120).optional(),
+    email: z.string().trim().email().max(255).optional(),
   })
-  .refine((v) => v.username != null || v.displayName != null, {
+  .refine((v) => v.username != null || v.displayName != null || v.email != null, {
     message: 'Nothing to update',
   });
 
@@ -38,26 +47,34 @@ export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/login', async (request, reply) => {
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: 'Username and password required' });
+      return reply.code(400).send({ error: 'Email and password required' });
     }
-    const { username, password } = parsed.data;
+    const { email, username, password } = parsed.data;
+    const identifier = (email ?? username)!.toLowerCase();
 
-    const rows = await db
+    // Primary: match by email. The demo account is excluded — its email column
+    // stores an internal seed-version marker, not a real address. Fallback:
+    // match by username so a not-yet-emailed account can still sign in.
+    let rows = await db
       .select()
       .from(users)
-      .where(eq(users.username, username.toLowerCase()))
+      .where(and(eq(users.email, identifier), ne(users.username, DEMO_USERNAME)))
       .limit(1);
-    const user = rows[0];
+    let user = rows[0];
+    if (!user) {
+      rows = await db.select().from(users).where(eq(users.username, identifier)).limit(1);
+      user = rows[0];
+    }
 
     // Same generic error and a verify call even when the user is missing,
-    // so timing and messaging do not reveal which usernames exist.
+    // so timing and messaging do not reveal which accounts exist.
     const ok =
       !!user &&
       user.active &&
       (await verifyPassword(user.passwordHash, password));
 
     if (!ok || !user) {
-      return reply.code(401).send({ error: 'Invalid username or password' });
+      return reply.code(401).send({ error: 'Invalid email or password' });
     }
 
     const { token, maxAgeSeconds } = await createSession(
@@ -151,7 +168,7 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Nothing to update' });
     }
     const me = request.currentUser!;
-    const patch: { username?: string; displayName?: string; updatedAt: Date } = {
+    const patch: { username?: string; displayName?: string; email?: string; updatedAt: Date } = {
       updatedAt: new Date(),
     };
 
@@ -169,6 +186,18 @@ export async function authRoutes(app: FastifyInstance) {
     }
     if (parsed.data.displayName != null) {
       patch.displayName = parsed.data.displayName.trim();
+    }
+    if (parsed.data.email != null) {
+      const email = parsed.data.email.toLowerCase();
+      const clash = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), ne(users.id, me.id)))
+        .limit(1);
+      if (clash[0]) {
+        return reply.code(400).send({ error: 'That email is already in use' });
+      }
+      patch.email = email;
     }
 
     await db.update(users).set(patch).where(eq(users.id, me.id));

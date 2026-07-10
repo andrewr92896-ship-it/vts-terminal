@@ -77,6 +77,7 @@ export async function listUsers(): Promise<AdminUserView[]> {
 export interface CreateUserInput {
   username: string;
   displayName: string;
+  email: string;
   password: string;
   roles: string[];
   viewBrokerage?: boolean;
@@ -84,11 +85,23 @@ export interface CreateUserInput {
 
 export class AdminError extends Error {}
 
+// Reject an email already used by another account (case-insensitive). Emails are
+// the sign-in identifier, so they must be unique. `exceptId` skips the account
+// being edited.
+async function assertEmailFree(email: string, exceptId?: string): Promise<void> {
+  const rows = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(2);
+  if (rows.some((r) => r.id !== exceptId)) {
+    throw new AdminError('That email is already in use');
+  }
+}
+
 export async function createUser(input: CreateUserInput): Promise<AdminUserView> {
   const username = input.username.trim().toLowerCase();
   const displayName = input.displayName.trim();
+  const email = input.email.trim().toLowerCase();
   if (!username) throw new AdminError('Username is required');
   if (!displayName) throw new AdminError('Display name is required');
+  if (!email) throw new AdminError('Email is required');
   if (input.password.length < 8) {
     throw new AdminError('Temporary password must be at least 8 characters');
   }
@@ -100,6 +113,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     .where(eq(users.username, username))
     .limit(1);
   if (existing[0]) throw new AdminError('That username is already taken');
+  await assertEmailFree(email);
 
   const now = new Date();
   const row = {
@@ -107,7 +121,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     username,
     createdUsername: username, // preserved even if the user renames later
     displayName,
-    email: null,
+    email,
     passwordHash: await hashPassword(input.password),
     role: 'Viewer' as const, // legacy column, unused; kept populated for type/back-compat
     roles: JSON.stringify(roles),
@@ -124,6 +138,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
 
 export interface UpdateUserInput {
   displayName?: string;
+  email?: string;
   roles?: string[];
   active?: boolean;
   viewBrokerage?: boolean;
@@ -157,6 +172,12 @@ export async function updateUser(
     const dn = input.displayName.trim();
     if (!dn) throw new AdminError('Display name cannot be empty');
     patch.displayName = dn;
+  }
+  if (input.email != null) {
+    const email = input.email.trim().toLowerCase();
+    if (!email) throw new AdminError('Email cannot be empty');
+    await assertEmailFree(email, targetId);
+    patch.email = email;
   }
   if (input.roles != null) patch.roles = JSON.stringify(cleanRoles(input.roles));
   if (input.active != null) patch.active = input.active;

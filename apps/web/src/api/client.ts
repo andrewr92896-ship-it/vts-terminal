@@ -120,10 +120,10 @@ export const api = {
   me(): Promise<{ user: User }> {
     return request('/api/auth/me');
   },
-  login(username: string, password: string): Promise<{ user: User }> {
+  login(email: string, password: string): Promise<{ user: User }> {
     return request('/api/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ email, password }),
     });
   },
   logout(): Promise<{ ok: boolean }> {
@@ -138,7 +138,11 @@ export const api = {
       body: JSON.stringify({ currentPassword, newPassword }),
     });
   },
-  updateProfile(patch: { username?: string; displayName?: string }): Promise<{ user: User }> {
+  updateProfile(patch: {
+    username?: string;
+    displayName?: string;
+    email?: string;
+  }): Promise<{ user: User }> {
     return request('/api/auth/profile', {
       method: 'PATCH',
       body: JSON.stringify(patch),
@@ -150,6 +154,7 @@ export const api = {
   adminCreateUser(input: {
     username: string;
     displayName: string;
+    email: string;
     password: string;
     roles: RoleKey[];
     viewBrokerage?: boolean;
@@ -163,6 +168,7 @@ export const api = {
     id: string,
     patch: {
       displayName?: string;
+      email?: string;
       roles?: RoleKey[];
       active?: boolean;
       viewBrokerage?: boolean;

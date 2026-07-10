@@ -35,6 +35,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   // Create form
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [roles, setRoles] = useState<RoleKey[]>(['todo']);
   const [password, setPassword] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
@@ -68,8 +69,8 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   async function create() {
     setCreateError(null);
     setCreated(null);
-    if (!displayName.trim() || !username.trim()) {
-      setCreateError('Name and username are required.');
+    if (!displayName.trim() || !username.trim() || !email.trim()) {
+      setCreateError('Name, email, and username are required.');
       return;
     }
     if (password.length < 8) {
@@ -81,12 +82,14 @@ export function AdminUsers({ theme }: { theme: Theme }) {
       await api.adminCreateUser({
         displayName: displayName.trim(),
         username: username.trim(),
+        email: email.trim(),
         roles,
         password,
       });
       setCreated({ username: username.trim().toLowerCase(), password });
       setDisplayName('');
       setUsername('');
+      setEmail('');
       setRoles(['todo']);
       setPassword('');
       await refresh();
@@ -160,6 +163,18 @@ export function AdminUsers({ theme }: { theme: Theme }) {
           <div>
             <label style={fieldLabel}>Display name</label>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Jane Smith" style={inputStyle} />
+          </div>
+          <div>
+            <label style={fieldLabel}>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="jane@vitalistradingsystems.com"
+              autoCapitalize="none"
+              autoCorrect="off"
+              style={inputStyle}
+            />
           </div>
           <div>
             <label style={fieldLabel}>Username</label>
@@ -242,6 +257,11 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                     @{u.username}
                     {renamed && <span style={{ color: '#6f84b2' }}> (created as @{u.createdUsername})</span>}
                   </div>
+                  {u.email && (
+                    <div style={{ fontSize: 11.5, color: '#6f84b2', fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
+                      {u.email}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
                     {!u.active && <Badge color="#ef5468">Inactive</Badge>}
                     {u.mustChangePassword && <Badge color="#e0a23a">Must set password</Badge>}

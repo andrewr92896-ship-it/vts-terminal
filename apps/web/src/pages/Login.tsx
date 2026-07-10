@@ -4,7 +4,7 @@ import { ApiError } from '../api/client';
 
 export function Login() {
   const { login, demoLogin } = useAuth();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -15,7 +15,7 @@ export function Login() {
     setError(null);
     setBusy(true);
     try {
-      await login(username, password);
+      await login(email, password);
     } catch (err) {
       setError(
         err instanceof ApiError ? err.message : 'Could not sign in. Try again.',
@@ -101,14 +101,19 @@ export function Login() {
           Portal Login
         </p>
 
-        <label style={labelStyle}>Username</label>
+        <label style={labelStyle}>Email</label>
         <input
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          autoComplete="username"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoComplete="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          placeholder="you@vitalistradingsystems.com"
           autoFocus
           style={inputStyle}
         />
+        <p style={helpStyle}>Your email is what you sign in with.</p>
 
         <label style={{ ...labelStyle, marginTop: 16 }}>Password</label>
         <input
@@ -137,7 +142,7 @@ export function Login() {
 
         <button
           type="submit"
-          disabled={busy || !username || !password}
+          disabled={busy || !email || !password}
           style={{
             width: '100%',
             marginTop: 24,
@@ -150,7 +155,7 @@ export function Login() {
             letterSpacing: '0.3px',
             color: '#0c2768',
             background: 'linear-gradient(180deg,#EBCB74,#C9A24B)',
-            opacity: busy || !username || !password ? 0.6 : 1,
+            opacity: busy || !email || !password ? 0.6 : 1,
           }}
         >
           {busy ? 'Signing in...' : 'Sign In'}
@@ -228,6 +233,13 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   color: '#8ea3cc',
   marginBottom: 7,
+};
+
+const helpStyle: React.CSSProperties = {
+  margin: '7px 0 0',
+  fontSize: 10.5,
+  color: '#6f84b2',
+  letterSpacing: '0.2px',
 };
 
 const inputStyle: React.CSSProperties = {

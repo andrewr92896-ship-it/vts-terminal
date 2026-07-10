@@ -48,6 +48,9 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   kia: ['sales'],
   todo: ['todo'],
   studies: ['studies'],
+  // The Vitalis Trading Systems LLC business workspace is owner-only for now:
+  // no dedicated role grants it, so only admins see it (isAdmin short-circuits).
+  llc: [],
   wealth: ['wealth'],
   finance: ['finance'],
 };
@@ -66,9 +69,10 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
   return roles.includes('trading_viewer');
 }
 
-// Ordered as the switcher shows them.
+// Ordered as the sidebar shows them. Wealth Management and Finance are removed
+// from the Meridian nav; the LLC business workspace is added (admin-only).
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['todo', 'kia', 'trading', 'wealth', 'finance', 'studies'];
+  const order: WorkspaceKey[] = ['trading', 'kia', 'studies', 'todo', 'llc'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 
