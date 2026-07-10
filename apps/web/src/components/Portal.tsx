@@ -96,6 +96,8 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
     case 'st_game':
       return <Series65Game theme={theme} />;
+    case 'st_test':
+      return <Series65Game theme={theme} initialView="test" />;
     case 'st_progress':
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     default:

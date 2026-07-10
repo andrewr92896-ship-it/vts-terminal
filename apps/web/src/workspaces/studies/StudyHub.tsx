@@ -40,7 +40,8 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
           A self-quiz game across the four exam areas — Economic Factors, Investment Vehicles, Client
           Recommendations, and Laws &amp; Ethics — weighted to the real exam. Level up each category
-          as you answer, and watch your last-100 score against the ~72% pass line.
+          as you answer, and watch your last-100 score against the ~72% pass line. Or sit a full
+          100-question mock test drawn to the real exam mix and put your score on the leaderboard.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr 1fr' : 'repeat(3,1fr)', gap: 10, margin: '18px 0' }}>
@@ -52,6 +53,9 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button onClick={() => { requestStudyView('quiz'); onNavigate('st_game'); }} style={primaryBtn(theme, accentGrad)}>
             Play the Study Game
+          </button>
+          <button onClick={() => { requestStudyView('test'); onNavigate('st_game'); }} style={ghostBtn(theme)}>
+            Take a mock test
           </button>
           <button onClick={() => { requestStudyView('cards'); onNavigate('st_game'); }} style={ghostBtn(theme)}>
             Flashcards

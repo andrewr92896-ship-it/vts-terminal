@@ -25,6 +25,37 @@ export interface LeaderboardEntry {
   isMe: boolean;
 }
 
+// ---- Studies: mock tests (mirror of apps/api/src/studies/tests.ts) ----
+// Per-topic correct/total for a finished test, keyed by Series 65 topic name.
+export type TestBreakdown = Record<string, { correct: number; total: number }>;
+
+// One finished mock test, stamped with the learner's attempt number.
+export interface TestResult {
+  id: string;
+  attempt: number; // this learner's Nth completed test
+  score: number; // percent correct, 0..100
+  correct: number;
+  total: number;
+  breakdown: TestBreakdown;
+  passed: boolean;
+  durationMs: number | null;
+  createdAt: number;
+}
+
+// One player's best test on the high-score board.
+export interface TestLeaderboardEntry {
+  userId: string;
+  name: string;
+  score: number;
+  correct: number;
+  total: number;
+  attempt: number; // the attempt number that produced this best score
+  attempts: number; // total tests finished
+  passed: boolean;
+  createdAt: number;
+  isMe: boolean;
+}
+
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {
   id: string;

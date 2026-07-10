@@ -43,6 +43,9 @@ import type {
   KiaDashboard,
   KiaDealParseResult,
   LeaderboardEntry,
+  TestBreakdown,
+  TestLeaderboardEntry,
+  TestResult,
   RemovedKiaDeal,
   RemovedTodoItem,
   PracticeOverview,
@@ -405,6 +408,22 @@ export const api = {
   },
   studyLeaderboard(): Promise<{ entries: LeaderboardEntry[] }> {
     return request('/api/studies/leaderboard');
+  },
+  // Record a finished 100-question mock test; returns it stamped with the
+  // server-assigned attempt number.
+  recordStudyTest(input: {
+    score: number;
+    correct: number;
+    total: number;
+    passed: boolean;
+    durationMs: number | null;
+    breakdown: TestBreakdown;
+  }): Promise<{ result: TestResult }> {
+    return request('/api/studies/tests', { method: 'POST', body: JSON.stringify(input) });
+  },
+  // The test high-score board plus the caller's own attempt history.
+  studyTestLeaderboard(): Promise<{ entries: TestLeaderboardEntry[]; mine: TestResult[] }> {
+    return request('/api/studies/tests/leaderboard');
   },
   // Custom flashcard deck (user-added words with AI-generated definitions).
   studyVocab(): Promise<{ cards: CustomVocabCard[] }> {

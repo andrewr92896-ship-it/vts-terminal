@@ -6,6 +6,7 @@ import { getGame, getLeaderboard, normalizeState, saveGame } from '../studies/ga
 import { addVocab, listVocab, removeVocab } from '../studies/vocab.js';
 import { addStarred, listStarred, removeStarred } from '../studies/starred.js';
 import { addSection, listSections, removeSection } from '../studies/sections.js';
+import { getTestLeaderboard, listMyTests, recordTest } from '../studies/tests.js';
 import { aiConfigured, classifyQuestionsIntoSection, defineSeries65Term } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 
@@ -18,6 +19,22 @@ const vocabAddSchema = z.object({
   def: z.string().trim().min(1).max(1000).optional(),
 });
 const starSchema = z.object({ id: z.number().int().nonnegative().max(100000) });
+
+// A finished mock test: its final score plus a per-topic breakdown. The attempt
+// number is assigned server-side, so it is not accepted from the client here.
+const testRecordSchema = z.object({
+  score: z.number().min(0).max(100),
+  correct: z.number().int().min(0).max(1000),
+  total: z.number().int().min(1).max(1000),
+  passed: z.boolean(),
+  durationMs: z.number().int().min(0).max(86_400_000).nullable().optional(),
+  breakdown: z
+    .record(
+      z.string().max(60),
+      z.object({ correct: z.number().int().min(0).max(1000), total: z.number().int().min(0).max(1000) }),
+    )
+    .optional(),
+});
 
 // Creating a custom subsection: the client sends its name plus a condensed copy
 // of the question bank (id + stem + broad topic). Claude picks the matching ids.
@@ -175,5 +192,33 @@ export async function studiesRoutes(app: FastifyInstance) {
   // where they stand and compare progress with each other.
   app.get('/api/studies/leaderboard', guard, async (request) => {
     return { entries: await getLeaderboard(request.currentUser!.id) };
+  });
+
+  // ---- Mock tests ----
+  // Record a finished 100-question mock exam and return it stamped with the
+  // server-assigned attempt number, so the client can show "recorded as attempt
+  // #N" and the test leaderboard updates.
+  app.post('/api/studies/tests', guard, async (request, reply) => {
+    const parsed = testRecordSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A completed test result is required' });
+    const result = await recordTest(request.currentUser!.id, {
+      score: parsed.data.score,
+      correct: parsed.data.correct,
+      total: parsed.data.total,
+      passed: parsed.data.passed,
+      durationMs: parsed.data.durationMs ?? null,
+      breakdown: parsed.data.breakdown ?? {},
+    });
+    return { result };
+  });
+
+  // The test high-score board (each player's best run, tagged with the attempt
+  // that produced it) plus the caller's own attempt history.
+  app.get('/api/studies/tests/leaderboard', guard, async (request) => {
+    const [entries, mine] = await Promise.all([
+      getTestLeaderboard(request.currentUser!.id),
+      listMyTests(request.currentUser!.id),
+    ]);
+    return { entries, mine };
   });
 }
