@@ -15,6 +15,7 @@ import {
   type OandaCreds,
 } from './connections.js';
 import { isDemoUser } from '../demo/identity.js';
+import { getDeskSettings } from './settings.js';
 import { pushConfigured } from '../notifications/push.js';
 import { pushoverConfigured } from '../notifications/pushover.js';
 import { config } from '../config.js';
@@ -219,6 +220,7 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   // them in full — no separate viewBrokerage grant required.
   const canSeeBalances = true;
   const generatedAt = Date.now();
+  const { breakEvenPct } = await getDeskSettings();
 
   // Every active connection across the trading team — not just this user's — so
   // the wall shows the whole desk's open positions, each tagged with its owner.
@@ -264,6 +266,7 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
       brokers,
       trades,
       note: 'Sample data — add a broker connection to stream the desk’s live positions.',
+      breakEvenPct,
     };
   }
 
@@ -286,7 +289,7 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   const failed = brokers.filter((b) => !b.ok);
   const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
 
-  return { source: 'live', generatedAt, canSeeBalances, brokers, trades, note };
+  return { source: 'live', generatedAt, canSeeBalances, brokers, trades, note, breakEvenPct };
 }
 
 // Fan out to every active connection and merge their open positions, recording

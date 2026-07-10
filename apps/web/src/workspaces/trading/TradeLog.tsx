@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
+import { classifyOutcome } from './outcome';
 import type {
   RemovedTrade,
   TradeInput,
@@ -69,18 +70,20 @@ function slippageFavorable(t: TradeRecord): boolean | null {
 }
 
 // Recompute the KPI stats for a subset of trades (one trader's), mirroring the
-// backend's desk-wide summarize() so a per-trader view reads the same way.
-function summarizeTrades(trades: TradeRecord[]): TradeSummary {
-  let open = 0, closed = 0, wins = 0, losses = 0, totalPl = 0, slipSum = 0, slipCount = 0, scored = 0;
+// backend's desk-wide summarize() so a per-trader view reads the same way —
+// including the desk-wide break-even band.
+function summarizeTrades(trades: TradeRecord[], breakEvenPct: number): TradeSummary {
+  let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, slipSum = 0, slipCount = 0;
   for (const t of trades) {
     if (t.status === 'open') open += 1;
     else closed += 1;
     if (t.realizedPl != null) {
       totalPl += t.realizedPl;
       if (t.status === 'closed') {
-        scored += 1;
-        if (t.realizedPl >= 0) wins += 1;
-        else losses += 1;
+        const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
+        if (outcome === 'win') wins += 1;
+        else if (outcome === 'loss') losses += 1;
+        else breakeven += 1;
       }
     }
     if (t.slippage != null) {
@@ -88,13 +91,15 @@ function summarizeTrades(trades: TradeRecord[]): TradeSummary {
       slipCount += 1;
     }
   }
+  const decided = wins + losses;
   return {
     total: trades.length,
     open,
     closed,
     wins,
     losses,
-    winRate: scored > 0 ? wins / scored : 0,
+    breakeven,
+    winRate: decided > 0 ? wins / decided : 0,
     totalRealizedPl: totalPl,
     avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
   };
@@ -189,12 +194,15 @@ export function TradeLog() {
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
-  const s = trader ? summarizeTrades(shownTrades) : data.summary;
+  const s = trader ? summarizeTrades(shownTrades, data.breakEvenPct) : data.summary;
   const selectedTraderName = traders.find((t) => t.id === trader)?.name ?? null;
+  // W · L · BE. Break-even trades are shown only when the desk has a band set or
+  // any actually landed there, so the line stays clean when the feature is off.
+  const wlSub = `${s.wins}W · ${s.losses}L${data.breakEvenPct > 0 || s.breakeven > 0 ? ` · ${s.breakeven}BE` : ''}`;
 
   const kpis: { label: string; val: string; sub: string }[] = [
     { label: 'Trades', val: String(s.total), sub: `${s.open} open · ${s.closed} closed` },
-    { label: 'Win Rate', val: s.closed ? `${Math.round(s.winRate * 100)}%` : '—', sub: `${s.wins}W · ${s.losses}L` },
+    { label: 'Win Rate', val: s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—', sub: wlSub },
     {
       label: 'Realized P/L',
       val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••',
@@ -297,6 +305,7 @@ export function TradeLog() {
             <DeckCard
               key={t.id}
               t={t}
+              breakEvenPct={data.breakEvenPct}
               showMoney={showMoney}
               canSeeBalances={canSeeBalances}
               readOnly={readOnly}
@@ -310,6 +319,7 @@ export function TradeLog() {
       ) : (
         <Tape
           trades={shownTrades}
+          breakEvenPct={data.breakEvenPct}
           showMoney={showMoney}
           canSeeBalances={canSeeBalances}
           readOnly={readOnly}
@@ -328,6 +338,7 @@ export function TradeLog() {
 // ---- Deck card (with inline edit) ----
 function DeckCard({
   t,
+  breakEvenPct,
   showMoney,
   canSeeBalances,
   readOnly,
@@ -337,6 +348,7 @@ function DeckCard({
   onSave,
 }: {
   t: TradeRecord;
+  breakEvenPct: number;
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
@@ -367,20 +379,29 @@ function DeckCard({
   const sideColor = long ? GREEN : RED;
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
+  // Break-even trades are counted (and coloured) as flat, not slight losses.
+  const isBreakeven =
+    t.status === 'closed' && t.realizedPl != null &&
+    classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct) === 'breakeven';
   const plUp = (t.realizedPl ?? 0) >= 0;
+  const plColor = isBreakeven ? GOLD : plUp ? GREEN : RED;
 
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${sideColor}` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px 8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
           {t.status === 'open' && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }}>OPEN</span>}
+          {isBreakeven && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }} title="Break-even — inside the desk's break-even band">B/E</span>}
           {t.source === 'broker' && t.broker && (
             <span style={{ ...sideBadge, color: '#7fa8ff', border: '1px solid #3a5a9a' }} title="Imported automatically from your broker">{t.broker.toUpperCase()}</span>
           )}
         </div>
-        <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etDate(t.openedAt)}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {t.code && <span style={codeChip} title="Trade code — date + order that day">{t.code}</span>}
+          <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etDate(t.openedAt)}</span>
+        </div>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px 8px' }}>
@@ -427,16 +448,18 @@ function DeckCard({
           ) : t.realizedPl == null ? (
             <span style={{ fontSize: 13, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>—</span>
           ) : (
-            <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: plUp ? GREEN : RED }}>
-              {showMoney ? `${plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••••'}
+            <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: plColor }}>
+              {showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••••'}
             </span>
           )}
         </div>
         {!readOnly && ((t.isMine && t.editable) || canRemove) && (
           <div style={{ display: 'flex', gap: 6 }}>
-            {t.isMine && t.editable && <button onClick={() => !busy && setEditing(true)} style={smallBtn}>Edit</button>}
+            {t.isMine && t.editable && (
+              <button onClick={() => !busy && setEditing(true)} title="Edit trade" aria-label="Edit trade" style={iconBtn}>✏️</button>
+            )}
             {canRemove && (
-              <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, color: '#52668f', borderColor: 'transparent', fontSize: 16, padding: '2px 6px' }}>×</button>
+              <button onClick={() => !busy && onRemove()} title="Delete trade" aria-label="Delete trade" style={{ ...iconBtn, color: '#52668f', fontSize: 16 }}>×</button>
             )}
           </div>
         )}
@@ -448,6 +471,7 @@ function DeckCard({
 // ---- Tape (dense rows) ----
 function Tape({
   trades,
+  breakEvenPct,
   showMoney,
   canSeeBalances,
   readOnly,
@@ -457,6 +481,7 @@ function Tape({
   onRemove,
 }: {
   trades: TradeRecord[];
+  breakEvenPct: number;
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
@@ -485,12 +510,18 @@ function Tape({
         const long = t.side === 'long';
         const fav = slippageFavorable(t);
         const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
+        const isBreakeven =
+          t.status === 'closed' && t.realizedPl != null &&
+          classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct) === 'breakeven';
         const plUp = (t.realizedPl ?? 0) >= 0;
+        const plColor = !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
         return (
           <div key={t.id} style={{ ...tapeRow, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
-            <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
               {t.instrument}
+              {t.code && <span style={{ fontSize: 8.5, color: FAINT, border: `1px solid ${BORDER2}`, borderRadius: 3, padding: '1px 4px' }} title="Trade code">{t.code}</span>}
               {t.status === 'open' && <span style={{ fontSize: 8.5, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 4px' }}>OPEN</span>}
+              {isBreakeven && <span style={{ fontSize: 8.5, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 4px' }} title="Break-even">B/E</span>}
               {t.source === 'broker' && t.broker && <span style={{ fontSize: 8.5, color: '#7fa8ff', border: '1px solid #3a5a9a', borderRadius: 3, padding: '1px 4px' }} title="Imported automatically from your broker">{t.broker.toUpperCase()}</span>}
             </span>
             <span style={{ flex: '0 0 90px', color: t.isMine ? GOLD : MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
@@ -501,8 +532,8 @@ function Tape({
             <span style={col}>{fmtPrice(t.exitPrice)}</span>
             <span style={{ ...col, color: slipColor }}>{t.slippage == null ? '—' : `${t.slippage > 0 ? '+' : ''}${fmtPrice(t.slippage)}`}</span>
             <span style={col}>{t.units}</span>
-            <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : plUp ? GREEN : RED }}>
-              {!canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••'}
+            <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: plColor }}>
+              {!canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••'}
             </span>
             <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.openedAt)}</span>
             {!readOnly &&
@@ -647,7 +678,8 @@ const panelLabel: CSSProperties = { fontSize: 10.5, letterSpacing: '0.6px', text
 const inputBase: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none' };
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '8px 14px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
-const smallBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 6, cursor: 'pointer' };
+const iconBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 13, lineHeight: 1, padding: '4px 7px', borderRadius: 6, cursor: 'pointer' };
+const codeChip: CSSProperties = { fontSize: 9.5, fontWeight: 700, color: '#bcd0ff', background: 'rgba(120,150,220,.12)', border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 6px', fontFamily: "'IBM Plex Mono', monospace" };
 const segBtn: CSSProperties = { background: 'none', border: 'none', color: MUTED, fontSize: 11.5, fontWeight: 600, padding: '7px 13px', cursor: 'pointer' };
 const segActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const sideBadge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };

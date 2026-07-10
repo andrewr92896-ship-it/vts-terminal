@@ -68,4 +68,5 @@ export interface LiveWall {
   brokers: BrokerLiveResult[];
   trades: LiveTrade[]; // flattened across brokers, newest first
   note: string | null;
+  breakEvenPct: number; // desk-wide break-even band, so the wall can flag flat positions
 }

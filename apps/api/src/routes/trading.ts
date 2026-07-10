@@ -10,7 +10,8 @@ import {
   updateTrade,
 } from '../trading/trades.js';
 import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
-import { getHistory, removePosition } from '../trading/history.js';
+import { getHistory, removePosition, updateClosedPosition } from '../trading/history.js';
+import { getDeskSettings, updateDeskSettings } from '../trading/settings.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
 import {
@@ -148,6 +149,35 @@ export async function tradingRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     await removePosition(u.id, id, isAdmin(parseRoles(u)));
     return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
+  });
+
+  // Edit a recorded CLOSED trade (correct an exit, P/L, strategy, dates, …). The
+  // owner can edit their own; an admin can correct any on the shared desk.
+  app.patch('/api/trading/history/:id', write, async (request, reply) => {
+    const parsed = historyEditSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the trade details and try again' });
+    }
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    try {
+      const ok = await updateClosedPosition(u.id, id, parsed.data, isAdmin(parseRoles(u)));
+      if (!ok) return reply.code(404).send({ error: 'Closed trade not found' });
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update trade' });
+    }
+    return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
+  });
+
+  // ---- Desk-wide settings (shared across the trading team) ----
+  app.get('/api/trading/desk-settings', read, async () => getDeskSettings());
+
+  app.patch('/api/trading/desk-settings', write, async (request, reply) => {
+    const parsed = deskSettingsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Enter a break-even percent between 0 and 100' });
+    }
+    return updateDeskSettings(parsed.data);
   });
 
   // ---- Account Metrics (prop-firm challenge) ----
@@ -869,6 +899,28 @@ const analyzeSchema = z.object({
   imageBase64: z.string().min(1),
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
 });
+
+const deskSettingsSchema = z
+  .object({ breakEvenPct: z.number().finite().min(0).max(100).optional() })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+// Editing a closed trade in History: the same shape as a hand-logged trade minus
+// the fields History doesn't own (broker/status/notes are managed elsewhere).
+const historyEditSchema = z
+  .object({
+    instrument: z.string().trim().min(1).max(40).optional(),
+    side: side.optional(),
+    units: z.number().finite().min(0).nullish(),
+    plannedEntry: price.nullish(),
+    entryPrice: price.optional(),
+    exitPrice: price.nullish(),
+    realizedPl: price.nullish(),
+    strategy: z.string().trim().max(80).nullish(),
+    timeframe: z.string().trim().max(16).nullish(),
+    openedAt: ts.nullish(),
+    closedAt: ts.nullish(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 const fundedAccountSchema = z.object({
   platform: z.string().trim().max(40).optional(),
