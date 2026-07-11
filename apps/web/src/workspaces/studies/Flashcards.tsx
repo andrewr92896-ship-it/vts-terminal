@@ -7,7 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { SERIES65_VOCAB, type VocabCard } from './series65Vocab';
 import { SERIES65_TOPICS, type Series65Topic } from './series65Questions';
 import { TutorChat } from './TutorChat';
-import { ReadAloudToggle, SpeakerButton, useSpeech } from './speech';
+import { ReadAloudToggle, SpeakerButton, SpeechRateControl, useSpeech } from './speech';
 
 // Default auto-rotation timing; both are adjustable in the controls below.
 const DEFAULT_TERM_SECS = 10;
@@ -422,6 +422,7 @@ export function Flashcards({
                 Always show the definition with the word
               </label>
               <ReadAloudToggle speech={speech} theme={theme} />
+              <SpeechRateControl speech={speech} theme={theme} />
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#8a7fc8' }}>
                 {cards.length === 0 ? '0 / 0' : `${Math.min(i, cards.length - 1) + 1} / ${cards.length}`}
               </span>
