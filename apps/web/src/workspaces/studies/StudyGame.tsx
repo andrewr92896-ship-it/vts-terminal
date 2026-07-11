@@ -15,7 +15,7 @@ import { Flashcards } from './Flashcards';
 import { Leaderboard } from './Leaderboard';
 import { TestMode } from './TestMode';
 import { TutorChat } from './TutorChat';
-import { ReadAloudToggle, SpeakerButton, questionSpeech, useSpeech } from './speech';
+import { QuestionSpeechControls, ReadAloudToggle, SpeechRateControl, questionSpeech, useSpeech } from './speech';
 import { consumeStudyView, type StudyView } from './studiesNav';
 import {
   CATEGORY_META,
@@ -586,6 +586,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
           Practice mode {practice ? '· not scoring' : '· off'}
         </button>
         <ReadAloudToggle speech={speech} theme={theme} />
+        <SpeechRateControl speech={speech} theme={theme} />
         {mode === 'starred' && (
           <span style={{ fontSize: 11, color: muted }}>Starred review never affects your score.</span>
         )}
@@ -828,7 +829,6 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
               <span style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace", textAlign: 'right' }}>
                 {lvl.toNext} to {lvl.nextLabel}
               </span>
-              <SpeakerButton speech={speech} theme={theme} text={questionSpeech(q.stem, q.options)} title="Read this question aloud" />
               <button
                 onClick={() => toggleStar(q.id)}
                 aria-pressed={starred.has(q.id)}
@@ -854,8 +854,12 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             <div style={{ height: '100%', width: `${Math.min(100, ((lvl.within - lvl.level.at) / Math.max(1, lvl.nextAt - lvl.level.at)) * 100)}%`, background: accentGrad }} />
           </div>
 
-          <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 16 }}>
+          <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 12 }}>
             {q.stem}
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <QuestionSpeechControls speech={speech} theme={theme} stem={q.stem} options={q.options} />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
