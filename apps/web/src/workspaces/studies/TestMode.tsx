@@ -7,6 +7,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import type { Series65Question } from './series65Questions';
 import { SERIES65_EXPLANATIONS } from './series65Explanations';
+import { ReadAloudToggle, SpeakerButton, questionSpeech, useSpeech } from './speech';
 import {
   TEST_BLUEPRINT,
   TEST_PASS,
@@ -42,6 +43,7 @@ export function TestMode({ theme }: { theme: Theme }) {
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
   const accentGrad = accentGradient(theme);
+  const speech = useSpeech();
 
   const [phase, setPhase] = useState<Phase>('intro');
   const [questions, setQuestions] = useState<Series65Question[]>([]);
@@ -227,6 +229,16 @@ export function TestMode({ theme }: { theme: Theme }) {
     return { correct, seen, pct: seen ? Math.round((100 * correct) / seen) : null };
   }, [questions, revealed, answers]);
 
+  // Read the current question aloud when it changes (and when read-aloud is
+  // switched on), while a test is running.
+  const currentId = phase === 'running' ? questions[index]?.id : undefined;
+  useEffect(() => {
+    if (phase !== 'running' || !speech.on) return;
+    const q = questions[index];
+    if (q) speech.speak(questionSpeech(q.stem, q.options));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId, phase, speech.on]);
+
   async function finish() {
     const score = gradeTest(questions, answers);
     setGraded(score);
@@ -333,9 +345,12 @@ export function TestMode({ theme }: { theme: Theme }) {
               <li>Your progress is saved and synced, so you can resume on any device.</li>
             </ul>
 
-            <button onClick={startTest} style={primaryBtn(theme, accentGrad)}>
-              Start the test
-            </button>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button onClick={startTest} style={primaryBtn(theme, accentGrad)}>
+                Start the test
+              </button>
+              <ReadAloudToggle speech={speech} theme={theme} />
+            </div>
             {readOnly && (
               <div style={{ marginTop: 10, fontSize: 11.5, color: muted }}>
                 Demo account: you can take the test, but results aren't saved to the leaderboard.
@@ -401,6 +416,10 @@ export function TestMode({ theme }: { theme: Theme }) {
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '3px 9px', opacity: 0.85 }}>
               {q.topic}
             </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ReadAloudToggle speech={speech} theme={theme} />
+              <SpeakerButton speech={speech} theme={theme} text={questionSpeech(q.stem, q.options)} title="Read this question aloud" />
+            </div>
           </div>
           <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 16 }}>
             {q.stem}

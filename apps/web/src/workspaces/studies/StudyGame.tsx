@@ -15,6 +15,7 @@ import { Flashcards } from './Flashcards';
 import { Leaderboard } from './Leaderboard';
 import { TestMode } from './TestMode';
 import { TutorChat } from './TutorChat';
+import { ReadAloudToggle, SpeakerButton, questionSpeech, useSpeech } from './speech';
 import { consumeStudyView, type StudyView } from './studiesNav';
 import {
   CATEGORY_META,
@@ -65,6 +66,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const storageKey = gameKey(user?.id);
 
   const poolsRef = useRef(buildPools());
+  const speech = useSpeech();
   const [game, setGame] = useState<GameState>(() => loadGame(storageKey));
   const [view, setView] = useState<StudyView>(() => initialView ?? consumeStudyView() ?? 'quiz');
   const [mode, setMode] = useState<Mode>('mix');
@@ -347,6 +349,21 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [starred, mode]);
 
+  // Read the question aloud when it changes (and when read-aloud is switched on),
+  // but only on the quiz view.
+  useEffect(() => {
+    if (view !== 'quiz' || !speech.on || !current) return;
+    speech.speak(questionSpeech(current.q.stem, current.q.options));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.q.id, view, speech.on]);
+
+  // Stop any quiz narration when leaving the quiz view (the Flashcards/Test views
+  // have their own speech that would otherwise overlap it).
+  useEffect(() => {
+    if (view !== 'quiz') speech.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
   // `label` is null when the user taps "I Don't Know" — counted as wrong with
   // no option highlighted as chosen.
   function answer(label: Letter | null) {
@@ -568,6 +585,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
           </span>
           Practice mode {practice ? '· not scoring' : '· off'}
         </button>
+        <ReadAloudToggle speech={speech} theme={theme} />
         {mode === 'starred' && (
           <span style={{ fontSize: 11, color: muted }}>Starred review never affects your score.</span>
         )}
@@ -810,6 +828,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
               <span style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace", textAlign: 'right' }}>
                 {lvl.toNext} to {lvl.nextLabel}
               </span>
+              <SpeakerButton speech={speech} theme={theme} text={questionSpeech(q.stem, q.options)} title="Read this question aloud" />
               <button
                 onClick={() => toggleStar(q.id)}
                 aria-pressed={starred.has(q.id)}
