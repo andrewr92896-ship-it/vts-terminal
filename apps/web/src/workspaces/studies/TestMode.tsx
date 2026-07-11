@@ -50,6 +50,15 @@ export function TestMode({ theme }: { theme: Theme }) {
   const startedAtRef = useRef<number>(0);
   const [resumed, setResumed] = useState(false);
 
+  // Immediate-feedback ("practice") mode: chosen on the intro screen. When on,
+  // each question is submitted to reveal right/wrong and a running score; when
+  // off, it's a silent exam graded only at the end. `reveal` is the active
+  // sitting's mode; `revealPref` is the toggle on the intro screen for the next
+  // one; `revealed[i]` marks a question whose result has been shown.
+  const [revealPref, setRevealPref] = useState(false);
+  const [reveal, setReveal] = useState(false);
+  const [revealed, setRevealed] = useState<boolean[]>([]);
+
   // Account sync: whether the server copy has been reconciled yet, the last
   // state we pushed up (to skip redundant writes), and whether the learner has
   // manually started a fresh test this mount (so a late server reconcile doesn't
@@ -86,6 +95,8 @@ export function TestMode({ theme }: { theme: Theme }) {
     setQuestions(qs);
     setAnswers(p.answers);
     setIndex(p.index);
+    setReveal(p.reveal);
+    setRevealed(p.revealed.length === qs.length ? p.revealed : new Array(qs.length).fill(false));
     startedAtRef.current = p.startedAt || Date.now();
     setResumed(true);
     setPhase('running');
@@ -126,17 +137,25 @@ export function TestMode({ theme }: { theme: Theme }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist the in-progress test to localStorage on every change while it's
-  // running (instant, offline-safe local copy).
-  useEffect(() => {
-    if (phase !== 'running' || questions.length !== TEST_SIZE) return;
-    saveTestProgress(user?.id, {
+  // A snapshot of the current in-progress test, shared by both persistence paths.
+  function snapshot(): TestProgress {
+    return {
       ids: questions.map((q) => q.id),
       answers,
       index,
       startedAt: startedAtRef.current,
-    });
-  }, [phase, questions, answers, index, user?.id]);
+      reveal,
+      revealed,
+    };
+  }
+
+  // Persist the in-progress test to localStorage on every change while it's
+  // running (instant, offline-safe local copy).
+  useEffect(() => {
+    if (phase !== 'running' || questions.length !== TEST_SIZE) return;
+    saveTestProgress(user?.id, snapshot());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, questions, answers, index, reveal, revealed, user?.id]);
 
   // Sync the in-progress test to the account (debounced) so it follows the
   // learner across devices. Gated on hydration so we never clobber the server
@@ -145,19 +164,15 @@ export function TestMode({ theme }: { theme: Theme }) {
   useEffect(() => {
     if (!hydrated || readOnly) return;
     if (phase !== 'running' || questions.length !== TEST_SIZE) return;
-    const json = JSON.stringify({
-      ids: questions.map((q) => q.id),
-      answers,
-      index,
-      startedAt: startedAtRef.current,
-    });
+    const json = JSON.stringify(snapshot());
     if (json === lastSavedRef.current) return;
     const id = setTimeout(() => {
       lastSavedRef.current = json;
       void api.saveStudyTestProgress(json).catch(() => {});
     }, 800);
     return () => clearTimeout(id);
-  }, [phase, questions, answers, index, hydrated, readOnly]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, questions, answers, index, reveal, revealed, hydrated, readOnly]);
 
   function startTest() {
     const qs = buildTest();
@@ -165,6 +180,8 @@ export function TestMode({ theme }: { theme: Theme }) {
     lastSavedRef.current = null; // force the new sitting to be pushed up
     setQuestions(qs);
     setAnswers(new Array(qs.length).fill(null));
+    setRevealed(new Array(qs.length).fill(false));
+    setReveal(revealPref);
     setIndex(0);
     startedAtRef.current = Date.now();
     setResumed(false);
@@ -176,6 +193,7 @@ export function TestMode({ theme }: { theme: Theme }) {
   }
 
   function choose(label: Letter) {
+    if (reveal && revealed[index]) return; // answer is locked once revealed
     setAnswers((prev) => {
       const next = [...prev];
       next[index] = next[index] === label ? null : label; // tap again to clear
@@ -183,7 +201,31 @@ export function TestMode({ theme }: { theme: Theme }) {
     });
   }
 
+  // Immediate-feedback mode: lock in and reveal the current answer.
+  function submitAnswer() {
+    if (!reveal || revealed[index] || answers[index] == null) return;
+    setRevealed((prev) => {
+      const next = [...prev];
+      next[index] = true;
+      return next;
+    });
+  }
+
   const answeredCount = useMemo(() => answers.filter((a) => a != null).length, [answers]);
+
+  // Running score in immediate-feedback mode: correct out of the questions
+  // revealed so far.
+  const running = useMemo(() => {
+    let correct = 0;
+    let seen = 0;
+    questions.forEach((q, i) => {
+      if (revealed[i]) {
+        seen += 1;
+        if (answers[i] === q.answer) correct += 1;
+      }
+    });
+    return { correct, seen, pct: seen ? Math.round((100 * correct) / seen) : null };
+  }, [questions, revealed, answers]);
 
   async function finish() {
     const score = gradeTest(questions, answers);
@@ -223,6 +265,7 @@ export function TestMode({ theme }: { theme: Theme }) {
     setPhase('intro');
     setQuestions([]);
     setAnswers([]);
+    setRevealed([]);
     setIndex(0);
   }
 
@@ -235,8 +278,8 @@ export function TestMode({ theme }: { theme: Theme }) {
             <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#fff' }}>Series 65 mock test</h3>
             <p style={{ margin: '8px 0 0', fontSize: 13, lineHeight: 1.6, color: '#d7ccff' }}>
               A full {TEST_SIZE}-question sitting drawn to the real exam mix. Each question is asked
-              once, in a random order of mixed difficulty. There's no feedback until you finish —
-              just like the real thing. Your score and attempt number go on the leaderboard.
+              once, in a random order of mixed difficulty. Your score and attempt number go on the
+              leaderboard.
             </p>
 
             <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr 1fr' : 'repeat(4,1fr)', gap: 10, margin: '16px 0' }}>
@@ -248,11 +291,46 @@ export function TestMode({ theme }: { theme: Theme }) {
               ))}
             </div>
 
+            {/* Mode picker: silent exam vs. immediate feedback */}
+            <button
+              onClick={() => setRevealPref((v) => !v)}
+              aria-pressed={revealPref}
+              style={{
+                display: 'flex',
+                width: '100%',
+                alignItems: 'center',
+                gap: 12,
+                textAlign: 'left',
+                border: `1px solid ${revealPref ? theme.accent : theme.navBorder}`,
+                background: revealPref ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.03)',
+                borderRadius: 10,
+                padding: '11px 14px',
+                cursor: 'pointer',
+                marginBottom: 14,
+              }}
+            >
+              <span
+                aria-hidden
+                style={{ width: 30, height: 17, borderRadius: 999, background: revealPref ? theme.accent : theme.navBorder, position: 'relative', flex: 'none', transition: 'background .15s' }}
+              >
+                <span style={{ position: 'absolute', top: 2, left: revealPref ? 15 : 2, width: 13, height: 13, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+              </span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: '#fff' }}>
+                  {revealPref ? 'Feedback as you go' : 'Exam mode (no feedback)'}
+                </span>
+                <span style={{ display: 'block', fontSize: 11, color: muted, marginTop: 2, lineHeight: 1.4 }}>
+                  {revealPref
+                    ? 'Submit each answer to see if you were right and track a running score.'
+                    : 'Silent, like the real exam — you find out how you did at the end.'}
+                </span>
+              </span>
+            </button>
+
             <ul style={{ margin: '4px 0 18px', paddingLeft: 18, fontSize: 12.5, color: muted, lineHeight: 1.7 }}>
               <li>Pass line is {TEST_PASS.toFixed(0)}%, the same as the real Series 65.</li>
-              <li>Answers can be changed until you submit; tap a choice again to clear it.</li>
               <li>Skipped questions are marked wrong — leaving one blank costs you.</li>
-              <li>Your progress is saved, so a refresh won't lose the sitting.</li>
+              <li>Your progress is saved and synced, so you can resume on any device.</li>
             </ul>
 
             <button onClick={startTest} style={primaryBtn(theme, accentGrad)}>
@@ -277,6 +355,7 @@ export function TestMode({ theme }: { theme: Theme }) {
     const chosen = answers[index];
     const last = index === questions.length - 1;
     const pct = Math.round(((index + 1) / questions.length) * 100);
+    const showResult = reveal && revealed[index]; // immediate feedback shown for this question
 
     return (
       <div style={{ maxWidth: 820, margin: '0 auto', color: '#eef3ff' }}>
@@ -291,8 +370,26 @@ export function TestMode({ theme }: { theme: Theme }) {
           <div style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>
             Question {index + 1} <span style={{ color: muted, fontWeight: 500 }}>of {questions.length}</span>
           </div>
-          <div style={{ fontSize: 11.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
-            {answeredCount} answered · {questions.length - answeredCount} left
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {reveal && running.pct != null && (
+              <span
+                title="Correct so far, of the questions you've submitted"
+                style={{
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  fontFamily: "'IBM Plex Mono', monospace",
+                  color: running.pct >= TEST_PASS ? GREEN : running.pct >= TEST_PASS - 12 ? AMBER : RED,
+                  border: `1px solid ${running.pct >= TEST_PASS ? GREEN : running.pct >= TEST_PASS - 12 ? AMBER : RED}`,
+                  borderRadius: 6,
+                  padding: '3px 9px',
+                }}
+              >
+                {running.correct}/{running.seen} · {running.pct}%
+              </span>
+            )}
+            <div style={{ fontSize: 11.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+              {answeredCount} answered · {questions.length - answeredCount} left
+            </div>
           </div>
         </div>
         <div style={{ height: 6, background: theme.navBorder, borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
@@ -311,10 +408,22 @@ export function TestMode({ theme }: { theme: Theme }) {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             {q.options.map((o) => {
               const isChosen = chosen === o.label;
+              const isCorrect = o.label === q.answer;
+              let border = isChosen ? theme.accent : theme.navBorder;
+              let bg = isChosen ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.04)';
+              let mark = isChosen ? '●' : '';
+              let markColor = theme.accent;
+              let labelColor = isChosen ? theme.accent : muted;
+              if (showResult) {
+                if (isCorrect) { border = GREEN; bg = 'rgba(53,196,123,.12)'; mark = '✓'; markColor = GREEN; labelColor = GREEN; }
+                else if (isChosen) { border = RED; bg = 'rgba(239,84,104,.12)'; mark = '✗'; markColor = RED; labelColor = RED; }
+                else { mark = ''; labelColor = muted; }
+              }
               return (
                 <button
                   key={o.label}
                   onClick={() => choose(o.label)}
+                  disabled={showResult}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
@@ -322,23 +431,43 @@ export function TestMode({ theme }: { theme: Theme }) {
                     textAlign: 'left',
                     padding: '12px 14px',
                     borderRadius: 10,
-                    border: `1px solid ${isChosen ? theme.accent : theme.navBorder}`,
-                    background: isChosen ? 'rgba(255,255,255,.09)' : 'rgba(255,255,255,.04)',
+                    border: `1px solid ${border}`,
+                    background: bg,
                     color: '#e7e0ff',
-                    cursor: 'pointer',
+                    cursor: showResult ? 'default' : 'pointer',
                     fontSize: 13.5,
                     lineHeight: 1.45,
                   }}
                 >
-                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: isChosen ? theme.accent : muted }}>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: labelColor }}>
                     {o.label}
                   </span>
                   <span style={{ flex: 1 }}>{o.text}</span>
-                  {isChosen && <span style={{ color: theme.accent, fontWeight: 700 }}>●</span>}
+                  {mark && <span style={{ color: markColor, fontWeight: 700 }}>{mark}</span>}
                 </button>
               );
             })}
           </div>
+
+          {/* Immediate-feedback result + explanation */}
+          {showResult && (
+            <div style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: chosen === q.answer ? GREEN : RED, marginBottom: 6 }}>
+                {chosen === q.answer ? 'Correct' : chosen ? 'Incorrect' : 'Left blank — incorrect'}
+              </div>
+              {chosen !== q.answer && (
+                <div style={{ fontSize: 12.5, color: '#d7ccff', lineHeight: 1.55, marginBottom: 6 }}>
+                  Correct answer: <strong style={{ color: '#fff' }}>{q.answer})</strong>{' '}
+                  {q.options.find((o) => o.label === q.answer)?.text}
+                </div>
+              )}
+              {SERIES65_EXPLANATIONS[q.id] && (
+                <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.55, paddingLeft: 10, borderLeft: `2px solid ${theme.accent}` }}>
+                  {SERIES65_EXPLANATIONS[q.id]}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Navigation */}
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
@@ -349,7 +478,16 @@ export function TestMode({ theme }: { theme: Theme }) {
             >
               ‹ Back
             </button>
-            {!last ? (
+            {reveal && !revealed[index] ? (
+              <button
+                onClick={submitAnswer}
+                disabled={chosen == null}
+                style={{ ...primaryBtn(theme, accentGrad), opacity: chosen == null ? 0.5 : 1, cursor: chosen == null ? 'default' : 'pointer' }}
+                title={chosen == null ? 'Pick an answer first' : 'Submit and see if you were right'}
+              >
+                Submit answer
+              </button>
+            ) : !last ? (
               <button onClick={() => setIndex((i) => Math.min(questions.length - 1, i + 1))} style={primaryBtn(theme, accentGrad)}>
                 Next ›
               </button>
@@ -359,10 +497,10 @@ export function TestMode({ theme }: { theme: Theme }) {
               </button>
             )}
             <button onClick={finish} style={{ ...ghostBtn(theme), marginLeft: 'auto' }} title="Grade the test now, even with questions left blank">
-              Submit test
+              End test now
             </button>
           </div>
-          {last && answeredCount < questions.length && (
+          {last && (!reveal || revealed[index]) && answeredCount < questions.length && (
             <div style={{ marginTop: 10, fontSize: 11.5, color: AMBER }}>
               {questions.length - answeredCount} question{questions.length - answeredCount === 1 ? '' : 's'} still blank — those count as wrong.
             </div>
