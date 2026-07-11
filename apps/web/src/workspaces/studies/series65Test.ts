@@ -87,6 +87,11 @@ export interface TestProgress {
   answers: (Letter | null)[];
   index: number;
   startedAt: number;
+  // Immediate-feedback ("practice") sitting: each answer is submitted per
+  // question to reveal right/wrong and a running score. `revealed[i]` marks a
+  // question whose result has been shown (and whose answer is now locked).
+  reveal: boolean;
+  revealed: boolean[];
 }
 
 export function testKey(userId: string | undefined): string {
@@ -109,11 +114,17 @@ export function parseTestProgress(raw: string | null): TestProgress | null {
     ) {
       return null;
     }
+    const reveal = p.reveal === true;
+    const revealed = Array.isArray(p.revealed) && p.revealed.length === TEST_SIZE
+      ? p.revealed.map((x: unknown) => x === true)
+      : new Array(TEST_SIZE).fill(false);
     return {
       ids: p.ids.map((n: unknown) => Number(n)),
       answers: p.answers.map((a: unknown) => (a === 'A' || a === 'B' || a === 'C' || a === 'D' ? a : null)),
       index: Math.max(0, Math.min(TEST_SIZE - 1, Number(p.index) || 0)),
       startedAt: Number(p.startedAt) || 0,
+      reveal,
+      revealed,
     };
   } catch {
     return null;

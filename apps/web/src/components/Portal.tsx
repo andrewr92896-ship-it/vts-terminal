@@ -94,10 +94,13 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <KiaTodo />;
     case 'st_home':
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
+    // Keyed distinctly so switching between the Study Game and Test Mode (both
+    // rendered by Series65Game) remounts with the right initial view instead of
+    // React reusing the instance and keeping the previous view.
     case 'st_game':
-      return <Series65Game theme={theme} />;
+      return <Series65Game key="st_game" theme={theme} />;
     case 'st_test':
-      return <Series65Game theme={theme} initialView="test" />;
+      return <Series65Game key="st_test" theme={theme} initialView="test" />;
     case 'st_progress':
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     default:
