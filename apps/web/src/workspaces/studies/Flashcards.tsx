@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { SERIES65_VOCAB, type VocabCard } from './series65Vocab';
 import { SERIES65_TOPICS, type Series65Topic } from './series65Questions';
 import { TutorChat } from './TutorChat';
+import { ReadAloudToggle, SpeakerButton, useSpeech } from './speech';
 
 // Default auto-rotation timing; both are adjustable in the controls below.
 const DEFAULT_TERM_SECS = 10;
@@ -49,6 +50,7 @@ export function Flashcards({
   // the auth hook so the public demo stays look-only here too.
   const readOnly = readOnlyProp ?? !!user?.isDemo;
   const accentGrad = accentGradient(theme);
+  const speech = useSpeech();
 
   const [filter, setFilter] = useState<Filter>('All');
   // Words the user already knows, hidden from the deck (persisted per device).
@@ -269,6 +271,15 @@ export function Flashcards({
   const card = cards.length ? cards[Math.min(i, cards.length - 1)] : null;
   const isCustom = !!card && customTerms.has(card.term);
 
+  // Read the card aloud when read-aloud is on: the term while it's hidden, the
+  // term and its definition once revealed. Re-runs on card change, on flip, and
+  // when read-aloud is switched on.
+  useEffect(() => {
+    if (!speech.on || !card) return;
+    speech.speak(revealed ? `${card.term}. ${card.def}` : card.term);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card?.term, revealed, speech.on]);
+
   const phaseTotal = alwaysDef ? defSecs : showDef ? defSecs : termSecs;
   const learnedList = useMemo(() => [...learned].sort((a, b) => a.localeCompare(b)), [learned]);
 
@@ -410,6 +421,7 @@ export function Flashcards({
                 <input type="checkbox" checked={alwaysDef} onChange={(e) => setAlwaysDef(e.target.checked)} style={checkbox(theme)} />
                 Always show the definition with the word
               </label>
+              <ReadAloudToggle speech={speech} theme={theme} />
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#8a7fc8' }}>
                 {cards.length === 0 ? '0 / 0' : `${Math.min(i, cards.length - 1) + 1} / ${cards.length}`}
               </span>
@@ -534,6 +546,12 @@ export function Flashcards({
                   {showDef ? 'Show term' : 'Show definition'}
                 </button>
               )}
+              <SpeakerButton
+                speech={speech}
+                theme={theme}
+                text={revealed ? `${card.term}. ${card.def}` : card.term}
+                title="Read this card aloud"
+              />
               {!readOnly && (
                 <button onClick={() => markKnown(card.term)} style={knownBtn} title="Hide this word; you already know it">
                   ✓ I know this
