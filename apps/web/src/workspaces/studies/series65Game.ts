@@ -38,9 +38,10 @@ export function metaFor(topic: Series65Topic): CategoryMeta {
 // A single progression that spans every category rather than one ladder per
 // topic. There are twelve themed levels, each a distinct emoji with its own base
 // hue, and each level holds five sub-levels that shade the base colour from dark
-// to light. Advancement is a plain count of correct answers: every
-// CORRECT_PER_SUBLEVEL correct answers is one sub-level up, and clearing the
-// fifth sub-level rolls over into the next level's emoji and hue.
+// to light. Advancement is a count of correct answers, but each sub-level costs
+// one more than the last (10, 11, 12, … continuously up the ladder), so higher
+// levels take progressively longer. Clearing the fifth sub-level rolls over into
+// the next level's emoji and hue.
 export interface MainLevelDef {
   emoji: string;
   name: string;
@@ -67,10 +68,35 @@ export const MAIN_LEVELS: MainLevelDef[] = [
   { emoji: '💎', name: 'Diamond', hue: 188, sat: 82, lMin: 42, lMax: 72 },
 ];
 
-export const CORRECT_PER_SUBLEVEL = 10; // correct answers per sub-level up
 export const SUBLEVELS = 5; // sub-levels per main level
-// Correct answers needed to fully max the ladder: 12 × 5 × 10 = 600.
-export const MAX_CORRECT = MAIN_LEVELS.length * SUBLEVELS * CORRECT_PER_SUBLEVEL;
+export const BASE_SUBLEVEL_COST = 10; // correct answers to clear the very first sub-level
+const MAX_STEP = MAIN_LEVELS.length * SUBLEVELS - 1; // 59 (Lv12, sub-level 5)
+
+// Correct answers to advance FROM sub-level step `s` to the next. Starts at
+// BASE_SUBLEVEL_COST and grows by one each sub-level, continuously across every
+// level — so each sub-level costs one more correct answer than the last (step 0
+// costs 10, step 1 costs 11, …), making higher levels progressively harder.
+export function subLevelCost(step: number): number {
+  return BASE_SUBLEVEL_COST + Math.max(0, Math.min(MAX_STEP, Math.floor(step)));
+}
+
+// Cumulative correct answers needed to REACH sub-level step `s` (0 at step 0):
+// the sum of every earlier sub-level's cost.
+export function correctToReachStep(step: number): number {
+  const s = Math.max(0, Math.min(MAX_STEP + 1, Math.floor(step)));
+  return BASE_SUBLEVEL_COST * s + (s * (s - 1)) / 2; // Σ_{i=0}^{s-1}(BASE + i)
+}
+
+// Highest sub-level step (0..59) reached at a given correct-answer count.
+export function stepForCorrect(totalCorrect: number): number {
+  const correct = Math.max(0, Math.floor(totalCorrect) || 0);
+  let s = 0;
+  while (s < MAX_STEP && correctToReachStep(s + 1) <= correct) s++;
+  return s;
+}
+
+// Correct answers to fully max the ladder (reach Lv12 ★★★★★).
+export const MAX_CORRECT = correctToReachStep(MAX_STEP);
 
 export interface OverallLevel {
   mainIndex: number; // 0..11 (main level index)
@@ -81,8 +107,9 @@ export interface OverallLevel {
   text: string; // readable text colour on `bg`
   isMax: boolean; // at level 12, sub-level 5
   correct: number; // total correct answers
-  intoSub: number; // correct answers into the current sub-level (0..CORRECT_PER_SUBLEVEL)
+  intoSub: number; // correct answers into the current sub-level (0..subCost)
   toNext: number; // correct answers remaining to the next sub-level (0 at max)
+  subCost: number; // correct answers this sub-level costs to clear
   nextLabel: string; // description of the next milestone
   step: number; // sub-level index across the whole ladder (0..59)
 }
@@ -122,12 +149,11 @@ function readableText(r: number, g: number, b: number): string {
 // colour, and progress toward the next milestone.
 export function overallLevel(totalCorrect: number): OverallLevel {
   const correct = Math.max(0, Math.floor(totalCorrect) || 0);
-  const maxStep = MAIN_LEVELS.length * SUBLEVELS - 1; // 59
-  const step = Math.min(maxStep, Math.floor(correct / CORRECT_PER_SUBLEVEL));
+  const step = stepForCorrect(correct);
   const mainIndex = Math.floor(step / SUBLEVELS);
   const sub = (step % SUBLEVELS) + 1; // 1..5
   const main = MAIN_LEVELS[mainIndex];
-  const isMax = step === maxStep;
+  const isMax = step === MAX_STEP;
 
   const L = main.lMin + ((main.lMax - main.lMin) * (sub - 1)) / (SUBLEVELS - 1);
   const [r, g, b] = hslToRgb(main.hue, main.sat, L);
@@ -135,15 +161,22 @@ export function overallLevel(totalCorrect: number): OverallLevel {
   const text = readableText(r, g, b);
 
   const stars = '★'.repeat(sub) + '☆'.repeat(SUBLEVELS - sub);
-  const intoSub = isMax ? CORRECT_PER_SUBLEVEL : correct - step * CORRECT_PER_SUBLEVEL;
-  const toNext = isMax ? 0 : CORRECT_PER_SUBLEVEL - intoSub;
+  const subCost = subLevelCost(step);
+  const intoSub = isMax ? subCost : correct - correctToReachStep(step);
+  const toNext = isMax ? 0 : subCost - intoSub;
   const nextLabel = isMax
     ? 'Maxed'
     : sub < SUBLEVELS
       ? `${main.emoji} ${main.name} ${'★'.repeat(sub + 1)}${'☆'.repeat(SUBLEVELS - sub - 1)}`
       : `${MAIN_LEVELS[mainIndex + 1].emoji} ${MAIN_LEVELS[mainIndex + 1].name}`;
 
-  return { mainIndex, main, sub, stars, bg, text, isMax, correct, intoSub, toNext, nextLabel, step };
+  return { mainIndex, main, sub, stars, bg, text, isMax, correct, intoSub, toNext, subCost, nextLabel, step };
+}
+
+// The level descriptor for an exact sub-level step (0..59). Used for the "best
+// reached" badges, where we track a step but not a correct-answer count.
+export function levelAtStep(step: number): OverallLevel {
+  return overallLevel(correctToReachStep(Math.max(0, Math.min(MAX_STEP, Math.floor(step)))));
 }
 
 // A summary of a level-up caused by finishing a mock test, so the test screen
@@ -182,13 +215,6 @@ export function emptyGame(): GameState {
   const cats = {} as Record<Series65Topic, CatState>;
   for (const t of SERIES65_TOPICS) cats[t] = { answered: 0, correct: 0, recent: [] };
   return { recent: [], totalAttempted: 0, totalCorrect: 0, levelCorrect: 0, bestStep: 0, allTimeBestStep: 0, cats };
-}
-
-// The overall level step reached at a given correct-answer count (0..59), the
-// same value `overallLevel` computes. Used to track the best level reached.
-export function stepForCorrect(totalCorrect: number): number {
-  const correct = Math.max(0, Math.floor(totalCorrect) || 0);
-  return Math.min(MAIN_LEVELS.length * SUBLEVELS - 1, Math.floor(correct / CORRECT_PER_SUBLEVEL));
 }
 
 export function gameKey(userId: string | undefined): string {

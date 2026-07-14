@@ -9,9 +9,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.6';
+export const APP_VERSION = 'Beta V 2.7';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.7',
+    date: 'July 14, 2026',
+    notes: [
+      'Study Game: each sub-level now costs one more correct answer than the last — the first star takes 10, the next 11, then 12, and so on continuously up the ladder, so higher levels take progressively more work.',
+      'Study Game: the current category now shows your percentage correct in it right next to its name (e.g. “Client Management · 82% correct”).',
+      'Studies: removed the read-aloud / text-to-speech option from the quiz, mock test, and flashcards.',
+    ],
+  },
   {
     version: 'Beta V 2.6',
     date: 'July 14, 2026',

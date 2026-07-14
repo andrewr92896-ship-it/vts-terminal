@@ -4,9 +4,9 @@ import { accentGradient } from '../../theme/themes';
 import { useAuth } from '../../auth/AuthContext';
 import {
   CATEGORY_META,
-  CORRECT_PER_SUBLEVEL,
   PASS_THRESHOLD,
   gameKey,
+  levelAtStep,
   lifetimeAccuracy,
   loadGame,
   overallLevel,
@@ -27,7 +27,7 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
   const passing = overall != null && overall >= PASS_THRESHOLD;
   const delta = overall == null ? 0 : round1(overall - PASS_THRESHOLD);
   const ov = overallLevel(game.levelCorrect);
-  const bestEver = overallLevel(game.allTimeBestStep * CORRECT_PER_SUBLEVEL);
+  const bestEver = levelAtStep(game.allTimeBestStep);
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
@@ -95,7 +95,7 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
               </div>
             </div>
             <div style={{ height: 8, background: theme.navBorder, borderRadius: 5, overflow: 'hidden', marginTop: 12 }}>
-              <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
+              <div style={{ height: '100%', width: `${(ov.intoSub / ov.subCost) * 100}%`, background: accentGrad }} />
             </div>
             {/* Highest level ever reached — kept even after a reset */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 11.5, color: muted }}>

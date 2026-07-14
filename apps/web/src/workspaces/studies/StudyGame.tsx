@@ -15,7 +15,6 @@ import { Flashcards } from './Flashcards';
 import { Leaderboard } from './Leaderboard';
 import { TestMode } from './TestMode';
 import { TutorChat } from './TutorChat';
-import { QuestionSpeechControls, ReadAloudToggle, SpeechRateControl, questionSpeech, useSpeech } from './speech';
 import { consumeStudyView, type StudyView } from './studiesNav';
 import { emitStudyLevelChange } from './studyTheme';
 import {
@@ -23,9 +22,9 @@ import {
   PASS_THRESHOLD,
   applyTestLevel,
   buildPools,
-  CORRECT_PER_SUBLEVEL,
   emptyGame,
   gameKey,
+  levelAtStep,
   lifetimeAccuracy,
   loadGame,
   loadStarred,
@@ -82,7 +81,6 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const storageKey = gameKey(user?.id);
 
   const poolsRef = useRef(buildPools());
-  const speech = useSpeech();
   const [game, setGame] = useState<GameState>(() => loadGame(storageKey));
   const [view, setView] = useState<StudyView>(() => initialView ?? consumeStudyView() ?? 'quiz');
   const [mode, setMode] = useState<Mode>('mix');
@@ -379,21 +377,6 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [starred, mode]);
 
-  // Read the question aloud when it changes (and when read-aloud is switched on),
-  // but only on the quiz view.
-  useEffect(() => {
-    if (view !== 'quiz' || !speech.on || !current) return;
-    speech.speak(questionSpeech(current.q.stem, current.q.options));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current?.q.id, view, speech.on]);
-
-  // Stop any quiz narration when leaving the quiz view (the Flashcards/Test views
-  // have their own speech that would otherwise overlap it).
-  useEffect(() => {
-    if (view !== 'quiz') speech.cancel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view]);
-
   // Keyboard answering: A–D highlights an option, Enter/Space confirms it (and,
   // once revealed, moves to the next question). The starred deck has its own
   // inline cards, so it opts out.
@@ -549,7 +532,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   }
 
   const overallScore = lifetimeAccuracy(game);
-  const bestEver = overallLevel(game.allTimeBestStep * CORRECT_PER_SUBLEVEL);
+  const bestEver = levelAtStep(game.allTimeBestStep);
   const muted = '#a99ff0';
 
   // Shared header with the Quiz / Flashcards view toggle.
@@ -733,8 +716,6 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
           </span>
           Practice mode {practice ? '· not scoring' : '· off'}
         </button>
-        <ReadAloudToggle speech={speech} theme={theme} />
-        <SpeechRateControl speech={speech} theme={theme} />
         {mode === 'starred' && (
           <span style={{ fontSize: 11, color: muted }}>Starred review never affects your score.</span>
         )}
@@ -802,7 +783,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   );
 
   // Reset confirmation: banks the current run to the leaderboard, then clears it.
-  const runBest = overallLevel(game.bestStep * CORRECT_PER_SUBLEVEL);
+  const runBest = levelAtStep(game.bestStep);
   const runAccuracy = lifetimeAccuracy(game);
   const resetPanel = resetConfirm ? (
     <div
@@ -960,6 +941,9 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const cat = current.topic;
   const meta = metaFor(cat);
   const ov = overallLevel(game.levelCorrect);
+  // Percent correct in the current category (matches the "Accuracy by category"
+  // panel), shown next to the category name in the HUD.
+  const catPct = scorePct(game.cats[cat].recent);
   const passing = overallScore != null && overallScore >= PASS_THRESHOLD;
   const delta = overallScore == null ? 0 : round1(overallScore - PASS_THRESHOLD);
   const explanation = revealed ? SERIES65_EXPLANATIONS[q.id] : undefined;
@@ -1033,7 +1017,13 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
               </div>
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 10.5, color: muted }}>{meta.topic} · {meta.weight}% of exam</div>
+              <div style={{ fontSize: 10.5, color: muted }}>
+                {meta.topic}
+                {catPct != null && (
+                  <span style={{ color: theme.accent, fontWeight: 700 }}> · {catPct.toFixed(0)}% correct</span>
+                )}
+                {' · '}{meta.weight}% of exam
+              </div>
               <div style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {ov.isMax ? 'Max level reached' : `${ov.toNext} correct to ${ov.nextLabel}`}
               </div>
@@ -1083,15 +1073,11 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             </div>
           </div>
           <div style={{ height: 5, background: theme.navBorder, borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
-            <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
+            <div style={{ height: '100%', width: `${(ov.intoSub / ov.subCost) * 100}%`, background: accentGrad }} />
           </div>
 
-          <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 12 }}>
+          <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 16 }}>
             {q.stem}
-          </div>
-
-          <div style={{ marginBottom: 16 }}>
-            <QuestionSpeechControls speech={speech} theme={theme} stem={q.stem} options={q.options} />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
@@ -1297,7 +1283,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
               </div>
             </div>
             <div style={{ height: 6, background: theme.navBorder, borderRadius: 4, overflow: 'hidden', marginTop: 10 }}>
-              <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
+              <div style={{ height: '100%', width: `${(ov.intoSub / ov.subCost) * 100}%`, background: accentGrad }} />
             </div>
             {/* Highest level ever reached — survives a reset */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 11, color: muted }}>
