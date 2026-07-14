@@ -3,7 +3,8 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
-import { classifyOutcome } from './outcome';
+import { classifyOutcome, bandFrom, type BreakEvenBand } from './outcome';
+import { tradePips, fmtPips, netPips, hasAnyPips } from './pips';
 import type { HistoryData, HistoryGroup, HistoryRecord, HistorySummary, TradeInput, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
@@ -70,16 +71,18 @@ function groupTrades(
   trades: HistoryRecord[],
   pick: (t: HistoryRecord) => string | null,
   canSeeBalances: boolean,
-  breakEvenPct: number,
+  band: BreakEvenBand,
 ): HistoryGroup[] {
-  const map = new Map<string, { count: number; wins: number; losses: number; breakeven: number; pl: number }>();
+  const map = new Map<string, { count: number; wins: number; losses: number; breakeven: number; pl: number; pips: number }>();
   for (const t of trades) {
     const label = (pick(t) ?? '—').trim() || '—';
-    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0 };
+    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0, pips: 0 };
     g.count += 1;
+    const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
+    if (pips != null) g.pips += pips;
     if (t.realizedPl != null) {
       g.pl += t.realizedPl;
-      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
+      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
       if (outcome === 'win') g.wins += 1;
       else if (outcome === 'loss') g.losses += 1;
       else g.breakeven += 1;
@@ -94,13 +97,14 @@ function groupTrades(
       losses: g.losses,
       breakeven: g.breakeven,
       realizedPl: canSeeBalances ? g.pl : null,
+      pips: Number(g.pips.toFixed(1)),
     }))
     .sort((a, b) => b.count - a.count);
 }
 
 // Recompute the History summary for a subset of trades (a day/month selection),
 // mirroring the server's getHistory math so the KPIs stay consistent.
-function summarize(trades: HistoryRecord[], canSeeBalances: boolean, breakEvenPct: number): HistorySummary {
+function summarize(trades: HistoryRecord[], canSeeBalances: boolean, band: BreakEvenBand): HistorySummary {
   let wins = 0;
   let losses = 0;
   let breakeven = 0;
@@ -108,7 +112,7 @@ function summarize(trades: HistoryRecord[], canSeeBalances: boolean, breakEvenPc
   for (const t of trades) {
     if (t.realizedPl != null) {
       totalPl += t.realizedPl;
-      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
+      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
       if (outcome === 'win') wins += 1;
       else if (outcome === 'loss') losses += 1;
       else breakeven += 1;
@@ -122,8 +126,8 @@ function summarize(trades: HistoryRecord[], canSeeBalances: boolean, breakEvenPc
     breakeven,
     winRate: decided > 0 ? wins / decided : 0,
     totalRealizedPl: canSeeBalances ? totalPl : null,
-    byStrategy: groupTrades(trades, (t) => t.strategy, canSeeBalances, breakEvenPct),
-    byInstrument: groupTrades(trades, (t) => t.instrument, canSeeBalances, breakEvenPct),
+    byStrategy: groupTrades(trades, (t) => t.strategy, canSeeBalances, band),
+    byInstrument: groupTrades(trades, (t) => t.instrument, canSeeBalances, band),
   };
 }
 
@@ -187,7 +191,7 @@ export function History() {
   }
 
   const allTrades = data?.trades ?? [];
-  const breakEvenPct = data?.breakEvenPct ?? 0;
+  const band: BreakEvenBand = data ? bandFrom(data) : { mode: 'percent', pct: 0, amount: 0 };
   const canSeeBalancesRaw = (data?.summary.totalRealizedPl ?? null) !== null;
 
   // Months that actually have closed trades, newest first, for the Month dropdown.
@@ -215,8 +219,10 @@ export function History() {
   const filterActive = dayFilter !== 'all' || monthFilter !== 'all';
   // Recompute the summary for a selection; the full view reuses the server's.
   const activeSummary = useMemo(
-    () => (filterActive ? summarize(filtered, canSeeBalancesRaw, breakEvenPct) : data?.summary ?? null),
-    [filterActive, filtered, canSeeBalancesRaw, breakEvenPct, data],
+    () => (filterActive ? summarize(filtered, canSeeBalancesRaw, band) : data?.summary ?? null),
+    // band is derived from data, so `data` covers its identity in the deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filterActive, filtered, canSeeBalancesRaw, data],
   );
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
@@ -233,11 +239,20 @@ export function History() {
   if (monthFilter !== 'all') scopeParts.push(monthOptions.find(([k]) => k === monthFilter)?.[1] ?? monthFilter);
   const scopeLabel = scopeParts.length ? scopeParts.join(' · ') : 'all closed';
 
-  const showBe = data.breakEvenPct > 0 || s.breakeven > 0;
-  const kpis = [
+  const beActive = band.mode === 'percent' ? band.pct > 0 : band.amount > 0;
+  const showBe = beActive || s.breakeven > 0;
+  // Net pips over the current selection — shown beside the Realized P/L, but only
+  // on a desk that trades forex (otherwise there's no pip to show).
+  const showPips = hasAnyPips(filtered);
+  const kpis: { label: string; val: string; sub: string; pips?: string }[] = [
     { label: 'Closed Trades', val: String(s.closed), sub: `${s.wins}W · ${s.losses}L${showBe ? ` · ${s.breakeven}BE` : ''}` },
     { label: 'Win Rate', val: s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—', sub: showBe ? 'wins ÷ decided trades' : 'of scored trades' },
-    { label: 'Realized P/L', val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••', sub: scopeLabel },
+    {
+      label: 'Realized P/L',
+      val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••',
+      sub: scopeLabel,
+      pips: showPips ? `(${fmtPips(netPips(filtered), true)})` : undefined,
+    },
   ];
 
   return (
@@ -301,6 +316,9 @@ export function History() {
           <div key={k.label} style={card}>
             <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{k.label}</div>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 22, fontWeight: 600, color: '#fff', marginTop: 6 }}>{k.val}</div>
+            {k.pips && (
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 600, color: GOLD, marginTop: 3 }}>{k.pips}</div>
+            )}
             <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>{k.sub}</div>
           </div>
         ))}
@@ -316,8 +334,8 @@ export function History() {
         <>
           {/* Per-strategy / per-instrument breakdown */}
           <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 13, marginBottom: 16 }}>
-            <Breakdown title="By Strategy" groups={s.byStrategy} money={money} />
-            <Breakdown title="By Instrument" groups={s.byInstrument} money={money} />
+            <Breakdown title="By Strategy" groups={s.byStrategy} money={money} showPips={showPips} />
+            <Breakdown title="By Instrument" groups={s.byInstrument} money={money} showPips={showPips} />
           </div>
 
           {/* Closed trades */}
@@ -342,7 +360,7 @@ export function History() {
               <TradeRow
                 key={t.id}
                 t={t}
-                breakEvenPct={data.breakEvenPct}
+                band={band}
                 isPhone={isPhone}
                 showMoney={showMoney}
                 canSeeBalances={canSeeBalances}
@@ -369,7 +387,7 @@ export function History() {
   );
 }
 
-function Breakdown({ title, groups, money }: { title: string; groups: HistoryGroup[]; money: (n: number | null) => string }) {
+function Breakdown({ title, groups, money, showPips }: { title: string; groups: HistoryGroup[]; money: (n: number | null) => string; showPips: boolean }) {
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: 13, fontWeight: 600, color: '#fff' }}>{title}</div>
@@ -382,8 +400,11 @@ function Breakdown({ title, groups, money }: { title: string; groups: HistoryGro
             <div key={g.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderTop: `1px solid ${BORDER}`, gap: 10 }}>
               <span style={{ fontSize: 12.5, color: TEXT, fontWeight: 600, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.label}</span>
               <span style={{ fontSize: 10.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>{g.count} · {g.wins}W {g.losses}L{g.breakeven > 0 ? ` ${g.breakeven}BE` : ''}</span>
-              <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: pl == null ? FAINT : pl >= 0 ? GREEN : RED, minWidth: 64, textAlign: 'right' }}>
-                {pl == null ? '—' : money(pl)}
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 64 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: pl == null ? FAINT : pl >= 0 ? GREEN : RED, textAlign: 'right' }}>
+                  {pl == null ? '—' : money(pl)}
+                </span>
+                {showPips && <span style={{ fontSize: 9.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>{`(${fmtPips(g.pips, true)})`}</span>}
               </span>
             </div>
           );
@@ -393,13 +414,15 @@ function Breakdown({ title, groups, money }: { title: string; groups: HistoryGro
   );
 }
 
-function TradeRow({ t, breakEvenPct, isPhone, showMoney, canSeeBalances, canEdit, removing, onRemove, onEdit }: { t: HistoryRecord; breakEvenPct: number; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean; canEdit: boolean; removing: boolean; onRemove: () => void; onEdit: () => void }) {
+function TradeRow({ t, band, isPhone, showMoney, canSeeBalances, canEdit, removing, onRemove, onEdit }: { t: HistoryRecord; band: BreakEvenBand; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean; canEdit: boolean; removing: boolean; onRemove: () => void; onEdit: () => void }) {
   const long = t.side === 'long';
   const isBreakeven =
-    t.realizedPl != null && classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct) === 'breakeven';
+    t.realizedPl != null && classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band) === 'breakeven';
   const plUp = (t.realizedPl ?? 0) >= 0;
   const plColor = !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
   const plText = !canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••';
+  // Closed forex trade's move in pips, shown beneath its P/L.
+  const rowPips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
   return (
     <div style={{ ...row, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap', opacity: removing ? 0.5 : 1 }}>
       <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -415,7 +438,10 @@ function TradeRow({ t, breakEvenPct, isPhone, showMoney, canSeeBalances, canEdit
       <span style={col}>{fmtPrice(t.entryPrice)}</span>
       <span style={col}>{fmtPrice(t.exitPrice)}</span>
       <span style={{ flex: '1 1 90px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.strategy ?? '—'}</span>
-      <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: plColor }}>{plText}</span>
+      <span style={{ ...col, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+        <span style={{ fontWeight: 700, color: plColor }}>{plText}</span>
+        {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
+      </span>
       <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.closedAt)}</span>
       {canEdit ? (
         <span style={{ display: 'flex', gap: 4, width: 60, justifyContent: 'flex-end' }}>

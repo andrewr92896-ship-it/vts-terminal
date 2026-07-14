@@ -417,13 +417,18 @@ export type TradingChallengeRow = typeof tradingChallenges.$inferSelect;
 
 // ---- Trading — desk-wide settings (shared across the whole trading team) ----
 // A single-row table (id = 'desk') holding settings that apply to the shared
-// desk, not to one trader. `breakEvenPct` is the break-even band as a percent of
-// price move (entry → exit): a closed trade whose move is within ±breakEvenPct
-// counts as a break-even trade — neither a win nor a loss. 0 disables the band,
-// so every scored trade is a win or a loss exactly as before.
+// desk, not to one trader. The break-even buffer marks a barely-moved trade as
+// flat (neither win nor loss). `breakEvenMode` picks how the buffer is measured:
+//   • 'percent' — ±`breakEvenPct` of the entry→exit price move (the original)
+//   • 'dollars' — realized P/L within ±`breakEvenAmount`
+//   • 'pips'    — an entry→exit move within ±`breakEvenAmount` pips (forex)
+// A zero buffer in the active mode disables break-even, so every scored trade is
+// a win or a loss exactly as before.
 export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
   id: text('id').primaryKey(),
   breakEvenPct: real('break_even_pct').notNull().default(0),
+  breakEvenMode: text('break_even_mode').notNull().default('percent'),
+  breakEvenAmount: real('break_even_amount').notNull().default(0),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;

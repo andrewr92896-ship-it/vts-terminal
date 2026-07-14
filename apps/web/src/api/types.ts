@@ -533,6 +533,9 @@ export interface BrokerLiveResult {
   count: number;
 }
 
+// How the desk-wide break-even buffer is measured.
+export type BreakEvenMode = 'percent' | 'dollars' | 'pips';
+
 export interface LiveWall {
   source: 'live' | 'sample';
   generatedAt: number;
@@ -541,11 +544,15 @@ export interface LiveWall {
   trades: LiveTrade[];
   note: string | null;
   breakEvenPct: number; // desk-wide break-even band (percent of price move)
+  breakEvenMode: BreakEvenMode;
+  breakEvenAmount: number; // dollar or pip band (used in 'dollars' / 'pips' mode)
 }
 
 // Desk-wide trading settings, shared across the whole team.
 export interface DeskSettings {
+  breakEvenMode: BreakEvenMode;
   breakEvenPct: number;
+  breakEvenAmount: number;
 }
 
 // ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----
@@ -984,6 +991,8 @@ export interface TradeLogData {
   trades: TradeRecord[];
   summary: TradeSummary;
   breakEvenPct: number;
+  breakEvenMode: BreakEvenMode;
+  breakEvenAmount: number;
 }
 
 // Raw data returned when a trade is removed, so the client can offer undo.
@@ -1115,6 +1124,7 @@ export interface HistoryGroup {
   losses: number;
   breakeven: number;
   realizedPl: number | null;
+  pips: number; // net entry→exit move across the group's forex trades, in pips
 }
 
 export interface HistorySummary {
@@ -1132,6 +1142,8 @@ export interface HistoryData {
   trades: HistoryRecord[];
   summary: HistorySummary;
   breakEvenPct: number;
+  breakEvenMode: BreakEvenMode;
+  breakEvenAmount: number;
 }
 
 // Fields accepted when creating/editing a trade.

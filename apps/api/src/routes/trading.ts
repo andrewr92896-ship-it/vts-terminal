@@ -175,7 +175,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.patch('/api/trading/desk-settings', write, async (request, reply) => {
     const parsed = deskSettingsSchema.safeParse(request.body);
     if (!parsed.success) {
-      return reply.code(400).send({ error: 'Enter a break-even percent between 0 and 100' });
+      return reply.code(400).send({ error: 'Enter a valid break-even buffer (percent 0–100, or a non-negative dollar/pip amount)' });
     }
     return updateDeskSettings(parsed.data);
   });
@@ -901,7 +901,11 @@ const analyzeSchema = z.object({
 });
 
 const deskSettingsSchema = z
-  .object({ breakEvenPct: z.number().finite().min(0).max(100).optional() })
+  .object({
+    breakEvenPct: z.number().finite().min(0).max(100).optional(),
+    breakEvenMode: z.enum(['percent', 'dollars', 'pips']).optional(),
+    breakEvenAmount: z.number().finite().min(0).optional(),
+  })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 // Editing a closed trade in History: the same shape as a hand-logged trade minus

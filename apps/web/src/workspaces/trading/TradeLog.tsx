@@ -5,7 +5,8 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
-import { classifyOutcome } from './outcome';
+import { classifyOutcome, bandFrom, type BreakEvenBand } from './outcome';
+import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
 import type {
   RemovedTrade,
   TradeInput,
@@ -72,7 +73,7 @@ function slippageFavorable(t: TradeRecord): boolean | null {
 // Recompute the KPI stats for a subset of trades (one trader's), mirroring the
 // backend's desk-wide summarize() so a per-trader view reads the same way —
 // including the desk-wide break-even band.
-function summarizeTrades(trades: TradeRecord[], breakEvenPct: number): TradeSummary {
+function summarizeTrades(trades: TradeRecord[], band: BreakEvenBand): TradeSummary {
   let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, slipSum = 0, slipCount = 0;
   for (const t of trades) {
     if (t.status === 'open') open += 1;
@@ -80,7 +81,7 @@ function summarizeTrades(trades: TradeRecord[], breakEvenPct: number): TradeSumm
     if (t.realizedPl != null) {
       totalPl += t.realizedPl;
       if (t.status === 'closed') {
-        const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
+        const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
         if (outcome === 'win') wins += 1;
         else if (outcome === 'loss') losses += 1;
         else breakeven += 1;
@@ -107,20 +108,42 @@ function summarizeTrades(trades: TradeRecord[], breakEvenPct: number): TradeSumm
 
 // Gross profit, gross loss and profit factor for a set of trades. Uses the same
 // win/loss classification as the KPIs above (break-even trades count toward
-// neither), so the numbers line up with the Win Rate card beside them.
-type ProfitFactor = { grossProfit: number; grossLoss: number; profitFactor: number | null };
-function profitFactorStats(trades: TradeRecord[], breakEvenPct: number): ProfitFactor {
+// neither), so the numbers line up with the Win Rate card beside them. The pip
+// figures are the forex pip equivalents of the gross money, so each card can
+// show its P/L in pips too.
+type ProfitFactor = {
+  grossProfit: number;
+  grossLoss: number;
+  profitFactor: number | null;
+  grossProfitPips: number;
+  grossLossPips: number;
+};
+function profitFactorStats(trades: TradeRecord[], band: BreakEvenBand): ProfitFactor {
   let grossProfit = 0;
   let grossLoss = 0;
+  let grossProfitPips = 0;
+  let grossLossPips = 0;
   for (const t of trades) {
     if (t.status !== 'closed' || t.realizedPl == null) continue;
-    const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
-    if (outcome === 'win') grossProfit += Math.max(0, t.realizedPl);
-    else if (outcome === 'loss') grossLoss += Math.abs(t.realizedPl);
+    const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
+    const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
+    if (outcome === 'win') {
+      grossProfit += Math.max(0, t.realizedPl);
+      if (pips != null) grossProfitPips += Math.max(0, pips);
+    } else if (outcome === 'loss') {
+      grossLoss += Math.abs(t.realizedPl);
+      if (pips != null) grossLossPips += Math.max(0, -pips);
+    }
   }
   // null = undefined: no losing trades to divide by (or nothing decided at all).
   const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
-  return { grossProfit, grossLoss, profitFactor };
+  return {
+    grossProfit,
+    grossLoss,
+    profitFactor,
+    grossProfitPips: Number(grossProfitPips.toFixed(1)),
+    grossLossPips: Number(grossLossPips.toFixed(1)),
+  };
 }
 
 // Human-readable profit factor: "—" when nothing's decided, "∞" when there are
@@ -143,14 +166,14 @@ function csvCell(v: string | number | null | undefined): string {
 // so a single download covers both. `generatedAt` is passed in (YYYY-MM-DD).
 function buildExportCsv(opts: {
   trades: TradeRecord[];
-  breakEvenPct: number;
+  band: BreakEvenBand;
   scopeLabel: string;
   rangeLabel: string;
   generatedAt: string;
 }): string {
-  const { trades, breakEvenPct, scopeLabel, rangeLabel, generatedAt } = opts;
-  const s = summarizeTrades(trades, breakEvenPct);
-  const pf = profitFactorStats(trades, breakEvenPct);
+  const { trades, band, scopeLabel, rangeLabel, generatedAt } = opts;
+  const s = summarizeTrades(trades, band);
+  const pf = profitFactorStats(trades, band);
   const money = (n: number) => n.toFixed(2);
   const lines: string[] = [];
   const row = (...cells: (string | number | null | undefined)[]) => lines.push(cells.map(csvCell).join(','));
@@ -159,7 +182,7 @@ function buildExportCsv(opts: {
   row('Scope', scopeLabel);
   row('Date range', rangeLabel);
   row('Generated', generatedAt);
-  row('Break-even band (%)', breakEvenPct);
+  row('Break-even buffer', bandLabel(band));
   row();
   row('Metric', 'Value');
   row('Total trades', s.total);
@@ -170,25 +193,38 @@ function buildExportCsv(opts: {
   row('Break-even', s.breakeven);
   row('Win rate', s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—');
   row('Gross profit', money(pf.grossProfit));
+  row('Gross profit (pips)', pf.grossProfitPips);
   row('Gross loss', money(-pf.grossLoss));
+  row('Gross loss (pips)', -pf.grossLossPips);
   row('Profit factor', pf.grossProfit === 0 && pf.grossLoss === 0 ? '' : pf.grossLoss === 0 ? 'Infinite (no losses)' : (pf.grossProfit / pf.grossLoss).toFixed(2));
   row('Realized P/L', s.totalRealizedPl == null ? '' : money(s.totalRealizedPl));
+  row('Net pips', netPips(trades));
   row('Avg slippage', s.avgSlippage == null ? '' : String(s.avgSlippage));
   row();
   row('Trades');
-  row('Code', 'Opened', 'Trader', 'Instrument', 'Side', 'Status', 'Planned Entry', 'Entry', 'Exit', 'Take Profit', 'Stop Loss', 'Size', 'Slippage', 'Realized P/L', 'Outcome', 'Strategy', 'Timeframe', 'Broker', 'Source', 'Notes');
+  row('Code', 'Opened', 'Trader', 'Instrument', 'Side', 'Status', 'Planned Entry', 'Entry', 'Exit', 'Take Profit', 'Stop Loss', 'Size', 'Slippage', 'Realized P/L', 'Pips', 'Outcome', 'Strategy', 'Timeframe', 'Broker', 'Source', 'Notes');
   for (const t of trades) {
     const outcome =
       t.status === 'closed' && t.realizedPl != null
-        ? classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct)
+        ? classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band)
         : '';
+    const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
     row(
       t.code, msToDateInput(t.openedAt), t.owner, t.instrument, t.side, t.status,
       t.plannedEntry, t.entryPrice, t.exitPrice, t.takeProfit, t.stopLoss, t.units,
-      t.slippage, t.realizedPl, outcome, t.strategy, t.timeframe, t.broker, t.source, t.notes,
+      t.slippage, t.realizedPl, pips == null ? '' : Number(pips.toFixed(1)), outcome, t.strategy, t.timeframe, t.broker, t.source, t.notes,
     );
   }
   return lines.join('\r\n');
+}
+
+// One-line description of the desk's break-even buffer, e.g. "0.05% price move",
+// "$5 realized", or "3 pips". Shared by the CSV export and any label that needs
+// to name the active buffer.
+function bandLabel(band: BreakEvenBand): string {
+  if (band.mode === 'dollars') return `$${band.amount} realized`;
+  if (band.mode === 'pips') return `${band.amount} pips`;
+  return `${band.pct}% price move`;
 }
 
 // Trigger a browser download of a CSV string. A BOM keeps Excel on UTF-8.
@@ -293,9 +329,15 @@ export function TradeLog() {
   const traders = [...new Map(data.trades.map((t) => [t.ownerId, t.owner])).entries()]
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const band = bandFrom(data);
   const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
-  const s = trader ? summarizeTrades(shownTrades, data.breakEvenPct) : data.summary;
-  const pf = profitFactorStats(shownTrades, data.breakEvenPct);
+  const s = trader ? summarizeTrades(shownTrades, band) : data.summary;
+  const pf = profitFactorStats(shownTrades, band);
+  // Pips are the desk's preferred unit — show them next to every $ metric, but
+  // only when the desk actually trades forex (otherwise there's no pip to show).
+  const showPips = hasAnyPips(shownTrades);
+  const netClosedPips = netPips(shownTrades);
+  const beActive = band.mode === 'percent' ? band.pct > 0 : band.amount > 0;
   const selectedTraderName = traders.find((t) => t.id === trader)?.name ?? null;
   // Export scope follows the on-screen trader filter: whole desk, or one trader.
   const scopeLabel = selectedTraderName ? `@${selectedTraderName}` : 'Whole desk';
@@ -303,25 +345,31 @@ export function TradeLog() {
     (selectedTraderName ?? 'whole-desk').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'desk';
   // W · L · BE. Break-even trades are shown only when the desk has a band set or
   // any actually landed there, so the line stays clean when the feature is off.
-  const wlSub = `${s.wins}W · ${s.losses}L${data.breakEvenPct > 0 || s.breakeven > 0 ? ` · ${s.breakeven}BE` : ''}`;
+  const wlSub = `${s.wins}W · ${s.losses}L${beActive || s.breakeven > 0 ? ` · ${s.breakeven}BE` : ''}`;
 
-  const kpis: { label: string; val: string; sub: string }[] = [
+  // Pip figure shown in parentheses under a $ metric — omitted on a desk with no
+  // forex trades. Realized P/L is signed (direction matters); the gross cards
+  // carry the sign of the bucket they total.
+  const kpis: { label: string; val: string; sub: string; pips?: string }[] = [
     { label: 'Trades', val: String(s.total), sub: `${s.open} open · ${s.closed} closed` },
     { label: 'Win Rate', val: s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—', sub: wlSub },
     {
       label: 'Realized P/L',
       val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••',
       sub: 'closed trades',
+      pips: showPips ? `(${fmtPips(netClosedPips, true)})` : undefined,
     },
     {
       label: 'Gross Profit',
       val: !canSeeBalances ? 'hidden' : showMoney ? usd(pf.grossProfit) : '•••••',
       sub: 'winning trades',
+      pips: showPips ? `(${fmtPips(pf.grossProfitPips)})` : undefined,
     },
     {
       label: 'Gross Loss',
       val: !canSeeBalances ? 'hidden' : showMoney ? usd(-pf.grossLoss) : '•••••',
       sub: 'losing trades',
+      pips: showPips ? `(${fmtPips(-pf.grossLossPips)})` : undefined,
     },
     { label: 'Profit Factor', val: profitFactorText(pf), sub: 'gross profit ÷ loss' },
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
@@ -375,7 +423,7 @@ export function TradeLog() {
       {exporting && (
         <ExportPanel
           trades={shownTrades}
-          breakEvenPct={data.breakEvenPct}
+          band={band}
           scopeLabel={scopeLabel}
           scopeSlug={scopeSlug}
           onClose={() => setExporting(false)}
@@ -391,6 +439,9 @@ export function TradeLog() {
           <div key={k.label} style={card}>
             <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{k.label}</div>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 22, fontWeight: 600, color: '#fff', marginTop: 6 }}>{k.val}</div>
+            {k.pips && (
+              <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 600, color: GOLD, marginTop: 3 }}>{k.pips}</div>
+            )}
             <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>{k.sub}</div>
           </div>
         ))}
@@ -421,7 +472,7 @@ export function TradeLog() {
             <DeckCard
               key={t.id}
               t={t}
-              breakEvenPct={data.breakEvenPct}
+              band={band}
               showMoney={showMoney}
               canSeeBalances={canSeeBalances}
               readOnly={readOnly}
@@ -435,7 +486,7 @@ export function TradeLog() {
       ) : (
         <Tape
           trades={shownTrades}
-          breakEvenPct={data.breakEvenPct}
+          band={band}
           showMoney={showMoney}
           canSeeBalances={canSeeBalances}
           readOnly={readOnly}
@@ -454,7 +505,7 @@ export function TradeLog() {
 // ---- Deck card (with inline edit) ----
 function DeckCard({
   t,
-  breakEvenPct,
+  band,
   showMoney,
   canSeeBalances,
   readOnly,
@@ -464,7 +515,7 @@ function DeckCard({
   onSave,
 }: {
   t: TradeRecord;
-  breakEvenPct: number;
+  band: BreakEvenBand;
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
@@ -498,9 +549,11 @@ function DeckCard({
   // Break-even trades are counted (and coloured) as flat, not slight losses.
   const isBreakeven =
     t.status === 'closed' && t.realizedPl != null &&
-    classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct) === 'breakeven';
+    classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band) === 'breakeven';
   const plUp = (t.realizedPl ?? 0) >= 0;
   const plColor = isBreakeven ? GOLD : plUp ? GREEN : RED;
+  // The trade's move in pips, shown beside its realized P/L (closed forex only).
+  const plPips = t.status === 'closed' ? pipsParenthetical(t.side, t.entryPrice, t.exitPrice, t.instrument, true) : '';
 
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${sideColor}` }}>
@@ -564,8 +617,11 @@ function DeckCard({
           ) : t.realizedPl == null ? (
             <span style={{ fontSize: 13, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>—</span>
           ) : (
-            <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: plColor }}>
-              {showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••••'}
+            <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: plColor }}>
+                {showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••••'}
+              </span>
+              {plPips && <span style={{ fontSize: 12, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", color: MUTED }}>{plPips}</span>}
             </span>
           )}
         </div>
@@ -587,7 +643,7 @@ function DeckCard({
 // ---- Tape (dense rows) ----
 function Tape({
   trades,
-  breakEvenPct,
+  band,
   showMoney,
   canSeeBalances,
   readOnly,
@@ -597,7 +653,7 @@ function Tape({
   onRemove,
 }: {
   trades: TradeRecord[];
-  breakEvenPct: number;
+  band: BreakEvenBand;
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
@@ -617,7 +673,7 @@ function Tape({
           <span style={col}>Exit</span>
           <span style={col}>Slip</span>
           <span style={col}>Size</span>
-          <span style={{ ...col, textAlign: 'right' }}>P/L</span>
+          <span style={{ ...plCol, textAlign: 'right' }}>P/L</span>
           <span style={{ ...col, textAlign: 'right' }}>Date</span>
           {!readOnly && <span style={{ width: 24 }} />}
         </div>
@@ -628,9 +684,10 @@ function Tape({
         const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
         const isBreakeven =
           t.status === 'closed' && t.realizedPl != null &&
-          classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct) === 'breakeven';
+          classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band) === 'breakeven';
         const plUp = (t.realizedPl ?? 0) >= 0;
         const plColor = !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
+        const rowPips = t.status === 'closed' ? tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument) : null;
         return (
           <div key={t.id} style={{ ...tapeRow, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
             <span style={{ flex: '1 1 90px', fontWeight: 600, color: TEXT, display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -648,8 +705,11 @@ function Tape({
             <span style={col}>{fmtPrice(t.exitPrice)}</span>
             <span style={{ ...col, color: slipColor }}>{t.slippage == null ? '—' : `${t.slippage > 0 ? '+' : ''}${fmtPrice(t.slippage)}`}</span>
             <span style={col}>{t.units}</span>
-            <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: plColor }}>
-              {!canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••'}
+            <span style={{ ...plCol, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+              <span style={{ fontWeight: 700, color: plColor }}>
+                {!canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••'}
+              </span>
+              {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
             </span>
             <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.openedAt)}</span>
             {!readOnly &&
@@ -879,13 +939,13 @@ function TraderMenu({
 // ---- Export panel — date-range picker + one-file CSV download ----
 function ExportPanel({
   trades,
-  breakEvenPct,
+  band,
   scopeLabel,
   scopeSlug,
   onClose,
 }: {
   trades: TradeRecord[];
-  breakEvenPct: number;
+  band: BreakEvenBand;
   scopeLabel: string;
   scopeSlug: string;
   onClose: () => void;
@@ -907,7 +967,7 @@ function ExportPanel({
   function doExport() {
     if (filtered.length === 0) return;
     const generatedAt = msToDateInput(Date.now());
-    const csv = buildExportCsv({ trades: filtered, breakEvenPct, scopeLabel, rangeLabel, generatedAt });
+    const csv = buildExportCsv({ trades: filtered, band, scopeLabel, rangeLabel, generatedAt });
     const range = `${from ? `_${from}` : ''}${to ? `_${to}` : ''}`;
     downloadCsv(`trade-metrics_${scopeSlug}${range || '_all'}.csv`, csv);
     onClose();
@@ -967,6 +1027,9 @@ function ownerChip(mine: boolean): CSSProperties {
 }
 const tapeRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace" };
 const col: CSSProperties = { flex: '0 0 56px' };
+// The P/L column is a touch wider than the rest — it stacks the money figure
+// over the trade's pip move.
+const plCol: CSSProperties = { flex: '0 0 78px' };
 const infoBanner: CSSProperties = { fontSize: 12.5, color: '#f3e3b8', background: 'rgba(235,203,116,.08)', border: '1px solid rgba(235,203,116,.35)', borderRadius: 8, padding: '9px 12px' };
 const menuButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 150, maxWidth: 240, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 8, color: TEXT, fontSize: 12.5, fontWeight: 600, padding: '8px 12px', cursor: 'pointer' };
 const menuPopup: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 220, maxWidth: 300, background: '#0c1f43', border: `1px solid ${BORDER2}`, borderRadius: 12, padding: 6, zIndex: 40, boxShadow: '0 16px 44px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflowY: 'auto' };
