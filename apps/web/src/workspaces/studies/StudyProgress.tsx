@@ -7,6 +7,7 @@ import {
   CORRECT_PER_SUBLEVEL,
   PASS_THRESHOLD,
   gameKey,
+  lifetimeAccuracy,
   loadGame,
   overallLevel,
   round1,
@@ -22,10 +23,11 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
   const game = useMemo(() => loadGame(gameKey(user?.id)), [user?.id]);
   const muted = '#a99ff0';
 
-  const overall = game.score;
+  const overall = lifetimeAccuracy(game);
   const passing = overall != null && overall >= PASS_THRESHOLD;
   const delta = overall == null ? 0 : round1(overall - PASS_THRESHOLD);
   const ov = overallLevel(game.totalCorrect);
+  const bestEver = overallLevel(game.allTimeBestStep * CORRECT_PER_SUBLEVEL);
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
@@ -49,7 +51,7 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
       ) : (
         <>
           <div style={{ ...card(theme), marginBottom: 14 }}>
-            <div style={statLabel}>Live score · moves every answer</div>
+            <div style={statLabel}>Score · lifetime accuracy</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 4 }}>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 34, fontWeight: 700, color: '#fff' }}>
                 {overall == null ? '—' : `${overall.toFixed(1)}%`}
@@ -94,6 +96,26 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
             </div>
             <div style={{ height: 8, background: theme.navBorder, borderRadius: 5, overflow: 'hidden', marginTop: 12 }}>
               <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
+            </div>
+            {/* Highest level ever reached — kept even after a reset */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 11.5, color: muted }}>
+              <span style={{ letterSpacing: '0.4px', textTransform: 'uppercase' }}>Best reached</span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: bestEver.bg,
+                  color: bestEver.text,
+                  borderRadius: 999,
+                  padding: '3px 10px',
+                  fontWeight: 700,
+                }}
+              >
+                <span style={{ fontSize: 16, lineHeight: 1 }}>{bestEver.main.emoji}</span>
+                Lv {bestEver.mainIndex + 1} · {bestEver.main.name}
+                <span style={{ letterSpacing: '1px' }}>{bestEver.stars}</span>
+              </span>
             </div>
           </div>
 

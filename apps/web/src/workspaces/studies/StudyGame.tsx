@@ -21,10 +21,10 @@ import {
   CATEGORY_META,
   PASS_THRESHOLD,
   buildPools,
-  INITIAL_SCORE,
   CORRECT_PER_SUBLEVEL,
   emptyGame,
   gameKey,
+  lifetimeAccuracy,
   loadGame,
   loadStarred,
   metaFor,
@@ -119,6 +119,8 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   // remaining) so undo can only be used once every UNDO_COOLDOWN questions.
   const [undoSnapshot, setUndoSnapshot] = useState<UndoSnapshot | null>(null);
   const [undoCooldown, setUndoCooldown] = useState(0);
+  // Two-step confirmation for resetting progress (which banks the run first).
+  const [resetConfirm, setResetConfirm] = useState(false);
 
   // Whether the saved server copy has been pulled yet, and the last state we
   // pushed up (to skip redundant writes).
@@ -451,13 +453,14 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     // The live score moves on every answer, so the change is always non-zero.
     // Before the first answer there is no prior, so measure from the neutral seed.
     const prevGame = game;
-    const prevScore = prevGame.score ?? INITIAL_SCORE;
+    const prevScore = lifetimeAccuracy(prevGame);
     const prevOv = overallLevel(prevGame.totalCorrect);
     const next = recordAnswer(prevGame, topic, correct);
-    const newScore = next.score ?? INITIAL_SCORE;
+    const newScore = lifetimeAccuracy(next);
     const nextOv = overallLevel(next.totalCorrect);
 
-    setScoreChange(round1(newScore - prevScore));
+    // Show the change in lifetime accuracy (0 before there was any prior).
+    setScoreChange(round1((newScore ?? 0) - (prevScore ?? (newScore ?? 0))));
     // The overall level only advances on correct answers (it counts correct
     // answers), so a rise in `step` means a sub-level — or main-level — up.
     if (nextOv.step > prevOv.step) {
@@ -494,15 +497,27 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     setUndoCooldown(UNDO_COOLDOWN);
   }
 
+  // Reset the game. The run just played is banked to the leaderboard first (so a
+  // reset preserves the session as a past run rather than erasing it), and the
+  // best level ever reached carries over so the "best reached" badge never drops.
   function resetProgress() {
-    setGame(emptyGame());
+    if (readOnly) return;
+    // Bank the current run before clearing it (best-effort; skipped when empty).
+    if (game.totalAttempted > 0) {
+      void api.archiveStudyGame(JSON.stringify(game)).catch(() => {});
+    }
+    const carriedBest = Math.max(game.allTimeBestStep, game.bestStep);
+    const fresh: GameState = { ...emptyGame(), allTimeBestStep: carriedBest };
+    setGame(fresh);
     poolsRef.current = buildPools();
     setUndoSnapshot(null);
     setUndoCooldown(0);
+    setResetConfirm(false);
     advance();
   }
 
-  const overallScore = game.score;
+  const overallScore = lifetimeAccuracy(game);
+  const bestEver = overallLevel(game.allTimeBestStep * CORRECT_PER_SUBLEVEL);
   const muted = '#a99ff0';
 
   // Shared header with the Quiz / Flashcards view toggle.
@@ -535,7 +550,11 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
           ))}
         </div>
         {view === 'quiz' && !readOnly && (
-          <button onClick={resetProgress} style={ghostBtn(theme)} title="Clear all levels and scores">
+          <button
+            onClick={() => setResetConfirm(true)}
+            style={ghostBtn(theme)}
+            title="Save this run to the leaderboard, then start fresh"
+          >
             Reset progress
           </button>
         )}
@@ -750,6 +769,46 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     </div>
   );
 
+  // Reset confirmation: banks the current run to the leaderboard, then clears it.
+  const runBest = overallLevel(game.bestStep * CORRECT_PER_SUBLEVEL);
+  const runAccuracy = lifetimeAccuracy(game);
+  const resetPanel = resetConfirm ? (
+    <div
+      style={{
+        marginBottom: 14,
+        padding: '14px 16px',
+        borderRadius: 12,
+        border: `1px solid ${AMBER}`,
+        background: 'rgba(224,162,58,.10)',
+      }}
+    >
+      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#fff', marginBottom: 4 }}>Reset your Study Game?</div>
+      <div style={{ fontSize: 12, color: '#e7e0ff', lineHeight: 1.55, marginBottom: 10 }}>
+        {game.totalAttempted > 0 ? (
+          <>
+            This run — <strong>{game.totalCorrect}/{game.totalAttempted} correct</strong>
+            {runAccuracy != null && <> · <strong>{runAccuracy.toFixed(1)}%</strong></>} · best{' '}
+            <span style={{ background: runBest.bg, color: runBest.text, borderRadius: 6, padding: '1px 6px' }}>
+              {runBest.main.emoji} Lv {runBest.mainIndex + 1} {runBest.stars}
+            </span>{' '}
+            — will be saved to the leaderboard, then your levels and score start fresh. Your best level ever
+            reached is kept.
+          </>
+        ) : (
+          <>You haven’t answered anything yet, so there’s nothing to save. This just starts a fresh game.</>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button onClick={resetProgress} style={{ ...primaryBtn(theme, accentGrad), minHeight: 38 }}>
+          {game.totalAttempted > 0 ? 'Save run & reset' : 'Reset'}
+        </button>
+        <button onClick={() => setResetConfirm(false)} style={{ ...ghostBtn(theme), minHeight: 38 }}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (view === 'cards') {
     return (
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
@@ -789,6 +848,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
         {categorySelector}
+        {resetPanel}
         {starredQuestions.length === 0 ? (
           <div style={{ ...card(theme), textAlign: 'center' }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>☆</div>
@@ -844,6 +904,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
         {categorySelector}
+        {resetPanel}
         {noStarred ? (
           <div style={{ ...card(theme), textAlign: 'center' }}>
             <div style={{ fontSize: 28, marginBottom: 6 }}>☆</div>
@@ -881,6 +942,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
       {header}
 
       {categorySelector}
+        {resetPanel}
 
       {/* Level-up banner + a burst of confetti (bigger on a new main level) */}
       {levelEvent && (
@@ -1133,7 +1195,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={card(theme)}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <span style={statLabel}>Live score · moves every answer</span>
+              <span style={statLabel}>Score · lifetime accuracy</span>
               {practice && (
                 <span
                   style={{
@@ -1204,6 +1266,27 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             </div>
             <div style={{ height: 6, background: theme.navBorder, borderRadius: 4, overflow: 'hidden', marginTop: 10 }}>
               <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
+            </div>
+            {/* Highest level ever reached — survives a reset */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 11, color: muted }}>
+              <span style={{ letterSpacing: '0.4px', textTransform: 'uppercase' }}>Best reached</span>
+              <span
+                title={`Highest level you've ever reached: Level ${bestEver.mainIndex + 1} ${bestEver.main.name}, sub-level ${bestEver.sub}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  background: bestEver.bg,
+                  color: bestEver.text,
+                  borderRadius: 999,
+                  padding: '3px 9px',
+                  fontWeight: 700,
+                }}
+              >
+                <span style={{ fontSize: 15, lineHeight: 1 }}>{bestEver.main.emoji}</span>
+                Lv {bestEver.mainIndex + 1}
+                <span style={{ letterSpacing: '1px' }}>{bestEver.stars}</span>
+              </span>
             </div>
           </div>
 

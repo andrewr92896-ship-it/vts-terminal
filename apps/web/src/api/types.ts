@@ -12,17 +12,20 @@ export type RoleKey =
   | 'wealth'
   | 'finance';
 
-// One player's row in the Study Game high-score table. Mirrors the backend's
-// LeaderboardEntry (studies/game.ts).
+// One row in the Study Game high-score table. Mirrors the backend's
+// LeaderboardEntry (studies/game.ts). A row is either a player's current live
+// run or a past run they banked by resetting.
 export interface LeaderboardEntry {
+  id: string; // unique row id: "live:<userId>" or "run:<runId>"
   userId: string;
   name: string;
-  score: number | null; // accuracy % over the last 100 answers
-  attempted: number; // lifetime questions answered
-  correct: number; // lifetime correct answers
-  accuracy: number | null; // lifetime correct / attempted, as a %
-  crowns: number; // total prestige crowns across all categories
-  isMe: boolean;
+  score: number | null; // lifetime accuracy % (correct / attempted)
+  attempted: number; // questions answered in this run
+  correct: number; // correct answers in this run
+  bestStep: number; // highest overall level step reached (0..59)
+  archived: boolean; // true for a banked (reset) run
+  when: number | null; // when the run was banked (ms); null for live rows
+  isMe: boolean; // the caller's current live row
 }
 
 // ---- Studies: mock tests (mirror of apps/api/src/studies/tests.ts) ----

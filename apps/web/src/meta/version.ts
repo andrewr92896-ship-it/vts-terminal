@@ -9,9 +9,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.4';
+export const APP_VERSION = 'Beta V 2.5';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.5',
+    date: 'July 14, 2026',
+    notes: [
+      'Study Game: your score is now simply your lifetime accuracy — every correct answer divided by every question you have attempted. No more moving/weighted score.',
+      'Study Game: “Reset progress” now banks the run you just played onto the leaderboard as a past run, so a reset preserves the session instead of erasing it. A quick confirmation shows what will be saved.',
+      'Study Game: a “Best reached” badge shows the highest level you have ever hit, and it sticks around even after you reset. The leaderboard now shows each run’s best level too.',
+    ],
+  },
   {
     version: 'Beta V 2.4',
     date: 'July 14, 2026',

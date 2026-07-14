@@ -442,7 +442,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Watch your score',
-        body: 'Your score is accuracy over your last 100 answers, to one decimal, with the change from the previous question. The bar marks the ~72% pass line and the status shows how many points you are above or below it.',
+        body: 'Your score is your lifetime accuracy — every correct answer divided by every question attempted, to one decimal — with the change from the previous question. The bar marks the ~72% pass line and the status shows how many points you are above or below it.',
       },
       {
         title: 'Level up',
@@ -453,8 +453,8 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Flip the Quiz / Flashcards switch at the top right to study the Series 65 vocabulary deck — filter by topic, tap a card to reveal the definition, or turn on auto-rotate (term 10s / definition 20s).',
       },
       {
-        title: 'Reset',
-        body: 'Tap “I Don’t Know” to reveal the answer and move on (it counts as incorrect), or “Reset progress” to clear all levels and scores and start fresh.',
+        title: 'Reset (and bank your run)',
+        body: 'Tap “I Don’t Know” to reveal the answer and move on (it counts as incorrect). “Reset progress” saves the run you just played to the leaderboard as a past run — then clears your levels and score to start fresh. The highest level you have ever reached is kept, shown as a “Best reached” badge.',
       },
     ],
   },
@@ -464,7 +464,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
     steps: [
       {
         title: 'Overall score',
-        body: 'The top figure is your accuracy over the last 100 answered questions, with PASSING / NOT PASSING relative to the ~72% line.',
+        body: 'The top figure is your lifetime accuracy — correct answers divided by questions attempted — with PASSING / NOT PASSING relative to the ~72% line.',
       },
       {
         title: 'Level and accuracy',

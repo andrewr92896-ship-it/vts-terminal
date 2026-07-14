@@ -7,30 +7,12 @@ import { SERIES65_QUESTIONS, SERIES65_TOPICS, type Series65Topic } from './serie
 export const PASS_THRESHOLD = 72; // Series 65 passing score (~72%)
 export const WINDOW = 100; // per-category accuracy is measured over the last 100 answers
 
-// ---- Live score ----
-// The headline score is a smoothed, recency-weighted read of how you are doing
-// that nudges on *every* answer (a plain last-100 accuracy sits still once you
-// hit 100%). It is an exponential moving average toward 100 (correct) or 0
-// (wrong), kept just inside the 0/100 rails so a correct answer can always rise
-// and a wrong one can always fall, with a guaranteed minimum step so the number
-// visibly moves each time. It tracks true accuracy closely over a run of
-// answers while never getting stuck.
-export const INITIAL_SCORE = 60; // neutral starting point before the first answer
-const SCORE_ALPHA = 0.08; // how hard each answer pulls the score (recency weight)
-const SCORE_MIN_STEP = 0.1; // smallest visible move per answer
-const SCORE_FLOOR = 0.1;
-const SCORE_CEIL = 99.9;
-
-// Fold one answer into the live score. `prev` is null before the first answer,
-// in which case we start from the neutral prior so early answers read sensibly.
-export function nextScore(prev: number | null, correct: boolean): number {
-  const base = prev ?? INITIAL_SCORE;
-  const target = correct ? 100 : 0;
-  let raw = base + SCORE_ALPHA * (target - base);
-  // Guarantee the number moves in the answer's direction, even near the rails
-  // where the raw EMA step rounds to nothing.
-  raw = correct ? Math.max(raw, base + SCORE_MIN_STEP) : Math.min(raw, base - SCORE_MIN_STEP);
-  return round1(Math.min(SCORE_CEIL, Math.max(SCORE_FLOOR, raw)));
+// ---- Score ----
+// The headline score is plain lifetime accuracy: correct answers divided by
+// questions attempted, across the whole life of the game. No smoothing, no
+// windowing — the number you see is exactly your all-time percentage.
+export function lifetimeAccuracy(g: GameState): number | null {
+  return g.totalAttempted > 0 ? round1((100 * g.totalCorrect) / g.totalAttempted) : null;
 }
 
 // Official NASAA Series 65 content areas and their exam weightings, mapped to
@@ -174,14 +156,22 @@ export interface GameState {
   recent: boolean[]; // last WINDOW outcomes overall
   totalAttempted: number;
   totalCorrect: number;
-  score: number | null; // smoothed live score; null until the first answer
+  bestStep: number; // highest overall level step reached this run (0..59)
+  allTimeBestStep: number; // highest level step ever reached — survives a reset
   cats: Record<Series65Topic, CatState>;
 }
 
 export function emptyGame(): GameState {
   const cats = {} as Record<Series65Topic, CatState>;
   for (const t of SERIES65_TOPICS) cats[t] = { answered: 0, correct: 0, recent: [] };
-  return { recent: [], totalAttempted: 0, totalCorrect: 0, score: null, cats };
+  return { recent: [], totalAttempted: 0, totalCorrect: 0, bestStep: 0, allTimeBestStep: 0, cats };
+}
+
+// The overall level step reached at a given correct-answer count (0..59), the
+// same value `overallLevel` computes. Used to track the best level reached.
+export function stepForCorrect(totalCorrect: number): number {
+  const correct = Math.max(0, Math.floor(totalCorrect) || 0);
+  return Math.min(MAIN_LEVELS.length * SUBLEVELS - 1, Math.floor(correct / CORRECT_PER_SUBLEVEL));
 }
 
 export function gameKey(userId: string | undefined): string {
@@ -220,22 +210,20 @@ export function normalizeGame(p: unknown): GameState {
   const fresh = emptyGame();
   if (!p || typeof p !== 'object') return fresh;
   const src = p as Record<string, unknown>;
+  const totalCorrect = Number(src.totalCorrect) || 0;
+  // Best level reached: honour the stored high-water marks when present, but
+  // never let them fall below the level the current correct-answer count implies
+  // (so older saves, which predate these fields, still show a sensible best).
+  const floorStep = stepForCorrect(totalCorrect);
+  const bestStep = Math.max(Number(src.bestStep) || 0, floorStep);
   const g: GameState = {
     recent: Array.isArray(src.recent) ? src.recent.filter((x: unknown) => typeof x === 'boolean').slice(-WINDOW) : [],
     totalAttempted: Number(src.totalAttempted) || 0,
-    totalCorrect: Number(src.totalCorrect) || 0,
-    score: null,
+    totalCorrect,
+    bestStep,
+    allTimeBestStep: Math.max(Number(src.allTimeBestStep) || 0, bestStep),
     cats: fresh.cats,
   };
-  // Live score: use the stored value when present. Older saves predate it, so
-  // seed from the player's existing accuracy — the number stays continuous with
-  // what they last saw, and no progress is lost.
-  if (typeof src.score === 'number' && Number.isFinite(src.score)) {
-    g.score = Math.min(SCORE_CEIL, Math.max(SCORE_FLOOR, round1(src.score)));
-  } else {
-    const acc = scorePct(g.recent);
-    g.score = acc == null ? null : Math.min(SCORE_CEIL, Math.max(SCORE_FLOOR, round1(acc)));
-  }
   const cats = (src.cats ?? {}) as Record<string, { answered?: unknown; correct?: unknown; recent?: unknown }>;
   for (const t of SERIES65_TOPICS) {
     const c = cats[t];
@@ -281,11 +269,14 @@ export function saveGame(key: string, g: GameState): void {
 // callers can diff scores/levels for the "score change" and level-up display).
 export function recordAnswer(g: GameState, topic: Series65Topic, correct: boolean): GameState {
   const cat = g.cats[topic];
+  const totalCorrect = g.totalCorrect + (correct ? 1 : 0);
+  const bestStep = Math.max(g.bestStep, stepForCorrect(totalCorrect));
   const next: GameState = {
     recent: [...g.recent, correct].slice(-WINDOW),
     totalAttempted: g.totalAttempted + 1,
-    totalCorrect: g.totalCorrect + (correct ? 1 : 0),
-    score: nextScore(g.score, correct),
+    totalCorrect,
+    bestStep,
+    allTimeBestStep: Math.max(g.allTimeBestStep, bestStep),
     cats: {
       ...g.cats,
       [topic]: {

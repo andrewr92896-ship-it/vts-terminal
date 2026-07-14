@@ -877,6 +877,23 @@ export const studyGame = sqliteTable('study_game', {
 });
 export type StudyGameRow = typeof studyGame.$inferSelect;
 
+// ---- Studies: banked Study Game runs (per user) ----
+// A snapshot of a completed Study Game run, saved to the leaderboard when the
+// learner resets their progress. Each row preserves that session's headline
+// numbers so a reset keeps the run on the board as a "past run" rather than
+// erasing it. `best_step` is the highest overall level step (0..59) reached.
+export const studyGameRuns = sqliteTable('study_game_runs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  attempted: integer('attempted').notNull(),
+  correct: integer('correct').notNull(),
+  bestStep: integer('best_step').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyGameRunRow = typeof studyGameRuns.$inferSelect;
+
 // ---- Studies: completed mock tests (per user) ----
 // One row per finished Series 65 mock test (a fixed 100-question exam drawn to
 // the real exam blueprint: 25 Investments, 30 Client Management, 30 Regulations
