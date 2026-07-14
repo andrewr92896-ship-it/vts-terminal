@@ -11,7 +11,7 @@ import {
 } from '../trading/trades.js';
 import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
 import { getHistory, removePosition, updateClosedPosition } from '../trading/history.js';
-import { getDeskSettings, updateDeskSettings } from '../trading/settings.js';
+import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
 import {
@@ -170,14 +170,20 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // ---- Desk-wide settings (shared across the trading team) ----
-  app.get('/api/trading/desk-settings', read, async () => getDeskSettings());
+  // The response carries `instruments` — every symbol the desk has traded — so
+  // the per-instrument buffer picker can offer them without the trader typing.
+  app.get('/api/trading/desk-settings', read, async () => {
+    const [settings, instruments] = await Promise.all([getDeskSettings(), getDeskInstruments()]);
+    return { ...settings, instruments };
+  });
 
   app.patch('/api/trading/desk-settings', write, async (request, reply) => {
     const parsed = deskSettingsSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Enter a valid break-even buffer (percent 0–100, or a non-negative dollar/pip amount)' });
     }
-    return updateDeskSettings(parsed.data);
+    const [settings, instruments] = await Promise.all([updateDeskSettings(parsed.data), getDeskInstruments()]);
+    return { ...settings, instruments };
   });
 
   // ---- Account Metrics (prop-firm challenge) ----

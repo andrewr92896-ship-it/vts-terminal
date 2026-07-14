@@ -564,6 +564,9 @@ export interface DeskSettings {
   breakEvenPct: number;
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
+  // Every instrument the desk has traded (from the Trade Log + History), so the
+  // per-instrument buffer picker can offer them. Auto-derived server-side.
+  instruments: string[];
 }
 
 // ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----
