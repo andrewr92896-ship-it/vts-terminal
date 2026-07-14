@@ -803,6 +803,7 @@ function TraderMenu({
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const { isPhone } = useResponsive();
 
   useEffect(() => {
     if (!open) return;
@@ -837,7 +838,17 @@ function TraderMenu({
         <span style={{ color: FAINT, fontSize: 10, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▾</span>
       </button>
       {open && (
-        <div style={menuPopup} role="listbox">
+        // On phone the button sits at the left edge of the wrapped header, so a
+        // right-aligned popup would spill off the left of the screen. Open it
+        // rightward (left:0) there and cap the width to the viewport instead.
+        <div
+          style={
+            isPhone
+              ? { ...menuPopup, left: 0, right: 'auto', maxWidth: 'min(300px, calc(100vw - 24px))' }
+              : menuPopup
+          }
+          role="listbox"
+        >
           {options.map((o) => {
             const selected = o.id === value;
             const hot = hovered === o.id;
