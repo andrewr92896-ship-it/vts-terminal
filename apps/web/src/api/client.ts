@@ -406,6 +406,11 @@ export const api = {
   saveStudyGame(state: string): Promise<{ ok: true }> {
     return request('/api/studies/game', { method: 'PUT', body: JSON.stringify({ state }) });
   },
+  // Bank the given Study Game run to the leaderboard as a past run (used when the
+  // learner resets their progress, so the session is preserved rather than lost).
+  archiveStudyGame(state: string): Promise<{ ok: true }> {
+    return request('/api/studies/game/archive', { method: 'POST', body: JSON.stringify({ state }) });
+  },
   studyLeaderboard(): Promise<{ entries: LeaderboardEntry[] }> {
     return request('/api/studies/leaderboard');
   },

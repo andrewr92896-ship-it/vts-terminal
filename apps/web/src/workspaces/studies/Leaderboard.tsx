@@ -3,7 +3,20 @@ import { api } from '../../api/client';
 import type { LeaderboardEntry } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { PASS_THRESHOLD } from './series65Game';
+import { CORRECT_PER_SUBLEVEL, PASS_THRESHOLD, overallLevel } from './series65Game';
+
+// The badge (emoji + level + stars) for the highest level a run reached.
+function bestBadge(bestStep: number) {
+  const lvl = overallLevel(bestStep * CORRECT_PER_SUBLEVEL);
+  return { emoji: lvl.main.emoji, label: `Lv ${lvl.mainIndex + 1}`, stars: lvl.stars, bg: lvl.bg, text: lvl.text };
+}
+
+// Short "reset MM/DD" tag for a banked past run.
+function bankedTag(when: number | null): string {
+  if (!when) return 'past run';
+  const d = new Date(when);
+  return `reset ${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 const GREEN = '#35c47b';
 const RED = '#ef5468';
@@ -78,42 +91,52 @@ export function Leaderboard({ theme }: { theme: Theme }) {
       </div>
 
       <div style={card(theme)}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
           <div style={statLabel}>High scores</div>
-          <div style={{ fontSize: 10.5, color: muted }}>Score = accuracy over last 100 · pass {PASS_THRESHOLD.toFixed(1)}%</div>
+          <div style={{ fontSize: 10.5, color: muted }}>Score = lifetime accuracy · pass {PASS_THRESHOLD.toFixed(1)}% · reset runs are banked here</div>
         </div>
 
         {isPhone ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-            {rows.map(({ e, rank }) => (
-              <div
-                key={e.userId}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 11,
-                  padding: '10px 12px',
-                  borderRadius: 10,
-                  border: `1px solid ${e.isMe ? theme.accent : theme.navBorder}`,
-                  background: e.isMe ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.03)',
-                }}
-              >
-                <span style={{ ...rankBadge(rank), flexShrink: 0 }}>{medal(rank)}</span>
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {e.name}
-                    {e.isMe && <span style={{ color: theme.accent, fontWeight: 600 }}> · you</span>}
-                    {e.crowns > 0 && <span> {'👑'.repeat(Math.min(e.crowns, 5))}</span>}
+            {rows.map(({ e, rank }) => {
+              const best = bestBadge(e.bestStep);
+              return (
+                <div
+                  key={e.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 11,
+                    padding: '10px 12px',
+                    borderRadius: 10,
+                    border: `1px solid ${e.isMe ? theme.accent : theme.navBorder}`,
+                    background: e.isMe ? 'rgba(255,255,255,.07)' : 'rgba(255,255,255,.03)',
+                    opacity: e.archived ? 0.9 : 1,
+                  }}
+                >
+                  <span style={{ ...rankBadge(rank), flexShrink: 0 }}>{medal(rank)}</span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {e.name}
+                      {e.isMe && <span style={{ color: theme.accent, fontWeight: 600 }}> · you</span>}
+                      {e.archived && <span style={{ color: muted, fontWeight: 600 }}> · {bankedTag(e.when)}</span>}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: muted, marginTop: 2, fontFamily: "'IBM Plex Mono', monospace" }}>
+                      {e.correct}/{e.attempted} correct
+                    </div>
                   </div>
-                  <div style={{ fontSize: 10.5, color: muted, marginTop: 2, fontFamily: "'IBM Plex Mono', monospace" }}>
-                    {e.correct}/{e.attempted} correct · {e.accuracy == null ? '—' : `${e.accuracy.toFixed(0)}%`} lifetime
-                  </div>
+                  <span
+                    title="Best level reached"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: best.bg, color: best.text, borderRadius: 999, padding: '2px 7px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}
+                  >
+                    {best.emoji} {best.label}
+                  </span>
+                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16, fontWeight: 700, color: scoreColor(e.score), flexShrink: 0 }}>
+                    {e.score == null ? '—' : `${e.score.toFixed(1)}%`}
+                  </span>
                 </div>
-                <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16, fontWeight: 700, color: scoreColor(e.score) }}>
-                  {e.score == null ? '—' : `${e.score.toFixed(1)}%`}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
@@ -125,37 +148,42 @@ export function Leaderboard({ theme }: { theme: Theme }) {
                   <th style={{ ...th, textAlign: 'right' }}>Score</th>
                   <th style={{ ...th, textAlign: 'right' }}>Answered</th>
                   <th style={{ ...th, textAlign: 'right' }}>Correct</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Lifetime</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Crowns</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Best level</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ e, rank }) => (
-                  <tr
-                    key={e.userId}
-                    style={{
-                      background: e.isMe ? 'rgba(255,255,255,.06)' : 'transparent',
-                      outline: e.isMe ? `1px solid ${theme.accent}` : 'none',
-                    }}
-                  >
-                    <td style={td}>
-                      <span style={rankBadge(rank)}>{medal(rank)}</span>
-                    </td>
-                    <td style={{ ...td, color: '#fff', fontWeight: 600 }}>
-                      {e.name}
-                      {e.isMe && <span style={{ color: theme.accent, fontWeight: 600 }}> · you</span>}
-                    </td>
-                    <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: scoreColor(e.score) }}>
-                      {e.score == null ? '—' : `${e.score.toFixed(1)}%`}
-                    </td>
-                    <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#dfe7fa' }}>{e.attempted}</td>
-                    <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#dfe7fa' }}>{e.correct}</td>
-                    <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: muted }}>
-                      {e.accuracy == null ? '—' : `${e.accuracy.toFixed(0)}%`}
-                    </td>
-                    <td style={{ ...td, textAlign: 'right' }}>{e.crowns > 0 ? '👑'.repeat(Math.min(e.crowns, 5)) : '—'}</td>
-                  </tr>
-                ))}
+                {rows.map(({ e, rank }) => {
+                  const best = bestBadge(e.bestStep);
+                  return (
+                    <tr
+                      key={e.id}
+                      style={{
+                        background: e.isMe ? 'rgba(255,255,255,.06)' : 'transparent',
+                        outline: e.isMe ? `1px solid ${theme.accent}` : 'none',
+                        opacity: e.archived ? 0.88 : 1,
+                      }}
+                    >
+                      <td style={td}>
+                        <span style={rankBadge(rank)}>{medal(rank)}</span>
+                      </td>
+                      <td style={{ ...td, color: '#fff', fontWeight: 600 }}>
+                        {e.name}
+                        {e.isMe && <span style={{ color: theme.accent, fontWeight: 600 }}> · you</span>}
+                        {e.archived && <span style={{ color: muted, fontWeight: 500 }}> · {bankedTag(e.when)}</span>}
+                      </td>
+                      <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: scoreColor(e.score) }}>
+                        {e.score == null ? '—' : `${e.score.toFixed(1)}%`}
+                      </td>
+                      <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#dfe7fa' }}>{e.attempted}</td>
+                      <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#dfe7fa' }}>{e.correct}</td>
+                      <td style={{ ...td, textAlign: 'right' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: best.bg, color: best.text, borderRadius: 999, padding: '2px 9px', fontWeight: 700 }}>
+                          {best.emoji} {best.label} <span style={{ letterSpacing: '1px' }}>{best.stars}</span>
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

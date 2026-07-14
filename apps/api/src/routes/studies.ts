@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireWorkspace } from '../auth/middleware.js';
 import { addLearned, listLearned, removeLearned } from '../studies/learned.js';
-import { getGame, getLeaderboard, normalizeState, saveGame } from '../studies/game.js';
+import { archiveRun, getGame, getLeaderboard, normalizeState, saveGame } from '../studies/game.js';
 import { addVocab, listVocab, removeVocab } from '../studies/vocab.js';
 import { addStarred, listStarred, removeStarred } from '../studies/starred.js';
 import { addSection, listSections, removeSection } from '../studies/sections.js';
@@ -193,6 +193,19 @@ export async function studiesRoutes(app: FastifyInstance) {
     const state = normalizeState(parsed.data.state);
     if (state == null) return reply.code(400).send({ error: 'Invalid game state' });
     await saveGame(request.currentUser!.id, state);
+    return { ok: true };
+  });
+
+  // Bank the current run to the leaderboard as a past run. Called when the
+  // learner resets their progress, so the session is preserved on the board
+  // rather than erased. The run's headline numbers are read from the posted
+  // state (the same blob the client saves), and an empty run is a silent no-op.
+  app.post('/api/studies/game/archive', guard, async (request, reply) => {
+    const parsed = gameSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
+    const state = normalizeState(parsed.data.state);
+    if (state == null) return reply.code(400).send({ error: 'Invalid game state' });
+    await archiveRun(request.currentUser!.id, state);
     return { ok: true };
   });
 
