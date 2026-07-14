@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -105,6 +105,105 @@ function summarizeTrades(trades: TradeRecord[], breakEvenPct: number): TradeSumm
   };
 }
 
+// Gross profit, gross loss and profit factor for a set of trades. Uses the same
+// win/loss classification as the KPIs above (break-even trades count toward
+// neither), so the numbers line up with the Win Rate card beside them.
+type ProfitFactor = { grossProfit: number; grossLoss: number; profitFactor: number | null };
+function profitFactorStats(trades: TradeRecord[], breakEvenPct: number): ProfitFactor {
+  let grossProfit = 0;
+  let grossLoss = 0;
+  for (const t of trades) {
+    if (t.status !== 'closed' || t.realizedPl == null) continue;
+    const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
+    if (outcome === 'win') grossProfit += Math.max(0, t.realizedPl);
+    else if (outcome === 'loss') grossLoss += Math.abs(t.realizedPl);
+  }
+  // null = undefined: no losing trades to divide by (or nothing decided at all).
+  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
+  return { grossProfit, grossLoss, profitFactor };
+}
+
+// Human-readable profit factor: "—" when nothing's decided, "∞" when there are
+// no losses to divide by, otherwise two decimals.
+function profitFactorText(pf: ProfitFactor): string {
+  if (pf.grossProfit === 0 && pf.grossLoss === 0) return '—';
+  if (pf.grossLoss === 0) return '∞';
+  return (pf.grossProfit / pf.grossLoss).toFixed(2);
+}
+
+// ---- CSV export ----
+// Escape a single cell for CSV (quote when it holds a comma, quote or newline).
+function csvCell(v: string | number | null | undefined): string {
+  if (v == null) return '';
+  const s = String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+// Build one CSV file that carries the metrics summary and the full trade list,
+// so a single download covers both. `generatedAt` is passed in (YYYY-MM-DD).
+function buildExportCsv(opts: {
+  trades: TradeRecord[];
+  breakEvenPct: number;
+  scopeLabel: string;
+  rangeLabel: string;
+  generatedAt: string;
+}): string {
+  const { trades, breakEvenPct, scopeLabel, rangeLabel, generatedAt } = opts;
+  const s = summarizeTrades(trades, breakEvenPct);
+  const pf = profitFactorStats(trades, breakEvenPct);
+  const money = (n: number) => n.toFixed(2);
+  const lines: string[] = [];
+  const row = (...cells: (string | number | null | undefined)[]) => lines.push(cells.map(csvCell).join(','));
+
+  row('Trade Metrics Export');
+  row('Scope', scopeLabel);
+  row('Date range', rangeLabel);
+  row('Generated', generatedAt);
+  row('Break-even band (%)', breakEvenPct);
+  row();
+  row('Metric', 'Value');
+  row('Total trades', s.total);
+  row('Open', s.open);
+  row('Closed', s.closed);
+  row('Wins', s.wins);
+  row('Losses', s.losses);
+  row('Break-even', s.breakeven);
+  row('Win rate', s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—');
+  row('Gross profit', money(pf.grossProfit));
+  row('Gross loss', money(-pf.grossLoss));
+  row('Profit factor', pf.grossProfit === 0 && pf.grossLoss === 0 ? '' : pf.grossLoss === 0 ? 'Infinite (no losses)' : (pf.grossProfit / pf.grossLoss).toFixed(2));
+  row('Realized P/L', s.totalRealizedPl == null ? '' : money(s.totalRealizedPl));
+  row('Avg slippage', s.avgSlippage == null ? '' : String(s.avgSlippage));
+  row();
+  row('Trades');
+  row('Code', 'Opened', 'Trader', 'Instrument', 'Side', 'Status', 'Planned Entry', 'Entry', 'Exit', 'Take Profit', 'Stop Loss', 'Size', 'Slippage', 'Realized P/L', 'Outcome', 'Strategy', 'Timeframe', 'Broker', 'Source', 'Notes');
+  for (const t of trades) {
+    const outcome =
+      t.status === 'closed' && t.realizedPl != null
+        ? classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct)
+        : '';
+    row(
+      t.code, msToDateInput(t.openedAt), t.owner, t.instrument, t.side, t.status,
+      t.plannedEntry, t.entryPrice, t.exitPrice, t.takeProfit, t.stopLoss, t.units,
+      t.slippage, t.realizedPl, outcome, t.strategy, t.timeframe, t.broker, t.source, t.notes,
+    );
+  }
+  return lines.join('\r\n');
+}
+
+// Trigger a browser download of a CSV string. A BOM keeps Excel on UTF-8.
+function downloadCsv(filename: string, csv: string): void {
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 type Layout = 'deck' | 'tape';
 
 export function TradeLog() {
@@ -124,6 +223,7 @@ export function TradeLog() {
   const [hideMoney, setHideMoney] = useState(false);
   const [layout, setLayout] = useState<Layout>('deck');
   const [adding, setAdding] = useState(false);
+  const [exporting, setExporting] = useState(false);
   // Per-trader filter: '' = the whole desk; otherwise an ownerId.
   const [trader, setTrader] = useState('');
 
@@ -195,7 +295,12 @@ export function TradeLog() {
     .sort((a, b) => a.name.localeCompare(b.name));
   const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
   const s = trader ? summarizeTrades(shownTrades, data.breakEvenPct) : data.summary;
+  const pf = profitFactorStats(shownTrades, data.breakEvenPct);
   const selectedTraderName = traders.find((t) => t.id === trader)?.name ?? null;
+  // Export scope follows the on-screen trader filter: whole desk, or one trader.
+  const scopeLabel = selectedTraderName ? `@${selectedTraderName}` : 'Whole desk';
+  const scopeSlug =
+    (selectedTraderName ?? 'whole-desk').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'desk';
   // W · L · BE. Break-even trades are shown only when the desk has a band set or
   // any actually landed there, so the line stays clean when the feature is off.
   const wlSub = `${s.wins}W · ${s.losses}L${data.breakEvenPct > 0 || s.breakeven > 0 ? ` · ${s.breakeven}BE` : ''}`;
@@ -208,6 +313,17 @@ export function TradeLog() {
       val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••',
       sub: 'closed trades',
     },
+    {
+      label: 'Gross Profit',
+      val: !canSeeBalances ? 'hidden' : showMoney ? usd(pf.grossProfit) : '•••••',
+      sub: 'winning trades',
+    },
+    {
+      label: 'Gross Loss',
+      val: !canSeeBalances ? 'hidden' : showMoney ? usd(-pf.grossLoss) : '•••••',
+      sub: 'losing trades',
+    },
+    { label: 'Profit Factor', val: profitFactorText(pf), sub: 'gross profit ÷ loss' },
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
   ];
 
@@ -224,20 +340,7 @@ export function TradeLog() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {traders.length > 1 && (
-            <select
-              value={trader}
-              onChange={(e) => setTrader(e.target.value)}
-              title="Show stats for one trader"
-              style={{ ...inputBase, flex: '0 0 auto', padding: '7px 11px' }}
-            >
-              <option value="">Whole desk</option>
-              {traders.map((t) => (
-                <option key={t.id} value={t.id}>
-                  @{t.name}
-                  {t.id === user?.id ? ' (you)' : ''}
-                </option>
-              ))}
-            </select>
+            <TraderMenu traders={traders} value={trader} onChange={setTrader} userId={user?.id} />
           )}
           <div style={{ display: 'flex', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
             {(['deck', 'tape'] as Layout[]).map((l) => (
@@ -251,6 +354,9 @@ export function TradeLog() {
               {hideMoney ? 'Show $' : 'Hide $'}
             </button>
           )}
+          <button onClick={() => setExporting((v) => !v)} style={exporting ? { ...ghostBtn, borderColor: GOLD, color: GOLD } : ghostBtn}>
+            {exporting ? 'Close' : '⭳ Export'}
+          </button>
           {!readOnly && (
             <button onClick={() => setAdding((v) => !v)} style={goldBtn}>
               {adding ? 'Close' : '+ Log a trade'}
@@ -264,6 +370,16 @@ export function TradeLog() {
       )}
       {actionError && (
         <div onClick={() => setActionError(null)} style={warnBanner}>{actionError} — refreshed. Click to dismiss.</div>
+      )}
+
+      {exporting && (
+        <ExportPanel
+          trades={shownTrades}
+          breakEvenPct={data.breakEvenPct}
+          scopeLabel={scopeLabel}
+          scopeSlug={scopeSlug}
+          onClose={() => setExporting(false)}
+        />
       )}
 
       {/* Summary */}
@@ -672,6 +788,148 @@ function Field({ label, value, strong, color }: { label: string; value: string; 
   );
 }
 
+// ---- Clean trader picker (replaces the native <select>) ----
+function TraderMenu({
+  traders,
+  value,
+  onChange,
+  userId,
+}: {
+  traders: { id: string; name: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  userId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onDoc);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  // '' is the desk-wide option; the rest are individual traders.
+  const options = [{ id: '', name: 'Whole desk' }, ...traders];
+  const optionLabel = (o: { id: string; name: string }) =>
+    o.id === '' ? 'Whole desk' : `@${o.name}${o.id === userId ? ' (you)' : ''}`;
+  const current = options.find((o) => o.id === value) ?? options[0];
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flex: '0 0 auto' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        title="Show stats for one trader"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{ ...menuButton, ...(open ? { borderColor: GOLD } : {}) }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{optionLabel(current)}</span>
+        <span style={{ color: FAINT, fontSize: 10, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▾</span>
+      </button>
+      {open && (
+        <div style={menuPopup} role="listbox">
+          {options.map((o) => {
+            const selected = o.id === value;
+            const hot = hovered === o.id;
+            return (
+              <button
+                key={o.id || 'desk'}
+                role="option"
+                aria-selected={selected}
+                onMouseEnter={() => setHovered(o.id)}
+                onMouseLeave={() => setHovered((h) => (h === o.id ? null : h))}
+                onClick={() => {
+                  onChange(o.id);
+                  setOpen(false);
+                }}
+                style={{ ...menuItem, ...(selected ? menuItemActive : hot ? menuItemHot : {}) }}
+              >
+                <span style={{ flex: '0 0 16px', color: GOLD, fontSize: 12 }}>{selected ? '✓' : ''}</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{optionLabel(o)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- Export panel — date-range picker + one-file CSV download ----
+function ExportPanel({
+  trades,
+  breakEvenPct,
+  scopeLabel,
+  scopeSlug,
+  onClose,
+}: {
+  trades: TradeRecord[];
+  breakEvenPct: number;
+  scopeLabel: string;
+  scopeSlug: string;
+  onClose: () => void;
+}) {
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+
+  const fromMs = dateToMs(from);
+  const toMs = dateToMs(to);
+  // The "to" bound is inclusive of that whole day.
+  const toEnd = toMs == null ? undefined : toMs + 24 * 60 * 60 * 1000 - 1;
+  const filtered = trades.filter((t) => {
+    if (fromMs != null && t.openedAt < fromMs) return false;
+    if (toEnd != null && t.openedAt > toEnd) return false;
+    return true;
+  });
+  const rangeLabel = from || to ? `${from || 'earliest'} to ${to || 'latest'}` : 'All dates';
+
+  function doExport() {
+    if (filtered.length === 0) return;
+    const generatedAt = msToDateInput(Date.now());
+    const csv = buildExportCsv({ trades: filtered, breakEvenPct, scopeLabel, rangeLabel, generatedAt });
+    const range = `${from ? `_${from}` : ''}${to ? `_${to}` : ''}`;
+    downloadCsv(`trade-metrics_${scopeSlug}${range || '_all'}.csv`, csv);
+    onClose();
+  }
+
+  return (
+    <div style={{ ...panel, marginBottom: 16 }}>
+      <div style={panelLabel}>Export trades &amp; metrics — {scopeLabel}</div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label style={exportField}>
+          <span style={exportFieldLabel}>From</span>
+          <input type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} style={{ ...inputBase, flex: '0 0 150px' }} />
+        </label>
+        <label style={exportField}>
+          <span style={exportFieldLabel}>To</span>
+          <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} style={{ ...inputBase, flex: '0 0 150px' }} />
+        </label>
+        <div style={{ fontSize: 11.5, color: MUTED, flex: '1 1 180px', lineHeight: 1.5 }}>
+          {filtered.length} trade{filtered.length === 1 ? '' : 's'} in range · leave the dates blank for all.
+          <br />
+          One CSV with the metrics summary (incl. profit factor) and the full trade list.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <button onClick={doExport} disabled={filtered.length === 0} style={{ ...goldBtn, opacity: filtered.length === 0 ? 0.6 : 1, cursor: filtered.length === 0 ? 'default' : 'pointer' }}>
+          ⭳ Download CSV
+        </button>
+        <button onClick={onClose} style={ghostBtn}>Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
 const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' };
 const panelLabel: CSSProperties = { fontSize: 10.5, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 };
@@ -699,4 +957,11 @@ function ownerChip(mine: boolean): CSSProperties {
 const tapeRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace" };
 const col: CSSProperties = { flex: '0 0 56px' };
 const infoBanner: CSSProperties = { fontSize: 12.5, color: '#f3e3b8', background: 'rgba(235,203,116,.08)', border: '1px solid rgba(235,203,116,.35)', borderRadius: 8, padding: '9px 12px' };
+const menuButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 150, maxWidth: 240, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 8, color: TEXT, fontSize: 12.5, fontWeight: 600, padding: '8px 12px', cursor: 'pointer' };
+const menuPopup: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 220, maxWidth: 300, background: '#0c1f43', border: `1px solid ${BORDER2}`, borderRadius: 12, padding: 6, zIndex: 40, boxShadow: '0 16px 44px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflowY: 'auto' };
+const menuItem: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: TEXT, fontSize: 13, fontWeight: 500, padding: '9px 10px', borderRadius: 8, cursor: 'pointer' };
+const menuItemActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
+const menuItemHot: CSSProperties = { background: 'rgba(255,255,255,.06)' };
+const exportField: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 5 };
+const exportFieldLabel: CSSProperties = { fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED };
 const warnBanner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
