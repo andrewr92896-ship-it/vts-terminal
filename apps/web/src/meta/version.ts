@@ -9,9 +9,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.3';
+export const APP_VERSION = 'Beta V 2.4';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.4',
+    date: 'July 14, 2026',
+    notes: [
+      'Study Game: a brand-new level ladder that spans every category. Climb 12 themed levels from 🥚 Egg to 💎 Diamond, each with five star sub-levels (★☆☆☆☆ → ★★★★★) that shade the level colour from dark to light. Every 10 correct answers is one sub-level up.',
+      'Study Game: answering is now two steps — click an option to highlight it, then Confirm (or press Enter/Space) to submit, so a misclick never scores. On the keyboard, A–D pick and Enter/Space confirms.',
+      'Study Game: a new ↩ Undo button reverts your last answer — restoring your score and stats and re-presenting the question. Usable once every 10 questions.',
+    ],
+  },
   {
     version: 'Beta V 2.3',
     date: 'July 8, 2026',
