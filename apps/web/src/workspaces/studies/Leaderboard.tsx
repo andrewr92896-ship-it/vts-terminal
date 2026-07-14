@@ -3,11 +3,11 @@ import { api } from '../../api/client';
 import type { LeaderboardEntry } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { CORRECT_PER_SUBLEVEL, PASS_THRESHOLD, overallLevel } from './series65Game';
+import { PASS_THRESHOLD, levelAtStep } from './series65Game';
 
 // The badge (emoji + level + stars) for the highest level a run reached.
 function bestBadge(bestStep: number) {
-  const lvl = overallLevel(bestStep * CORRECT_PER_SUBLEVEL);
+  const lvl = levelAtStep(bestStep);
   return { emoji: lvl.main.emoji, label: `Lv ${lvl.mainIndex + 1}`, stars: lvl.stars, bg: lvl.bg, text: lvl.text };
 }
 

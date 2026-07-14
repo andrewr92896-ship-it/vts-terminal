@@ -10,13 +10,22 @@ import { studyGame, studyGameRuns, users } from '../db/schema.js';
 const MAX_STATE_BYTES = 64 * 1024; // generous ceiling for the serialized state
 
 // Level ladder shape, kept in step with the web client (series65Game.ts): 12
-// levels × 5 sub-levels, one sub-level per 10 correct answers. Used to derive a
-// run's "best level reached" step (0..59) when the stored state predates it.
-const CORRECT_PER_SUBLEVEL = 10;
+// levels × 5 sub-levels. Each sub-level costs one more correct answer than the
+// last (10, 11, 12, … continuously up the ladder). Used to derive a run's "best
+// level reached" step (0..59) when the stored state predates that field.
+const BASE_SUBLEVEL_COST = 10;
 const MAX_LEVEL_STEP = 12 * 5 - 1; // 59
 
+function correctToReachStep(step: number): number {
+  const s = Math.max(0, Math.min(MAX_LEVEL_STEP + 1, Math.floor(step)));
+  return BASE_SUBLEVEL_COST * s + (s * (s - 1)) / 2;
+}
+
 function stepForCorrect(correct: number): number {
-  return Math.min(MAX_LEVEL_STEP, Math.floor(Math.max(0, correct) / CORRECT_PER_SUBLEVEL));
+  const c = Math.max(0, Math.floor(correct) || 0);
+  let s = 0;
+  while (s < MAX_LEVEL_STEP && correctToReachStep(s + 1) <= c) s++;
+  return s;
 }
 
 export async function getGame(userId: string): Promise<string | null> {

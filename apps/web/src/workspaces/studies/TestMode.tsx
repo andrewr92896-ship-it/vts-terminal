@@ -8,7 +8,6 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import type { Series65Question } from './series65Questions';
 import { SERIES65_EXPLANATIONS } from './series65Explanations';
-import { QuestionSpeechControls, ReadAloudToggle, SpeechRateControl, questionSpeech, useSpeech } from './speech';
 import {
   TEST_BLUEPRINT,
   TEST_PASS,
@@ -44,7 +43,6 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
   const accentGrad = accentGradient(theme);
-  const speech = useSpeech();
 
   const [phase, setPhase] = useState<Phase>('intro');
   const [questions, setQuestions] = useState<Series65Question[]>([]);
@@ -234,16 +232,6 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
     return { correct, seen, pct: seen ? Math.round((100 * correct) / seen) : null };
   }, [questions, revealed, answers]);
 
-  // Read the current question aloud when it changes (and when read-aloud is
-  // switched on), while a test is running.
-  const currentId = phase === 'running' ? questions[index]?.id : undefined;
-  useEffect(() => {
-    if (phase !== 'running' || !speech.on) return;
-    const q = questions[index];
-    if (q) speech.speak(questionSpeech(q.stem, q.options));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentId, phase, speech.on]);
-
   async function finish() {
     const score = gradeTest(questions, answers);
     setGraded(score);
@@ -358,8 +346,6 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
               <button onClick={startTest} style={primaryBtn(theme, accentGrad)}>
                 Start the test
               </button>
-              <ReadAloudToggle speech={speech} theme={theme} />
-              <SpeechRateControl speech={speech} theme={theme} />
             </div>
             {readOnly && (
               <div style={{ marginTop: 10, fontSize: 11.5, color: muted }}>
@@ -426,16 +412,9 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '3px 9px', opacity: 0.85 }}>
               {q.topic}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <ReadAloudToggle speech={speech} theme={theme} />
-              <SpeechRateControl speech={speech} theme={theme} />
-            </div>
           </div>
-          <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 12 }}>
+          <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 16 }}>
             {q.stem}
-          </div>
-          <div style={{ marginBottom: 16 }}>
-            <QuestionSpeechControls speech={speech} theme={theme} stem={q.stem} options={q.options} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             {q.options.map((o) => {
