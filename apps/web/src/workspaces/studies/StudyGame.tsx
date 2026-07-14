@@ -17,9 +17,11 @@ import { TestMode } from './TestMode';
 import { TutorChat } from './TutorChat';
 import { QuestionSpeechControls, ReadAloudToggle, SpeechRateControl, questionSpeech, useSpeech } from './speech';
 import { consumeStudyView, type StudyView } from './studiesNav';
+import { emitStudyLevelChange } from './studyTheme';
 import {
   CATEGORY_META,
   PASS_THRESHOLD,
+  applyTestLevel,
   buildPools,
   CORRECT_PER_SUBLEVEL,
   emptyGame,
@@ -37,6 +39,7 @@ import {
   scorePct,
   weightedCategory,
   type GameState,
+  type TestLevelUp,
 } from './series65Game';
 
 const GREEN = '#35c47b';
@@ -130,6 +133,12 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   useEffect(() => {
     saveGame(storageKey, game);
   }, [game, storageKey]);
+
+  // Tell the shell to re-tint the studies workspace whenever the level moves, so
+  // the whole page's colour follows the current level.
+  useEffect(() => {
+    emitStudyLevelChange();
+  }, [game.levelCorrect]);
 
   // Pull saved progress from the account once. The localStorage copy renders
   // instantly; a server copy (if any) takes precedence so levels and scores
@@ -454,10 +463,10 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     // Before the first answer there is no prior, so measure from the neutral seed.
     const prevGame = game;
     const prevScore = lifetimeAccuracy(prevGame);
-    const prevOv = overallLevel(prevGame.totalCorrect);
+    const prevOv = overallLevel(prevGame.levelCorrect);
     const next = recordAnswer(prevGame, topic, correct);
     const newScore = lifetimeAccuracy(next);
-    const nextOv = overallLevel(next.totalCorrect);
+    const nextOv = overallLevel(next.levelCorrect);
 
     // Show the change in lifetime accuracy (0 before there was any prior).
     setScoreChange(round1((newScore ?? 0) - (prevScore ?? (newScore ?? 0))));
@@ -495,6 +504,29 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     resetQuestionState();
     setUndoSnapshot(null);
     setUndoCooldown(UNDO_COOLDOWN);
+  }
+
+  // Fold a finished mock test's correct answers into the level only: it advances
+  // the level (and best-level marks) but never touches lifetime accuracy, the
+  // per-category stats, or the leaderboard. Returns a summary of any level-up so
+  // the test screen can celebrate it.
+  function applyTestToLevel(correctCount: number): TestLevelUp | null {
+    if (readOnly) return null;
+    const before = overallLevel(game.levelCorrect);
+    const next = applyTestLevel(game, correctCount);
+    const after = overallLevel(next.levelCorrect);
+    setGame(next);
+    if (after.step <= before.step) return null;
+    return {
+      mainUp: after.mainIndex > before.mainIndex,
+      emoji: after.main.emoji,
+      name: after.main.name,
+      mainIndex: after.mainIndex,
+      stars: after.stars,
+      bg: after.bg,
+      text: after.text,
+      gained: after.step - before.step,
+    };
   }
 
   // Reset the game. The run just played is banked to the leaderboard first (so a
@@ -822,7 +854,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     return (
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
-        <TestMode theme={theme} />
+        <TestMode theme={theme} onTestComplete={applyTestToLevel} />
       </div>
     );
   }
@@ -927,7 +959,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const q = current.q;
   const cat = current.topic;
   const meta = metaFor(cat);
-  const ov = overallLevel(game.totalCorrect);
+  const ov = overallLevel(game.levelCorrect);
   const passing = overallScore != null && overallScore >= PASS_THRESHOLD;
   const delta = overallScore == null ? 0 : round1(overallScore - PASS_THRESHOLD);
   const explanation = revealed ? SERIES65_EXPLANATIONS[q.id] : undefined;

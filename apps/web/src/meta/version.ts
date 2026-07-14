@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.5';
+export const APP_VERSION = 'Beta V 2.6';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.6',
+    date: 'July 14, 2026',
+    notes: [
+      'Study Game: the whole page now changes colour with your level — the background, buttons, and accents shift through all 12 level hues (🥚 cream → 💎 cyan) as you climb, so your progress is visible at a glance.',
+      'Study Game: mock test answers now count toward your level too. Finishing a test advances your level (and can trigger a level-up on the results screen) — without changing your lifetime accuracy or leaderboard score, which stay driven by the quiz.',
+    ],
+  },
   {
     version: 'Beta V 2.5',
     date: 'July 14, 2026',

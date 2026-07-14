@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import type { TestLeaderboardEntry, TestResult } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
+import type { TestLevelUp } from './series65Game';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import type { Series65Question } from './series65Questions';
@@ -38,7 +39,7 @@ type Phase = 'intro' | 'running' | 'done';
 // no per-question feedback during the test — like the real exam, you find out
 // how you did at the end. Completing a test records the score (and the attempt
 // number) to the test leaderboard.
-export function TestMode({ theme }: { theme: Theme }) {
+export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComplete?: (correct: number) => TestLevelUp | null }) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
@@ -71,6 +72,9 @@ export function TestMode({ theme }: { theme: Theme }) {
 
   // Final grade + the server-recorded result (with its attempt number).
   const [graded, setGraded] = useState<TestScore | null>(null);
+  // Any Study Game level-up earned by finishing this test (test answers count
+  // toward your level only — not your accuracy or leaderboard score).
+  const [testLevelUp, setTestLevelUp] = useState<TestLevelUp | null>(null);
   const [result, setResult] = useState<TestResult | null>(null);
   const [recording, setRecording] = useState(false);
   const [recordError, setRecordError] = useState<string | null>(null);
@@ -191,6 +195,7 @@ export function TestMode({ theme }: { theme: Theme }) {
     setResult(null);
     setRecordError(null);
     setReviewOpen(false);
+    setTestLevelUp(null);
     setPhase('running');
   }
 
@@ -246,6 +251,10 @@ export function TestMode({ theme }: { theme: Theme }) {
     clearTestProgress(user?.id); // clear the local in-progress copy
     lastSavedRef.current = null;
     const durationMs = startedAtRef.current ? Date.now() - startedAtRef.current : null;
+
+    // Fold the test's correct answers into the Study Game level (level-only —
+    // this never changes lifetime accuracy or the leaderboard).
+    setTestLevelUp(onTestComplete?.(score.correct) ?? null);
 
     if (readOnly) return; // demo account: show the grade, don't record it
     void api.clearStudyTestProgress().catch(() => {}); // clear the account copy
@@ -553,6 +562,31 @@ export function TestMode({ theme }: { theme: Theme }) {
     <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff' }}>
       <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1.4fr 1fr', gap: 16, alignItems: 'start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Study Game level-up earned from this test's correct answers */}
+          {testLevelUp && (
+            <div
+              style={{
+                background: testLevelUp.mainUp ? 'linear-gradient(90deg,rgba(224,162,58,.25),rgba(224,162,58,.12))' : 'rgba(53,196,123,.14)',
+                border: `1px solid ${testLevelUp.mainUp ? AMBER : GREEN}`,
+                borderRadius: 12,
+                padding: '12px 16px',
+                textAlign: 'center',
+                animation: 'celebratePop .45s ease-out',
+              }}
+            >
+              <div style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '0.5px', color: testLevelUp.mainUp ? AMBER : GREEN }}>
+                🎉 {testLevelUp.mainUp ? 'LEVEL UP!' : 'SUB-LEVEL UP!'} 🎉
+                {testLevelUp.gained > 1 && <span style={{ color: muted, fontWeight: 600 }}> +{testLevelUp.gained} sub-levels</span>}
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                <span style={{ background: testLevelUp.bg, color: testLevelUp.text, borderRadius: 8, padding: '3px 10px' }}>
+                  {testLevelUp.emoji} Lv {testLevelUp.mainIndex + 1} · {testLevelUp.name}
+                </span>
+                <span style={{ color: '#f5c451', letterSpacing: '1px' }}>{testLevelUp.stars}</span>
+              </div>
+              <div style={{ fontSize: 11, color: muted, marginTop: 3 }}>Your test answers counted toward your level.</div>
+            </div>
+          )}
           {/* Headline score */}
           <div style={{ ...card(theme), borderLeft: `3px solid ${score.passed ? GREEN : RED}` }}>
             <div style={statLabel}>Your result</div>

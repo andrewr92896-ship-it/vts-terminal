@@ -26,7 +26,7 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
   const overall = lifetimeAccuracy(game);
   const passing = overall != null && overall >= PASS_THRESHOLD;
   const delta = overall == null ? 0 : round1(overall - PASS_THRESHOLD);
-  const ov = overallLevel(game.totalCorrect);
+  const ov = overallLevel(game.levelCorrect);
   const bestEver = overallLevel(game.allTimeBestStep * CORRECT_PER_SUBLEVEL);
 
   return (
