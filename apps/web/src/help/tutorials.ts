@@ -418,7 +418,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
   st_game: {
     title: 'Study Game',
-    intro: 'A gamified Series 65 self-quiz: answer questions, level up each category, and track your score against the passing line.',
+    intro: 'A gamified Series 65 self-quiz: answer questions, level up as you go, and track your score against the passing line.',
     steps: [
       {
         title: 'Pick a category (or Mix)',
@@ -434,15 +434,19 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Answer the question',
-        body: 'Click the option you think is right. The correct choice is highlighted; if you missed it, the correct answer (and a quick definition when available) is shown.',
+        body: 'Answering takes two steps: click an option to highlight it, then click Confirm (or press Enter/Space) to submit. Nothing is scored until you confirm, so you can change your pick first. On the keyboard, A–D select and Enter/Space confirm. When the answer is revealed the correct choice is highlighted, with a quick definition when available.',
+      },
+      {
+        title: 'Undo a slip',
+        body: 'Misclicked or want a mulligan? The ↩ Undo button reverts your last answer — it restores your score and stats and re-presents that question. It can be used once every 10 questions, then greys out until 10 more have elapsed.',
       },
       {
         title: 'Watch your score',
         body: 'Your score is accuracy over your last 100 answers, to one decimal, with the change from the previous question. The bar marks the ~72% pass line and the status shows how many points you are above or below it.',
       },
       {
-        title: 'Level up and prestige',
-        body: 'Each category has its own level ladder (Novice → Grandmaster) that climbs as you answer more questions in it. Max it out and the category prestiges — a crown 👑 is added and the ladder restarts.',
+        title: 'Level up',
+        body: 'One level ladder spans every category: 12 themed levels (🥚 Egg → 💎 Diamond), each with five star sub-levels ★☆☆☆☆ → ★★★★★ that shade the level colour from dark to light. Every 10 correct answers is one sub-level up; clearing the fifth advances to the next level’s emoji and colour.',
       },
       {
         title: 'Flashcards',
@@ -450,7 +454,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Reset',
-        body: 'Use “Skip” to pass on a question without scoring it, or “Reset progress” to clear all levels and scores and start fresh.',
+        body: 'Tap “I Don’t Know” to reveal the answer and move on (it counts as incorrect), or “Reset progress” to clear all levels and scores and start fresh.',
       },
     ],
   },
@@ -463,8 +467,8 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'The top figure is your accuracy over the last 100 answered questions, with PASSING / NOT PASSING relative to the ~72% line.',
       },
       {
-        title: 'By category',
-        body: 'Each exam area shows its level (with any prestige crowns), how many questions you have answered there, and your score — so you can see which areas need more work.',
+        title: 'Level and accuracy',
+        body: 'Your overall level (one ladder across all categories, advancing every 10 correct answers) sits up top, and each exam area shows how many questions you have answered there and your accuracy — so you can see which areas need more work.',
       },
     ],
   },

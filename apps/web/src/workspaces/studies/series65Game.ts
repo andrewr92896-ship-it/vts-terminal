@@ -52,56 +52,116 @@ export function metaFor(topic: Series65Topic): CategoryMeta {
   return CATEGORY_META.find((c) => c.topic === topic)!;
 }
 
-// The universal level ladder. `at` is the count of questions answered (in a
-// category) at which the level is reached.
-export interface LevelDef {
-  icon: string;
+// ---- Overall level ladder (topic-agnostic) ----
+// A single progression that spans every category rather than one ladder per
+// topic. There are twelve themed levels, each a distinct emoji with its own base
+// hue, and each level holds five sub-levels that shade the base colour from dark
+// to light. Advancement is a plain count of correct answers: every
+// CORRECT_PER_SUBLEVEL correct answers is one sub-level up, and clearing the
+// fifth sub-level rolls over into the next level's emoji and hue.
+export interface MainLevelDef {
+  emoji: string;
   name: string;
-  at: number;
+  hue: number; // base hue on the colour wheel (0..360)
+  sat: number; // base saturation %
+  lMin: number; // lightness % at sub-level 1 (darkest / dullest)
+  lMax: number; // lightness % at sub-level 5 (lightest)
 }
 
-// Every level is reached 15 questions after the previous one, so each level-up
-// costs a consistent 15 answered questions in the category.
-export const LEVEL_STEP = 15;
-
-export const LEVELS: LevelDef[] = [
-  { icon: '🌱', name: 'Novice', at: 0 },
-  { icon: '📖', name: 'Student', at: 15 },
-  { icon: '✏️', name: 'Apprentice', at: 30 },
-  { icon: '🧠', name: 'Adept', at: 45 },
-  { icon: '🔬', name: 'Specialist', at: 60 },
-  { icon: '🎓', name: 'Scholar', at: 75 },
-  { icon: '🏅', name: 'Expert', at: 90 },
-  { icon: '⭐', name: 'Master', at: 105 },
-  { icon: '👑', name: 'Grandmaster', at: 120 },
+// Twelve levels; hues are spaced far apart so adjacent levels read as clearly
+// different colours.
+export const MAIN_LEVELS: MainLevelDef[] = [
+  { emoji: '🥚', name: 'Egg', hue: 45, sat: 44, lMin: 66, lMax: 90 },
+  { emoji: '🍅', name: 'Tomato', hue: 6, sat: 72, lMin: 34, lMax: 66 },
+  { emoji: '🍊', name: 'Orange', hue: 26, sat: 88, lMin: 40, lMax: 68 },
+  { emoji: '🌽', name: 'Corn', hue: 47, sat: 85, lMin: 46, lMax: 74 },
+  { emoji: '🌱', name: 'Sprout', hue: 138, sat: 55, lMin: 28, lMax: 58 },
+  { emoji: '🌊', name: 'Wave', hue: 182, sat: 60, lMin: 28, lMax: 56 },
+  { emoji: '🫐', name: 'Blueberry', hue: 221, sat: 66, lMin: 34, lMax: 64 },
+  { emoji: '🍇', name: 'Grape', hue: 272, sat: 50, lMin: 36, lMax: 64 },
+  { emoji: '🌸', name: 'Blossom', hue: 330, sat: 72, lMin: 44, lMax: 74 },
+  { emoji: '🟤', name: 'Cocoa', hue: 24, sat: 42, lMin: 26, lMax: 50 },
+  { emoji: '⚫', name: 'Onyx', hue: 250, sat: 14, lMin: 12, lMax: 34 },
+  { emoji: '💎', name: 'Diamond', hue: 188, sat: 82, lMin: 42, lMax: 72 },
 ];
 
-// Reaching Grandmaster (120) holds for one more 15-question band, then the
-// category prestiges: a crown is added and the ladder restarts at Novice.
-export const PRESTIGE_AT = 135;
+export const CORRECT_PER_SUBLEVEL = 10; // correct answers per sub-level up
+export const SUBLEVELS = 5; // sub-levels per main level
+// Correct answers needed to fully max the ladder: 12 × 5 × 10 = 600.
+export const MAX_CORRECT = MAIN_LEVELS.length * SUBLEVELS * CORRECT_PER_SUBLEVEL;
 
-export interface LevelInfo {
-  prestige: number; // crowns earned (completed cycles)
-  index: number; // 0..8 within the current cycle
-  level: LevelDef;
-  within: number; // answers into the current cycle
-  isMax: boolean; // at Grandmaster
-  nextAt: number; // answers-in-cycle for the next milestone (or PRESTIGE_AT)
-  toNext: number; // answers remaining to that milestone
-  nextLabel: string; // what the next milestone is
+export interface OverallLevel {
+  mainIndex: number; // 0..11 (main level index)
+  main: MainLevelDef;
+  sub: number; // 1..5 (current sub-level)
+  stars: string; // pip string, e.g. "★★☆☆☆"
+  bg: string; // shaded base colour for this sub-level
+  text: string; // readable text colour on `bg`
+  isMax: boolean; // at level 12, sub-level 5
+  correct: number; // total correct answers
+  intoSub: number; // correct answers into the current sub-level (0..CORRECT_PER_SUBLEVEL)
+  toNext: number; // correct answers remaining to the next sub-level (0 at max)
+  nextLabel: string; // description of the next milestone
+  step: number; // sub-level index across the whole ladder (0..59)
 }
 
-export function levelInfo(answered: number): LevelInfo {
-  const prestige = Math.floor(answered / PRESTIGE_AT);
-  const within = answered - prestige * PRESTIGE_AT;
-  let index = 0;
-  for (let i = 0; i < LEVELS.length; i++) if (within >= LEVELS[i].at) index = i;
-  const isMax = index === LEVELS.length - 1;
-  const nextAt = isMax ? PRESTIGE_AT : LEVELS[index + 1].at;
+// Convert HSL to sRGB channels (0..255), so text contrast can be computed.
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  const sat = s / 100;
+  const lig = l / 100;
+  const c = (1 - Math.abs(2 * lig - 1)) * sat;
+  const hp = ((((h % 360) + 360) % 360) / 60);
+  const x = c * (1 - Math.abs((hp % 2) - 1));
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (hp < 1) [r, g, b] = [c, x, 0];
+  else if (hp < 2) [r, g, b] = [x, c, 0];
+  else if (hp < 3) [r, g, b] = [0, c, x];
+  else if (hp < 4) [r, g, b] = [0, x, c];
+  else if (hp < 5) [r, g, b] = [x, 0, c];
+  else [r, g, b] = [c, 0, x];
+  const m = lig - c / 2;
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+}
+
+// Pick black or white text for a background by its WCAG relative luminance, so
+// every one of the 60 shades stays legible.
+function readableText(r: number, g: number, b: number): string {
+  const lin = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const L = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return L > 0.42 ? '#1a1324' : '#ffffff';
+}
+
+// Resolve a running total of correct answers into the current level, sub-level,
+// colour, and progress toward the next milestone.
+export function overallLevel(totalCorrect: number): OverallLevel {
+  const correct = Math.max(0, Math.floor(totalCorrect) || 0);
+  const maxStep = MAIN_LEVELS.length * SUBLEVELS - 1; // 59
+  const step = Math.min(maxStep, Math.floor(correct / CORRECT_PER_SUBLEVEL));
+  const mainIndex = Math.floor(step / SUBLEVELS);
+  const sub = (step % SUBLEVELS) + 1; // 1..5
+  const main = MAIN_LEVELS[mainIndex];
+  const isMax = step === maxStep;
+
+  const L = main.lMin + ((main.lMax - main.lMin) * (sub - 1)) / (SUBLEVELS - 1);
+  const [r, g, b] = hslToRgb(main.hue, main.sat, L);
+  const bg = `hsl(${main.hue}, ${main.sat}%, ${round1(L)}%)`;
+  const text = readableText(r, g, b);
+
+  const stars = '★'.repeat(sub) + '☆'.repeat(SUBLEVELS - sub);
+  const intoSub = isMax ? CORRECT_PER_SUBLEVEL : correct - step * CORRECT_PER_SUBLEVEL;
+  const toNext = isMax ? 0 : CORRECT_PER_SUBLEVEL - intoSub;
   const nextLabel = isMax
-    ? `Prestige 👑${'👑'.repeat(prestige)}`
-    : `${LEVELS[index + 1].icon} ${LEVELS[index + 1].name}`;
-  return { prestige, index, level: LEVELS[index], within, isMax, nextAt, toNext: nextAt - within, nextLabel };
+    ? 'Maxed'
+    : sub < SUBLEVELS
+      ? `${main.emoji} ${main.name} ${'★'.repeat(sub + 1)}${'☆'.repeat(SUBLEVELS - sub - 1)}`
+      : `${MAIN_LEVELS[mainIndex + 1].emoji} ${MAIN_LEVELS[mainIndex + 1].name}`;
+
+  return { mainIndex, main, sub, stars, bg, text, isMax, correct, intoSub, toNext, nextLabel, step };
 }
 
 export interface CatState {

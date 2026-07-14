@@ -4,10 +4,11 @@ import { accentGradient } from '../../theme/themes';
 import { useAuth } from '../../auth/AuthContext';
 import {
   CATEGORY_META,
+  CORRECT_PER_SUBLEVEL,
   PASS_THRESHOLD,
   gameKey,
-  levelInfo,
   loadGame,
+  overallLevel,
   round1,
   scorePct,
 } from './series65Game';
@@ -24,6 +25,7 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
   const overall = game.score;
   const passing = overall != null && overall >= PASS_THRESHOLD;
   const delta = overall == null ? 0 : round1(overall - PASS_THRESHOLD);
+  const ov = overallLevel(game.totalCorrect);
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
@@ -66,19 +68,45 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
             </div>
           </div>
 
+          <div style={{ ...card(theme), marginBottom: 14 }}>
+            <div style={statLabel}>Level · {ov.correct} correct answers</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  background: ov.bg,
+                  color: ov.text,
+                  borderRadius: 12,
+                  padding: '9px 13px',
+                }}
+              >
+                <span style={{ fontSize: 26, lineHeight: 1 }}>{ov.main.emoji}</span>
+                <div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700 }}>Lv {ov.mainIndex + 1} · {ov.main.name}</div>
+                  <div style={{ fontSize: 15, letterSpacing: '2px' }}>{ov.stars}</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 11.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {ov.isMax ? 'Max level reached' : `${ov.toNext} correct to ${ov.nextLabel}`}
+              </div>
+            </div>
+            <div style={{ height: 8, background: theme.navBorder, borderRadius: 5, overflow: 'hidden', marginTop: 12 }}>
+              <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
+            </div>
+          </div>
+
           <div style={card(theme)}>
-            <div style={statLabel}>By category</div>
+            <div style={statLabel}>Accuracy by category</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 13, marginTop: 12 }}>
               {CATEGORY_META.map((c) => {
                 const cs = game.cats[c.topic];
-                const cl = levelInfo(cs.answered);
                 const sc = scorePct(cs.recent);
                 return (
                   <div key={c.topic}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, marginBottom: 5 }}>
-                      <span style={{ color: '#fff', fontWeight: 600 }}>
-                        {'👑'.repeat(cl.prestige)}{cl.level.icon} {c.topic}
-                      </span>
+                      <span style={{ color: '#fff', fontWeight: 600 }}>{c.topic}</span>
                       <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: '#fff' }}>
                         {sc == null ? '—' : `${sc.toFixed(1)}%`}
                       </span>
@@ -87,8 +115,8 @@ export function StudyProgress({ theme, onNavigate }: { theme: Theme; onNavigate:
                       <div style={{ height: '100%', width: `${sc ?? 0}%`, background: accentGrad }} />
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: muted, marginTop: 4 }}>
-                      <span>Level {cl.index + 1} · {cl.level.name}{cl.prestige > 0 ? ` · Prestige ${cl.prestige}` : ''}</span>
-                      <span>{cs.answered} answered · {c.weight}% of exam</span>
+                      <span>{cs.answered} answered</span>
+                      <span>{c.weight}% of exam</span>
                     </div>
                   </div>
                 );
