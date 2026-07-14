@@ -67,6 +67,8 @@ export function DeskSettingsModal({
   // Per-instrument overrides, held as edit rows (value is the string in the
   // field; which band number it maps to depends on the row's own mode).
   const [overrides, setOverrides] = useState<OverrideRow[]>([]);
+  // Instruments the desk has traded, offered in the per-instrument picker.
+  const [instruments, setInstruments] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +94,7 @@ export function DeskSettingsModal({
             value: o.mode === 'percent' ? String(o.pct) : String(o.amount),
           })),
         );
+        setInstruments(s.instruments);
         setLoaded(true);
       })
       .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Failed to load settings'));
@@ -114,6 +117,16 @@ export function DeskSettingsModal({
   // content must be fully valid before we allow a save.
   const overridesValid = overrides.every((r) => rowBlank(r) || rowValid(r));
   const valid = defaultValid && overridesValid;
+
+  // Instruments offered in the picker: the desk's traded instruments plus any
+  // already sitting on an override row (so a saved one still shows even if it's
+  // dropped off recent history), sorted. `availableToAdd` are the ones not yet
+  // used by a row — the pool a new row can pick from.
+  const knownInstruments = Array.from(
+    new Set([...instruments, ...overrides.map((r) => r.instrument.trim().toUpperCase()).filter(Boolean)]),
+  ).sort((a, b) => a.localeCompare(b));
+  const chosen = new Set(overrides.map((r) => r.instrument.trim().toUpperCase()).filter(Boolean));
+  const availableToAdd = knownInstruments.filter((x) => !chosen.has(x));
 
   function setRow(i: number, patch: Partial<OverrideRow>) {
     setOverrides((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -157,6 +170,7 @@ export function DeskSettingsModal({
           value: o.mode === 'percent' ? String(o.pct) : String(o.amount),
         })),
       );
+      setInstruments(s.instruments);
       setSaved(true);
       onSaved?.(s);
     } catch (e) {
@@ -304,24 +318,35 @@ export function DeskSettingsModal({
               <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
                 <div style={sectionLabel}>Per-instrument buffers</div>
                 <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
-                  Set a buffer for a specific instrument (e.g. <b>EUR/USD</b>) — it overrides the default for that
-                  instrument, desk-wide. Leave empty to use the default everywhere.
+                  Override the default for a specific instrument, desk-wide. The instrument list is filled in
+                  automatically from what the desk has traded — just pick one, no typing.
                 </div>
 
                 {overrides.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
                     {overrides.map((r, i) => {
                       const bad = !rowBlank(r) && !rowValid(r);
+                      // Offer every known instrument except those chosen on other
+                      // rows, so the same instrument can't be set twice.
+                      const own = r.instrument.trim().toUpperCase();
+                      const usedByOthers = new Set(
+                        overrides.filter((_, idx) => idx !== i).map((x) => x.instrument.trim().toUpperCase()).filter(Boolean),
+                      );
+                      const opts = knownInstruments.filter((x) => x === own || !usedByOthers.has(x));
                       return (
                         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <input
-                            value={r.instrument}
+                          <select
+                            value={own}
                             onChange={(e) => setRow(i, { instrument: e.target.value })}
                             disabled={readOnly || busy}
-                            placeholder="EUR/USD"
                             aria-label="Override instrument"
-                            style={{ ...input, fontSize: 13, flex: '1 1 110px', minWidth: 90, textTransform: 'uppercase', borderColor: bad ? '#8a4a52' : BORDER2 }}
-                          />
+                            style={{ ...input, fontSize: 13, flex: '1 1 120px', minWidth: 110, cursor: 'pointer', padding: '9px 8px', borderColor: bad ? '#8a4a52' : BORDER2 }}
+                          >
+                            <option value="">Instrument…</option>
+                            {opts.map((x) => (
+                              <option key={x} value={x}>{x}</option>
+                            ))}
+                          </select>
                           <select
                             value={r.mode}
                             onChange={(e) => setRow(i, { mode: e.target.value as BreakEvenMode })}
@@ -356,10 +381,22 @@ export function DeskSettingsModal({
                   </div>
                 )}
 
-                {!readOnly && (
-                  <button onClick={addRow} disabled={busy} style={{ ...addBtn, marginTop: overrides.length > 0 ? 10 : 12 }}>
-                    + Add instrument
-                  </button>
+                {knownInstruments.length === 0 ? (
+                  <div style={{ fontSize: 11.5, color: FAINT, marginTop: 12, lineHeight: 1.5 }}>
+                    No instruments in the desk's trade history yet — once a trade is logged, its instrument
+                    appears here automatically.
+                  </div>
+                ) : (
+                  !readOnly && (
+                    <button
+                      onClick={addRow}
+                      disabled={busy || availableToAdd.length === 0}
+                      title={availableToAdd.length === 0 ? 'Every traded instrument already has a buffer' : undefined}
+                      style={{ ...addBtn, marginTop: overrides.length > 0 ? 10 : 12, opacity: availableToAdd.length === 0 ? 0.5 : 1 }}
+                    >
+                      + Add instrument
+                    </button>
+                  )
                 )}
               </div>
 
