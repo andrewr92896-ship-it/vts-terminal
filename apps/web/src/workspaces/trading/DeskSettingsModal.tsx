@@ -10,6 +10,31 @@ const MODES: { key: BreakEvenMode; label: string }[] = [
   { key: 'pips', label: 'Pips' },
 ];
 
+// An in-progress per-instrument override row in the editor. `value` is the raw
+// field text; it maps to the band's pct (percent mode) or amount (dollars/pips).
+interface OverrideRow {
+  instrument: string;
+  mode: BreakEvenMode;
+  value: string;
+}
+
+// A row with neither an instrument nor a value is ignored on save.
+function rowBlank(r: OverrideRow): boolean {
+  return r.instrument.trim() === '' && r.value.trim() === '';
+}
+// A row is savable when it names an instrument and holds a valid number for its
+// mode (percent 0–100, dollars/pips ≥ 0).
+function rowValid(r: OverrideRow): boolean {
+  if (r.instrument.trim() === '') return false;
+  const n = Number(r.value);
+  if (r.value.trim() === '' || !Number.isFinite(n) || n < 0) return false;
+  return r.mode !== 'percent' || n <= 100;
+}
+// The short unit shown after an override's value field.
+function unitLabel(mode: BreakEvenMode): string {
+  return mode === 'percent' ? '%' : mode === 'pips' ? 'pips' : '$';
+}
+
 const GOLD = '#EBCB74';
 const TEXT = '#eef3ff';
 const MUTED = '#9fb0d6';
@@ -39,6 +64,9 @@ export function DeskSettingsModal({
   const [mode, setMode] = useState<BreakEvenMode>('percent');
   const [bePct, setBePct] = useState('');
   const [beAmount, setBeAmount] = useState('');
+  // Per-instrument overrides, held as edit rows (value is the string in the
+  // field; which band number it maps to depends on the row's own mode).
+  const [overrides, setOverrides] = useState<OverrideRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +85,13 @@ export function DeskSettingsModal({
         setMode(s.breakEvenMode);
         setBePct(String(s.breakEvenPct));
         setBeAmount(String(s.breakEvenAmount));
+        setOverrides(
+          s.breakEvenOverrides.map((o) => ({
+            instrument: o.instrument,
+            mode: o.mode,
+            value: o.mode === 'percent' ? String(o.pct) : String(o.amount),
+          })),
+        );
         setLoaded(true);
       })
       .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Failed to load settings'));
@@ -71,24 +106,57 @@ export function DeskSettingsModal({
   // non-negative amount. Only the field for the active mode has to be valid.
   const parsedPct = Number(bePct);
   const parsedAmount = Number(beAmount);
-  const valid =
+  const defaultValid =
     mode === 'percent'
       ? bePct.trim() !== '' && Number.isFinite(parsedPct) && parsedPct >= 0 && parsedPct <= 100
       : beAmount.trim() !== '' && Number.isFinite(parsedAmount) && parsedAmount >= 0;
+  // A blank row (no instrument, no value) is ignored on save; any row with
+  // content must be fully valid before we allow a save.
+  const overridesValid = overrides.every((r) => rowBlank(r) || rowValid(r));
+  const valid = defaultValid && overridesValid;
+
+  function setRow(i: number, patch: Partial<OverrideRow>) {
+    setOverrides((rows) => rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+    setSaved(false);
+  }
+  function addRow() {
+    setOverrides((rows) => [...rows, { instrument: '', mode: 'pips', value: '' }]);
+    setSaved(false);
+  }
+  function removeRow(i: number) {
+    setOverrides((rows) => rows.filter((_, idx) => idx !== i));
+    setSaved(false);
+  }
 
   async function save() {
     if (!valid) return;
     setBusy(true);
     setError(null);
     try {
-      // Send the mode plus only the field it uses, so the other value is left as
-      // the desk last set it (and can be switched back to without re-typing).
-      const patch: Partial<DeskSettings> =
+      // Send the default mode plus only the field it uses (the other value is
+      // left as the desk last set it), and the full override list — which
+      // replaces the stored set, so removals persist.
+      const base: Partial<DeskSettings> =
         mode === 'percent' ? { breakEvenMode: mode, breakEvenPct: parsedPct } : { breakEvenMode: mode, breakEvenAmount: parsedAmount };
-      const s = await api.updateDeskSettings(patch);
+      const breakEvenOverrides = overrides
+        .filter((r) => !rowBlank(r))
+        .map((r) => {
+          const n = Number(r.value);
+          return r.mode === 'percent'
+            ? { instrument: r.instrument.trim(), mode: r.mode, pct: n, amount: 0 }
+            : { instrument: r.instrument.trim(), mode: r.mode, pct: 0, amount: n };
+        });
+      const s = await api.updateDeskSettings({ ...base, breakEvenOverrides });
       setMode(s.breakEvenMode);
       setBePct(String(s.breakEvenPct));
       setBeAmount(String(s.breakEvenAmount));
+      setOverrides(
+        s.breakEvenOverrides.map((o) => ({
+          instrument: o.instrument,
+          mode: o.mode,
+          value: o.mode === 'percent' ? String(o.pct) : String(o.amount),
+        })),
+      );
       setSaved(true);
       onSaved?.(s);
     } catch (e) {
@@ -150,12 +218,14 @@ export function DeskSettingsModal({
               <div style={{ fontSize: 12, color: MUTED, marginTop: 6, lineHeight: 1.55 }}>
                 A closed trade whose result stays inside this buffer — in either direction — counts as a{' '}
                 <b style={{ color: GOLD }}>break-even</b> trade instead of a win or a loss. It applies across the whole
-                desk: the Trade Log, History, and the Live Wall. Pick how the buffer is measured, then set the size.
-                Set <b>0</b> to turn it off.
+                desk: the Trade Log, History, and the Live Wall. The <b>default</b> below governs every instrument, and you
+                can override it for a <b>specific instrument</b> underneath. Set <b>0</b> to turn a buffer off.
               </div>
 
+              <div style={sectionLabel}>Default — every instrument without its own buffer</div>
+
               {/* Mode: percent of price move, a flat dollar amount, or pips. */}
-              <div style={{ ...seg, marginTop: 14 }} role="tablist" aria-label="Break-even buffer unit">
+              <div style={{ ...seg, marginTop: 10 }} role="tablist" aria-label="Break-even buffer unit">
                 {MODES.map((m) => (
                   <button
                     key={m.key}
@@ -229,6 +299,70 @@ export function DeskSettingsModal({
                 </>
               )}
 
+              {/* Per-instrument overrides. Each row sets its own unit + size for
+                  one instrument, overriding the default for that instrument only. */}
+              <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
+                <div style={sectionLabel}>Per-instrument buffers</div>
+                <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
+                  Set a buffer for a specific instrument (e.g. <b>EUR/USD</b>) — it overrides the default for that
+                  instrument, desk-wide. Leave empty to use the default everywhere.
+                </div>
+
+                {overrides.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                    {overrides.map((r, i) => {
+                      const bad = !rowBlank(r) && !rowValid(r);
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <input
+                            value={r.instrument}
+                            onChange={(e) => setRow(i, { instrument: e.target.value })}
+                            disabled={readOnly || busy}
+                            placeholder="EUR/USD"
+                            aria-label="Override instrument"
+                            style={{ ...input, fontSize: 13, flex: '1 1 110px', minWidth: 90, textTransform: 'uppercase', borderColor: bad ? '#8a4a52' : BORDER2 }}
+                          />
+                          <select
+                            value={r.mode}
+                            onChange={(e) => setRow(i, { mode: e.target.value as BreakEvenMode })}
+                            disabled={readOnly || busy}
+                            aria-label="Override unit"
+                            style={{ ...input, fontSize: 13, flex: '0 0 auto', cursor: 'pointer', padding: '9px 8px' }}
+                          >
+                            {MODES.map((m) => (
+                              <option key={m.key} value={m.key}>{m.label}</option>
+                            ))}
+                          </select>
+                          <input
+                            value={r.value}
+                            onChange={(e) => setRow(i, { value: e.target.value })}
+                            disabled={readOnly || busy}
+                            type="number"
+                            step={r.mode === 'percent' ? '0.01' : r.mode === 'pips' ? '0.1' : '0.01'}
+                            min="0"
+                            max={r.mode === 'percent' ? '100' : undefined}
+                            inputMode="decimal"
+                            aria-label="Override value"
+                            placeholder="0"
+                            style={{ ...input, fontSize: 13, width: 72, borderColor: bad ? '#8a4a52' : BORDER2 }}
+                          />
+                          <span style={{ fontSize: 12, color: MUTED, fontFamily: "'IBM Plex Mono', monospace", width: 34 }}>{unitLabel(r.mode)}</span>
+                          {!readOnly && (
+                            <button onClick={() => removeRow(i)} disabled={busy} title="Remove override" aria-label="Remove override" style={removeBtn}>×</button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {!readOnly && (
+                  <button onClick={addRow} disabled={busy} style={{ ...addBtn, marginTop: overrides.length > 0 ? 10 : 12 }}>
+                    + Add instrument
+                  </button>
+                )}
+              </div>
+
               {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginTop: 12 }}>{error}</div>}
 
               {!readOnly ? (
@@ -255,3 +389,6 @@ const segBtn: CSSProperties = { background: 'none', border: 'none', color: MUTED
 const segActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 15, padding: '9px 11px', outline: 'none', fontFamily: "'IBM Plex Mono', monospace" };
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12.5, padding: '9px 18px', borderRadius: 7, cursor: 'pointer' };
+const sectionLabel: CSSProperties = { fontSize: 10.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED, marginTop: 16 };
+const addBtn: CSSProperties = { fontSize: 12, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
+const removeBtn: CSSProperties = { flex: '0 0 auto', background: 'none', border: `1px solid ${BORDER2}`, color: '#8fa0c8', fontSize: 16, lineHeight: 1, padding: '3px 9px', borderRadius: 6, cursor: 'pointer' };

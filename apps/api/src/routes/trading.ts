@@ -900,11 +900,21 @@ const analyzeSchema = z.object({
   mediaType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp']).optional(),
 });
 
+const beOverrideSchema = z.object({
+  instrument: z.string().trim().min(1).max(40),
+  mode: z.enum(['percent', 'dollars', 'pips']),
+  pct: z.number().finite().min(0).max(100),
+  amount: z.number().finite().min(0),
+});
+
 const deskSettingsSchema = z
   .object({
     breakEvenPct: z.number().finite().min(0).max(100).optional(),
     breakEvenMode: z.enum(['percent', 'dollars', 'pips']).optional(),
     breakEvenAmount: z.number().finite().min(0).optional(),
+    // The full per-instrument override list; when present it replaces the stored
+    // set. Capped so one request can't insert an unbounded number of rows.
+    breakEvenOverrides: z.array(beOverrideSchema).max(200).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 

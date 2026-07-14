@@ -21,6 +21,54 @@ export interface BreakEvenBand {
   amount: number;
 }
 
+// A per-instrument break-even buffer: the same band, tagged with the instrument
+// it applies to. Desk-wide, like the default — the same override governs every
+// trader's view of that instrument.
+export interface BreakEvenOverride extends BreakEvenBand {
+  instrument: string;
+}
+
+// The full desk break-even configuration: one default band that applies to any
+// instrument without its own setting, plus per-instrument overrides keyed by a
+// normalized symbol so "EUR/USD", "eur_usd" and "EURUSD" all resolve the same.
+export interface BreakEvenConfig {
+  base: BreakEvenBand;
+  overrides: Record<string, BreakEvenBand>;
+}
+
+// Collapse an instrument symbol to a match key: uppercase, alphanumerics only,
+// so notation differences ("EUR/USD" vs "EURUSD") never split one instrument's
+// buffer in two.
+export function normInstr(instrument: string): string {
+  return instrument.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+// The band that governs a given instrument: its own override if one is set,
+// otherwise the desk default.
+export function bandForInstrument(config: BreakEvenConfig, instrument: string): BreakEvenBand {
+  return config.overrides[normInstr(instrument)] ?? config.base;
+}
+
+// Whether a band actually buffers anything (a zero band is "off").
+export function bandActive(band: BreakEvenBand): boolean {
+  return band.mode === 'percent' ? band.pct > 0 : band.amount > 0;
+}
+
+// Whether any part of the config buffers anything — the default or any override.
+export function configActive(config: BreakEvenConfig): boolean {
+  return bandActive(config.base) || Object.values(config.overrides).some(bandActive);
+}
+
+// Build a resolver config from a default band and a list of per-instrument
+// overrides (shared by the server and the client).
+export function buildBreakEvenConfig(base: BreakEvenBand, overrides: BreakEvenOverride[]): BreakEvenConfig {
+  const map: Record<string, BreakEvenBand> = {};
+  for (const o of overrides) {
+    map[normInstr(o.instrument)] = { mode: o.mode, pct: o.pct, amount: o.amount };
+  }
+  return { base, overrides: map };
+}
+
 // The trade's return as a percent of the entry price, sign-adjusted for side: a
 // long that exits above its entry is positive; a short that exits below its
 // entry is positive. Null when the move can't be measured — no exit price, or a
@@ -36,7 +84,9 @@ export function tradeReturnPct(
 }
 
 // Classify a scored trade as win / loss / break-even against the desk's chosen
-// break-even buffer. The buffer is measured one of three ways (see BreakEvenMode):
+// break-even buffer. The instrument picks the band — its own per-instrument
+// override if one is set, otherwise the desk default — and the band is measured
+// one of three ways (see BreakEvenMode):
 //   • percent — ±band of the entry→exit price move (the original measure)
 //   • dollars — realized P/L within ±$band reads as flat
 //   • pips    — an entry→exit move within ±band pips reads as flat (forex only)
@@ -50,8 +100,9 @@ export function classifyOutcome(
   exitPrice: number | null,
   realizedPl: number | null,
   instrument: string,
-  band: BreakEvenBand,
+  config: BreakEvenConfig,
 ): Outcome {
+  const band = bandForInstrument(config, instrument);
   if (band.mode === 'dollars') {
     if (realizedPl != null) {
       if (Math.abs(realizedPl) <= band.amount) return 'breakeven';

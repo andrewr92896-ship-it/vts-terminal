@@ -5,7 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
-import { classifyOutcome, bandFrom, type BreakEvenBand } from './outcome';
+import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
 import type {
   RemovedTrade,
@@ -73,7 +73,7 @@ function slippageFavorable(t: TradeRecord): boolean | null {
 // Recompute the KPI stats for a subset of trades (one trader's), mirroring the
 // backend's desk-wide summarize() so a per-trader view reads the same way —
 // including the desk-wide break-even band.
-function summarizeTrades(trades: TradeRecord[], band: BreakEvenBand): TradeSummary {
+function summarizeTrades(trades: TradeRecord[], config: BreakEvenConfig): TradeSummary {
   let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, slipSum = 0, slipCount = 0;
   for (const t of trades) {
     if (t.status === 'open') open += 1;
@@ -81,7 +81,7 @@ function summarizeTrades(trades: TradeRecord[], band: BreakEvenBand): TradeSumma
     if (t.realizedPl != null) {
       totalPl += t.realizedPl;
       if (t.status === 'closed') {
-        const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
+        const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
         if (outcome === 'win') wins += 1;
         else if (outcome === 'loss') losses += 1;
         else breakeven += 1;
@@ -118,14 +118,14 @@ type ProfitFactor = {
   grossProfitPips: number;
   grossLossPips: number;
 };
-function profitFactorStats(trades: TradeRecord[], band: BreakEvenBand): ProfitFactor {
+function profitFactorStats(trades: TradeRecord[], config: BreakEvenConfig): ProfitFactor {
   let grossProfit = 0;
   let grossLoss = 0;
   let grossProfitPips = 0;
   let grossLossPips = 0;
   for (const t of trades) {
     if (t.status !== 'closed' || t.realizedPl == null) continue;
-    const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
+    const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
     const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
     if (outcome === 'win') {
       grossProfit += Math.max(0, t.realizedPl);
@@ -166,14 +166,14 @@ function csvCell(v: string | number | null | undefined): string {
 // so a single download covers both. `generatedAt` is passed in (YYYY-MM-DD).
 function buildExportCsv(opts: {
   trades: TradeRecord[];
-  band: BreakEvenBand;
+  config: BreakEvenConfig;
   scopeLabel: string;
   rangeLabel: string;
   generatedAt: string;
 }): string {
-  const { trades, band, scopeLabel, rangeLabel, generatedAt } = opts;
-  const s = summarizeTrades(trades, band);
-  const pf = profitFactorStats(trades, band);
+  const { trades, config, scopeLabel, rangeLabel, generatedAt } = opts;
+  const s = summarizeTrades(trades, config);
+  const pf = profitFactorStats(trades, config);
   const money = (n: number) => n.toFixed(2);
   const lines: string[] = [];
   const row = (...cells: (string | number | null | undefined)[]) => lines.push(cells.map(csvCell).join(','));
@@ -182,7 +182,10 @@ function buildExportCsv(opts: {
   row('Scope', scopeLabel);
   row('Date range', rangeLabel);
   row('Generated', generatedAt);
-  row('Break-even buffer', bandLabel(band));
+  row('Break-even buffer (default)', bandLabel(config.base));
+  for (const [key, b] of Object.entries(config.overrides)) {
+    row(`Break-even buffer (${key})`, bandLabel(b));
+  }
   row();
   row('Metric', 'Value');
   row('Total trades', s.total);
@@ -206,7 +209,7 @@ function buildExportCsv(opts: {
   for (const t of trades) {
     const outcome =
       t.status === 'closed' && t.realizedPl != null
-        ? classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band)
+        ? classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config)
         : '';
     const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
     row(
@@ -329,15 +332,15 @@ export function TradeLog() {
   const traders = [...new Map(data.trades.map((t) => [t.ownerId, t.owner])).entries()]
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
-  const band = bandFrom(data);
+  const config = configFrom(data);
   const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
-  const s = trader ? summarizeTrades(shownTrades, band) : data.summary;
-  const pf = profitFactorStats(shownTrades, band);
+  const s = trader ? summarizeTrades(shownTrades, config) : data.summary;
+  const pf = profitFactorStats(shownTrades, config);
   // Pips are the desk's preferred unit — show them next to every $ metric, but
   // only when the desk actually trades forex (otherwise there's no pip to show).
   const showPips = hasAnyPips(shownTrades);
   const netClosedPips = netPips(shownTrades);
-  const beActive = band.mode === 'percent' ? band.pct > 0 : band.amount > 0;
+  const beActive = configActive(config);
   const selectedTraderName = traders.find((t) => t.id === trader)?.name ?? null;
   // Export scope follows the on-screen trader filter: whole desk, or one trader.
   const scopeLabel = selectedTraderName ? `@${selectedTraderName}` : 'Whole desk';
@@ -423,7 +426,7 @@ export function TradeLog() {
       {exporting && (
         <ExportPanel
           trades={shownTrades}
-          band={band}
+          config={config}
           scopeLabel={scopeLabel}
           scopeSlug={scopeSlug}
           onClose={() => setExporting(false)}
@@ -472,7 +475,7 @@ export function TradeLog() {
             <DeckCard
               key={t.id}
               t={t}
-              band={band}
+              config={config}
               showMoney={showMoney}
               canSeeBalances={canSeeBalances}
               readOnly={readOnly}
@@ -486,7 +489,7 @@ export function TradeLog() {
       ) : (
         <Tape
           trades={shownTrades}
-          band={band}
+          config={config}
           showMoney={showMoney}
           canSeeBalances={canSeeBalances}
           readOnly={readOnly}
@@ -505,7 +508,7 @@ export function TradeLog() {
 // ---- Deck card (with inline edit) ----
 function DeckCard({
   t,
-  band,
+  config,
   showMoney,
   canSeeBalances,
   readOnly,
@@ -515,7 +518,7 @@ function DeckCard({
   onSave,
 }: {
   t: TradeRecord;
-  band: BreakEvenBand;
+  config: BreakEvenConfig;
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
@@ -549,7 +552,7 @@ function DeckCard({
   // Break-even trades are counted (and coloured) as flat, not slight losses.
   const isBreakeven =
     t.status === 'closed' && t.realizedPl != null &&
-    classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band) === 'breakeven';
+    classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config) === 'breakeven';
   const plUp = (t.realizedPl ?? 0) >= 0;
   const plColor = isBreakeven ? GOLD : plUp ? GREEN : RED;
   // The trade's move in pips, shown beside its realized P/L (closed forex only).
@@ -643,7 +646,7 @@ function DeckCard({
 // ---- Tape (dense rows) ----
 function Tape({
   trades,
-  band,
+  config,
   showMoney,
   canSeeBalances,
   readOnly,
@@ -653,7 +656,7 @@ function Tape({
   onRemove,
 }: {
   trades: TradeRecord[];
-  band: BreakEvenBand;
+  config: BreakEvenConfig;
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
@@ -684,7 +687,7 @@ function Tape({
         const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
         const isBreakeven =
           t.status === 'closed' && t.realizedPl != null &&
-          classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band) === 'breakeven';
+          classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config) === 'breakeven';
         const plUp = (t.realizedPl ?? 0) >= 0;
         const plColor = !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
         const rowPips = t.status === 'closed' ? tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument) : null;
@@ -939,13 +942,13 @@ function TraderMenu({
 // ---- Export panel — date-range picker + one-file CSV download ----
 function ExportPanel({
   trades,
-  band,
+  config,
   scopeLabel,
   scopeSlug,
   onClose,
 }: {
   trades: TradeRecord[];
-  band: BreakEvenBand;
+  config: BreakEvenConfig;
   scopeLabel: string;
   scopeSlug: string;
   onClose: () => void;
@@ -967,7 +970,7 @@ function ExportPanel({
   function doExport() {
     if (filtered.length === 0) return;
     const generatedAt = msToDateInput(Date.now());
-    const csv = buildExportCsv({ trades: filtered, band, scopeLabel, rangeLabel, generatedAt });
+    const csv = buildExportCsv({ trades: filtered, config, scopeLabel, rangeLabel, generatedAt });
     const range = `${from ? `_${from}` : ''}${to ? `_${to}` : ''}`;
     downloadCsv(`trade-metrics_${scopeSlug}${range || '_all'}.csv`, csv);
     onClose();

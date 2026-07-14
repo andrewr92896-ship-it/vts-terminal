@@ -3,7 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
-import { classifyOutcome, bandFrom, type BreakEvenBand } from './outcome';
+import { classifyOutcome, configFrom, configActive, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips } from './pips';
 import type { HistoryData, HistoryGroup, HistoryRecord, HistorySummary, TradeInput, TradeSide } from '../../api/types';
 
@@ -71,7 +71,7 @@ function groupTrades(
   trades: HistoryRecord[],
   pick: (t: HistoryRecord) => string | null,
   canSeeBalances: boolean,
-  band: BreakEvenBand,
+  config: BreakEvenConfig,
 ): HistoryGroup[] {
   const map = new Map<string, { count: number; wins: number; losses: number; breakeven: number; pl: number; pips: number }>();
   for (const t of trades) {
@@ -82,7 +82,7 @@ function groupTrades(
     if (pips != null) g.pips += pips;
     if (t.realizedPl != null) {
       g.pl += t.realizedPl;
-      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
+      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
       if (outcome === 'win') g.wins += 1;
       else if (outcome === 'loss') g.losses += 1;
       else g.breakeven += 1;
@@ -104,7 +104,7 @@ function groupTrades(
 
 // Recompute the History summary for a subset of trades (a day/month selection),
 // mirroring the server's getHistory math so the KPIs stay consistent.
-function summarize(trades: HistoryRecord[], canSeeBalances: boolean, band: BreakEvenBand): HistorySummary {
+function summarize(trades: HistoryRecord[], canSeeBalances: boolean, config: BreakEvenConfig): HistorySummary {
   let wins = 0;
   let losses = 0;
   let breakeven = 0;
@@ -112,7 +112,7 @@ function summarize(trades: HistoryRecord[], canSeeBalances: boolean, band: Break
   for (const t of trades) {
     if (t.realizedPl != null) {
       totalPl += t.realizedPl;
-      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band);
+      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
       if (outcome === 'win') wins += 1;
       else if (outcome === 'loss') losses += 1;
       else breakeven += 1;
@@ -126,8 +126,8 @@ function summarize(trades: HistoryRecord[], canSeeBalances: boolean, band: Break
     breakeven,
     winRate: decided > 0 ? wins / decided : 0,
     totalRealizedPl: canSeeBalances ? totalPl : null,
-    byStrategy: groupTrades(trades, (t) => t.strategy, canSeeBalances, band),
-    byInstrument: groupTrades(trades, (t) => t.instrument, canSeeBalances, band),
+    byStrategy: groupTrades(trades, (t) => t.strategy, canSeeBalances, config),
+    byInstrument: groupTrades(trades, (t) => t.instrument, canSeeBalances, config),
   };
 }
 
@@ -191,7 +191,9 @@ export function History() {
   }
 
   const allTrades = data?.trades ?? [];
-  const band: BreakEvenBand = data ? bandFrom(data) : { mode: 'percent', pct: 0, amount: 0 };
+  const config: BreakEvenConfig = data
+    ? configFrom(data)
+    : { base: { mode: 'percent', pct: 0, amount: 0 }, overrides: {} };
   const canSeeBalancesRaw = (data?.summary.totalRealizedPl ?? null) !== null;
 
   // Months that actually have closed trades, newest first, for the Month dropdown.
@@ -219,8 +221,8 @@ export function History() {
   const filterActive = dayFilter !== 'all' || monthFilter !== 'all';
   // Recompute the summary for a selection; the full view reuses the server's.
   const activeSummary = useMemo(
-    () => (filterActive ? summarize(filtered, canSeeBalancesRaw, band) : data?.summary ?? null),
-    // band is derived from data, so `data` covers its identity in the deps.
+    () => (filterActive ? summarize(filtered, canSeeBalancesRaw, config) : data?.summary ?? null),
+    // config is derived from data, so `data` covers its identity in the deps.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [filterActive, filtered, canSeeBalancesRaw, data],
   );
@@ -239,7 +241,7 @@ export function History() {
   if (monthFilter !== 'all') scopeParts.push(monthOptions.find(([k]) => k === monthFilter)?.[1] ?? monthFilter);
   const scopeLabel = scopeParts.length ? scopeParts.join(' · ') : 'all closed';
 
-  const beActive = band.mode === 'percent' ? band.pct > 0 : band.amount > 0;
+  const beActive = configActive(config);
   const showBe = beActive || s.breakeven > 0;
   // Net pips over the current selection — shown beside the Realized P/L, but only
   // on a desk that trades forex (otherwise there's no pip to show).
@@ -360,7 +362,7 @@ export function History() {
               <TradeRow
                 key={t.id}
                 t={t}
-                band={band}
+                config={config}
                 isPhone={isPhone}
                 showMoney={showMoney}
                 canSeeBalances={canSeeBalances}
@@ -414,10 +416,10 @@ function Breakdown({ title, groups, money, showPips }: { title: string; groups: 
   );
 }
 
-function TradeRow({ t, band, isPhone, showMoney, canSeeBalances, canEdit, removing, onRemove, onEdit }: { t: HistoryRecord; band: BreakEvenBand; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean; canEdit: boolean; removing: boolean; onRemove: () => void; onEdit: () => void }) {
+function TradeRow({ t, config, isPhone, showMoney, canSeeBalances, canEdit, removing, onRemove, onEdit }: { t: HistoryRecord; config: BreakEvenConfig; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean; canEdit: boolean; removing: boolean; onRemove: () => void; onEdit: () => void }) {
   const long = t.side === 'long';
   const isBreakeven =
-    t.realizedPl != null && classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, band) === 'breakeven';
+    t.realizedPl != null && classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config) === 'breakeven';
   const plUp = (t.realizedPl ?? 0) >= 0;
   const plColor = !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
   const plText = !canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••';
