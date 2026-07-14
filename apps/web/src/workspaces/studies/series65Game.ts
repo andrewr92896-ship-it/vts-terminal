@@ -146,6 +146,19 @@ export function overallLevel(totalCorrect: number): OverallLevel {
   return { mainIndex, main, sub, stars, bg, text, isMax, correct, intoSub, toNext, nextLabel, step };
 }
 
+// A summary of a level-up caused by finishing a mock test, so the test screen
+// can celebrate it. Null-ish (no summary) means the test didn't cross a level.
+export interface TestLevelUp {
+  mainUp: boolean; // reached a new main level (fresh emoji + hue)
+  emoji: string;
+  name: string;
+  mainIndex: number;
+  stars: string;
+  bg: string;
+  text: string;
+  gained: number; // sub-levels gained
+}
+
 export interface CatState {
   answered: number;
   correct: number;
@@ -156,6 +169,10 @@ export interface GameState {
   recent: boolean[]; // last WINDOW outcomes overall
   totalAttempted: number;
   totalCorrect: number;
+  // Correct answers that count toward the level. Quiz answers bump this and
+  // totalCorrect together; mock-test answers bump only this — so tests level you
+  // up without changing your lifetime accuracy or leaderboard score.
+  levelCorrect: number;
   bestStep: number; // highest overall level step reached this run (0..59)
   allTimeBestStep: number; // highest level step ever reached — survives a reset
   cats: Record<Series65Topic, CatState>;
@@ -164,7 +181,7 @@ export interface GameState {
 export function emptyGame(): GameState {
   const cats = {} as Record<Series65Topic, CatState>;
   for (const t of SERIES65_TOPICS) cats[t] = { answered: 0, correct: 0, recent: [] };
-  return { recent: [], totalAttempted: 0, totalCorrect: 0, bestStep: 0, allTimeBestStep: 0, cats };
+  return { recent: [], totalAttempted: 0, totalCorrect: 0, levelCorrect: 0, bestStep: 0, allTimeBestStep: 0, cats };
 }
 
 // The overall level step reached at a given correct-answer count (0..59), the
@@ -211,15 +228,19 @@ export function normalizeGame(p: unknown): GameState {
   if (!p || typeof p !== 'object') return fresh;
   const src = p as Record<string, unknown>;
   const totalCorrect = Number(src.totalCorrect) || 0;
+  // Level progress. Older saves predate the field, so seed it from totalCorrect
+  // (which is what drove the level before) — no level is lost on upgrade.
+  const levelCorrect = Math.max(Number(src.levelCorrect) || 0, totalCorrect);
   // Best level reached: honour the stored high-water marks when present, but
-  // never let them fall below the level the current correct-answer count implies
-  // (so older saves, which predate these fields, still show a sensible best).
-  const floorStep = stepForCorrect(totalCorrect);
+  // never let them fall below the level the level count implies (so older saves,
+  // which predate these fields, still show a sensible best).
+  const floorStep = stepForCorrect(levelCorrect);
   const bestStep = Math.max(Number(src.bestStep) || 0, floorStep);
   const g: GameState = {
     recent: Array.isArray(src.recent) ? src.recent.filter((x: unknown) => typeof x === 'boolean').slice(-WINDOW) : [],
     totalAttempted: Number(src.totalAttempted) || 0,
     totalCorrect,
+    levelCorrect,
     bestStep,
     allTimeBestStep: Math.max(Number(src.allTimeBestStep) || 0, bestStep),
     cats: fresh.cats,
@@ -270,11 +291,13 @@ export function saveGame(key: string, g: GameState): void {
 export function recordAnswer(g: GameState, topic: Series65Topic, correct: boolean): GameState {
   const cat = g.cats[topic];
   const totalCorrect = g.totalCorrect + (correct ? 1 : 0);
-  const bestStep = Math.max(g.bestStep, stepForCorrect(totalCorrect));
+  const levelCorrect = g.levelCorrect + (correct ? 1 : 0);
+  const bestStep = Math.max(g.bestStep, stepForCorrect(levelCorrect));
   const next: GameState = {
     recent: [...g.recent, correct].slice(-WINDOW),
     totalAttempted: g.totalAttempted + 1,
     totalCorrect,
+    levelCorrect,
     bestStep,
     allTimeBestStep: Math.max(g.allTimeBestStep, bestStep),
     cats: {
@@ -287,6 +310,17 @@ export function recordAnswer(g: GameState, topic: Series65Topic, correct: boolea
     },
   };
   return next;
+}
+
+// Fold a finished mock test's correct answers into the level only: `levelCorrect`
+// (and the best-level marks) advance, but lifetime accuracy, per-category stats,
+// and the leaderboard are untouched. Returns a new state.
+export function applyTestLevel(g: GameState, correctCount: number): GameState {
+  const gained = Math.max(0, Math.floor(correctCount) || 0);
+  if (gained === 0) return g;
+  const levelCorrect = g.levelCorrect + gained;
+  const bestStep = Math.max(g.bestStep, stepForCorrect(levelCorrect));
+  return { ...g, levelCorrect, bestStep, allTimeBestStep: Math.max(g.allTimeBestStep, bestStep) };
 }
 
 export function round1(n: number): number {

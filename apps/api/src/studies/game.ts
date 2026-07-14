@@ -90,8 +90,10 @@ function statsFromState(raw: string): RunStats | null {
   if (attempted <= 0) return null;
 
   // Best level reached: honour the stored high-water mark, but never below what
-  // the correct-answer count already implies (older saves predate the field).
-  const bestStep = Math.max(Number(g.bestStep) || 0, stepForCorrect(correct));
+  // the level count already implies (older saves predate the field). Level is
+  // driven by `levelCorrect` (quiz + test), falling back to totalCorrect.
+  const levelCorrect = Number(g.levelCorrect) || correct;
+  const bestStep = Math.max(Number(g.bestStep) || 0, stepForCorrect(levelCorrect));
 
   return { attempted, correct, bestStep };
 }

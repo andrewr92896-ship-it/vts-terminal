@@ -39,9 +39,10 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         </div>
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
           A self-quiz game across the four exam areas — Economic Factors, Investment Vehicles, Client
-          Recommendations, and Laws &amp; Ethics — weighted to the real exam. Level up each category
-          as you answer, and watch your last-100 score against the ~72% pass line. Or sit a full
-          100-question mock test drawn to the real exam mix and put your score on the leaderboard.
+          Recommendations, and Laws &amp; Ethics — weighted to the real exam. Level up as you answer
+          correctly (the page recolors to your level), and watch your lifetime accuracy against the
+          ~72% pass line. Or sit a full 100-question mock test drawn to the real exam mix — its
+          answers count toward your level too, and your score goes on the leaderboard.
         </p>
 
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr 1fr' : 'repeat(3,1fr)', gap: 10, margin: '18px 0' }}>

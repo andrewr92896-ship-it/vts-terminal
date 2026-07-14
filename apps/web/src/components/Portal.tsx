@@ -26,6 +26,12 @@ import { AccountSettings } from './AccountSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
 import { DealershipProvider } from '../workspaces/kia/dealership';
 import { HelpHub } from './HelpHub';
+import {
+  currentStudyLevel,
+  currentStudyTheme,
+  onStudyLevelChange,
+  studyBgTint,
+} from '../workspaces/studies/studyTheme';
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
@@ -171,7 +177,25 @@ export function Portal() {
   // Mobile off-canvas nav drawer.
   const [navOpen, setNavOpen] = useState(false);
 
-  const theme = THEMES[workspace];
+  // Bumped whenever the Study Game level changes, so the Studies workspace
+  // re-tints to the new level's colour the moment the learner levels up.
+  const [studyLevelTick, setStudyLevelTick] = useState(0);
+  useEffect(() => onStudyLevelChange(() => setStudyLevelTick((t) => t + 1)), []);
+
+  // The Studies workspace recolours to the learner's current level; every other
+  // workspace uses its fixed theme.
+  const theme = useMemo(
+    () => (workspace === 'studies' ? currentStudyTheme(user?.id) : THEMES[workspace]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspace, user?.id, studyLevelTick],
+  );
+  // A level-hued wash layered over the content area's dark background, so the
+  // whole study page carries the level colour (null for other workspaces).
+  const contentTint = useMemo(
+    () => (workspace === 'studies' ? studyBgTint(currentStudyLevel(user?.id)) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [workspace, user?.id, studyLevelTick],
+  );
   const accent = accentFor(workspace);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -297,7 +321,16 @@ export function Portal() {
       {topBar}
       <PrivacyBanner />
       <InstallPrompt theme={theme} />
-      <main ref={scrollRef} style={{ flex: 1, overflowY: 'auto', position: 'relative' }}>
+      <main
+        ref={scrollRef}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          position: 'relative',
+          background: contentTint ? `${contentTint}, ${C.bg}` : undefined,
+          transition: 'background 0.5s ease',
+        }}
+      >
         <ErrorBoundary resetKey={screen}>
           <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
             {renderScreen(screen, theme, selectScreen) ?? <Screen screen={screen} theme={theme} />}
