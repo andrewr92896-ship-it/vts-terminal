@@ -1,10 +1,10 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome } from './outcome';
-import type { HistoryData, HistoryGroup, HistoryRecord, TradeInput, TradeSide } from '../../api/types';
+import type { HistoryData, HistoryGroup, HistoryRecord, HistorySummary, TradeInput, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
 const GOLD = '#EBCB74';
@@ -42,6 +42,91 @@ function etDate(ms: number | null): string {
   return new Date(ms).toLocaleDateString('en-US', { timeZone: ET, month: 'short', day: 'numeric' });
 }
 
+// Day-of-week / month are derived in Eastern Time so they line up with the ET
+// clock the desk runs on (and with the "Closed" column above, which is also ET).
+const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
+const etWeekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: ET, weekday: 'long' });
+const etMonthLabelFmt = new Intl.DateTimeFormat('en-US', { timeZone: ET, year: 'numeric', month: 'long' });
+const etMonthPartsFmt = new Intl.DateTimeFormat('en-US', { timeZone: ET, year: 'numeric', month: '2-digit' });
+// Full weekday name in ET, e.g. "Monday".
+function etWeekday(ms: number): string {
+  return etWeekdayFmt.format(new Date(ms));
+}
+// Sortable month key in ET, e.g. "2026-01" — stable for filtering & grouping.
+function etMonthKey(ms: number): string {
+  const p = etMonthPartsFmt.formatToParts(new Date(ms));
+  const y = p.find((x) => x.type === 'year')?.value ?? '';
+  const m = p.find((x) => x.type === 'month')?.value ?? '';
+  return `${y}-${m}`;
+}
+// Human month label in ET, e.g. "January 2026".
+function etMonthLabel(ms: number): string {
+  return etMonthLabelFmt.format(new Date(ms));
+}
+
+// Group a set of closed trades the same way the server's groupBy does, so a
+// filtered (by day/month) breakdown scores identically to the full history.
+function groupTrades(
+  trades: HistoryRecord[],
+  pick: (t: HistoryRecord) => string | null,
+  canSeeBalances: boolean,
+  breakEvenPct: number,
+): HistoryGroup[] {
+  const map = new Map<string, { count: number; wins: number; losses: number; breakeven: number; pl: number }>();
+  for (const t of trades) {
+    const label = (pick(t) ?? '—').trim() || '—';
+    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0 };
+    g.count += 1;
+    if (t.realizedPl != null) {
+      g.pl += t.realizedPl;
+      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
+      if (outcome === 'win') g.wins += 1;
+      else if (outcome === 'loss') g.losses += 1;
+      else g.breakeven += 1;
+    }
+    map.set(label, g);
+  }
+  return [...map.entries()]
+    .map(([label, g]) => ({
+      label,
+      count: g.count,
+      wins: g.wins,
+      losses: g.losses,
+      breakeven: g.breakeven,
+      realizedPl: canSeeBalances ? g.pl : null,
+    }))
+    .sort((a, b) => b.count - a.count);
+}
+
+// Recompute the History summary for a subset of trades (a day/month selection),
+// mirroring the server's getHistory math so the KPIs stay consistent.
+function summarize(trades: HistoryRecord[], canSeeBalances: boolean, breakEvenPct: number): HistorySummary {
+  let wins = 0;
+  let losses = 0;
+  let breakeven = 0;
+  let totalPl = 0;
+  for (const t of trades) {
+    if (t.realizedPl != null) {
+      totalPl += t.realizedPl;
+      const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, breakEvenPct);
+      if (outcome === 'win') wins += 1;
+      else if (outcome === 'loss') losses += 1;
+      else breakeven += 1;
+    }
+  }
+  const decided = wins + losses;
+  return {
+    closed: trades.length,
+    wins,
+    losses,
+    breakeven,
+    winRate: decided > 0 ? wins / decided : 0,
+    totalRealizedPl: canSeeBalances ? totalPl : null,
+    byStrategy: groupTrades(trades, (t) => t.strategy, canSeeBalances, breakEvenPct),
+    byInstrument: groupTrades(trades, (t) => t.instrument, canSeeBalances, breakEvenPct),
+  };
+}
+
 export function History() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
@@ -54,6 +139,10 @@ export function History() {
   const [editing, setEditing] = useState<HistoryRecord | null>(null);
   const [saving, setSaving] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
+  // Day-of-week and month filters. 'all' = no filter; a day is a full weekday
+  // name ("Monday"), a month is an ET month key ("2026-01").
+  const [dayFilter, setDayFilter] = useState<string>('all');
+  const [monthFilter, setMonthFilter] = useState<string>('all');
 
   async function load() {
     setRefreshing(true);
@@ -97,19 +186,58 @@ export function History() {
     }
   }
 
-  if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading History…</div>;
+  const allTrades = data?.trades ?? [];
+  const breakEvenPct = data?.breakEvenPct ?? 0;
+  const canSeeBalancesRaw = (data?.summary.totalRealizedPl ?? null) !== null;
 
-  const s = data.summary;
-  const canSeeBalances = s.totalRealizedPl !== null;
+  // Months that actually have closed trades, newest first, for the Month dropdown.
+  const monthOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const t of allTrades) {
+      if (t.closedAt == null) continue;
+      map.set(etMonthKey(t.closedAt), etMonthLabel(t.closedAt));
+    }
+    return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+  }, [allTrades]);
+
+  // Apply the day-of-week and month filters. A trade with no close time can't be
+  // placed on a calendar, so it drops out whenever either filter is active.
+  const filtered = useMemo(() => {
+    if (dayFilter === 'all' && monthFilter === 'all') return allTrades;
+    return allTrades.filter((t) => {
+      if (t.closedAt == null) return false;
+      if (dayFilter !== 'all' && etWeekday(t.closedAt) !== dayFilter) return false;
+      if (monthFilter !== 'all' && etMonthKey(t.closedAt) !== monthFilter) return false;
+      return true;
+    });
+  }, [allTrades, dayFilter, monthFilter]);
+
+  const filterActive = dayFilter !== 'all' || monthFilter !== 'all';
+  // Recompute the summary for a selection; the full view reuses the server's.
+  const activeSummary = useMemo(
+    () => (filterActive ? summarize(filtered, canSeeBalancesRaw, breakEvenPct) : data?.summary ?? null),
+    [filterActive, filtered, canSeeBalancesRaw, breakEvenPct, data],
+  );
+
+  if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
+  if (!data || !activeSummary) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading History…</div>;
+
+  const s = activeSummary;
+  const canSeeBalances = canSeeBalancesRaw;
   const showMoney = canSeeBalances && !privacy && !hideMoney;
   const money = (n: number | null) => (n == null ? '—' : showMoney ? usd(n) : '•••••');
+
+  // Plain-English label for the current selection, shown on the P/L card.
+  const scopeParts: string[] = [];
+  if (dayFilter !== 'all') scopeParts.push(`${dayFilter}s`);
+  if (monthFilter !== 'all') scopeParts.push(monthOptions.find(([k]) => k === monthFilter)?.[1] ?? monthFilter);
+  const scopeLabel = scopeParts.length ? scopeParts.join(' · ') : 'all closed';
 
   const showBe = data.breakEvenPct > 0 || s.breakeven > 0;
   const kpis = [
     { label: 'Closed Trades', val: String(s.closed), sub: `${s.wins}W · ${s.losses}L${showBe ? ` · ${s.breakeven}BE` : ''}` },
     { label: 'Win Rate', val: s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—', sub: showBe ? 'wins ÷ decided trades' : 'of scored trades' },
-    { label: 'Realized P/L', val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••', sub: 'all closed' },
+    { label: 'Realized P/L', val: s.totalRealizedPl == null ? 'hidden' : showMoney ? usd(s.totalRealizedPl) : '•••••', sub: scopeLabel },
   ];
 
   return (
@@ -132,6 +260,41 @@ export function History() {
         </div>
       </div>
 
+      {/* Day-of-week / month filters */}
+      <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16, padding: '12px 16px' }}>
+        <label style={filterField}>
+          <span style={filterLabel}>Day of week</span>
+          <select value={dayFilter} onChange={(e) => setDayFilter(e.target.value)} style={select} aria-label="Filter by day of week">
+            <option value="all">All days</option>
+            {WEEKDAYS.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </label>
+        <label style={filterField}>
+          <span style={filterLabel}>Month</span>
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            style={select}
+            aria-label="Filter by month"
+            disabled={monthOptions.length === 0}
+          >
+            <option value="all">All months</option>
+            {monthOptions.map(([key, label]) => (
+              <option key={key} value={key}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 11.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>
+          {filterActive ? `${filtered.length} of ${allTrades.length}` : `${allTrades.length}`} trade{allTrades.length === 1 ? '' : 's'}
+        </span>
+        {filterActive && (
+          <button onClick={() => { setDayFilter('all'); setMonthFilter('all'); }} style={ghostBtn}>Clear</button>
+        )}
+      </div>
+
       {/* Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 12, marginBottom: 16 }}>
         {kpis.map((k) => (
@@ -143,9 +306,11 @@ export function History() {
         ))}
       </div>
 
-      {data.trades.length === 0 ? (
+      {filtered.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          No closed trades yet. When an open position on the Live Wall closes, it’s recorded here automatically.
+          {allTrades.length === 0
+            ? 'No closed trades yet. When an open position on the Live Wall closes, it’s recorded here automatically.'
+            : `No closed trades for ${scopeLabel}. Try a different day or month.`}
         </div>
       ) : (
         <>
@@ -173,7 +338,7 @@ export function History() {
                 {!readOnly && <span style={{ width: 60 }} />}
               </div>
             )}
-            {data.trades.map((t) => (
+            {filtered.map((t) => (
               <TradeRow
                 key={t.id}
                 t={t}
@@ -347,6 +512,9 @@ const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(18
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '7px 12px', borderRadius: 7, cursor: 'pointer' };
 const rowIconBtn: CSSProperties = { background: 'none', border: 'none', color: MUTED, fontSize: 13, lineHeight: 1, padding: '2px 4px', cursor: 'pointer' };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none' };
+const select: CSSProperties = { ...input, cursor: 'pointer', padding: '8px 11px' };
+const filterField: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
+const filterLabel: CSSProperties = { fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED };
 const modalCard: CSSProperties = {
   position: 'fixed',
   top: '7vh',
