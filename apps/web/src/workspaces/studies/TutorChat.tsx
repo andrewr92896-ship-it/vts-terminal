@@ -144,7 +144,8 @@ export function TutorChat({
             style={{
               flex: 1,
               minWidth: 100,
-              fontSize: 12.5,
+              // fontSize must be >= 16px so iOS Safari doesn't auto-zoom the viewport when the field is focused.
+              fontSize: 16,
               padding: '9px 12px',
               borderRadius: 8,
               border: `1px solid ${theme.navBorder}`,
