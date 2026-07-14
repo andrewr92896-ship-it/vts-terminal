@@ -22,12 +22,13 @@ import {
   PASS_THRESHOLD,
   buildPools,
   INITIAL_SCORE,
+  CORRECT_PER_SUBLEVEL,
   emptyGame,
   gameKey,
-  levelInfo,
   loadGame,
   loadStarred,
   metaFor,
+  overallLevel,
   parseGame,
   recordAnswer,
   round1,
@@ -50,13 +51,25 @@ const isSectionMode = (m: Mode): m is `sec:${string}` =>
 const sectionIdOf = (m: string): string => m.slice(4);
 
 interface LevelEvent {
-  prestige: boolean;
-  icon: string;
+  mainUp: boolean; // crossed into a new main level (fresh emoji + hue)
+  emoji: string;
   name: string;
-  category: Series65Topic;
-  answered: number;
-  crowns: number;
+  sub: number;
+  stars: string;
+  bg: string;
+  text: string;
+  correct: number;
 }
+
+// A snapshot taken just before an answer is scored, so the Undo button can
+// restore the prior score/stats and re-present the same question.
+interface UndoSnapshot {
+  game: GameState;
+  current: { q: Series65Question; topic: Series65Topic };
+}
+
+// Answered questions that must elapse after an undo before it can be used again.
+const UNDO_COOLDOWN = 10;
 
 export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: StudyView }) {
   const { isPhone } = useResponsive();
@@ -95,11 +108,17 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   // Shuffled index queues per subsection id, refilled from its ids when empty.
   const sectionQueuesRef = useRef<Map<string, number[]>>(new Map());
   const [current, setCurrent] = useState<{ q: Series65Question; topic: Series65Topic } | null>(null);
+  // `selected` is the highlighted answer before confirmation, and the submitted
+  // answer once `revealed` — no answer is scored until it is confirmed.
   const [selected, setSelected] = useState<Letter | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [outcome, setOutcome] = useState<boolean | null>(null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
+  // Undo: the pre-answer snapshot to revert to, plus a cooldown (scored answers
+  // remaining) so undo can only be used once every UNDO_COOLDOWN questions.
+  const [undoSnapshot, setUndoSnapshot] = useState<UndoSnapshot | null>(null);
+  const [undoCooldown, setUndoCooldown] = useState(0);
 
   // Whether the saved server copy has been pulled yet, and the last state we
   // pushed up (to skip redundant writes).
@@ -364,9 +383,57 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
-  // `label` is null when the user taps "I Don't Know" — counted as wrong with
-  // no option highlighted as chosen.
-  function answer(label: Letter | null) {
+  // Keyboard answering: A–D highlights an option, Enter/Space confirms it (and,
+  // once revealed, moves to the next question). The starred deck has its own
+  // inline cards, so it opts out.
+  useEffect(() => {
+    if (view !== 'quiz' || mode === 'starred') return;
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (!current) return;
+      if (revealed) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          advance();
+        }
+        return;
+      }
+      const k = e.key.toLowerCase();
+      if (k === 'a' || k === 'b' || k === 'c' || k === 'd') {
+        const label = k.toUpperCase() as Letter;
+        if (current.q.options.some((o) => o.label === label)) {
+          e.preventDefault();
+          setSelected(label);
+        }
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        if (selected != null) {
+          e.preventDefault();
+          submit(selected);
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, mode, current, revealed, selected, practice, game]);
+
+  // First step of answering: highlight a choice without scoring it. A different
+  // choice can be picked freely until it is confirmed.
+  function selectOption(label: Letter) {
+    if (revealed) return;
+    setSelected(label);
+  }
+
+  // Second step: confirm the highlighted choice, which scores it.
+  function confirm() {
+    if (revealed || selected == null) return;
+    submit(selected);
+  }
+
+  // Score an answer and reveal the outcome. `label` is null when the user taps
+  // "I Don't Know" — counted as wrong with no option highlighted as chosen.
+  function submit(label: Letter | null) {
     if (!current || revealed) return;
     const { q, topic } = current;
     const correct = label === q.answer;
@@ -383,25 +450,55 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
 
     // The live score moves on every answer, so the change is always non-zero.
     // Before the first answer there is no prior, so measure from the neutral seed.
-    const prevScore = game.score ?? INITIAL_SCORE;
-    const prevLevel = levelInfo(game.cats[topic].answered);
-    const next = recordAnswer(game, topic, correct);
+    const prevGame = game;
+    const prevScore = prevGame.score ?? INITIAL_SCORE;
+    const prevOv = overallLevel(prevGame.totalCorrect);
+    const next = recordAnswer(prevGame, topic, correct);
     const newScore = next.score ?? INITIAL_SCORE;
-    const newLevel = levelInfo(next.cats[topic].answered);
+    const nextOv = overallLevel(next.totalCorrect);
 
     setScoreChange(round1(newScore - prevScore));
-    if (newLevel.prestige > prevLevel.prestige) {
-      setLevelEvent({ prestige: true, icon: '👑', name: 'Grandmaster', category: topic, answered: next.cats[topic].answered, crowns: newLevel.prestige });
-    } else if (newLevel.index > prevLevel.index) {
-      setLevelEvent({ prestige: false, icon: newLevel.level.icon, name: newLevel.level.name, category: topic, answered: next.cats[topic].answered, crowns: newLevel.prestige });
+    // The overall level only advances on correct answers (it counts correct
+    // answers), so a rise in `step` means a sub-level — or main-level — up.
+    if (nextOv.step > prevOv.step) {
+      setLevelEvent({
+        mainUp: nextOv.mainIndex > prevOv.mainIndex,
+        emoji: nextOv.main.emoji,
+        name: nextOv.main.name,
+        sub: nextOv.sub,
+        stars: nextOv.stars,
+        bg: nextOv.bg,
+        text: nextOv.text,
+        correct: next.totalCorrect,
+      });
     }
 
     setGame(next);
+
+    // Snapshot the pre-answer state and this question so Undo can revert it, and
+    // count down any cooldown left from a previous undo.
+    setUndoSnapshot({ game: prevGame, current });
+    setUndoCooldown((c) => (c > 0 ? c - 1 : 0));
+  }
+
+  const undoReady = !!undoSnapshot && undoCooldown === 0;
+
+  // Revert the last scored answer: restore the prior score/stats and re-present
+  // that same question unanswered. Locked again for UNDO_COOLDOWN questions.
+  function undo() {
+    if (!undoReady || !undoSnapshot) return;
+    setGame(undoSnapshot.game);
+    setCurrent(undoSnapshot.current);
+    resetQuestionState();
+    setUndoSnapshot(null);
+    setUndoCooldown(UNDO_COOLDOWN);
   }
 
   function resetProgress() {
     setGame(emptyGame());
     poolsRef.current = buildPools();
+    setUndoSnapshot(null);
+    setUndoCooldown(0);
     advance();
   }
 
@@ -414,7 +511,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
       <div>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Study Game</h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-          Series 65 · level up each category · pass line {PASS_THRESHOLD.toFixed(1)}%
+          Series 65 · level up as you answer correctly · pass line {PASS_THRESHOLD.toFixed(1)}%
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -769,11 +866,15 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const q = current.q;
   const cat = current.topic;
   const meta = metaFor(cat);
-  const lvl = levelInfo(game.cats[cat].answered);
-  const crowns = '👑'.repeat(lvl.prestige);
+  const ov = overallLevel(game.totalCorrect);
   const passing = overallScore != null && overallScore >= PASS_THRESHOLD;
   const delta = overallScore == null ? 0 : round1(overallScore - PASS_THRESHOLD);
   const explanation = revealed ? SERIES65_EXPLANATIONS[q.id] : undefined;
+  const undoTitle = undoCooldown > 0
+    ? `Undo unlocks in ${undoCooldown} question${undoCooldown === 1 ? '' : 's'}`
+    : undoSnapshot
+      ? 'Undo your last answer'
+      : 'Answer a question to enable undo';
 
   return (
     <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
@@ -781,15 +882,15 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
 
       {categorySelector}
 
-      {/* Level-up / prestige banner + a burst of confetti */}
+      {/* Level-up banner + a burst of confetti (bigger on a new main level) */}
       {levelEvent && (
-        <Confetti key={`${levelEvent.category}-${levelEvent.answered}`} prestige={levelEvent.prestige} accent={theme.accent} />
+        <Confetti key={levelEvent.correct} big={levelEvent.mainUp} accent={theme.accent} />
       )}
       {levelEvent && (
         <div
           style={{
-            background: levelEvent.prestige ? 'linear-gradient(90deg,rgba(224,162,58,.25),rgba(224,162,58,.12))' : 'rgba(53,196,123,.14)',
-            border: `1px solid ${levelEvent.prestige ? AMBER : GREEN}`,
+            background: levelEvent.mainUp ? 'linear-gradient(90deg,rgba(224,162,58,.25),rgba(224,162,58,.12))' : 'rgba(53,196,123,.14)',
+            border: `1px solid ${levelEvent.mainUp ? AMBER : GREEN}`,
             borderRadius: 12,
             padding: '12px 16px',
             marginBottom: 14,
@@ -797,15 +898,17 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             animation: 'celebratePop .45s ease-out',
           }}
         >
-          <div style={{ fontSize: 13, fontWeight: 700, color: levelEvent.prestige ? AMBER : GREEN, letterSpacing: '0.5px' }}>
-            🎉 {levelEvent.prestige ? 'PRESTIGE!' : 'LEVEL UP!'} 🎉
+          <div style={{ fontSize: 13, fontWeight: 700, color: levelEvent.mainUp ? AMBER : GREEN, letterSpacing: '0.5px' }}>
+            🎉 {levelEvent.mainUp ? 'LEVEL UP!' : 'SUB-LEVEL UP!'} 🎉
           </div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4 }}>
-            {levelEvent.prestige && <span>{'👑'.repeat(levelEvent.crowns)} </span>}
-            {levelEvent.icon} {metaFor(levelEvent.category).topic} — {levelEvent.name}
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <span style={{ background: levelEvent.bg, color: levelEvent.text, borderRadius: 8, padding: '3px 10px' }}>
+              {levelEvent.emoji} {levelEvent.name}
+            </span>
+            <span style={{ color: STAR, letterSpacing: '1px' }}>{levelEvent.stars}</span>
           </div>
           <div style={{ fontSize: 11.5, color: muted, marginTop: 3 }}>
-            {levelEvent.answered} answered in this category
+            {levelEvent.correct} correct answers
           </div>
         </div>
       )}
@@ -813,22 +916,57 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
       <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1.7fr 1fr', gap: 16, alignItems: 'start' }}>
         {/* Question + level HUD */}
         <div style={card(theme)}>
-          {/* Level HUD for the current category */}
+          {/* Overall level HUD (topic-agnostic: one ladder across every category) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
-            <span style={{ fontSize: 18 }}>{crowns}{lvl.level.icon}</span>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>
-                Level {lvl.index + 1} · {lvl.level.name}
-                {lvl.prestige > 0 && <span style={{ color: AMBER }}> · Prestige {lvl.prestige}</span>}
-              </div>
-              <div style={{ fontSize: 10.5, color: muted }}>
-                {meta.topic} · {meta.weight}% of exam
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 9,
+                background: ov.bg,
+                color: ov.text,
+                borderRadius: 12,
+                padding: '7px 12px',
+                minWidth: 0,
+              }}
+            >
+              <span style={{ fontSize: 22, lineHeight: 1 }}>{ov.main.emoji}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700 }}>Lv {ov.mainIndex + 1} · {ov.main.name}</div>
+                <div style={{ fontSize: 13, letterSpacing: '1.5px' }} aria-label={`Sub-level ${ov.sub} of ${5}`}>
+                  {ov.stars}
+                </div>
               </div>
             </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace", textAlign: 'right' }}>
-                {lvl.toNext} to {lvl.nextLabel}
-              </span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 10.5, color: muted }}>{meta.topic} · {meta.weight}% of exam</div>
+              <div style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {ov.isMax ? 'Max level reached' : `${ov.toNext} correct to ${ov.nextLabel}`}
+              </div>
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={undo}
+                disabled={!undoReady}
+                title={undoTitle}
+                aria-label="Undo last answer"
+                style={{
+                  border: `1px solid ${undoReady ? theme.accent : theme.navBorder}`,
+                  background: undoReady ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.02)',
+                  color: undoReady ? '#fff' : muted,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  lineHeight: 1,
+                  borderRadius: 8,
+                  cursor: undoReady ? 'pointer' : 'not-allowed',
+                  opacity: undoReady ? 1 : 0.5,
+                  padding: '8px 11px',
+                  minHeight: 34,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                ↩ Undo{undoCooldown > 0 ? ` (${undoCooldown})` : ''}
+              </button>
               <button
                 onClick={() => toggleStar(q.id)}
                 aria-pressed={starred.has(q.id)}
@@ -851,7 +989,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             </div>
           </div>
           <div style={{ height: 5, background: theme.navBorder, borderRadius: 4, overflow: 'hidden', marginBottom: 16 }}>
-            <div style={{ height: '100%', width: `${Math.min(100, ((lvl.within - lvl.level.at) / Math.max(1, lvl.nextAt - lvl.level.at)) * 100)}%`, background: accentGrad }} />
+            <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
           </div>
 
           <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 12 }}>
@@ -872,12 +1010,17 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
               if (revealed) {
                 if (isCorrect) { border = GREEN; bg = 'rgba(53,196,123,.12)'; mark = '✓'; }
                 else if (isChosen) { border = RED; bg = 'rgba(239,84,104,.12)'; mark = '✗'; }
+              } else if (isChosen) {
+                // Highlight the pre-confirmation selection (not yet scored).
+                border = theme.accent;
+                bg = 'rgba(255,255,255,.10)';
               }
               return (
                 <button
                   key={o.label}
-                  onClick={() => answer(o.label)}
+                  onClick={() => selectOption(o.label)}
                   disabled={revealed}
+                  aria-pressed={!revealed && isChosen}
                   style={{
                     display: 'flex',
                     alignItems: 'flex-start',
@@ -904,12 +1047,31 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
           </div>
 
           {!revealed && (
-            <div style={{ marginTop: 12 }}>
+            <div style={{ marginTop: 12, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <button
-                onClick={() => answer(null)}
+                onClick={confirm}
+                disabled={selected == null}
+                title={selected == null ? 'Pick an answer first' : 'Confirm and submit'}
                 style={{
-                  width: '100%',
-                  padding: '11px 14px',
+                  flex: 1,
+                  minWidth: 160,
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: 'none',
+                  background: selected == null ? 'rgba(255,255,255,.06)' : accentGrad,
+                  color: selected == null ? muted : theme.accentText,
+                  cursor: selected == null ? 'not-allowed' : 'pointer',
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  opacity: selected == null ? 0.7 : 1,
+                }}
+              >
+                {selected == null ? 'Select an answer' : `Confirm ${selected} ↵`}
+              </button>
+              <button
+                onClick={() => submit(null)}
+                style={{
+                  padding: '12px 14px',
                   borderRadius: 10,
                   border: `1px dashed ${theme.navBorder}`,
                   background: 'rgba(255,255,255,.03)',
@@ -1015,26 +1177,55 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             </div>
           </div>
 
+          {/* Overall level (one topic-agnostic ladder — 10 correct = 1 sub-level) */}
           <div style={card(theme)}>
-            <div style={statLabel}>Categories</div>
+            <div style={statLabel}>Level · {ov.correct} correct answers</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 11, marginTop: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  background: ov.bg,
+                  color: ov.text,
+                  borderRadius: 12,
+                  padding: '8px 12px',
+                }}
+              >
+                <span style={{ fontSize: 24, lineHeight: 1 }}>{ov.main.emoji}</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>Lv {ov.mainIndex + 1} · {ov.main.name}</div>
+                  <div style={{ fontSize: 14, letterSpacing: '2px' }}>{ov.stars}</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 11, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {ov.isMax ? 'Max level' : `${ov.toNext} to ${ov.nextLabel}`}
+              </div>
+            </div>
+            <div style={{ height: 6, background: theme.navBorder, borderRadius: 4, overflow: 'hidden', marginTop: 10 }}>
+              <div style={{ height: '100%', width: `${(ov.intoSub / CORRECT_PER_SUBLEVEL) * 100}%`, background: accentGrad }} />
+            </div>
+          </div>
+
+          <div style={card(theme)}>
+            <div style={statLabel}>Accuracy by category</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 10 }}>
               {CATEGORY_META.map((c) => {
                 const cs = game.cats[c.topic];
-                const cl = levelInfo(cs.answered);
                 const sc = scorePct(cs.recent);
                 const isCurrent = c.topic === cat;
                 return (
                   <div key={c.topic} style={{ opacity: isCurrent ? 1 : 0.85 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 12, color: isCurrent ? '#fff' : '#cdbcff', fontWeight: isCurrent ? 700 : 500 }}>
-                        {'👑'.repeat(cl.prestige)}{cl.level.icon} {c.topic}
+                        {c.topic}
                       </span>
                       <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: '#fff' }}>
                         {sc == null ? '—' : `${sc.toFixed(1)}%`}
                       </span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: muted, marginTop: 2 }}>
-                      <span>L{cl.index + 1} {cl.level.name} · {cs.answered} answered</span>
+                      <span>{cs.answered} answered</span>
                       <span>{c.weight}% of exam</span>
                     </div>
                   </div>
@@ -1052,8 +1243,8 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
 // component mounts (the caller remounts it per event via a changing `key`), fall
 // from the top of the screen, and fade out — a purely decorative overlay that
 // ignores pointer events and hides itself for reduced-motion users (via CSS).
-function Confetti({ prestige, accent }: { prestige: boolean; accent: string }) {
-  const palette = prestige
+function Confetti({ big, accent }: { big: boolean; accent: string }) {
+  const palette = big
     ? ['#e0a23a', '#f5c451', '#fff2c2', '#ffd76a']
     : ['#35c47b', accent, '#7fe0c0', '#f5c451', '#8ab4ff'];
   const [pieces] = useState(() =>
