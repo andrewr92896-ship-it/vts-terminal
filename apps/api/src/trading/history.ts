@@ -6,9 +6,10 @@ import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { sendToTradingDesk } from '../notifications/push.js';
 import { sendPushoverToDesk } from '../notifications/pushover.js';
-import { classifyOutcome } from './outcome.js';
+import { classifyOutcome, type BreakEvenBand, type BreakEvenMode } from './outcome.js';
+import { tradePips } from './forex.js';
 import { deskTradeCodeIndex } from './codes.js';
-import { getDeskSettings } from './settings.js';
+import { getDeskSettings, bandOf } from './settings.js';
 import type { LiveTrade } from './types.js';
 
 // A position opened within this window is treated as a fresh fill worth a push;
@@ -231,6 +232,7 @@ export interface HistoryGroup {
   losses: number;
   breakeven: number; // trades inside the desk's break-even band
   realizedPl: number | null; // gated
+  pips: number; // net entry→exit move across the group's forex trades, in pips
 }
 
 export interface HistorySummary {
@@ -247,7 +249,10 @@ export interface HistorySummary {
 export interface HistoryData {
   trades: HistoryRecord[];
   summary: HistorySummary;
-  breakEvenPct: number; // the desk-wide break-even band applied to the summary
+  // The desk-wide break-even buffer applied to the summary, in all three shapes.
+  breakEvenPct: number;
+  breakEvenMode: BreakEvenMode;
+  breakEvenAmount: number;
 }
 
 function slippageOf(planned: number | null, entry: number): number | null {
@@ -287,16 +292,20 @@ function groupBy(
   rows: TradingPositionRow[],
   pick: (r: TradingPositionRow) => string | null,
   canSeeBalances: boolean,
-  breakEvenPct: number,
+  band: BreakEvenBand,
 ): HistoryGroup[] {
-  const map = new Map<string, { count: number; wins: number; losses: number; breakeven: number; pl: number }>();
+  const map = new Map<string, { count: number; wins: number; losses: number; breakeven: number; pl: number; pips: number }>();
   for (const r of rows) {
     const label = (pick(r) ?? '—').trim() || '—';
-    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0 };
+    const g = map.get(label) ?? { count: 0, wins: 0, losses: 0, breakeven: 0, pl: 0, pips: 0 };
     g.count += 1;
+    // Pips are a price fact (not a balance), so they accrue for every closeable
+    // forex trade regardless of whether realized P/L is known or visible.
+    const pips = tradePips(r.side as TradeSide, r.entryPrice, r.exitPrice, r.instrument);
+    if (pips != null) g.pips += pips;
     if (r.realizedPl != null) {
       g.pl += r.realizedPl;
-      const outcome = classifyOutcome(r.side as TradeSide, r.entryPrice, r.exitPrice, r.realizedPl, breakEvenPct);
+      const outcome = classifyOutcome(r.side as TradeSide, r.entryPrice, r.exitPrice, r.realizedPl, r.instrument, band);
       if (outcome === 'win') g.wins += 1;
       else if (outcome === 'loss') g.losses += 1;
       else g.breakeven += 1;
@@ -311,6 +320,7 @@ function groupBy(
       losses: g.losses,
       breakeven: g.breakeven,
       realizedPl: canSeeBalances ? g.pl : null,
+      pips: Number(g.pips.toFixed(1)),
     }))
     .sort((a, b) => b.count - a.count);
 }
@@ -409,12 +419,18 @@ export async function getHistory(
   // The public demo is sandboxed off the real desk: it never sees teammates'
   // closed trades (and its own showcase has no closed positions), so its History
   // is empty rather than a window into real accounts.
-  const { breakEvenPct } = await getDeskSettings();
+  const settings = await getDeskSettings();
+  const band = bandOf(settings);
+  const beFields = {
+    breakEvenPct: settings.breakEvenPct,
+    breakEvenMode: settings.breakEvenMode,
+    breakEvenAmount: settings.breakEvenAmount,
+  };
   if (viewerIsDemo) {
     return {
       trades: [],
       summary: { closed: 0, wins: 0, losses: 0, breakeven: 0, winRate: 0, totalRealizedPl: canSeeBalances ? 0 : null, byStrategy: [], byInstrument: [] },
-      breakEvenPct,
+      ...beFields,
     };
   }
 
@@ -444,7 +460,7 @@ export async function getHistory(
   for (const r of rows) {
     if (r.realizedPl != null) {
       totalPl += r.realizedPl;
-      const outcome = classifyOutcome(r.side as TradeSide, r.entryPrice, r.exitPrice, r.realizedPl, breakEvenPct);
+      const outcome = classifyOutcome(r.side as TradeSide, r.entryPrice, r.exitPrice, r.realizedPl, r.instrument, band);
       if (outcome === 'win') wins += 1;
       else if (outcome === 'loss') losses += 1;
       else breakeven += 1;
@@ -468,9 +484,9 @@ export async function getHistory(
       breakeven,
       winRate: decided > 0 ? wins / decided : 0,
       totalRealizedPl: canSeeBalances ? totalPl : null,
-      byStrategy: groupBy(rows, (r) => r.strategy, canSeeBalances, breakEvenPct),
-      byInstrument: groupBy(rows, (r) => r.instrument, canSeeBalances, breakEvenPct),
+      byStrategy: groupBy(rows, (r) => r.strategy, canSeeBalances, band),
+      byInstrument: groupBy(rows, (r) => r.instrument, canSeeBalances, band),
     },
-    breakEvenPct,
+    ...beFields,
   };
 }

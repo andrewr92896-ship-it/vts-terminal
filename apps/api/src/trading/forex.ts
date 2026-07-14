@@ -45,6 +45,26 @@ export function pipSizeFor(quote: string): number {
   return quote === 'JPY' ? 0.01 : 0.0001;
 }
 
+// The realized move of a closed (or marked) trade in pips, sign-adjusted for
+// side: a long that exits above entry is positive, a short that exits below
+// entry is positive. Null when the instrument isn't a currency pair, or a price
+// is missing — non-forex trades (metals, indices, crypto) have no pip size, so
+// callers show money only there. This is the profit/loss of a trade expressed in
+// pips, the desk's preferred unit.
+export function tradePips(
+  side: 'long' | 'short',
+  entryPrice: number | null,
+  exitPrice: number | null,
+  instrument: string,
+): number | null {
+  if (entryPrice == null || exitPrice == null) return null;
+  const pair = forexPair(instrument);
+  if (!pair) return null;
+  const pipSize = pipSizeFor(pair[1]);
+  const sign = side === 'short' ? -1 : 1;
+  return ((exitPrice - entryPrice) * sign) / pipSize;
+}
+
 // Account-currency value of one pip for `units` of the pair. Exact for the
 // common case where the account currency is the pair's quote (then a pip is
 // worth units * pipSize directly) or its base (divide by the current price). For

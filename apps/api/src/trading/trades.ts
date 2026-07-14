@@ -14,9 +14,9 @@ import {
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
-import { classifyOutcome } from './outcome.js';
+import { classifyOutcome, type BreakEvenBand, type BreakEvenMode } from './outcome.js';
 import { deskTradeCodeIndex } from './codes.js';
-import { getDeskSettings } from './settings.js';
+import { getDeskSettings, bandOf } from './settings.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
 // (full or view-only) sees every other trading user's trades in full — capital
@@ -74,7 +74,11 @@ export interface TradeSummary {
 export interface TradeLogData {
   trades: TradeRecord[];
   summary: TradeSummary;
-  breakEvenPct: number; // the desk-wide break-even band applied to the summary
+  // The desk-wide break-even buffer applied to the summary, in all three of its
+  // shapes so the client can classify and label trades the same way.
+  breakEvenPct: number;
+  breakEvenMode: BreakEvenMode;
+  breakEvenAmount: number;
 }
 
 export interface TradeInput {
@@ -188,10 +192,10 @@ function positionToRecord(row: TradingPositionRow, owner: string, viewerId: stri
   };
 }
 
-// Summary over the trade record list. `breakEvenPct` is the desk-wide band: a
-// scored trade whose entry→exit move is within ±band counts as break-even, kept
-// out of both the win and loss tallies (and out of the win-rate denominator).
-function summarizeRecords(records: TradeRecord[], breakEvenPct: number): TradeSummary {
+// Summary over the trade record list. `band` is the desk-wide break-even buffer:
+// a scored trade inside it counts as break-even, kept out of both the win and
+// loss tallies (and out of the win-rate denominator).
+function summarizeRecords(records: TradeRecord[], band: BreakEvenBand): TradeSummary {
   let open = 0;
   let closed = 0;
   let wins = 0;
@@ -206,7 +210,7 @@ function summarizeRecords(records: TradeRecord[], breakEvenPct: number): TradeSu
     if (r.realizedPl != null) {
       totalPl += r.realizedPl;
       if (r.status === 'closed') {
-        const outcome = classifyOutcome(r.side, r.entryPrice, r.exitPrice, r.realizedPl, breakEvenPct);
+        const outcome = classifyOutcome(r.side, r.entryPrice, r.exitPrice, r.realizedPl, r.instrument, band);
         if (outcome === 'win') wins += 1;
         else if (outcome === 'loss') losses += 1;
         else breakeven += 1;
@@ -280,12 +284,18 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
   // Stamp each row with its desk code and score against the desk-wide break-even
   // band. The demo is sandboxed off the shared code index, so its rows keep the
   // null code set in the mappers.
-  const { breakEvenPct } = await getDeskSettings();
+  const settings = await getDeskSettings();
   if (!viewerIsDemo) {
     const codes = await deskTradeCodeIndex();
     for (const r of sorted) r.code = codes.get(r.id) ?? null;
   }
-  return { trades: sorted, summary: summarizeRecords(sorted, breakEvenPct), breakEvenPct };
+  return {
+    trades: sorted,
+    summary: summarizeRecords(sorted, bandOf(settings)),
+    breakEvenPct: settings.breakEvenPct,
+    breakEvenMode: settings.breakEvenMode,
+    breakEvenAmount: settings.breakEvenAmount,
+  };
 }
 
 export async function addTrade(userId: string, input: TradeInput): Promise<string> {

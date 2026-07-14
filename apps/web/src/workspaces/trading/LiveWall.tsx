@@ -6,7 +6,7 @@ import { usePrivacy } from '../../privacy/privacy';
 import { readClipboardImage } from '../../lib/clipboard';
 import { BrokerConnections } from './BrokerConnections';
 import { DeskSettingsModal } from './DeskSettingsModal';
-import { classifyOutcome } from './outcome';
+import { classifyOutcome, bandFrom, type BreakEvenBand } from './outcome';
 import type { ForexMetrics, LiveTrade, LiveWall as LiveWallData } from '../../api/types';
 
 // Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
@@ -201,7 +201,7 @@ export function LiveWall() {
             <TradeCard
               key={t.id}
               t={t}
-              breakEvenPct={data.breakEvenPct}
+              band={bandFrom(data)}
               mine={t.ownerId === user?.id}
               readOnly={readOnly}
               showMoney={showMoney}
@@ -218,7 +218,7 @@ export function LiveWall() {
 
 function TradeCard({
   t,
-  breakEvenPct,
+  band,
   mine,
   readOnly,
   showMoney,
@@ -227,7 +227,7 @@ function TradeCard({
   onClosed,
 }: {
   t: LiveTrade;
-  breakEvenPct: number;
+  band: BreakEvenBand;
   mine: boolean; // the position is on the viewer's own broker account
   readOnly: boolean;
   showMoney: boolean;
@@ -245,7 +245,7 @@ function TradeCard({
   // from entry to the current mark) is flagged flat rather than a slim win/loss.
   const isBreakeven =
     t.currentPrice != null &&
-    classifyOutcome(t.side, t.entryPrice, t.currentPrice, t.unrealizedPl, breakEvenPct) === 'breakeven';
+    classifyOutcome(t.side, t.entryPrice, t.currentPrice, t.unrealizedPl, t.instrument, band) === 'breakeven';
 
   // A funded (FTP off-book) position the viewer owns can be closed right here on
   // the wall: its id is `funded:<tradeId>`. Closing reads a trade-result
