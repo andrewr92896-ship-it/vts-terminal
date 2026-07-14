@@ -168,7 +168,8 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
               onKeyDown={onKey}
               placeholder="Ask Claude…  (Enter to send)"
               rows={2}
-              style={{ flex: 1, resize: 'none', background: 'rgba(6,15,36,.6)', border: '1px solid #1d3560', borderRadius: 9, color: '#dfe7fa', padding: 11, fontSize: 13, outline: 'none', fontFamily: 'inherit' }}
+              // fontSize must be >= 16px so iOS Safari doesn't auto-zoom the viewport when the field is focused.
+              style={{ flex: 1, resize: 'none', background: 'rgba(6,15,36,.6)', border: '1px solid #1d3560', borderRadius: 9, color: '#dfe7fa', padding: 11, fontSize: 16, outline: 'none', fontFamily: 'inherit' }}
             />
             <button
               onClick={() => void send(input)}
