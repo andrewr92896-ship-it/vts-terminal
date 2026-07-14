@@ -433,6 +433,20 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;
 
+// Per-instrument break-even buffers: an override that governs a single
+// instrument (e.g. EUR/USD gets a 2-pip buffer while the desk default is 0.05%).
+// Desk-wide like the default settings — the same override applies to every
+// trader's view. `instrument` is the canonical symbol (upper-cased) and the
+// primary key, so one instrument has at most one override.
+export const tradingBeOverrides = sqliteTable('trading_be_overrides', {
+  instrument: text('instrument').primaryKey(),
+  mode: text('mode').notNull().default('percent'),
+  pct: real('pct').notNull().default(0),
+  amount: real('amount').notNull().default(0),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TradingBeOverrideRow = typeof tradingBeOverrides.$inferSelect;
+
 // ---- Trading — Funded platforms (manual / screenshot-tracked prop accounts) ----
 // Funded prop accounts (FTP and other funded platforms) are tracked separately
 // from the Live Wall / Trade Log because they have no usable API: the trader

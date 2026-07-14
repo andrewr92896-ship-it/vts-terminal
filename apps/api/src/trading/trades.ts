@@ -14,9 +14,9 @@ import {
 } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
-import { classifyOutcome, type BreakEvenBand, type BreakEvenMode } from './outcome.js';
+import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEvenOverride } from './outcome.js';
 import { deskTradeCodeIndex } from './codes.js';
-import { getDeskSettings, bandOf } from './settings.js';
+import { getDeskSettings, configOf } from './settings.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
 // (full or view-only) sees every other trading user's trades in full — capital
@@ -75,10 +75,12 @@ export interface TradeLogData {
   trades: TradeRecord[];
   summary: TradeSummary;
   // The desk-wide break-even buffer applied to the summary, in all three of its
-  // shapes so the client can classify and label trades the same way.
+  // shapes plus the per-instrument overrides, so the client can classify and
+  // label trades exactly the same way the server does.
   breakEvenPct: number;
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number;
+  breakEvenOverrides: BreakEvenOverride[];
 }
 
 export interface TradeInput {
@@ -192,10 +194,11 @@ function positionToRecord(row: TradingPositionRow, owner: string, viewerId: stri
   };
 }
 
-// Summary over the trade record list. `band` is the desk-wide break-even buffer:
-// a scored trade inside it counts as break-even, kept out of both the win and
-// loss tallies (and out of the win-rate denominator).
-function summarizeRecords(records: TradeRecord[], band: BreakEvenBand): TradeSummary {
+// Summary over the trade record list. `config` is the desk-wide break-even
+// buffer (default + per-instrument overrides): a scored trade inside its
+// instrument's buffer counts as break-even, kept out of both the win and loss
+// tallies (and out of the win-rate denominator).
+function summarizeRecords(records: TradeRecord[], config: BreakEvenConfig): TradeSummary {
   let open = 0;
   let closed = 0;
   let wins = 0;
@@ -210,7 +213,7 @@ function summarizeRecords(records: TradeRecord[], band: BreakEvenBand): TradeSum
     if (r.realizedPl != null) {
       totalPl += r.realizedPl;
       if (r.status === 'closed') {
-        const outcome = classifyOutcome(r.side, r.entryPrice, r.exitPrice, r.realizedPl, r.instrument, band);
+        const outcome = classifyOutcome(r.side, r.entryPrice, r.exitPrice, r.realizedPl, r.instrument, config);
         if (outcome === 'win') wins += 1;
         else if (outcome === 'loss') losses += 1;
         else breakeven += 1;
@@ -291,10 +294,11 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
   }
   return {
     trades: sorted,
-    summary: summarizeRecords(sorted, bandOf(settings)),
+    summary: summarizeRecords(sorted, configOf(settings)),
     breakEvenPct: settings.breakEvenPct,
     breakEvenMode: settings.breakEvenMode,
     breakEvenAmount: settings.breakEvenAmount,
+    breakEvenOverrides: settings.breakEvenOverrides,
   };
 }
 

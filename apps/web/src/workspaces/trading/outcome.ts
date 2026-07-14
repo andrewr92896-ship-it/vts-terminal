@@ -1,4 +1,4 @@
-import type { BreakEvenMode, TradeSide } from '../../api/types';
+import type { BreakEvenMode, BreakEvenOverride, TradeSide } from '../../api/types';
 import { tradePips } from './pips';
 
 // Mirror of apps/api/src/trading/outcome.ts so the client can classify trades the
@@ -15,10 +15,47 @@ export interface BreakEvenBand {
   amount: number;
 }
 
-// Build the band from a response object carrying the three desk fields. Keeps
-// every call site from re-plucking the same trio.
-export function bandFrom(d: { breakEvenMode: BreakEvenMode; breakEvenPct: number; breakEvenAmount: number }): BreakEvenBand {
-  return { mode: d.breakEvenMode, pct: d.breakEvenPct, amount: d.breakEvenAmount };
+// The full break-even resolver: a default band plus per-instrument overrides
+// keyed by a normalized symbol. Mirror of the server's BreakEvenConfig.
+export interface BreakEvenConfig {
+  base: BreakEvenBand;
+  overrides: Record<string, BreakEvenBand>;
+}
+
+// Collapse an instrument symbol to a match key (uppercase, alphanumerics only)
+// so "EUR/USD", "eur_usd" and "EURUSD" all resolve to the same buffer.
+export function normInstr(instrument: string): string {
+  return instrument.toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+// The band governing an instrument: its own override, else the desk default.
+export function bandForInstrument(config: BreakEvenConfig, instrument: string): BreakEvenBand {
+  return config.overrides[normInstr(instrument)] ?? config.base;
+}
+
+// Whether a band actually buffers anything (a zero band is "off").
+export function bandActive(band: BreakEvenBand): boolean {
+  return band.mode === 'percent' ? band.pct > 0 : band.amount > 0;
+}
+
+// Whether any part of the config buffers anything — the default or any override.
+export function configActive(config: BreakEvenConfig): boolean {
+  return bandActive(config.base) || Object.values(config.overrides).some(bandActive);
+}
+
+// Build the resolver from a response object carrying the desk default trio plus
+// the per-instrument overrides. Keeps every call site from re-plucking them.
+export function configFrom(d: {
+  breakEvenMode: BreakEvenMode;
+  breakEvenPct: number;
+  breakEvenAmount: number;
+  breakEvenOverrides: BreakEvenOverride[];
+}): BreakEvenConfig {
+  const overrides: Record<string, BreakEvenBand> = {};
+  for (const o of d.breakEvenOverrides) {
+    overrides[normInstr(o.instrument)] = { mode: o.mode, pct: o.pct, amount: o.amount };
+  }
+  return { base: { mode: d.breakEvenMode, pct: d.breakEvenPct, amount: d.breakEvenAmount }, overrides };
 }
 
 // The trade's return as a percent of entry, sign-adjusted for side. Null when
@@ -33,18 +70,19 @@ export function tradeReturnPct(
   return side === 'short' ? -raw : raw;
 }
 
-// Classify a scored trade as win / loss / break-even against the desk's chosen
-// break-even buffer (percent of price move, a flat dollar amount, or a pip
-// distance). Falls back to the sign of realized P/L when the chosen measure
-// can't be computed for the trade.
+// Classify a scored trade as win / loss / break-even. The instrument picks the
+// band — its per-instrument override if set, else the desk default — measured as
+// a percent of price move, a flat dollar amount, or a pip distance. Falls back
+// to the sign of realized P/L when the chosen measure can't be computed.
 export function classifyOutcome(
   side: TradeSide,
   entryPrice: number | null,
   exitPrice: number | null,
   realizedPl: number | null,
   instrument: string,
-  band: BreakEvenBand,
+  config: BreakEvenConfig,
 ): Outcome {
+  const band = bandForInstrument(config, instrument);
   if (band.mode === 'dollars') {
     if (realizedPl != null) {
       if (Math.abs(realizedPl) <= band.amount) return 'breakeven';

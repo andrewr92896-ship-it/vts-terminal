@@ -536,6 +536,15 @@ export interface BrokerLiveResult {
 // How the desk-wide break-even buffer is measured.
 export type BreakEvenMode = 'percent' | 'dollars' | 'pips';
 
+// A per-instrument break-even buffer that overrides the desk default for one
+// instrument. Desk-wide, like the default.
+export interface BreakEvenOverride {
+  instrument: string;
+  mode: BreakEvenMode;
+  pct: number;
+  amount: number;
+}
+
 export interface LiveWall {
   source: 'live' | 'sample';
   generatedAt: number;
@@ -546,6 +555,7 @@ export interface LiveWall {
   breakEvenPct: number; // desk-wide break-even band (percent of price move)
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number; // dollar or pip band (used in 'dollars' / 'pips' mode)
+  breakEvenOverrides: BreakEvenOverride[]; // per-instrument buffers
 }
 
 // Desk-wide trading settings, shared across the whole team.
@@ -553,6 +563,7 @@ export interface DeskSettings {
   breakEvenMode: BreakEvenMode;
   breakEvenPct: number;
   breakEvenAmount: number;
+  breakEvenOverrides: BreakEvenOverride[];
 }
 
 // ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----
@@ -993,6 +1004,7 @@ export interface TradeLogData {
   breakEvenPct: number;
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number;
+  breakEvenOverrides: BreakEvenOverride[];
 }
 
 // Raw data returned when a trade is removed, so the client can offer undo.
@@ -1144,6 +1156,7 @@ export interface HistoryData {
   breakEvenPct: number;
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number;
+  breakEvenOverrides: BreakEvenOverride[];
 }
 
 // Fields accepted when creating/editing a trade.

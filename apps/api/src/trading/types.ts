@@ -68,9 +68,11 @@ export interface LiveWall {
   brokers: BrokerLiveResult[];
   trades: LiveTrade[]; // flattened across brokers, newest first
   note: string | null;
-  // Desk-wide break-even buffer (all three shapes), so the wall can flag flat
-  // positions and label pip moves the same way the rest of the desk does.
+  // Desk-wide break-even buffer (all three shapes) plus per-instrument
+  // overrides, so the wall can flag flat positions and label pip moves the same
+  // way the rest of the desk does.
   breakEvenPct: number;
   breakEvenMode: 'percent' | 'dollars' | 'pips';
   breakEvenAmount: number;
+  breakEvenOverrides: import('./outcome.js').BreakEvenOverride[];
 }
