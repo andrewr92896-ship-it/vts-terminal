@@ -247,6 +247,58 @@ export function saveStarred(userId: string | undefined, ids: Set<number>): void 
   }
 }
 
+// The question a learner is currently on, persisted per user so closing and
+// reopening the app returns them to the same question rather than drawing a new
+// one. Only the question id and its answer state are stored — the live question
+// object is resolved from the static bank on load.
+export interface CurrentSnapshot {
+  id: number; // question id from the static bank
+  topic: Series65Topic; // the category it was served under
+  selected: 'A' | 'B' | 'C' | 'D' | null; // highlighted / submitted choice, if any
+  revealed: boolean; // whether the answer was already submitted and scored
+  outcome: boolean | null; // correct / incorrect, once revealed
+}
+
+export function currentKey(userId: string | undefined): string {
+  return `vts_series65_current_${userId ?? 'anon'}`;
+}
+
+export function saveCurrent(userId: string | undefined, snap: CurrentSnapshot | null): void {
+  try {
+    if (snap == null) localStorage.removeItem(currentKey(userId));
+    else localStorage.setItem(currentKey(userId), JSON.stringify(snap));
+  } catch {
+    /* ignore storage failures */
+  }
+}
+
+// Read back the persisted current question, validating each field so a stale or
+// malformed entry falls back to null (i.e. a fresh question will be drawn).
+export function loadCurrentSnapshot(userId: string | undefined): CurrentSnapshot | null {
+  try {
+    const raw = localStorage.getItem(currentKey(userId));
+    if (!raw) return null;
+    const p = JSON.parse(raw) as Record<string, unknown>;
+    const id = Number(p.id);
+    if (!Number.isInteger(id)) return null;
+    const topic = p.topic;
+    if (typeof topic !== 'string' || !SERIES65_TOPICS.includes(topic as Series65Topic)) return null;
+    const selected =
+      p.selected === 'A' || p.selected === 'B' || p.selected === 'C' || p.selected === 'D'
+        ? p.selected
+        : null;
+    return {
+      id,
+      topic: topic as Series65Topic,
+      selected,
+      revealed: p.revealed === true,
+      outcome: typeof p.outcome === 'boolean' ? p.outcome : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // Coerce an arbitrary parsed object into a valid GameState, dropping anything
 // malformed. Shared by the localStorage and server-synced load paths.
 export function normalizeGame(p: unknown): GameState {
