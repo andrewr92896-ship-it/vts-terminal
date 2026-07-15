@@ -309,6 +309,13 @@
       "when": 1782337536908,
       "tag": "0043_news_trade_note",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "6",
+      "when": 1782337636908,
+      "tag": "0044_purge_sample_news",
+      "breakpoints": true
     }
   ]
 }

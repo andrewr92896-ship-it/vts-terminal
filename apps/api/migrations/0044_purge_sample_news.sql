@@ -1,0 +1,1 @@
+DELETE FROM `trading_news` WHERE `source` IN ('Desk Wire', 'Crypto Desk');
