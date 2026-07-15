@@ -69,6 +69,12 @@ function etSince(ms: number | null): string {
   return m ? `${h}h ${m}m ago` : `${h}h ago`;
 }
 
+// An owner's display handle: the part of their email/username before the "@"
+// domain, so "dale@vitalistradingsystems.com" shows as "dale".
+function ownerHandle(owner: string): string {
+  return owner.split('@')[0] || owner;
+}
+
 // Slippage is favorable when the fill beat the planned entry: a long filled
 // below plan, or a short filled above plan.
 function slippageFavorable(t: LiveTrade): boolean | null {
@@ -135,9 +141,6 @@ export function LiveWall() {
             <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Live Wall</h2>
             <span style={isSample ? sampledPill : livePill}>{isSample ? 'Sample data' : 'Live'}</span>
           </div>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Open positions across the whole desk — every trader’s fills, slippage, TP/SL, and open P/L, tagged by trader.
-          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -166,25 +169,6 @@ export function LiveWall() {
           Showing the last positions from {etTime(data.generatedAt)} ET. Couldn't refresh: {staleError}
         </div>
       )}
-
-      {/* Broker health strip */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
-        {data.brokers.map((b) => {
-          const color = !b.configured ? FAINT : b.ok ? GREEN : RED;
-          const state = !b.configured ? 'unconfigured' : b.ok ? `${b.count} open` : 'error';
-          return (
-            <div key={b.connectionId} style={brokerChip} title={b.error ?? `${b.name} — ${b.platform}`}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flex: 'none' }} />
-              <span style={{ fontWeight: 600, color: TEXT }}>{b.name}</span>
-              {/* The platform tells two same-named connections apart (e.g. an
-                  OANDA and a Kraken account both labeled the same). */}
-              <span style={platformPill}>{b.platform}</span>
-              {b.owner && <span style={{ color: b.ownerId === user?.id ? GOLD : FAINT }}>@{b.owner}</span>}
-              <span style={{ color: MUTED }}>· {state}</span>
-            </div>
-          );
-        })}
-      </div>
 
       {data.note && (
         <div style={isSample ? infoBanner : warnBanner}>{data.note}</div>
@@ -301,7 +285,11 @@ function TradeCard({
           {isBreakeven && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }} title="Break-even — inside the desk's break-even band">B/E</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={ownerTag(mine)} title={mine ? `${t.owner} (you)` : t.owner}>@{t.owner}{mine ? ' · you' : ''}</span>
+          {/* On the viewer's own card the broker name already identifies it, so
+              the owner tag is dropped. On teammates' cards show their handle
+              (the part of the email before the domain) so it's clear whose it
+              is. */}
+          {!mine && <span style={ownerTag(false)} title={t.owner}>@{ownerHandle(t.owner)}</span>}
           {t.broker === 'ftp' ? (
             <span style={ftpTag} title="Funded / prop position — priced off OANDA, and kept off the Trade Log & Live Brokers capital">{t.brokerName} · off-book</span>
           ) : (
@@ -540,27 +528,6 @@ function ownerTag(mine: boolean): CSSProperties {
     fontFamily: MONO,
   };
 }
-const brokerChip: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 7,
-  fontSize: 11.5,
-  background: PANEL,
-  border: `1px solid ${BORDER}`,
-  borderRadius: 8,
-  padding: '7px 11px',
-};
-const platformPill: CSSProperties = {
-  fontSize: 9,
-  fontWeight: 700,
-  letterSpacing: '0.4px',
-  textTransform: 'uppercase',
-  color: MUTED,
-  background: 'rgba(255,255,255,.04)',
-  border: `1px solid ${BORDER2}`,
-  borderRadius: 4,
-  padding: '1px 5px',
-};
 const metaChip: CSSProperties = {
   fontSize: 10,
   fontWeight: 600,
