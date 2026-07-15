@@ -167,6 +167,21 @@ export function MarketNews() {
     };
   }, [data]);
 
+  // The EUR/USD feed leads with Forex Factory — its economic calendar is the
+  // primary source there — narrowed to the two currencies that drive the pair.
+  const eurusdCal = useMemo(() => {
+    const now = Date.now();
+    const evs = (data?.calendar ?? []).filter((e) => {
+      const c = (e.country ?? '').toUpperCase();
+      return c === 'EUR' || c === 'USD';
+    });
+    return {
+      upcoming: evs.filter((e) => e.eventTime >= now - 6 * 3600_000),
+      past: evs.filter((e) => e.eventTime < now - 6 * 3600_000).reverse(),
+      total: evs.length,
+    };
+  }, [data]);
+
   if (err && !data) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{err}</div>;
   if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading market news…</div>;
 
@@ -177,6 +192,9 @@ export function MarketNews() {
   const counts: Record<string, number> = { all: headlines.length, trump: truth.length, calendar: data.calendar.length };
   for (const f of NEWS_FEEDS) counts[f.key] = 0;
   for (const h of headlines) for (const k of newsFeeds(h)) counts[k] = (counts[k] ?? 0) + 1;
+  // EUR/USD leads with the Forex Factory calendar, so its tab count includes
+  // those EUR/USD events alongside the classified headlines.
+  counts.eurusd = (counts.eurusd ?? 0) + eurusdCal.total;
 
   const isNewsTab = feed !== 'trump' && feed !== 'calendar';
 
@@ -296,25 +314,57 @@ export function MarketNews() {
         )
       )}
 
+      {/* EUR/USD leads with Forex Factory — its economic calendar is the primary
+          source for the pair; the classified EUR/USD headlines follow below. */}
+      {feed === 'eurusd' && (() => {
+        const passImpact = (imp: NewsImpact) =>
+          impactFilter === 'all' ? true : impactFilter === 'high' ? imp === 'high' : imp !== 'low';
+        const up = eurusdCal.upcoming.filter((e) => passImpact(e.impact));
+        const pa = eurusdCal.past.filter((e) => passImpact(e.impact));
+        return (
+          <div style={{ marginBottom: 18 }}>
+            <div style={feedSectionLabel}>Forex Factory · EUR &amp; USD economic calendar</div>
+            {up.length + pa.length === 0 ? (
+              <div style={{ ...card, textAlign: 'center', padding: '22px 20px', color: MUTED, fontSize: 13 }}>
+                No EUR/USD events{filtersActive ? ' match this filter' : ' in range yet'} — the Forex Factory feed populates within a few minutes.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <CalendarColumn events={up} canWrite={canWrite} busy={busy} run={run} />
+                {pa.length > 0 && (
+                  <div style={{ opacity: 0.65 }}>
+                    <div style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, margin: '4px 0 8px' }}>Past</div>
+                    <CalendarColumn events={pa} canWrite={canWrite} busy={busy} run={run} />
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* News headline feeds */}
       {isNewsTab && (
-        headlines.length === 0 ? (
-          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-            No headlines yet — the live news feeds populate within a few minutes.
-          </div>
-        ) : shown.length === 0 ? (
-          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-            No stories match this filter{feed !== 'all' ? ' in this feed' : ''}. {filtersActive ? 'Try clearing the filters.' : 'Check back shortly.'}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-            {shown.map((h) => (
-              <HeadlineCard key={h.id} h={h} canWrite={canWrite} busy={busy} watchlist={watchlist}
-                onSave={(p) => run(api.updateNews(h.id, p))}
-                onRemove={() => run(api.removeNews(h.id))} />
-            ))}
-          </div>
-        )
+        <>
+          {feed === 'eurusd' && <div style={feedSectionLabel}>EUR/USD headlines</div>}
+          {headlines.length === 0 ? (
+            <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
+              No headlines yet — the live news feeds populate within a few minutes.
+            </div>
+          ) : shown.length === 0 ? (
+            <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
+              {feed === 'eurusd' ? 'No EUR/USD headlines match this filter.' : `No stories match this filter${feed !== 'all' ? ' in this feed' : ''}.`} {filtersActive ? 'Try clearing the filters.' : 'Check back shortly.'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              {shown.map((h) => (
+                <HeadlineCard key={h.id} h={h} canWrite={canWrite} busy={busy} watchlist={watchlist}
+                  onSave={(p) => run(api.updateNews(h.id, p))}
+                  onRemove={() => run(api.removeNews(h.id))} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -546,5 +596,6 @@ const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(18
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const smallBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' };
 const banner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
+const feedSectionLabel: CSSProperties = { fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, fontWeight: 700, margin: '0 0 10px' };
 const tabBtn: CSSProperties = { flex: 'none', display: 'inline-flex', alignItems: 'center', fontSize: 12, fontWeight: 600, color: MUTED, background: 'rgba(255,255,255,.04)', border: `1px solid ${BORDER}`, padding: '6px 12px', borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap' };
 const tabBtnActive: CSSProperties = { background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', border: '1px solid transparent' };
