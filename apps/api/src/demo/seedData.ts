@@ -38,7 +38,6 @@ import { addPlan } from '../wealth/planning.js';
 import { addItem as addComplianceItem } from '../wealth/compliance.js';
 import { addTrade } from '../trading/trades.js';
 import { addSession } from '../trading/sessions.js';
-import { addNews, addEvent } from '../trading/news.js';
 import { ensureSeed as ensureTodoSeed } from '../todo/service.js';
 
 // One-time seeding of a read-only public DEMO user so every workspace looks
@@ -74,8 +73,6 @@ export async function clearDemoData(userId: string): Promise<void> {
     wealthPortfolios,
     wealthClients,
     tradingAlerts,
-    tradingNews,
-    tradingCalendar,
     tradingSessions,
     tradingTrades,
     tradingPositions,
@@ -89,6 +86,18 @@ export async function clearDemoData(userId: string): Promise<void> {
   for (const t of tables) {
     try {
       await db.delete(t).where(eq((t as unknown as { userId: typeof todoItems.userId }).userId, userId));
+    } catch (err) {
+      console.error('demo clear failed for a table:', err);
+    }
+  }
+  // The shared Market News feed keys ownership on `authorId`, not `userId`, so
+  // its two tables are cleared explicitly. Historically they were listed above
+  // and silently failed to clear (no `userId` column), which let seeded sample
+  // headlines/events accumulate in the shared feed across deploys — this purges
+  // any that a demo seed authored.
+  for (const t of [tradingNews, tradingCalendar]) {
+    try {
+      await db.delete(t).where(eq(t.authorId, userId));
     } catch (err) {
       console.error('demo clear failed for a table:', err);
     }
@@ -523,99 +532,11 @@ export async function seedDemoData(userId: string): Promise<void> {
       active: true,
     });
 
-    // Five market-news headlines.
-    const headlines: Array<{
-      title: string;
-      body: string;
-      source: string;
-      category: 'markets' | 'geopolitical' | 'economic' | 'crypto' | 'other';
-      impact: 'high' | 'medium' | 'low';
-      bias: 'bullish' | 'bearish' | 'neutral';
-      hoursAgo: number;
-    }> = [
-      {
-        title: 'Dollar firms as traders trim rate-cut bets ahead of CPI',
-        body: 'The dollar index edged higher as markets repriced the timing of the first cut.',
-        source: 'Desk Wire',
-        category: 'markets',
-        impact: 'high',
-        bias: 'bullish',
-        hoursAgo: 2,
-      },
-      {
-        title: 'Euro slips below 1.09 on soft German factory orders',
-        body: 'Weaker-than-expected industrial data weighed on the single currency.',
-        source: 'Desk Wire',
-        category: 'economic',
-        impact: 'medium',
-        bias: 'bearish',
-        hoursAgo: 5,
-      },
-      {
-        title: 'Bitcoin reclaims range high as ETF inflows resume',
-        body: 'Spot ETF net inflows turned positive for a third straight session.',
-        source: 'Crypto Desk',
-        category: 'crypto',
-        impact: 'medium',
-        bias: 'bullish',
-        hoursAgo: 9,
-      },
-      {
-        title: 'Oil steadies as supply concerns offset demand worries',
-        body: 'Brent held a tight range as the market weighed mixed signals.',
-        source: 'Desk Wire',
-        category: 'markets',
-        impact: 'low',
-        bias: 'neutral',
-        hoursAgo: 14,
-      },
-      {
-        title: 'Yen intervention risk rises as USD/JPY tests multi-decade highs',
-        body: 'Officials reiterated they are watching FX moves "with a high sense of urgency".',
-        source: 'Desk Wire',
-        category: 'geopolitical',
-        impact: 'high',
-        bias: 'bearish',
-        hoursAgo: 20,
-      },
-    ];
-    for (const h of headlines) {
-      await addNews(userId, {
-        title: h.title,
-        body: h.body,
-        source: h.source,
-        category: h.category,
-        impact: h.impact,
-        bias: h.bias,
-        publishedAt: now - h.hoursAgo * 3_600_000,
-      });
-    }
-
-    // Economic calendar events.
-    await addEvent(userId, {
-      title: 'US CPI (YoY)',
-      country: 'US',
-      impact: 'high',
-      eventTime: now + 1 * DAY_MS,
-      forecast: '3.2%',
-      previous: '3.4%',
-    });
-    await addEvent(userId, {
-      title: 'ECB Interest Rate Decision',
-      country: 'EU',
-      impact: 'high',
-      eventTime: now + 3 * DAY_MS,
-      forecast: '4.25%',
-      previous: '4.50%',
-    });
-    await addEvent(userId, {
-      title: 'US Nonfarm Payrolls',
-      country: 'US',
-      impact: 'high',
-      eventTime: now + 6 * DAY_MS,
-      forecast: '185K',
-      previous: '206K',
-    });
+    // Market News (headlines + economic calendar) is intentionally NOT seeded.
+    // That feed is shared across the whole desk — not per user — so any rows
+    // seeded here would surface as "sample" news in the owner's real Market
+    // News too. In production it is populated live by the background pollers
+    // (curated RSS headlines, the Forex Factory calendar, and Truth Social).
 
     // Three TradingView alerts: one already analyzed (with a linked trade), two new.
     const analyzedTradeId = await addTrade(userId, {

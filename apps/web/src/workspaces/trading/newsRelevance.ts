@@ -91,11 +91,12 @@ export function affectedInstruments(item: NewsLike, watchlist: string[]): string
   return scored.map((s) => s.sym);
 }
 
-// A sensible default desk watchlist (majors, gold, indices, BTC) used until the
-// trader's own instruments load — and so EUR/USD-style links work out of the box.
+// A sensible default desk watchlist used until the trader's own instruments
+// load — and so EUR/USD-style links work out of the box. Led by this desk's core
+// book (EUR/USD, Bitcoin, gold, Nasdaq, S&P 500), with a few majors for context.
 export const DEFAULT_WATCHLIST = [
-  'EUR/USD', 'GBP/USD', 'USD/JPY', 'AUD/USD', 'USD/CAD', 'USD/CHF',
-  'XAU/USD', 'US100', 'US30', 'BTC/USD',
+  'EUR/USD', 'BTC/USD', 'XAU/USD', 'US100', 'US500', 'US30',
+  'GBP/USD', 'USD/JPY',
 ];
 
 // Build the trader's watchlist from the instruments they actually trade, falling

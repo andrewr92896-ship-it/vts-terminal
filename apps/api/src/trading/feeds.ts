@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { desc, eq, gte, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingNews, tradingCalendar, truthPosts, type NewsImpact, type TruthPostRow } from '../db/schema.js';
+import { tradingNews, tradingCalendar, truthPosts, type NewsImpact, type NewsCategory, type TruthPostRow } from '../db/schema.js';
 import { config } from '../config.js';
 import { resolveOwnerId } from './alerts.js';
 
@@ -107,6 +107,170 @@ export async function ingestFinnhubNews(): Promise<void> {
     }
   } catch (err) {
     console.error('Finnhub news ingest failed:', err);
+  }
+}
+
+// ---- Curated RSS news feeds ----
+// The Market News headlines come from a handful of free, public RSS/Atom feeds
+// chosen for what this desk trades: general market news, the Federal Reserve,
+// Bitcoin/crypto, and USD/EUR (forex). No API key is needed. Each fetch is
+// best-effort — a feed that 403s, times out, or returns malformed XML is
+// skipped and the rest still run. The parser is pure and exported for testing.
+
+export interface RssItem {
+  title: string;
+  url: string | null;
+  summary: string | null;
+  publishedAt: number; // ms epoch
+}
+
+// One configured feed: where to fetch it and how its items should be tagged in
+// the shared headline list (source label + category + default impact).
+interface RssFeed {
+  url: string;
+  source: string;
+  category: NewsCategory;
+  impact: NewsImpact;
+}
+
+// The desk's feed list, grouped by the trader's priorities. Order is cosmetic —
+// items are re-sorted by publish time when displayed. Kept deliberately small
+// and to reputable outlets so the headline list stays signal, not noise.
+const RSS_FEEDS: RssFeed[] = [
+  // Federal Reserve — rate decisions, FOMC, and official press releases.
+  { url: 'https://www.federalreserve.gov/feeds/press_all.xml', source: 'Federal Reserve', category: 'economic', impact: 'high' },
+  // General market news.
+  { url: 'https://www.cnbc.com/id/100003114/device/rss/rss.html', source: 'CNBC', category: 'markets', impact: 'medium' },
+  { url: 'https://www.cnbc.com/id/20910258/device/rss/rss.html', source: 'CNBC Markets', category: 'markets', impact: 'medium' },
+  { url: 'https://feeds.content.dowjones.io/public/rss/mw_topstories', source: 'MarketWatch', category: 'markets', impact: 'medium' },
+  // Bitcoin / crypto.
+  { url: 'https://www.coindesk.com/arc/outboundfeeds/rss/?outputType=xml', source: 'CoinDesk', category: 'crypto', impact: 'medium' },
+  { url: 'https://cointelegraph.com/rss', source: 'Cointelegraph', category: 'crypto', impact: 'medium' },
+  // USD/EUR and broader forex.
+  { url: 'https://www.fxstreet.com/rss/news', source: 'FXStreet', category: 'markets', impact: 'medium' },
+];
+
+// Unwrap a `<![CDATA[ ... ]]>` payload, or return the string unchanged.
+function unwrapCdata(s: string): string {
+  const m = /^\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*$/.exec(s);
+  return m ? m[1] : s;
+}
+
+// First `<name ...>...</name>` inner text within a block, or null. Whitespace and
+// any CDATA wrapper are stripped; tag attributes are tolerated.
+function firstTag(block: string, name: string): string | null {
+  const re = new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)</${name}>`, 'i');
+  const m = re.exec(block);
+  return m ? unwrapCdata(m[1]).trim() : null;
+}
+
+// Extract an item's link, handling both the RSS `<link>URL</link>` form and the
+// Atom `<link href="URL"/>` form (preferring rel="alternate"/no rel over others).
+function extractLink(block: string): string | null {
+  const rss = firstTag(block, 'link');
+  if (rss && /^https?:\/\//i.test(rss)) return rss;
+  const links = [...block.matchAll(/<link\b([^>]*)\/?>/gi)];
+  let fallback: string | null = null;
+  for (const m of links) {
+    const attrs = m[1];
+    const href = /\bhref=["']([^"']+)["']/i.exec(attrs)?.[1];
+    if (!href || !/^https?:\/\//i.test(href)) continue;
+    const rel = /\brel=["']([^"']+)["']/i.exec(attrs)?.[1];
+    if (!rel || rel.toLowerCase() === 'alternate') return href;
+    if (!fallback) fallback = href;
+  }
+  return fallback;
+}
+
+// Pure normalizer for an RSS 2.0 or Atom feed document. Pulls each item/entry's
+// title, link, summary, and publish time; drops entries without a title or a
+// usable http(s) link; returns newest first. Exported for unit testing.
+export function parseRssItems(xml: unknown): RssItem[] {
+  if (typeof xml !== 'string' || !xml) return [];
+  const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/\1>/gi) ?? [];
+  const items: RssItem[] = [];
+  for (const block of blocks) {
+    const rawTitle = firstTag(block, 'title');
+    const title = rawTitle ? htmlToText(rawTitle).slice(0, 240) : null;
+    const url = extractLink(block);
+    if (!title || !url) continue;
+    const rawSummary = firstTag(block, 'description') ?? firstTag(block, 'summary') ?? firstTag(block, 'content');
+    const summary = rawSummary ? htmlToText(rawSummary).slice(0, 4000) || null : null;
+    const rawDate =
+      firstTag(block, 'pubDate') ?? firstTag(block, 'published') ?? firstTag(block, 'updated') ?? firstTag(block, 'dc:date');
+    const parsed = rawDate ? Date.parse(rawDate) : NaN;
+    const publishedAt = Number.isFinite(parsed) ? parsed : Date.now();
+    items.push({ title, url, summary, publishedAt });
+  }
+  items.sort((a, b) => b.publishedAt - a.publishedAt);
+  return items;
+}
+
+function rssEnabled(): boolean {
+  // On by default (no key needed); only an explicit 'false' disables it.
+  return process.env.RSS_NEWS_ENABLED !== 'false';
+}
+
+const RSS_MAX_PER_FEED = 12; // cap each poll so one busy feed can't flood the list
+const RSS_MAX_AGE_MS = 7 * 24 * 3600 * 1000; // ignore stale items on first ingest
+
+// Fetch every configured RSS feed and insert any new headlines (deduped by url)
+// into the shared tradingNews feed, tagged with the feed's source/category and a
+// neutral bias (direction isn't inferred from a headline). Best-effort — every
+// feed and the whole poll are try/caught so a failure never affects the others.
+export async function ingestRssNews(): Promise<void> {
+  if (!rssEnabled()) return;
+  try {
+    const authorId = await resolveOwnerId();
+    if (!authorId) return;
+
+    // Dedupe by url against recent rows so re-polling doesn't duplicate items.
+    const recent = await db
+      .select({ url: tradingNews.url })
+      .from(tradingNews)
+      .orderBy(desc(tradingNews.publishedAt))
+      .limit(1000);
+    const seen = new Set(recent.map((r) => r.url).filter((u): u is string => !!u));
+
+    const now = new Date();
+    const cutoff = Date.now() - RSS_MAX_AGE_MS;
+    for (const feed of RSS_FEEDS) {
+      try {
+        const res = await fetch(feed.url, {
+          headers: {
+            'User-Agent': TRUTH_USER_AGENT,
+            Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+          },
+        });
+        if (!res.ok) {
+          console.error(`RSS feed ${feed.source} responded ${res.status}`);
+          continue;
+        }
+        const items = parseRssItems(await res.text()).slice(0, RSS_MAX_PER_FEED);
+        for (const item of items) {
+          if (!item.url || seen.has(item.url) || item.publishedAt < cutoff) continue;
+          seen.add(item.url);
+          await db.insert(tradingNews).values({
+            id: crypto.randomUUID(),
+            authorId,
+            title: item.title,
+            body: item.summary,
+            source: feed.source,
+            url: item.url,
+            category: feed.category,
+            impact: feed.impact,
+            bias: 'neutral',
+            publishedAt: new Date(item.publishedAt),
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      } catch (err) {
+        console.error(`RSS feed fetch failed (${feed.source}):`, err);
+      }
+    }
+  } catch (err) {
+    console.error('RSS news ingest failed:', err);
   }
 }
 
@@ -419,6 +583,7 @@ export function startFeeds(): void {
   if (!config.isProd) return;
 
   const runAll = () => {
+    void ingestRssNews().catch((err) => console.error('RSS news poll error:', err));
     void ingestFinnhubNews().catch((err) => console.error('Finnhub poll error:', err));
     void ingestForexFactory().catch((err) => console.error('Forex Factory poll error:', err));
     void ingestTruth().catch((err) => console.error('Truth poll error:', err));
