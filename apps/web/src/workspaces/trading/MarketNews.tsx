@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { api, ApiError } from '../../api/client';
+import { api, ApiError, type FeedBriefPayload } from '../../api/client';
 import { useNowTick } from '../../hooks/useNowTick';
 import { useAuth } from '../../auth/AuthContext';
 import { affectedInstruments, deriveWatchlist, newsFeeds, NEWS_FEEDS, DEFAULT_WATCHLIST } from './newsRelevance';
@@ -100,6 +100,19 @@ function toLocalInput(ms: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// Compact a calendar event for the AI overview payload (ET day + time label).
+function eventPayload(e: CalendarEvent) {
+  return {
+    when: `${fmtDayKey(e.eventTime)} ${fmtTime(e.eventTime)}`,
+    country: e.country ?? undefined,
+    title: e.title,
+    impact: e.impact,
+    forecast: e.forecast ?? undefined,
+    previous: e.previous ?? undefined,
+    actual: e.actual ?? undefined,
+  };
+}
+
 export function MarketNews() {
   // Keep the "x ago" headline times fresh between the 120s data polls.
   useNowTick();
@@ -117,9 +130,6 @@ export function MarketNews() {
   const [busy, setBusy] = useState(false);
   const [brief, setBrief] = useState<string | null>(null);
   const [briefBusy, setBriefBusy] = useState(false);
-  // A Claude read of the Forex Factory EUR/USD calendar, shown in that feed.
-  const [ffBrief, setFfBrief] = useState<string | null>(null);
-  const [ffBriefBusy, setFfBriefBusy] = useState(false);
   // Which subfeed is showing, and the story filters within it (impact / bias).
   const [feed, setFeed] = useState<string>('all');
   // Default to Med+ so low-impact / no-read-through noise (the AI marks off-topic
@@ -155,16 +165,26 @@ export function MarketNews() {
 
   async function getBrief() {
     setBriefBusy(true);
-    try { setBrief((await api.newsBrief()).brief); setErr(null); }
-    catch (e) { setErr(e instanceof ApiError ? (e.status === 503 ? 'Claude isn’t configured yet — an API key needs to be set on the server.' : e.message) : 'Brief failed'); }
-    finally { setBriefBusy(false); }
-  }
-
-  async function getFfBrief() {
-    setFfBriefBusy(true);
-    try { setFfBrief((await api.calendarBrief()).brief); setErr(null); }
+    try {
+      // Summarize exactly what the active feed is showing: headlines for a news
+      // feed (plus the EUR/USD calendar on that feed), the calendar on Calendar,
+      // and Trump's posts on Trump.
+      const label = tabs.find((t) => t.key === feed)?.label ?? 'Market News';
+      const payload: FeedBriefPayload = { label };
+      if (feed === 'trump') {
+        payload.posts = truth.slice(0, 20).map((p) => ({ content: p.content.slice(0, 2000) }));
+      } else if (feed === 'calendar') {
+        payload.events = upcoming.slice(0, 50).map(eventPayload);
+      } else {
+        payload.headlines = shown.slice(0, 50).map((h) => ({
+          title: h.title, category: h.category, impact: h.impact, bias: h.bias, source: h.source ?? undefined,
+        }));
+        if (feed === 'eurusd') payload.events = eurusdCal.upcoming.slice(0, 40).map(eventPayload);
+      }
+      setBrief((await api.feedBrief(payload)).brief); setErr(null);
+    }
     catch (e) { setErr(e instanceof ApiError ? (e.status === 503 ? 'Claude isn’t configured yet — an API key needs to be set on the server.' : e.message) : 'Overview failed'); }
-    finally { setFfBriefBusy(false); }
+    finally { setBriefBusy(false); }
   }
 
   // Upcoming events first; split out past events into their own (collapsed-feel) tail.
@@ -238,7 +258,7 @@ export function MarketNews() {
           </div>
         </div>
         <button onClick={() => void getBrief()} disabled={briefBusy} style={{ ...ghostBtn, opacity: briefBusy ? 0.6 : 1 }}>
-          {briefBusy ? 'Briefing…' : '✨ Brief me'}
+          {briefBusy ? 'Reading…' : '✨ AI overview'}
         </button>
       </div>
 
@@ -246,7 +266,7 @@ export function MarketNews() {
 
       {brief && (
         <div style={{ ...card, borderLeft: `3px solid ${GOLD}`, marginBottom: 16, position: 'relative' }}>
-          <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: GOLD, marginBottom: 6 }}>Claude desk brief · Sonnet</div>
+          <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: GOLD, marginBottom: 6 }}>AI overview · Claude</div>
           <div style={{ fontSize: 13, lineHeight: 1.6, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{brief}</div>
           <button onClick={() => setBrief(null)} style={{ position: 'absolute', top: 10, right: 12, background: 'none', border: 'none', color: FAINT, fontSize: 16, cursor: 'pointer' }}>×</button>
         </div>
@@ -323,19 +343,7 @@ export function MarketNews() {
         const pa = eurusdCal.past.filter((e) => passImpact(e.impact));
         return (
           <div style={{ marginBottom: 18 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-              <div style={{ ...feedSectionLabel, margin: 0 }}>Forex Factory · EUR &amp; USD economic calendar</div>
-              <button onClick={() => void getFfBrief()} disabled={ffBriefBusy} style={{ ...ghostBtn, padding: '6px 11px', fontSize: 11, opacity: ffBriefBusy ? 0.6 : 1 }}>
-                {ffBriefBusy ? 'Reading…' : '✨ AI overview'}
-              </button>
-            </div>
-            {ffBrief && (
-              <div style={{ ...card, borderLeft: `3px solid ${GOLD}`, marginBottom: 12, position: 'relative' }}>
-                <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: GOLD, marginBottom: 6 }}>Forex Factory overview · Claude</div>
-                <div style={{ fontSize: 13, lineHeight: 1.6, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{ffBrief}</div>
-                <button onClick={() => setFfBrief(null)} style={{ position: 'absolute', top: 10, right: 12, background: 'none', border: 'none', color: FAINT, fontSize: 16, cursor: 'pointer' }}>×</button>
-              </div>
-            )}
+            <div style={feedSectionLabel}>Forex Factory · EUR &amp; USD economic calendar</div>
             {up.length + pa.length === 0 ? (
               <div style={{ ...card, textAlign: 'center', padding: '22px 20px', color: MUTED, fontSize: 13 }}>
                 No EUR/USD events{filtersActive ? ' match this filter' : ' in range yet'} — the Forex Factory feed populates within a few minutes.

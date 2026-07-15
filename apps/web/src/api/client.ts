@@ -76,6 +76,15 @@ export interface CustomVocabCard {
   topic: string;
 }
 
+// The payload for the Market News "AI overview" — whatever the active feed is
+// currently showing, sent for Claude to summarize.
+export interface FeedBriefPayload {
+  label: string;
+  headlines?: { title: string; category?: string; impact?: string; bias?: string; source?: string }[];
+  events?: { when: string; country?: string; title: string; impact?: string; forecast?: string; previous?: string; actual?: string }[];
+  posts?: { content: string }[];
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -266,11 +275,8 @@ export const api = {
   removeCalendarEvent(id: string): Promise<MarketNewsData> {
     return request(`/api/trading/calendar/${id}`, { method: 'DELETE' });
   },
-  newsBrief(): Promise<{ brief: string }> {
-    return request('/api/trading/news/brief', { method: 'POST', body: JSON.stringify({}) });
-  },
-  calendarBrief(): Promise<{ brief: string }> {
-    return request('/api/trading/calendar/brief', { method: 'POST', body: JSON.stringify({}) });
+  feedBrief(payload: FeedBriefPayload): Promise<{ brief: string }> {
+    return request('/api/trading/feed/brief', { method: 'POST', body: JSON.stringify(payload) });
   },
   tradingChallenge(): Promise<ChallengeData> {
     return request('/api/trading/challenge');
