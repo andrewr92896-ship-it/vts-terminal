@@ -136,6 +136,7 @@ export function MarketNews() {
   // stories "low") is hidden out of the gate; "All" is one click away.
   const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medhigh'>('medhigh');
   const [biasFilter, setBiasFilter] = useState<'all' | NewsBias>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
 
   async function load() {
     try { setData(await api.marketNews()); setErr(null); } catch (e) { setErr(e instanceof ApiError ? e.message : 'Failed to load'); }
@@ -228,16 +229,25 @@ export function MarketNews() {
 
   const isNewsTab = feed !== 'trump' && feed !== 'calendar';
 
-  // Headlines for the active news tab, after the impact/bias filters.
-  const shown = isNewsTab
-    ? headlines.filter((h) => {
-        if (feed !== 'all' && !newsFeeds(h).includes(feed)) return false;
-        if (impactFilter === 'high' && h.impact !== 'high') return false;
-        if (impactFilter === 'medhigh' && h.impact === 'low') return false;
-        if (biasFilter !== 'all' && h.bias !== biasFilter) return false;
-        return true;
-      })
+  // Headlines that belong to the active feed (topic membership only) — the basis
+  // for the Source dropdown's options and for the filtered list below.
+  const feedHeadlines = isNewsTab
+    ? headlines.filter((h) => feed === 'all' || newsFeeds(h).includes(feed))
     : [];
+  const feedSources = [...new Set(feedHeadlines.map((h) => h.source).filter((s): s is string => !!s))].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  // A stale source selection (e.g. after switching feeds) falls back to "all".
+  const sourceActive = sourceFilter !== 'all' && feedSources.includes(sourceFilter);
+
+  // Headlines for the active news tab, after the impact/bias/source filters.
+  const shown = feedHeadlines.filter((h) => {
+    if (impactFilter === 'high' && h.impact !== 'high') return false;
+    if (impactFilter === 'medhigh' && h.impact === 'low') return false;
+    if (biasFilter !== 'all' && h.bias !== biasFilter) return false;
+    if (sourceActive && h.source !== sourceFilter) return false;
+    return true;
+  });
 
   const tabs: { key: string; label: string }[] = [
     { key: 'all', label: 'All' },
@@ -246,7 +256,7 @@ export function MarketNews() {
     { key: 'calendar', label: 'Calendar' },
   ];
 
-  const filtersActive = impactFilter !== 'all' || biasFilter !== 'all';
+  const filtersActive = impactFilter !== 'all' || biasFilter !== 'all' || sourceActive;
 
   return (
     <div style={{ maxWidth: 860, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
@@ -274,7 +284,7 @@ export function MarketNews() {
 
       {/* Feed + story filters, each its own dropdown */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
-        <Dropdown label="Feed" value={feed} onChange={setFeed}
+        <Dropdown label="Feed" value={feed} onChange={(v) => { setFeed(v); setSourceFilter('all'); }}
           options={tabs.map((t) => ({ v: t.key, l: `${t.label} (${counts[t.key] ?? 0})` }))} />
         {isNewsTab && (
           <>
@@ -282,8 +292,12 @@ export function MarketNews() {
               options={[{ v: 'all', l: 'All' }, { v: 'medhigh', l: 'Medium & up' }, { v: 'high', l: 'High only' }]} />
             <Dropdown label="Bias" value={biasFilter} onChange={(v) => setBiasFilter(v as typeof biasFilter)}
               options={[{ v: 'all', l: 'All' }, { v: 'bullish', l: 'Bullish' }, { v: 'bearish', l: 'Bearish' }, { v: 'neutral', l: 'Neutral' }]} />
+            {feedSources.length > 0 && (
+              <Dropdown label="Source" value={sourceActive ? sourceFilter : 'all'} onChange={setSourceFilter}
+                options={[{ v: 'all', l: 'All sources' }, ...feedSources.map((s) => ({ v: s, l: s }))]} />
+            )}
             {filtersActive && (
-              <button onClick={() => { setImpactFilter('all'); setBiasFilter('all'); }} style={{ ...smallBtn, borderColor: 'transparent', color: FAINT, marginBottom: 1 }}>Clear</button>
+              <button onClick={() => { setImpactFilter('all'); setBiasFilter('all'); setSourceFilter('all'); }} style={{ ...smallBtn, borderColor: 'transparent', color: FAINT, marginBottom: 1 }}>Clear</button>
             )}
           </>
         )}
