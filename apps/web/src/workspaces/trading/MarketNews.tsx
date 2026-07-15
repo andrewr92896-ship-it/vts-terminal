@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import { useResponsive } from '../../hooks/useMediaQuery';
 import { useNowTick } from '../../hooks/useNowTick';
 import { useAuth } from '../../auth/AuthContext';
-import { affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
+import { affectedInstruments, deriveWatchlist, newsFeeds, NEWS_FEEDS, DEFAULT_WATCHLIST } from './newsRelevance';
 import type {
   CalendarEvent,
   EventInput,
@@ -74,7 +73,6 @@ function toLocalInput(ms: number): string {
 }
 
 export function MarketNews() {
-  const { isPhone } = useResponsive();
   // Keep the "x ago" headline times fresh between the 120s data polls.
   useNowTick();
   const { user } = useAuth();
@@ -89,9 +87,12 @@ export function MarketNews() {
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [composing, setComposing] = useState<'news' | 'event' | null>(null);
   const [brief, setBrief] = useState<string | null>(null);
   const [briefBusy, setBriefBusy] = useState(false);
+  // Which subfeed is showing, and the story filters within it (impact / bias).
+  const [feed, setFeed] = useState<string>('all');
+  const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medhigh'>('all');
+  const [biasFilter, setBiasFilter] = useState<'all' | NewsBias>('all');
 
   async function load() {
     try { setData(await api.marketNews()); setErr(null); } catch (e) { setErr(e instanceof ApiError ? e.message : 'Failed to load'); }
@@ -141,22 +142,46 @@ export function MarketNews() {
 
   const headlines = data.headlines;
 
+  // Tab counts key on topic membership only (the impact/bias filters narrow the
+  // list inside a feed but leave the tab counts stable).
+  const counts: Record<string, number> = { all: headlines.length, trump: truth.length, calendar: data.calendar.length };
+  for (const f of NEWS_FEEDS) counts[f.key] = 0;
+  for (const h of headlines) for (const k of newsFeeds(h)) counts[k] = (counts[k] ?? 0) + 1;
+
+  const isNewsTab = feed !== 'trump' && feed !== 'calendar';
+
+  // Headlines for the active news tab, after the impact/bias filters.
+  const shown = isNewsTab
+    ? headlines.filter((h) => {
+        if (feed !== 'all' && !newsFeeds(h).includes(feed)) return false;
+        if (impactFilter === 'high' && h.impact !== 'high') return false;
+        if (impactFilter === 'medhigh' && h.impact === 'low') return false;
+        if (biasFilter !== 'all' && h.bias !== biasFilter) return false;
+        return true;
+      })
+    : [];
+
+  const tabs: { key: string; label: string }[] = [
+    { key: 'all', label: 'All' },
+    { key: 'trump', label: 'Trump' },
+    ...NEWS_FEEDS,
+    { key: 'calendar', label: 'Calendar' },
+  ];
+
+  const filtersActive = impactFilter !== 'all' || biasFilter !== 'all';
+
   return (
-    <div style={{ maxWidth: 1180, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
+    <div style={{ maxWidth: 860, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Market News</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Live headlines — general market news, the Federal Reserve, Bitcoin, and USD/EUR — tagged with impact, bias, and the instruments they move, plus an economic calendar from Forex Factory and Truth Social posts as they land (Eastern Time).
+            Live headlines across the desk's markets, each read by Claude for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time).
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => void getBrief()} disabled={briefBusy} style={{ ...ghostBtn, opacity: briefBusy ? 0.6 : 1 }}>
-            {briefBusy ? 'Briefing…' : '✨ Brief me'}
-          </button>
-          {canWrite && <button onClick={() => setComposing((v) => (v === 'news' ? null : 'news'))} style={goldBtn}>{composing === 'news' ? 'Close' : '+ Headline'}</button>}
-          {canWrite && <button onClick={() => setComposing((v) => (v === 'event' ? null : 'event'))} style={ghostBtn}>{composing === 'event' ? 'Close' : '+ Calendar event'}</button>}
-        </div>
+        <button onClick={() => void getBrief()} disabled={briefBusy} style={{ ...ghostBtn, opacity: briefBusy ? 0.6 : 1 }}>
+          {briefBusy ? 'Briefing…' : '✨ Brief me'}
+        </button>
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
@@ -169,22 +194,45 @@ export function MarketNews() {
         </div>
       )}
 
-      {composing === 'news' && canWrite && (
-        <NewsForm busy={busy} submitLabel="Post headline" onSubmit={async (input) => { if (await run(api.addNews(input))) setComposing(null); }} onCancel={() => setComposing(null)} />
-      )}
-      {composing === 'event' && canWrite && (
-        <EventForm busy={busy} submitLabel="Add event" onSubmit={async (input) => { if (await run(api.addCalendarEvent(input))) setComposing(null); }} onCancel={() => setComposing(null)} />
+      {/* Subfeed tabs */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, scrollbarWidth: 'none' }}>
+        {tabs.map((t) => {
+          const active = feed === t.key;
+          const n = counts[t.key] ?? 0;
+          return (
+            <button key={t.key} onClick={() => setFeed(t.key)} style={{ ...tabBtn, ...(active ? tabBtnActive : null), opacity: !active && n === 0 && t.key !== 'all' ? 0.5 : 1 }}>
+              {t.label}
+              <span style={{ marginLeft: 6, fontSize: 10, color: active ? '#0c2768' : FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{n}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Story filters (news feeds only) */}
+      {isNewsTab && (
+        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+          <FilterGroup label="Impact" value={impactFilter} onChange={(v) => setImpactFilter(v as typeof impactFilter)}
+            options={[{ v: 'all', l: 'All' }, { v: 'medhigh', l: 'Med+' }, { v: 'high', l: 'High' }]} />
+          <FilterGroup label="Bias" value={biasFilter} onChange={(v) => setBiasFilter(v as typeof biasFilter)}
+            options={[{ v: 'all', l: 'All' }, { v: 'bullish', l: 'Bullish', c: GREEN }, { v: 'bearish', l: 'Bearish', c: RED }, { v: 'neutral', l: 'Neutral' }]} />
+          {filtersActive && (
+            <button onClick={() => { setImpactFilter('all'); setBiasFilter('all'); }} style={{ ...smallBtn, borderColor: 'transparent', color: FAINT }}>Clear</button>
+          )}
+        </div>
       )}
 
-      {/* Truth Social feed (best-effort live). */}
-      {truth.length > 0 && (
-        <div style={{ marginBottom: 16 }}>
-          <SectionLabel text={`Truth Social · @realDonaldTrump`} />
+      {/* Trump / Truth Social feed */}
+      {feed === 'trump' && (
+        truth.length === 0 ? (
+          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
+            No Truth Social posts yet — the feed mirrors @realDonaldTrump's posts as they land.
+          </div>
+        ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {truth.slice(0, 8).map((p) => (
+            {truth.map((p) => (
               <div key={p.id} style={{ ...card, borderLeft: `3px solid ${GOLD}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>{p.author}</span>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>{p.author} <span style={{ color: FAINT, fontWeight: 400 }}>· @realDonaldTrump</span></span>
                   <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(p.postedAt)}</span>
                 </div>
                 <div style={{ fontSize: 13, lineHeight: 1.55, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{p.content}</div>
@@ -196,54 +244,71 @@ export function MarketNews() {
               </div>
             ))}
           </div>
-        </div>
+        )
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'minmax(0,1.5fr) minmax(0,1fr)', gap: 18, alignItems: 'start' }}>
-        {/* Headlines */}
-        <div>
-          <SectionLabel text={`Headlines · ${headlines.length}`} />
-          {headlines.length === 0 ? (
-            <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-              No headlines yet — the live news feeds populate within a few minutes.{canWrite ? ' You can also post one with “+ Headline”.' : ''}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-              {headlines.map((h) => (
-                <HeadlineCard key={h.id} h={h} canWrite={canWrite} busy={busy} watchlist={watchlist}
-                  onSave={(p) => run(api.updateNews(h.id, p))}
-                  onRemove={() => run(api.removeNews(h.id))} />
-              ))}
-            </div>
-          )}
-        </div>
+      {/* Economic calendar feed */}
+      {feed === 'calendar' && (
+        data.calendar.length === 0 ? (
+          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
+            No events yet — the Forex Factory feed populates within a few minutes.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <CalendarColumn events={upcoming} canWrite={canWrite} busy={busy} run={run} />
+            {past.length > 0 && (
+              <div style={{ opacity: 0.65 }}>
+                <div style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, margin: '4px 0 8px' }}>Past</div>
+                <CalendarColumn events={past} canWrite={canWrite} busy={busy} run={run} />
+              </div>
+            )}
+          </div>
+        )
+      )}
 
-        {/* Economic calendar */}
-        <div>
-          <SectionLabel text={`Economic calendar · ${data.calendar.length}`} />
-          {data.calendar.length === 0 ? (
-            <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-              No events yet — the Forex Factory feed populates within a few minutes.{canWrite ? ' You can also add one with “+ Calendar event”.' : ''}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <CalendarColumn events={upcoming} canWrite={canWrite} busy={busy} run={run} />
-              {past.length > 0 && (
-                <div style={{ opacity: 0.65 }}>
-                  <div style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, margin: '4px 0 8px' }}>Past</div>
-                  <CalendarColumn events={past} canWrite={canWrite} busy={busy} run={run} />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* News headline feeds */}
+      {isNewsTab && (
+        headlines.length === 0 ? (
+          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
+            No headlines yet — the live news feeds populate within a few minutes.
+          </div>
+        ) : shown.length === 0 ? (
+          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
+            No stories match this filter{feed !== 'all' ? ' in this feed' : ''}. {filtersActive ? 'Try clearing the filters.' : 'Check back shortly.'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+            {shown.map((h) => (
+              <HeadlineCard key={h.id} h={h} canWrite={canWrite} busy={busy} watchlist={watchlist}
+                onSave={(p) => run(api.updateNews(h.id, p))}
+                onRemove={() => run(api.removeNews(h.id))} />
+            ))}
+          </div>
+        )
+      )}
     </div>
   );
 }
 
-function SectionLabel({ text }: { text: string }) {
-  return <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, fontWeight: 600, margin: '0 0 10px' }}>{text}</div>;
+function FilterGroup({ label, value, options, onChange }: { label: string; value: string; options: { v: string; l: string; c?: string }[]; onChange: (v: string) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <span style={{ fontSize: 10, letterSpacing: '0.4px', textTransform: 'uppercase', color: FAINT, fontWeight: 600 }}>{label}</span>
+      <div style={{ display: 'flex', gap: 4 }}>
+        {options.map((o) => {
+          const active = value === o.v;
+          return (
+            <button key={o.v} onClick={() => onChange(o.v)} style={{
+              fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 6, cursor: 'pointer',
+              border: `1px solid ${active ? (o.c ?? BORDER2) : BORDER}`,
+              background: active ? (o.c ? `${o.c}22` : 'rgba(255,255,255,.08)') : 'transparent',
+              color: active ? (o.c ?? TEXT) : MUTED,
+            }}>{o.l}</button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: NewsItem; canWrite: boolean; busy: boolean; watchlist: string[]; onSave: (p: NewsInput) => void; onRemove: () => void }) {
@@ -255,12 +320,15 @@ function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: N
   }
   const im = IMPACT[h.impact];
   const bi = BIAS[h.bias];
+  const arrow = h.bias === 'bullish' ? '▲' : h.bias === 'bearish' ? '▼' : '●';
   return (
-    <div style={{ ...card, padding: '13px 15px', borderLeft: `3px solid ${im.color}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 7 }}>
-        <span style={chip}>{CATEGORY[h.category]}</span>
+    <div style={{ ...card, padding: '13px 15px', borderLeft: `3px solid ${bi.color}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 8 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: bi.color, background: `${bi.color}1e`, border: `1px solid ${bi.color}55`, borderRadius: 6, padding: '3px 9px' }}>
+          <span style={{ fontSize: 9 }}>{arrow}</span>{bi.label}
+        </span>
         <span style={{ ...chip, color: im.color, borderColor: im.color }}>{im.label} impact</span>
-        <span style={{ ...chip, color: bi.color, borderColor: bi.color }}>{bi.label}</span>
+        <span style={chip}>{CATEGORY[h.category]}</span>
         {affected.length > 0 && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 9.5, color: FAINT, letterSpacing: '0.3px' }}>affects</span>
@@ -272,7 +340,12 @@ function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: N
         <span style={{ marginLeft: 'auto', fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(h.publishedAt)}</span>
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>{h.title}</div>
-      {h.body && <div style={{ fontSize: 12.5, color: '#c4d2ee', lineHeight: 1.55, marginTop: 6, whiteSpace: 'pre-wrap' }}>{h.body}</div>}
+      {h.body && (
+        <div style={{ marginTop: 8, padding: '8px 11px', background: 'rgba(255,255,255,.03)', borderRadius: 8, border: `1px solid ${BORDER}` }}>
+          <div style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: bi.color, fontWeight: 700, marginBottom: 3 }}>How it could affect us</div>
+          <div style={{ fontSize: 12.5, color: '#d4def5', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{h.body}</div>
+        </div>
+      )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
         {h.source && <span style={{ fontSize: 11, color: MUTED }}>{h.source}</span>}
         {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: GOLD, textDecoration: 'none' }}>Source ↗</a>}
@@ -439,3 +512,5 @@ const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(18
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const smallBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' };
 const banner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
+const tabBtn: CSSProperties = { flex: 'none', display: 'inline-flex', alignItems: 'center', fontSize: 12, fontWeight: 600, color: MUTED, background: 'rgba(255,255,255,.04)', border: `1px solid ${BORDER}`, padding: '6px 12px', borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap' };
+const tabBtnActive: CSSProperties = { background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', border: '1px solid transparent' };

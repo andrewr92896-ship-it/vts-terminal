@@ -99,6 +99,49 @@ export const DEFAULT_WATCHLIST = [
   'GBP/USD', 'USD/JPY',
 ];
 
+// ---- News subfeeds (topic grouping for the Market News tabs) ----
+
+export interface NewsFeedDef {
+  key: string;
+  label: string;
+}
+
+// Ordered topic subfeeds for the headline list. Truth Social and the economic
+// calendar are separate data sources, handled as their own tabs in the UI.
+export const NEWS_FEEDS: NewsFeedDef[] = [
+  { key: 'fed', label: 'Federal Reserve' },
+  { key: 'eurusd', label: 'EUR/USD' },
+  { key: 'btc', label: 'Bitcoin' },
+  { key: 'gold', label: 'Gold' },
+  { key: 'indices', label: 'Indices' },
+  { key: 'markets', label: 'General Market' },
+];
+
+// Whole-word-ish topic matchers over the headline text. Deliberately specific:
+// "indices" keys on named indices, not the generic word "stocks", so broad
+// market stories land in the General Market bucket instead.
+const FEED_PATTERNS: { key: string; re: RegExp }[] = [
+  { key: 'fed', re: /\b(fed|feds|fomc|federal reserve|jerome powell|powell|rate cut|rate hike|rate decision|interest rate|interest rates|monetary policy|dot plot|beige book)\b/i },
+  { key: 'btc', re: /\b(bitcoin|btc|crypto|cryptocurrency|ethereum|ether|stablecoin|coinbase|blackrock ibit|spot etf)\b/i },
+  { key: 'eurusd', re: /\b(eur\/usd|eurusd|euro|euros|eurozone|ecb|european central bank|lagarde|germany|german|france|french)\b/i },
+  { key: 'gold', re: /\b(gold|xau|bullion|precious metal|precious metals)\b/i },
+  { key: 'indices', re: /\b(nasdaq|nas100|us100|s&p|s&p 500|sp500|spx|us500|dow jones|djia|us30|russell 2000|russell)\b/i },
+];
+
+// The subfeeds a headline belongs to. A headline can match several (a Fed story
+// that also names the euro shows under both). Source and category add signal
+// beyond the text. Anything matching no specific topic falls into "markets".
+export function newsFeeds(item: NewsLike): string[] {
+  const text = [item.title, item.body, item.source].filter(Boolean).join(' ');
+  const keys = new Set<string>();
+  for (const { key, re } of FEED_PATTERNS) if (re.test(text)) keys.add(key);
+  const src = (item.source ?? '').toLowerCase();
+  if (src.includes('federal reserve')) keys.add('fed');
+  if (item.category === 'crypto') keys.add('btc');
+  if (keys.size === 0) keys.add('markets');
+  return [...keys];
+}
+
 // Build the trader's watchlist from the instruments they actually trade, falling
 // back to the default set when there are none yet. Deduped, original casing kept.
 export function deriveWatchlist(traded: Iterable<string>): string[] {
