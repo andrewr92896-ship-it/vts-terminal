@@ -267,9 +267,17 @@ export function MarketNews() {
             Live headlines across the desk's markets, each read by Claude for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time).
           </div>
         </div>
-        <button onClick={() => void getBrief()} disabled={briefBusy} style={{ ...ghostBtn, opacity: briefBusy ? 0.6 : 1 }}>
-          {briefBusy ? 'Reading…' : '✨ AI overview'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button onClick={() => void getBrief()} disabled={briefBusy} style={{ ...ghostBtn, opacity: briefBusy ? 0.6 : 1 }}>
+            {briefBusy ? 'Reading…' : '✨ AI overview'}
+          </button>
+          <button onClick={() => { setFeed('all'); setSourceFilter('all'); }} style={feed !== 'calendar' ? goldBtn : ghostBtn}>
+            Live market news
+          </button>
+          <button onClick={() => setFeed('calendar')} style={feed === 'calendar' ? goldBtn : ghostBtn}>
+            Calendar
+          </button>
+        </div>
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
@@ -515,6 +523,12 @@ function EventRow({ e, canWrite, busy, onSave, onRemove }: { e: CalendarEvent; c
             {e.actual && <span>Act <b style={{ color: TEXT }}>{e.actual}</b></span>}
             {e.forecast && <span>Fcst <b style={{ color: '#cdd9f3' }}>{e.forecast}</b></span>}
             {e.previous && <span>Prev <b style={{ color: '#cdd9f3' }}>{e.previous}</b></span>}
+          </div>
+        )}
+        {e.explainer && (
+          <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.5, marginTop: 5, display: 'flex', gap: 5 }}>
+            <span style={{ color: GOLD, flex: 'none' }}>ⓘ</span>
+            <span>{e.explainer}</span>
           </div>
         )}
       </div>

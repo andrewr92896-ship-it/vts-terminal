@@ -316,6 +316,13 @@
       "when": 1782337636908,
       "tag": "0044_purge_sample_news",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "6",
+      "when": 1782337736908,
+      "tag": "0045_calendar_explainer",
+      "breakpoints": true
     }
   ]
 }
