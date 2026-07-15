@@ -54,7 +54,6 @@ import {
 } from '../trading/manual.js';
 import {
   aiConfigured,
-  askClaude,
   parsePositionScreenshot,
   parseAccountScreenshot,
   parseTradeHistoryScreenshot,
@@ -359,69 +358,55 @@ export async function tradingRoutes(app: FastifyInstance) {
     removeEvent((request.params as { id: string }).id),
   );
 
-  // A quick Claude (Sonnet) desk brief over the current headlines. Read-only
-  // generation, no data is stored. Returns 503 if no API key is configured.
-  app.post('/api/trading/news/brief', read, async (request, reply) => {
+  // A Claude (Sonnet) overview of the currently-viewed Market News feed. The
+  // client sends exactly what it is showing — headlines (with impact/bias tags),
+  // upcoming economic-calendar releases, and/or Trump posts — plus the feed
+  // label, and we summarize it for the desk. This powers the "AI overview"
+  // button on every feed. Read-only, nothing stored; per-user AI limit enforced;
+  // 503 when no API key.
+  app.post('/api/trading/feed/brief', read, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }
-    const { headlines } = await getMarketNews();
-    if (headlines.length === 0) {
-      return { brief: 'No headlines posted yet, add a few and I’ll summarize the desk view.' };
-    }
-    const lines = headlines
-      .slice(0, 40)
-      .map((h) => `- [${h.category}/${h.impact}/${h.bias}] ${h.title}${h.source ? ` (${h.source})` : ''}`)
-      .join('\n');
-    const system =
-      'You are a trading-desk analyst. Given a list of market headlines with category, impact, and bias tags, write a brief, practical desk note: the overall risk tone, the few things that matter most today, and what to watch. Be concise (under 180 words), plain text, no markdown headers.';
-    try {
-      await enforceAiLimit(request.currentUser!.id, 'news_brief');
-      const brief = await askClaude(`Current headlines:\n${lines}`, system);
-      return { brief };
-    } catch (err) {
-      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
-      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Brief failed' });
-    }
-  });
+    const parsed = feedBriefSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the feed contents and try again' });
+    const { label, headlines, events, posts } = parsed.data;
 
-  // A Claude (Sonnet) overview of the Forex Factory economic calendar for the
-  // EUR/USD desk: the upcoming EUR & USD releases, which ones matter most, and
-  // what a beat/miss would imply for the pair. Read-only, nothing stored.
-  app.post('/api/trading/calendar/brief', read, async (request, reply) => {
-    if (!aiConfigured()) {
-      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const parts: string[] = [];
+    if (headlines?.length) {
+      parts.push(
+        'Headlines:\n' +
+          headlines
+            .map(
+              (h) =>
+                `- [${h.impact ?? '?'}/${h.bias ?? '?'}${h.category ? `/${h.category}` : ''}] ${h.title}${h.source ? ` (${h.source})` : ''}`,
+            )
+            .join('\n'),
+      );
     }
-    const { calendar } = await getMarketNews();
-    const now = Date.now();
-    const ccy = new Set(['EUR', 'USD']);
-    const upcoming = calendar
-      .filter((e) => e.country && ccy.has(e.country.toUpperCase()) && e.eventTime >= now - 6 * 3600_000)
-      .sort((a, b) => a.eventTime - b.eventTime)
-      .slice(0, 40);
-    if (upcoming.length === 0) {
-      return { brief: 'No upcoming EUR or USD events on the Forex Factory calendar right now — it refreshes through the week.' };
+    if (events?.length) {
+      parts.push(
+        'Upcoming economic releases:\n' +
+          events
+            .map((e) => {
+              const v = [e.actual && `actual ${e.actual}`, e.forecast && `fcst ${e.forecast}`, e.previous && `prev ${e.previous}`]
+                .filter(Boolean)
+                .join(', ');
+              return `- ${e.when} ET · ${e.country ?? ''} · [${e.impact ?? '?'} impact] ${e.title}${v ? ` (${v})` : ''}`;
+            })
+            .join('\n'),
+      );
     }
-    const fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
-    const lines = upcoming
-      .map((e) => {
-        const vals = [e.actual && `actual ${e.actual}`, e.forecast && `fcst ${e.forecast}`, e.previous && `prev ${e.previous}`]
-          .filter(Boolean)
-          .join(', ');
-        return `- ${fmt.format(e.eventTime)} ET · ${e.country} · [${e.impact} impact] ${e.title}${vals ? ` (${vals})` : ''}`;
-      })
-      .join('\n');
+    if (posts?.length) {
+      parts.push('Trump Truth Social posts:\n' + posts.map((p) => `- ${p.content}`).join('\n'));
+    }
+    const data = parts.join('\n\n');
+    if (!data) return { brief: 'Nothing in this feed yet to summarize — it fills in as the feeds update.' };
+
     const system =
-      'You are a EUR/USD trading-desk analyst. Given the upcoming EUR and USD economic-calendar releases (from Forex Factory), write a brief overview for a EUR/USD trader: the 2-3 releases that matter most and when they hit, what a beat vs a miss on each would imply for the US dollar, the euro, and EUR/USD direction, and the net setup or risk to watch into them. Concise (under 170 words), plain text, no markdown headers. Times shown are Eastern.';
+      `You are a trading-desk analyst for a desk that trades EUR/USD, Bitcoin, gold (futures), Nasdaq (futures), and the S&P 500 (ETF + futures); the trader is also an investment adviser. You are given the current "${label}" feed from the desk's Market News — it may hold headlines (with impact/bias tags), upcoming economic-calendar releases, and/or Trump Truth Social posts. Write a brief overview for this trader: the few things that matter most here, the concrete read-through to the desk's instruments (direction and risk), and what to watch next. Concise (under 170 words), plain text, no markdown headers. Times are Eastern.`;
     try {
-      const brief = await generateBrief(request.currentUser!.id, 'calendar_brief', system, `Upcoming EUR/USD calendar:\n${lines}`);
+      const brief = await generateBrief(request.currentUser!.id, 'feed_brief', system, data);
       return { brief };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
@@ -1033,6 +1018,38 @@ const addSessionSchema = z.object({ name: z.string().trim().min(1).max(80), ...s
 const editSessionSchema = z
   .object({ name: z.string().trim().min(1).max(80).optional(), ...sessionFields })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+// The "AI overview" payload: the client sends what the active feed is showing.
+const feedBriefSchema = z.object({
+  label: z.string().trim().min(1).max(60),
+  headlines: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(240),
+        category: z.string().max(20).optional(),
+        impact: z.string().max(10).optional(),
+        bias: z.string().max(10).optional(),
+        source: z.string().max(80).optional(),
+      }),
+    )
+    .max(60)
+    .optional(),
+  events: z
+    .array(
+      z.object({
+        when: z.string().max(60),
+        country: z.string().max(8).optional(),
+        title: z.string().trim().min(1).max(160),
+        impact: z.string().max(10).optional(),
+        forecast: z.string().max(40).optional(),
+        previous: z.string().max(40).optional(),
+        actual: z.string().max(40).optional(),
+      }),
+    )
+    .max(60)
+    .optional(),
+  posts: z.array(z.object({ content: z.string().max(2000) })).max(20).optional(),
+});
 
 const newsFields = {
   body: z.string().trim().max(4000).nullish(),
