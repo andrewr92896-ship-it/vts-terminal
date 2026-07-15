@@ -1,37 +1,50 @@
-# VTS Portal — Handoff for a New Claude Code Chat
+# VTS Portal — Handoff for a New Claude Chat
 
-Paste this whole file into a new chat to continue work. It is everything a fresh
-Claude needs to be productive immediately. (A companion file, `PROJECT_LOG.md`,
-records *everything already built* — read that for history; read this for how to
-work and what's next.)
+Paste this whole file into a new chat to continue work on the VTS Portal. It is
+everything a fresh Claude needs to be productive immediately: what the app is,
+how it's built, the conventions you must follow, the workflow the owner expects,
+and where each workspace stands today.
 
-**This chat's focus: build out the Trading tab until it is done.** See §6.
+> **How to use this handoff:** tell the new chat *what you want built or changed*
+> (e.g. "add X to the Trading Trade Desk", "build out the LLC Documents tab").
+> This file gives it the context; your message gives it the task.
+
+_Last refreshed: July 15, 2026 · App version **Beta V 2.7** · Migrations through
+**0042**._
 
 ---
 
 ## 1. What this project is
 
-**VTS Portal** — a private, dark "pro‑terminal" web app for one owner
-(Andrew) and a small number of admin‑created users. It bundles several
-workspaces behind one login:
+**VTS Portal** — a private, dark "pro-terminal" web app for one owner (Andrew)
+plus a small number of admin-created users. One login fronts several workspaces,
+each with its own theme and sub-tabs:
 
-- **Trading** — broker status dashboard (read‑only "Viewer" role allowed).
-  **Currently all placeholder screens — this is the next big build (see §6).**
-- **Kia Sales** — a car‑salesperson performance tracker (deals, commission, unit
-  goals, bonus tiers, Google‑review gating, monthly history, editable pay plan).
-- **Studies** — a gamified **Series 65 Study Game** (400‑question bank, exam‑
-  weighted categories, per‑category levels/prestige, last‑100 scoring vs a 72%
-  pass line, per‑question explanations) with a vocabulary **Flashcards** view
-  folded in, plus a **Study Hub** and **Progress** screen.
-- **To Do** — per‑user task lists that start empty.
-- **Vitalis Retirement & Wealth Management** — the owner's future RIA portal.
-  The **Clients** management list is built (per‑user, privacy‑masked, add/edit/
-  remove with undo). Other Wealth tabs (Overview, Portfolios, Planning,
-  Compliance) are still placeholders.
+- **Trading** — a real trading desk: Live Wall, Alerts, Trade Desk, Strategy
+  Sessions, Funded (prop-challenge tracking), Market News, and a Trading To-Do.
+  Wired to broker keys (OANDA, Kraken, TradeStation, FTP Match-Trader),
+  TradingView webhook alerts, live prices, and push notifications.
+- **Kia Sales** — a car-salesperson performance tracker (deals, commission, unit
+  goals, bonus tiers, Google-review gating, monthly history, editable pay plan),
+  plus Kia News and Product Knowledge tabs.
+- **Studies** — a gamified **Series 65 Study Game** (400-question bank, exam-
+  weighted categories, a level ladder with per-level page recolor, prestige,
+  lifetime-accuracy scoring vs a 72% pass line, mock tests, starred questions,
+  per-question "More Details"/multi-turn "Ask Claude" tutor), vocab flashcards,
+  a Subjects hub, and a Progress screen.
+- **To Do** — per-user task lists that start empty.
+- **Wealth** (Vitalis Retirement & Wealth Management) — the owner's RIA portal:
+  Overview, Clients (per-user, privacy-masked, add/edit/remove with undo),
+  Portfolios, Planning, Compliance.
+- **Finance** — personal finance: Overview, Expenses, Net Worth.
+- **Vitalis Trading Systems LLC** — company admin workspace: Overview, Documents,
+  Members, Contractors, Compliance & Filings, Accounts & Banking, Legal &
+  Contracts. (Newest workspace; several tabs are still thin — good build targets.)
 
-Cross‑cutting features: multi‑user isolated data, admin‑managed accounts &
+Cross-cutting features: multi-user isolated data, admin-managed accounts &
 granular roles (incl. **permanent account deletion**), a privacy/demo mode that
-masks names/contacts/dollar amounts, per‑page "?" tutorials, and an undo bar on
+masks names/contacts/dollar amounts, per-page "?" tutorials, an in-app patch-
+notes/help hub, web-push notifications (VAPID + Pushover), and an undo bar on
 list removals.
 
 ---
@@ -51,21 +64,27 @@ Monorepo (npm workspaces):
     (`src/privacy/privacy.tsx`) and `DealershipProvider/useDealership`
     (`src/workspaces/kia/dealership.tsx`). Both persist to `localStorage`.
   - `src/hooks/useUndo.ts` + `src/components/UndoBar.tsx` power undo.
-  - Heavy screens are code‑split with `React.lazy` in `components/Portal.tsx`
-    (the Studies screens are lazy so the 400‑question data stays out of the main
-    bundle). Follow that pattern for any large Trading data.
+  - Heavy screens are code-split with `React.lazy` in `components/Portal.tsx`,
+    wrapped in an `ErrorBoundary` that recovers from stale-chunk fetch failures
+    after a redeploy. Follow that pattern for any large data-heavy screen.
 - **`apps/api`** — Fastify 5 + Drizzle ORM + `@libsql/client` (SQLite).
-  - argon2 password hashing, server‑side session cookies (only the SHA‑256 of
+  - argon2 password hashing, server-side session cookies (only the SHA-256 of
     the token is stored), Zod validation on every route.
   - Money is stored as **integers**: percentages in **basis points** (1350 =
     13.5%), dollars as **whole dollars**.
+  - Secrets (broker keys, Anthropic key, VAPID/Pushover, TradingView webhook
+    secret) live only in `apps/api/.env` — never sent to the browser. See
+    `.env.example` for every variable.
+  - Service dirs: `admin/ ai/ auth/ chat/ demo/ finance/ kia/ notifications/
+    studies/ todo/ trading/ wealth/`. Routes: `apps/api/src/routes/*.ts`.
 
 ### Commands (run from repo root)
 ```bash
 npm install                                 # first thing in a fresh container
-npm run typecheck --workspace @vts/api      # tsc --noEmit
-npm run build --workspace @vts/web          # vite build (includes tsc)
+npm run typecheck                           # tsc --noEmit for api + web
+npm run build                               # api build + web vite build (incl. tsc)
 npm run db:migrate --workspace @vts/api     # apply migrations to the DB
+npm run dev                                 # api + web together (localhost:5173)
 ```
 The API also runs migrations automatically on boot.
 
@@ -73,39 +92,46 @@ The API also runs migrations automatically on boot.
 
 ## 3. Conventions you MUST follow
 
-- **Inline styles only** in web code; match the surrounding dark theme. The
-  Trading theme is navy/gold (accent `#EBCB74`); see `THEMES.trading` in
-  `src/theme/themes.ts`. No CSS‑class refactors.
-- **Responsive via `useResponsive()`**, never CSS media queries.
+- **Inline styles only** in web code; match the surrounding dark theme for that
+  workspace. Each workspace has its own palette in `src/theme/themes.ts`
+  (`THEMES`, `BRAND`, `TABS`, `DEFAULT_SCREEN`). Trading is navy/gold (accent
+  `#EBCB74`). **No CSS-class refactors.**
+- **Responsive via `useResponsive()`**, never CSS media queries. On mobile,
+  watch for iOS input zoom (use ≥16px font on inputs/textareas) and off-screen
+  dropdown clipping — both have bitten this repo before.
 - **Drizzle migrations come in pairs:** add the `.sql` file in
-  `apps/api/migrations/` **and** add a matching entry to
-  `apps/api/migrations/meta/_journal.json` (increment `idx`, keep `tag` ==
-  filename without extension). **The latest is `idx: 8`, `0008_wealth_clients`,**
-  so the next Trading migration is `0009_*` / `idx: 9`. CREATE TABLE format:
-  copy an existing migration (e.g. `0008_wealth_clients.sql`).
+  `apps/api/migrations/` **and** a matching entry in
+  `apps/api/migrations/meta/_journal.json` (increment `idx`, `tag` == filename
+  without extension). **The latest is `idx: 42`, `0042_trading_be_overrides`, so
+  the next migration is `0043_*` / `idx: 43`.** Copy an existing migration's
+  CREATE TABLE format.
 - **Money math:** percent→bp is `Math.round(pct * 100)`; store dollars rounded to
-  whole numbers.
-- **Per‑user everything.** Every per‑user row is keyed by `userId`; new users
-  start empty (copy the `seedUser`/`ensure*Seed` pattern in
-  `apps/api/src/kia/service.ts`, or the seed‑free pattern in
-  `apps/api/src/wealth/service.ts`). If Trading data is shared (e.g. one set of
-  broker accounts the owner watches) rather than per‑user, decide that explicitly
-  and document it.
-- **RBAC for Trading:** routes go behind `requireWorkspace('trading')`. The
-  **`trading_viewer`** role is **read‑only** (see `isWorkspaceReadOnly` in
-  `apps/api/src/auth/rbac.ts`) — viewers must not be able to mutate. The
-  **`viewBrokerage`** flag on the user gates whether balances/account detail are
-  shown. Privacy/demo mode masks dollar amounts; honor it.
-- **Verify before merging:** API typecheck + web build, and for DB changes run
-  the migration chain on a throwaway SQLite file and exercise the service
-  functions with a quick `tsx` script (delete the script afterward — don't commit
-  scratch files). Set `DATABASE_URL=file:/tmp/.../scratch.db` and
+  whole numbers. Privacy/demo mode masks dollar amounts — honor it everywhere.
+- **Per-user everything.** Every per-user row is keyed by `userId`; new users
+  start empty. Copy the seed pattern from `apps/api/src/kia/service.ts` or the
+  seed-free pattern in `apps/api/src/wealth/service.ts`. If data is shared
+  (e.g. the owner's single trading desk) rather than per-user, decide that
+  explicitly and document it.
+- **RBAC.** Role keys live in `apps/api/src/auth/rbac.ts` (`ROLE_KEYS`):
+  `admin, trading, trading_viewer, sales, studies, todo, wealth, finance`.
+  `admin` grants everything. Routes go behind `requireWorkspace('<ws>')`. The
+  **`trading_viewer`** role is **read-only** (`isWorkspaceReadOnly`) — viewers
+  must never mutate. The **`viewBrokerage`** flag gates whether balances/account
+  detail are shown.
+- **Verify before merging:** `npm run typecheck` + `npm run build`, and for DB
+  changes run the migration chain on a throwaway SQLite file and exercise the
+  service functions with a quick `tsx` script (delete the script afterward —
+  don't commit scratch files). Set `DATABASE_URL=file:/tmp/.../scratch.db` and
   `SESSION_SECRET=test-secret-1234567890` when running scripts.
 - **Revert `package-lock.json` churn** before committing (`npm install` rewrites
   it; `git checkout -- package-lock.json`).
-- Common palette: Trading `GOLD #EBCB74`, `GOLD2 #C9A24B`; status `GREEN #35c47b`,
-  `AMBER #e0a23a`, `RED #ef5468`; text `#eef3ff`, muted `#9fb0d6`/`#8ea3cc`,
-  navy panels `rgba(11,26,58,.5)`. (Other workspaces have their own palettes.)
+- **Common Trading palette:** `GOLD #EBCB74`, `GOLD2 #C9A24B`; status
+  `GREEN #35c47b`, `AMBER #e0a23a`, `RED #ef5468`; text `#eef3ff`, muted
+  `#9fb0d6`/`#8ea3cc`, navy panels `rgba(11,26,58,.5)`. Other workspaces have
+  their own palettes in `themes.ts`.
+- **Version pill / patch notes:** on any user-visible change, bump `APP_VERSION`
+  and prepend a `PATCH_NOTES` entry in `apps/web/src/meta/version.ts` (top-bar
+  pill and the help hub both read from it).
 
 ---
 
@@ -119,13 +145,17 @@ In practice:
 
 1. **Batch ideas, keep moving.** Don't stop and ask on every idea; pick the
    fastest path and build. Only stop for genuinely ambiguous or destructive
-   decisions.
-2. **Per‑feature branch → PR → squash‑merge to `main`.** Established, owner‑
-   approved flow (PRs #13–#17 all squash‑merged to `main`). Sync local `main`
-   after each merge. Use the branch the harness assigns you; never push to a
-   different branch without explicit permission.
-3. **TLDR when asking the owner.** He asked that every question be short — use the
-   `AskUserQuestion` tool with brief options.
+   decisions. Keep questions short (TLDR) via the `AskUserQuestion` tool.
+2. **Auto-deploy when done.** Per `CLAUDE.md`: this is a private single-owner
+   portal with no review step. When a feature is complete **and verified**
+   (typecheck + build pass), open a PR to `main` and **squash-merge it without
+   waiting for approval** — merging to `main` is the deploy (Railway
+   auto-redeploys `main`). **Never ask the owner to review/approve a PR.** If a
+   build/verify step **fails, do not merge** — report the failure (Railway keeps
+   the previous version live).
+3. **Per-feature branch → PR → squash-merge to `main`.** Sync local `main` after
+   each merge. Use the branch the harness assigns you; never push elsewhere
+   without permission.
 4. **Report concisely** what shipped + how it was verified.
 
 ### Git / environment specifics
@@ -133,133 +163,81 @@ In practice:
   push or it's lost.** Run `npm install` first.
 - **GitHub is reached only through `mcp__github__*` MCP tools** (load them with
   `ToolSearch`; the `gh` CLI is **not** available). Repo scope:
-  `andrewr92896-ship-it/vts-portal`. You can open and **squash‑merge** PRs with
-  these tools (done for #17).
+  `andrewr92896-ship-it/vts-portal`. You can open and squash-merge PRs with
+  these tools.
 - **Commit message footer** (every commit):
   ```
   Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
   Claude-Session: https://claude.ai/code/<your session url>
   ```
-- **PR body footer:** the `🤖 Generated with Claude Code` line + your session URL.
+- **PR body footer:** the `🤖 Generated with Claude Code` line + session URL.
 - **Never** put the model identifier in commits/PRs/code — chat replies only.
-- **Headless Chromium is blocked** by the network policy → you cannot screenshot
-  or browser‑repro. Verify by reasoning + typecheck/build + throwaway‑DB scripts.
+- **Headless Chromium / browser repro is blocked** by the network policy → you
+  cannot screenshot. Verify by reasoning + typecheck/build + throwaway-DB `tsx`
+  scripts.
 - The owner views a **deployed site that runs `main`**, so a feature isn't
   visible to him until its PR is merged to `main` and the site redeploys.
 
 ---
 
-## 5. Current state (as of this handoff)
+## 5. Current state per workspace (as of this handoff)
 
-- **Everything is merged to `main`** (latest: PR **#17**, squash commit, "Wealth
-  Clients, account deletion, Series 65 Study Game, Alpha V 1.0"). No open PRs.
-- Version pill in the top bar reads **Alpha V 1.0** (`components/TopBar.tsx`).
-- Migrations applied: **`0000`–`0008`** (next is `0009`).
-- Recently shipped (all live on `main`): Vitalis Wealth **Clients** list; admin
-  **permanent account deletion** (with cascade cleanup + guards); the gamified
-  **Series 65 Study Game** + vocab flashcards + Study Hub + Progress; Studies
-  data **code‑split**; two mis‑keyed Series 65 questions corrected (Q55, Q176).
+Everything below is **built and wired** into `Portal.renderScreen` unless noted.
+Sub-tabs are defined in `TABS` in `src/theme/themes.ts`.
 
----
+- **Trading** (`workspaces/trading/`) — most built-out area. Screens: `LiveWall`,
+  `Alerts`, `TradingDesk` (+ `DeskSettingsModal`, break-even buffer modes/
+  overrides), `StrategySessions`, `Funded`/`FundedScreen`, `TradeLog` +
+  `History`, `MarketNews`, `TradingTodo`, `LiveBrokers`/`BrokerConnections`.
+  Helpers: `pips.ts`, `outcome.ts`, `newsRelevance.ts`, `useLivePrices.ts`.
+  Backed by `apps/api/src/trading/` + routes `trading.ts`, `brokers.ts`,
+  `tvWebhook.ts`. Reads real broker/TradingView/Finnhub data when keys are set.
+- **Kia Sales** (`workspaces/kia/`) — `KiaDashboard` (deals, KPIs, pace, bonus
+  tiers, editable pay plan, split commission), Kia News, Product Knowledge, Kia
+  To-Do. Backed by `apps/api/src/kia/`.
+- **Studies** (`workspaces/studies/`) — Series 65 Study Game, mock tests
+  (`st_test`), Flashcards, Progress, Subjects hub. `React.lazy` code-split.
+  Backed by `apps/api/src/studies/` + AI tutor via `apps/api/src/ai/`.
+- **To Do** (`td_all`) — per-user tasks. Backed by `apps/api/src/todo/`.
+- **Wealth** (`workspaces/wealth/`) — `WealthOverview`, `WealthClients`,
+  `WealthPortfolios`, `WealthPlanning`, `WealthCompliance`. Backed by
+  `apps/api/src/wealth/`.
+- **Finance** (`workspaces/finance/`) — `FinanceOverview`, `FinanceExpenses`,
+  `FinanceNetWorth`. Backed by `apps/api/src/finance/`.
+- **LLC** (`workspaces/llc/LlcWorkspace.tsx`) — newest workspace; 7 tabs defined
+  (Overview, Documents, Members, Contractors, Compliance & Filings, Accounts &
+  Banking, Legal & Contracts). Several tabs are still thin — **good candidates
+  for the next build.**
 
-## 6. Next task — build out the **Trading** tab (until done)
-
-**Goal:** turn the Trading workspace from placeholders into a working dashboard.
-Build it stage by stage, branch → PR → squash‑merge per stage; keep going until
-the owner says it's done.
-
-### What exists today (all placeholder)
-- **Tabs** (`TABS.trading` in `src/theme/themes.ts`): `live` Live Wall, `log`
-  Trade Log, `sessions` Strategy Sessions, `metrics` Account Metrics, `news`
-  Market News, `history` History, `td_trading` To Do. Default screen is `live`.
-- **Screens** are branded stubs rendered by `apps/web/src/workspaces/Screens.tsx`
-  (the `SCREENS` map has each one's intended blurb). None are wired in
-  `Portal.renderScreen` yet — add `case`s there as you build real screens (see
-  how Kia/Wealth/Studies are wired).
-- **Backend:** `apps/api/src/routes/brokers.ts` exposes
-  `GET /api/brokers/status`, guarded by `requireWorkspace('trading')`. It returns
-  four hard‑coded brokers — **FTP** (Funded Trading Plus, Match‑Trader, funded
-  prop), **OANDA** (forex), **Kraken Pro** (crypto), **TradeStation** (stocks) —
-  all with `status: 'unconfigured'`, `balance: null`, `lastSyncAt: null`, and a
-  `stage: 1` note. The **TopBar** renders these as colored status dots (Trading
-  only). There are **no trading DB tables or services yet.**
-- **RBAC:** `trading` (full) and `trading_viewer` (read‑only) roles;
-  `viewBrokerage` flag gates balances. `api/types.ts` already has a
-  `BrokerStatus` type and `api.brokerStatus()` client method.
-
-### Intended functionality (from the prototype blurbs in `Screens.tsx`)
-- **Live Wall** — live trade cards: planned entry vs actual fill, slippage, TP,
-  SL, strategy, timeframe, lots — "streamed from the brokers."
-- **Trade Log** — full fill history with **Deck** and **Tape** layouts; computed
-  slippage vs the alert price per trade.
-- **Strategy Sessions** — active/opening/closing strategy windows with bull/bear
-  playbooks per instrument.
-- **Account Metrics** — an **FTP challenge** dashboard: $200K account, 10% target,
-  4% daily and 6% trailing drawdown, live equity.
-- **Market News** — market/geopolitical headlines with impact & bias tags, plus
-  an economic calendar in **Eastern Time**.
-- **History** — historical performance, closed trades, per‑strategy results.
-- **To Do** — Trading tasks, also visible in the full To Do workspace (mirror
-  `KiaTodo`).
-
-### Suggested approach (confirm scope with the owner first — TLDR)
-1. **Decide data source.** Real broker APIs need keys in `apps/api/.env` and
-   outbound network (likely blocked here) — so the practical first cut is
-   **owner‑editable / seeded mock data** persisted in SQLite, structured so a
-   live feed can replace it later. **Ask the owner (TLDR):** real broker
-   integration now vs. mock/manual data first, and which screen to build first.
-2. **Model the data** (new `0009_*` migration + journal entry): e.g.
-   `trading_accounts` (per broker: equity, balance, the FTP challenge params),
-   `trades` (instrument, side, planned vs fill price, slippage, TP/SL, strategy,
-   timeframe, lots, status open/closed, opened/closed timestamps),
-   `strategies`/`sessions`, and optionally `news`. Decide **per‑user vs shared**
-   (the owner is the main trader — shared/owner‑scoped may fit better than
-   per‑user; document the choice). Mind Eastern‑Time bucketing like Kia.
-3. **API services + routes** under `requireWorkspace('trading')`; **enforce
-   read‑only for `trading_viewer`** (no writes) and gate balances behind
-   `viewBrokerage`. Copy the service/route shape from
-   `apps/api/src/kia/service.ts` + `routes/kia.ts` or `wealth/`.
-4. **Web screens** wired into `Portal.renderScreen`, inline‑styled in the navy/
-   gold Trading theme, responsive, privacy‑masked dollars, undo on removals.
-   Reference UIs: `workspaces/kia/KiaDashboard.tsx`,
-   `workspaces/wealth/WealthClients.tsx`, `workspaces/studies/StudyGame.tsx`.
-   Replace each placeholder one screen at a time.
-5. **Tutorials:** add `live`/`log`/`sessions`/`metrics`/`news`/`history` entries
-   to `apps/web/src/help/tutorials.ts` as each screen ships.
-6. **Verify** (typecheck + build + throwaway‑DB `tsx` script for any DB work),
-   then branch → PR → squash‑merge. Repeat per stage until done.
-
-### Backlog the owner has floated (after / alongside Trading, confirm priority)
-- Kia "Ask Claude" command bar (currently a disabled placeholder on the Kia
-  dashboard).
-- Remaining Wealth tabs (Overview, Portfolios, Planning, Compliance).
-- Per‑page "?" tutorial polish.
+**No open PRs assumed** — check `list_pull_requests` before starting. Latest
+merged work (recent commits): Live Wall header cleanup (#122), Study Game
+question persistence (#121), per-instrument break-even buffers (#117/#118),
+Trade Log profit factor + CSV export (#112).
 
 ---
 
-## 7. Key files to read first
+## 6. Key files to read first
 
-**Trading‑specific**
-- `apps/web/src/workspaces/Screens.tsx` — the placeholder screens + their intended
-  blurbs (the spec for what each Trading screen should become).
-- `apps/api/src/routes/brokers.ts` — the broker status endpoint (4 brokers).
-- `apps/web/src/components/TopBar.tsx` — broker status dots + the version pill.
-- `apps/api/src/auth/rbac.ts` — `trading`/`trading_viewer`, `isWorkspaceReadOnly`,
-  `canAccessWorkspace`, `viewBrokerage` gating.
-- `apps/web/src/theme/themes.ts` — `THEMES.trading`, `TABS.trading`,
-  `DEFAULT_SCREEN`, `BRAND.trading` (gold wordmark).
-- `apps/web/src/api/{client,types}.ts` — `BrokerStatus`, `api.brokerStatus()`.
-
-**Reference patterns to copy**
-- `apps/api/src/db/schema.ts` — all tables (users, sessions, todo, kia_*,
-  wealth_clients). Add Trading tables here.
-- `apps/api/src/kia/service.ts` + `routes/kia.ts` — richest service: per‑user,
-  per‑month (ET), undo, settings. `apps/api/src/wealth/service.ts` — simpler
-  list+summary+undo. `apps/api/src/admin/service.ts` `deleteUser` — multi‑table
-  transaction example.
-- `apps/web/src/workspaces/kia/KiaDashboard.tsx` + `wealth/WealthClients.tsx` +
-  `studies/StudyGame.tsx` — inline‑styled, responsive, privacy/undo UI patterns.
-- `apps/web/src/components/Portal.tsx` — `renderScreen` switch (+ `React.lazy`
-  code‑splitting), `onNavigate` prop pattern.
+**Shell / cross-cutting**
+- `apps/web/src/components/Portal.tsx` — `renderScreen` switch + `React.lazy`
+  code-splitting + `ErrorBoundary`; `onNavigate` prop pattern.
+- `apps/web/src/theme/themes.ts` — `THEMES`, `BRAND`, `TABS`, `DEFAULT_SCREEN`,
+  `WORKSPACE_LABELS`, `WorkspaceKey`.
+- `apps/web/src/meta/version.ts` — `APP_VERSION` + `PATCH_NOTES`.
+- `apps/api/src/auth/rbac.ts` — roles, `requireWorkspace`, `isWorkspaceReadOnly`,
+  `canAccessWorkspace`, `viewBrokerage`.
 - `apps/web/src/privacy/privacy.tsx`, `hooks/useUndo.ts`,
   `components/UndoBar.tsx`, `hooks/useMediaQuery.ts`.
+- `apps/api/src/db/schema.ts` — all tables (add new tables here).
+
+**Reference patterns to copy**
+- Richest service: `apps/api/src/kia/service.ts` + `routes/kia.ts` (per-user,
+  per-month ET, undo, settings). Simpler list+summary+undo:
+  `apps/api/src/wealth/service.ts`. Multi-table transaction:
+  `apps/api/src/admin/service.ts` `deleteUser`.
+- Screen UI patterns: `workspaces/kia/KiaDashboard.tsx`,
+  `workspaces/wealth/WealthClients.tsx`, `workspaces/studies/StudyGame.tsx`,
+  `workspaces/trading/TradingDesk.tsx`.
+
+**Companion doc:** `PROJECT_LOG.md` records earlier build history (now partly
+superseded by this file — trust this handoff for current state).
