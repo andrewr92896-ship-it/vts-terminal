@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { tradingNews, tradingCalendar, truthPosts, type NewsImpact, type NewsCategory, type TruthPostRow } from '../db/schema.js';
 import { config } from '../config.js';
 import { resolveOwnerId } from './alerts.js';
+import { aiConfigured, summarizeNewsItems, type NewsRead } from '../ai/claude.js';
 
 // Three best-effort scheduled pollers that populate the Market News area:
 //   1. Finnhub market-news headlines (needs FINNHUB_API_KEY).
@@ -211,13 +212,23 @@ function rssEnabled(): boolean {
   return process.env.RSS_NEWS_ENABLED !== 'false';
 }
 
+function newsAiEnabled(): boolean {
+  // Claude bias/impact/trade-note read of each headline. On by default; needs an
+  // API key (aiConfigured). Set to 'false' to ingest headlines without the read.
+  return process.env.NEWS_AI_SUMMARY_ENABLED !== 'false';
+}
+
 const RSS_MAX_PER_FEED = 12; // cap each poll so one busy feed can't flood the list
 const RSS_MAX_AGE_MS = 7 * 24 * 3600 * 1000; // ignore stale items on first ingest
+const RSS_MAX_AI_BATCH = 16; // headlines read by Claude per poll (one batched call)
 
 // Fetch every configured RSS feed and insert any new headlines (deduped by url)
-// into the shared tradingNews feed, tagged with the feed's source/category and a
-// neutral bias (direction isn't inferred from a headline). Best-effort — every
-// feed and the whole poll are try/caught so a failure never affects the others.
+// into the shared tradingNews feed. Each new batch gets a single Claude read
+// that tags every headline with a bias, impact, and a one-line note on how it
+// could affect this desk's trading (stored in `bias` / `impact` / `body`).
+// Best-effort throughout: any feed, the AI read, or the whole poll can fail
+// without affecting the rest — headlines still land, just with a neutral read
+// and their raw excerpt.
 export async function ingestRssNews(): Promise<void> {
   if (!rssEnabled()) return;
   try {
@@ -232,8 +243,10 @@ export async function ingestRssNews(): Promise<void> {
       .limit(1000);
     const seen = new Set(recent.map((r) => r.url).filter((u): u is string => !!u));
 
-    const now = new Date();
+    // Collect every new candidate across all feeds first, so the whole poll's
+    // fresh headlines can be read in one batched AI call (not one per headline).
     const cutoff = Date.now() - RSS_MAX_AGE_MS;
+    const candidates: { feed: RssFeed; item: RssItem }[] = [];
     for (const feed of RSS_FEEDS) {
       try {
         const res = await fetch(feed.url, {
@@ -250,24 +263,49 @@ export async function ingestRssNews(): Promise<void> {
         for (const item of items) {
           if (!item.url || seen.has(item.url) || item.publishedAt < cutoff) continue;
           seen.add(item.url);
-          await db.insert(tradingNews).values({
-            id: crypto.randomUUID(),
-            authorId,
-            title: item.title,
-            body: item.summary,
-            source: feed.source,
-            url: item.url,
-            category: feed.category,
-            impact: feed.impact,
-            bias: 'neutral',
-            publishedAt: new Date(item.publishedAt),
-            createdAt: now,
-            updatedAt: now,
-          });
+          candidates.push({ feed, item });
         }
       } catch (err) {
         console.error(`RSS feed fetch failed (${feed.source}):`, err);
       }
+    }
+    if (candidates.length === 0) return;
+
+    // The most-recent candidates get the Claude read (bias/impact/trade-note),
+    // capped so a first-run burst can't blow the AI budget in a single poll. Any
+    // overflow still lands, just with a neutral read and its raw excerpt.
+    candidates.sort((a, b) => b.item.publishedAt - a.item.publishedAt);
+    const batch = candidates.slice(0, RSS_MAX_AI_BATCH);
+    let reads: NewsRead[] | null = null;
+    if (newsAiEnabled() && aiConfigured()) {
+      try {
+        reads = await summarizeNewsItems(
+          batch.map((c) => ({ title: c.item.title, source: c.feed.source, category: c.feed.category })),
+        );
+      } catch (err) {
+        console.error('News AI read failed:', err);
+      }
+    }
+
+    const now = new Date();
+    for (let i = 0; i < candidates.length; i++) {
+      const { feed, item } = candidates[i];
+      const read = i < batch.length ? reads?.[i] : undefined;
+      const body = (read?.summary || item.summary) ?? null;
+      await db.insert(tradingNews).values({
+        id: crypto.randomUUID(),
+        authorId,
+        title: item.title,
+        body: body ? body.slice(0, 4000) : null,
+        source: feed.source,
+        url: item.url,
+        category: feed.category,
+        impact: read?.impact ?? feed.impact,
+        bias: read?.bias ?? 'neutral',
+        publishedAt: new Date(item.publishedAt),
+        createdAt: now,
+        updatedAt: now,
+      });
     }
   } catch (err) {
     console.error('RSS news ingest failed:', err);
