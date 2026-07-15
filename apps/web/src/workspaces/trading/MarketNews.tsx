@@ -147,7 +147,7 @@ export function MarketNews() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Market News</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Market &amp; geopolitical headlines with impact and bias tags, plus a live economic calendar from Forex Factory — upcoming releases and actuals as they print (Eastern Time).
+            Live headlines — general market news, the Federal Reserve, Bitcoin, and USD/EUR — tagged with impact, bias, and the instruments they move, plus an economic calendar from Forex Factory and Truth Social posts as they land (Eastern Time).
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -205,7 +205,7 @@ export function MarketNews() {
           <SectionLabel text={`Headlines · ${headlines.length}`} />
           {headlines.length === 0 ? (
             <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-              No headlines yet.{canWrite ? ' Post one with “+ Headline”.' : ''}
+              No headlines yet — the live news feeds populate within a few minutes.{canWrite ? ' You can also post one with “+ Headline”.' : ''}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
