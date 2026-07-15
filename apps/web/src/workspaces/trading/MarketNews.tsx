@@ -65,6 +65,34 @@ function fmtRelative(ms: number): string {
   if (h < 24) return `${h}h ago`;
   return fmtDayKey(ms);
 }
+// Decode HTML entities in feed text for display. Server-side ingest already
+// decodes new items, but rows stored before that fix (and any the backfill only
+// re-read for a note, not a title) can still carry raw "&#x2019;"-style codes —
+// decoding again here is idempotent and guarantees clean headlines everywhere.
+function entityCodePoint(n: number): string {
+  try {
+    return Number.isFinite(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+  } catch {
+    return '';
+  }
+}
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => entityCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec: string) => entityCodePoint(parseInt(dec, 10)))
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&hellip;/g, '…')
+    .replace(/&(?:rsquo|lsquo|apos);/g, "'")
+    .replace(/&(?:ldquo|rdquo);/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
 // Datetime-local <-> ms helpers, interpreted in the browser's local zone.
 function toLocalInput(ms: number): string {
   const d = new Date(ms);
@@ -91,7 +119,9 @@ export function MarketNews() {
   const [briefBusy, setBriefBusy] = useState(false);
   // Which subfeed is showing, and the story filters within it (impact / bias).
   const [feed, setFeed] = useState<string>('all');
-  const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medhigh'>('all');
+  // Default to Med+ so low-impact / no-read-through noise (the AI marks off-topic
+  // stories "low") is hidden out of the gate; "All" is one click away.
+  const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medhigh'>('medhigh');
   const [biasFilter, setBiasFilter] = useState<'all' | NewsBias>('all');
 
   async function load() {
@@ -235,7 +265,7 @@ export function MarketNews() {
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>{p.author} <span style={{ color: FAINT, fontWeight: 400 }}>· @realDonaldTrump</span></span>
                   <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(p.postedAt)}</span>
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.55, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{p.content}</div>
+                <div style={{ fontSize: 13, lineHeight: 1.55, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{decodeEntities(p.content)}</div>
                 {p.url && (
                   <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 7, fontSize: 11, color: GOLD, textDecoration: 'none' }}>
                     View on Truth Social →
@@ -339,16 +369,16 @@ function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: N
         )}
         <span style={{ marginLeft: 'auto', fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(h.publishedAt)}</span>
       </div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>{h.title}</div>
+      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>{decodeEntities(h.title)}</div>
       {h.tradeNote ? (
         // Claude's desk read — only labelled when it's an actual AI note.
         <div style={{ marginTop: 8, padding: '8px 11px', background: 'rgba(255,255,255,.03)', borderRadius: 8, border: `1px solid ${BORDER}` }}>
           <div style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: bi.color, fontWeight: 700, marginBottom: 3 }}>How it could affect us</div>
-          <div style={{ fontSize: 12.5, color: '#d4def5', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{h.tradeNote}</div>
+          <div style={{ fontSize: 12.5, color: '#d4def5', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{decodeEntities(h.tradeNote)}</div>
         </div>
       ) : h.body ? (
         // Raw source excerpt (no AI read yet) — shown plainly, never mislabeled.
-        <div style={{ fontSize: 12.5, color: '#c4d2ee', lineHeight: 1.55, marginTop: 6, whiteSpace: 'pre-wrap' }}>{h.body}</div>
+        <div style={{ fontSize: 12.5, color: '#c4d2ee', lineHeight: 1.55, marginTop: 6, whiteSpace: 'pre-wrap' }}>{decodeEntities(h.body)}</div>
       ) : null}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
         {h.source && <span style={{ fontSize: 11, color: MUTED }}>{h.source}</span>}
