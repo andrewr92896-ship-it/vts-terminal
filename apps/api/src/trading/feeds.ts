@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { desc, eq, gte, inArray } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingNews, tradingCalendar, truthPosts, type NewsImpact, type NewsCategory, type TruthPostRow } from '../db/schema.js';
 import { config } from '../config.js';
@@ -269,47 +269,86 @@ export async function ingestRssNews(): Promise<void> {
         console.error(`RSS feed fetch failed (${feed.source}):`, err);
       }
     }
-    if (candidates.length === 0) return;
-
-    // The most-recent candidates get the Claude read (bias/impact/trade-note),
-    // capped so a first-run burst can't blow the AI budget in a single poll. Any
-    // overflow still lands, just with a neutral read and its raw excerpt.
-    candidates.sort((a, b) => b.item.publishedAt - a.item.publishedAt);
-    const batch = candidates.slice(0, RSS_MAX_AI_BATCH);
-    let reads: NewsRead[] | null = null;
-    if (newsAiEnabled() && aiConfigured()) {
-      try {
-        reads = await summarizeNewsItems(
-          batch.map((c) => ({ title: c.item.title, source: c.feed.source, category: c.feed.category })),
-        );
-      } catch (err) {
-        console.error('News AI read failed:', err);
-      }
-    }
-
+    // Insert every new candidate first. `body` holds only the raw source excerpt;
+    // the Claude trade-note lands in `tradeNote` below (kept separate so the UI
+    // never labels an excerpt as an AI read). bias/impact start at their neutral
+    // defaults until the read runs.
     const now = new Date();
-    for (let i = 0; i < candidates.length; i++) {
-      const { feed, item } = candidates[i];
-      const read = i < batch.length ? reads?.[i] : undefined;
-      const body = (read?.summary || item.summary) ?? null;
+    const insertedTargets: ReadTarget[] = [];
+    for (const { feed, item } of candidates) {
+      const id = crypto.randomUUID();
       await db.insert(tradingNews).values({
-        id: crypto.randomUUID(),
+        id,
         authorId,
         title: item.title,
-        body: body ? body.slice(0, 4000) : null,
+        body: item.summary ? item.summary.slice(0, 4000) : null,
+        tradeNote: null,
         source: feed.source,
         url: item.url,
         category: feed.category,
-        impact: read?.impact ?? feed.impact,
-        bias: read?.bias ?? 'neutral',
+        impact: feed.impact,
+        bias: 'neutral',
         publishedAt: new Date(item.publishedAt),
         createdAt: now,
         updatedAt: now,
       });
+      insertedTargets.push({ id, title: item.title, source: feed.source, category: feed.category });
+    }
+
+    if (!newsAiEnabled() || !aiConfigured()) return;
+
+    // One batched Claude read per poll, capped at RSS_MAX_AI_BATCH: this poll's
+    // new items first, then — using any spare budget — recent RSS rows still
+    // missing a trade note. That gradually repairs a first-run burst (where more
+    // items arrived at once than a single read could cover) over the next polls.
+    const rssSources = RSS_FEEDS.map((f) => f.source);
+    const targets: ReadTarget[] = insertedTargets.slice(0, RSS_MAX_AI_BATCH);
+    if (targets.length < RSS_MAX_AI_BATCH) {
+      const insertedIds = new Set(insertedTargets.map((t) => t.id));
+      const backfillStart = new Date(Date.now() - RSS_MAX_AGE_MS);
+      const rows = await db
+        .select({ id: tradingNews.id, title: tradingNews.title, source: tradingNews.source, category: tradingNews.category })
+        .from(tradingNews)
+        .where(and(isNull(tradingNews.tradeNote), inArray(tradingNews.source, rssSources), gte(tradingNews.publishedAt, backfillStart)))
+        .orderBy(desc(tradingNews.publishedAt))
+        .limit(RSS_MAX_AI_BATCH + insertedTargets.length);
+      for (const r of rows) {
+        if (insertedIds.has(r.id)) continue; // already in this batch
+        targets.push({ id: r.id, title: r.title, source: r.source, category: r.category });
+        if (targets.length >= RSS_MAX_AI_BATCH) break;
+      }
+    }
+    if (targets.length === 0) return;
+
+    let reads: NewsRead[];
+    try {
+      reads = await summarizeNewsItems(targets.map((t) => ({ title: t.title, source: t.source, category: t.category })));
+    } catch (err) {
+      // The rows are already stored with their excerpt; a later poll retries them.
+      console.error('News AI read failed:', err);
+      return;
+    }
+
+    const readAt = new Date();
+    for (let i = 0; i < targets.length; i++) {
+      const read = reads[i];
+      if (!read || !read.summary) continue; // no usable note — leave for a later poll
+      await db
+        .update(tradingNews)
+        .set({ bias: read.bias, impact: read.impact, tradeNote: read.summary.slice(0, 400), updatedAt: readAt })
+        .where(eq(tradingNews.id, targets[i].id));
     }
   } catch (err) {
     console.error('RSS news ingest failed:', err);
   }
+}
+
+// A row/candidate handed to the batched Claude news read.
+interface ReadTarget {
+  id: string;
+  title: string;
+  source: string | null;
+  category: string;
 }
 
 // ---- Forex Factory economic calendar ----
@@ -487,18 +526,44 @@ export interface TruthPostView {
   postedAt: number; // ms epoch
 }
 
-// Strip HTML tags and decode a few common entities to plain text.
-function htmlToText(html: string): string {
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
+// Convert a numeric HTML entity code point to its character, guarding against
+// out-of-range values (String.fromCodePoint throws on those).
+function codePoint(n: number): string {
+  try {
+    return Number.isFinite(n) && n >= 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+  } catch {
+    return '';
+  }
+}
+
+// Decode the HTML entities that show up in RSS titles/summaries and Truth Social
+// content: numeric (decimal and hex — e.g. &#8217; / &#x2019; for a curly
+// apostrophe) plus the common named ones. Numeric entities are decoded first so
+// feeds that use them (many do) render as real punctuation, not raw "&#x2019;".
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, hex: string) => codePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec: string) => codePoint(parseInt(dec, 10)))
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&mdash;/g, '—')
+    .replace(/&ndash;/g, '–')
+    .replace(/&hellip;/g, '…')
+    .replace(/&(?:rsquo|lsquo|apos);/g, "'")
+    .replace(/&(?:ldquo|rdquo);/g, '"')
     .replace(/&#39;/g, "'")
     .replace(/&quot;/g, '"')
-    .trim();
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+}
+
+// Strip HTML tags and decode entities to plain text.
+function htmlToText(html: string): string {
+  const stripped = html
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, '');
+  return decodeEntities(stripped).trim();
 }
 
 // Pure normalizer for the Truth Social account statuses response. Strips HTML

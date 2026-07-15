@@ -912,6 +912,7 @@ export interface NewsItem {
   id: string;
   title: string;
   body: string | null;
+  tradeNote: string | null;
   source: string | null;
   url: string | null;
   category: NewsCategory;

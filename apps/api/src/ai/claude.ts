@@ -385,10 +385,10 @@ export interface NewsRead {
   summary: string;
 }
 
-const NEWS_READ_SYSTEM = `You are a trading-desk analyst. The desk trades EUR/USD (forex), Bitcoin, gold (futures), Nasdaq (futures), and the S&P 500 (SPY ETF + futures), and the trader is also an investment adviser. For EACH numbered headline, judge:
-- "bias": the directional lean the news implies — "bullish", "bearish", or "neutral". Judge it for the specific instrument the headline is about (e.g. gold, Bitcoin, EUR/USD); if it is broad macro/risk news, judge it for risk assets (equities/crypto). Use "neutral" when genuinely two-sided or unclear.
-- "impact": how much it could move the desk's markets — "high", "medium", or "low".
-- "note": ONE concrete sentence on how it could affect THIS desk's trading (name the instrument(s) it bears on). Under 200 characters, plain text.
+const NEWS_READ_SYSTEM = `You are a trading-desk analyst. The desk trades ONLY these instruments: EUR/USD (forex), Bitcoin, gold (futures), Nasdaq-100 (futures), and the S&P 500 (SPY ETF + futures). The trader is also an investment adviser. For EACH numbered headline, judge it FROM THE DESK'S PERSPECTIVE:
+- "bias": the directional lean for the desk — "bullish", "bearish", or "neutral". If the headline is about one of the desk's instruments, judge that instrument. If it is broad macro/rates/risk news, judge risk assets (Nasdaq, S&P, Bitcoin). If it is about something the desk does NOT trade (e.g. a single stock, another country), judge only the read-through to the desk's markets; if there is no meaningful read-through, use "neutral". Use "neutral" when genuinely two-sided or unclear.
+- "impact": how much it could move the DESK'S markets specifically — "high", "medium", or "low". Use "low" when it barely touches the desk's instruments.
+- "note": ONE sentence, written TO THIS TRADER, on the read-through to the desk's positions — name the specific desk instrument(s) it bears on (EUR/USD, Bitcoin, gold, Nasdaq, or S&P) and the likely direction. Do NOT just restate or summarize the headline; connect it to what the desk trades. If it has little bearing on the desk, say so plainly (e.g. "Little direct read-through to our books; a single-name story."). Under 200 characters, plain text.
 
 Respond with ONLY a JSON object of exactly this shape and nothing else:
 {"reads":[{"i":<the headline number>,"bias":"bullish|bearish|neutral","impact":"high|medium|low","note":"..."}]}

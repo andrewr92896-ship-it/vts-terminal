@@ -302,6 +302,13 @@
       "when": 1782337436908,
       "tag": "0042_trading_be_overrides",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1782337536908,
+      "tag": "0043_news_trade_note",
+      "breakpoints": true
     }
   ]
 }

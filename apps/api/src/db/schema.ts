@@ -603,6 +603,10 @@ export const tradingNews = sqliteTable('trading_news', {
   authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
   title: text('title').notNull(),
   body: text('body'),
+  // Claude's read of how this story could affect the desk's trading. Distinct
+  // from `body` (the raw source excerpt) so the UI never mislabels an excerpt as
+  // an AI note. Null until the background reader tags it.
+  tradeNote: text('trade_note'),
   source: text('source'),
   url: text('url'),
   category: text('category', { enum: NEWS_CATEGORIES }).notNull().default('markets'),

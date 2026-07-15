@@ -21,6 +21,7 @@ export interface NewsItem {
   id: string;
   title: string;
   body: string | null;
+  tradeNote: string | null; // Claude's read of how it could affect the desk
   source: string | null;
   url: string | null;
   category: NewsCategory;
@@ -71,6 +72,7 @@ function toNews(row: TradingNewsRow): NewsItem {
     id: row.id,
     title: row.title,
     body: row.body,
+    tradeNote: row.tradeNote,
     source: row.source,
     url: row.url,
     category: isCategory(row.category) ? row.category : 'markets',
