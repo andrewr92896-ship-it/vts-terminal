@@ -242,32 +242,22 @@ export function MarketNews() {
         </div>
       )}
 
-      {/* Subfeed tabs */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4, marginBottom: 12, scrollbarWidth: 'none' }}>
-        {tabs.map((t) => {
-          const active = feed === t.key;
-          const n = counts[t.key] ?? 0;
-          return (
-            <button key={t.key} onClick={() => setFeed(t.key)} style={{ ...tabBtn, ...(active ? tabBtnActive : null), opacity: !active && n === 0 && t.key !== 'all' ? 0.5 : 1 }}>
-              {t.label}
-              <span style={{ marginLeft: 6, fontSize: 10, color: active ? '#0c2768' : FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{n}</span>
-            </button>
-          );
-        })}
+      {/* Feed + story filters, each its own dropdown */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+        <Dropdown label="Feed" value={feed} onChange={setFeed}
+          options={tabs.map((t) => ({ v: t.key, l: `${t.label} (${counts[t.key] ?? 0})` }))} />
+        {isNewsTab && (
+          <>
+            <Dropdown label="Impact" value={impactFilter} onChange={(v) => setImpactFilter(v as typeof impactFilter)}
+              options={[{ v: 'all', l: 'All' }, { v: 'medhigh', l: 'Medium & up' }, { v: 'high', l: 'High only' }]} />
+            <Dropdown label="Bias" value={biasFilter} onChange={(v) => setBiasFilter(v as typeof biasFilter)}
+              options={[{ v: 'all', l: 'All' }, { v: 'bullish', l: 'Bullish' }, { v: 'bearish', l: 'Bearish' }, { v: 'neutral', l: 'Neutral' }]} />
+            {filtersActive && (
+              <button onClick={() => { setImpactFilter('all'); setBiasFilter('all'); }} style={{ ...smallBtn, borderColor: 'transparent', color: FAINT, marginBottom: 1 }}>Clear</button>
+            )}
+          </>
+        )}
       </div>
-
-      {/* Story filters (news feeds only) */}
-      {isNewsTab && (
-        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
-          <FilterGroup label="Impact" value={impactFilter} onChange={(v) => setImpactFilter(v as typeof impactFilter)}
-            options={[{ v: 'all', l: 'All' }, { v: 'medhigh', l: 'Med+' }, { v: 'high', l: 'High' }]} />
-          <FilterGroup label="Bias" value={biasFilter} onChange={(v) => setBiasFilter(v as typeof biasFilter)}
-            options={[{ v: 'all', l: 'All' }, { v: 'bullish', l: 'Bullish', c: GREEN }, { v: 'bearish', l: 'Bearish', c: RED }, { v: 'neutral', l: 'Neutral' }]} />
-          {filtersActive && (
-            <button onClick={() => { setImpactFilter('all'); setBiasFilter('all'); }} style={{ ...smallBtn, borderColor: 'transparent', color: FAINT }}>Clear</button>
-          )}
-        </div>
-      )}
 
       {/* Trump / Truth Social feed */}
       {feed === 'trump' && (
@@ -370,24 +360,14 @@ export function MarketNews() {
   );
 }
 
-function FilterGroup({ label, value, options, onChange }: { label: string; value: string; options: { v: string; l: string; c?: string }[]; onChange: (v: string) => void }) {
+function Dropdown({ label, value, options, onChange }: { label: string; value: string; options: { v: string; l: string }[]; onChange: (v: string) => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
       <span style={{ fontSize: 10, letterSpacing: '0.4px', textTransform: 'uppercase', color: FAINT, fontWeight: 600 }}>{label}</span>
-      <div style={{ display: 'flex', gap: 4 }}>
-        {options.map((o) => {
-          const active = value === o.v;
-          return (
-            <button key={o.v} onClick={() => onChange(o.v)} style={{
-              fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 6, cursor: 'pointer',
-              border: `1px solid ${active ? (o.c ?? BORDER2) : BORDER}`,
-              background: active ? (o.c ? `${o.c}22` : 'rgba(255,255,255,.08)') : 'transparent',
-              color: active ? (o.c ?? TEXT) : MUTED,
-            }}>{o.l}</button>
-          );
-        })}
-      </div>
-    </div>
+      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...input, padding: '8px 30px 8px 11px', minWidth: 150, cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239fb0d6' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center' }}>
+        {options.map((o) => <option key={o.v} value={o.v} style={{ background: INPUT_BG, color: TEXT }}>{o.l}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -597,5 +577,3 @@ const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7
 const smallBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' };
 const banner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
 const feedSectionLabel: CSSProperties = { fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, fontWeight: 700, margin: '0 0 10px' };
-const tabBtn: CSSProperties = { flex: 'none', display: 'inline-flex', alignItems: 'center', fontSize: 12, fontWeight: 600, color: MUTED, background: 'rgba(255,255,255,.04)', border: `1px solid ${BORDER}`, padding: '6px 12px', borderRadius: 20, cursor: 'pointer', whiteSpace: 'nowrap' };
-const tabBtnActive: CSSProperties = { background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', border: '1px solid transparent' };
