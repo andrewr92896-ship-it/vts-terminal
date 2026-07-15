@@ -4,7 +4,7 @@ import { db } from '../db/index.js';
 import { tradingNews, tradingCalendar, truthPosts, type NewsImpact, type NewsCategory, type TruthPostRow } from '../db/schema.js';
 import { config } from '../config.js';
 import { resolveOwnerId } from './alerts.js';
-import { aiConfigured, summarizeNewsItems, type NewsRead } from '../ai/claude.js';
+import { aiConfigured, summarizeNewsItems, explainCalendarTitles, type NewsRead } from '../ai/claude.js';
 
 // Three best-effort scheduled pollers that populate the Market News area:
 //   1. Finnhub market-news headlines (needs FINNHUB_API_KEY).
@@ -509,6 +509,58 @@ export async function ingestForexFactory(): Promise<void> {
   }
 }
 
+const CAL_EXPLAIN_WINDOW_MS = 14 * 24 * 3600 * 1000; // recent + upcoming events
+const CAL_EXPLAIN_MAX_TITLES = 15; // distinct titles explained by Claude per poll
+
+// Fill the plain-language `explainer` for calendar events that lack one. Because
+// releases recur (CPI, NFP, Retail Sales…), explanations are keyed by TITLE:
+// each distinct title is explained by Claude once and reused across every event
+// with that title (past, current, other currencies). Best-effort; needs a key.
+export async function explainCalendar(): Promise<void> {
+  if (!newsAiEnabled() || !aiConfigured()) return;
+  try {
+    const windowStart = new Date(Date.now() - CAL_EXPLAIN_WINDOW_MS);
+    const rows = await db
+      .select({ id: tradingCalendar.id, title: tradingCalendar.title, explainer: tradingCalendar.explainer })
+      .from(tradingCalendar)
+      .where(gte(tradingCalendar.eventTime, windowStart));
+
+    // Known explanation per title (reused across recurring events).
+    const byTitle = new Map<string, string>();
+    for (const r of rows) if (r.explainer && !byTitle.has(r.title)) byTitle.set(r.title, r.explainer);
+
+    const missing = rows.filter((r) => !r.explainer);
+    if (missing.length === 0) return;
+
+    // Distinct titles among the missing rows that we don't already explain,
+    // capped so one poll can't blow the AI budget.
+    const need: string[] = [];
+    const seen = new Set<string>();
+    for (const r of missing) {
+      if (byTitle.has(r.title) || seen.has(r.title)) continue;
+      seen.add(r.title);
+      need.push(r.title);
+      if (need.length >= CAL_EXPLAIN_MAX_TITLES) break;
+    }
+    if (need.length > 0) {
+      const texts = await explainCalendarTitles(need);
+      need.forEach((t, i) => {
+        if (texts[i]) byTitle.set(t, texts[i]);
+      });
+    }
+
+    // Apply the explanation to every missing row whose title we now know.
+    const now = new Date();
+    for (const r of missing) {
+      const text = byTitle.get(r.title);
+      if (!text) continue;
+      await db.update(tradingCalendar).set({ explainer: text, updatedAt: now }).where(eq(tradingCalendar.id, r.id));
+    }
+  } catch (err) {
+    console.error('Calendar explain failed:', err);
+  }
+}
+
 // ---- Truth Social ----
 
 export interface TruthStatusItem {
@@ -688,7 +740,9 @@ export function startFeeds(): void {
   const runAll = () => {
     void ingestRssNews().catch((err) => console.error('RSS news poll error:', err));
     void ingestFinnhubNews().catch((err) => console.error('Finnhub poll error:', err));
-    void ingestForexFactory().catch((err) => console.error('Forex Factory poll error:', err));
+    void ingestForexFactory()
+      .then(() => explainCalendar())
+      .catch((err) => console.error('Forex Factory / explain poll error:', err));
     void ingestTruth().catch((err) => console.error('Truth poll error:', err));
   };
 

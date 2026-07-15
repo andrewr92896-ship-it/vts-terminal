@@ -430,6 +430,36 @@ export async function summarizeNewsItems(items: NewsForRead[]): Promise<NewsRead
   return out;
 }
 
+// ---- Economic-calendar explainers (plain-language "what is this release?") ----
+
+const CAL_EXPLAIN_SYSTEM = `You explain economic-calendar releases to a non-expert. For EACH numbered release title, write ONE clear, plain-language sentence a layman can understand: what the release measures and why traders watch it (its market effect). Avoid jargon; if a term is unavoidable, gloss it in a few words. Under 200 characters.
+
+Respond with ONLY a JSON object of exactly this shape and nothing else:
+{"items":[{"i":<the title number>,"text":"..."}]}
+Return one entry per title using its number as "i". No prose or code fences outside the JSON.`;
+
+// Sonnet: explain a batch of economic-calendar release titles in one call.
+// Returns explanations aligned to the input order; any title the model omits
+// (or the whole call, on a parse failure) falls back to an empty string.
+export async function explainCalendarTitles(titles: string[]): Promise<string[]> {
+  const fallback = titles.map(() => '');
+  if (titles.length === 0) return fallback;
+
+  const list = titles.map((t, i) => `${i}. ${t}`).join('\n');
+  const raw = await askClaude(`Release titles:\n${list}`, CAL_EXPLAIN_SYSTEM);
+  const parsed = extractJson(raw) as { items?: unknown } | null;
+  const items = Array.isArray(parsed?.items) ? (parsed!.items as unknown[]) : [];
+
+  const out = [...fallback];
+  for (const it of items) {
+    const o = (it ?? {}) as Record<string, unknown>;
+    const i = typeof o.i === 'number' ? o.i : Number(o.i);
+    if (!Number.isInteger(i) || i < 0 || i >= out.length) continue;
+    out[i] = typeof o.text === 'string' ? o.text.trim().slice(0, 400) : '';
+  }
+  return out;
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;

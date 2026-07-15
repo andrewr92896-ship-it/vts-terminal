@@ -39,6 +39,7 @@ export interface CalendarEvent {
   forecast: string | null;
   previous: string | null;
   actual: string | null;
+  explainer: string | null; // plain-language "what is this release?"
 }
 
 export interface MarketNewsData {
@@ -92,6 +93,7 @@ function toEvent(row: TradingCalendarRow): CalendarEvent {
     forecast: row.forecast,
     previous: row.previous,
     actual: row.actual,
+    explainer: row.explainer,
   };
 }
 
