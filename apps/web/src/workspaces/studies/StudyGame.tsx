@@ -26,9 +26,11 @@ import {
   gameKey,
   levelAtStep,
   lifetimeAccuracy,
+  loadCurrentSnapshot,
   loadGame,
   loadStarred,
   metaFor,
+  saveCurrent,
   overallLevel,
   parseGame,
   recordAnswer,
@@ -108,12 +110,24 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const [createError, setCreateError] = useState<string | null>(null);
   // Shuffled index queues per subsection id, refilled from its ids when empty.
   const sectionQueuesRef = useRef<Map<string, number[]>>(new Map());
-  const [current, setCurrent] = useState<{ q: Series65Question; topic: Series65Topic } | null>(null);
+  // The question the learner was last on (persisted locally), resolved once on
+  // mount so reopening the app returns to it instead of drawing a new one.
+  const initialCurrentRef = useRef<ReturnType<typeof loadCurrentSnapshot> | undefined>(undefined);
+  if (initialCurrentRef.current === undefined) {
+    initialCurrentRef.current = loadCurrentSnapshot(user?.id);
+  }
+  const [current, setCurrent] = useState<{ q: Series65Question; topic: Series65Topic } | null>(() => {
+    const snap = initialCurrentRef.current;
+    if (!snap) return null;
+    const q = SERIES65_QUESTIONS.find((x) => x.id === snap.id);
+    return q ? { q, topic: snap.topic } : null;
+  });
   // `selected` is the highlighted answer before confirmation, and the submitted
-  // answer once `revealed` — no answer is scored until it is confirmed.
-  const [selected, setSelected] = useState<Letter | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [outcome, setOutcome] = useState<boolean | null>(null);
+  // answer once `revealed` — no answer is scored until it is confirmed. Seeded
+  // from the persisted snapshot so a restored question keeps its answer state.
+  const [selected, setSelected] = useState<Letter | null>(() => initialCurrentRef.current?.selected ?? null);
+  const [revealed, setRevealed] = useState(() => initialCurrentRef.current?.revealed ?? false);
+  const [outcome, setOutcome] = useState<boolean | null>(() => initialCurrentRef.current?.outcome ?? null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
   // Undo: the pre-answer snapshot to revert to, plus a cooldown (scored answers
@@ -131,6 +145,23 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   useEffect(() => {
     saveGame(storageKey, game);
   }, [game, storageKey]);
+
+  // Persist the question the learner is on (and its answer state) so closing and
+  // reopening the app returns them to it. Cleared when there is no current
+  // question (e.g. an empty starred deck).
+  useEffect(() => {
+    if (!current) {
+      saveCurrent(user?.id, null);
+      return;
+    }
+    saveCurrent(user?.id, {
+      id: current.q.id,
+      topic: current.topic,
+      selected,
+      revealed,
+      outcome,
+    });
+  }, [current, selected, revealed, outcome, user?.id]);
 
   // Tell the shell to re-tint the studies workspace whenever the level moves, so
   // the whole page's colour follows the current level.
@@ -363,8 +394,15 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load a question on mount and whenever the category mode changes.
+  // Load a question on mount and whenever the category mode changes. On the very
+  // first mount, keep any question restored from a previous session instead of
+  // drawing a new one — that is what keeps the learner on their question.
+  const advanceInitRef = useRef(false);
   useEffect(() => {
+    if (!advanceInitRef.current) {
+      advanceInitRef.current = true;
+      if (current) return;
+    }
     advance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
