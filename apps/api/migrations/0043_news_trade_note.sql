@@ -1,0 +1,1 @@
+ALTER TABLE `trading_news` ADD `trade_note` text;

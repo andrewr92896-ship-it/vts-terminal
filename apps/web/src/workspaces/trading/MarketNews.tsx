@@ -340,12 +340,16 @@ function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: N
         <span style={{ marginLeft: 'auto', fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(h.publishedAt)}</span>
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>{h.title}</div>
-      {h.body && (
+      {h.tradeNote ? (
+        // Claude's desk read — only labelled when it's an actual AI note.
         <div style={{ marginTop: 8, padding: '8px 11px', background: 'rgba(255,255,255,.03)', borderRadius: 8, border: `1px solid ${BORDER}` }}>
           <div style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: bi.color, fontWeight: 700, marginBottom: 3 }}>How it could affect us</div>
-          <div style={{ fontSize: 12.5, color: '#d4def5', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{h.body}</div>
+          <div style={{ fontSize: 12.5, color: '#d4def5', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{h.tradeNote}</div>
         </div>
-      )}
+      ) : h.body ? (
+        // Raw source excerpt (no AI read yet) — shown plainly, never mislabeled.
+        <div style={{ fontSize: 12.5, color: '#c4d2ee', lineHeight: 1.55, marginTop: 6, whiteSpace: 'pre-wrap' }}>{h.body}</div>
+      ) : null}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
         {h.source && <span style={{ fontSize: 11, color: MUTED }}>{h.source}</span>}
         {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: GOLD, textDecoration: 'none' }}>Source ↗</a>}
