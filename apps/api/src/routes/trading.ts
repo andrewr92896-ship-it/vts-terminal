@@ -385,6 +385,50 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
+  // A Claude (Sonnet) overview of the Forex Factory economic calendar for the
+  // EUR/USD desk: the upcoming EUR & USD releases, which ones matter most, and
+  // what a beat/miss would imply for the pair. Read-only, nothing stored.
+  app.post('/api/trading/calendar/brief', read, async (request, reply) => {
+    if (!aiConfigured()) {
+      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    }
+    const { calendar } = await getMarketNews();
+    const now = Date.now();
+    const ccy = new Set(['EUR', 'USD']);
+    const upcoming = calendar
+      .filter((e) => e.country && ccy.has(e.country.toUpperCase()) && e.eventTime >= now - 6 * 3600_000)
+      .sort((a, b) => a.eventTime - b.eventTime)
+      .slice(0, 40);
+    if (upcoming.length === 0) {
+      return { brief: 'No upcoming EUR or USD events on the Forex Factory calendar right now — it refreshes through the week.' };
+    }
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+    const lines = upcoming
+      .map((e) => {
+        const vals = [e.actual && `actual ${e.actual}`, e.forecast && `fcst ${e.forecast}`, e.previous && `prev ${e.previous}`]
+          .filter(Boolean)
+          .join(', ');
+        return `- ${fmt.format(e.eventTime)} ET · ${e.country} · [${e.impact} impact] ${e.title}${vals ? ` (${vals})` : ''}`;
+      })
+      .join('\n');
+    const system =
+      'You are a EUR/USD trading-desk analyst. Given the upcoming EUR and USD economic-calendar releases (from Forex Factory), write a brief overview for a EUR/USD trader: the 2-3 releases that matter most and when they hit, what a beat vs a miss on each would imply for the US dollar, the euro, and EUR/USD direction, and the net setup or risk to watch into them. Concise (under 170 words), plain text, no markdown headers. Times shown are Eastern.';
+    try {
+      const brief = await generateBrief(request.currentUser!.id, 'calendar_brief', system, `Upcoming EUR/USD calendar:\n${lines}`);
+      return { brief };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Overview failed' });
+    }
+  });
+
   app.post('/api/trading/trades', write, async (request, reply) => {
     const parsed = addSchema.safeParse(request.body);
     if (!parsed.success) {

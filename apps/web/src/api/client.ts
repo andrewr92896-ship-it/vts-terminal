@@ -269,6 +269,9 @@ export const api = {
   newsBrief(): Promise<{ brief: string }> {
     return request('/api/trading/news/brief', { method: 'POST', body: JSON.stringify({}) });
   },
+  calendarBrief(): Promise<{ brief: string }> {
+    return request('/api/trading/calendar/brief', { method: 'POST', body: JSON.stringify({}) });
+  },
   tradingChallenge(): Promise<ChallengeData> {
     return request('/api/trading/challenge');
   },
