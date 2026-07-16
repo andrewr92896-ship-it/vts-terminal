@@ -101,9 +101,9 @@ export function LiveWall() {
   const [hideMoney, setHideMoney] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  // Two views on the wall: the live positions grid (default) and the
-  // customizable multi-chart board with saved presets.
-  const [view, setView] = useState<'positions' | 'charts'>('positions');
+  // Two views on the wall: the customizable multi-chart board with saved
+  // presets ("Master", the default) and the live positions grid.
+  const [view, setView] = useState<'positions' | 'charts'>('charts');
   const firstLoad = useRef(true);
 
   const load = useCallback(async () => {
@@ -146,10 +146,10 @@ export function LiveWall() {
               <span style={data.source === 'sample' ? sampledPill : livePill}>{data.source === 'sample' ? 'Sample data' : 'Live'}</span>
             )}
           </div>
-          {/* Positions ⇄ Charts view toggle */}
+          {/* Master (charts board) ⇄ Positions view toggle */}
           <div style={segWrap}>
+            <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>Master</button>
             <button onClick={() => setView('positions')} style={segBtn(view === 'positions')}>Positions</button>
-            <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>Charts</button>
           </div>
         </div>
         {view === 'positions' && data && (
