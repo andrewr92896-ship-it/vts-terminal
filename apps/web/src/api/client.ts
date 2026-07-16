@@ -76,6 +76,16 @@ export interface CustomVocabCard {
   topic: string;
 }
 
+// The team-gated Series 65 bank payload (the licensed content, served only to
+// the owner's team). Shapes come from the studies meta module so the study
+// screens and this client agree on one type.
+import type { Series65Question, VocabCard } from '../workspaces/studies/series65Meta';
+export interface Series65BankResponse {
+  questions: Series65Question[];
+  explanations: Record<number, string>;
+  vocab: VocabCard[];
+}
+
 // The payload for the Market News "AI overview" — whatever the active feed is
 // currently showing, sent for Claude to summarize.
 export interface FeedBriefPayload {
@@ -433,6 +443,12 @@ export const api = {
   },
   removeLearnedTerm(term: string): Promise<{ terms: string[] }> {
     return request(`/api/studies/learned?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
+  },
+  // The team-gated Series 65 question bank + explanations + vocabulary. Only the
+  // owner's team may load it (the server returns 403 otherwise); the licensed
+  // content never ships in the bundle.
+  series65Bank(): Promise<Series65BankResponse> {
+    return request('/api/studies/series65/bank');
   },
   studyGame(): Promise<{ state: string | null }> {
     return request('/api/studies/game');

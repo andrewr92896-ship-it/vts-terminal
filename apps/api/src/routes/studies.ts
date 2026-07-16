@@ -18,6 +18,10 @@ import {
 import { aiConfigured, classifyQuestionsIntoSection, defineSeries65Term } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { getTeamName } from '../teams/service.js';
+import { canUseSeries65 } from '../studies/access.js';
+import { SERIES65_QUESTIONS } from '../studies/series65/bank.js';
+import { SERIES65_EXPLANATIONS } from '../studies/series65/explanations.js';
+import { SERIES65_VOCAB } from '../studies/series65/vocab.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
@@ -63,6 +67,21 @@ const sectionCreateSchema = z.object({
 
 export async function studiesRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
+
+  // The Series 65 question bank + explanations + vocabulary. This is the
+  // licensed content the owner keeps within their own team, so it is served
+  // ONLY to Vitalis members (never the demo) and is the single place it leaves
+  // the server — it is not bundled into the web app for anyone else.
+  app.get('/api/studies/series65/bank', guard, async (request, reply) => {
+    if (!canUseSeries65(request.currentUser)) {
+      return reply.code(403).send({ error: 'The Series 65 study set is limited to your team.' });
+    }
+    return {
+      questions: SERIES65_QUESTIONS,
+      explanations: SERIES65_EXPLANATIONS,
+      vocab: SERIES65_VOCAB,
+    };
+  });
 
   app.get('/api/studies/learned', guard, async (request) => {
     return { terms: await listLearned(request.currentUser!.id) };

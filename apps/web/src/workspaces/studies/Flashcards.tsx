@@ -4,8 +4,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { SERIES65_VOCAB, type VocabCard } from './series65Vocab';
-import { SERIES65_TOPICS, type Series65Topic } from './series65Questions';
+import { SERIES65_TOPICS, type Series65Topic, type VocabCard } from './series65Meta';
 import { TutorChat } from './TutorChat';
 
 // Default auto-rotation timing; both are adjustable in the controls below.
@@ -38,10 +37,14 @@ export function Flashcards({
   theme,
   embedded = false,
   readOnly: readOnlyProp,
+  vocab,
 }: {
   theme: Theme;
   embedded?: boolean;
   readOnly?: boolean;
+  // The built-in Series 65 vocabulary deck, fetched from the team-gated server
+  // bank by the parent (StudyGame) and passed down so it is never bundled.
+  vocab: VocabCard[];
 }) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
@@ -63,10 +66,10 @@ export function Flashcards({
   // word with the same name as a built-in one replaces it).
   const allCards = useMemo<VocabCard[]>(() => {
     const customByTerm = new Set(custom.map((c) => c.term));
-    const base = SERIES65_VOCAB.filter((c) => !customByTerm.has(c.term));
+    const base = vocab.filter((c) => !customByTerm.has(c.term));
     const added = custom.map((c) => ({ term: c.term, def: c.def, topic: c.topic as VocabCard['topic'] }));
     return [...base, ...added];
-  }, [custom]);
+  }, [custom, vocab]);
 
   const cards = useMemo(
     () =>

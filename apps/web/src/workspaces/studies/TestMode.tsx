@@ -6,8 +6,7 @@ import { accentGradient } from '../../theme/themes';
 import type { TestLevelUp } from './series65Game';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import type { Series65Question } from './series65Questions';
-import { SERIES65_EXPLANATIONS } from './series65Explanations';
+import type { Series65Question } from './series65Meta';
 import {
   TEST_BLUEPRINT,
   TEST_PASS,
@@ -38,7 +37,17 @@ type Phase = 'intro' | 'running' | 'done';
 // no per-question feedback during the test — like the real exam, you find out
 // how you did at the end. Completing a test records the score (and the attempt
 // number) to the test leaderboard.
-export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComplete?: (correct: number) => TestLevelUp | null }) {
+export function TestMode({
+  theme,
+  onTestComplete,
+  questions: bank,
+  explanations,
+}: {
+  theme: Theme;
+  onTestComplete?: (correct: number) => TestLevelUp | null;
+  questions: Series65Question[];
+  explanations: Record<number, string>;
+}) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
@@ -117,7 +126,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
     const local = loadTestProgress(user?.id);
     let localAnswered = -1;
     if (local) {
-      const qs = questionsFromIds(local.ids);
+      const qs = questionsFromIds(local.ids, bank);
       if (qs) {
         applyProgress(qs, local);
         localAnswered = countAnswered(local);
@@ -130,7 +139,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
       .then((r) => {
         const remote = parseTestProgress(r.state);
         if (remote && !freshStartRef.current) {
-          const qs = questionsFromIds(remote.ids);
+          const qs = questionsFromIds(remote.ids, bank);
           if (qs && countAnswered(remote) >= localAnswered) {
             applyProgress(qs, remote);
             saveTestProgress(user?.id, remote); // keep the local copy in step
@@ -181,7 +190,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
   }, [phase, questions, answers, index, reveal, revealed, hydrated, readOnly]);
 
   function startTest() {
-    const qs = buildTest();
+    const qs = buildTest(bank);
     freshStartRef.current = true; // a late server reconcile must not replace this
     lastSavedRef.current = null; // force the new sitting to be pushed up
     setQuestions(qs);
@@ -474,9 +483,9 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
                   {q.options.find((o) => o.label === q.answer)?.text}
                 </div>
               )}
-              {SERIES65_EXPLANATIONS[q.id] && (
+              {explanations[q.id] && (
                 <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.55, paddingLeft: 10, borderLeft: `2px solid ${theme.accent}` }}>
-                  {SERIES65_EXPLANATIONS[q.id]}
+                  {explanations[q.id]}
                 </div>
               )}
             </div>
@@ -636,7 +645,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
             {reviewOpen && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
                 {questions.map((q, i) => (
-                  <ReviewRow key={q.id} q={q} chosen={answers[i]} n={i + 1} />
+                  <ReviewRow key={q.id} q={q} chosen={answers[i]} n={i + 1} explanations={explanations} />
                 ))}
               </div>
             )}
@@ -651,9 +660,19 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
 
 // One reviewed question on the results screen: shows the learner's choice, the
 // correct answer, and the explanation.
-function ReviewRow({ q, chosen, n }: { q: Series65Question; chosen: Letter | null; n: number }) {
+function ReviewRow({
+  q,
+  chosen,
+  n,
+  explanations,
+}: {
+  q: Series65Question;
+  chosen: Letter | null;
+  n: number;
+  explanations: Record<number, string>;
+}) {
   const right = chosen === q.answer;
-  const explanation = SERIES65_EXPLANATIONS[q.id];
+  const explanation = explanations[q.id];
   return (
     <div style={{ borderLeft: `3px solid ${right ? GREEN : RED}`, paddingLeft: 12 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', marginBottom: 4 }}>

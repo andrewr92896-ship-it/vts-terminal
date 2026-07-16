@@ -40,6 +40,20 @@ export function isAdmin(roles: RoleKey[]): boolean {
   return roles.includes('admin');
 }
 
+// The owner's trading team. The Series 65 study track is licensed content the
+// owner keeps within this team only; every other team builds its own study
+// games. Mirrors the backend DEFAULT_TEAM_ID (apps/api/src/teams/service.ts) and
+// canUseSeries65 (apps/api/src/studies/access.ts) — the server is the enforcer,
+// this just drives the UI (hiding the Series 65 hub card and nav sections).
+export const SERIES65_TEAM_ID = 'team-vitalis';
+
+export function canUseSeries65(
+  user: { teamId: string | null; isDemo: boolean } | null | undefined,
+): boolean {
+  if (!user || user.isDemo) return false;
+  return user.teamId === SERIES65_TEAM_ID;
+}
+
 const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
   todo: ['todo'],

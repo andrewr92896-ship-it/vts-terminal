@@ -5,12 +5,8 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import {
-  SERIES65_QUESTIONS,
-  type Series65Question,
-  type Series65Topic,
-} from './series65Questions';
-import { SERIES65_EXPLANATIONS } from './series65Explanations';
+import type { Series65Question, Series65Topic } from './series65Meta';
+import { useSeries65Bank, type Series65Bank } from './useSeries65Bank';
 import { Flashcards } from './Flashcards';
 import { Leaderboard } from './Leaderboard';
 import { TestMode } from './TestMode';
@@ -80,14 +76,40 @@ interface UndoSnapshot {
 // Answered questions that must elapse after an undo before it can be used again.
 const UNDO_COOLDOWN = 10;
 
+// The Series 65 bank is the owner's licensed content, so it is fetched from the
+// team-gated server endpoint rather than bundled. This wrapper loads it once and
+// gates the game on it; the actual game body lives in StudyGameInner, which
+// receives the bank as a prop (and passes it down to Test Mode and Flashcards).
 export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: StudyView }) {
+  const { bank, loading, error } = useSeries65Bank();
+  if (loading) return <StudyGameNotice theme={theme}>Loading the Series 65 study set…</StudyGameNotice>;
+  if (error || !bank) {
+    return (
+      <StudyGameNotice theme={theme}>
+        Couldn’t load the Series 65 study set. Check your connection and try again.
+      </StudyGameNotice>
+    );
+  }
+  return <StudyGameInner theme={theme} initialView={initialView} bank={bank} />;
+}
+
+function StudyGameNotice({ theme, children }: { theme: Theme; children: ReactNode }) {
+  return (
+    <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+      <div style={{ ...card(theme), textAlign: 'center', color: '#a99ff0', fontSize: 13 }}>{children}</div>
+    </div>
+  );
+}
+
+function StudyGameInner({ theme, initialView, bank }: { theme: Theme; initialView?: StudyView; bank: Series65Bank }) {
+  const { questions, explanations } = bank;
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
   const accentGrad = accentGradient(theme);
   const storageKey = gameKey(user?.id);
 
-  const poolsRef = useRef(buildPools());
+  const poolsRef = useRef(buildPools(questions));
   const [game, setGame] = useState<GameState>(() => loadGame(storageKey));
   const [view, setView] = useState<StudyView>(() => initialView ?? consumeStudyView() ?? 'quiz');
   const [mode, setMode] = useState<Mode>('mix');
@@ -97,7 +119,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   // Map a question id to its index in the static bank (ids are not guaranteed to
   // equal the array position), used when drawing from the starred set.
   const idToIndex = useRef<Map<number, number>>(
-    new Map(SERIES65_QUESTIONS.map((q, i) => [q.id, i])),
+    new Map(questions.map((q, i) => [q.id, i])),
   );
   // Shuffled queue of starred ids to serve from in "Starred" mode, rebuilt from
   // the current starred set when it empties.
@@ -124,7 +146,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const [current, setCurrent] = useState<{ q: Series65Question; topic: Series65Topic } | null>(() => {
     const snap = initialCurrentRef.current;
     if (!snap) return null;
-    const q = SERIES65_QUESTIONS.find((x) => x.id === snap.id);
+    const q = questions.find((x) => x.id === snap.id);
     return q ? { q, topic: snap.topic } : null;
   });
   // `selected` is the highlighted answer before confirmation, and the submitted
@@ -224,7 +246,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   function draw(cat: Series65Topic): number {
     let pool = poolsRef.current[cat];
     if (!pool.length) {
-      poolsRef.current[cat] = buildPools()[cat]; // reshuffle this category
+      poolsRef.current[cat] = buildPools(questions)[cat]; // reshuffle this category
       pool = poolsRef.current[cat];
     }
     return pool.pop()!;
@@ -317,7 +339,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     setCreating(true);
     setCreateError(null);
     try {
-      const compact = SERIES65_QUESTIONS.map((q) => ({ id: q.id, stem: q.stem, topic: q.topic }));
+      const compact = questions.map((q) => ({ id: q.id, stem: q.stem, topic: q.topic }));
       const r = await api.createStudySection(name, compact);
       setSections(r.sections);
       sectionQueuesRef.current.delete(r.section.id);
@@ -353,7 +375,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
         return;
       }
       qi = drawn;
-      cat = SERIES65_QUESTIONS[qi].topic; // a starred question keeps its own topic
+      cat = questions[qi].topic; // a starred question keeps its own topic
     } else if (isSectionMode(mode)) {
       const drawn = drawSection(sectionIdOf(mode));
       if (drawn == null) {
@@ -362,12 +384,12 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
         return;
       }
       qi = drawn;
-      cat = SERIES65_QUESTIONS[qi].topic; // a subsection question keeps its own topic
+      cat = questions[qi].topic; // a subsection question keeps its own topic
     } else {
       cat = mode === 'mix' ? weightedCategory() : mode;
       qi = draw(cat);
     }
-    setCurrent({ q: SERIES65_QUESTIONS[qi], topic: cat });
+    setCurrent({ q: questions[qi], topic: cat });
     resetQuestionState();
   }
 
@@ -606,7 +628,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     const carriedBest = Math.max(game.allTimeBestStep, game.bestStep);
     const fresh: GameState = { ...emptyGame(), allTimeBestStep: carriedBest };
     setGame(fresh);
-    poolsRef.current = buildPools();
+    poolsRef.current = buildPools(questions);
     setUndoSnapshot(null);
     setUndoCooldown(0);
     setResetConfirm(false);
@@ -815,7 +837,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
           }}
         >
           <div style={{ fontSize: 12, color: '#e7e0ff', marginBottom: 8, lineHeight: 1.5 }}>
-            Name a topic and Claude will scan all {SERIES65_QUESTIONS.length} questions and gather the ones that fit — e.g. <em>Bonds</em>, <em>Compliance</em>, <em>Options</em>, <em>Retirement plans</em>.
+            Name a topic and Claude will scan all {questions.length} questions and gather the ones that fit — e.g. <em>Bonds</em>, <em>Compliance</em>, <em>Options</em>, <em>Retirement plans</em>.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
             <input
@@ -909,7 +931,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     return (
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
-        <Flashcards theme={theme} embedded readOnly={readOnly} />
+        <Flashcards theme={theme} embedded readOnly={readOnly} vocab={bank.vocab} />
       </div>
     );
   }
@@ -918,7 +940,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     return (
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
-        <TestMode theme={theme} onTestComplete={applyTestToLevel} />
+        <TestMode theme={theme} onTestComplete={applyTestToLevel} questions={questions} explanations={explanations} />
       </div>
     );
   }
@@ -939,7 +961,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     const starredQuestions = [...starred]
       .map((id) => idToIndex.current.get(id))
       .filter((idx): idx is number => idx != null)
-      .map((idx) => SERIES65_QUESTIONS[idx]);
+      .map((idx) => questions[idx]);
     return (
       <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
@@ -985,6 +1007,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
                   theme={theme}
                   isPhone={isPhone}
                   onUnstar={() => toggleStar(sq.id)}
+                  explanations={explanations}
                 />
               ))}
             </div>
@@ -1033,7 +1056,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const catPct = scorePct(game.cats[cat].recent);
   const passing = overallScore != null && overallScore >= PASS_THRESHOLD;
   const delta = overallScore == null ? 0 : round1(overallScore - PASS_THRESHOLD);
-  const explanation = revealed ? SERIES65_EXPLANATIONS[q.id] : undefined;
+  const explanation = revealed ? explanations[q.id] : undefined;
   const undoTitle = undoCooldown > 0
     ? `Undo unlocks in ${undoCooldown} question${undoCooldown === 1 ? '' : 's'}`
     : undoSnapshot
@@ -1641,16 +1664,18 @@ function StarredQuestionCard({
   theme,
   isPhone,
   onUnstar,
+  explanations,
 }: {
   q: Series65Question;
   theme: Theme;
   isPhone: boolean;
   onUnstar: () => void;
+  explanations: Record<number, string>;
 }) {
   const [selected, setSelected] = useState<Letter | null>(null);
   const [revealed, setRevealed] = useState(false);
   const muted = '#a99ff0';
-  const explanation = revealed ? SERIES65_EXPLANATIONS[q.id] : undefined;
+  const explanation = revealed ? explanations[q.id] : undefined;
 
   function pick(label: Letter) {
     if (revealed) return;

@@ -2,7 +2,7 @@
 // throughout the 400-question database. Grouped by the same four topics the
 // quiz uses so the Flashcards screen can filter by area.
 
-import type { Series65Topic } from './series65Questions';
+import type { Series65Topic } from './bank.js';
 
 export interface VocabCard {
   term: string;
