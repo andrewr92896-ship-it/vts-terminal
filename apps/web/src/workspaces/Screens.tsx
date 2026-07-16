@@ -23,11 +23,6 @@ const SCREENS: Record<string, ScreenInfo> = {
   history: { title: 'History', blurb: 'Historical performance, closed trades, and per-strategy results over time.', stage: 2 },
   td_trading: { title: 'Trading To Do', blurb: 'Trading tasks, also visible in your full To Do List workspace.', stage: 3 },
   admin: { title: 'Admin', blurb: 'User and role management, broker connection health, and audit settings.', stage: 3 },
-  // Kia
-  kia_dash: { title: 'Kia Dashboard', blurb: 'Units sold, pace to goal, commission, and recent deals.', stage: 3 },
-  kia_news: { title: 'Kia News', blurb: 'Kia announcements, incentives, and dealership updates.', stage: 3 },
-  kia_know: { title: 'Product Knowledge', blurb: 'Claude-powered product knowledge chat for the Kia lineup.', stage: 4 },
-  kia_todo: { title: 'Kia To Do', blurb: 'Sales tasks and working deals, also visible in your full To Do List workspace.', stage: 3 },
   // To Do
   td_all: { title: 'All Tasks', blurb: 'Numbered sections, recurring tasks with reset intervals, due and overdue flags, and a Claude command parser.', stage: 3 },
   // Studies

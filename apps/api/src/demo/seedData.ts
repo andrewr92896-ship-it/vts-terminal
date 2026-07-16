@@ -5,8 +5,6 @@ import {
   todoSections,
   todoItems,
   tradingAlerts,
-  kiaDeals,
-  kiaSettings,
   wealthClients,
   wealthPortfolios,
   wealthAllocations,
@@ -26,7 +24,6 @@ import {
 } from '../db/schema.js';
 import type { AnalyzeResult } from '../ai/claude.js';
 
-import { addDeal, updateSettings as updateKiaSettings } from '../kia/service.js';
 import {
   addExpense,
   addNetWorth,
@@ -47,16 +44,6 @@ import { ensureSeed as ensureTodoSeed } from '../todo/service.js';
 
 const DAY_MS = 86_400_000;
 
-// 'YYYY-MM-DD' for a day in the current calendar month (clamped to a valid day).
-function dayOfThisMonth(day: number): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth(); // 0-based
-  const daysInMonth = new Date(y, m + 1, 0).getDate();
-  const d = Math.min(Math.max(1, day), daysInMonth);
-  return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
-
 // Remove every row the seeder owns for this user, so the demo can be refreshed
 // to the latest seed on deploy without piling up duplicates. Scoped strictly by
 // userId, and child tables are cleared before their parents. Each delete is
@@ -65,8 +52,6 @@ export async function clearDemoData(userId: string): Promise<void> {
   const tables = [
     todoItems,
     todoSections,
-    kiaDeals,
-    kiaSettings,
     wealthAllocations,
     wealthCompliance,
     wealthPlans,
@@ -105,43 +90,6 @@ export async function clearDemoData(userId: string): Promise<void> {
 }
 
 export async function seedDemoData(userId: string): Promise<void> {
-  // ---- Kia ----
-  try {
-    const deals: Array<{
-      customer: string;
-      model: string;
-      type: 'New' | 'Used';
-      frontProfit?: number;
-      backProfit?: number;
-      profit?: number;
-      day: number;
-    }> = [
-      { customer: 'Marcus Bell', model: 'Sportage LX', type: 'New', frontProfit: 1200, backProfit: 900, day: 3 },
-      { customer: 'Dana Whitfield', model: 'Forte GT', type: 'New', frontProfit: 850, backProfit: 1400, day: 6 },
-      { customer: 'Priya Nair', model: 'Sorento EX', type: 'New', frontProfit: 1650, backProfit: 1100, day: 9 },
-      { customer: 'Walk-in', model: 'Optima (Used)', type: 'Used', profit: 1850, day: 12 },
-      { customer: 'Elena Vasquez', model: 'Telluride SX', type: 'New', frontProfit: 2200, backProfit: 1300, day: 15 },
-      { customer: 'Trevor Lang', model: 'Soul S (Used)', type: 'Used', frontProfit: 700, backProfit: 600, day: 18 },
-      { customer: 'Hannah Brooks', model: 'Carnival SX', type: 'New', frontProfit: 1500, backProfit: 1750, day: 21 },
-      { customer: 'Walk-in', model: 'Niro EV', type: 'New', frontProfit: 1300, backProfit: 800, day: 24 },
-    ];
-    for (const d of deals) {
-      await addDeal(userId, {
-        customer: d.customer,
-        model: d.model,
-        type: d.type,
-        profit: d.profit,
-        frontProfit: d.frontProfit,
-        backProfit: d.backProfit,
-        soldAt: dayOfThisMonth(d.day),
-      });
-    }
-    // Monthly unit goal of 15; reviewCount is the per-month Google-review tally.
-    await updateKiaSettings(userId, undefined, { goalUnits: 15, reviewCount: 11 });
-  } catch (err) {
-    console.error('demo seed kia failed:', err);
-  }
-
   // ---- Finance ----
   try {
     const expenses: Array<{ label: string; amount: number; dayOfMonth: number; category: string }> = [

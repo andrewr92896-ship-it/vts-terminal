@@ -24,7 +24,6 @@ import { InstallPrompt } from './InstallPrompt';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
-import { DealershipProvider } from '../workspaces/kia/dealership';
 import { HelpHub } from './HelpHub';
 import {
   currentStudyLevel,
@@ -35,10 +34,6 @@ import {
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
-import { KiaDashboard } from '../workspaces/kia/KiaDashboard';
-import { KiaNews } from '../workspaces/kia/KiaNews';
-import { KiaProductKnowledge } from '../workspaces/kia/KiaProductKnowledge';
-import { KiaTodo } from '../workspaces/kia/KiaTodo';
 import { LlcWorkspace } from '../workspaces/llc/LlcWorkspace';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
@@ -90,14 +85,6 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <TradingTodo />;
     case 'td_all':
       return <TodoAll />;
-    case 'kia_dash':
-      return <KiaDashboard />;
-    case 'kia_news':
-      return <KiaNews />;
-    case 'kia_know':
-      return <KiaProductKnowledge />;
-    case 'kia_todo':
-      return <KiaTodo />;
     case 'st_home':
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
     // Keyed distinctly so switching between the Study Game and Test Mode (both
@@ -359,8 +346,7 @@ export function Portal() {
 
   return (
     <PrivacyProvider>
-      <DealershipProvider>
-        <AlertSoundProvider>
+      <AlertSoundProvider>
           {canAccessWorkspace(effectiveRoles, 'trading') && <AlertSoundWatcher />}
 
           {isPhone ? (
@@ -474,8 +460,7 @@ export function Portal() {
           {isDemo && tourOpen && (
             <DemoTour theme={theme} onGo={goTo} onOpenClaude={() => setAiOpen(true)} onClose={closeTour} />
           )}
-        </AlertSoundProvider>
-      </DealershipProvider>
+      </AlertSoundProvider>
     </PrivacyProvider>
   );
 }

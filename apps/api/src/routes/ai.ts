@@ -21,11 +21,6 @@ const WORKSPACE_GUIDE: Record<string, { label: string; guide: string }> = {
     guide:
       'Help with live broker positions, the trade log and slippage, strategy sessions, the prop-firm (FTP) challenge metrics (profit target, daily and trailing drawdown), market news, and trade journaling. Be precise and risk-aware; emphasize protecting drawdown buffers. This is not personalized investment advice.',
   },
-  kia: {
-    label: 'Kia Sales',
-    guide:
-      'Help a Kia salesperson with deals, commission and pay-plan math, pace to their monthly unit goal, Google-review targets, and Kia product/process questions. Be practical and floor-ready.',
-  },
   finance: {
     label: 'Personal Finance',
     guide:
@@ -54,7 +49,7 @@ function systemPrompt(workspaceKey: string | undefined, displayName: string): st
   const ws = workspaceKey ? WORKSPACE_GUIDE[workspaceKey] : undefined;
   return [
     'You are the built-in assistant inside VTS Portal — a private dark "pro-terminal" web app for Andrew and a few invited users.',
-    'It bundles several workspaces: Trading, Kia Sales, Studies (Series 65), a To-Do list, Vitalis Wealth Management, and Personal Finance.',
+    'It bundles several workspaces: Trading, Studies (Series 65), a To-Do list, Vitalis Wealth Management, and Personal Finance.',
     ws ? `The user is currently in the ${ws.label} workspace. ${ws.guide}` : '',
     `You are talking to ${displayName}.`,
     'Be concise, practical, and direct. You do not have live access to their data; if they ask for specific numbers, point them to the relevant screen. Use plain text (no markdown headers).',
@@ -89,13 +84,6 @@ const tutorSchema = z.object({
     .max(40)
     .optional(),
 }).refine((v) => v.explain || v.ask || v.messages, { message: 'Provide a question to explain or ask' });
-
-const KIA_SYSTEM = [
-  'You are a Kia product expert helping a salesperson on the floor at a Kia dealership.',
-  'Answer questions about Kia models, trims, specs, towing and payload, EV range and charging, MPG, key features, incentives, and basic troubleshooting — accurately and concisely, the way you would brief a salesperson before they walk back to a customer.',
-  'Exact figures vary by model year and trim. When you are not certain of an exact number, say so, give the typical range, and suggest confirming on the window sticker or kia.com.',
-  'Use plain text — short paragraphs or simple bullet lines, no markdown headers.',
-].join(' ');
 
 export async function aiRoutes(app: FastifyInstance) {
   // Current user's AI usage against the monthly cap (for the UI to show).
@@ -169,21 +157,4 @@ export async function aiRoutes(app: FastifyInstance) {
     }
   });
 
-  // Kia Product Knowledge — same Sonnet model, a vehicle-expert persona.
-  app.post('/api/ai/kia', { preHandler: requireWorkspace('kia') }, async (request, reply) => {
-    if (!aiConfigured()) {
-      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
-    }
-    const parsed = schema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.code(400).send({ error: 'Invalid request' });
-    }
-    try {
-      await enforceAiLimit(request.currentUser!.id, 'kia');
-      return { reply: await chatClaude(parsed.data.messages, KIA_SYSTEM) };
-    } catch (err) {
-      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
-      return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
-    }
-  });
 }

@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.7';
+export const APP_VERSION = 'Beta V 2.8';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.8',
+    date: 'July 16, 2026',
+    notes: [
+      'Removed the Kia Sales workspace and its dashboard, news, product-knowledge, and to-do tools. The portal now focuses on Trading, Studies, To Do, Wealth, Finance, and the LLC workspace.',
+    ],
+  },
   {
     version: 'Beta V 2.7',
     date: 'July 14, 2026',

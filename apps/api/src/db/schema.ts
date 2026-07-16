@@ -75,7 +75,7 @@ export type SessionRow = typeof sessions.$inferSelect;
 //   note    - reflective notes shown as bullet dots (Life Changes), not checkable
 //   daily   - daily reference list shown as dashes, not checkable
 //   routine - recurring checkbox tasks with a reset interval and due date
-//   deals   - working deals (Kia), placeholder section
+//   deals   - working deals, placeholder section
 export const SECTION_TYPES = ['one', 'note', 'daily', 'routine', 'deals'] as const;
 export type SectionType = (typeof SECTION_TYPES)[number];
 
@@ -88,7 +88,7 @@ export const todoSections = sqliteTable('todo_sections', {
   icon: text('icon').notNull(),
   title: text('title').notNull(),
   type: text('type', { enum: SECTION_TYPES }).notNull(),
-  tag: text('tag'), // 'kia' | 'trading' | null — for cross-listing in those workspaces
+  tag: text('tag'), // 'trading' | null — for cross-listing in that workspace
   life: integer('life', { mode: 'boolean' }).notNull().default(false),
   position: integer('position').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
@@ -115,79 +115,6 @@ export const todoItems = sqliteTable('todo_items', {
 
 export type TodoSectionRow = typeof todoSections.$inferSelect;
 export type TodoItemRow = typeof todoItems.$inferSelect;
-
-// ---- Kia Sales ----
-// Per-user Kia settings: the legacy goal/review fallback plus the editable pay
-// plan (commission rate, bonus tiers, and the review requirement).
-export const kiaSettings = sqliteTable('kia_settings', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  goalUnits: integer('goal_units').notNull().default(12),
-  reviewCount: integer('review_count').notNull().default(5),
-  // Pay plan ----------------------------------------------------------------
-  // 'total' = one rate on each deal's total profit (front+back, the default);
-  // 'split' = separate rates on front-end and back-end profit.
-  commissionMode: text('commission_mode', { enum: ['total', 'split'] })
-    .notNull()
-    .default('total'),
-  // Commission stored in basis points (1350 = 13.5%) to avoid float drift.
-  commissionBp: integer('commission_bp').notNull().default(1350),
-  commissionFrontBp: integer('commission_front_bp').notNull().default(0),
-  commissionBackBp: integer('commission_back_bp').notNull().default(0),
-  // Minimum commission per deal in whole US dollars (a "mini"): when the
-  // percentage on a thin deal comes out lower, the salesperson still earns
-  // this floor. Defaults to $200.
-  miniAmount: integer('mini_amount').notNull().default(200),
-  // Whether the unit bonus requires a minimum review percentage at all.
-  reviewRequired: integer('review_required', { mode: 'boolean' }).notNull().default(true),
-  reviewReqPct: integer('review_req_pct').notNull().default(50),
-  // JSON array of { units, amount } bonus tiers; null falls back to defaults.
-  bonusTiers: text('bonus_tiers'),
-  // UI preference: whether the salesperson has hidden the dollar figures
-  // (profit/commission) on their dashboard. Stored per account so the choice
-  // follows them across devices and survives tab switches.
-  hideComm: integer('hide_comm', { mode: 'boolean' }).notNull().default(false),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-
-// Per-month goal and review count, so each month's dashboard stands on its own.
-export const kiaMonthSettings = sqliteTable(
-  'kia_month_settings',
-  {
-    userId: text('user_id')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    month: text('month').notNull(), // 'YYYY-MM' (Eastern Time)
-    goalUnits: integer('goal_units').notNull().default(12),
-    reviewCount: integer('review_count').notNull().default(0),
-    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-  },
-  (t) => ({ pk: primaryKey({ columns: [t.userId, t.month] }) }),
-);
-
-export const kiaDeals = sqliteTable('kia_deals', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  customer: text('customer').notNull(),
-  model: text('model').notNull(),
-  type: text('type', { enum: ['New', 'Used'] }).notNull(),
-  profit: integer('profit').notNull(), // total profit (front+back), whole US dollars
-  // Optional front/back split, used by split-commission pay plans. Null when
-  // the deal was entered as a single total.
-  frontProfit: integer('front_profit'),
-  backProfit: integer('back_profit'),
-  soldAt: integer('sold_at', { mode: 'timestamp_ms' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-});
-
-export type KiaSettingsRow = typeof kiaSettings.$inferSelect;
-export type KiaMonthSettingsRow = typeof kiaMonthSettings.$inferSelect;
-export type KiaDealRow = typeof kiaDeals.$inferSelect;
 
 // ---- Vitalis Wealth Management ----
 // Per-user client list for the advisory practice. Like every other workspace,
@@ -218,7 +145,7 @@ export type WealthClientRow = typeof wealthClients.$inferSelect;
 // ---- Trading — Trade Log ----
 // Per-user record of trades (the trader's own log), keyed by userId so a new
 // user starts empty. Prices and sizes are stored as reals (forex/crypto prices
-// need decimals, so the whole-dollar integer convention used for Kia/Wealth
+// need decimals, so the whole-dollar integer convention used for Wealth
 // does not apply here); realized P/L is a real in account currency. The planned
 // (alert) entry is what the broker position feed cannot supply — it is recorded
 // here so slippage (entry vs. plan) can be computed for the Trade Log.
@@ -829,7 +756,7 @@ export type AnnouncementRow = typeof announcements.$inferSelect;
 
 // ---- AI usage (per-user guardrails) ----
 // One row per Claude call, used to enforce a monthly cap. `kind` records which
-// feature made the call (ask, kia, analyze, news_brief, todo_command, ...).
+// feature made the call (ask, analyze, news_brief, todo_command, ...).
 export const aiUsage = sqliteTable('ai_usage', {
   id: text('id').primaryKey(),
   userId: text('user_id')

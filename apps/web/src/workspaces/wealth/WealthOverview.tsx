@@ -6,7 +6,7 @@ import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components
 import type { PracticeOverview, WealthClientStatus } from '../../api/types';
 
 // Wealth workspace palette — the dark green "pro-terminal" theme, hardcoded so
-// the screen is self-contained (mirrors WealthClients / KiaDashboard).
+// the screen is self-contained (mirrors WealthClients).
 const GREEN = '#34b87a';
 const CARD = '#0e1a15';
 const PANEL = '#0a201a';

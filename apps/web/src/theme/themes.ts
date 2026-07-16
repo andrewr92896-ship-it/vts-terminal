@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'kia' | 'todo' | 'studies' | 'llc' | 'wealth' | 'finance';
+export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'llc' | 'wealth' | 'finance';
 
 export interface Theme {
   pageBg: string;
@@ -44,16 +44,6 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent: '#EBCB74',
     accent2: '#C9A24B',
     accentText: '#0c2768',
-  },
-  kia: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1c1f25 0%,#0a0b0d 60%)',
-    headerBg: 'linear-gradient(90deg,#141518 0%,#202227 100%)',
-    headerBorder: '#2c2f36',
-    navBg: '#141518',
-    navBorder: '#26282e',
-    accent: '#BB162B',
-    accent2: '#8d0f20',
-    accentText: '#ffffff',
   },
   todo: {
     pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1b2c3b 0%,#0d1620 60%)',
@@ -122,13 +112,6 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     size: '21px',
     letterSpacing: '2px',
   },
-  kia: {
-    name: () => 'KIA',
-    sub: 'Kia of Streetsboro',
-    color: '#ffffff',
-    size: '26px',
-    letterSpacing: '5px',
-  },
   todo: {
     name: (userName: string) => `${userName}'s To Do List`,
     sub: 'Personal workspace',
@@ -184,12 +167,6 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'news', label: 'Market News', dot: '#ef5468' },
     { key: 'td_trading', label: 'To Do' },
   ],
-  kia: [
-    { key: 'kia_dash', label: 'Dashboard' },
-    { key: 'kia_news', label: 'Kia News' },
-    { key: 'kia_know', label: 'Product Knowledge' },
-    { key: 'kia_todo', label: 'To Do' },
-  ],
   todo: [{ key: 'td_all', label: 'All Tasks' }],
   wealth: [
     { key: 'wm_home', label: 'Overview' },
@@ -216,7 +193,6 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'live',
-  kia: 'kia_dash',
   todo: 'td_all',
   studies: 'st_home',
   llc: 'llc_overview',
@@ -226,7 +202,6 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   todo: 'To Do List',
-  kia: 'Kia Sales',
   trading: 'Trading',
   studies: 'Studies',
   llc: 'Vitalis Trading Systems LLC',

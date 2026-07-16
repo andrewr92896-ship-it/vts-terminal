@@ -40,17 +40,6 @@ function cannedAsk(body: unknown): string {
     .join(' ');
 }
 
-function cannedKia(body: unknown): string {
-  const q = clip(lastUserMessage(body), 160);
-  return [
-    'This is a scripted sample reply in the demo. In the live portal this is a Kia product expert running on Claude (Sonnet).',
-    q ? `You asked: "${q}".` : '',
-    'It briefs a salesperson on trims, towing and payload, EV range, MPG, incentives, and quick model comparisons, and flags when an exact figure should be confirmed on the window sticker.',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
 function cannedTutor(body: unknown): string {
   const q = clip(lastUserMessage(body), 160);
   return [
@@ -122,7 +111,6 @@ export const demoGuard: preHandlerHookHandler = async (request, reply) => {
 
   // Scripted AI: same response shapes as the real routes, no model call.
   if (url === '/api/ai/ask') return reply.send({ reply: cannedAsk(request.body) });
-  if (url === '/api/ai/kia') return reply.send({ reply: cannedKia(request.body) });
   if (url === '/api/ai/tutor') return reply.send({ reply: cannedTutor(request.body) });
   if (url === '/api/trading/metrics/brief') return reply.send({ brief: BRIEF_METRICS });
   if (url === '/api/trading/news/brief') return reply.send({ brief: BRIEF_NEWS });

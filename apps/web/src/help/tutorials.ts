@@ -19,11 +19,11 @@ export const TUTORIALS: Record<string, Tutorial> = {
   // ---- Personal Finance ----
   fin_overview: {
     title: 'Personal Finance',
-    intro: 'Your take-home this month across every job and business — car sales commission, real-broker trading, and Funded Trading Plus (scaled) — minus your bills.',
+    intro: 'Your take-home this month across every job and business — real-broker trading and Funded Trading Plus (scaled) — minus your bills.',
     steps: [
       {
         title: 'Earnings this month',
-        body: 'The top card adds up your earnings (Kia commission + real broker trading P/L + scaled FTP), subtracts your expenses, and shows what’s left after bills, with a “bills covered” bar.',
+        body: 'The top card adds up your earnings (real broker trading P/L + scaled FTP), subtracts your expenses, and shows what’s left after bills, with a “bills covered” bar.',
       },
       {
         title: 'FTP is scaled',
@@ -31,7 +31,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Sources',
-        body: 'The Earnings sources panel breaks the total down. Car sales pulls from your Kia tracker; trading uses your closed trades this month.',
+        body: 'The Earnings sources panel breaks the total down. Trading uses your closed trades this month.',
       },
       {
         title: 'Expenses & Net Worth',
@@ -328,79 +328,6 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
-  // ---- Kia Sales ----
-  kia_dash: {
-    title: 'Using the Sales Dashboard',
-    intro: 'Track your month: deals, pace to goal, commission, and Google reviews — all updated automatically as you log deals.',
-    steps: [
-      {
-        title: 'Ask Claude to change details',
-        body: 'The command bar runs several changes at once in plain English — e.g. "add deal Sportage LX 1850 for Reyes · set goal 12 · set reviews 60% · summary". It can add, edit, or remove deals, set your goal, reviews, commission, or mini, and summarize the month. A ✓/– recap shows what it did.',
-      },
-      {
-        title: 'Log a deal',
-        body: 'In "Log a deal", enter the customer (optional), model, New/Used, profit in dollars, and the sale date, then click "Add deal". It appears in Recent Deals and updates every metric.',
-      },
-      {
-        title: 'Read your KPIs',
-        body: 'The cards across the top show units sold, projected pace, days left in the month, total profit, estimated commission, and your review percentage.',
-      },
-      {
-        title: 'Set your goal and reviews',
-        body: 'Use the +/- steppers on "Monthly Unit Goal" and "Google Reviews" to set your target units and how many reviews you have. Reviews need to stay at 50%+ to unlock the unit bonus.',
-      },
-      {
-        title: 'Hide dollar details',
-        body: 'Click "Hide $ details" to mask profit and commission figures when someone might see your screen. Click again to show them.',
-      },
-      {
-        title: 'Remove a deal',
-        body: 'Click the × on any row in Recent Deals to remove that deal; the metrics recalculate instantly.',
-      },
-    ],
-  },
-  kia_news: {
-    title: 'Kia News',
-    intro: 'Product, incentive, and corporate headlines relevant to the floor.',
-    steps: [
-      {
-        title: 'Browse headlines',
-        body: 'Each card shows a topic tag, the source, and how long ago it was posted, with a short summary.',
-      },
-      {
-        title: 'Sample feed for now',
-        body: 'This is sample content. A live news source gets wired in later — the layout stays the same.',
-      },
-    ],
-  },
-  kia_know: {
-    title: 'Product Knowledge',
-    intro: 'A Claude (Sonnet) assistant for Kia specs, trims, incentives, and troubleshooting — quick answers before you walk back to a customer.',
-    steps: [
-      { title: 'Ask anything', body: 'Type a question about any Kia model — towing, payload, EV range and charging, MPG, trims, features, incentives, or troubleshooting — and press Enter.' },
-      { title: 'Topic shortcuts', body: 'Tap a chip at the top to send a common question instantly.' },
-      { title: 'Double-check exact numbers', body: 'Figures vary by model year and trim; the assistant will flag when a number is approximate. Confirm specifics on the window sticker or kia.com.' },
-    ],
-  },
-  kia_todo: {
-    title: 'Dealership To-Do',
-    intro: 'Your sales tasks and working deals — a focused view of the Kia parts of your full To Do List.',
-    steps: [
-      {
-        title: 'Add a dealership task',
-        body: 'Type a task in the box and click Add. It is filed under Dealership / Sales.',
-      },
-      {
-        title: 'Shared with your To Do List',
-        body: 'These tasks also appear in the full To Do List workspace, so anything you add here shows up there too.',
-      },
-      {
-        title: 'Check off and track deals',
-        body: 'Tick the checkbox to complete a task. Working Deals shows deals you are actively tracking.',
-      },
-    ],
-  },
-
   // ---- Studies (Series 65) ----
   st_home: {
     title: 'Study Hub',
@@ -612,7 +539,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Choose the right role',
-        body: 'Admin = everything (including this screen). Sales = Kia workspace + to-do. Trader = Trading workspace + to-do. Viewer = read-only.',
+        body: 'Admin = everything (including this screen). Trader = Trading workspace + to-do. Viewer = read-only.',
       },
       {
         title: 'Manage existing users',
@@ -620,7 +547,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Delete an account',
-        body: 'Click "Delete", then "Confirm delete", to permanently remove an account and all of its data (to-dos, Kia deals, clients). This cannot be undone — use Deactivate instead if you only need to suspend access. You cannot delete your own account or the last remaining admin.',
+        body: 'Click "Delete", then "Confirm delete", to permanently remove an account and all of its data (to-dos, clients). This cannot be undone — use Deactivate instead if you only need to suspend access. You cannot delete your own account or the last remaining admin.',
       },
       {
         title: 'Renamed accounts',
@@ -641,7 +568,7 @@ export const DEFAULT_TUTORIAL: Tutorial = {
     },
     {
       title: 'Switch workspaces',
-      body: 'Use the workspace switcher in the top bar to move between To Do List, Kia Sales, and the other areas you have access to.',
+      body: 'Use the workspace switcher in the top bar to move between To Do List, Trading, and the other areas you have access to.',
     },
   ],
 };

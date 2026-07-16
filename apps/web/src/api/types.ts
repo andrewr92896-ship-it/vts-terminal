@@ -6,7 +6,6 @@ export type RoleKey =
   | 'admin'
   | 'trading'
   | 'trading_viewer'
-  | 'sales'
   | 'studies'
   | 'todo'
   | 'wealth'
@@ -129,17 +128,6 @@ export interface RemovedTodoItem {
   intervalDays: number | null;
 }
 
-export interface RemovedKiaDeal {
-  id: string;
-  customer: string;
-  model: string;
-  type: 'New' | 'Used';
-  profit: number;
-  frontProfit: number | null;
-  backProfit: number | null;
-  soldAt: number;
-}
-
 // The prior state of a toggled item, returned so the client can offer an Undo.
 export interface TodoItemState {
   id: string;
@@ -196,99 +184,6 @@ export interface TodoSection {
   count: number;
   empty: boolean;
   items: TodoItem[];
-}
-
-export interface KiaDeal {
-  id: string;
-  customer: string;
-  model: string;
-  type: 'New' | 'Used';
-  profit: number;
-  frontProfit: number | null;
-  backProfit: number | null;
-  dateLabel: string;
-  soldAt: number;
-}
-
-export interface KiaMetrics {
-  units: number;
-  goalUnits: number;
-  toGoal: number;
-  unitPct: number;
-  totalProfit: number;
-  commission: number;
-  commissionRate: number;
-  reviewCount: number;
-  reviewPct: number;
-  reviewReq: number;
-  reviewRequired: boolean;
-  reviewOk: boolean;
-  bonusTiers: { units: number; amount: number }[];
-  bonusEarned: number;
-  tierHitUnits: number | null;
-  nextBonus: { units: number; amount: number; toGo: number } | null;
-  daysInMonth: number;
-  dayOfMonth: number;
-  daysLeft: number;
-  paceUnits: number;
-  paceProfit: number;
-  paceComm: number;
-  onPace: boolean;
-}
-
-export interface KiaMonthOption {
-  key: string; // 'YYYY-MM'
-  label: string; // e.g. 'June 2026'
-}
-
-export interface KiaMonthSummary {
-  month: string;
-  label: string;
-  units: number;
-  totalProfit: number;
-  commission: number;
-}
-
-export interface KiaBonusTier {
-  units: number;
-  amount: number;
-}
-
-export interface KiaPayPlan {
-  commissionMode: 'total' | 'split';
-  commissionRate: number; // total mode fraction, e.g. 0.135
-  frontRate: number; // split mode: front-end fraction
-  backRate: number; // split mode: back-end fraction
-  reviewRequired: boolean;
-  reviewReqPct: number;
-  bonusTiers: KiaBonusTier[];
-  miniAmount: number; // minimum commission per deal (a "mini"), whole dollars
-}
-
-export interface KiaDashboard {
-  month: string; // the month currently shown, 'YYYY-MM'
-  months: KiaMonthOption[]; // selectable months, newest first
-  history: KiaMonthSummary[]; // per-month totals, newest first
-  deals: KiaDeal[];
-  metrics: KiaMetrics;
-  settings: { goalUnits: number; reviewCount: number };
-  payPlan: KiaPayPlan;
-  hideComm: boolean; // per-account: dollar figures hidden on the dashboard
-}
-
-// Result of logging a deal from a plain-English note via Claude.
-export interface KiaDealParseResult {
-  dashboard: KiaDashboard | null; // refreshed when a deal was logged
-  logged: boolean;
-  reply: string;
-}
-
-// Result of running a Claude command-bar instruction over the month.
-export interface KiaCommandResult {
-  dashboard: KiaDashboard; // refreshed dashboard for the viewed month
-  applied: string[];
-  skipped: string[];
-  reply: string;
 }
 
 // ---- Vitalis Wealth Management ----
@@ -866,7 +761,7 @@ export interface FinanceOverview {
   monthLabel: string;
   todayDay: number;
   settings: { ftpPhase: FtpPhase; ftpDivisor: number; ftpPayoutPct: number };
-  earnings: { kiaCommission: number; tradingReal: number; ftpRaw: number; ftpScaled: number; total: number };
+  earnings: { tradingReal: number; ftpRaw: number; ftpScaled: number; total: number };
   expenses: { total: number; paid: number; upcoming: number; count: number };
   net: number;
   billsCoveredPct: number;

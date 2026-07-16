@@ -65,7 +65,7 @@ export async function financeRoutes(app: FastifyInstance) {
     const o = await getOverview(uid(request));
     const data = [
       `Month: ${o.monthLabel} (day ${o.todayDay}).`,
-      `Earnings — Kia commission ${usd(o.earnings.kiaCommission)}, trading P/L ${usd(o.earnings.tradingReal)}, FTP scaled ${usd(o.earnings.ftpScaled)} (raw ${usd(o.earnings.ftpRaw)}, phase ${o.settings.ftpPhase}); total ${usd(o.earnings.total)}.`,
+      `Earnings — trading P/L ${usd(o.earnings.tradingReal)}, FTP scaled ${usd(o.earnings.ftpScaled)} (raw ${usd(o.earnings.ftpRaw)}, phase ${o.settings.ftpPhase}); total ${usd(o.earnings.total)}.`,
       `Expenses — ${usd(o.expenses.total)} across ${o.expenses.count} bills; ${usd(o.expenses.paid)} paid, ${usd(o.expenses.upcoming)} upcoming. Bills covered by earnings: ${o.billsCoveredPct}%.`,
       `Net this month: ${usd(o.net)}.`,
       `Net worth — assets ${usd(o.netWorth.assets)}, liabilities ${usd(o.netWorth.liabilities)}, total ${usd(o.netWorth.total)}.`,

@@ -9,7 +9,6 @@ export const ALL_ROLES: RoleKey[] = [
   'admin',
   'trading',
   'trading_viewer',
-  'sales',
   'studies',
   'todo',
   'wealth',
@@ -20,7 +19,6 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   admin: 'Admin',
   trading: 'Trading',
   trading_viewer: 'Trading (View only)',
-  sales: 'Sales',
   studies: 'Studies',
   todo: 'To Do',
   wealth: 'Wealth Management',
@@ -32,7 +30,6 @@ export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
   admin: 'Manage users and see every workspace',
   trading: 'Trading workspace (full access)',
   trading_viewer: 'Trading workspace (read-only)',
-  sales: 'Kia Sales workspace',
   studies: 'Studies workspace',
   todo: 'Personal To Do List workspace',
   wealth: 'Vitalis Retirement & Wealth Management workspace',
@@ -45,7 +42,6 @@ export function isAdmin(roles: RoleKey[]): boolean {
 
 const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
-  kia: ['sales'],
   todo: ['todo'],
   studies: ['studies'],
   // The Vitalis Trading Systems LLC business workspace is owner-only for now:
@@ -72,7 +68,7 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
 // Ordered as the sidebar shows them. Wealth Management and Finance are removed
 // from the Meridian nav; the LLC business workspace is added (admin-only).
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['trading', 'kia', 'studies', 'todo', 'llc'];
+  const order: WorkspaceKey[] = ['trading', 'studies', 'todo', 'llc'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 
