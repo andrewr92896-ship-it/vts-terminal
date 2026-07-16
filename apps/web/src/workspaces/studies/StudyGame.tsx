@@ -38,9 +38,11 @@ import {
   saveGame,
   saveStarred,
   scorePct,
+  sessionScore,
   STREAK_STEP,
   streakMultiplier,
   weightedCategory,
+  WINDOW,
   type GameState,
   type TestLevelUp,
 } from './series65Game';
@@ -592,6 +594,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   }
 
   const overallScore = lifetimeAccuracy(game);
+  const session = sessionScore(game);
   const bestEver = levelAtStep(game.allTimeBestStep);
   const muted = '#a99ff0';
 
@@ -1350,6 +1353,46 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
         {/* Scoreboard + categories */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={card(theme)}>
+            {/* Session score — the current block of up to WINDOW questions,
+                reset every WINDOW answers (Q1–100, Q101–200, …). */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span style={statLabel}>
+                Session score · Q{session ? session.start : 1}–{session ? session.end : WINDOW}
+              </span>
+              <span style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {session ? session.attempted : 0}/{WINDOW}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+              <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 30, fontWeight: 700, color: '#fff' }}>
+                {session == null ? '—' : `${session.pct.toFixed(1)}%`}
+              </span>
+              {session && (
+                <span style={{ fontSize: 11.5, color: muted }}>
+                  {session.correct}/{session.attempted} correct
+                </span>
+              )}
+            </div>
+            <div style={{ height: 8, background: theme.navBorder, borderRadius: 5, overflow: 'hidden', marginTop: 10, position: 'relative' }}>
+              <div style={{ position: 'absolute', left: `${PASS_THRESHOLD}%`, top: 0, width: 2, height: '100%', background: '#fff', opacity: 0.6 }} />
+              <div
+                style={{
+                  height: '100%',
+                  width: `${session?.pct ?? 0}%`,
+                  background: session && session.pct >= PASS_THRESHOLD ? `linear-gradient(90deg,${GREEN},#27a866)` : accentGrad,
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: muted }}>
+              <span>
+                {session && session.attempted >= WINDOW
+                  ? 'Block complete — next answer starts a new one'
+                  : `Resets every ${WINDOW} · ${session ? WINDOW - session.attempted : WINDOW} to go`}
+              </span>
+            </div>
+
+            <div style={{ height: 1, background: theme.navBorder, margin: '14px 0' }} />
+
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
               <span style={statLabel}>Score · lifetime accuracy</span>
               {practice && (
