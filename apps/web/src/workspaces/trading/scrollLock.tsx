@@ -87,10 +87,20 @@ export function MobileScrollLockBar() {
   // Disable finger-scrolling of the page while locked.
   useEffect(() => {
     if (!isLocked || !root) return;
-    const prev = root.style.touchAction;
+    const prevTouch = root.style.touchAction;
+    const prevOverflow = root.style.overflowY;
     root.style.touchAction = 'none';
+    // overflow:hidden makes the container completely non-user-scrollable. This
+    // is what stops a drag that STARTS inside the TradingView iframe: those
+    // touches never reach our listener (cross-origin), but the browser would
+    // otherwise scroll-chain the gesture into the page — with no scrollable
+    // container to chain into, it can't. scrollTop is still settable
+    // programmatically (the scrollbar thumb below), so deliberate scrolling
+    // keeps working.
+    root.style.overflowY = 'hidden';
     return () => {
-      root.style.touchAction = prev;
+      root.style.touchAction = prevTouch;
+      root.style.overflowY = prevOverflow;
     };
   }, [isLocked, root]);
 
