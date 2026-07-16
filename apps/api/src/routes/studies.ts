@@ -17,6 +17,7 @@ import {
 } from '../studies/tests.js';
 import { aiConfigured, classifyQuestionsIntoSection, defineSeries65Term } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
+import { getTeamName } from '../teams/service.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
@@ -212,7 +213,9 @@ export async function studiesRoutes(app: FastifyInstance) {
   // High-score table: everyone's headline Study Game stats, so learners can see
   // where they stand and compare progress with each other.
   app.get('/api/studies/leaderboard', guard, async (request) => {
-    return { entries: await getLeaderboard(request.currentUser!.id) };
+    const me = request.currentUser!;
+    const [entries, teamName] = await Promise.all([getLeaderboard(me.id), getTeamName(me.teamId)]);
+    return { entries, team: teamName ? { id: me.teamId!, name: teamName } : null };
   });
 
   // ---- Mock tests ----
@@ -236,11 +239,13 @@ export async function studiesRoutes(app: FastifyInstance) {
   // The test high-score board (each player's best run, tagged with the attempt
   // that produced it) plus the caller's own attempt history.
   app.get('/api/studies/tests/leaderboard', guard, async (request) => {
-    const [entries, mine] = await Promise.all([
-      getTestLeaderboard(request.currentUser!.id),
-      listMyTests(request.currentUser!.id),
+    const me = request.currentUser!;
+    const [entries, mine, teamName] = await Promise.all([
+      getTestLeaderboard(me.id),
+      listMyTests(me.id),
+      getTeamName(me.teamId),
     ]);
-    return { entries, mine };
+    return { entries, mine, team: teamName ? { id: me.teamId!, name: teamName } : null };
   });
 
   // In-progress test state, stored as one JSON blob per user so an unfinished

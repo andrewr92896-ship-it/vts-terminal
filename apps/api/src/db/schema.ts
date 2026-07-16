@@ -4,6 +4,22 @@ import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
 export type Role = (typeof ROLES)[number];
 
+// ---- Trading teams ----
+// Admin-managed groups a trader belongs to. Each user is a member of at most one
+// team (users.team_id below). Teams partition the shared portal into competing
+// desks: the Studies leaderboards rank a learner only against their own team,
+// while the Trading data (Live Wall presets, Trade Desk, alerts, sessions,
+// funded, etc.) stays shared across every team. Only admins create/rename/delete
+// teams and assign members. The default team ("Vitalis Trading Team") is seeded
+// on boot; see teams/service.ts DEFAULT_TEAM_ID.
+export const tradingTeams = sqliteTable('trading_teams', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TradingTeamRow = typeof tradingTeams.$inferSelect;
+
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
   username: text('username').notNull().unique(),
@@ -20,6 +36,10 @@ export const users = sqliteTable('users', {
   // Granular, admin-assigned roles as a JSON array of role keys
   // (see auth/rbac.ts ROLE_KEYS), e.g. ["admin"] or ["sales","studies"].
   roles: text('roles'),
+  // The trading team this user belongs to (trading_teams.id), or null for none.
+  // Admin-assigned. Scopes the Studies leaderboards to teammates; the Trading
+  // workspace itself stays shared across teams.
+  teamId: text('team_id'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
   viewBrokerage: integer('view_brokerage', { mode: 'boolean' })

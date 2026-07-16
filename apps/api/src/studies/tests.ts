@@ -120,28 +120,36 @@ export async function listMyTests(userId: string): Promise<TestResult[]> {
 // The test high-score table: every player's single best test, ranked by score.
 // Ties break toward the earlier attempt (fewer tries to reach it), then the
 // earlier date. Each row carries the attempt number that produced the score and
-// the player's total attempts.
+// the player's total attempts. Scoped to the caller's trading team, so a learner
+// is ranked only against teammates (team-less learners against each other).
 export async function getTestLeaderboard(
   currentUserId: string,
 ): Promise<TestLeaderboardEntry[]> {
-  const rows = await db
-    .select({
-      userId: studyTests.userId,
-      name: users.displayName,
-      attempt: studyTests.attempt,
-      score: studyTests.score,
-      correct: studyTests.correct,
-      total: studyTests.total,
-      passed: studyTests.passed,
-      createdAt: studyTests.createdAt,
-    })
-    .from(studyTests)
-    .innerJoin(users, eq(users.id, studyTests.userId));
+  const [viewerRows, rows] = await Promise.all([
+    db.select({ teamId: users.teamId }).from(users).where(eq(users.id, currentUserId)).limit(1),
+    db
+      .select({
+        userId: studyTests.userId,
+        name: users.displayName,
+        teamId: users.teamId,
+        attempt: studyTests.attempt,
+        score: studyTests.score,
+        correct: studyTests.correct,
+        total: studyTests.total,
+        passed: studyTests.passed,
+        createdAt: studyTests.createdAt,
+      })
+      .from(studyTests)
+      .innerJoin(users, eq(users.id, studyTests.userId)),
+  ]);
+
+  const viewerTeamId = viewerRows[0]?.teamId ?? null;
 
   // Fold every player's rows into their best single result plus a total count.
   const best = new Map<string, TestLeaderboardEntry>();
   const counts = new Map<string, number>();
   for (const r of rows) {
+    if ((r.teamId ?? null) !== viewerTeamId) continue;
     counts.set(r.userId, (counts.get(r.userId) ?? 0) + 1);
     const created = r.createdAt.getTime();
     const prev = best.get(r.userId);

@@ -10,10 +10,17 @@ import {
   createSession,
   destroySession,
 } from '../auth/sessions.js';
-import { toPublicUser } from '../auth/rbac.js';
+import { toPublicUser, type PublicUser } from '../auth/rbac.js';
 import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { ensureDemoAccount } from '../seed.js';
+import { getTeamName } from '../teams/service.js';
+
+// Build the browser-safe user, resolving the trading-team name from the user's
+// teamId so the client can show which team they're on.
+async function publicUser(u: typeof users.$inferSelect): Promise<PublicUser> {
+  return toPublicUser(u, await getTeamName(u.teamId));
+}
 
 // Sign-in is by email. `username` is still accepted as an optional fallback
 // identifier so a legacy credential (or an account whose email is not yet set)
@@ -82,7 +89,7 @@ export async function authRoutes(app: FastifyInstance) {
       request.headers['user-agent'],
     );
     reply.setCookie(SESSION_COOKIE, token, cookieOptions(maxAgeSeconds));
-    return { user: toPublicUser(user) };
+    return { user: await publicUser(user) };
   });
 
   // One-click entry to the public, read-only demo. No credentials: it signs the
@@ -109,7 +116,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
     const { token, maxAgeSeconds } = await createSession(user.id, request.headers['user-agent']);
     reply.setCookie(SESSION_COOKIE, token, cookieOptions(maxAgeSeconds));
-    return { user: toPublicUser(user) };
+    return { user: await publicUser(user) };
   });
 
   app.post('/api/auth/logout', async (request, reply) => {
@@ -125,7 +132,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.get('/api/auth/me', { preHandler: requireAuth }, async (request) => {
-    return { user: toPublicUser(request.currentUser!) };
+    return { user: await publicUser(request.currentUser!) };
   });
 
   // Change your own password. Works both for the forced first-login change
@@ -155,7 +162,7 @@ export async function authRoutes(app: FastifyInstance) {
         .where(eq(users.id, me.id));
 
       const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
-      return { user: toPublicUser(fresh) };
+      return { user: await publicUser(fresh) };
     },
   );
 
@@ -202,6 +209,6 @@ export async function authRoutes(app: FastifyInstance) {
 
     await db.update(users).set(patch).where(eq(users.id, me.id));
     const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
-    return { user: toPublicUser(fresh) };
+    return { user: await publicUser(fresh) };
   });
 }

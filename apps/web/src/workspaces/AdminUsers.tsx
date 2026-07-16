@@ -3,7 +3,7 @@ import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../auth/access';
-import type { AdminUser, RoleKey } from '../api/types';
+import type { AdminUser, RoleKey, Team } from '../api/types';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 
@@ -27,6 +27,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const accentGrad = accentGradient(theme);
 
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -37,6 +38,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [roles, setRoles] = useState<RoleKey[]>(['todo']);
+  const [teamId, setTeamId] = useState<string>('');
   const [password, setPassword] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -51,9 +53,12 @@ export function AdminUsers({ theme }: { theme: Theme }) {
 
   useEffect(() => {
     let alive = true;
-    api
-      .adminListUsers()
-      .then((r) => alive && setUsers(r.users))
+    Promise.all([api.adminListUsers(), api.adminListTeams()])
+      .then(([u, t]) => {
+        if (!alive) return;
+        setUsers(u.users);
+        setTeams(t.teams);
+      })
       .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load users'))
       .finally(() => alive && setLoading(false));
     return () => {
@@ -84,6 +89,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
         username: username.trim(),
         email: email.trim(),
         roles,
+        teamId: teamId || null,
         password,
       });
       setCreated({ username: username.trim().toLowerCase(), password });
@@ -150,6 +156,16 @@ export function AdminUsers({ theme }: { theme: Theme }) {
         </p>
       </div>
 
+      {/* Trading teams */}
+      <TeamsManager
+        teams={teams}
+        setTeams={setTeams}
+        onMembersChanged={refresh}
+        onError={setActionError}
+        theme={theme}
+        accentGrad={accentGrad}
+      />
+
       {/* Create a user */}
       <div style={{ ...panel(theme), marginBottom: 18 }}>
         <div style={panelLabel}>Add a user</div>
@@ -204,6 +220,11 @@ export function AdminUsers({ theme }: { theme: Theme }) {
               />
             ))}
           </div>
+        </div>
+
+        <div style={{ marginTop: 14, maxWidth: isPhone ? '100%' : 320 }}>
+          <label style={fieldLabel}>Trading team</label>
+          <TeamSelect value={teamId} onChange={setTeamId} teams={teams} />
         </div>
 
         {createError && <div style={msgStyle(false)}>{createError}</div>}
@@ -353,6 +374,17 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 </div>
               </div>
 
+              {/* Trading team assignment */}
+              <div style={{ marginTop: 12, maxWidth: isPhone ? '100%' : 320 }}>
+                <div style={{ ...fieldLabel, marginBottom: 8 }}>Trading team</div>
+                <TeamSelect
+                  value={u.teamId ?? ''}
+                  onChange={(v) => patch(u.id, { teamId: v || null })}
+                  teams={teams}
+                  disabled={busyId === u.id}
+                />
+              </div>
+
               {resetFor === u.id && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <input
@@ -436,6 +468,217 @@ function RoleToggle({
       </span>
       {ROLE_LABELS[role]}
     </button>
+  );
+}
+
+// A native dropdown for picking a user's trading team (or none). Kept simple so
+// it inherits the dark theme via inline styles like everything else here.
+function TeamSelect({
+  value,
+  onChange,
+  teams,
+  disabled,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  teams: Team[];
+  disabled?: boolean;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled}
+      style={{ ...inputStyle, opacity: disabled ? 0.6 : 1, cursor: disabled ? 'default' : 'pointer' }}
+    >
+      <option value="">No team</option>
+      {teams.map((t) => (
+        <option key={t.id} value={t.id}>
+          {t.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+// Admin panel to create, rename, and delete trading teams. Team membership is
+// assigned per user (the TeamSelect above); this manages the team list itself.
+// Deleting a team unassigns its members server-side, so we refresh the user
+// list afterward via onMembersChanged.
+function TeamsManager({
+  teams,
+  setTeams,
+  onMembersChanged,
+  onError,
+  theme,
+  accentGrad,
+}: {
+  teams: Team[];
+  setTeams: (t: Team[]) => void;
+  onMembersChanged: () => Promise<void> | void;
+  onError: (msg: string | null) => void;
+  theme: Theme;
+  accentGrad: string;
+}) {
+  const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  async function add() {
+    const name = newName.trim();
+    if (!name) return;
+    setBusy(true);
+    onError(null);
+    try {
+      const r = await api.adminCreateTeam(name);
+      setTeams(r.teams);
+      setNewName('');
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : 'Could not create the team.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rename(id: string) {
+    const name = renameVal.trim();
+    if (!name) return;
+    setBusy(true);
+    onError(null);
+    try {
+      const r = await api.adminRenameTeam(id, name);
+      setTeams(r.teams);
+      setRenamingId(null);
+      setRenameVal('');
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : 'Could not rename the team.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    setBusy(true);
+    onError(null);
+    try {
+      const r = await api.adminDeleteTeam(id);
+      setTeams(r.teams);
+      setConfirmDeleteId(null);
+      await onMembersChanged();
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : 'Could not delete the team.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ ...panel(theme), marginBottom: 18 }}>
+      <div style={panelLabel}>Trading teams</div>
+      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#8ea3cc', lineHeight: 1.5 }}>
+        Teams group traders into their own desk. The Studies leaderboard ranks a learner only
+        against their team; the Trading workspace (Live Wall presets, Trade Desk, alerts, sessions,
+        funded) stays shared across every team. Assign a user to a team below.
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {teams.length === 0 && (
+          <div style={{ fontSize: 12.5, color: '#8ea3cc' }}>No teams yet — add one below.</div>
+        )}
+        {teams.map((t) => (
+          <div
+            key={t.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexWrap: 'wrap',
+              padding: '8px 10px',
+              borderRadius: 8,
+              border: `1px solid ${theme.navBorder}`,
+              background: 'rgba(0,0,0,.18)',
+            }}
+          >
+            {renamingId === t.id ? (
+              <>
+                <input
+                  value={renameVal}
+                  onChange={(e) => setRenameVal(e.target.value)}
+                  autoFocus
+                  style={{ ...inputStyle, flex: '1 1 180px', minHeight: 36 }}
+                />
+                <button onClick={() => rename(t.id)} disabled={busy} style={primaryBtn(theme, accentGrad)}>
+                  Save
+                </button>
+                <button onClick={() => setRenamingId(null)} disabled={busy} style={ghostBtn}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#eef3ff', flex: '1 1 auto' }}>
+                  {t.name}
+                </span>
+                <Badge color="#8ea3cc">
+                  {t.memberCount} {t.memberCount === 1 ? 'member' : 'members'}
+                </Badge>
+                <button
+                  onClick={() => {
+                    setRenamingId(t.id);
+                    setRenameVal(t.name);
+                    setConfirmDeleteId(null);
+                  }}
+                  disabled={busy}
+                  style={ghostBtn}
+                >
+                  Rename
+                </button>
+                {confirmDeleteId === t.id ? (
+                  <>
+                    <button onClick={() => remove(t.id)} disabled={busy} style={dangerSolidBtn}>
+                      {busy ? 'Deleting…' : 'Confirm'}
+                    </button>
+                    <button onClick={() => setConfirmDeleteId(null)} disabled={busy} style={ghostBtn}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => setConfirmDeleteId(t.id)}
+                    disabled={busy}
+                    style={ghostDangerBtn}
+                    title="Delete this team; its members become unassigned"
+                  >
+                    Delete
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {confirmDeleteId && (
+        <div style={{ ...msgStyle(false), marginTop: 10 }}>
+          Deleting a team unassigns everyone on it (their data is untouched). This can't be undone.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+          placeholder="New team name"
+          style={{ ...inputStyle, flex: '1 1 200px' }}
+        />
+        <button onClick={add} disabled={busy || !newName.trim()} style={primaryBtn(theme, accentGrad)}>
+          Add team
+        </button>
+      </div>
+    </div>
   );
 }
 

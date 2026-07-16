@@ -26,6 +26,7 @@ import { pushoverRoutes } from './routes/pushover.js';
 import { runMigrations } from './db/migrate.js';
 import { waitForDatabase } from './db/index.js';
 import { seedAdmin, seedDemo, backfillEmails } from './seed.js';
+import { seedDefaultTeam } from './teams/service.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
@@ -118,6 +119,10 @@ async function bootstrapDatabase(): Promise<void> {
   // Give any pre-email accounts a sign-in email before email login goes live.
   await backfillEmails();
   await seedDemo();
+  // Ensure the default trading team exists and adopt any team-less accounts
+  // (the admin/demo users are seeded after migrations, so they need this on a
+  // fresh database).
+  await seedDefaultTeam();
   await seedWelcome();
 }
 

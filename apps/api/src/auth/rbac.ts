@@ -95,6 +95,10 @@ export interface PublicUser {
   displayName: string;
   email: string | null;
   roles: RoleKey[];
+  // The trading team the user belongs to (or null). Scopes the Studies
+  // leaderboards; the name is resolved from trading_teams by the caller.
+  teamId: string | null;
+  teamName: string | null;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   isDemo: boolean; // the public, read-only demo account
@@ -105,7 +109,9 @@ export interface PublicUser {
   };
 }
 
-export function toPublicUser(u: UserRow): PublicUser {
+// `teamName` is resolved by the caller (routes) from the user's teamId, since
+// this module stays free of database access.
+export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
   const roles = parseRoles(u);
   const workspaces = workspacesForRoles(roles);
   const isDemo = u.username === DEMO_USERNAME;
@@ -116,6 +122,8 @@ export function toPublicUser(u: UserRow): PublicUser {
     // The demo account stores its seed version in the email column; never expose it.
     email: u.username === DEMO_USERNAME ? null : u.email,
     roles,
+    teamId: u.teamId ?? null,
+    teamName: teamName ?? null,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
     isDemo,
