@@ -23,6 +23,11 @@ export interface LeaderboardEntry {
   attempted: number; // questions answered in this run
   correct: number; // correct answers in this run
   bestStep: number; // highest overall level step reached (0..59)
+  // Current session block (up to 100 questions, resets every 100). Only live
+  // rows carry it — a banked run has no live block, so these are null/0.
+  sessionScore: number | null; // % correct in the current block
+  sessionAttempted: number; // answers in the current block (0..100)
+  sessionCorrect: number; // correct answers in the current block
   archived: boolean; // true for a banked (reset) run
   when: number | null; // when the run was banked (ms); null for live rows
   isMe: boolean; // the caller's current live row
