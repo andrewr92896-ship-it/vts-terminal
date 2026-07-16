@@ -906,7 +906,7 @@ export interface SessionInput {
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----
 // A saved, customizable grid of chart/watchlist tiles the trader arranges on
 // the Live Wall ("presets").
-export type BoardTileKind = 'chart' | 'watchlist';
+export type BoardTileKind = 'chart' | 'watchlist' | 'positions';
 
 export interface BoardTile {
   id: string;
