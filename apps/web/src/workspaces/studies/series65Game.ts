@@ -72,6 +72,20 @@ export const SUBLEVELS = 5; // sub-levels per main level
 export const BASE_SUBLEVEL_COST = 10; // correct answers to clear the very first sub-level
 const MAX_STEP = MAIN_LEVELS.length * SUBLEVELS - 1; // 59 (Lv12, sub-level 5)
 
+// ---- Streak multiplier ----
+// A run of consecutive correct answers boosts how much each correct answer
+// counts toward your level. Every STREAK_STEP answers in a row bumps the
+// multiplier: 5 in a row → ×2, 10 → ×3, 15 → ×4, and so on. A single wrong
+// answer resets the streak (and the multiplier) to zero. The multiplier only
+// scales level progress — lifetime accuracy still counts each answer once.
+export const STREAK_STEP = 5; // correct answers in a row per multiplier tier
+
+// The multiplier for a given streak length: 1× below the first tier, then +1 for
+// every STREAK_STEP consecutive correct answers.
+export function streakMultiplier(streak: number): number {
+  return 1 + Math.floor(Math.max(0, Math.floor(streak)) / STREAK_STEP);
+}
+
 // Correct answers to advance FROM sub-level step `s` to the next. Starts at
 // BASE_SUBLEVEL_COST and grows by one each sub-level, continuously across every
 // level — so each sub-level costs one more correct answer than the last (step 0
@@ -208,13 +222,28 @@ export interface GameState {
   levelCorrect: number;
   bestStep: number; // highest overall level step reached this run (0..59)
   allTimeBestStep: number; // highest level step ever reached — survives a reset
+  // Current run of consecutive correct answers, and the longest such run this
+  // game. `streak` drives the level multiplier (see streakMultiplier); a wrong
+  // answer resets it to 0. `bestStreak` is kept for a "best streak" readout.
+  streak: number;
+  bestStreak: number;
   cats: Record<Series65Topic, CatState>;
 }
 
 export function emptyGame(): GameState {
   const cats = {} as Record<Series65Topic, CatState>;
   for (const t of SERIES65_TOPICS) cats[t] = { answered: 0, correct: 0, recent: [] };
-  return { recent: [], totalAttempted: 0, totalCorrect: 0, levelCorrect: 0, bestStep: 0, allTimeBestStep: 0, cats };
+  return {
+    recent: [],
+    totalAttempted: 0,
+    totalCorrect: 0,
+    levelCorrect: 0,
+    bestStep: 0,
+    allTimeBestStep: 0,
+    streak: 0,
+    bestStreak: 0,
+    cats,
+  };
 }
 
 export function gameKey(userId: string | undefined): string {
@@ -321,6 +350,14 @@ export function normalizeGame(p: unknown): GameState {
     levelCorrect,
     bestStep,
     allTimeBestStep: Math.max(Number(src.allTimeBestStep) || 0, bestStep),
+    // Streak fields postdate the first saves; absent → 0. bestStreak never falls
+    // below the current streak.
+    streak: Math.max(0, Math.floor(Number(src.streak) || 0)),
+    bestStreak: Math.max(
+      0,
+      Math.floor(Number(src.bestStreak) || 0),
+      Math.floor(Number(src.streak) || 0),
+    ),
     cats: fresh.cats,
   };
   const cats = (src.cats ?? {}) as Record<string, { answered?: unknown; correct?: unknown; recent?: unknown }>;
@@ -369,7 +406,12 @@ export function saveGame(key: string, g: GameState): void {
 export function recordAnswer(g: GameState, topic: Series65Topic, correct: boolean): GameState {
   const cat = g.cats[topic];
   const totalCorrect = g.totalCorrect + (correct ? 1 : 0);
-  const levelCorrect = g.levelCorrect + (correct ? 1 : 0);
+  // Extend the streak on a correct answer (reset it on a miss), then let the
+  // multiplier for the *new* streak scale this answer's contribution to the
+  // level. So the 5th correct in a row lands at ×2, the 10th at ×3, etc.
+  const streak = correct ? g.streak + 1 : 0;
+  const gain = correct ? streakMultiplier(streak) : 0;
+  const levelCorrect = g.levelCorrect + gain;
   const bestStep = Math.max(g.bestStep, stepForCorrect(levelCorrect));
   const next: GameState = {
     recent: [...g.recent, correct].slice(-WINDOW),
@@ -378,6 +420,8 @@ export function recordAnswer(g: GameState, topic: Series65Topic, correct: boolea
     levelCorrect,
     bestStep,
     allTimeBestStep: Math.max(g.allTimeBestStep, bestStep),
+    streak,
+    bestStreak: Math.max(g.bestStreak, streak),
     cats: {
       ...g.cats,
       [topic]: {

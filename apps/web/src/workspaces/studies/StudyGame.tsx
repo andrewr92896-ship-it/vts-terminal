@@ -38,6 +38,8 @@ import {
   saveGame,
   saveStarred,
   scorePct,
+  STREAK_STEP,
+  streakMultiplier,
   weightedCategory,
   type GameState,
   type TestLevelUp,
@@ -47,6 +49,7 @@ const GREEN = '#35c47b';
 const RED = '#ef5468';
 const AMBER = '#e0a23a';
 const STAR = '#f5c451';
+const FLAME = '#ff7a3d'; // streak multiplier accent
 type Letter = 'A' | 'B' | 'C' | 'D';
 type Mode = 'mix' | 'starred' | Series65Topic | `sec:${string}`;
 
@@ -130,6 +133,10 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const [outcome, setOutcome] = useState<boolean | null>(() => initialCurrentRef.current?.outcome ?? null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
+  // The streak multiplier applied to the last scored answer: how many level
+  // points it earned, the multiplier in force, and whether it just crossed into
+  // a higher multiplier tier (so the reveal can celebrate the boost).
+  const [streakGain, setStreakGain] = useState<{ gain: number; mult: number; tierUp: boolean } | null>(null);
   // Undo: the pre-answer snapshot to revert to, plus a cooldown (scored answers
   // remaining) so undo can only be used once every UNDO_COOLDOWN questions.
   const [undoSnapshot, setUndoSnapshot] = useState<UndoSnapshot | null>(null);
@@ -279,6 +286,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     setOutcome(null);
     setScoreChange(null);
     setLevelEvent(null);
+    setStreakGain(null);
   }
 
   // Pull the learner's custom subsections once so they follow across devices.
@@ -491,6 +499,20 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
 
     // Show the change in lifetime accuracy (0 before there was any prior).
     setScoreChange(round1((newScore ?? 0) - (prevScore ?? (newScore ?? 0))));
+
+    // Record how the streak multiplier shaped this answer's level gain: the
+    // points earned, the multiplier in force, and whether it just unlocked a new
+    // tier (5, 10, 15, … in a row) so the reveal can celebrate the boost.
+    if (correct) {
+      const mult = streakMultiplier(next.streak);
+      setStreakGain({
+        gain: next.levelCorrect - prevGame.levelCorrect,
+        mult,
+        tierUp: mult > streakMultiplier(prevGame.streak),
+      });
+    } else {
+      setStreakGain(null);
+    }
     // The overall level only advances on correct answers (it counts correct
     // answers), so a rise in `step` means a sub-level — or main-level — up.
     if (nextOv.step > prevOv.step) {
@@ -579,7 +601,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
       <div>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Study Game</h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-          Series 65 · level up as you answer correctly · pass line {PASS_THRESHOLD.toFixed(1)}%
+          Series 65 · level up as you answer correctly · {STREAK_STEP} in a row for a multiplier · pass line {PASS_THRESHOLD.toFixed(1)}%
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -979,6 +1001,10 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const cat = current.topic;
   const meta = metaFor(cat);
   const ov = overallLevel(game.levelCorrect);
+  // Current streak multiplier and how many more correct answers unlock the next
+  // tier (5 in a row → ×2, 10 → ×3, …).
+  const streakMult = streakMultiplier(game.streak);
+  const streakToNext = STREAK_STEP - (game.streak % STREAK_STEP);
   // Percent correct in the current category (matches the "Accuracy by category"
   // panel), shown next to the category name in the HUD.
   const catPct = scorePct(game.cats[cat].recent);
@@ -1029,6 +1055,29 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
         </div>
       )}
 
+      {/* Multiplier unlocked: shown when a correct answer just crossed into a new
+          streak tier (5, 10, 15, … in a row). */}
+      {streakGain?.tierUp && (
+        <div
+          style={{
+            background: 'linear-gradient(90deg,rgba(255,122,61,.28),rgba(224,162,58,.14))',
+            border: `1px solid ${FLAME}`,
+            borderRadius: 12,
+            padding: '12px 16px',
+            marginBottom: 14,
+            textAlign: 'center',
+            animation: 'celebratePop .45s ease-out',
+          }}
+        >
+          <div style={{ fontSize: 13, fontWeight: 700, color: FLAME, letterSpacing: '0.5px' }}>
+            🔥 ×{streakGain.mult} MULTIPLIER! 🔥
+          </div>
+          <div style={{ fontSize: 11.5, color: muted, marginTop: 3 }}>
+            {game.streak} correct in a row · each right answer now counts ×{streakGain.mult} toward your level
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1.7fr 1fr', gap: 16, alignItems: 'start' }}>
         {/* Question + level HUD */}
         <div style={card(theme)}>
@@ -1051,6 +1100,43 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
                 <div style={{ fontSize: 12.5, fontWeight: 700 }}>Lv {ov.mainIndex + 1} · {ov.main.name}</div>
                 <div style={{ fontSize: 13, letterSpacing: '1.5px' }} aria-label={`Sub-level ${ov.sub} of ${5}`}>
                   {ov.stars}
+                </div>
+              </div>
+            </div>
+            {/* Streak multiplier: lights up as correct answers stack, and shows
+                how much each one is worth toward the level. */}
+            <div
+              title={`Answer correctly ${STREAK_STEP} times in a row for ×2 toward your level, ${STREAK_STEP * 2} for ×3, and so on. One miss resets the streak.`}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                background:
+                  streakMult > 1
+                    ? 'linear-gradient(135deg,rgba(255,122,61,.22),rgba(224,162,58,.14))'
+                    : 'rgba(255,255,255,.04)',
+                border: `1px solid ${streakMult > 1 ? FLAME : theme.navBorder}`,
+                borderRadius: 12,
+                padding: '7px 12px',
+                minWidth: 0,
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 20,
+                  lineHeight: 1,
+                  filter: game.streak > 0 ? 'none' : 'grayscale(1)',
+                  opacity: game.streak > 0 ? 1 : 0.5,
+                }}
+              >
+                🔥
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: streakMult > 1 ? FLAME : '#fff' }}>
+                  {streakMult > 1 ? `×${streakMult} multiplier` : 'Streak'}
+                </div>
+                <div style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                  {game.streak} in a row · {streakToNext} to ×{streakMult + 1}
                 </div>
               </div>
             </div>
@@ -1213,6 +1299,20 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
                     {scoreChange >= 0 ? '+' : ''}{scoreChange.toFixed(1)}%
                   </span>
                 )}
+                {streakGain && outcome && (
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: streakGain.mult > 1 ? FLAME : muted,
+                      marginLeft: 8,
+                    }}
+                  >
+                    {streakGain.mult > 1
+                      ? `🔥 ×${streakGain.mult} · +${streakGain.gain} to level`
+                      : `+${streakGain.gain} to level`}
+                  </span>
+                )}
               </div>
               {!outcome && (
                 <div style={{ fontSize: 13, color: '#d7ccff', lineHeight: 1.55, marginBottom: 8 }}>
@@ -1322,6 +1422,26 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             </div>
             <div style={{ height: 6, background: theme.navBorder, borderRadius: 4, overflow: 'hidden', marginTop: 10 }}>
               <div style={{ height: '100%', width: `${(ov.intoSub / ov.subCost) * 100}%`, background: accentGrad }} />
+            </div>
+            {/* Streak multiplier: consecutive correct answers scale level gains */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 12 }}>
+              <span
+                title={`Every ${STREAK_STEP} correct answers in a row raises the multiplier: ${STREAK_STEP} → ×2, ${STREAK_STEP * 2} → ×3, and so on.`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  fontSize: 11.5,
+                  color: streakMult > 1 ? FLAME : muted,
+                  fontWeight: streakMult > 1 ? 700 : 500,
+                }}
+              >
+                <span style={{ fontSize: 14, lineHeight: 1, filter: game.streak > 0 ? 'none' : 'grayscale(1)', opacity: game.streak > 0 ? 1 : 0.5 }}>🔥</span>
+                {game.streak} streak{streakMult > 1 ? ` · ×${streakMult}` : ''}
+              </span>
+              <span style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                {game.bestStreak > 0 ? `Best: ${game.bestStreak}` : `${streakToNext} to ×2`}
+              </span>
             </div>
             {/* Highest level ever reached — survives a reset */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 11, color: muted }}>
