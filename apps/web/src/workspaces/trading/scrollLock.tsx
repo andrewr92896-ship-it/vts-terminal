@@ -4,14 +4,55 @@ import { BORDER2, GOLD } from './tvChart';
 // Mobile "scroll lock" for the Live Wall charts.
 //
 // On a phone, dragging inside a TradingView chart (to draw or pan) also scrolls
-// the page out from under your finger. Locking sets `touch-action: none` on the
-// page's main scroll container so finger drags no longer scroll the page — you
-// can work inside a chart freely. Because the page can then no longer be
-// finger-scrolled, a wide, touch-draggable scrollbar is shown on the right edge
-// so the page is still scrollable on purpose.
+// the page out from under your finger. Locking freezes every scroll surface on
+// the page so finger drags no longer scroll anything — you can work inside a
+// chart freely. Because the page can then no longer be finger-scrolled, a wide,
+// touch-draggable scrollbar is shown on the right edge so the page is still
+// scrollable on purpose.
 //
-// The lock is global (one page scroll container), toggled from any chart's
-// header button; every button and the scrollbar read the same shared state.
+// The lock is global, toggled from any chart's header button; every button and
+// the scrollbar read the same shared state.
+
+// The DOM lock is a single CSS class rather than inline styles. `<main>` is
+// shared across every section of the portal and React owns its inline style, so
+// saving/restoring inline `overflow` is fragile — a missed restore would break
+// scrolling app-wide. A class (applied to <html>, <body>, and the content
+// container) is applied and, crucially, removed symmetrically here in the store,
+// and unlock strips it from EVERY element that carries it, so nothing can be
+// left frozen.
+const LOCK_CLASS = 'vts-scroll-locked';
+const LOCK_CSS =
+  `.${LOCK_CLASS}{overflow:hidden!important;overscroll-behavior:none!important;touch-action:none!important;}`;
+
+function ensureStyleEl() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('vts-scroll-lock-style')) return;
+  const el = document.createElement('style');
+  el.id = 'vts-scroll-lock-style';
+  el.textContent = LOCK_CSS;
+  document.head.appendChild(el);
+}
+
+// The portal's scroll container — its <main>, tagged in Portal.tsx.
+function scrollRoot(): HTMLElement | null {
+  if (typeof document === 'undefined') return null;
+  return document.querySelector<HTMLElement>('[data-vts-scroll-root]');
+}
+
+function applyLock() {
+  if (typeof document === 'undefined') return;
+  ensureStyleEl();
+  document.documentElement.classList.add(LOCK_CLASS);
+  document.body.classList.add(LOCK_CLASS);
+  scrollRoot()?.classList.add(LOCK_CLASS);
+}
+
+function removeLock() {
+  if (typeof document === 'undefined') return;
+  // Strip the class from anything carrying it — resilient even if the root
+  // element changed identity between lock and unlock.
+  document.querySelectorAll(`.${LOCK_CLASS}`).forEach((el) => el.classList.remove(LOCK_CLASS));
+}
 
 let locked = false;
 const listeners = new Set<() => void>();
@@ -21,14 +62,14 @@ function emit() {
 
 export const scrollLock = {
   toggle() {
-    locked = !locked;
-    emit();
+    scrollLock.set(!locked);
   },
   set(v: boolean) {
-    if (locked !== v) {
-      locked = v;
-      emit();
-    }
+    if (locked === v) return;
+    locked = v;
+    if (v) applyLock();
+    else removeLock();
+    emit();
   },
   get() {
     return locked;
@@ -45,83 +86,27 @@ export function useScrollLock(): boolean {
   return useSyncExternalStore(scrollLock.subscribe, scrollLock.get, () => false);
 }
 
-// Walk up from a node to the nearest scrollable ancestor — the portal's <main>
-// content area, whose finger-scroll we lock and whose scroll we drive from the
-// custom scrollbar.
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let node = el?.parentElement ?? null;
-  while (node) {
-    const oy = getComputedStyle(node).overflowY;
-    if ((oy === 'auto' || oy === 'scroll') && node.scrollHeight > node.clientHeight) return node;
-    node = node.parentElement;
-  }
-  return null;
-}
-
 const THUMB_MIN = 48; // keep the thumb comfortably finger-sized
 
-// Rendered once on the chart board. When the scroll lock is on it (a) sets
-// `touch-action: none` on the scroll container so the page won't finger-scroll,
-// and (b) draws a wide draggable scrollbar on the right so the page can still be
-// scrolled deliberately. Renders nothing (beyond a zero-size DOM anchor used to
-// locate the scroll container) while unlocked.
+// Rendered once on the chart board. The DOM freeze itself lives in the store
+// (above); this component just draws the wide, touch-draggable scrollbar that
+// replaces finger scrolling while locked, and guarantees the lock is released
+// if it ever unmounts. Renders nothing (beyond a zero-size DOM anchor) while
+// unlocked.
 export function MobileScrollLockBar() {
   const isLocked = useScrollLock();
-  const anchorRef = useRef<HTMLDivElement | null>(null);
   const [root, setRoot] = useState<HTMLElement | null>(null);
   const [geo, setGeo] = useState({ top: 0, height: 0, thumbTop: 0, thumbH: THUMB_MIN });
   const drag = useRef<{ startY: number; startScroll: number } | null>(null);
 
-  // Release the lock if this ever unmounts while still locked.
+  // Safety net: never leave the page frozen if this unmounts (e.g. the trader
+  // navigates to another section) while still locked.
   useEffect(() => () => scrollLock.set(false), []);
 
-  // Resolve the scroll container when locking. Prefer the portal's tagged
-  // <main>; fall back to walking the DOM if the tag ever moves.
+  // Resolve the scroll container when locking, for the scrollbar geometry.
   useEffect(() => {
-    if (!isLocked) {
-      setRoot(null);
-      return;
-    }
-    const tagged = document.querySelector<HTMLElement>('[data-vts-scroll-root]');
-    setRoot(tagged ?? findScrollParent(anchorRef.current));
+    setRoot(isLocked ? scrollRoot() : null);
   }, [isLocked]);
-
-  // Disable finger-scrolling of the page while locked. The page has more than
-  // one scroll surface — the content container AND the window/body — and a drag
-  // can scroll any of them (a drag chaining out of the chart iframe was still
-  // scrolling the window). So lock them all: overflow:hidden makes each
-  // completely non-user-scrollable (and gives scroll-chaining nowhere to land),
-  // while scrollTop stays settable programmatically for the scrollbar thumb.
-  useEffect(() => {
-    if (!isLocked || !root) return;
-    const docEl = document.documentElement;
-    const body = document.body;
-    const saved = {
-      rootTouch: root.style.touchAction,
-      rootOverflow: root.style.overflowY,
-      rootOverscroll: root.style.overscrollBehavior,
-      docOverflow: docEl.style.overflow,
-      docOverscroll: docEl.style.overscrollBehavior,
-      bodyOverflow: body.style.overflow,
-      bodyOverscroll: body.style.overscrollBehavior,
-    };
-    root.style.touchAction = 'none';
-    root.style.overflowY = 'hidden';
-    root.style.overscrollBehavior = 'none';
-    docEl.style.overflow = 'hidden';
-    docEl.style.overscrollBehavior = 'none';
-    body.style.overflow = 'hidden';
-    body.style.overscrollBehavior = 'none';
-    return () => {
-      root.style.touchAction = saved.rootTouch;
-      root.style.overflowY = saved.rootOverflow;
-      root.style.overscrollBehavior = saved.rootOverscroll;
-      docEl.style.overflow = saved.docOverflow;
-      docEl.style.overscrollBehavior = saved.docOverscroll;
-      body.style.overflow = saved.bodyOverflow;
-      body.style.overscrollBehavior = saved.bodyOverscroll;
-    };
-  }, [isLocked, root]);
 
   // Track the container's position and scroll so the thumb is sized and placed
   // correctly, following scroll, resize, and content growth.
@@ -150,20 +135,15 @@ export function MobileScrollLockBar() {
     };
   }, [isLocked, root]);
 
-  // The hard lock. A single non-passive touchmove listener on the window
-  // cancels the browser's native finger-scroll for EVERY touch on the page
-  // while locked — `touch-action: none` alone isn't honored for overflow
-  // containers on iOS Safari, so we cancel the gesture outright. Touches inside
-  // the cross-origin TradingView iframe never reach us, so chart panning still
-  // works; and dragging the thumb scrolls the page programmatically (below),
-  // which is unaffected by cancelling the native scroll. The net effect: the
-  // page cannot be finger-scrolled at all — the wide scrollbar is the only way.
+  // Dragging the thumb scrolls the container programmatically (native scrolling
+  // is frozen while locked, but scrollTop is still settable). Non-passive so the
+  // drag itself never triggers a browser gesture.
   useEffect(() => {
     if (!isLocked || !root) return;
     const onMove = (e: TouchEvent) => {
-      if (e.cancelable) e.preventDefault(); // kill native scroll everywhere
       const d = drag.current;
-      if (!d) return; // not dragging the thumb — nothing more to do
+      if (!d) return;
+      if (e.cancelable) e.preventDefault();
       const trackH = root.getBoundingClientRect().height;
       const ratio = root.clientHeight / Math.max(root.scrollHeight, 1);
       const thumbH = Math.min(trackH, Math.max(THUMB_MIN, trackH * ratio));
@@ -185,18 +165,15 @@ export function MobileScrollLockBar() {
     };
   }, [isLocked, root]);
 
+  if (!isLocked || !root) return null;
   return (
-    <div ref={anchorRef} style={{ position: 'absolute', width: 0, height: 0 }} aria-hidden>
-      {isLocked && root && (
-        <div style={{ ...track, top: geo.top, height: geo.height }}>
-          <div
-            onTouchStart={(e) => {
-              drag.current = { startY: e.touches[0].clientY, startScroll: root.scrollTop };
-            }}
-            style={{ ...thumb, top: geo.thumbTop, height: geo.thumbH }}
-          />
-        </div>
-      )}
+    <div style={{ ...track, top: geo.top, height: geo.height }} aria-hidden>
+      <div
+        onTouchStart={(e) => {
+          drag.current = { startY: e.touches[0].clientY, startScroll: root.scrollTop };
+        }}
+        style={{ ...thumb, top: geo.thumbTop, height: geo.thumbH }}
+      />
     </div>
   );
 }
