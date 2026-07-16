@@ -75,32 +75,51 @@ export function MobileScrollLockBar() {
   // Release the lock if this ever unmounts while still locked.
   useEffect(() => () => scrollLock.set(false), []);
 
-  // Resolve the scroll container when locking.
+  // Resolve the scroll container when locking. Prefer the portal's tagged
+  // <main>; fall back to walking the DOM if the tag ever moves.
   useEffect(() => {
     if (!isLocked) {
       setRoot(null);
       return;
     }
-    setRoot(findScrollParent(anchorRef.current));
+    const tagged = document.querySelector<HTMLElement>('[data-vts-scroll-root]');
+    setRoot(tagged ?? findScrollParent(anchorRef.current));
   }, [isLocked]);
 
-  // Disable finger-scrolling of the page while locked.
+  // Disable finger-scrolling of the page while locked. The page has more than
+  // one scroll surface — the content container AND the window/body — and a drag
+  // can scroll any of them (a drag chaining out of the chart iframe was still
+  // scrolling the window). So lock them all: overflow:hidden makes each
+  // completely non-user-scrollable (and gives scroll-chaining nowhere to land),
+  // while scrollTop stays settable programmatically for the scrollbar thumb.
   useEffect(() => {
     if (!isLocked || !root) return;
-    const prevTouch = root.style.touchAction;
-    const prevOverflow = root.style.overflowY;
+    const docEl = document.documentElement;
+    const body = document.body;
+    const saved = {
+      rootTouch: root.style.touchAction,
+      rootOverflow: root.style.overflowY,
+      rootOverscroll: root.style.overscrollBehavior,
+      docOverflow: docEl.style.overflow,
+      docOverscroll: docEl.style.overscrollBehavior,
+      bodyOverflow: body.style.overflow,
+      bodyOverscroll: body.style.overscrollBehavior,
+    };
     root.style.touchAction = 'none';
-    // overflow:hidden makes the container completely non-user-scrollable. This
-    // is what stops a drag that STARTS inside the TradingView iframe: those
-    // touches never reach our listener (cross-origin), but the browser would
-    // otherwise scroll-chain the gesture into the page — with no scrollable
-    // container to chain into, it can't. scrollTop is still settable
-    // programmatically (the scrollbar thumb below), so deliberate scrolling
-    // keeps working.
     root.style.overflowY = 'hidden';
+    root.style.overscrollBehavior = 'none';
+    docEl.style.overflow = 'hidden';
+    docEl.style.overscrollBehavior = 'none';
+    body.style.overflow = 'hidden';
+    body.style.overscrollBehavior = 'none';
     return () => {
-      root.style.touchAction = prevTouch;
-      root.style.overflowY = prevOverflow;
+      root.style.touchAction = saved.rootTouch;
+      root.style.overflowY = saved.rootOverflow;
+      root.style.overscrollBehavior = saved.rootOverscroll;
+      docEl.style.overflow = saved.docOverflow;
+      docEl.style.overscrollBehavior = saved.docOverscroll;
+      body.style.overflow = saved.bodyOverflow;
+      body.style.overscrollBehavior = saved.bodyOverscroll;
     };
   }, [isLocked, root]);
 
