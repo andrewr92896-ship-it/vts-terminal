@@ -8,6 +8,8 @@ import type { BoardTile, BoardTileKind, TradingBoard } from '../../api/types';
 import { ChartTile } from './ChartTile';
 import { WatchlistTile } from './WatchlistTile';
 import { PositionsTile } from './PositionsTile';
+import { NewsTile } from './NewsTile';
+import { CalendarTile } from './CalendarTile';
 import { MobileScrollLockBar } from './scrollLock';
 import { BORDER, BORDER2, FAINT, GOLD, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
 
@@ -90,7 +92,7 @@ export function ChartBoard() {
         w: t.w,
         h: t.h,
         minW: 3,
-        minH: t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : 8,
+        minH: t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'news' || t.kind === 'calendar' ? 5 : 8,
       })),
     [tiles],
   );
@@ -237,6 +239,8 @@ export function ChartBoard() {
             <button onClick={() => addTile('chart')} style={ghostBtn}>+ Chart</button>
             <button onClick={() => addTile('watchlist')} style={ghostBtn}>+ Watchlist</button>
             <button onClick={() => addTile('positions')} style={ghostBtn}>+ Positions</button>
+            <button onClick={() => addTile('news')} style={ghostBtn}>+ News</button>
+            <button onClick={() => addTile('calendar')} style={ghostBtn}>+ Calendar</button>
             {!isUnsaved && (
               <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>Rename</button>
             )}
@@ -300,6 +304,10 @@ export function ChartBoard() {
                 <ChartTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : t.kind === 'positions' ? (
                 <PositionsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+              ) : t.kind === 'news' ? (
+                <NewsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+              ) : t.kind === 'calendar' ? (
+                <CalendarTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : (
                 <WatchlistTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               )}
