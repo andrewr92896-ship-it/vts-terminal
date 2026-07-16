@@ -1053,7 +1053,7 @@ const editSessionSchema = z
 // keys are stripped.
 const boardTileSchema = z.object({
   id: z.string().trim().min(1).max(64),
-  kind: z.enum(['chart', 'watchlist', 'positions']),
+  kind: z.enum(['chart', 'watchlist', 'positions', 'news', 'calendar']),
   x: z.number().int().min(0).max(96),
   y: z.number().int().min(0).max(4096),
   w: z.number().int().min(1).max(96),
@@ -1066,6 +1066,8 @@ const boardTileSchema = z.object({
   title: z.string().trim().max(60).optional(),
   positionsView: z.enum(['list', 'cards']).optional(),
   watchlistMode: z.enum(['scroll', 'static']).optional(),
+  newsFeed: z.string().trim().max(24).optional(),
+  minImpact: z.enum(['all', 'medhigh', 'high']).optional(),
 });
 const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(40) });
 const createBoardSchema = z.object({

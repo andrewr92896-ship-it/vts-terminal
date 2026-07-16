@@ -932,7 +932,7 @@ export interface SessionInput {
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----
 // A saved, customizable grid of chart/watchlist tiles the trader arranges on
 // the Live Wall ("presets").
-export type BoardTileKind = 'chart' | 'watchlist' | 'positions';
+export type BoardTileKind = 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar';
 
 export interface BoardTile {
   id: string;
@@ -956,6 +956,12 @@ export interface BoardTile {
   // Positions tiles — how the open positions are laid out inside the tile:
   // 'list' (the compact default) or 'cards' (the full Live Wall trading cards).
   positionsView?: 'list' | 'cards';
+  // News tiles — which topic subfeed to show ('all' or a NEWS_FEEDS key, e.g.
+  // 'fed', 'eurusd', 'btc'). Undefined → all headlines.
+  newsFeed?: string;
+  // News & Calendar tiles — the lowest impact to show: 'all', 'medhigh'
+  // (medium & up, the default) or 'high' (high only).
+  minImpact?: 'all' | 'medhigh' | 'high';
 }
 
 export interface BoardLayout {
