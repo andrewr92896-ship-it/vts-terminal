@@ -631,6 +631,8 @@ export const tradingCalendar = sqliteTable('trading_calendar', {
   // A plain-language, layman explanation of what this release is (AI-filled,
   // deduped by title across recurring events). Null until the reader tags it.
   explainer: text('explainer'),
+  // Where the event came from (e.g. "Forex Factory"). Null for hand-added events.
+  source: text('source'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

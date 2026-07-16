@@ -499,6 +499,7 @@ export async function ingestForexFactory(): Promise<void> {
         forecast: ev.forecast,
         previous: ev.previous,
         actual: ev.actual,
+        source: 'Forex Factory',
       };
       await db.insert(tradingCalendar).values({ ...inserted, authorId, createdAt: now, updatedAt: now });
       // Record it so the this-week / next-week overlap doesn't double-insert.

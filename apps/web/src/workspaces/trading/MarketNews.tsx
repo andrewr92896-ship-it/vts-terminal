@@ -517,6 +517,7 @@ function EventRow({ e, canWrite, busy, onSave, onRemove }: { e: CalendarEvent; c
           <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: TEXT }}>{fmtTime(e.eventTime)}</span>
           {e.country && <span style={{ fontSize: 10, color: MUTED }}>{e.country}</span>}
           <span style={{ fontSize: 12.5, color: '#e7eefb', fontWeight: 500 }}>{e.title}</span>
+          <span style={{ ...chip, color: GOLD, borderColor: 'rgba(235,203,116,.5)', background: 'rgba(235,203,116,.08)' }}>{e.source ?? 'Forex Factory'}</span>
         </div>
         {(e.forecast || e.previous || e.actual) && (
           <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10.5, color: MUTED }}>
