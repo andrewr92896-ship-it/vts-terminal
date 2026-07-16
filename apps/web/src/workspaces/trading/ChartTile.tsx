@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { BoardTile } from '../../api/types';
 import { TvWidget } from './TvWidget';
 import {
@@ -39,6 +39,9 @@ export function ChartTile({
   onRemove: () => void;
 }) {
   const [showCfg, setShowCfg] = useState(false);
+  // Leaving edit mode closes the settings panel so it doesn't reopen on the
+  // next edit.
+  useEffect(() => { if (!editing) setShowCfg(false); }, [editing]);
   const symbol = tile.symbol || 'OANDA:EURUSD';
   const interval = tile.interval || '60';
   const style = tile.style || '1';
@@ -77,17 +80,17 @@ export function ChartTile({
           <span style={metaChip}>{styleLabel(style)}</span>
           {studies.length > 0 && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}>{studies.length} ind</span>}
         </div>
-        <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={() => setShowCfg((v) => !v)} style={iconBtn} title="Chart settings">⚙</button>
-          {editing && (
+        {editing && (
+          <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => setShowCfg((v) => !v)} style={iconBtn} title="Chart settings">⚙</button>
             <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <TvWidget src={ADVANCED_CHART_SRC} config={config} configKey={configKey} />
-        {showCfg && (
+        {editing && showCfg && (
           <div className="no-drag" style={cfgPanel} onMouseDown={(e) => e.stopPropagation()}>
             <ChartConfig
               tile={tile}

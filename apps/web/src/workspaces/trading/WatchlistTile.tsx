@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { BoardTile } from '../../api/types';
 import { TvWidget } from './TvWidget';
 import {
@@ -31,6 +31,9 @@ export function WatchlistTile({
   onRemove: () => void;
 }) {
   const [showCfg, setShowCfg] = useState(false);
+  // Leaving edit mode closes the settings panel so it doesn't reopen on the
+  // next edit.
+  useEffect(() => { if (!editing) setShowCfg(false); }, [editing]);
   const symbols = tile.symbols && tile.symbols.length > 0 ? tile.symbols : ['OANDA:EURUSD'];
 
   const config = useMemo(
@@ -54,15 +57,17 @@ export function WatchlistTile({
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{tile.title || 'Watchlist'}</span>
           <span style={countChip}>{symbols.length}</span>
         </div>
-        <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button onClick={() => setShowCfg((v) => !v)} style={iconBtn} title="Watchlist settings">⚙</button>
-          {editing && <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>}
-        </div>
+        {editing && (
+          <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => setShowCfg((v) => !v)} style={iconBtn} title="Watchlist settings">⚙</button>
+            <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>
+          </div>
+        )}
       </div>
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <TvWidget src={TICKER_TAPE_SRC} config={config} configKey={configKey} />
-        {showCfg && (
+        {editing && showCfg && (
           <div className="no-drag" style={cfgPanel} onMouseDown={(e) => e.stopPropagation()}>
             <WatchlistConfig tile={tile} onChange={onChange} onClose={() => setShowCfg(false)} />
           </div>

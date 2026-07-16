@@ -210,7 +210,7 @@ export function ChartBoard() {
           </button>
         ))}
         {isUnsaved && <span style={boardPill(true)}>{name} <span style={{ color: FAINT }}>· unsaved</span></span>}
-        <button onClick={startNewBoard} style={{ ...ghostBtn, padding: '6px 10px' }}>+ New</button>
+        {editing && <button onClick={startNewBoard} style={{ ...ghostBtn, padding: '6px 10px' }}>+ New</button>}
       </div>
 
       {/* Actions bar */}
@@ -234,12 +234,14 @@ export function ChartBoard() {
             )}
           </>
         )}
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {dirty && <span style={{ fontSize: 11, color: FAINT }}>Unsaved changes</span>}
-          <button onClick={save} disabled={saving || (!dirty && !isUnsaved)} style={{ ...goldBtn, opacity: saving || (!dirty && !isUnsaved) ? 0.55 : 1 }}>
-            {saving ? 'Saving…' : isUnsaved ? 'Save board' : 'Save'}
-          </button>
-        </div>
+        {editing && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {dirty && <span style={{ fontSize: 11, color: FAINT }}>Unsaved changes</span>}
+            <button onClick={save} disabled={saving || (!dirty && !isUnsaved)} style={{ ...goldBtn, opacity: saving || (!dirty && !isUnsaved) ? 0.55 : 1 }}>
+              {saving ? 'Saving…' : isUnsaved ? 'Save board' : 'Save'}
+            </button>
+          </div>
+        )}
       </div>
 
       {namePrompt && (
