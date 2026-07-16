@@ -351,6 +351,13 @@
       "when": 1782338136908,
       "tag": "0049_drop_kia_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "6",
+      "when": 1782338236908,
+      "tag": "0050_study_decks",
+      "breakpoints": true
     }
   ]
 }
