@@ -2,7 +2,7 @@
 // prestige, exam-weighted question mix, and last-100 accuracy scoring. Persisted
 // per user in localStorage.
 
-import { SERIES65_QUESTIONS, SERIES65_TOPICS, type Series65Topic } from './series65Questions';
+import { SERIES65_TOPICS, type Series65Question, type Series65Topic } from './series65Meta';
 
 export const PASS_THRESHOLD = 72; // Series 65 passing score (~72%)
 export const WINDOW = 100; // per-category accuracy is measured over the last 100 answers
@@ -506,10 +506,11 @@ export function weightedCategory(): Series65Topic {
 }
 
 // Shuffled question-index pools per category (cycled through, then reshuffled).
-export function buildPools(): Record<Series65Topic, number[]> {
+// Takes the fetched question bank so the Series 65 content is never bundled.
+export function buildPools(questions: Series65Question[]): Record<Series65Topic, number[]> {
   const pools = {} as Record<Series65Topic, number[]>;
   for (const t of SERIES65_TOPICS) pools[t] = [];
-  SERIES65_QUESTIONS.forEach((q, i) => pools[q.topic].push(i));
+  questions.forEach((q, i) => pools[q.topic].push(i));
   for (const t of SERIES65_TOPICS) {
     const a = pools[t];
     for (let i = a.length - 1; i > 0; i--) {

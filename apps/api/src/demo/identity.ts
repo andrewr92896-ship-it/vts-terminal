@@ -8,7 +8,13 @@ export const DEMO_DISPLAY_NAME = 'Demo User';
 // Bump this whenever the demo's seeded data changes. On boot, seedDemo() wipes
 // and re-seeds the demo account when the stored version differs, so tweaks to
 // the simulated data take effect on the next deploy without a manual reset.
-export const DEMO_SEED_VERSION = 4;
+export const DEMO_SEED_VERSION = 5;
+
+// The demo account has its own team so its sample study game (and any leaderboard
+// activity) stays isolated from the real owner's team — otherwise the default
+// team-seeding would adopt the team-less demo into the owner's Vitalis team.
+export const DEMO_TEAM_ID = 'team-demo';
+export const DEMO_TEAM_NAME = 'Demo Team';
 
 // The roles the demo account holds: every workspace except admin (so a reviewer
 // sees the whole product but never the real user-management screen).

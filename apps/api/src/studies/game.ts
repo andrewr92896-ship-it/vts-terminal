@@ -2,36 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyGame, studyGameRuns, users } from '../db/schema.js';
+import { accuracyOf, statsFromState, type RunStats } from './gameStats.js';
 
 // Per-user Study Game state, stored as an opaque JSON string. The shape is owned
 // by the web client (see series65Game.ts); the server only persists and returns
 // it verbatim, so progress follows the learner across devices.
 
-const MAX_STATE_BYTES = 64 * 1024; // generous ceiling for the serialized state
-
-// Level ladder shape, kept in step with the web client (series65Game.ts): 12
-// levels × 5 sub-levels. Each sub-level costs one more correct answer than the
-// last (10, 11, 12, … continuously up the ladder). Used to derive a run's "best
-// level reached" step (0..59) when the stored state predates that field.
-const BASE_SUBLEVEL_COST = 10;
-const MAX_LEVEL_STEP = 12 * 5 - 1; // 59
-
-// Session score window, kept in step with the web client (series65Game.ts): the
-// score for the current fixed block of up to WINDOW questions (Q1–100, Q101–200,
-// …), which resets every WINDOW answers.
-const WINDOW = 100;
-
-function correctToReachStep(step: number): number {
-  const s = Math.max(0, Math.min(MAX_LEVEL_STEP + 1, Math.floor(step)));
-  return BASE_SUBLEVEL_COST * s + (s * (s - 1)) / 2;
-}
-
-function stepForCorrect(correct: number): number {
-  const c = Math.max(0, Math.floor(correct) || 0);
-  let s = 0;
-  while (s < MAX_LEVEL_STEP && correctToReachStep(s + 1) <= c) s++;
-  return s;
-}
+// The state validator and the ranking-number extraction live with the other
+// shared Study Game math (gameStats.ts), reused by the team-deck leaderboards.
+export { normalizeState } from './gameStats.js';
 
 export async function getGame(userId: string): Promise<string | null> {
   const rows = await db
@@ -73,62 +52,6 @@ export interface LeaderboardEntry {
   archived: boolean; // true for a banked (reset) run
   when: number | null; // when the run was banked (ms); null for live rows
   isMe: boolean; // the caller's current live row
-}
-
-// The headline numbers of one run, read from either a stored state blob or a
-// banked run row.
-interface RunStats {
-  attempted: number;
-  correct: number;
-  bestStep: number;
-  // Current session block, derived from the stored `recent` window. Zeroed for
-  // banked runs (which store no per-answer history).
-  sessionAttempted: number;
-  sessionCorrect: number;
-}
-
-function round1(n: number): number {
-  return Math.round(n * 10) / 10;
-}
-
-function accuracyOf(correct: number, attempted: number): number | null {
-  return attempted > 0 ? round1((100 * correct) / attempted) : null;
-}
-
-// Pull the ranking numbers out of one stored state blob. Returns null when the
-// state is unparseable or the player has not answered anything yet, so empty
-// and broken rows simply drop off the board.
-function statsFromState(raw: string): RunStats | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  if (!parsed || typeof parsed !== 'object') return null;
-  const g = parsed as Record<string, unknown>;
-
-  const attempted = Number(g.totalAttempted) || 0;
-  const correct = Number(g.totalCorrect) || 0;
-  if (attempted <= 0) return null;
-
-  // Best level reached: honour the stored high-water mark, but never below what
-  // the level count already implies (older saves predate the field). Level is
-  // driven by `levelCorrect` (quiz + test), falling back to totalCorrect.
-  const levelCorrect = Number(g.levelCorrect) || correct;
-  const bestStep = Math.max(Number(g.bestStep) || 0, stepForCorrect(levelCorrect));
-
-  // Current session block: the most recent `blockLen` outcomes in `recent` are
-  // exactly this block's answers (a completed block shows its full WINDOW). This
-  // mirrors sessionScore() in the web client.
-  const recent = Array.isArray(g.recent) ? g.recent.filter((x: unknown) => typeof x === 'boolean') : [];
-  const rem = attempted % WINDOW;
-  const blockLen = rem === 0 ? WINDOW : rem;
-  const tail = recent.slice(-blockLen);
-  const sessionAttempted = tail.length;
-  const sessionCorrect = tail.filter(Boolean).length;
-
-  return { attempted, correct, bestStep, sessionAttempted, sessionCorrect };
 }
 
 // Bank a run to the leaderboard: parse its headline numbers from the given state
@@ -230,18 +153,4 @@ export async function getLeaderboard(currentUserId: string): Promise<Leaderboard
     return b.correct - a.correct;
   });
   return entries;
-}
-
-// Validate that the body is a JSON string within our size ceiling. Returns the
-// canonical string to store, or null if it is unusable.
-export function normalizeState(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  if (raw.length === 0 || raw.length > MAX_STATE_BYTES) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') return null;
-    return raw;
-  } catch {
-    return null;
-  }
 }

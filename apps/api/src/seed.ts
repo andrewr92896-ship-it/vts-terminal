@@ -2,11 +2,30 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 import { db } from './db/index.js';
-import { users } from './db/schema.js';
+import { tradingTeams, users } from './db/schema.js';
 import { hashPassword } from './auth/passwords.js';
 import { seedConnectionsFromEnv } from './trading/connections.js';
-import { DEMO_USERNAME, DEMO_DISPLAY_NAME, DEMO_ROLES, DEMO_SEED_VERSION } from './demo/identity.js';
+import {
+  DEMO_USERNAME,
+  DEMO_DISPLAY_NAME,
+  DEMO_ROLES,
+  DEMO_SEED_VERSION,
+  DEMO_TEAM_ID,
+  DEMO_TEAM_NAME,
+} from './demo/identity.js';
 import { seedDemoData, clearDemoData } from './demo/seedData.js';
+
+// Ensure the demo's own team exists so its sample study game and leaderboard
+// stay isolated from the owner's team. Idempotent.
+async function ensureDemoTeam(): Promise<void> {
+  const existing = (
+    await db.select({ id: tradingTeams.id }).from(tradingTeams).where(eq(tradingTeams.id, DEMO_TEAM_ID)).limit(1)
+  )[0];
+  if (!existing) {
+    const now = new Date();
+    await db.insert(tradingTeams).values({ id: DEMO_TEAM_ID, name: DEMO_TEAM_NAME, createdAt: now, updatedAt: now });
+  }
+}
 
 // Default email domain used to backfill sign-in emails for accounts that
 // predate email login. Override with APP_EMAIL_DOMAIN. Sign-in is by email, so
@@ -122,6 +141,7 @@ export async function seedAdmin(): Promise<void> {
 // seeded. Returns the demo user's id and whether it was just created. Demo
 // *data* (alerts, portfolios, etc.) is handled separately by seedDemo().
 export async function ensureDemoAccount(): Promise<{ id: string; created: boolean }> {
+  await ensureDemoTeam();
   const existing = (
     await db.select().from(users).where(eq(users.username, DEMO_USERNAME)).limit(1)
   )[0];
@@ -129,12 +149,19 @@ export async function ensureDemoAccount(): Promise<{ id: string; created: boolea
   if (existing) {
     // Repair anything that would make the one-click demo unreachable, but only
     // write when something is actually off so a healthy demo is left untouched.
-    if (!existing.active || existing.mustChangePassword || !existing.viewBrokerage) {
+    // The demo's team is pinned to its own team so the default-team seeding never
+    // adopts it into the owner's Vitalis team.
+    if (
+      !existing.active ||
+      existing.mustChangePassword ||
+      !existing.viewBrokerage ||
+      existing.teamId !== DEMO_TEAM_ID
+    ) {
       await db
         .update(users)
-        .set({ active: true, mustChangePassword: false, viewBrokerage: true, updatedAt: new Date() })
+        .set({ active: true, mustChangePassword: false, viewBrokerage: true, teamId: DEMO_TEAM_ID, updatedAt: new Date() })
         .where(eq(users.id, existing.id));
-      console.log('Demo account repaired (reactivated / unlocked).');
+      console.log('Demo account repaired (reactivated / unlocked / team pinned).');
     }
     return { id: existing.id, created: false };
   }
@@ -151,6 +178,7 @@ export async function ensureDemoAccount(): Promise<{ id: string; created: boolea
     passwordHash: await hashPassword(crypto.randomBytes(18).toString('base64url')),
     role: 'Viewer', // legacy column
     roles: JSON.stringify([...DEMO_ROLES]),
+    teamId: DEMO_TEAM_ID, // its own team, isolated from the owner's Vitalis team
     viewBrokerage: true, // so balances and the forex pip money show in the demo
     active: true,
     mustChangePassword: false,

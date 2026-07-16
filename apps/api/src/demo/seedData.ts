@@ -21,8 +21,13 @@ import {
   financeNetWorth,
   brokerConnections,
   aiUsage,
+  studyDecks,
+  studyDeckGame,
+  studyDeckRuns,
 } from '../db/schema.js';
 import type { AnalyzeResult } from '../ai/claude.js';
+import { createDeck } from '../studies/deckStore.js';
+import { DEMO_TEAM_ID } from './identity.js';
 
 import {
   addExpense,
@@ -67,6 +72,8 @@ export async function clearDemoData(userId: string): Promise<void> {
     financeSettings,
     brokerConnections,
     aiUsage,
+    studyDeckGame,
+    studyDeckRuns,
   ];
   for (const t of tables) {
     try {
@@ -74,6 +81,14 @@ export async function clearDemoData(userId: string): Promise<void> {
     } catch (err) {
       console.error('demo clear failed for a table:', err);
     }
+  }
+  // The demo's sample study deck is keyed by createdBy (not userId); deleting it
+  // cascades its questions/state/runs. Cleared here so a re-seed doesn't pile up
+  // duplicate sample decks across deploys.
+  try {
+    await db.delete(studyDecks).where(eq(studyDecks.createdBy, userId));
+  } catch (err) {
+    console.error('demo clear failed for the sample study deck:', err);
   }
   // The shared Market News feed keys ownership on `authorId`, not `userId`, so
   // its two tables are cleared explicitly. Historically they were listed above
@@ -653,4 +668,150 @@ export async function seedDemoData(userId: string): Promise<void> {
   } catch (err) {
     console.error('demo seed todo failed:', err);
   }
+
+  // ---- Team Study Games (sample) ----
+  try {
+    await seedDemoStudyDeck(userId);
+  } catch (err) {
+    console.error('demo seed study deck failed:', err);
+  }
+}
+
+// A neutral, clearly non-financial sample study game so the demo shows a live,
+// playable team game without any pre-made financial content or advice. These are
+// plain educational definitions of common chart-reading terms — no
+// buy/sell recommendations, no financial advice.
+const TA_SAMPLE_QUESTIONS = [
+  {
+    topic: 'Concepts',
+    stem: 'On a price chart, what does a “support level” describe?',
+    options: [
+      { label: 'A' as const, text: 'A price area where declines have historically tended to pause' },
+      { label: 'B' as const, text: 'The highest price ever reached' },
+      { label: 'C' as const, text: 'A guaranteed floor the price cannot fall below' },
+      { label: 'D' as const, text: 'The average trading volume' },
+    ],
+    answer: 'A' as const,
+    explanation: 'Support is simply an area where buying interest has historically slowed a decline — not a guarantee.',
+  },
+  {
+    topic: 'Concepts',
+    stem: '“Resistance” on a chart refers to a price area where…',
+    options: [
+      { label: 'A' as const, text: 'Advances have historically tended to stall' },
+      { label: 'B' as const, text: 'Trading is not allowed' },
+      { label: 'C' as const, text: 'The market always reverses' },
+      { label: 'D' as const, text: 'Dividends are paid' },
+    ],
+    answer: 'A' as const,
+    explanation: 'Resistance is an area where selling has historically slowed an advance.',
+  },
+  {
+    topic: 'Indicators',
+    stem: 'A “moving average” is calculated by…',
+    options: [
+      { label: 'A' as const, text: 'Averaging the price over a set number of periods' },
+      { label: 'B' as const, text: 'Counting the number of trades in a day' },
+      { label: 'C' as const, text: 'Adding all dividends together' },
+      { label: 'D' as const, text: 'Measuring a company’s revenue' },
+    ],
+    answer: 'A' as const,
+    explanation: 'A moving average smooths price by averaging it over a chosen window of periods.',
+  },
+  {
+    topic: 'Indicators',
+    stem: 'The RSI (Relative Strength Index) is an oscillator that ranges between…',
+    options: [
+      { label: 'A' as const, text: '0 and 100' },
+      { label: 'B' as const, text: '-1 and 1' },
+      { label: 'C' as const, text: '0 and 10' },
+      { label: 'D' as const, text: 'Any value with no bounds' },
+    ],
+    answer: 'A' as const,
+    explanation: 'RSI is bounded between 0 and 100.',
+  },
+  {
+    topic: 'Concepts',
+    stem: 'On a stock chart, “volume” measures…',
+    options: [
+      { label: 'A' as const, text: 'The number of shares or contracts traded in a period' },
+      { label: 'B' as const, text: 'The price change since yesterday' },
+      { label: 'C' as const, text: 'The company’s total assets' },
+      { label: 'D' as const, text: 'The number of employees' },
+    ],
+    answer: 'A' as const,
+    explanation: 'Volume is how much was traded during the period.',
+  },
+  {
+    topic: 'Candlesticks',
+    stem: 'The “body” of a candlestick shows…',
+    options: [
+      { label: 'A' as const, text: 'The range between the open and the close' },
+      { label: 'B' as const, text: 'The highest and lowest prices only' },
+      { label: 'C' as const, text: 'The trading volume' },
+      { label: 'D' as const, text: 'The dividend yield' },
+    ],
+    answer: 'A' as const,
+    explanation: 'A candle’s body spans its open and close; the wicks show the high and low.',
+  },
+  {
+    topic: 'Candlesticks',
+    stem: 'A “doji” candlestick forms when…',
+    options: [
+      { label: 'A' as const, text: 'The open and close are nearly equal' },
+      { label: 'B' as const, text: 'The price doubles' },
+      { label: 'C' as const, text: 'Volume is zero' },
+      { label: 'D' as const, text: 'The market is closed' },
+    ],
+    answer: 'A' as const,
+    explanation: 'A doji has a very small body because the open and close are almost the same.',
+  },
+  {
+    topic: 'Patterns',
+    stem: 'The “head and shoulders” is most commonly described as a…',
+    options: [
+      { label: 'A' as const, text: 'Reversal pattern' },
+      { label: 'B' as const, text: 'Type of moving average' },
+      { label: 'C' as const, text: 'Volume indicator' },
+      { label: 'D' as const, text: 'Dividend schedule' },
+    ],
+    answer: 'A' as const,
+    explanation: 'It is classically discussed as a reversal pattern.',
+  },
+  {
+    topic: 'Concepts',
+    stem: 'A “trend line” on a chart is drawn to…',
+    options: [
+      { label: 'A' as const, text: 'Connect a series of highs or lows to show direction' },
+      { label: 'B' as const, text: 'Mark where a company was founded' },
+      { label: 'C' as const, text: 'Show the exact future price' },
+      { label: 'D' as const, text: 'Separate two trading days' },
+    ],
+    answer: 'A' as const,
+    explanation: 'A trend line connects successive highs or lows to visualize direction.',
+  },
+  {
+    topic: 'Concepts',
+    stem: 'A “breakout” generally refers to price…',
+    options: [
+      { label: 'A' as const, text: 'Moving beyond a defined support or resistance level' },
+      { label: 'B' as const, text: 'Staying exactly flat all day' },
+      { label: 'C' as const, text: 'Being delisted' },
+      { label: 'D' as const, text: 'Paying a special dividend' },
+    ],
+    answer: 'A' as const,
+    explanation: 'A breakout is price moving past a previously established support or resistance area.',
+  },
+];
+
+async function seedDemoStudyDeck(userId: string): Promise<void> {
+  await createDeck({
+    teamId: DEMO_TEAM_ID,
+    name: 'Technical Analysis Basics',
+    description: 'A friendly sample study game on common chart-reading terms. Educational only — not financial advice.',
+    createdBy: userId,
+    source: 'sample',
+    isSample: true,
+    questions: TA_SAMPLE_QUESTIONS,
+  });
 }

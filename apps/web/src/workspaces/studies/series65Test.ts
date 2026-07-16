@@ -4,7 +4,7 @@
 // repeats questions and scores a rolling average) — a test is a one-shot sitting
 // meant to mirror a real exam result.
 
-import { SERIES65_QUESTIONS, type Series65Question, type Series65Topic } from './series65Questions';
+import type { Series65Question, Series65Topic } from './series65Meta';
 import { PASS_THRESHOLD } from './series65Game';
 
 export const TEST_PASS = PASS_THRESHOLD; // ~72%, same pass line as the real exam
@@ -40,10 +40,10 @@ function shuffle<T>(arr: T[]): T[] {
 // mix, one appearance each). If a topic's bank is smaller than its quota we take
 // all of it — the four Series 65 banks are large enough that this never trims in
 // practice, but the guard keeps the builder safe.
-export function buildTest(): Series65Question[] {
+export function buildTest(bank: Series65Question[]): Series65Question[] {
   const picked: Series65Question[] = [];
   for (const slice of TEST_BLUEPRINT) {
-    const pool = SERIES65_QUESTIONS.filter((q) => q.topic === slice.topic);
+    const pool = bank.filter((q) => q.topic === slice.topic);
     picked.push(...shuffle(pool).slice(0, Math.min(slice.count, pool.length)));
   }
   return shuffle(picked);
@@ -164,8 +164,8 @@ export function clearTestProgress(userId: string | undefined): void {
 // Rehydrate the drawn questions from stored ids, dropping any id no longer in
 // the bank. Returns null if the set can't be fully restored (bank changed), so
 // the caller falls back to a fresh test rather than a short one.
-export function questionsFromIds(ids: number[]): Series65Question[] | null {
-  const byId = new Map(SERIES65_QUESTIONS.map((q) => [q.id, q]));
+export function questionsFromIds(ids: number[], bank: Series65Question[]): Series65Question[] | null {
+  const byId = new Map(bank.map((q) => [q.id, q]));
   const out: Series65Question[] = [];
   for (const id of ids) {
     const q = byId.get(id);

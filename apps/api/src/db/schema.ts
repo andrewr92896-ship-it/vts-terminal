@@ -891,6 +891,76 @@ export const studyGameRuns = sqliteTable('study_game_runs', {
 });
 export type StudyGameRunRow = typeof studyGameRuns.$inferSelect;
 
+// ---- Team-authored study games (decks) ----
+// Any team (other than the owner's, which has the licensed Series 65 track) can
+// build its own study game: questions AI-generated from a topic, or parsed by
+// Claude from an uploaded text file. A deck is team-SHARED — any member creates
+// it, the whole team plays it — and gets the same level/streak/leaderboard
+// mechanics as the Series 65 game. All rows are scoped by teamId.
+export const studyDecks = sqliteTable('study_decks', {
+  id: text('id').primaryKey(),
+  teamId: text('team_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  // The member who built it; null if that account is later deleted.
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  source: text('source').notNull(), // 'ai_topic' | 'upload' | 'sample'
+  isSample: integer('is_sample', { mode: 'boolean' }).notNull().default(false),
+  categories: text('categories').notNull(), // JSON string[] of this deck's category names
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyDeckRow = typeof studyDecks.$inferSelect;
+
+export const studyDeckQuestions = sqliteTable('study_deck_questions', {
+  id: text('id').primaryKey(),
+  deckId: text('deck_id')
+    .notNull()
+    .references(() => studyDecks.id, { onDelete: 'cascade' }),
+  teamId: text('team_id').notNull(), // denormalized for team-scoped guards
+  seq: integer('seq').notNull(), // stable question number within the deck
+  topic: text('topic').notNull(), // one of the deck's categories
+  stem: text('stem').notNull(),
+  options: text('options').notNull(), // JSON [{label,text} x4]
+  answer: text('answer').notNull(), // 'A' | 'B' | 'C' | 'D'
+  explanation: text('explanation'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyDeckQuestionRow = typeof studyDeckQuestions.$inferSelect;
+
+// Per-user, per-deck game state (mirror of study_game). One row per (user, deck).
+export const studyDeckGame = sqliteTable(
+  'study_deck_game',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    deckId: text('deck_id')
+      .notNull()
+      .references(() => studyDecks.id, { onDelete: 'cascade' }),
+    state: text('state').notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.deckId] }) }),
+);
+export type StudyDeckGameRow = typeof studyDeckGame.$inferSelect;
+
+// Banked runs for a deck (mirror of study_game_runs), for the deck leaderboard.
+export const studyDeckRuns = sqliteTable('study_deck_runs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  deckId: text('deck_id')
+    .notNull()
+    .references(() => studyDecks.id, { onDelete: 'cascade' }),
+  attempted: integer('attempted').notNull(),
+  correct: integer('correct').notNull(),
+  bestStep: integer('best_step').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyDeckRunRow = typeof studyDeckRuns.$inferSelect;
+
 // ---- Studies: completed mock tests (per user) ----
 // One row per finished Series 65 mock test (a fixed 100-question exam drawn to
 // the real exam blueprint: 25 Investments, 30 Client Management, 30 Regulations

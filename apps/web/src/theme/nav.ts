@@ -45,12 +45,13 @@ export const NAV: NavWorkspace[] = [
     label: 'Studies',
     icon: 'graduation-cap',
     accent: C.violet,
-    group: 'Series 65',
+    group: 'Studies',
     sections: [
       { key: 'st_home', label: 'Subjects', icon: 'layers' },
       { key: 'st_game', label: 'Study Game', icon: 'gamepad-2' },
       { key: 'st_test', label: 'Test Mode', icon: 'file-check-2' },
       { key: 'st_progress', label: 'Progress', icon: 'trending-up' },
+      { key: 'st_decks', label: 'Study Games', icon: 'library' },
     ],
   },
   {
@@ -66,6 +67,11 @@ export const NAV: NavWorkspace[] = [
 export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
   return NAV.find((w) => w.key === ws);
 }
+
+// Studies sections that belong to the Series 65 track (the owner's licensed
+// content). The sidebar hides these for teams that can't use Series 65; the
+// Subjects hub and the team-built Study Games stay visible to everyone.
+export const SERIES65_ONLY_SECTIONS = new Set(['st_game', 'st_test', 'st_progress']);
 
 // The signalling accent for a workspace (falls back to gold for anything not in
 // the Meridian nav, e.g. a legacy wealth/finance route reached by deep link).
