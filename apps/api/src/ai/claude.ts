@@ -357,10 +357,12 @@ export async function parseTradeHistoryScreenshot(
 }
 
 // Sonnet 4.6: the site-wide assistant (Ask Claude, product knowledge, parsing).
-export async function askClaude(prompt: string, system?: string): Promise<string> {
+// maxTokens defaults to 4000; question-generation passes a larger budget since a
+// deck of up to 50 four-option questions with explanations is a big response.
+export async function askClaude(prompt: string, system?: string, maxTokens = 4000): Promise<string> {
   const message = await getClient().messages.create({
     model: config.ANTHROPIC_MODEL_DEFAULT,
-    max_tokens: 4000,
+    max_tokens: maxTokens,
     ...(system ? { system } : {}),
     messages: [{ role: 'user', content: prompt }],
   });
@@ -561,4 +563,143 @@ export async function classifyQuestionsIntoSection(
     }
   }
   return out;
+}
+
+// ---- Team study-deck question generation ----
+// A team builds its own quiz: either AI-generated from a topic, or authored by
+// Claude from an uploaded text file (their own questions, or source notes). Both
+// paths produce the same structured multiple-choice shape. Answer-key
+// correctness is the model's; we validate STRUCTURE only (exactly four labelled
+// options, one valid answer, a non-empty stem) and assign question numbers/ids
+// server-side (see deckStore) — the model can never inject those.
+
+const LETTERS = ['A', 'B', 'C', 'D'] as const;
+type QLetter = (typeof LETTERS)[number];
+
+export interface GeneratedQuestion {
+  stem: string;
+  options: { label: QLetter; text: string }[];
+  answer: QLetter;
+  topic: string; // a short category label (grouped into 2–5 across the set)
+  explanation: string;
+}
+
+// Coerce a raw model question into our shape, or null if it is structurally
+// unusable. `categories`, when non-empty, constrains the topic; otherwise the
+// model's own short label is kept (falling back to `fallbackTopic`).
+function coerceQuestion(
+  raw: unknown,
+  categories: string[],
+  fallbackTopic: string,
+): GeneratedQuestion | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const stem = typeof o.stem === 'string' ? o.stem.trim() : '';
+  if (!stem) return null;
+
+  const rawOpts = Array.isArray(o.options) ? o.options : [];
+  const byLabel = new Map<QLetter, string>();
+  for (const opt of rawOpts) {
+    const oo = (opt ?? {}) as Record<string, unknown>;
+    const label = typeof oo.label === 'string' ? (oo.label.trim().toUpperCase() as string) : '';
+    const text = typeof oo.text === 'string' ? oo.text.trim() : '';
+    if ((LETTERS as readonly string[]).includes(label) && text && !byLabel.has(label as QLetter)) {
+      byLabel.set(label as QLetter, text);
+    }
+  }
+  // Require exactly the four labelled options A–D.
+  if (LETTERS.some((l) => !byLabel.has(l))) return null;
+  const options = LETTERS.map((l) => ({ label: l, text: byLabel.get(l)! }));
+
+  const answer = typeof o.answer === 'string' ? (o.answer.trim().toUpperCase() as string) : '';
+  if (!(LETTERS as readonly string[]).includes(answer)) return null;
+
+  const rawTopic = typeof o.topic === 'string' ? o.topic.trim() : '';
+  let topic = rawTopic || fallbackTopic;
+  if (categories.length) {
+    const hit = categories.find((c) => c.toLowerCase() === rawTopic.toLowerCase());
+    topic = hit ?? categories[0];
+  }
+  topic = topic.slice(0, 40) || fallbackTopic;
+
+  const explanation = typeof o.explanation === 'string' ? o.explanation.trim().slice(0, 400) : '';
+  return { stem: stem.slice(0, 600), options, answer: answer as QLetter, topic, explanation };
+}
+
+// Parse + validate the model's {"questions":[...]} response into clean questions,
+// deduped by normalized stem and capped at `count`. Exported so the structural
+// contract can be unit-tested without a live model call.
+export function parseGeneratedQuestions(
+  raw: string,
+  count: number,
+  categories: string[] = [],
+  fallbackTopic = 'General',
+): GeneratedQuestion[] {
+  const parsed = extractJson(raw) as { questions?: unknown } | null;
+  const list = Array.isArray(parsed?.questions) ? (parsed!.questions as unknown[]) : [];
+  const out: GeneratedQuestion[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    const q = coerceQuestion(item, categories, fallbackTopic);
+    if (!q) continue;
+    const key = q.stem.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
+// A generous token budget for a deck: ~200 tokens per question plus overhead.
+function deckMaxTokens(count: number): number {
+  return Math.min(16000, 1200 + count * 220);
+}
+
+const DECK_FORMAT = [
+  'Respond with ONLY a JSON object of exactly this shape and nothing else:',
+  '{"questions":[{"stem":"...","options":[{"label":"A","text":"..."},{"label":"B","text":"..."},{"label":"C","text":"..."},{"label":"D","text":"..."}],"answer":"A","topic":"...","explanation":"..."}]}',
+  'Rules: every question has EXACTLY four options labelled A, B, C, and D; exactly one is correct and named in "answer"; "explanation" is ONE short sentence saying why the answer is right; "topic" is a short category label — reuse a small set of 2–5 topics across the whole set. No prose or code fences outside the JSON.',
+].join('\n');
+
+// AI-generate a fresh quiz from a topic the team named (plus optional extra
+// instructions). Returns validated questions; the caller stores them.
+export async function generateDeckQuestions(input: {
+  topic: string;
+  instructions?: string;
+  count: number;
+}): Promise<GeneratedQuestion[]> {
+  const count = Math.max(1, Math.min(50, Math.floor(input.count) || 0));
+  const system = `You are an expert exam-question author. Write clear, self-contained multiple-choice practice questions that test real understanding of the subject the user names. Vary difficulty. Do not repeat questions. ${DECK_FORMAT}`;
+  const prompt = [
+    `Write ${count} multiple-choice questions about: ${input.topic}.`,
+    input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
+    `Produce exactly ${count} questions.`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const raw = await askClaude(prompt, system, deckMaxTokens(count));
+  return parseGeneratedQuestions(raw, count, [], input.topic.trim().slice(0, 40) || 'General');
+}
+
+// Build a quiz from an uploaded text file: either parse questions already in the
+// text, or author questions from the source material / instructions it contains.
+export async function parseDeckFromText(input: {
+  text: string;
+  instructions?: string;
+  count?: number;
+}): Promise<GeneratedQuestion[]> {
+  const count = Math.max(1, Math.min(50, Math.floor(input.count ?? 50) || 50));
+  const system = `You are an expert exam-question author. You are given a text file from a study author. It may ALREADY contain questions (with or without answers) — in that case, parse them faithfully and preserve their wording and intended answers. Or it may be source notes, an outline, or instructions — in that case, author questions from that material. Either way, do not invent facts beyond the supplied material. ${DECK_FORMAT}`;
+  const prompt = [
+    `Turn the following material into up to ${count} multiple-choice questions.`,
+    input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
+    '',
+    'MATERIAL:',
+    input.text,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const raw = await askClaude(prompt, system, deckMaxTokens(count));
+  return parseGeneratedQuestions(raw, count, [], 'General');
 }

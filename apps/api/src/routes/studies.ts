@@ -15,13 +15,22 @@ import {
   recordTest,
   saveTestProgress,
 } from '../studies/tests.js';
-import { aiConfigured, classifyQuestionsIntoSection, defineSeries65Term } from '../ai/claude.js';
+import {
+  aiConfigured,
+  classifyQuestionsIntoSection,
+  defineSeries65Term,
+  generateDeckQuestions,
+  parseDeckFromText,
+} from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { getTeamName } from '../teams/service.js';
 import { canUseSeries65 } from '../studies/access.js';
 import { SERIES65_QUESTIONS } from '../studies/series65/bank.js';
 import { SERIES65_EXPLANATIONS } from '../studies/series65/explanations.js';
 import { SERIES65_VOCAB } from '../studies/series65/vocab.js';
+import { createDeck, deleteDeck, getDeck, listDecks } from '../studies/deckStore.js';
+import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
+import { isAdmin, parseRoles } from '../auth/rbac.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
@@ -65,6 +74,20 @@ const sectionCreateSchema = z.object({
     .max(1000),
 });
 
+// Building a team study deck: AI from a topic, or from an uploaded text file.
+const deckGenerateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  topic: z.string().trim().min(1).max(200),
+  instructions: z.string().trim().max(2000).optional(),
+  count: z.number().int().min(1).max(50),
+});
+const deckImportSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  text: z.string().min(1).max(100_000),
+  instructions: z.string().trim().max(2000).optional(),
+  count: z.number().int().min(1).max(50).optional(),
+});
+
 export async function studiesRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
 
@@ -81,6 +104,142 @@ export async function studiesRoutes(app: FastifyInstance) {
       explanations: SERIES65_EXPLANATIONS,
       vocab: SERIES65_VOCAB,
     };
+  });
+
+  // ---- Team study games (decks) ----
+  // A team builds and plays its own quizzes. Every deck is team-scoped: a member
+  // creates it (AI-generated or from an uploaded file) and the whole team plays
+  // it with the same mechanics as the Series 65 game.
+
+  // The list of the caller's team decks.
+  app.get('/api/studies/decks', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.send({ decks: [] });
+    return { decks: await listDecks(teamId) };
+  });
+
+  // Create a deck by generating questions from a topic with Claude.
+  app.post('/api/studies/decks/generate', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
+    const parsed = deckGenerateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name, topic, and question count are required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_deck_generate');
+      const questions = await generateDeckQuestions({
+        topic: parsed.data.topic,
+        instructions: parsed.data.instructions,
+        count: parsed.data.count,
+      });
+      if (questions.length === 0) {
+        return reply.code(422).send({ error: 'Claude could not produce questions for that topic. Try a clearer topic or add instructions.' });
+      }
+      const deck = await createDeck({
+        teamId,
+        name: parsed.data.name,
+        description: parsed.data.topic,
+        createdBy: request.currentUser!.id,
+        source: 'ai_topic',
+        questions,
+      });
+      return { deck, decks: await listDecks(teamId) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the study game' });
+    }
+  });
+
+  // Create a deck from an uploaded text file (their own questions or notes).
+  app.post('/api/studies/decks/import', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
+    const parsed = deckImportSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name and the file text are required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_deck_import');
+      const questions = await parseDeckFromText({
+        text: parsed.data.text,
+        instructions: parsed.data.instructions,
+        count: parsed.data.count,
+      });
+      if (questions.length === 0) {
+        return reply.code(422).send({ error: 'Claude could not build questions from that file. Make sure it contains questions or study material.' });
+      }
+      const deck = await createDeck({
+        teamId,
+        name: parsed.data.name,
+        description: 'Imported from a file',
+        createdBy: request.currentUser!.id,
+        source: 'upload',
+        questions,
+      });
+      return { deck, decks: await listDecks(teamId) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the study game' });
+    }
+  });
+
+  // One deck with its questions (team-scoped).
+  app.get('/api/studies/decks/:id', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    const id = (request.params as { id: string }).id;
+    if (!teamId) return reply.code(404).send({ error: 'Not found' });
+    const deck = await getDeck(id, teamId);
+    if (!deck) return reply.code(404).send({ error: 'Study game not found' });
+    return { deck };
+  });
+
+  // Delete a deck (creator or a team admin).
+  app.delete('/api/studies/decks/:id', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
+    const ok = await deleteDeck(id, me.teamId, me.id, isAdmin(parseRoles(me)));
+    if (!ok) return reply.code(403).send({ error: 'You can only delete study games you created.' });
+    return { decks: await listDecks(me.teamId) };
+  });
+
+  // Per-user, per-deck game state (mirror of the Series 65 game endpoints).
+  app.get('/api/studies/decks/:id/game', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    const id = (request.params as { id: string }).id;
+    if (!teamId || !(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    return { state: await getDeckGame(request.currentUser!.id, id) };
+  });
+
+  app.put('/api/studies/decks/:id/game', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    const id = (request.params as { id: string }).id;
+    if (!teamId || !(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    const parsed = gameSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
+    const state = normalizeState(parsed.data.state);
+    if (state == null) return reply.code(400).send({ error: 'Invalid game state' });
+    await saveDeckGame(request.currentUser!.id, id, state);
+    return { ok: true };
+  });
+
+  app.post('/api/studies/decks/:id/game/archive', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    const id = (request.params as { id: string }).id;
+    if (!teamId || !(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    const parsed = gameSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
+    const state = normalizeState(parsed.data.state);
+    if (state == null) return reply.code(400).send({ error: 'Invalid game state' });
+    await archiveDeckRun(request.currentUser!.id, id, state);
+    return { ok: true };
+  });
+
+  // The per-deck leaderboard (all players of a deck are teammates by design).
+  app.get('/api/studies/decks/:id/leaderboard', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId || !(await getDeck(id, me.teamId))) return reply.code(404).send({ error: 'Not found' });
+    return { entries: await getDeckLeaderboard(id, me.id) };
   });
 
   app.get('/api/studies/learned', guard, async (request) => {
