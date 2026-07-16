@@ -93,6 +93,17 @@ export function Leaderboard({ theme }: { theme: Theme }) {
             {me ? `${me.score == null ? '—' : `${me.score.toFixed(1)}%`} · ${me.correct}/${me.attempted} correct` : 'Play to join the board'}
           </div>
         </div>
+        <div style={{ ...card(theme), flex: '1 1 200px' }}>
+          <div style={statLabel}>Your session · current 100</div>
+          <div style={{ ...statBig, color: scoreColor(me?.sessionScore ?? null) }}>
+            {me == null || me.sessionScore == null ? '—' : `${me.sessionScore.toFixed(1)}%`}
+          </div>
+          <div style={{ fontSize: 11, color: muted, marginTop: 2 }}>
+            {me && me.sessionScore != null
+              ? `${me.sessionCorrect}/${me.sessionAttempted} this block`
+              : 'Answer a question to start a block'}
+          </div>
+        </div>
       </div>
 
       <div style={card(theme)}>
@@ -101,7 +112,7 @@ export function Leaderboard({ theme }: { theme: Theme }) {
             <div style={statLabel}>High scores</div>
             {team && <span style={teamPill(theme)} title="Ranked against your trading team only">🏦 {team.name}</span>}
           </div>
-          <div style={{ fontSize: 10.5, color: muted }}>Score = lifetime accuracy · pass {PASS_THRESHOLD.toFixed(1)}% · reset runs are banked here</div>
+          <div style={{ fontSize: 10.5, color: muted }}>Score = lifetime accuracy · Session = current 100 questions · pass {PASS_THRESHOLD.toFixed(1)}% · reset runs are banked here</div>
         </div>
 
         {isPhone ? (
@@ -131,6 +142,13 @@ export function Leaderboard({ theme }: { theme: Theme }) {
                     </div>
                     <div style={{ fontSize: 10.5, color: muted, marginTop: 2, fontFamily: "'IBM Plex Mono', monospace" }}>
                       {e.correct}/{e.attempted} correct
+                      {e.sessionScore != null && (
+                        <>
+                          {' · session '}
+                          <span style={{ color: scoreColor(e.sessionScore), fontWeight: 700 }}>{e.sessionScore.toFixed(1)}%</span>
+                          {` (${e.sessionCorrect}/${e.sessionAttempted})`}
+                        </>
+                      )}
                     </div>
                   </div>
                   <span
@@ -154,6 +172,7 @@ export function Leaderboard({ theme }: { theme: Theme }) {
                   <th style={{ ...th, width: 56 }}>Rank</th>
                   <th style={th}>Player</th>
                   <th style={{ ...th, textAlign: 'right' }}>Score</th>
+                  <th style={{ ...th, textAlign: 'right' }}>Session</th>
                   <th style={{ ...th, textAlign: 'right' }}>Answered</th>
                   <th style={{ ...th, textAlign: 'right' }}>Correct</th>
                   <th style={{ ...th, textAlign: 'right' }}>Best level</th>
@@ -181,6 +200,20 @@ export function Leaderboard({ theme }: { theme: Theme }) {
                       </td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: scoreColor(e.score) }}>
                         {e.score == null ? '—' : `${e.score.toFixed(1)}%`}
+                      </td>
+                      <td style={{ ...td, textAlign: 'right' }}>
+                        {e.sessionScore == null ? (
+                          <span style={{ color: muted }}>—</span>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', lineHeight: 1.25 }}>
+                            <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontWeight: 700, color: scoreColor(e.sessionScore) }}>
+                              {e.sessionScore.toFixed(1)}%
+                            </span>
+                            <span style={{ fontSize: 10, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>
+                              {e.sessionCorrect}/{e.sessionAttempted}
+                            </span>
+                          </div>
+                        )}
                       </td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#dfe7fa' }}>{e.attempted}</td>
                       <td style={{ ...td, textAlign: 'right', fontFamily: "'IBM Plex Mono', monospace", color: '#dfe7fa' }}>{e.correct}</td>

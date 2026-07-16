@@ -16,6 +16,11 @@ const MAX_STATE_BYTES = 64 * 1024; // generous ceiling for the serialized state
 const BASE_SUBLEVEL_COST = 10;
 const MAX_LEVEL_STEP = 12 * 5 - 1; // 59
 
+// Session score window, kept in step with the web client (series65Game.ts): the
+// score for the current fixed block of up to WINDOW questions (Q1–100, Q101–200,
+// …), which resets every WINDOW answers.
+const WINDOW = 100;
+
 function correctToReachStep(step: number): number {
   const s = Math.max(0, Math.min(MAX_LEVEL_STEP + 1, Math.floor(step)));
   return BASE_SUBLEVEL_COST * s + (s * (s - 1)) / 2;
@@ -60,6 +65,11 @@ export interface LeaderboardEntry {
   attempted: number; // questions answered in this run
   correct: number; // correct answers in this run
   bestStep: number; // highest overall level step reached (0..59)
+  // Current session block (up to WINDOW questions, resets every WINDOW). Only
+  // live rows carry it — a banked run has no live block, so these are null/0.
+  sessionScore: number | null; // % correct in the current block
+  sessionAttempted: number; // answers in the current block (0..WINDOW)
+  sessionCorrect: number; // correct answers in the current block
   archived: boolean; // true for a banked (reset) run
   when: number | null; // when the run was banked (ms); null for live rows
   isMe: boolean; // the caller's current live row
@@ -71,6 +81,10 @@ interface RunStats {
   attempted: number;
   correct: number;
   bestStep: number;
+  // Current session block, derived from the stored `recent` window. Zeroed for
+  // banked runs (which store no per-answer history).
+  sessionAttempted: number;
+  sessionCorrect: number;
 }
 
 function round1(n: number): number {
@@ -104,7 +118,17 @@ function statsFromState(raw: string): RunStats | null {
   const levelCorrect = Number(g.levelCorrect) || correct;
   const bestStep = Math.max(Number(g.bestStep) || 0, stepForCorrect(levelCorrect));
 
-  return { attempted, correct, bestStep };
+  // Current session block: the most recent `blockLen` outcomes in `recent` are
+  // exactly this block's answers (a completed block shows its full WINDOW). This
+  // mirrors sessionScore() in the web client.
+  const recent = Array.isArray(g.recent) ? g.recent.filter((x: unknown) => typeof x === 'boolean') : [];
+  const rem = attempted % WINDOW;
+  const blockLen = rem === 0 ? WINDOW : rem;
+  const tail = recent.slice(-blockLen);
+  const sessionAttempted = tail.length;
+  const sessionCorrect = tail.filter(Boolean).length;
+
+  return { attempted, correct, bestStep, sessionAttempted, sessionCorrect };
 }
 
 // Bank a run to the leaderboard: parse its headline numbers from the given state
@@ -167,6 +191,9 @@ export async function getLeaderboard(currentUserId: string): Promise<Leaderboard
       attempted: stats.attempted,
       correct: stats.correct,
       bestStep: stats.bestStep,
+      sessionScore: accuracyOf(stats.sessionCorrect, stats.sessionAttempted),
+      sessionAttempted: stats.sessionAttempted,
+      sessionCorrect: stats.sessionCorrect,
       archived: false,
       when: null,
       isMe: row.userId === currentUserId,
@@ -184,6 +211,10 @@ export async function getLeaderboard(currentUserId: string): Promise<Leaderboard
       attempted: row.attempted,
       correct: row.correct,
       bestStep: row.bestStep,
+      // A banked run has no live session block.
+      sessionScore: null,
+      sessionAttempted: 0,
+      sessionCorrect: 0,
       archived: true,
       when: row.createdAt.getTime(),
       isMe: false,
