@@ -176,48 +176,54 @@ export function LiveWall() {
       <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={() => void load()} />
       <DeskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} readOnly={readOnly} onSaved={() => void load()} />
 
-      {view === 'charts' ? (
+      {/* Master board — kept mounted (just hidden) when the Positions view is
+          open, so the preset you have open and any unsaved edits survive
+          switching to Positions and back. */}
+      <div style={{ display: view === 'charts' ? 'block' : 'none' }}>
         <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading charts…</div>}>
           <ChartBoard />
         </Suspense>
-      ) : loadError ? (
-        <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>
-      ) : !data ? (
-        <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the wall…</div>
-      ) : (
-        <>
-          {staleError && (
-            <div style={warnBanner}>
-              Showing the last positions from {etTime(data.generatedAt)} ET. Couldn't refresh: {staleError}
-            </div>
-          )}
+      </div>
 
-          {data.note && <div style={data.source === 'sample' ? infoBanner : warnBanner}>{data.note}</div>}
+      {view === 'positions' &&
+        (loadError ? (
+          <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>
+        ) : !data ? (
+          <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the wall…</div>
+        ) : (
+          <>
+            {staleError && (
+              <div style={warnBanner}>
+                Showing the last positions from {etTime(data.generatedAt)} ET. Couldn't refresh: {staleError}
+              </div>
+            )}
 
-          {/* Trade cards */}
-          {data.trades.length === 0 ? (
-            <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-              No open positions right now. New fills appear here automatically.
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>
-              {data.trades.map((t) => (
-                <TradeCard
-                  key={t.id}
-                  t={t}
-                  config={configFrom(data)}
-                  mine={t.ownerId === user?.id}
-                  readOnly={readOnly}
-                  showMoney={data.canSeeBalances && !privacy && !hideMoney}
-                  showFxMoney={!privacy && !hideMoney}
-                  canSeeBalances={data.canSeeBalances}
-                  onClosed={() => void load()}
-                />
-              ))}
-            </div>
-          )}
-        </>
-      )}
+            {data.note && <div style={data.source === 'sample' ? infoBanner : warnBanner}>{data.note}</div>}
+
+            {/* Trade cards */}
+            {data.trades.length === 0 ? (
+              <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
+                No open positions right now. New fills appear here automatically.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>
+                {data.trades.map((t) => (
+                  <TradeCard
+                    key={t.id}
+                    t={t}
+                    config={configFrom(data)}
+                    mine={t.ownerId === user?.id}
+                    readOnly={readOnly}
+                    showMoney={data.canSeeBalances && !privacy && !hideMoney}
+                    showFxMoney={!privacy && !hideMoney}
+                    canSeeBalances={data.canSeeBalances}
+                    onClosed={() => void load()}
+                  />
+                ))}
+              </div>
+            )}
+          </>
+        ))}
     </div>
   );
 }

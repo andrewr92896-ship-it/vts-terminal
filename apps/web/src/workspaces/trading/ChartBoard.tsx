@@ -3,6 +3,7 @@ import GridLayout, { WidthProvider, type Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import type { BoardTile, BoardTileKind, TradingBoard } from '../../api/types';
 import { ChartTile } from './ChartTile';
 import { WatchlistTile } from './WatchlistTile';
@@ -19,6 +20,11 @@ const ROW_H = 30;
 // grid is locked for interaction until "Edit layout" is on, so charts stay
 // clickable while you trade and only move when you mean to move them.
 export function ChartBoard() {
+  const { user } = useAuth();
+  // Remember the last-opened preset per user (per device) so returning to the
+  // board — after toggling to Positions, a reload, or a new session — lands on
+  // the same preset instead of resetting to the default.
+  const lastKey = user?.id ? `vts:lastBoard:${user.id}` : null;
   const [boards, setBoards] = useState<TradingBoard[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null); // null → unsaved working board
   const [name, setName] = useState('New board');
@@ -31,20 +37,31 @@ export function ChartBoard() {
   const [namePrompt, setNamePrompt] = useState<{ mode: 'create' | 'rename'; value: string } | null>(null);
   const firstLoad = useRef(true);
 
-  const applyBoard = useCallback((b: TradingBoard) => {
-    setActiveId(b.id);
-    setName(b.name);
-    setTiles(b.layout.tiles ?? []);
-    setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
-    setNamePrompt(null);
-  }, []);
+  const applyBoard = useCallback(
+    (b: TradingBoard) => {
+      setActiveId(b.id);
+      setName(b.name);
+      setTiles(b.layout.tiles ?? []);
+      setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
+      setNamePrompt(null);
+      if (lastKey) {
+        try { localStorage.setItem(lastKey, b.id); } catch { /* storage unavailable — non-fatal */ }
+      }
+    },
+    [lastKey],
+  );
 
   const load = useCallback(async () => {
     try {
       const { boards: list } = await api.tradingBoards();
       setBoards(list);
       if (firstLoad.current && list.length > 0) {
-        applyBoard(list.find((b) => b.isDefault) ?? list[0]);
+        // Prefer the user's last-opened preset, then their default, then the first.
+        let savedId: string | null = null;
+        if (lastKey) {
+          try { savedId = localStorage.getItem(lastKey); } catch { /* ignore */ }
+        }
+        applyBoard(list.find((b) => b.id === savedId) ?? list.find((b) => b.isDefault) ?? list[0]);
       }
       setError(null);
     } catch (e) {
@@ -53,7 +70,7 @@ export function ChartBoard() {
       firstLoad.current = false;
       setLoading(false);
     }
-  }, [applyBoard]);
+  }, [applyBoard, lastKey]);
 
   useEffect(() => {
     void load();
