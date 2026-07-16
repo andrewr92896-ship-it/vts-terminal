@@ -15,6 +15,45 @@ export function lifetimeAccuracy(g: GameState): number | null {
   return g.totalAttempted > 0 ? round1((100 * g.totalCorrect) / g.totalAttempted) : null;
 }
 
+// ---- Session score ----
+// Alongside lifetime accuracy, the score for the current block of up to WINDOW
+// (100) questions. Blocks are fixed, not sliding: questions 1–100 are one block,
+// 101–200 the next, and so on. A completed block's score stays visible until the
+// next question begins a fresh block (which then reads as the new block from its
+// first answer). Derived from `recent` + `totalAttempted`, so it needs no extra
+// stored state and is restored by Undo along with the rest of the run.
+export interface SessionScore {
+  attempted: number; // questions answered in the current block (1..WINDOW)
+  correct: number; // correct answers in the current block
+  pct: number; // correct / attempted × 100, to one decimal
+  index: number; // 0-based block number (0 = questions 1–100)
+  start: number; // first question number in this block (1-based)
+  end: number; // last question number this block can hold (start + WINDOW − 1)
+}
+
+export function sessionScore(g: GameState): SessionScore | null {
+  const total = Math.max(0, Math.floor(g.totalAttempted) || 0);
+  if (total <= 0) return null;
+  // Position within the current block: a completed block (total a multiple of
+  // WINDOW) shows its full WINDOW answers rather than an empty next block.
+  const rem = total % WINDOW;
+  const blockLen = rem === 0 ? WINDOW : rem;
+  // The current block's answers are exactly the most recent `blockLen` outcomes.
+  const tail = g.recent.slice(-blockLen);
+  const attempted = tail.length;
+  if (attempted === 0) return null;
+  const correct = tail.filter(Boolean).length;
+  const index = Math.floor((total - 1) / WINDOW);
+  return {
+    attempted,
+    correct,
+    pct: round1((100 * correct) / attempted),
+    index,
+    start: index * WINDOW + 1,
+    end: index * WINDOW + WINDOW,
+  };
+}
+
 // Official NASAA Series 65 content areas and their exam weightings, mapped to
 // our four topics. Used to weight the question mix and shown in the HUD.
 export interface CategoryMeta {
