@@ -124,31 +124,31 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
   funded: {
-    title: 'Funded',
-    intro: 'Everything for your funded account in one place: your FTP prop challenge (equity vs. target + drawdown) and your funded/prop accounts tracked from screenshots — each with daily / weekly / 30-day trade P/L. Capital figures are shown to full traders only.',
+    title: 'Manual Trades',
+    intro: 'Your own book of accounts, kept entirely by hand — nothing here connects to an outside platform. Add an account, place trades by typing them in or reading them off a screenshot, and track open positions live on the Live Wall, with each account’s balance and Today / This week / 30-day P/L. Capital figures are shown to full traders only.',
     steps: [
       {
-        title: 'The FTP challenge',
-        body: 'The top section is your prop challenge. Click Edit to set account size, profit target %, and daily / max drawdown %. The card shows equity, progress to target, and two drawdown gauges; the status pill flips to Breached or Target Reached.',
+        title: 'Add an account',
+        body: 'Use “+ Add account” to set one up — give it a name, an optional broker/label, a currency, and a current balance. Everything is self-entered; you keep the balance current yourself.',
       },
       {
-        title: 'Keep challenge equity current',
-        body: 'FTP has no API — type your equity, or use “Update balance from a screenshot”: upload or paste (⌘/Ctrl+V) a screenshot of your account and Claude reads the balance and sets your equity.',
+        title: 'Place a trade',
+        body: 'Add a trade by hand with “+ Trade” (instrument, side, size, entry/exit, P/L), or use “Import from screenshot” to read a batch off a trade-history photo — Claude parses the rows, skips duplicates (by time + profit), and sets the balance if it’s shown.',
       },
       {
-        title: 'Funded / prop accounts',
-        body: 'Add prop accounts with “+ Add account”. Log trades by pasting a trade-history screenshot — Claude reads the trades and the account equity, skips duplicates (by time + profit), and shows each account’s balance and Today / This week / 30-day P/L. The “Paste funded trades” button at the top can create an account on the fly.',
+        title: 'Track an open position live',
+        body: '“Track live trade” reads an open position off a screenshot and posts it to the Live Wall, marked against the desk’s OANDA price — while staying off the Trade Log and Live Brokers totals. Close it later from its result screenshot and it lands in the account’s logged P/L.',
       },
       {
         title: 'Hide dollar details',
-        body: 'Use “Hide $” or Privacy mode to mask every figure on the page at once. Percentages and drawdown buffers still show.',
+        body: 'Use “Hide $” or Privacy mode to mask every figure on the page at once.',
       },
     ],
   },
 
   metrics: {
     title: 'Live Brokers',
-    intro: 'Your live broker capital, pulled from the broker API so it updates as trades are placed. Capital figures are shown to full traders only; the FTP challenge and funded/prop accounts live on the Funded tab.',
+    intro: 'Your live broker capital, pulled from the broker API so it updates as trades are placed. Capital figures are shown to full traders only; hand-kept accounts live on the Manual Trades tab.',
     steps: [
       {
         title: 'Live brokers (OANDA)',

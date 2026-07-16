@@ -386,7 +386,7 @@ export function TradeLog() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Trade Log</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L. Trades from a
-            connected broker (e.g. OANDA) show up here automatically; funded/prop trades stay on the Funded tab.
+            connected broker (e.g. OANDA) show up here automatically; hand-kept trades stay on the Manual Trades tab.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

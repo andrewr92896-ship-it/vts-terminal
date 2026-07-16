@@ -17,7 +17,7 @@ const SCREENS: Record<string, ScreenInfo> = {
   alerts: { title: 'Alerts', blurb: 'TradingView alerts arrive by webhook; paste a chart screenshot and Claude (Opus 4.8) analyzes the trade and logs it.', stage: 2 },
   log: { title: 'Trade Log', blurb: 'Full fill history with Deck and Tape layouts, computed slippage versus the alert price per trade.', stage: 2 },
   sessions: { title: 'Strategy Sessions', blurb: 'Active, opening, and closing strategy windows with bull and bear playbooks per instrument.', stage: 2 },
-  funded: { title: 'Funded', blurb: 'Everything for the funded account in one place: the FTP prop challenge (target + drawdown) and funded/prop accounts tracked from screenshots — each with daily / weekly / 30-day trade P/L.', stage: 2 },
+  funded: { title: 'Manual Trades', blurb: 'A self-managed book of accounts kept by hand — place trades by typing them in or reading them off a screenshot, track open positions live on the Live Wall, and see each account’s balance and daily / weekly / 30-day trade P/L.', stage: 2 },
   metrics: { title: 'Live Brokers', blurb: 'Live broker capital (OANDA): NAV, balance, open P/L, and trade P/L over daily / weekly / 30-day windows, pulled from the broker API.', stage: 2 },
   news: { title: 'Market News', blurb: 'Market and geopolitical headlines with impact and bias tags, plus the economic calendar in ET.', stage: 2 },
   history: { title: 'History', blurb: 'Historical performance, closed trades, and per-strategy results over time.', stage: 2 },

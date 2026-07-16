@@ -170,7 +170,7 @@ export function TradeCard({
               is. */}
           {!mine && <span style={ownerTag(false)} title={t.owner}>@{ownerHandle(t.owner)}</span>}
           {t.broker === 'ftp' ? (
-            <span style={ftpTag} title="Funded / prop position — priced off OANDA, and kept off the Trade Log & Live Brokers capital">{t.brokerName} · off-book</span>
+            <span style={ftpTag} title="Hand-tracked position — priced off OANDA, and kept off the Trade Log & Live Brokers capital">{t.brokerName} · off-book</span>
           ) : (
             <span style={brokerTag}>{t.brokerName}</span>
           )}

@@ -64,7 +64,7 @@ export function LiveBrokers() {
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Live Brokers</h2>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
             The whole desk’s live brokerage capital, each account tagged with its trader, pulled from the broker API
-            so it updates as trades are placed. The FTP challenge and funded/prop accounts are on the Funded tab.
+            so it updates as trades are placed. Hand-kept accounts are on the Manual Trades tab.
           </div>
         </div>
         {!readOnly && oanda?.configured && (
