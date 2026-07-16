@@ -16,10 +16,15 @@ import {
 } from './tvChart';
 
 const TICKER_TAPE_SRC = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
+const MARKET_QUOTES_SRC = 'https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js';
 
-// A configurable live price strip (TradingView Ticker Tape). Holds any set of
-// TradingView symbols and scrolls their prices/changes. Works well as a wide,
-// short tile across the top of a board.
+// A configurable live price watchlist (TradingView). Holds any set of symbols
+// and shows them one of two ways, chosen per tile and saved with the preset:
+//   • 'scroll' — the auto-scrolling Ticker Tape (default). Works well as a wide,
+//     short strip across the top of a board.
+//   • 'static' — a stationary quote list (Market Quotes) that shows every symbol
+//     at once, with no scrolling. Better for a taller tile where you want the
+//     whole list visible at a glance.
 export function WatchlistTile({
   tile,
   editing,
@@ -36,19 +41,36 @@ export function WatchlistTile({
   // next edit.
   useEffect(() => { if (!editing) setShowCfg(false); }, [editing]);
   const symbols = tile.symbols && tile.symbols.length > 0 ? tile.symbols : ['OANDA:EURUSD'];
+  const mode = tile.watchlistMode ?? 'scroll';
 
+  // The scrolling Ticker Tape and the stationary Market Quotes list take
+  // differently-shaped configs, so build whichever the current mode needs.
   const config = useMemo(
-    () => ({
-      symbols: symbols.map((s) => ({ proName: s, title: symbolLabel(s) })),
-      showSymbolLogo: true,
-      isTransparent: true,
-      displayMode: 'adaptive',
-      colorTheme: 'dark',
-      locale: 'en',
-    }),
-    [symbols],
+    () =>
+      mode === 'static'
+        ? {
+            symbolsGroups: [
+              { name: '', originalName: '', symbols: symbols.map((s) => ({ name: s, displayName: symbolLabel(s) })) },
+            ],
+            showSymbolLogo: true,
+            isTransparent: true,
+            colorTheme: 'dark',
+            locale: 'en',
+            width: '100%',
+            height: '100%',
+          }
+        : {
+            symbols: symbols.map((s) => ({ proName: s, title: symbolLabel(s) })),
+            showSymbolLogo: true,
+            isTransparent: true,
+            displayMode: 'adaptive',
+            colorTheme: 'dark',
+            locale: 'en',
+          },
+    [symbols, mode],
   );
-  const configKey = JSON.stringify(symbols);
+  // Include the mode so switching scroll ⇄ static rebuilds the widget.
+  const configKey = `${mode}:${JSON.stringify(symbols)}`;
 
   return (
     <div style={tileWrap}>
@@ -60,6 +82,12 @@ export function WatchlistTile({
         </div>
         {editing && (
           <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Scroll ⇄ Static layout picker — auto-scrolling ticker tape or a
+                stationary list with every symbol visible. Saved with the preset. */}
+            <div style={segWrap} title="How to show the watchlist in this tile">
+              <button onClick={() => onChange({ watchlistMode: 'scroll' })} style={segBtn(mode === 'scroll')} title="Auto-scrolling ticker">Scroll</button>
+              <button onClick={() => onChange({ watchlistMode: 'static' })} style={segBtn(mode === 'static')} title="Stationary — all symbols visible">Static</button>
+            </div>
             {/* A clearly labelled button (not a bare icon) so changing what's on
                 the watchlist is easy to find — the header keeps a fixed height
                 even when the tile is a thin strip, so this stays reachable. */}
@@ -70,7 +98,7 @@ export function WatchlistTile({
       </div>
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
-        <TvWidget src={TICKER_TAPE_SRC} config={config} configKey={configKey} />
+        <TvWidget src={mode === 'static' ? MARKET_QUOTES_SRC : TICKER_TAPE_SRC} config={config} configKey={configKey} />
         {/* On a normal-height tile the header button can sit above the fold; an
             overlaid tap target over the ticker makes editing obvious there too.
             It only shows while editing (so it never blocks live prices) and hides
@@ -194,6 +222,28 @@ const iconBtn: CSSProperties = {
   padding: '4px 7px',
   cursor: 'pointer',
 };
+// Scroll ⇄ Static segmented toggle in the tile header (mirrors the Positions
+// tile's List ⇄ Cards picker).
+const segWrap: CSSProperties = {
+  display: 'inline-flex',
+  background: 'rgba(4,12,30,.5)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 6,
+  padding: 2,
+  gap: 2,
+};
+function segBtn(active: boolean): CSSProperties {
+  return {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: active ? '#0c2768' : TEXT,
+    background: active ? GOLD : 'transparent',
+    border: 'none',
+    borderRadius: 4,
+    padding: '3px 9px',
+    cursor: 'pointer',
+  };
+}
 // A labelled edit button in the header — obvious enough that the watchlist's
 // symbols never look "un-editable".
 const editSymbolsBtn: CSSProperties = {

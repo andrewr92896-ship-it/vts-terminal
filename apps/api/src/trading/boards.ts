@@ -26,6 +26,9 @@ export interface BoardTile {
   // Watchlist tiles
   symbols?: string[];
   title?: string;
+  // 'scroll' (the auto-scrolling ticker tape, default) or 'static' (a stationary
+  // quote list with every symbol visible at once).
+  watchlistMode?: 'scroll' | 'static';
   // Positions tiles — 'list' (compact default) or 'cards' (full trading cards).
   positionsView?: 'list' | 'cards';
 }
