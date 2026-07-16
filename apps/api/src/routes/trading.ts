@@ -1064,6 +1064,7 @@ const boardTileSchema = z.object({
   studies: z.array(z.string().trim().max(64)).max(30).optional(),
   symbols: z.array(z.string().trim().max(40)).max(60).optional(),
   title: z.string().trim().max(60).optional(),
+  positionsView: z.enum(['list', 'cards']).optional(),
 });
 const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(40) });
 const createBoardSchema = z.object({

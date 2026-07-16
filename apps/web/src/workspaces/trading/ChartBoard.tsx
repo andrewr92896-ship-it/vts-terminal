@@ -299,7 +299,7 @@ export function ChartBoard() {
               {t.kind === 'chart' ? (
                 <ChartTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : t.kind === 'positions' ? (
-                <PositionsTile tile={t} editing={editing} onRemove={() => removeTile(t.id)} />
+                <PositionsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : (
                 <WatchlistTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               )}

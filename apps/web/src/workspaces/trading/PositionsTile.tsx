@@ -3,21 +3,27 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, LiveTrade, LiveWall } from '../../api/types';
-import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
+import { configFrom } from './outcome';
+import { TradeCard } from './TradeCard';
+import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
 
 const REFRESH_MS = 12_000;
 
 // A live "Open Positions" tile for the chart board — the same desk-wide open
-// positions as the Positions view, in a compact, scrollable list that fits a
-// grid cell so charts and positions live on one screen. Polls the Live Wall on
-// its own interval and keeps the last snapshot on a failed refresh.
+// positions as the Positions view. Two layouts, chosen per tile and saved with
+// the preset: a compact, scrollable list ('list', the default) that fits a
+// small grid cell, or the full Live Wall trading cards ('cards') for the whole
+// entry/fill/slippage/TP-SL/forex breakdown. Polls the Live Wall on its own
+// interval and keeps the last snapshot on a failed refresh.
 export function PositionsTile({
   tile,
   editing,
+  onChange,
   onRemove,
 }: {
   tile: BoardTile;
   editing: boolean;
+  onChange: (patch: Partial<BoardTile>) => void;
   onRemove: () => void;
 }) {
   const { user } = useAuth();
@@ -51,7 +57,10 @@ export function PositionsTile({
     };
   }, [load]);
 
+  const view = tile.positionsView ?? 'list';
   const showMoney = !!data?.canSeeBalances && !privacy;
+  // The demo (and trading view-only roles) can browse but not close positions.
+  const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
 
   return (
     <div style={tileWrap}>
@@ -63,15 +72,40 @@ export function PositionsTile({
           {data && <span style={data.source === 'sample' ? sampleDot : liveDot}>{data.source === 'sample' ? 'sample' : 'live'}</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* List ⇄ Cards layout picker — only while editing the board, saved with
+              the preset. */}
+          {editing && (
+            <div style={segWrap} title="How to show open positions in this tile">
+              <button onClick={() => onChange({ positionsView: 'list' })} style={segBtn(view === 'list')}>List</button>
+              <button onClick={() => onChange({ positionsView: 'cards' })} style={segBtn(view === 'cards')}>Cards</button>
+            </div>
+          )}
           {editing && <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>}
         </div>
       </div>
 
-      <div style={body}>
+      <div style={{ ...body, padding: view === 'cards' ? 10 : '4px 0' }}>
         {!data && !error && <div style={hint}>Loading positions…</div>}
         {error && !data && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {data && data.trades.length === 0 && <div style={hint}>No open positions right now. New fills appear here automatically.</div>}
-        {data &&
+        {data && data.trades.length > 0 && view === 'cards' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {data.trades.map((t) => (
+              <TradeCard
+                key={t.id}
+                t={t}
+                config={configFrom(data)}
+                mine={t.ownerId === user?.id}
+                readOnly={readOnly}
+                showMoney={showMoney}
+                showFxMoney={!privacy}
+                canSeeBalances={data.canSeeBalances}
+                onClosed={() => void load()}
+              />
+            ))}
+          </div>
+        )}
+        {data && data.trades.length > 0 && view === 'list' &&
           data.trades.map((t) => (
             <PositionRow key={t.id} t={t} mine={t.ownerId === user?.id} showMoney={showMoney} canSeeBalances={data.canSeeBalances} />
           ))}
@@ -147,7 +181,7 @@ const header: CSSProperties = {
   borderBottom: `1px solid ${BORDER}`,
   flex: '0 0 auto',
 };
-const body: CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 0' };
+const body: CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto' };
 const row: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -166,6 +200,27 @@ const countChip: CSSProperties = {
   borderRadius: 5,
   padding: '1px 6px',
 };
+// List ⇄ Cards segmented toggle in the tile header.
+const segWrap: CSSProperties = {
+  display: 'inline-flex',
+  background: 'rgba(4,12,30,.5)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 6,
+  padding: 2,
+  gap: 2,
+};
+function segBtn(active: boolean): CSSProperties {
+  return {
+    fontSize: 10.5,
+    fontWeight: 700,
+    color: active ? '#0c2768' : TEXT,
+    background: active ? GOLD : 'transparent',
+    border: 'none',
+    borderRadius: 4,
+    padding: '3px 9px',
+    cursor: 'pointer',
+  };
+}
 const liveDot: CSSProperties = {
   fontSize: 8.5,
   fontWeight: 700,

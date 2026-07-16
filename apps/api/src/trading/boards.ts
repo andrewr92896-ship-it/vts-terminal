@@ -26,6 +26,8 @@ export interface BoardTile {
   // Watchlist tiles
   symbols?: string[];
   title?: string;
+  // Positions tiles — 'list' (compact default) or 'cards' (full trading cards).
+  positionsView?: 'list' | 'cards';
 }
 
 export interface BoardLayout {
