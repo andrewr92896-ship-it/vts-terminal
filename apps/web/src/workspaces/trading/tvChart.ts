@@ -103,6 +103,9 @@ export function newTile(kind: BoardTileKind, at: { x: number; y: number }): Boar
   if (kind === 'chart') {
     return { id, kind, x: at.x, y: at.y, w: 6, h: 14, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] };
   }
+  if (kind === 'positions') {
+    return { id, kind, x: at.x, y: at.y, w: 4, h: 12, title: 'Open Positions' };
+  }
   return {
     id,
     kind,
@@ -129,7 +132,10 @@ export function starterTiles(): BoardTile[] {
       title: 'Watchlist',
       symbols: ['OANDA:EURUSD', 'OANDA:GBPUSD', 'OANDA:USDJPY', 'OANDA:XAUUSD', 'OANDA:NAS100USD', 'BINANCE:BTCUSDT'],
     },
-    { id: `chart-start-${idCounter()}`, kind: 'chart', x: 0, y: 3, w: 12, h: 16, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] },
+    // Chart and the live positions list side by side, so a fresh board already
+    // shows charts and open positions on one screen.
+    { id: `chart-start-${idCounter()}`, kind: 'chart', x: 0, y: 3, w: 8, h: 16, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] },
+    { id: `positions-start-${idCounter()}`, kind: 'positions', x: 8, y: 3, w: 4, h: 16, title: 'Open Positions' },
   ];
 }
 

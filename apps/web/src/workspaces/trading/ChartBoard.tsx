@@ -6,6 +6,7 @@ import { api, ApiError } from '../../api/client';
 import type { BoardTile, BoardTileKind, TradingBoard } from '../../api/types';
 import { ChartTile } from './ChartTile';
 import { WatchlistTile } from './WatchlistTile';
+import { PositionsTile } from './PositionsTile';
 import { BORDER, BORDER2, FAINT, GOLD, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
 
 const RGL = WidthProvider(GridLayout);
@@ -71,7 +72,7 @@ export function ChartBoard() {
         w: t.w,
         h: t.h,
         minW: 3,
-        minH: t.kind === 'watchlist' ? 2 : 8,
+        minH: t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : 8,
       })),
     [tiles],
   );
@@ -221,6 +222,7 @@ export function ChartBoard() {
           <>
             <button onClick={() => addTile('chart')} style={ghostBtn}>+ Chart</button>
             <button onClick={() => addTile('watchlist')} style={ghostBtn}>+ Watchlist</button>
+            <button onClick={() => addTile('positions')} style={ghostBtn}>+ Positions</button>
             {!isUnsaved && (
               <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>Rename</button>
             )}
@@ -280,6 +282,8 @@ export function ChartBoard() {
             <div key={t.id} style={{ overflow: 'hidden' }}>
               {t.kind === 'chart' ? (
                 <ChartTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+              ) : t.kind === 'positions' ? (
+                <PositionsTile tile={t} editing={editing} onRemove={() => removeTile(t.id)} />
               ) : (
                 <WatchlistTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               )}

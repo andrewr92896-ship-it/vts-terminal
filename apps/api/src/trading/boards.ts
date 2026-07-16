@@ -13,7 +13,7 @@ import { tradingBoards, type TradingBoardRow } from '../db/schema.js';
 // chart/watchlist details; the server only needs the grid geometry to be sane.
 export interface BoardTile {
   id: string;
-  kind: 'chart' | 'watchlist';
+  kind: 'chart' | 'watchlist' | 'positions';
   x: number;
   y: number;
   w: number;
