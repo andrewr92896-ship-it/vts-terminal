@@ -30,6 +30,7 @@ import {
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
 import { isRoleKey, parseRoles, type RoleKey } from '../auth/rbac.js';
+import { teamExists } from '../teams/service.js';
 
 // A user row as shown in the admin user-management screen. Never includes the
 // password hash. `createdUsername` is the username the account was created
@@ -42,6 +43,7 @@ export interface AdminUserView {
   displayName: string;
   email: string | null;
   roles: RoleKey[];
+  teamId: string | null;
   active: boolean;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
@@ -56,11 +58,20 @@ function toView(u: typeof users.$inferSelect): AdminUserView {
     displayName: u.displayName,
     email: u.email,
     roles: parseRoles(u),
+    teamId: u.teamId ?? null,
     active: u.active,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
     createdAt: u.createdAt.getTime(),
   };
+}
+
+// Validate an admin-supplied team assignment: null clears the team; a non-null
+// id must reference an existing team. Returns the normalized value to store.
+async function resolveTeamId(teamId: string | null): Promise<string | null> {
+  if (teamId == null) return null;
+  if (!(await teamExists(teamId))) throw new AdminError('That team no longer exists');
+  return teamId;
 }
 
 // Normalize an incoming roles array: keep only valid keys, de-duplicate.
@@ -81,6 +92,7 @@ export interface CreateUserInput {
   password: string;
   roles: string[];
   viewBrokerage?: boolean;
+  teamId?: string | null;
 }
 
 export class AdminError extends Error {}
@@ -114,6 +126,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     .limit(1);
   if (existing[0]) throw new AdminError('That username is already taken');
   await assertEmailFree(email);
+  const teamId = await resolveTeamId(input.teamId ?? null);
 
   const now = new Date();
   const row = {
@@ -125,6 +138,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     passwordHash: await hashPassword(input.password),
     role: 'Viewer' as const, // legacy column, unused; kept populated for type/back-compat
     roles: JSON.stringify(roles),
+    teamId,
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,
     // Admin sets a temporary password; force a change on first login.
@@ -142,6 +156,9 @@ export interface UpdateUserInput {
   roles?: string[];
   active?: boolean;
   viewBrokerage?: boolean;
+  // The trading team to assign. `null` clears the team; a non-null id must
+  // reference an existing team. Omitted leaves the current team unchanged.
+  teamId?: string | null;
   // When provided, sets a new temporary password and forces a change at next
   // login, revoking the user's existing sessions.
   password?: string;
@@ -182,6 +199,7 @@ export async function updateUser(
   if (input.roles != null) patch.roles = JSON.stringify(cleanRoles(input.roles));
   if (input.active != null) patch.active = input.active;
   if (input.viewBrokerage != null) patch.viewBrokerage = input.viewBrokerage;
+  if (input.teamId !== undefined) patch.teamId = await resolveTeamId(input.teamId);
 
   let revoke = false;
   if (input.password != null) {

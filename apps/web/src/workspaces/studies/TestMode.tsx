@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '../../api/client';
-import type { TestLeaderboardEntry, TestResult } from '../../api/types';
+import type { TeamRef, TestLeaderboardEntry, TestResult } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import type { TestLevelUp } from './series65Game';
@@ -81,6 +81,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
   // Leaderboard + the learner's own attempt history.
   const [board, setBoard] = useState<TestLeaderboardEntry[] | null>(null);
   const [mine, setMine] = useState<TestResult[]>([]);
+  const [boardTeam, setBoardTeam] = useState<TeamRef | null>(null);
   const [boardError, setBoardError] = useState<string | null>(null);
 
   const refreshBoard = () => {
@@ -89,6 +90,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
       .then((r) => {
         setBoard(r.entries);
         setMine(r.mine);
+        setBoardTeam(r.team);
       })
       .catch(() => setBoardError('Could not load the test leaderboard right now.'));
   };
@@ -354,7 +356,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
             )}
           </div>
 
-          <TestBoard theme={theme} board={board} mine={mine} error={boardError} isPhone={isPhone} />
+          <TestBoard theme={theme} board={board} mine={mine} team={boardTeam} error={boardError} isPhone={isPhone} />
         </div>
       </div>
     );
@@ -641,7 +643,7 @@ export function TestMode({ theme, onTestComplete }: { theme: Theme; onTestComple
           </div>
         </div>
 
-        <TestBoard theme={theme} board={board} mine={mine} error={boardError} isPhone={isPhone} />
+        <TestBoard theme={theme} board={board} mine={mine} team={boardTeam} error={boardError} isPhone={isPhone} />
       </div>
     </div>
   );
@@ -679,20 +681,29 @@ function TestBoard({
   theme,
   board,
   mine,
+  team,
   error,
   isPhone,
 }: {
   theme: Theme;
   board: TestLeaderboardEntry[] | null;
   mine: TestResult[];
+  team: TeamRef | null;
   error: string | null;
   isPhone: boolean;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={card(theme)}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-          <div style={statLabel}>Test leaderboard</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={statLabel}>Test leaderboard</div>
+            {team && (
+              <span style={teamPill(theme)} title="Ranked against your trading team only">
+                🏦 {team.name}
+              </span>
+            )}
+          </div>
           <div style={{ fontSize: 10.5, color: muted }}>Best score · pass {TEST_PASS.toFixed(0)}%</div>
         </div>
         {error ? (
@@ -701,7 +712,8 @@ function TestBoard({
           <div style={{ color: muted, fontSize: 12.5 }}>Loading…</div>
         ) : !board.length ? (
           <div style={{ color: muted, fontSize: 12.5, lineHeight: 1.6 }}>
-            No tests yet. Finish a mock test and you'll be the first on the board.
+            No tests{team ? ` on ${team.name}` : ''} yet. Finish a mock test and you'll be the first
+            on the board.
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -786,6 +798,22 @@ function card(theme: Theme): CSSProperties {
     border: `1px solid ${theme.navBorder}`,
     borderRadius: 14,
     padding: 20,
+  };
+}
+
+// Pill labelling the trading team a leaderboard is scoped to.
+function teamPill(theme: Theme): CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    fontSize: 11,
+    fontWeight: 700,
+    color: theme.accent,
+    background: 'rgba(255,255,255,.05)',
+    border: `1px solid ${theme.accent}`,
+    borderRadius: 999,
+    padding: '2px 10px',
   };
 }
 

@@ -337,6 +337,13 @@
       "when": 1782337936908,
       "tag": "0047_trading_boards",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "6",
+      "when": 1782338036908,
+      "tag": "0048_trading_teams",
+      "breakpoints": true
     }
   ]
 }

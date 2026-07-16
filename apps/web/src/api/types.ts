@@ -66,6 +66,10 @@ export interface User {
   displayName: string;
   email: string | null;
   roles: RoleKey[];
+  // The trading team the user belongs to (or null). Scopes the Studies
+  // leaderboards to teammates; the Trading workspace itself stays shared.
+  teamId: string | null;
+  teamName: string | null;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   isDemo: boolean; // the public, read-only demo account
@@ -74,6 +78,22 @@ export interface User {
     workspaces: WorkspaceKey[];
     readOnlyWorkspaces: WorkspaceKey[];
   };
+}
+
+// A trading team as shown in the admin team-management panel (mirror of the
+// backend TeamView).
+export interface Team {
+  id: string;
+  name: string;
+  memberCount: number;
+  createdAt: number;
+}
+
+// A team reference attached to leaderboard responses so the board can be
+// labelled with the team it's scoped to.
+export interface TeamRef {
+  id: string;
+  name: string;
 }
 
 // Admin user-management view (matches the backend AdminUserView). Includes
@@ -85,6 +105,7 @@ export interface AdminUser {
   displayName: string;
   email: string | null;
   roles: RoleKey[];
+  teamId: string | null;
   active: boolean;
   viewBrokerage: boolean;
   mustChangePassword: boolean;

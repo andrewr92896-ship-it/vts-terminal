@@ -45,6 +45,8 @@ import type {
   KiaDashboard,
   KiaDealParseResult,
   LeaderboardEntry,
+  Team,
+  TeamRef,
   TestBreakdown,
   TestLeaderboardEntry,
   TestResult,
@@ -173,6 +175,7 @@ export const api = {
     password: string;
     roles: RoleKey[];
     viewBrokerage?: boolean;
+    teamId?: string | null;
   }): Promise<{ user: AdminUser }> {
     return request('/api/admin/users', {
       method: 'POST',
@@ -187,6 +190,7 @@ export const api = {
       roles?: RoleKey[];
       active?: boolean;
       viewBrokerage?: boolean;
+      teamId?: string | null;
       password?: string;
     },
   ): Promise<{ user: AdminUser }> {
@@ -197,6 +201,20 @@ export const api = {
   },
   adminDeleteUser(id: string): Promise<{ ok: boolean }> {
     return request(`/api/admin/users/${id}`, { method: 'DELETE' });
+  },
+
+  // ---- Trading teams (admin) ----
+  adminListTeams(): Promise<{ teams: Team[] }> {
+    return request('/api/admin/teams');
+  },
+  adminCreateTeam(name: string): Promise<{ team: Team; teams: Team[] }> {
+    return request('/api/admin/teams', { method: 'POST', body: JSON.stringify({ name }) });
+  },
+  adminRenameTeam(id: string, name: string): Promise<{ team: Team; teams: Team[] }> {
+    return request(`/api/admin/teams/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) });
+  },
+  adminDeleteTeam(id: string): Promise<{ ok: boolean; teams: Team[] }> {
+    return request(`/api/admin/teams/${id}`, { method: 'DELETE' });
   },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');
@@ -434,7 +452,7 @@ export const api = {
   archiveStudyGame(state: string): Promise<{ ok: true }> {
     return request('/api/studies/game/archive', { method: 'POST', body: JSON.stringify({ state }) });
   },
-  studyLeaderboard(): Promise<{ entries: LeaderboardEntry[] }> {
+  studyLeaderboard(): Promise<{ entries: LeaderboardEntry[]; team: TeamRef | null }> {
     return request('/api/studies/leaderboard');
   },
   // Record a finished 100-question mock test; returns it stamped with the
@@ -450,7 +468,7 @@ export const api = {
     return request('/api/studies/tests', { method: 'POST', body: JSON.stringify(input) });
   },
   // The test high-score board plus the caller's own attempt history.
-  studyTestLeaderboard(): Promise<{ entries: TestLeaderboardEntry[]; mine: TestResult[] }> {
+  studyTestLeaderboard(): Promise<{ entries: TestLeaderboardEntry[]; mine: TestResult[]; team: TeamRef | null }> {
     return request('/api/studies/tests/leaderboard');
   },
   // In-progress test state, synced to the account so an unfinished sitting

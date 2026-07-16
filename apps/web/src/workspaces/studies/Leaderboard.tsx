@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api } from '../../api/client';
-import type { LeaderboardEntry } from '../../api/types';
+import type { LeaderboardEntry, TeamRef } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { PASS_THRESHOLD, levelAtStep } from './series65Game';
@@ -28,6 +28,7 @@ const muted = '#a99ff0';
 export function Leaderboard({ theme }: { theme: Theme }) {
   const { isPhone } = useResponsive();
   const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null);
+  const [team, setTeam] = useState<TeamRef | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,7 +36,9 @@ export function Leaderboard({ theme }: { theme: Theme }) {
     api
       .studyLeaderboard()
       .then((r) => {
-        if (alive) setEntries(r.entries);
+        if (!alive) return;
+        setEntries(r.entries);
+        setTeam(r.team);
       })
       .catch(() => {
         if (alive) setError('Could not load the leaderboard right now.');
@@ -54,8 +57,10 @@ export function Leaderboard({ theme }: { theme: Theme }) {
   if (!entries.length) {
     return (
       <div style={card(theme)}>
+        {team && <div style={{ ...teamPill(theme), marginBottom: 10 }}>🏦 {team.name}</div>}
         <div style={{ color: muted, fontSize: 13, lineHeight: 1.6 }}>
-          No scores yet. Answer a few questions in the Quiz and you’ll be the first on the board.
+          No scores{team ? ` on ${team.name}` : ''} yet. Answer a few questions in the Quiz and
+          you’ll be the first on the board.
         </div>
       </div>
     );
@@ -92,7 +97,10 @@ export function Leaderboard({ theme }: { theme: Theme }) {
 
       <div style={card(theme)}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
-          <div style={statLabel}>High scores</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div style={statLabel}>High scores</div>
+            {team && <span style={teamPill(theme)} title="Ranked against your trading team only">🏦 {team.name}</span>}
+          </div>
           <div style={{ fontSize: 10.5, color: muted }}>Score = lifetime accuracy · pass {PASS_THRESHOLD.toFixed(1)}% · reset runs are banked here</div>
         </div>
 
@@ -213,6 +221,22 @@ function card(theme: Theme): CSSProperties {
     border: `1px solid ${theme.navBorder}`,
     borderRadius: 14,
     padding: 20,
+  };
+}
+
+// Pill labelling the team a board is scoped to.
+function teamPill(theme: Theme): CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    fontSize: 11,
+    fontWeight: 700,
+    color: theme.accent,
+    background: 'rgba(255,255,255,.05)',
+    border: `1px solid ${theme.accent}`,
+    borderRadius: 999,
+    padding: '2px 10px',
   };
 }
 

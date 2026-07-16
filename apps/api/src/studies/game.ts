@@ -125,11 +125,14 @@ export async function archiveRun(userId: string, raw: string): Promise<void> {
 
 // Build the high-score table: every player's current run plus every banked past
 // run, ranked by lifetime accuracy (then correct count). The caller's live row
-// is flagged so the client can highlight it.
+// is flagged so the client can highlight it. The board is scoped to the caller's
+// trading team — a learner is ranked only against teammates (and team-less
+// learners against each other), so each team competes on its own board.
 export async function getLeaderboard(currentUserId: string): Promise<LeaderboardEntry[]> {
-  const [liveRows, runRows] = await Promise.all([
+  const [viewerRows, liveRows, runRows] = await Promise.all([
+    db.select({ teamId: users.teamId }).from(users).where(eq(users.id, currentUserId)).limit(1),
     db
-      .select({ userId: studyGame.userId, name: users.displayName, state: studyGame.state })
+      .select({ userId: studyGame.userId, name: users.displayName, teamId: users.teamId, state: studyGame.state })
       .from(studyGame)
       .innerJoin(users, eq(users.id, studyGame.userId)),
     db
@@ -137,6 +140,7 @@ export async function getLeaderboard(currentUserId: string): Promise<Leaderboard
         id: studyGameRuns.id,
         userId: studyGameRuns.userId,
         name: users.displayName,
+        teamId: users.teamId,
         attempted: studyGameRuns.attempted,
         correct: studyGameRuns.correct,
         bestStep: studyGameRuns.bestStep,
@@ -146,9 +150,13 @@ export async function getLeaderboard(currentUserId: string): Promise<Leaderboard
       .innerJoin(users, eq(users.id, studyGameRuns.userId)),
   ]);
 
+  const viewerTeamId = viewerRows[0]?.teamId ?? null;
+  const sameTeam = (teamId: string | null) => (teamId ?? null) === viewerTeamId;
+
   const entries: LeaderboardEntry[] = [];
 
   for (const row of liveRows) {
+    if (!sameTeam(row.teamId)) continue;
     const stats = statsFromState(row.state);
     if (!stats) continue;
     entries.push({
@@ -166,6 +174,7 @@ export async function getLeaderboard(currentUserId: string): Promise<Leaderboard
   }
 
   for (const row of runRows) {
+    if (!sameTeam(row.teamId)) continue;
     if (row.attempted <= 0) continue;
     entries.push({
       id: `run:${row.id}`,
