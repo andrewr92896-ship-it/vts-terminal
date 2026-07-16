@@ -17,11 +17,16 @@ export function TileConfigModal({ onClose, children }: { onClose: () => void; ch
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Close only when the press starts on the backdrop itself (not on a child that
+  // bubbles up). Using the event target keeps a drag that begins inside the
+  // panel — e.g. selecting text in an input — from dismissing the modal.
+  const closeIfBackdrop = (e: React.SyntheticEvent) => {
+    if (e.target === e.currentTarget) onClose();
+  };
+
   return createPortal(
-    <div className="no-drag" style={overlay} onMouseDown={onClose}>
-      <div style={panel} onMouseDown={(e) => e.stopPropagation()}>
-        {children}
-      </div>
+    <div className="no-drag" style={overlay} onMouseDown={closeIfBackdrop} onTouchStart={closeIfBackdrop}>
+      <div style={panel}>{children}</div>
     </div>,
     document.body,
   );

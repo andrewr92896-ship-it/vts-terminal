@@ -60,7 +60,10 @@ export function WatchlistTile({
         </div>
         {editing && (
           <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button onClick={() => setShowCfg((v) => !v)} style={iconBtn} title="Watchlist settings">⚙</button>
+            {/* A clearly labelled button (not a bare icon) so changing what's on
+                the watchlist is easy to find — the header keeps a fixed height
+                even when the tile is a thin strip, so this stays reachable. */}
+            <button onClick={() => setShowCfg(true)} style={editSymbolsBtn} title="Edit watchlist symbols">⚙ Symbols</button>
             <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>
           </div>
         )}
@@ -68,6 +71,20 @@ export function WatchlistTile({
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <TvWidget src={TICKER_TAPE_SRC} config={config} configKey={configKey} />
+        {/* On a normal-height tile the header button can sit above the fold; an
+            overlaid tap target over the ticker makes editing obvious there too.
+            It only shows while editing (so it never blocks live prices) and hides
+            once the modal is open. Sits above the TradingView iframe. */}
+        {editing && !showCfg && (
+          <button
+            className="no-drag"
+            onClick={() => setShowCfg(true)}
+            style={editOverlayBtn}
+            title="Edit watchlist symbols"
+          >
+            ⚙ Edit symbols
+          </button>
+        )}
         {editing && showCfg && (
           <TileConfigModal onClose={() => setShowCfg(false)}>
             <WatchlistConfig tile={tile} onChange={onChange} onClose={() => setShowCfg(false)} />
@@ -176,6 +193,37 @@ const iconBtn: CSSProperties = {
   borderRadius: 6,
   padding: '4px 7px',
   cursor: 'pointer',
+};
+// A labelled edit button in the header — obvious enough that the watchlist's
+// symbols never look "un-editable".
+const editSymbolsBtn: CSSProperties = {
+  fontSize: 11,
+  fontWeight: 700,
+  lineHeight: 1,
+  whiteSpace: 'nowrap',
+  color: '#0c2768',
+  background: GOLD,
+  border: 'none',
+  borderRadius: 6,
+  padding: '5px 9px',
+  cursor: 'pointer',
+};
+// The same action floated over the ticker so it's tappable on a taller tile.
+const editOverlayBtn: CSSProperties = {
+  position: 'absolute',
+  top: 8,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 4,
+  fontSize: 12,
+  fontWeight: 700,
+  color: '#0c2768',
+  background: GOLD,
+  border: 'none',
+  borderRadius: 8,
+  padding: '7px 14px',
+  cursor: 'pointer',
+  boxShadow: '0 4px 14px rgba(0,0,0,.4)',
 };
 const lbl: CSSProperties = {
   display: 'block',
