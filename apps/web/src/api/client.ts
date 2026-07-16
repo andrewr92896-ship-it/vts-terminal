@@ -62,6 +62,8 @@ import type {
   TodoCommandResult,
   TodoSection,
   StudySection,
+  TeamDeck,
+  TeamDeckDetail,
   TradingSignals,
   User,
   WealthClientStatus,
@@ -529,6 +531,52 @@ export const api = {
   },
   deleteStudySection(id: string): Promise<{ sections: StudySection[] }> {
     return request(`/api/studies/sections?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+  // ---- Team study games (decks) ----
+  // Team-built quizzes (AI-generated or from an uploaded file), shared across
+  // the whole team and played with the same mechanics as the Series 65 game.
+  studyDecks(): Promise<{ decks: TeamDeck[] }> {
+    return request('/api/studies/decks');
+  },
+  generateStudyDeck(input: {
+    name: string;
+    topic: string;
+    instructions?: string;
+    count: number;
+  }): Promise<{ deck: TeamDeckDetail; decks: TeamDeck[] }> {
+    return request('/api/studies/decks/generate', { method: 'POST', body: JSON.stringify(input) });
+  },
+  importStudyDeck(input: {
+    name: string;
+    text: string;
+    instructions?: string;
+    count?: number;
+  }): Promise<{ deck: TeamDeckDetail; decks: TeamDeck[] }> {
+    return request('/api/studies/decks/import', { method: 'POST', body: JSON.stringify(input) });
+  },
+  studyDeck(id: string): Promise<{ deck: TeamDeckDetail }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}`);
+  },
+  deleteStudyDeck(id: string): Promise<{ decks: TeamDeck[] }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+  studyDeckGame(id: string): Promise<{ state: string | null }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}/game`);
+  },
+  saveStudyDeckGame(id: string, state: string): Promise<{ ok: true }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}/game`, {
+      method: 'PUT',
+      body: JSON.stringify({ state }),
+    });
+  },
+  archiveStudyDeckGame(id: string, state: string): Promise<{ ok: true }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}/game/archive`, {
+      method: 'POST',
+      body: JSON.stringify({ state }),
+    });
+  },
+  studyDeckLeaderboard(id: string): Promise<{ entries: LeaderboardEntry[] }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}/leaderboard`);
   },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');

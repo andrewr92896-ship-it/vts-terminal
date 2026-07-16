@@ -11,7 +11,7 @@ import {
 } from '../theme/themes';
 import { navFor, accentFor } from '../theme/nav';
 import { C } from '../theme/tokens';
-import { canAccessWorkspace, workspacesForRoles } from '../auth/access';
+import { canAccessWorkspace, canUseSeries65, workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
@@ -54,10 +54,23 @@ const StudyHub = lazy(() =>
 const StudyProgress = lazy(() =>
   import('../workspaces/studies/StudyProgress').then((m) => ({ default: m.StudyProgress })),
 );
+const TeamStudyDecks = lazy(() =>
+  import('../workspaces/studies/TeamStudyDecks').then((m) => ({ default: m.TeamStudyDecks })),
+);
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder. `onNavigate` lets a screen jump to another tab.
-function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string) => void) {
+function renderScreen(
+  screen: string,
+  theme: Theme,
+  onNavigate: (screen: string) => void,
+  canSeries65: boolean,
+) {
+  // Series 65 screens are the owner's licensed track — gate them defensively in
+  // case a non-team member reaches one by a deep link.
+  if (!canSeries65 && (screen === 'st_game' || screen === 'st_test' || screen === 'st_progress')) {
+    return <Series65Unavailable theme={theme} onNavigate={onNavigate} />;
+  }
   switch (screen) {
     case 'live':
       return <LiveWall />;
@@ -95,9 +108,49 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
       return <Series65Game key="st_test" theme={theme} initialView="test" />;
     case 'st_progress':
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
+    case 'st_decks':
+      return <TeamStudyDecks theme={theme} />;
     default:
       return null;
   }
+}
+
+// Shown when a non-team member reaches a Series 65 screen by a deep link.
+function Series65Unavailable({ theme, onNavigate }: { theme: Theme; onNavigate: (screen: string) => void }) {
+  return (
+    <div style={{ maxWidth: 620, margin: '40px auto 0', textAlign: 'center', color: '#eef3ff' }}>
+      <div
+        style={{
+          background: 'linear-gradient(180deg,rgba(40,30,72,.5),rgba(28,20,54,.55))',
+          border: `1px solid ${theme.navBorder}`,
+          borderRadius: 14,
+          padding: '28px 26px',
+        }}
+      >
+        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>Series 65 isn’t available for your team</h3>
+        <p style={{ margin: '10px 0 18px', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
+          The Series 65 study set is limited to its owner’s team. You can build your own team study
+          games instead — AI-generated from a topic, or from a file you upload.
+        </p>
+        <button
+          onClick={() => onNavigate('st_decks')}
+          style={{
+            border: 'none',
+            background: theme.accent,
+            color: theme.accentText,
+            fontSize: 13,
+            fontWeight: 700,
+            padding: '11px 18px',
+            borderRadius: 8,
+            cursor: 'pointer',
+            minHeight: 44,
+          }}
+        >
+          Open Study Games
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
@@ -266,12 +319,14 @@ export function Portal() {
   }, [workspace, screen]);
 
   const canTrade = canAccessWorkspace(effectiveRoles, 'trading');
+  const canSeries65 = canUseSeries65(user);
 
   const sidebar = (
     <Sidebar
       workspace={workspace}
       screen={screen}
       workspaces={allowed}
+      canSeries65={canSeries65}
       collapsed={isPhone ? false : collapsed}
       onToggle={isPhone ? () => setNavOpen(false) : toggleCollapsed}
       onSelectWorkspace={selectWorkspace}
@@ -318,7 +373,7 @@ export function Portal() {
       >
         <ErrorBoundary resetKey={screen}>
           <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
-            {renderScreen(screen, theme, selectScreen) ?? <Screen screen={screen} theme={theme} />}
+            {renderScreen(screen, theme, selectScreen, canSeries65) ?? <Screen screen={screen} theme={theme} />}
           </Suspense>
         </ErrorBoundary>
         <footer

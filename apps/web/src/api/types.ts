@@ -173,6 +173,35 @@ export interface StudySection {
   questionIds: number[];
 }
 
+// ---- Team-authored study games (decks) ----
+// A quiz a team built for itself (AI-generated or from an uploaded file). Shared
+// across the whole team; played with the same mechanics as the Series 65 game.
+export interface DeckQuestion {
+  seq: number;
+  topic: string;
+  stem: string;
+  options: { label: 'A' | 'B' | 'C' | 'D'; text: string }[];
+  answer: 'A' | 'B' | 'C' | 'D';
+  explanation: string | null;
+}
+
+export interface TeamDeck {
+  id: string;
+  name: string;
+  description: string | null;
+  source: string; // 'ai_topic' | 'upload' | 'sample'
+  isSample: boolean;
+  categories: string[];
+  questionCount: number;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: number;
+}
+
+export interface TeamDeckDetail extends TeamDeck {
+  questions: DeckQuestion[];
+}
+
 export interface TodoSection {
   id: string;
   n: number;
