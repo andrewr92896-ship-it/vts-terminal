@@ -931,6 +931,7 @@ export interface CalendarEvent {
   previous: string | null;
   actual: string | null;
   explainer: string | null;
+  source: string | null;
 }
 
 export interface MarketNewsData {

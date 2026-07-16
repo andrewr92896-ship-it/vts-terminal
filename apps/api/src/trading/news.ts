@@ -40,6 +40,7 @@ export interface CalendarEvent {
   previous: string | null;
   actual: string | null;
   explainer: string | null; // plain-language "what is this release?"
+  source: string | null; // e.g. "Forex Factory"
 }
 
 export interface MarketNewsData {
@@ -94,6 +95,7 @@ function toEvent(row: TradingCalendarRow): CalendarEvent {
     previous: row.previous,
     actual: row.actual,
     explainer: row.explainer,
+    source: row.source,
   };
 }
 
