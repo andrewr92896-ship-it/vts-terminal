@@ -100,7 +100,7 @@ export function newTile(kind: BoardTileKind, at: { x: number; y: number }): Boar
     return { id, kind, x: at.x, y: at.y, w: 6, h: 14, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] };
   }
   if (kind === 'positions') {
-    return { id, kind, x: at.x, y: at.y, w: 4, h: 12, title: 'Open Positions' };
+    return { id, kind, x: at.x, y: at.y, w: 4, h: 12, title: 'Open Positions', positionsView: 'list' };
   }
   return {
     id,

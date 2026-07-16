@@ -945,6 +945,9 @@ export interface BoardTile {
   // Watchlist tiles
   symbols?: string[];
   title?: string;
+  // Positions tiles — how the open positions are laid out inside the tile:
+  // 'list' (the compact default) or 'cards' (the full Live Wall trading cards).
+  positionsView?: 'list' | 'cards';
 }
 
 export interface BoardLayout {
