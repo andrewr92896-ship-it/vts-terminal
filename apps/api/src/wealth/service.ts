@@ -8,8 +8,8 @@ import {
   type WealthClientStatus,
 } from '../db/schema.js';
 
-// The client list mirrors the Kia patterns: every row is keyed by userId so a
-// new user's list starts empty (no seed row is needed — the absence of rows is
+// The client list follows the standard per-user pattern: every row is keyed by
+// userId so a new user's list starts empty (no seed row is needed — the absence of rows is
 // the empty state), removals return the full row so the UI can offer undo, and
 // restore re-inserts with onConflictDoNothing.
 

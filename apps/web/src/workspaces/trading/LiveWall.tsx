@@ -10,7 +10,7 @@ import { TradeCard, etTime } from './TradeCard';
 import type { LiveWall as LiveWallData } from '../../api/types';
 
 // Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
-// so the screen is self-contained, the same way Kia/Wealth screens own their
+// so the screen is self-contained, the same way the Wealth screens own their
 // palette.
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';

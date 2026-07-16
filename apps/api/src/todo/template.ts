@@ -18,7 +18,7 @@ export interface TemplateSection {
   icon: string;
   title: string;
   type: SectionType;
-  tag?: 'kia' | 'trading';
+  tag?: 'trading';
   life?: boolean;
   intervalDays?: number; // routine sections
   items: TemplateItem[];
@@ -26,18 +26,15 @@ export interface TemplateSection {
 
 // Categories a brand-new user starts with: the same general structure, but
 // with zero tasks. New users begin empty (per product decision) while still
-// having sensible categories to add into — including the two Kia-tagged
-// sections the Kia To-Do tab reads from. The personalized starter list below
+// having sensible categories to add into. The personalized starter list below
 // (TODO_TEMPLATE) is only kept for reference / the original owner account.
 export const STARTER_SECTIONS: TemplateSection[] = [
   { n: 1, icon: '⭐', title: 'Priority', type: 'one', items: [] },
   { n: 2, icon: '📋', title: 'Daily Routine', type: 'daily', items: [] },
   { n: 3, icon: '📋', title: 'Weekly', type: 'routine', intervalDays: 7, items: [] },
   { n: 4, icon: '📋', title: 'Monthly', type: 'routine', intervalDays: 30, items: [] },
-  { n: 5, icon: '🚗', title: 'Dealership / Sales', type: 'one', tag: 'kia', items: [] },
-  { n: 6, icon: '🤝', title: 'Working Deals', type: 'deals', tag: 'kia', items: [] },
-  { n: 7, icon: '💰', title: 'Finance', type: 'one', items: [] },
-  { n: 8, icon: '🏠', title: 'Personal / Home', type: 'one', items: [] },
+  { n: 5, icon: '💰', title: 'Finance', type: 'one', items: [] },
+  { n: 6, icon: '🏠', title: 'Personal / Home', type: 'one', items: [] },
 ];
 
 export const TODO_TEMPLATE: TemplateSection[] = [
@@ -157,25 +154,6 @@ export const TODO_TEMPLATE: TemplateSection[] = [
   },
   {
     n: 8,
-    icon: '🚗',
-    title: 'Dealership / Sales',
-    type: 'one',
-    tag: 'kia',
-    items: [
-      { text: 'Clean work toolbox' },
-      { text: 'Go back to using Google Voice for Kia leads' },
-    ],
-  },
-  {
-    n: 9,
-    icon: '🤝',
-    title: 'Working Deals',
-    type: 'deals',
-    tag: 'kia',
-    items: [],
-  },
-  {
-    n: 10,
     icon: '💹',
     title: 'Vitalis Trading',
     type: 'one',
@@ -183,7 +161,7 @@ export const TODO_TEMPLATE: TemplateSection[] = [
     items: [{ text: 'Upload trading documents to Discord' }],
   },
   {
-    n: 11,
+    n: 9,
     icon: '💰',
     title: 'Finance',
     type: 'one',
@@ -194,7 +172,7 @@ export const TODO_TEMPLATE: TemplateSection[] = [
     ],
   },
   {
-    n: 12,
+    n: 10,
     icon: '🏠',
     title: 'Personal / Home',
     type: 'one',
@@ -211,7 +189,7 @@ export const TODO_TEMPLATE: TemplateSection[] = [
     ],
   },
   {
-    n: 13,
+    n: 11,
     icon: '🔨',
     title: 'House Projects',
     type: 'one',
@@ -226,7 +204,7 @@ export const TODO_TEMPLATE: TemplateSection[] = [
     ],
   },
   {
-    n: 14,
+    n: 12,
     icon: '🏷️',
     title: 'Sell / Gift / Trash',
     type: 'one',
@@ -237,9 +215,9 @@ export const TODO_TEMPLATE: TemplateSection[] = [
       { text: 'Sell welder' },
     ],
   },
-  { n: 15, icon: '⚔️', title: 'RuneScape', type: 'one', items: [] },
+  { n: 13, icon: '⚔️', title: 'RuneScape', type: 'one', items: [] },
   {
-    n: 16,
+    n: 14,
     icon: '💕',
     title: 'Time with Nicole',
     type: 'one',
@@ -249,7 +227,7 @@ export const TODO_TEMPLATE: TemplateSection[] = [
     ],
   },
   {
-    n: 17,
+    n: 15,
     icon: '⏸️',
     title: 'On Hold',
     type: 'one',

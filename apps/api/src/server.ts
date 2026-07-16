@@ -12,7 +12,6 @@ import { adminRoutes } from './routes/admin.js';
 import { brokerRoutes } from './routes/brokers.js';
 import { healthRoutes } from './routes/health.js';
 import { todoRoutes } from './routes/todo.js';
-import { kiaRoutes } from './routes/kia.js';
 import { wealthRoutes } from './routes/wealth.js';
 import { tradingRoutes } from './routes/trading.js';
 import { webhookRoutes } from './routes/webhooks.js';
@@ -84,7 +83,6 @@ export async function buildServer() {
   await app.register(webhookRoutes);
   await app.register(tvWebhookRoutes);
   await app.register(todoRoutes);
-  await app.register(kiaRoutes);
   await app.register(wealthRoutes);
   await app.register(financeRoutes);
   await app.register(aiRoutes);

@@ -20,7 +20,7 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'trading',
     screen: 'live',
     title: 'Welcome to VTS Portal',
-    body: 'A private trading and operations portal: live trading, a Kia sales desk, wealth management, personal finance, Series 65 study tools, and an AI assistant. This is a read-only demo with simulated data.',
+    body: 'A private trading and operations portal: live trading, wealth management, personal finance, Series 65 study tools, and an AI assistant. This is a read-only demo with simulated data.',
   },
   {
     workspace: 'trading',
@@ -46,12 +46,6 @@ export const DEMO_STEPS: TourStep[] = [
     openClaude: true,
     title: 'Ask Claude, anywhere',
     body: 'The assistant is one click away on every screen and knows which workspace you are in. In the demo its replies are scripted; the live portal answers with Claude (Sonnet).',
-  },
-  {
-    workspace: 'kia',
-    screen: 'kia_dash',
-    title: 'Kia Sales desk',
-    body: 'A second, totally different workspace: deals, commission and pay-plan math, pace to the monthly unit goal, and review targets. Deals can be logged in plain English.',
   },
   {
     workspace: 'wealth',

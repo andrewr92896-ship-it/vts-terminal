@@ -6,9 +6,6 @@ import {
   sessions,
   todoSections,
   todoItems,
-  kiaSettings,
-  kiaMonthSettings,
-  kiaDeals,
   wealthClients,
   wealthPortfolios,
   wealthAllocations,
@@ -252,9 +249,6 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
   await db.transaction(async (tx) => {
     await tx.delete(todoItems).where(eq(todoItems.userId, targetId));
     await tx.delete(todoSections).where(eq(todoSections.userId, targetId));
-    await tx.delete(kiaDeals).where(eq(kiaDeals.userId, targetId));
-    await tx.delete(kiaMonthSettings).where(eq(kiaMonthSettings.userId, targetId));
-    await tx.delete(kiaSettings).where(eq(kiaSettings.userId, targetId));
     await tx.delete(wealthClients).where(eq(wealthClients.userId, targetId));
     await tx.delete(wealthAllocations).where(eq(wealthAllocations.userId, targetId));
     await tx.delete(wealthPortfolios).where(eq(wealthPortfolios.userId, targetId));

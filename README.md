@@ -1,7 +1,7 @@
 # Vitalis Trading Systems Portal
 
-Private business portal for Vitalis Trading Systems LLC. One login, four
-workspaces: To Do List, Kia Sales, Trading, and Studies.
+Private business portal for Vitalis Trading Systems LLC. One login, three
+workspaces: To Do List, Trading, and Studies.
 
 This repository is built in stages. **Stage 1 (this stage)** delivers the
 project scaffold, authentication, role-based access, and the full app shell
@@ -16,7 +16,7 @@ later stages.
   exposes them to the browser
 - **Database:** SQLite via Drizzle ORM and the libsql driver (no native build)
 - **Auth:** self-hosted username/password, argon2 hashing, signed server-side
-  session cookies, role-based access control (Admin, Trader, Sales, Viewer)
+  session cookies, role-based access control (Admin, Trader, Viewer)
 
 ## Layout
 

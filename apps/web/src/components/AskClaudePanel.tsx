@@ -6,7 +6,7 @@ import { api, ApiError } from '../api/client';
 interface AskClaudePanelProps {
   open: boolean;
   theme: Theme;
-  workspace?: string; // workspace key (trading, kia, finance, ...) for context
+  workspace?: string; // workspace key (trading, finance, ...) for context
   workspaceLabel?: string; // human label, for display
   onClose: () => void;
 }
@@ -19,7 +19,6 @@ interface Msg {
 // Suggested prompts tailored to the current workspace.
 const SUGGESTIONS_BY_WS: Record<string, string[]> = {
   trading: ['How is my FTP challenge scored?', 'What’s a healthy daily drawdown buffer?', 'How do I read slippage in my trade log?'],
-  kia: ['How is my commission calculated?', 'Tips to hit my unit goal this month', 'Telluride vs Sorento — quick pitch'],
   finance: ['Tips for tracking monthly expenses', 'How does FTP payout scaling work?', 'Ways to improve my net worth'],
   wealth: ['How should I structure model portfolios?', 'What goes in an IPS?', 'Key RIA compliance filings to track'],
   studies: ['Explain the brochure rule (Series 65)', 'Quiz me on fiduciary duty', 'Define a discretionary account'],
@@ -58,9 +57,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
     setBusy(true);
     setError(null);
     try {
-      // In the Kia workspace, use the dedicated Kia product-expert persona;
-      // elsewhere the general workspace-aware assistant.
-      const { reply } = workspace === 'kia' ? await api.askKia(next) : await api.askAi(next, workspace);
+      const { reply } = await api.askAi(next, workspace);
       setMessages([...next, { role: 'assistant', content: reply }]);
       api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => { /* keep */ });
     } catch (e) {

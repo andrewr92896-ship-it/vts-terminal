@@ -12,8 +12,8 @@ import type {
   RemovedWealthClient,
 } from '../../api/types';
 
-// Wealth workspace palette — the dark green "pro-terminal" theme (mirrors how
-// KiaDashboard hardcodes the Kia red palette so the screen is self-contained).
+// Wealth workspace palette — the dark green "pro-terminal" theme, hardcoded so
+// the screen is self-contained.
 const GREEN = '#34b87a';
 const GREEN2 = '#239160';
 const CARD = '#0e1a15';

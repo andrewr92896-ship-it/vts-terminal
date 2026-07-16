@@ -64,7 +64,6 @@ export function FinanceOverview() {
   }
 
   const sources = [
-    { label: 'Car sales commission', value: e.kiaCommission, sub: 'Kia tracker, this month' },
     { label: 'Trading (real brokers)', value: e.tradingReal, sub: 'OANDA · Kraken closed P/L' },
   ];
 

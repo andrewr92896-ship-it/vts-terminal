@@ -41,16 +41,12 @@ import type {
   TradeInput,
   TradeLogData,
   RemovedTrade,
-  KiaCommandResult,
-  KiaDashboard,
-  KiaDealParseResult,
   LeaderboardEntry,
   Team,
   TeamRef,
   TestBreakdown,
   TestLeaderboardEntry,
   TestResult,
-  RemovedKiaDeal,
   RemovedTodoItem,
   PracticeOverview,
   PortfoliosData,
@@ -224,9 +220,6 @@ export const api = {
   },
   aiUsage(): Promise<AiUsage> {
     return request('/api/ai/usage');
-  },
-  askKia(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<{ reply: string }> {
-    return request('/api/ai/kia', { method: 'POST', body: JSON.stringify({ messages }) });
   },
   studyTutor(body: {
     explain?: { stem: string; options: { label: string; text: string }[]; answer: string; topic?: string };
@@ -618,98 +611,6 @@ export const api = {
       body: JSON.stringify(item),
     });
   },
-  kiaDashboard(month?: string): Promise<KiaDashboard> {
-    return request(`/api/kia/dashboard${monthQuery(month)}`);
-  },
-  kiaParseDeal(note: string): Promise<KiaDealParseResult> {
-    return request('/api/kia/deals/parse', { method: 'POST', body: JSON.stringify({ note }) });
-  },
-  kiaCommand(command: string, month?: string): Promise<KiaCommandResult> {
-    return request(`/api/kia/command${monthQuery(month)}`, {
-      method: 'POST',
-      body: JSON.stringify({ command }),
-    });
-  },
-  kiaAddDeal(
-    deal: {
-      customer?: string;
-      model: string;
-      type: 'New' | 'Used';
-      profit?: number;
-      frontProfit?: number;
-      backProfit?: number;
-      soldAt?: string;
-    },
-    month?: string,
-  ): Promise<KiaDashboard> {
-    return request(`/api/kia/deals${monthQuery(month)}`, {
-      method: 'POST',
-      body: JSON.stringify(deal),
-    });
-  },
-  kiaUpdateDeal(
-    id: string,
-    patch: {
-      customer?: string;
-      model?: string;
-      type?: 'New' | 'Used';
-      profit?: number;
-      frontProfit?: number;
-      backProfit?: number;
-      soldAt?: string;
-    },
-    month?: string,
-  ): Promise<KiaDashboard> {
-    return request(`/api/kia/deals/${id}${monthQuery(month)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    });
-  },
-  kiaRemoveDeal(
-    id: string,
-    month?: string,
-  ): Promise<KiaDashboard & { removed: RemovedKiaDeal | null }> {
-    return request(`/api/kia/deals/${id}${monthQuery(month)}`, { method: 'DELETE' });
-  },
-  kiaRestoreDeal(deal: RemovedKiaDeal, month?: string): Promise<KiaDashboard> {
-    return request(`/api/kia/deals/restore${monthQuery(month)}`, {
-      method: 'POST',
-      body: JSON.stringify(deal),
-    });
-  },
-  kiaUpdateSettings(
-    patch: { goalUnits?: number; reviewCount?: number },
-    month?: string,
-  ): Promise<KiaDashboard> {
-    return request(`/api/kia/settings${monthQuery(month)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    });
-  },
-  kiaUpdatePayPlan(
-    patch: {
-      commissionMode?: 'total' | 'split';
-      commissionPct?: number;
-      commissionFrontPct?: number;
-      commissionBackPct?: number;
-      miniAmount?: number;
-      reviewRequired?: boolean;
-      reviewReqPct?: number;
-      bonusTiers?: { units: number; amount: number }[];
-    },
-    month?: string,
-  ): Promise<KiaDashboard> {
-    return request(`/api/kia/payplan${monthQuery(month)}`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    });
-  },
-  kiaSetHideComm(hideComm: boolean, month?: string): Promise<KiaDashboard> {
-    return request(`/api/kia/prefs${monthQuery(month)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ hideComm }),
-    });
-  },
   // ---- Personal Finance ----
   financeOverview(): Promise<FinanceOverview> {
     return request('/api/finance/overview');
@@ -839,8 +740,3 @@ export const api = {
     });
   },
 };
-
-// Append ?month=YYYY-MM when a specific month is being viewed.
-function monthQuery(month?: string): string {
-  return month ? `?month=${encodeURIComponent(month)}` : '';
-}

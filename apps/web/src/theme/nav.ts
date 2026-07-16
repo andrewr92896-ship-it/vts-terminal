@@ -41,19 +41,6 @@ export const NAV: NavWorkspace[] = [
     ],
   },
   {
-    key: 'kia',
-    label: 'Kia Sales',
-    icon: 'car-front',
-    accent: '#E0526A',
-    group: 'Kia of Streetsboro',
-    sections: [
-      { key: 'kia_dash', label: 'Dashboard', icon: 'gauge' },
-      { key: 'kia_news', label: 'Kia News', icon: 'newspaper' },
-      { key: 'kia_know', label: 'Product Knowledge', icon: 'book-open' },
-      { key: 'kia_todo', label: 'To Do', icon: 'list-todo' },
-    ],
-  },
-  {
     key: 'studies',
     label: 'Studies',
     icon: 'graduation-cap',

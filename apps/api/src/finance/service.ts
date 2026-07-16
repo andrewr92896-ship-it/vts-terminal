@@ -15,9 +15,8 @@ import {
   type FinanceNetWorthRow,
   type FinanceSettingsRow,
 } from '../db/schema.js';
-import { getDashboard } from '../kia/service.js';
 
-// ---- Eastern-Time month helpers (match Kia bucketing) ----
+// ---- Eastern-Time month helpers (match the trading month bucketing) ----
 function etParts(d = new Date()): { year: number; month: number; day: number; key: string } {
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/New_York',
@@ -60,7 +59,6 @@ export interface FinanceOverview {
   todayDay: number;
   settings: { ftpPhase: FtpPhase; ftpDivisor: number; ftpPayoutPct: number };
   earnings: {
-    kiaCommission: number;
     tradingReal: number;
     ftpRaw: number;
     ftpScaled: number;
@@ -80,14 +78,6 @@ function scaleFtp(raw: number, s: FinanceSettingsRow): number {
 export async function getOverview(userId: string): Promise<FinanceOverview> {
   const settings = await ensureSettings(userId);
   const now = etParts();
-
-  // Car sales commission for the current month (from the Kia tracker).
-  let kiaCommission = 0;
-  try {
-    kiaCommission = (await getDashboard(userId)).metrics.commission;
-  } catch {
-    /* user may have no Kia data — treat as 0 */
-  }
 
   // Closed trades this month: FTP (simulated, scaled) vs. real brokers (100%).
   const closedTrades = await db
@@ -115,7 +105,7 @@ export async function getOverview(userId: string): Promise<FinanceOverview> {
 
   const tradingReal = realFromLog + realFromPositions;
   const ftpScaled = scaleFtp(ftpRaw, settings);
-  const totalEarnings = kiaCommission + tradingReal + ftpScaled;
+  const totalEarnings = tradingReal + ftpScaled;
 
   // Expenses (recurring monthly). "Paid" = its bank day has already passed.
   const expenseRows = (
@@ -143,7 +133,6 @@ export async function getOverview(userId: string): Promise<FinanceOverview> {
     todayDay: now.day,
     settings: { ftpPhase: settings.ftpPhase, ftpDivisor: settings.ftpDivisor, ftpPayoutPct: settings.ftpPayoutBp / 100 },
     earnings: {
-      kiaCommission,
       tradingReal,
       ftpRaw,
       ftpScaled,
