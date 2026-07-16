@@ -61,22 +61,6 @@ export const NAV: NavWorkspace[] = [
     group: 'Tasks',
     sections: [{ key: 'td_all', label: 'All Tasks', icon: 'list-checks' }],
   },
-  {
-    key: 'llc',
-    label: 'Vitalis Trading Systems LLC',
-    icon: 'building-2',
-    accent: C.info,
-    group: 'Business',
-    sections: [
-      { key: 'llc_overview', label: 'Overview', icon: 'landmark' },
-      { key: 'llc_documents', label: 'Documents', icon: 'folder-archive' },
-      { key: 'llc_members', label: 'Members', icon: 'users' },
-      { key: 'llc_contractors', label: 'Contractors', icon: 'briefcase' },
-      { key: 'llc_compliance', label: 'Compliance & Filings', icon: 'file-check-2' },
-      { key: 'llc_banking', label: 'Accounts & Banking', icon: 'banknote' },
-      { key: 'llc_legal', label: 'Legal & Contracts', icon: 'scale' },
-    ],
-  },
 ];
 
 export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
