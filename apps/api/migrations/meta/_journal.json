@@ -330,6 +330,13 @@
       "when": 1782337836908,
       "tag": "0046_calendar_source",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "6",
+      "when": 1782337936908,
+      "tag": "0047_trading_boards",
+      "breakpoints": true
     }
   ]
 }

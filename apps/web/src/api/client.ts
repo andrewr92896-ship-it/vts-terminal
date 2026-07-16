@@ -32,6 +32,8 @@ import type {
   NetWorthKind,
   SessionInput,
   StrategySession,
+  TradingBoard,
+  BoardInput,
   MarketNewsData,
   NewsInput,
   EventInput,
@@ -253,6 +255,18 @@ export const api = {
   },
   removeSession(id: string): Promise<{ sessions: StrategySession[] }> {
     return request(`/api/trading/sessions/${id}`, { method: 'DELETE' });
+  },
+  tradingBoards(): Promise<{ boards: TradingBoard[] }> {
+    return request('/api/trading/boards');
+  },
+  createBoard(input: BoardInput): Promise<{ board: TradingBoard; boards: TradingBoard[] }> {
+    return request('/api/trading/boards', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateBoard(id: string, patch: BoardInput): Promise<{ board: TradingBoard; boards: TradingBoard[] }> {
+    return request(`/api/trading/boards/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  removeBoard(id: string): Promise<{ boards: TradingBoard[] }> {
+    return request(`/api/trading/boards/${id}`, { method: 'DELETE' });
   },
   marketNews(): Promise<MarketNewsData> {
     return request('/api/trading/news');

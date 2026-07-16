@@ -25,6 +25,7 @@ import {
   importFundedTrades,
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
+import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
   getMarketNews,
   addNews,
@@ -307,6 +308,33 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.delete('/api/trading/sessions/:id', write, async (request) => ({
     sessions: await removeSession(request.currentUser!.id, (request.params as { id: string }).id),
   }));
+
+  // ---- Live Wall boards (per-user customizable chart/watchlist presets) ----
+  app.get('/api/trading/boards', read, async (request) => ({ boards: await listBoards(request.currentUser!.id) }));
+  app.post('/api/trading/boards', write, async (request, reply) => {
+    const parsed = createBoardSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name is required' });
+    try {
+      const board = await createBoard(request.currentUser!.id, parsed.data);
+      return { board, boards: await listBoards(request.currentUser!.id) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save board' });
+    }
+  });
+  app.patch('/api/trading/boards/:id', write, async (request, reply) => {
+    const parsed = editBoardSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the board details' });
+    try {
+      const board = await updateBoard(request.currentUser!.id, (request.params as { id: string }).id, parsed.data);
+      return { board, boards: await listBoards(request.currentUser!.id) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update board' });
+    }
+  });
+  app.delete('/api/trading/boards/:id', write, async (request) => {
+    await removeBoard(request.currentUser!.id, (request.params as { id: string }).id);
+    return { boards: await listBoards(request.currentUser!.id) };
+  });
 
   // ---- Market News (shared desk feed: headlines + economic calendar) ----
   app.get('/api/trading/news', read, async () => getMarketNews());
@@ -1017,6 +1045,38 @@ const sessionFields = {
 const addSessionSchema = z.object({ name: z.string().trim().min(1).max(80), ...sessionFields });
 const editSessionSchema = z
   .object({ name: z.string().trim().min(1).max(80).optional(), ...sessionFields })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+// Live Wall board layouts. The layout is a bounded grid of tiles; every field
+// is length/range-capped so a saved board can never bloat the row or carry
+// unexpected shapes. `.passthrough()` is deliberately NOT used — unknown tile
+// keys are stripped.
+const boardTileSchema = z.object({
+  id: z.string().trim().min(1).max(64),
+  kind: z.enum(['chart', 'watchlist']),
+  x: z.number().int().min(0).max(96),
+  y: z.number().int().min(0).max(4096),
+  w: z.number().int().min(1).max(96),
+  h: z.number().int().min(1).max(96),
+  symbol: z.string().trim().max(40).optional(),
+  interval: z.string().trim().max(8).optional(),
+  style: z.string().trim().max(4).optional(),
+  studies: z.array(z.string().trim().max(64)).max(30).optional(),
+  symbols: z.array(z.string().trim().max(40)).max(60).optional(),
+  title: z.string().trim().max(60).optional(),
+});
+const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(40) });
+const createBoardSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  layout: boardLayoutSchema.optional(),
+  isDefault: z.boolean().optional(),
+});
+const editBoardSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80).optional(),
+    layout: boardLayoutSchema.optional(),
+    isDefault: z.boolean().optional(),
+  })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 // The "AI overview" payload: the client sends what the active feed is showing.

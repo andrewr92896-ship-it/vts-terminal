@@ -903,6 +903,47 @@ export interface SessionInput {
   active?: boolean;
 }
 
+// ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----
+// A saved, customizable grid of chart/watchlist tiles the trader arranges on
+// the Live Wall ("presets").
+export type BoardTileKind = 'chart' | 'watchlist';
+
+export interface BoardTile {
+  id: string;
+  kind: BoardTileKind;
+  // Grid geometry (react-grid-layout units).
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  // Chart tiles
+  symbol?: string; // TradingView symbol, e.g. "OANDA:EURUSD"
+  interval?: string; // TradingView interval, e.g. "15", "60", "D"
+  style?: string; // candle style code (1 = candles, 8 = Heikin Ashi, …)
+  studies?: string[]; // indicator ids, e.g. "RSI@tv-basicstudies"
+  // Watchlist tiles
+  symbols?: string[];
+  title?: string;
+}
+
+export interface BoardLayout {
+  tiles: BoardTile[];
+}
+
+export interface TradingBoard {
+  id: string;
+  name: string;
+  layout: BoardLayout;
+  isDefault: boolean;
+  updatedAt: number;
+}
+
+export interface BoardInput {
+  name?: string;
+  layout?: BoardLayout;
+  isDefault?: boolean;
+}
+
 // ---- Trading — Market News (mirror of apps/api/src/trading/news.ts) ----
 export type NewsImpact = 'high' | 'medium' | 'low';
 export type NewsBias = 'bullish' | 'bearish' | 'neutral';
