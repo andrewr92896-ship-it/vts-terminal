@@ -35,7 +35,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'alerts', label: 'Alerts', icon: 'bell' },
       { key: 'desk', label: 'Trade Desk', icon: 'candlestick-chart' },
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
-      { key: 'funded', label: 'Funded', icon: 'shield-check' },
+      { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
       { key: 'news', label: 'Market News', icon: 'newspaper' },
       { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
     ],

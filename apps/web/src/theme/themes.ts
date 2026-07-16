@@ -142,7 +142,7 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'alerts', label: 'Alerts', dot: '#EBCB74' },
     { key: 'desk', label: 'Trade Desk' },
     { key: 'sessions', label: 'Strategy Sessions' },
-    { key: 'funded', label: 'Funded' },
+    { key: 'funded', label: 'Manual Trades' },
     { key: 'news', label: 'Market News', dot: '#ef5468' },
     { key: 'td_trading', label: 'To Do' },
   ],

@@ -58,7 +58,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
     api
       .funded()
       .then((d) => alive && setData(d))
-      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load funded accounts'));
+      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load accounts'));
     return () => {
       alive = false;
     };
@@ -79,15 +79,15 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
   }
 
   if (loadError) return <div style={{ color: RED, fontSize: 12.5 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, fontSize: 12.5 }}>Loading funded accounts…</div>;
+  if (!data) return <div style={{ color: MUTED, fontSize: 12.5 }}>Loading accounts…</div>;
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>Funded / Prop accounts</div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>Accounts</div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4 }}>
-            Tracked by hand — keep the balance current and log trades by pasting or uploading a trade-history photo. “Track live trade” posts an active position to the Live Wall with OANDA-priced P/L (kept off the Trade Log and Live Brokers). Duplicates are skipped by time + profit.
+            Kept by hand — set the balance and place trades by typing them in or pasting a trade-history photo. “Track live trade” posts an open position to the Live Wall with OANDA-priced P/L (kept off the Trade Log and Live Brokers). Duplicates are skipped by time + profit.
           </div>
         </div>
         {!readOnly && (
@@ -109,7 +109,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
 
       {data.accounts.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '28px 20px', color: MUTED, fontSize: 12.5 }}>
-          No funded accounts yet.{!readOnly && ' Use “+ Add account” to track your first FTP or prop account.'}
+          No accounts yet.{!readOnly && ' Use “+ Add account” to set up your first one.'}
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 14 }}>
@@ -249,7 +249,7 @@ function AccountCard({
           </div>
           <div style={{ fontSize: 11, color: FAINT, marginTop: 6 }}>
             Logged P/L <b style={{ color: a.realizedPl >= 0 ? GREEN : RED, fontFamily: MONO }}>{showMoney ? money(a.realizedPl, ccy) : '•••••'}</b> · {a.tradeCount} trade{a.tradeCount === 1 ? '' : 's'}
-            {a.startingBalance != null && <> · funded at {dollars(a.startingBalance)}</>}
+            {a.startingBalance != null && <> · started at {dollars(a.startingBalance)}</>}
           </div>
           {/* Capital gained from trades — deposits/withdrawals don't count */}
           <div style={{ display: 'flex', gap: 18, marginTop: 10, flexWrap: 'wrap' }}>
@@ -539,7 +539,7 @@ function AccountForm({
   onSubmit: (input: { platform: string; label: string; currency: string; balance?: number; startingBalance?: number; notes?: string }) => void;
   onCancel: () => void;
 }) {
-  const [platform, setPlatform] = useState('FTP');
+  const [platform, setPlatform] = useState('');
   const [label, setLabel] = useState('');
   const [currency, setCurrency] = useState('USD');
   const [balance, setBalance] = useState('');
@@ -550,20 +550,20 @@ function AccountForm({
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={panelLabel}>Add a funded account</div>
+      <div style={panelLabel}>Add an account</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Platform (FTP, Topstep…)" style={{ ...inputBase, flex: '0 0 170px' }} />
+        <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Broker / label (optional)" style={{ ...inputBase, flex: '0 0 170px' }} />
         <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Account name *" style={{ ...inputBase, flex: '1 1 180px' }} />
         <input value={currency} onChange={(e) => setCurrency(e.target.value)} placeholder="Currency" style={{ ...inputBase, flex: '0 0 90px' }} />
         <input value={balance} onChange={(e) => setBalance(e.target.value)} type="number" step="any" placeholder="Current balance" style={{ ...inputBase, flex: '0 0 150px' }} />
-        <input value={starting} onChange={(e) => setStarting(e.target.value)} type="number" step="any" placeholder="Funded size" style={{ ...inputBase, flex: '0 0 150px' }} />
+        <input value={starting} onChange={(e) => setStarting(e.target.value)} type="number" step="any" placeholder="Starting balance" style={{ ...inputBase, flex: '0 0 150px' }} />
         <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" style={{ ...inputBase, flex: '1 1 100%' }} />
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button
           onClick={() =>
             onSubmit({
-              platform: platform.trim() || 'FTP',
+              platform: platform.trim() || 'Manual',
               label: label.trim(),
               currency: currency.trim() || 'USD',
               balance: num(balance),
