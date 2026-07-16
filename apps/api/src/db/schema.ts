@@ -586,6 +586,28 @@ export const tradingSessions = sqliteTable('trading_sessions', {
 
 export type TradingSessionRow = typeof tradingSessions.$inferSelect;
 
+// ---- Live Wall boards (per-user customizable chart/watchlist layouts) ----
+// Each row is a saved board "preset": a drag-resize grid of chart and
+// watchlist tiles the trader arranges on the Live Wall. The whole arrangement
+// (tiles, their positions/sizes, and each tile's config — symbol, timeframe,
+// candle style, indicators) is stored as one JSON blob in `layout`, so the
+// grid can evolve without a migration per field. Exactly one board per user
+// may be the default (enforced in the service, not the schema).
+export const tradingBoards = sqliteTable('trading_boards', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  // JSON: { tiles: BoardTile[] }. Opaque to the DB; validated in the route.
+  layout: text('layout').notNull().default('{"tiles":[]}'),
+  isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+
+export type TradingBoardRow = typeof tradingBoards.$inferSelect;
+
 // ---- Market News (a shared desk feed: headlines + economic calendar) ----
 // Unlike the per-user trading data, news and calendar events are shared across
 // all traders. Anyone in the Trading workspace can read them; only writers

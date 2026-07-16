@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -26,6 +26,11 @@ const BORDER2 = '#1c3a7a';
 const MONO = "'IBM Plex Mono', monospace";
 
 const REFRESH_MS = 10_000;
+
+// The chart board pulls in react-grid-layout and the TradingView embeds, so it
+// is code-split — it only loads when the trader opens the Charts view, keeping
+// the initial app bundle lean (same pattern as the Studies screens).
+const ChartBoard = lazy(() => import('./ChartBoard').then((m) => ({ default: m.ChartBoard })));
 
 const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US');
 
@@ -96,6 +101,9 @@ export function LiveWall() {
   const [hideMoney, setHideMoney] = useState(false);
   const [connOpen, setConnOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Two views on the wall: the live positions grid (default) and the
+  // customizable multi-chart board with saved presets.
+  const [view, setView] = useState<'positions' | 'charts'>('positions');
   const firstLoad = useRef(true);
 
   const load = useCallback(async () => {
@@ -123,11 +131,6 @@ export function LiveWall() {
     return () => window.clearInterval(id);
   }, [load]);
 
-  if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the wall…</div>;
-
-  const showMoney = data.canSeeBalances && !privacy && !hideMoney;
-  const isSample = data.source === 'sample';
   // The demo (and trading view-only roles) can browse the wall but not manage
   // broker connections — hide the entry point to the connection editor.
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
@@ -136,65 +139,84 @@ export function LiveWall() {
     <div style={{ maxWidth: 1280, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
-        <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Live Wall</h2>
-            <span style={isSample ? sampledPill : livePill}>{isSample ? 'Sample data' : 'Live'}</span>
+            {view === 'positions' && data && (
+              <span style={data.source === 'sample' ? sampledPill : livePill}>{data.source === 'sample' ? 'Sample data' : 'Live'}</span>
+            )}
+          </div>
+          {/* Positions ⇄ Charts view toggle */}
+          <div style={segWrap}>
+            <button onClick={() => setView('positions')} style={segBtn(view === 'positions')}>Positions</button>
+            <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>Charts</button>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>
-            Updated {etTime(data.generatedAt)} ET
-          </span>
-          {data.canSeeBalances && (
-            <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>
-              {hideMoney ? 'Show $' : 'Hide $'}
+        {view === 'positions' && data && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>
+              Updated {etTime(data.generatedAt)} ET
+            </span>
+            {data.canSeeBalances && (
+              <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>
+                {hideMoney ? 'Show $' : 'Hide $'}
+              </button>
+            )}
+            {!readOnly && (
+              <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
+            )}
+            <button onClick={() => setSettingsOpen(true)} style={ghostBtn} title="Trade desk settings">⚙ Settings</button>
+            <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
+              {refreshing ? 'Refreshing…' : 'Refresh'}
             </button>
-          )}
-          {!readOnly && (
-            <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
-          )}
-          <button onClick={() => setSettingsOpen(true)} style={ghostBtn} title="Trade desk settings">⚙ Settings</button>
-          <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
-            {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={() => void load()} />
       <DeskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} readOnly={readOnly} onSaved={() => void load()} />
 
-      {staleError && (
-        <div style={warnBanner}>
-          Showing the last positions from {etTime(data.generatedAt)} ET. Couldn't refresh: {staleError}
-        </div>
-      )}
-
-      {data.note && (
-        <div style={isSample ? infoBanner : warnBanner}>{data.note}</div>
-      )}
-
-      {/* Trade cards */}
-      {data.trades.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          No open positions right now. New fills appear here automatically.
-        </div>
+      {view === 'charts' ? (
+        <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading charts…</div>}>
+          <ChartBoard />
+        </Suspense>
+      ) : loadError ? (
+        <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>
+      ) : !data ? (
+        <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the wall…</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>
-          {data.trades.map((t) => (
-            <TradeCard
-              key={t.id}
-              t={t}
-              config={configFrom(data)}
-              mine={t.ownerId === user?.id}
-              readOnly={readOnly}
-              showMoney={showMoney}
-              showFxMoney={!privacy && !hideMoney}
-              canSeeBalances={data.canSeeBalances}
-              onClosed={() => void load()}
-            />
-          ))}
-        </div>
+        <>
+          {staleError && (
+            <div style={warnBanner}>
+              Showing the last positions from {etTime(data.generatedAt)} ET. Couldn't refresh: {staleError}
+            </div>
+          )}
+
+          {data.note && <div style={data.source === 'sample' ? infoBanner : warnBanner}>{data.note}</div>}
+
+          {/* Trade cards */}
+          {data.trades.length === 0 ? (
+            <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
+              No open positions right now. New fills appear here automatically.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>
+              {data.trades.map((t) => (
+                <TradeCard
+                  key={t.id}
+                  t={t}
+                  config={configFrom(data)}
+                  mine={t.ownerId === user?.id}
+                  readOnly={readOnly}
+                  showMoney={data.canSeeBalances && !privacy && !hideMoney}
+                  showFxMoney={!privacy && !hideMoney}
+                  canSeeBalances={data.canSeeBalances}
+                  onClosed={() => void load()}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -446,6 +468,27 @@ function RRBox({ label, pips, money, ccy, color }: { label: string; pips: number
 }
 
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12 };
+// Positions ⇄ Charts segmented control.
+const segWrap: CSSProperties = {
+  display: 'inline-flex',
+  background: 'rgba(4,12,30,.5)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 8,
+  padding: 3,
+  gap: 3,
+};
+function segBtn(active: boolean): CSSProperties {
+  return {
+    fontSize: 12,
+    fontWeight: 700,
+    color: active ? '#0c2768' : '#cbd8f5',
+    background: active ? GOLD : 'transparent',
+    border: 'none',
+    borderRadius: 6,
+    padding: '6px 14px',
+    cursor: 'pointer',
+  };
+}
 const fxLabel: CSSProperties = { fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT };
 const fxTag: CSSProperties = {
   fontSize: 8.5,
