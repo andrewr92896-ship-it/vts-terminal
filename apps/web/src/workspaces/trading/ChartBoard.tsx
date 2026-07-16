@@ -8,6 +8,7 @@ import type { BoardTile, BoardTileKind, TradingBoard } from '../../api/types';
 import { ChartTile } from './ChartTile';
 import { WatchlistTile } from './WatchlistTile';
 import { PositionsTile } from './PositionsTile';
+import { MobileScrollLockBar } from './scrollLock';
 import { BORDER, BORDER2, FAINT, GOLD, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
 
 const RGL = WidthProvider(GridLayout);
@@ -208,6 +209,7 @@ export function ChartBoard() {
   return (
     <div>
       <style>{PLACEHOLDER_CSS}</style>
+      <MobileScrollLockBar />
 
       {/* Presets bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
@@ -217,9 +219,7 @@ export function ChartBoard() {
             key={b.id}
             onClick={() => confirmSwitch(() => applyBoard(b))}
             style={boardPill(b.id === activeId)}
-            title={b.isDefault ? 'Default board' : undefined}
           >
-            {b.isDefault && <span style={{ color: GOLD, marginRight: 4 }}>★</span>}
             {b.name}
           </button>
         ))}
