@@ -121,15 +121,20 @@ export function MobileScrollLockBar() {
     };
   }, [isLocked, root]);
 
-  // Dragging the thumb scrolls the container programmatically (native scrolling
-  // is off while locked). Listeners are non-passive so the drag doesn't also
-  // trigger any browser gesture.
+  // The hard lock. A single non-passive touchmove listener on the window
+  // cancels the browser's native finger-scroll for EVERY touch on the page
+  // while locked — `touch-action: none` alone isn't honored for overflow
+  // containers on iOS Safari, so we cancel the gesture outright. Touches inside
+  // the cross-origin TradingView iframe never reach us, so chart panning still
+  // works; and dragging the thumb scrolls the page programmatically (below),
+  // which is unaffected by cancelling the native scroll. The net effect: the
+  // page cannot be finger-scrolled at all — the wide scrollbar is the only way.
   useEffect(() => {
     if (!isLocked || !root) return;
     const onMove = (e: TouchEvent) => {
+      if (e.cancelable) e.preventDefault(); // kill native scroll everywhere
       const d = drag.current;
-      if (!d) return;
-      e.preventDefault();
+      if (!d) return; // not dragging the thumb — nothing more to do
       const trackH = root.getBoundingClientRect().height;
       const ratio = root.clientHeight / Math.max(root.scrollHeight, 1);
       const thumbH = Math.min(trackH, Math.max(THUMB_MIN, trackH * ratio));
