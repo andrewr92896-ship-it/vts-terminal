@@ -182,6 +182,14 @@ export function TopBar(props: TopBarProps) {
           minWidth: 0,
         }}
       >
+        {!isPhone && user.teamName && (
+          <>
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+              {user.teamName}
+            </span>
+            <Icon name="chevron-right" size={13} color={C.faint} />
+          </>
+        )}
         {!isPhone && (
           <>
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
