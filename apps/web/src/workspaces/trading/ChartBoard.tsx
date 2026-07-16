@@ -109,14 +109,11 @@ export function ChartBoard() {
     [dirty],
   );
 
-  const startNewBoard = () =>
-    confirmSwitch(() => {
-      setActiveId(null);
-      setName('New board');
-      setTiles(starterTiles());
-      setSavedTilesJson('');
-      setEditing(true);
-    });
+  // "Save as new" — keep the current layout exactly as it is and save it under
+  // a new name as a separate preset (the original board is left untouched). It
+  // never discards or resets the tiles; it just opens the name prompt, and
+  // confirmName's 'create' branch persists the current tiles.
+  const saveAsNew = () => setNamePrompt({ mode: 'create', value: isUnsaved ? name : `${name} copy` });
 
   const save = async () => {
     if (saving) return;
@@ -210,7 +207,7 @@ export function ChartBoard() {
           </button>
         ))}
         {isUnsaved && <span style={boardPill(true)}>{name} <span style={{ color: FAINT }}>· unsaved</span></span>}
-        {editing && <button onClick={startNewBoard} style={{ ...ghostBtn, padding: '6px 10px' }}>+ New</button>}
+        {editing && <button onClick={saveAsNew} style={{ ...ghostBtn, padding: '6px 10px' }}>Save as new</button>}
       </div>
 
       {/* Actions bar */}
