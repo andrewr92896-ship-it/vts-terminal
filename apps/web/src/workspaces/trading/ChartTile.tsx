@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { BoardTile } from '../../api/types';
 import { TvWidget } from './TvWidget';
+import { TileConfigModal } from './TileConfigModal';
 import {
   BORDER,
   BORDER2,
@@ -91,13 +92,9 @@ export function ChartTile({
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
         <TvWidget src={ADVANCED_CHART_SRC} config={config} configKey={configKey} />
         {editing && showCfg && (
-          <div className="no-drag" style={cfgPanel} onMouseDown={(e) => e.stopPropagation()}>
-            <ChartConfig
-              tile={tile}
-              onChange={onChange}
-              onClose={() => setShowCfg(false)}
-            />
-          </div>
+          <TileConfigModal onClose={() => setShowCfg(false)}>
+            <ChartConfig tile={tile} onChange={onChange} onClose={() => setShowCfg(false)} />
+          </TileConfigModal>
         )}
       </div>
     </div>
@@ -217,21 +214,6 @@ const iconBtn: CSSProperties = {
   borderRadius: 6,
   padding: '4px 7px',
   cursor: 'pointer',
-};
-const cfgPanel: CSSProperties = {
-  position: 'absolute',
-  top: 8,
-  right: 8,
-  width: 300,
-  maxWidth: 'calc(100% - 16px)',
-  maxHeight: 'calc(100% - 16px)',
-  overflowY: 'auto',
-  background: 'rgba(8,18,42,.98)',
-  border: `1px solid ${BORDER2}`,
-  borderRadius: 10,
-  padding: 12,
-  boxShadow: '0 12px 40px rgba(0,0,0,.5)',
-  zIndex: 5,
 };
 const lbl: CSSProperties = {
   display: 'block',

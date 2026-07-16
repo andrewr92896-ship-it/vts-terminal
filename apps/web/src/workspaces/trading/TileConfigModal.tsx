@@ -1,0 +1,51 @@
+import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { BORDER2 } from './tvChart';
+
+// A centered settings dialog for a board tile. Rendered through a portal to
+// document.body so its size is independent of the tile it belongs to — a short
+// watchlist tile would otherwise clip the panel to a sliver (the tile and the
+// grid item both clip overflow, and react-grid-layout's transform means even
+// position:fixed can't escape the tile). Click the backdrop or press Escape to
+// close.
+export function TileConfigModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div className="no-drag" style={overlay} onMouseDown={onClose}>
+      <div style={panel} onMouseDown={(e) => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+const overlay: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(3,8,20,.6)',
+  backdropFilter: 'blur(2px)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 16,
+  zIndex: 1000,
+};
+const panel: React.CSSProperties = {
+  width: 340,
+  maxWidth: '92vw',
+  maxHeight: '85vh',
+  overflowY: 'auto',
+  background: 'rgba(8,18,42,.99)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 12,
+  padding: 16,
+  boxShadow: '0 24px 70px rgba(0,0,0,.6)',
+};
