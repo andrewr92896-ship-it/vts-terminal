@@ -134,6 +134,10 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
   const [revealed, setRevealed] = useState(() => initialCurrentRef.current?.revealed ?? false);
   const [outcome, setOutcome] = useState<boolean | null>(() => initialCurrentRef.current?.outcome ?? null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
+  // The change in the current session-block score from the last scored answer,
+  // shown alongside the lifetime change. Null (no readout) across a block reset
+  // or the first answer, where a delta isn't meaningful.
+  const [sessionChange, setSessionChange] = useState<number | null>(null);
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
   // The streak multiplier applied to the last scored answer: how many level
   // points it earned, the multiplier in force, and whether it just crossed into
@@ -287,6 +291,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
     setRevealed(false);
     setOutcome(null);
     setScoreChange(null);
+    setSessionChange(null);
     setLevelEvent(null);
     setStreakGain(null);
   }
@@ -501,6 +506,21 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
 
     // Show the change in lifetime accuracy (0 before there was any prior).
     setScoreChange(round1((newScore ?? 0) - (prevScore ?? (newScore ?? 0))));
+
+    // Show the change in the current session-block score too. A delta only makes
+    // sense within the same block, so measure against the prior block score only
+    // when the answer stayed in that block; across a reset (new block) or the
+    // very first answer, fall back to the new score so the change reads 0 — the
+    // same neutral convention the lifetime change uses.
+    const prevSession = sessionScore(prevGame);
+    const nextSession = sessionScore(next);
+    if (nextSession) {
+      const sameBlock = prevSession != null && prevSession.index === nextSession.index;
+      const baseline = sameBlock ? prevSession.pct : nextSession.pct;
+      setSessionChange(round1(nextSession.pct - baseline));
+    } else {
+      setSessionChange(null);
+    }
 
     // Record how the streak multiplier shaped this answer's level gain: the
     // points earned, the multiplier in force, and whether it just unlocked a new
@@ -1297,9 +1317,25 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: outcome ? GREEN : RED, marginBottom: 6 }}>
                 {outcome ? 'Correct' : 'Incorrect'}
-                {scoreChange != null && (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: scoreChange >= 0 ? GREEN : RED, marginLeft: 8 }}>
-                    {scoreChange >= 0 ? '+' : ''}{scoreChange.toFixed(1)}%
+                {(sessionChange != null || scoreChange != null) && (
+                  <span style={{ fontSize: 12, fontWeight: 600, marginLeft: 8, color: muted }}>
+                    {sessionChange != null && (
+                      <>
+                        Session{' '}
+                        <span style={{ color: sessionChange >= 0 ? GREEN : RED, fontWeight: 700 }}>
+                          {sessionChange >= 0 ? '+' : ''}{sessionChange.toFixed(1)}%
+                        </span>
+                      </>
+                    )}
+                    {sessionChange != null && scoreChange != null && ' · '}
+                    {scoreChange != null && (
+                      <>
+                        Lifetime{' '}
+                        <span style={{ color: scoreChange >= 0 ? GREEN : RED, fontWeight: 700 }}>
+                          {scoreChange >= 0 ? '+' : ''}{scoreChange.toFixed(1)}%
+                        </span>
+                      </>
+                    )}
                   </span>
                 )}
                 {streakGain && outcome && (
@@ -1367,6 +1403,11 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 30, fontWeight: 700, color: '#fff' }}>
                 {session == null ? '—' : `${session.pct.toFixed(1)}%`}
               </span>
+              {sessionChange != null && (
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: sessionChange >= 0 ? GREEN : RED }}>
+                  {sessionChange >= 0 ? '+' : ''}{sessionChange.toFixed(1)}%
+                </span>
+              )}
               {session && (
                 <span style={{ fontSize: 11.5, color: muted }}>
                   {session.correct}/{session.attempted} correct
