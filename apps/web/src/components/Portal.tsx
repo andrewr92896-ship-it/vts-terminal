@@ -323,6 +323,7 @@ export function Portal() {
       <InstallPrompt theme={theme} />
       <main
         ref={scrollRef}
+        data-vts-scroll-root
         style={{
           flex: 1,
           overflowY: 'auto',
