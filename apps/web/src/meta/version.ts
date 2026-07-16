@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.8';
+export const APP_VERSION = 'Beta V 2.9';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 2.9',
+    date: 'July 16, 2026',
+    notes: [
+      'Removed the Vitalis Trading Systems LLC business workspace (Overview, Documents, Members, Contractors, Compliance, Banking, and Legal). The portal now focuses on Trading, Studies, To Do, Wealth, and Finance.',
+    ],
+  },
   {
     version: 'Beta V 2.8',
     date: 'July 16, 2026',

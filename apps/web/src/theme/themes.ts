@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'llc' | 'wealth' | 'finance';
+export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'wealth' | 'finance';
 
 export interface Theme {
   pageBg: string;
@@ -65,20 +65,6 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#4f63d6',
     accentText: '#0a0e22',
   },
-  // Vitalis Trading Systems LLC — the new business workspace (info-blue accent).
-  // The Meridian shell is a unified navy, so pageBg/headerBg are only kept for
-  // API compatibility with screens that still read a theme; the LLC screens use
-  // the design tokens directly.
-  llc: {
-    pageBg: '#050B18',
-    headerBg: '#071021',
-    headerBorder: '#152139',
-    navBg: '#071021',
-    navBorder: '#152139',
-    accent: '#6C9EFF',
-    accent2: '#3F6BD6',
-    accentText: '#04122e',
-  },
 };
 
 export function accentGradient(t: Theme): string {
@@ -135,13 +121,6 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     size: '21px',
     letterSpacing: '2px',
   },
-  llc: {
-    name: () => 'VITALIS LLC',
-    sub: 'Vitalis Trading Systems LLC',
-    color: '#6C9EFF',
-    size: '21px',
-    letterSpacing: '2px',
-  },
 };
 
 export interface TabDef {
@@ -180,22 +159,12 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'fin_expenses', label: 'Expenses' },
     { key: 'fin_networth', label: 'Net Worth' },
   ],
-  llc: [
-    { key: 'llc_overview', label: 'Overview' },
-    { key: 'llc_documents', label: 'Documents' },
-    { key: 'llc_members', label: 'Members' },
-    { key: 'llc_contractors', label: 'Contractors' },
-    { key: 'llc_compliance', label: 'Compliance & Filings' },
-    { key: 'llc_banking', label: 'Accounts & Banking' },
-    { key: 'llc_legal', label: 'Legal & Contracts' },
-  ],
 };
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'live',
   todo: 'td_all',
   studies: 'st_home',
-  llc: 'llc_overview',
   wealth: 'wm_home',
   finance: 'fin_overview',
 };
@@ -204,7 +173,6 @@ export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   todo: 'To Do List',
   trading: 'Trading',
   studies: 'Studies',
-  llc: 'Vitalis Trading Systems LLC',
   wealth: 'Wealth Management',
   finance: 'Finance',
 };

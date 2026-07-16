@@ -34,7 +34,6 @@ import {
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/AdminUsers';
 import { TodoAll } from '../workspaces/TodoAll';
-import { LlcWorkspace } from '../workspaces/llc/LlcWorkspace';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
 import { Alerts } from '../workspaces/trading/Alerts';
@@ -97,8 +96,6 @@ function renderScreen(screen: string, theme: Theme, onNavigate: (screen: string)
     case 'st_progress':
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     default:
-      // The Vitalis LLC workspace's sections all share one router.
-      if (screen.startsWith('llc_')) return <LlcWorkspace screen={screen} />;
       return null;
   }
 }
