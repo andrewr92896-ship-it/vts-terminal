@@ -20,16 +20,12 @@ export const BORDER = '#16294f';
 export const BORDER2 = '#1c3a7a';
 export const MONO = "'IBM Plex Mono', monospace";
 
-// TradingView Advanced Chart "style" codes. Candles and Heikin Ashi are the two
-// the desk cares about most; the rest are available from the chart toolbar too.
+// TradingView Advanced Chart "style" codes. The desk only wants the two candle
+// types — regular candles and Heikin Ashi. (Other styles are still reachable
+// from the chart's own toolbar if ever needed.)
 export const CANDLE_STYLES: { code: string; label: string }[] = [
   { code: '1', label: 'Candles' },
   { code: '8', label: 'Heikin Ashi' },
-  { code: '9', label: 'Hollow' },
-  { code: '0', label: 'Bars' },
-  { code: '2', label: 'Line' },
-  { code: '3', label: 'Area' },
-  { code: '10', label: 'Baseline' },
 ];
 
 // TradingView interval codes → friendly labels.
