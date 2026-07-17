@@ -11,6 +11,8 @@ import {
   tradingCalendar,
   tradingPositions,
   tradingChallenges,
+  fundedAccounts,
+  fundedTrades,
   brokerConnections,
   aiUsage,
   studyDecks,
@@ -23,6 +25,7 @@ import { DEMO_TEAM_ID } from './identity.js';
 
 import { addTrade } from '../trading/trades.js';
 import { addSession } from '../trading/sessions.js';
+import { addFundedAccount, addFundedTrade } from '../trading/funded.js';
 import { ensureSeed as ensureTodoSeed } from '../todo/service.js';
 
 // One-time seeding of a read-only public DEMO user so every workspace looks
@@ -45,6 +48,8 @@ export async function clearDemoData(userId: string): Promise<void> {
     tradingTrades,
     tradingPositions,
     tradingChallenges,
+    fundedTrades,
+    fundedAccounts,
     brokerConnections,
     aiUsage,
     studyDeckGame,
@@ -363,6 +368,72 @@ export async function seedDemoData(userId: string): Promise<void> {
     });
   } catch (err) {
     console.error('demo seed trading failed:', err);
+  }
+
+  // ---- Manual Trades ----
+  // A couple of hand-kept accounts with logged trades, so the Manual Trades tab
+  // (the renamed, self-managed "Funded" section) looks alive for a reviewer.
+  // Deliberately generic personal accounts — no prop/funded-platform framing.
+  try {
+    const now = Date.now();
+    const seedAccount = async (
+      account: { platform: string; label: string; balance: number; startingBalance: number },
+      trades: Array<{
+        instrument: string;
+        side: 'long' | 'short';
+        units: number;
+        entry: number;
+        exit?: number;
+        pl?: number;
+        day: number;
+        open?: boolean;
+      }>,
+    ): Promise<void> => {
+      const data = await addFundedAccount(userId, {
+        platform: account.platform,
+        label: account.label,
+        currency: 'USD',
+        balance: account.balance,
+        startingBalance: account.startingBalance,
+      });
+      const created = data.accounts.find((a) => a.label === account.label);
+      if (!created) return;
+      for (const t of trades) {
+        await addFundedTrade(userId, created.id, {
+          instrument: t.instrument,
+          side: t.side,
+          units: t.units,
+          entryPrice: t.entry,
+          exitPrice: t.open ? undefined : t.exit,
+          realizedPl: t.open ? undefined : t.pl,
+          status: t.open ? 'open' : 'closed',
+          openedAt: now - t.day * DAY_MS,
+          closedAt: t.open ? undefined : now - t.day * DAY_MS + 4 * 3_600_000,
+        });
+      }
+    };
+
+    await seedAccount(
+      { platform: 'OANDA', label: 'Swing Book', balance: 26680, startingBalance: 25000 },
+      [
+        { instrument: 'EUR/USD', side: 'long', units: 30000, entry: 1.0812, exit: 1.0868, pl: 168, day: 12 },
+        { instrument: 'US30', side: 'long', units: 2, entry: 38720, exit: 38510, pl: -210, day: 9 },
+        { instrument: 'XAU/USD', side: 'long', units: 4, entry: 2306, exit: 2338, pl: 640, day: 6 },
+        { instrument: 'GBP/USD', side: 'short', units: 25000, entry: 1.2745, exit: 1.2701, pl: 275, day: 3 },
+        { instrument: 'USD/JPY', side: 'long', units: 20000, entry: 156.2, day: 1, open: true },
+      ],
+    );
+
+    await seedAccount(
+      { platform: 'Manual', label: 'Index Futures', balance: 7420, startingBalance: 5000 },
+      [
+        { instrument: 'NAS100', side: 'long', units: 1, entry: 19620, exit: 19910, pl: 580, day: 8 },
+        { instrument: 'US30', side: 'short', units: 1, entry: 39050, exit: 39180, pl: -130, day: 5 },
+        { instrument: 'SPX500', side: 'long', units: 2, entry: 5412, exit: 5449, pl: 370, day: 2 },
+      ],
+    );
+  } catch (err) {
+    console.error('demo seed manual trades failed:', err);
   }
 
   // ---- Todo ----

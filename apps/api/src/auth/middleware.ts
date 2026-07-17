@@ -13,6 +13,7 @@ import {
   parseRoles,
   type WorkspaceKey,
 } from './rbac.js';
+import { isDemoUser } from '../demo/identity.js';
 
 // Runs on every request: resolves the signed session cookie to a user
 // (or null) and attaches it to request.currentUser.
@@ -67,6 +68,11 @@ export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
 // Reject unless the user holds the admin-assigned `funded` role (admins pass).
 // Guards the private Funded (prop-challenge) endpoints. Pair with a Trading
 // workspace guard so the caller also holds Trading access.
+//
+// The public demo account is hard-excluded here regardless of roles: the Funded
+// section is a private feature that must never be reachable from the demo or the
+// public, so the exclusion is baked into the guard rather than relying only on
+// the demo not being granted the role.
 export const requireFunded: preHandlerHookHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -75,7 +81,7 @@ export const requireFunded: preHandlerHookHandler = async (
   if (!user) {
     return reply.code(401).send({ error: 'Not authenticated' });
   }
-  if (!canAccessFunded(parseRoles(user))) {
+  if (isDemoUser(user) || !canAccessFunded(parseRoles(user))) {
     return reply.code(403).send({ error: 'Forbidden' });
   }
 };
