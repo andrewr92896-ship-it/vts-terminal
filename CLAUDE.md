@@ -13,65 +13,71 @@ longer exist) — trust this file and the code, not the README.
 VTS Portal ("Vitalis Trading Systems") is a **private, dark "pro-terminal" web
 app** for the owner (Andrew) and a few invited users. One login leads to a
 sidebar of workspaces, each with its own sections. It is a PWA (installable,
-with web push). There is no public sign-up; there is a single read-only **demo
-account** used to show the app off.
+web push). There is no public sign-up; there is a single read-only **demo
+account** and a public **Early Access** request form on the login screen.
 
 ## Architecture
 
-Monorepo managed with **npm workspaces**:
+Monorepo, **npm workspaces**:
 
 - `apps/api` — **Fastify + TypeScript** backend. Holds all secrets; the browser
   never sees broker keys, the Anthropic key, or password hashes. In production
-  it also serves the built web app (`@fastify/static`).
-- `apps/web` — **Vite + React + TypeScript** frontend (React 18). Styling is
-  inline-style / theme-token based (see `src/theme`), not a CSS framework.
+  it also serves the built web app (`@fastify/static`) — one process, same
+  origin, so the API and site share a host.
+- `apps/web` — **Vite + React 18 + TypeScript** frontend. Styling is
+  inline-style / theme-token based (`src/theme`), **not** a CSS framework.
 
-Key tech:
+Tech:
 
-- **Database:** SQLite via **Drizzle ORM** on the **libsql** driver
-  (`@libsql/client`); file at `apps/api/data/vts.db`. Schema in
-  `apps/api/src/db/schema.ts`; SQL migrations in `apps/api/migrations` (run with
-  `db:migrate`, seed with `db:seed`).
-- **Auth:** self-hosted username/password, **argon2id** hashing
-  (`@node-rs/argon2`), signed **httpOnly** session cookies, role-based access
-  control. See `apps/api/src/auth`.
+- **DB:** SQLite via **Drizzle ORM** on the **libsql** driver (`@libsql/client`);
+  file at `DATABASE_URL` (default `file:./data/vts.db`; prod uses a Railway
+  volume). Schema in `apps/api/src/db/schema.ts`; ~57 SQL migrations in
+  `apps/api/migrations` (`db:migrate`), seed with `db:seed`. Per-user deletes
+  are **explicit** in `admin/service.ts` (no `ON DELETE CASCADE`) — when you add
+  a per-user table, add it to that delete list too.
+- **Auth:** username/password, **argon2id** (`@node-rs/argon2`), signed
+  **httpOnly** session cookies, role-based access. See `apps/api/src/auth`.
 - **AI:** Claude via `@anthropic-ai/sdk`, server-side only (`apps/api/src/ai`).
+- **Secrets at rest:** broker credentials are AES-256-GCM encrypted
+  (`security/secretbox.ts`).
 - **Notifications:** web push (VAPID, `web-push`) and **Pushover**.
 
 ### Where things live
 
-- API feature modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,feedback,notifications,patchNotes,security,settings,studies,teams,todo,trading}`.
-  HTTP routes are in `apps/api/src/routes/*` and registered in `server.ts`
-  (health, auth, admin, earlyAccess, brokers, trading, webhooks, tvWebhook,
-  todo, ai, chat, feedback, studies, push, pushover, content).
-- Web shell: `apps/web/src/components` (`Portal.tsx`, `Sidebar.tsx`,
-  `TopBar.tsx`, `AskClaudePanel.tsx`, `TeamChat.tsx`, …).
-- Web features: `apps/web/src/workspaces/{trading,studies,admin,help}` plus
-  `Screens.tsx`.
+- API modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,feedback,notifications,patchNotes,security,settings,studies,teams,todo,trading}`.
+  Routes in `apps/api/src/routes/*`, registered in `server.ts` (health, auth,
+  admin, earlyAccess, brokers, trading, webhooks, tvWebhook, todo, ai, chat,
+  feedback, studies, push, pushover, content).
+- Web shell: `apps/web/src/components` (`Portal.tsx` is the router/shell,
+  `Sidebar.tsx`, `TopBar.tsx`, `AskClaudePanel.tsx`, `TeamChat.tsx`,
+  `UpdatePrompt.tsx`, `InstallPrompt.tsx`, …).
+- Web features: `apps/web/src/workspaces/{trading,studies,admin,help}`.
+- Web API client: `apps/web/src/api/client.ts` — one flat typed `api` object;
+  every call is cookie-authed (`credentials: 'include'`), root-relative `/api`,
+  throws `ApiError { status }` on non-2xx.
 - **Navigation is data-driven:** `apps/web/src/theme/nav.ts` is the source of
-  truth for workspaces, their sidebar sections, order, icons, and role gates.
-  Section `key`s are the screen keys routed in `Portal.tsx`.
+  truth for workspaces, sidebar sections, order, icons, and role gates. Section
+  `key`s are the screen keys switched in `Portal.tsx` (`renderScreen` /
+  `renderExtra`).
 
-## Workspaces & sections (from `theme/nav.ts`)
+## Workspaces & sections (`theme/nav.ts`)
 
-Four workspaces show in the sidebar. Sections a user lacks the role for are
-hidden.
+Four workspaces in the sidebar; sections a user lacks the role for are hidden.
 
-- **Trading** (gold): Live Wall, Alerts, Trade Desk, Strategy Sessions, Manual
-  Trades, **Funded** (role-gated prop-firm challenge dashboard), Market News,
-  To Do. Trading also has live-broker (OANDA) capital, a trade log with
-  slippage, TradingView webhook alerts, market news + economic calendar (ET),
-  and a shared team To-Do.
-- **Studies** (violet): Subjects (hub), Study Game, Test Mode, Progress, Study
-  Creation, Study Guides. **Series 65** is the first/primary subject; its
-  sections (`st_game`, `st_test`, `st_progress`) are hidden for teams not
-  licensed for it (`SERIES65_ONLY_SECTIONS`). Leaderboards are scoped by
-  trading team.
+- **Trading** (gold): Live Wall, Alerts, Trade Desk (`desk` — merges Trade Log +
+  History + Live Brokers; legacy keys `log`/`history`/`metrics` alias into it),
+  Strategy Sessions, Manual Trades (`funded` key, `FundedScreen`), **Funded**
+  (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
+- **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Test Mode
+  (`st_test`), Progress (`st_progress`), Study Creation (`st_decks`, team decks),
+  Study Guides (`st_guides`). **Series 65** is the first subject; its sections
+  (`st_game`, `st_test`, `st_progress`, and the question bank) are gated to the
+  owner's team only (`SERIES65_ONLY_SECTIONS` in the UI; `canUseSeries65` on the
+  server). Studies is lazy-loaded (it bundles the 400-question bank).
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion. Available to **every** signed-in user.
-- **Admin** (pink): Users, Teams, Badges, AI Instructions, Patch Notes, Site
-  Wording, Early Access, View as role, Suggestions, Bug Reports. Shown **only
-  to admins**.
+- **Admin** (rose): Users, Teams, Badges, AI Instructions, Patch Notes, Site
+  Wording, Early Access, View as role, Suggestions, Bug Reports. **Admins only.**
 
 Removed and gone (do not reintroduce or reference): the standalone To-Do
 workspace, Vitalis Wealth Management, Personal Finance, the Vitalis LLC business
@@ -79,58 +85,195 @@ workspace, and Kia Sales.
 
 ## Roles & access (`auth/rbac.ts`)
 
-Granular, admin-assigned roles; a user may hold any combination:
+Granular, admin-assigned roles (JSON array in `users.roles`); a user may hold
+any combination:
 
-- `admin` — everything, including user management.
-- `trading` — full Trading access.
-- `trading_viewer` — **read-only** Trading (the only workspace with a read-only
-  variant).
-- `funded` — reveals the private **Funded** prop-challenge section inside
-  Trading (still needs Trading access to reach it). Never shown to the demo.
-- `studies` — Studies access.
+- `admin` — everything, incl. user/team management.
+- `trading` — full Trading.
+- `trading_viewer` — **read-only** Trading (the only read-only variant;
+  `requireWorkspaceWrite` blocks it).
+- `funded` — reveals the private **Funded** prop-challenge section inside Trading
+  (still needs Trading access; `requireFunded`). Never the demo.
+- `studies` — Studies.
 
-The **demo** account is public and read-only: every workspace it can reach is
-read-only, and server-side `demoGuard` refuses writes regardless of the UI.
+Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`,
+`requireWorkspace(ws)`, `requireWorkspaceWrite(ws)`, `requireFunded`. The
+legacy `users.role` string column is still populated but **unused** — real
+roles live in `users.roles`.
 
-## AI / Ask Claude (`apps/api/src/ai/prompts.ts`)
+## Teams (`teams/service.ts`) — scope almost everything
 
-All AI personas/prompts have a shipped **default** in `prompts.ts` and are
-**admin-editable live** from **Admin ▸ AI Instructions** (overrides stored in
-`app_settings` under `ai.<id>`; a reset restores the default here). When you
-change AI behavior, edit the default in `prompts.ts` so a reset stays correct.
+A **trading team** is an admin-managed group; a user belongs to at most one
+(`users.team_id`). Teams scope **all trade data** (Live Wall, Trade Log,
+History, broker capital), Studies **leaderboards**, **team chat**, and
+notification recipients — a trader only ever sees their own team's data (or just
+their own if team-less). Default team `team-vitalis` / "Vitalis Trading Team"
+(seeded on boot; team-less users are adopted into it). Series 65 content is
+gated to `team-vitalis` specifically.
 
-- `global` — the **Ask Claude** base persona, used across every workspace. The
-  route (`routes/ai.ts`) substitutes `{workspace}` (filled only for Trading and
-  Studies; empty elsewhere, so the base persona must carry the whole site map)
-  and `{name}` (the user). Because it is empty in Admin/Site Help, keep the base
-  persona self-sufficient.
-- `ws.trading`, `ws.studies` — extra guidance injected into `{workspace}`.
-- `tutor` — Series 65 study tutor. `market_overview` — Market News "Brief me".
-  `metrics_coach` — prop-challenge read. `support` — bug-intake assistant
-  (**structured**: must return the exact JSON shape or intake breaks).
+## AI / Ask Claude (`apps/api/src/ai`)
 
-AI calls are metered per user against a monthly cap (`ai_usage` table).
+- **Models** (env-overridable, current defaults): text = `ANTHROPIC_MODEL_DEFAULT`
+  (`claude-sonnet-4-6`); vision/screenshot analysis = `ANTHROPIC_MODEL_ANALYSIS`
+  (`claude-opus-4-8`, adaptive thinking). No streaming anywhere — every call is
+  a single awaited `messages.create`.
+- **Availability:** `aiConfigured()` = `!!ANTHROPIC_API_KEY`. When unset, AI
+  endpoints return **503**.
+- **Usage cap:** per-user, metered in `ai_usage`. `AI_MONTHLY_LIMIT` (default
+  **1000**/month, resets at the start of each **Eastern-Time** month) + an
+  in-memory burst limit `AI_RATE_PER_MIN` (default **15**, resets on restart).
+  Over limit → **429**. `enforceAiLimit` runs before every call.
+- **Editable prompts** (`ai/prompts.ts`, `PROMPT_DEFS`): shipped default here,
+  admin-editable live from **Admin ▸ AI Instructions** (override in
+  `app_settings` under `ai.<id>`; blank value resets to default). Edit the
+  default in `prompts.ts` so a reset stays correct.
+  - `global` — Ask Claude base persona. `routes/ai.ts` substitutes `{workspace}`
+    (filled only for Trading/Studies; **empty in Admin/Help**, so the base
+    persona must carry the whole site map) and `{name}`.
+  - `ws.trading`, `ws.studies` — injected into `{workspace}`.
+  - `tutor` (Series 65), `market_overview` (Market News "Brief me", keep
+    `{label}`), `metrics_coach` (prop-challenge read), `support` (bug intake —
+    **structured**: must return the exact JSON `{needMore, reply}` or intake
+    breaks).
+- **Vision flows** (Opus, non-editable prompts in `claude.ts`): paste-a-screenshot
+  → parse. Used for alert analysis, manual/funded position import, funded-trade
+  close, and reading challenge equity off an FTP screenshot. These endpoints take
+  `{ imageBase64, mediaType }` and allow a 12 MB body.
+
+## External integrations & background jobs (`apps/api/src/trading`)
+
+- **OANDA** (`brokers/oanda.ts`) — v20 REST, host per connection env: live
+  (`api-fxtrade`) vs practice (`api-fxpractice`). Fetches open trades, pricing,
+  account summary (NAV/balance/PL) and closed trades. NAV = live "capital" figure.
+  Kraken and TradeStation/FTP connectors exist but the self-service connection UI
+  only supports `oanda | kraken | manual`.
+- **TradingView webhooks — TWO endpoints, easy to misconfigure:**
+  - `POST /api/webhooks/tradingview` — secret `TRADINGVIEW_WEBHOOK_SECRET` (in
+    body or query). Writes `trading_alerts`; **this is the one wired to the
+    Alerts UI**. Inbound alerts are attributed to the earliest-created active
+    admin; with no admin, alerts are silently dropped. Alerts do **not** auto-place
+    trades — a human pastes a screenshot for Opus to log the trade.
+  - `POST /api/tv-webhook` — secret `TV_WEBHOOK_SECRET` (body-only, timing-safe).
+    Writes a **different** table `tv_alerts` that nothing reads yet. Newer/more
+    secure but not UI-wired. Point TradingView at the first one unless you're
+    deliberately working on this.
+- **News feeds** (`trading/feeds.ts`, prod-only pollers, every **5 min**):
+  Finnhub (`FINNHUB_API_KEY`, optional), curated RSS (Fed/CNBC/MarketWatch/
+  CoinDesk/Cointelegraph/FXStreet, keyless), Forex Factory economic calendar
+  (keyless JSON), Truth Social (unofficial public API, default account = Trump,
+  expected to 403 sometimes). Claude tags bias/impact on headlines and explains
+  calendar entries. All best-effort; feeds default ON unless env set to `false`.
+- **Desk watch** (`trading/service.ts`, prod-only, every **10 s**,
+  `DESK_WATCH_SECONDS`): reconciles broker positions so trade open/close/TP-SL
+  notifications fire even with no client open. **Only runs if push is configured.**
+- **Notifications** fire (web push + Pushover together, team-scoped, demo
+  excluded, best-effort) on: a new TradingView alert, and each trade
+  **opened / closed / retargeted** during reconcile. Team chat is not pushed
+  (it has its own top-bar bell).
+
+## Auth & security specifics
+
+- Login `POST /api/auth/login` by email (or username fallback), generic 401,
+  constant-time-ish (always runs a verify) to resist enumeration. One-click demo
+  via `POST /api/auth/demo`.
+- Session cookie **`vts_session`**: random token, stored server-side in
+  `sessions` (SHA-256 of the token; raw token only in the cookie), Fastify-signed
+  with `SESSION_SECRET`, `httpOnly`, `sameSite: 'lax'`, `secure` per
+  `COOKIE_SECURE`, TTL `SESSION_TTL_DAYS` (default 14). Admin password reset /
+  deactivate revokes all of a user's sessions.
+- **No** login rate-limit, account lockout, or CSRF token — CSRF posture rests on
+  `sameSite: 'lax'` + signed httpOnly cookie. AI usage cap and the broker poll
+  throttle are the only rate limits.
+- **Key rotation caveat:** `SESSION_SECRET` signs cookies; `CREDENTIALS_KEY`
+  (or, if unset, a key derived from `SESSION_SECRET`) encrypts broker creds.
+  Rotating either **invalidates all sessions and makes stored broker creds
+  undecryptable** — re-enter creds after a rotation.
+- **Demo** (`demo/`): username `demo`, roles `['trading','studies']`, own team.
+  `demoGuard` allows only GET/HEAD/OPTIONS + logout, serves canned AI/brief
+  responses (no real Claude spend), and 403s every other write. UI also renders
+  all demo workspaces read-only.
+
+## Frontend specifics
+
+- **Routing is state-based, not URL-based** (no react-router). `Portal.tsx` holds
+  `workspace`/`screen` in `useState`; the URL never changes and there is **no
+  deep-linking, refresh-persistence, or browser back/forward**. `Screen`
+  (`workspaces/Screens.tsx`) is a stale "Stage N" placeholder that only renders
+  as the fallback for unmapped keys.
+- **State:** auth/current-user in `auth/AuthContext.tsx` (`useAuth()`); everything
+  else is local `useState` in `Portal.tsx` plus feature Providers (Privacy,
+  Badges, AlertSound). UI RBAC gating in `auth/access.ts` mirrors the server but
+  the **server is the enforcer**.
+- **PWA:** `vite-plugin-pwa`, `registerType: 'prompt'`. The static shell is
+  precached; **`/api` is denylisted from caching** so live data never goes stale.
+  `UpdatePrompt.tsx` polls for a new SW every 60 s and shows a relaunch card.
+  Push subscription flow in `push/usePushNotifications.ts`; SW handlers in
+  `public/push-sw.js`.
+- **Theming:** unified navy background everywhere; workspace signalled by accent
+  (`theme/tokens.ts`, `theme/themes.ts`). Studies is special — it recolors live
+  to the learner's Study-Game level.
+- **Responsive:** `useResponsive()` → `{ isPhone ≤480, isTablet ≤768 }`. Phones
+  use an off-canvas nav drawer and a sections dropdown; there is no bottom TabBar.
+
+## Environment variables
+
+Validated in `config.ts` (Zod) unless noted. Most are optional with sane
+defaults; the app runs locally with almost nothing set.
+
+- **Core:** `NODE_ENV`, `PORT` (default 4000; Railway sets it), `WEB_ORIGIN`
+  (CORS), `DATABASE_URL` (default `file:./data/vts.db`), `SESSION_SECRET`
+  (**required in production**, ≥16 chars; dev falls back to an insecure default),
+  `SESSION_TTL_DAYS` (14), `COOKIE_SECURE` (`true` only over HTTPS),
+  `CREDENTIALS_KEY` (broker-cred encryption; falls back to `SESSION_SECRET`).
+- **AI:** `ANTHROPIC_API_KEY` (absent = AI off), `ANTHROPIC_MODEL_DEFAULT`,
+  `ANTHROPIC_MODEL_ANALYSIS`, `AI_MONTHLY_LIMIT` (1000), `AI_RATE_PER_MIN` (15).
+- **Webhooks:** `TRADINGVIEW_WEBHOOK_SECRET`, `TV_WEBHOOK_SECRET` (each unset =
+  that webhook rejects everything).
+- **Brokers** (env-config path; also seedable per-user in the UI): `OANDA_API_TOKEN`,
+  `OANDA_ACCOUNT_ID`, `OANDA_ENV` (`practice`/`live`), `KRAKEN_API_KEY/SECRET`,
+  `TRADESTATION_*`, `FTP_API_URL/TOKEN/ACCOUNT_ID`.
+- **Feeds:** `FINNHUB_API_KEY`, `RSS_NEWS_ENABLED`, `NEWS_AI_SUMMARY_ENABLED`,
+  `FOREX_FACTORY_ENABLED`, `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`.
+- **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
+  `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`.
+- **First-boot admin seed** (read directly via `process.env`, not in the schema):
+  `ADMIN_USERNAME` (default `andrew`), `ADMIN_DISPLAY_NAME`, `ADMIN_EMAIL`,
+  `ADMIN_PASSWORD` (blank = random, printed once to logs), `APP_EMAIL_DOMAIN`.
+
+`.env.example` is the fullest list, but note it and `config.ts` have drifted —
+some documented vars aren't in the schema and vice-versa.
 
 ## Conventions
 
 - **Every deploy:** bump `APP_VERSION` and prepend a `PATCH_NOTES` entry in
-  `apps/web/src/meta/version.ts` (e.g. `Beta V 3.1` → `Beta V 3.2`). The
-  top-bar version pill and **Site Help ▸ Patch notes** both read from it.
-  Admins can also manage patch notes from the Admin workspace.
-- User-facing wording is editable from **Admin ▸ Site Wording** (content routes
-  / `app_settings`); prefer editing there over hardcoding copy where a key
-  already exists.
+  `apps/web/src/meta/version.ts` (e.g. `Beta V 3.1` → `Beta V 3.2`). `APP_VERSION`
+  drives the top-bar version pill. Patch notes are **now DB-backed** (admins draft
+  & publish from Admin ▸ Patch Notes); the web merges DB-published notes (newest)
+  with the `version.ts` array as the historical archive, so keep prepending there
+  for the record.
+- **Editable copy:** `howto.<screen>` and `ai.<id>` keys live in `app_settings`;
+  prefer editing via **Admin ▸ Site Wording / AI Instructions** over hardcoding
+  where a key already exists.
 - Keep the plain, terminal-style voice in UI copy and AI prompts.
+
+## Known stale / legacy (don't trust these)
+
+- `README.md` — Stage 1 era, wrong workspaces/roles.
+- `workspaces/Screens.tsx` + `help/tutorials.ts` — "Stage 1–4" placeholder
+  scaffolding; most real screens bypass it.
+- `themes.ts` `TABS`/`TabDef` — superseded by `theme/nav.ts`.
+- `tokens.ts` `info` comment ("LLC workspace accent") and `nav.ts`/`access.ts`
+  "wealth/finance deep link" fallbacks — reference removed workspaces.
 
 ## Verifying changes
 
 Run before merging (both must pass):
 
-- Typecheck: `npm run typecheck` (root; runs api + web) — or a single workspace
-  with `npm --workspace @vts/api run typecheck` / `@vts/web`.
-- Build: `npm run build` (root; api `tsc` + web `vite build`).
+- Typecheck: `npm run typecheck` (root; api + web). Single workspace:
+  `npm --workspace @vts/api run typecheck` / `@vts/web`.
+- Build: `npm run build` (api `tsc` + web `vite build`).
 
-Dependencies may need `npm install` first in a fresh container.
+Run `npm install` first in a fresh container.
 
 ## Deployment workflow (owner preference)
 
