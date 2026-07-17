@@ -1,4 +1,4 @@
-import { eq, ne } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingDeskSettings, tradingBeOverrides, tradingTrades, tradingPositions, users } from '../db/schema.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
@@ -115,24 +115,25 @@ export async function updateDeskSettings(patch: Partial<DeskSettings>): Promise<
   return getDeskSettings();
 }
 
-// Every instrument the desk has traded — distinct symbols from the manual Trade
-// Log and the recorded positions (History), canonicalized to match how overrides
-// are stored. This is what powers the per-instrument buffer picker, so a trader
-// chooses from what they've actually traded instead of typing. The demo sandbox
-// is excluded so its showcase instruments never leak into the real desk. Derived
-// live, so a newly-traded instrument shows up on the next settings load.
-export async function getDeskInstruments(): Promise<string[]> {
+// Every instrument the viewer's team has traded — distinct symbols from the
+// manual Trade Log and the recorded positions (History), canonicalized to match
+// how overrides are stored. This powers the per-instrument buffer picker, so a
+// trader chooses from what they've actually traded instead of typing. Scoped to
+// the team via `scopeIds` (matching the Trade Log / History), with the demo
+// sandbox excluded. Derived live, so a newly-traded instrument shows up next load.
+export async function getDeskInstruments(scopeIds: Set<string>): Promise<string[]> {
+  const inTeam = inArray(users.id, [...scopeIds]);
   const [manual, positions] = await Promise.all([
     db
       .selectDistinct({ instrument: tradingTrades.instrument })
       .from(tradingTrades)
       .innerJoin(users, eq(users.id, tradingTrades.userId))
-      .where(ne(users.username, DEMO_USERNAME)),
+      .where(and(ne(users.username, DEMO_USERNAME), inTeam)),
     db
       .selectDistinct({ instrument: tradingPositions.instrument })
       .from(tradingPositions)
       .innerJoin(users, eq(users.id, tradingPositions.userId))
-      .where(ne(users.username, DEMO_USERNAME)),
+      .where(and(ne(users.username, DEMO_USERNAME), inTeam)),
   ]);
   const set = new Set<string>();
   for (const r of [...manual, ...positions]) {

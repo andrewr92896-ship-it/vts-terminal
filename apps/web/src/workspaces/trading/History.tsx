@@ -263,7 +263,7 @@ export function History() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>History</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Closed trades across the desk — recorded automatically when a Live Wall position closes, tagged by trader.
+            Closed trades across your team — recorded automatically when a Live Wall position closes, tagged by trader.
             {!readOnly && ' Delete any of your own rows to clear out test trades.'}
           </div>
         </div>

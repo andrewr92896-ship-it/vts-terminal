@@ -4,9 +4,10 @@ import { db } from '../db/index.js';
 import { tradingTeams, users } from '../db/schema.js';
 
 // Trading teams: admin-managed groups a trader belongs to. A user is a member of
-// at most one team (users.team_id). Teams scope the Studies leaderboards to
-// teammates; the Trading workspace data stays shared across every team. Only
-// admins manage teams and assign members.
+// at most one team (users.team_id). Teams scope the Studies leaderboards AND all
+// trade data (Live Wall, Trade Log, History, broker capital) to teammates — a
+// trader sees only their own team's trades (or just their own when teamless).
+// Only admins manage teams and assign members.
 
 // The default team seeded on boot (and by migration 0048). Existing accounts are
 // assigned to it so the leaderboards keep showing everyone until an admin splits

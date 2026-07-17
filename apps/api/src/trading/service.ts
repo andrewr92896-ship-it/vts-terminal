@@ -4,6 +4,7 @@ import { fetchOandaTrades, fetchOandaPrices } from './brokers/oanda.js';
 import { fetchKrakenPositions } from './brokers/kraken.js';
 import { getManualTrades } from './manual.js';
 import { getDeskFundedOpenPositions } from './funded.js';
+import { scopedTraderIds } from './scope.js';
 import { sampleLiveTrades } from './sample.js';
 import { computeForex, forexPair } from './forex.js';
 import { reconcile } from './history.js';
@@ -100,8 +101,8 @@ function normSym(s: string): string {
 // Brokers capital while still showing live P/L on the wall. Best-effort: if no
 // OANDA connection is available (or a symbol isn't priceable) the position still
 // shows with its fill, just without a live mark.
-async function loadFundedLiveTrades(conns: OwnedConnection[]): Promise<LiveTrade[]> {
-  const positions = await getDeskFundedOpenPositions();
+async function loadFundedLiveTrades(conns: OwnedConnection[], scopeIds: Set<string>): Promise<LiveTrade[]> {
+  const positions = await getDeskFundedOpenPositions(scopeIds);
   if (positions.length === 0) return [];
 
   const marks = new Map<string, number>();
@@ -215,24 +216,25 @@ async function loadConnection(
 }
 
 export async function getLiveWall(user: UserRow): Promise<LiveWall> {
-  // The trading desk is a shared team: anyone reaching this route already holds
-  // a trading role (the workspace guard enforces it), so balances are open to
-  // them in full — no separate viewBrokerage grant required.
+  // Anyone reaching this route holds a trading role (the workspace guard enforces
+  // it), so balances are open to them in full — no separate viewBrokerage grant.
+  // What they see is scoped to their team below.
   const canSeeBalances = true;
   const generatedAt = Date.now();
   const { breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides } = await getDeskSettings();
 
-  // Every active connection across the trading team — not just this user's — so
-  // the wall shows the whole desk's open positions, each tagged with its owner.
-  // The public demo is sandboxed: it never reaches the real desk's connections,
-  // so it falls through to the sample feed below instead of streaming live
-  // money positions to anyone who opens the demo.
-  const conns = isDemoUser(user) ? [] : await getAllActiveDecrypted();
+  // Trade data is scoped to the viewer's team (or just the viewer, if they have
+  // no team) — never the whole install. Only that team's active connections are
+  // loaded, so the wall shows only the team's open positions, each tagged with
+  // its owner. The public demo is sandboxed: it never reaches real connections,
+  // so it falls through to the sample feed below.
+  const scopeIds = await scopedTraderIds(user);
+  const conns = isDemoUser(user) ? [] : await getAllActiveDecrypted(scopeIds);
 
-  // Open funded/prop positions (e.g. FTP), marked against the desk's OANDA
-  // price. Kept separate from the broker feed so they never reconcile into the
-  // Trade Log / History / Live Brokers capital. Demo users never see them.
-  const fundedLive = isDemoUser(user) ? [] : await loadFundedLiveTrades(conns);
+  // Open funded positions, marked against the team's OANDA price. Kept separate
+  // from the broker feed so they never reconcile into the Trade Log / History /
+  // Live Brokers capital. Scoped to the same team; demo users never see them.
+  const fundedLive = isDemoUser(user) ? [] : await loadFundedLiveTrades(conns, scopeIds);
 
   // No connection anywhere on the desk → show the sample feed so the wall is
   // never blank. The sample is attributed to the viewer.

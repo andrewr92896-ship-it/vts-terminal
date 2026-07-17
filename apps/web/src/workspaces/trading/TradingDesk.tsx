@@ -21,7 +21,7 @@ const BORDER2 = '#1c3a7a';
 export type DeskView = 'log' | 'brokers' | 'history';
 
 const VIEWS: { key: DeskView; label: string; hint: string }[] = [
-  { key: 'log', label: 'Trade Log', hint: 'Every fill across the desk — slippage and realized P/L' },
+  { key: 'log', label: 'Trade Log', hint: 'Every fill across your team — slippage and realized P/L' },
   { key: 'brokers', label: 'Live Brokers', hint: 'Live account capital, pulled from the broker API' },
   { key: 'history', label: 'History', hint: 'Closed trades with per-strategy and per-instrument breakdowns' },
 ];

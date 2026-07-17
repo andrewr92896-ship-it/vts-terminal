@@ -116,10 +116,16 @@ export async function sendToUsers(userIds: string[], payload: PushPayload): Prom
   );
 }
 
-// Send to the whole trading desk (everyone who can access the Trading workspace
-// and has at least one subscription), optionally excluding one user (e.g. the
-// trader who caused the event). The public demo is never notified.
-export async function sendToTradingDesk(payload: PushPayload, excludeUserId?: string): Promise<void> {
+// Send a trading notification to a team (everyone who can access the Trading
+// workspace and has a subscription), optionally excluding one user (e.g. the
+// trader who caused the event). `scopeIds` restricts recipients to one team so a
+// fill/alert only reaches the owner's teammates — trade info never fans out
+// across teams. Omit it only for genuinely install-wide notices. Demo never notified.
+export async function sendToTradingDesk(
+  payload: PushPayload,
+  excludeUserId?: string,
+  scopeIds?: Set<string>,
+): Promise<void> {
   if (!configured) return;
   const rows = await db
     .select({ id: users.id, roles: users.roles, username: users.username })
@@ -128,6 +134,7 @@ export async function sendToTradingDesk(payload: PushPayload, excludeUserId?: st
   const recipients = new Set<string>();
   for (const r of rows) {
     if (r.id === excludeUserId) continue;
+    if (scopeIds && !scopeIds.has(r.id)) continue; // only the owner's team
     if (isDemoUser({ username: r.username })) continue;
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     recipients.add(r.id);

@@ -10,6 +10,7 @@ import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEv
 import { tradePips } from './forex.js';
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
+import { scopedTraderIds, scopedTraderIdsForUser, type Viewer } from './scope.js';
 import type { LiveTrade } from './types.js';
 
 // A position opened within this window is treated as a fresh fill worth a push;
@@ -142,10 +143,13 @@ export async function reconcile(
     }
   }
 
-  // Buzz the desk about fresh fills and closes. Best-effort and fire-and-forget
-  // so the Live Wall render never waits on (or fails from) a push. Because the
-  // open/close DB transition happens exactly once, this notifies once even
-  // though every viewer's poll calls reconcile.
+  // Buzz the OWNER'S TEAM about fresh fills and closes — trade info never fans
+  // out past the team. Best-effort and fire-and-forget so the Live Wall render
+  // never waits on (or fails from) a push. Because the open/close DB transition
+  // happens exactly once, this notifies once even though every viewer's poll
+  // calls reconcile.
+  const hasEvents = opened.length > 0 || closed.length > 0 || retargeted.length > 0;
+  const teamIds = hasEvents ? await scopedTraderIdsForUser(userId) : new Set<string>();
   const who = ownerName ? `${ownerName} · ` : '';
   for (const t of opened) {
     const body = `${who}${t.side.toUpperCase()} ${t.units}${t.entryPrice ? ` @ ${t.entryPrice}` : ''}`;
@@ -154,14 +158,14 @@ export async function reconcile(
       body,
       url: '/?screen=live',
       tag: `vts-open-${t.id}`,
-    }).catch(() => {});
+    }, undefined, teamIds).catch(() => {});
     void sendPushoverToDesk({
       title: `Trade opened · ${t.instrument}`,
       message: body,
       priority: 1,
       url: '/?screen=live',
       urlTitle: 'Open the Live Wall',
-    }).catch(() => {});
+    }, undefined, teamIds).catch(() => {});
   }
   for (const c of closed) {
     const pl = fmtPl(c.pl);
@@ -171,14 +175,14 @@ export async function reconcile(
       body,
       url: '/?screen=history',
       tag: `vts-close-${c.instrument}`,
-    }).catch(() => {});
+    }, undefined, teamIds).catch(() => {});
     void sendPushoverToDesk({
       title: `Trade closed · ${c.instrument}`,
       message: body,
       priority: 1,
       url: '/?screen=history',
       urlTitle: 'Open History',
-    }).catch(() => {});
+    }, undefined, teamIds).catch(() => {});
   }
   for (const m of retargeted) {
     const t = m.trade;
@@ -192,14 +196,14 @@ export async function reconcile(
       url: '/?screen=live',
       // Re-use the tag per trade so a rapid re-edit collapses onto the last one.
       tag: `vts-tpsl-${t.id}`,
-    }).catch(() => {});
+    }, undefined, teamIds).catch(() => {});
     void sendPushoverToDesk({
       title: `Trade updated · ${t.instrument}`,
       message: body,
       priority: 1,
       url: '/?screen=live',
       urlTitle: 'Open the Live Wall',
-    }).catch(() => {});
+    }, undefined, teamIds).catch(() => {});
   }
 }
 
@@ -414,10 +418,11 @@ export async function updateClosedPosition(
 }
 
 export async function getHistory(
-  viewerId: string,
+  viewer: Viewer,
   canSeeBalances: boolean,
   viewerIsDemo = false,
 ): Promise<HistoryData> {
+  const viewerId = viewer.id;
   // The public demo is sandboxed off the real desk: it never sees teammates'
   // closed trades (and its own showcase has no closed positions), so its History
   // is empty rather than a window into real accounts.
@@ -437,9 +442,10 @@ export async function getHistory(
     };
   }
 
-  // Shared desk history: every trading-team member's closed positions, tagged
-  // with the owner. Joined live with users so a teammate who loses trading
-  // access drops off, mirroring the Live Wall and Trade Log.
+  // Team-scoped history: the closed positions of the viewer's team (or just the
+  // viewer, if teamless), tagged with the owner. Joined live with users so a
+  // teammate who loses trading access drops off, mirroring the Live Wall/Trade Log.
+  const scopeIds = await scopedTraderIds(viewer);
   const joined = await db
     .select({ pos: tradingPositions, username: users.username, roles: users.roles })
     .from(tradingPositions)
@@ -449,9 +455,11 @@ export async function getHistory(
 
   const visible = joined.filter(
     (r) =>
+      scopeIds.has(r.pos.userId) && // only the viewer's team
       // Drop the demo account: it's a sandbox, so its positions never surface as
-      // "demo"-tagged rows in a real trader's shared history.
-      r.username !== DEMO_USERNAME && canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'),
+      // "demo"-tagged rows in a real trader's history.
+      r.username !== DEMO_USERNAME &&
+      canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'),
   );
   const rows = visible.map((r) => r.pos);
   const ownerOf = new Map(visible.map((r) => [r.pos.id, r.username]));
@@ -471,7 +479,7 @@ export async function getHistory(
   }
   const decided = wins + losses;
 
-  const codes = await deskTradeCodeIndex();
+  const codes = await deskTradeCodeIndex(scopeIds);
   const trades = rows.map((r) => {
     const rec = toRecord(r, ownerOf.get(r.id) ?? '', viewerId, canSeeBalances);
     rec.code = codes.get(r.id) ?? null;

@@ -12,6 +12,7 @@ import {
 import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
 import { getHistory, removePosition, updateClosedPosition } from '../trading/history.js';
 import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
+import { scopedTraderIds } from '../trading/scope.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
 import {
@@ -122,28 +123,29 @@ export async function tradingRoutes(app: FastifyInstance) {
   const fundedRead = { preHandler: [requireWorkspace('trading'), requireFunded] };
   const fundedWrite = { preHandler: [requireWorkspaceWrite('trading'), requireFunded] };
 
-  // The trading desk is a shared team: every endpoint here is behind the
-  // `trading` workspace guard, so any caller holds a trading role (full or
-  // view-only). Balances are open to the whole team — there is no separate
-  // viewBrokerage grant in play, so dollar figures always flow through.
+  // Every endpoint here is behind the `trading` workspace guard, so any caller
+  // holds a trading role (full or view-only). Trade data is scoped to the
+  // caller's team (see trading/scope.ts) — never the whole install. Balances flow
+  // through to whoever can see the data: there is no separate viewBrokerage grant
+  // in play, so dollar figures always show for the trades a viewer is allowed.
   const SEE_BALANCES = true;
 
-  // The Live Wall: open positions streamed from every configured broker.
-  // Read-only, so the trading_viewer role is fine. Balances are open to the team.
+  // The Live Wall: open positions streamed from the caller's team's brokers.
+  // Read-only, so the trading_viewer role is fine.
   app.get('/api/trading/live', read, async (request) => {
     return getLiveWall(request.currentUser!);
   });
 
-  // ---- Trade Log (per-user) ----
+  // ---- Trade Log (scoped to the caller's team) ----
   app.get('/api/trading/trades', read, async (request) => {
     const u = request.currentUser!;
-    return getTrades(u.id, isDemoUser(u));
+    return getTrades(u, isDemoUser(u));
   });
 
   // ---- History (closed positions, auto-recorded from the Live Wall) ----
   app.get('/api/trading/history', read, async (request) => {
     const u = request.currentUser!;
-    return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
+    return getHistory(u, SEE_BALANCES, isDemoUser(u));
   });
 
   // Delete a recorded closed trade the caller owns (e.g. a test trade). Only the
@@ -152,7 +154,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
     await removePosition(u.id, id, isAdmin(parseRoles(u)));
-    return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
+    return getHistory(u, SEE_BALANCES, isDemoUser(u));
   });
 
   // Edit a recorded CLOSED trade (correct an exit, P/L, strategy, dates, …). The
@@ -170,14 +172,15 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update trade' });
     }
-    return getHistory(u.id, SEE_BALANCES, isDemoUser(u));
+    return getHistory(u, SEE_BALANCES, isDemoUser(u));
   });
 
   // ---- Desk-wide settings (shared across the trading team) ----
   // The response carries `instruments` — every symbol the desk has traded — so
   // the per-instrument buffer picker can offer them without the trader typing.
-  app.get('/api/trading/desk-settings', read, async () => {
-    const [settings, instruments] = await Promise.all([getDeskSettings(), getDeskInstruments()]);
+  app.get('/api/trading/desk-settings', read, async (request) => {
+    const ids = await scopedTraderIds(request.currentUser!);
+    const [settings, instruments] = await Promise.all([getDeskSettings(), getDeskInstruments(ids)]);
     return { ...settings, instruments };
   });
 
@@ -186,7 +189,8 @@ export async function tradingRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Enter a valid break-even buffer (percent 0–100, or a non-negative dollar/pip amount)' });
     }
-    const [settings, instruments] = await Promise.all([updateDeskSettings(parsed.data), getDeskInstruments()]);
+    const ids = await scopedTraderIds(request.currentUser!);
+    const [settings, instruments] = await Promise.all([updateDeskSettings(parsed.data), getDeskInstruments(ids)]);
     return { ...settings, instruments };
   });
 
@@ -241,8 +245,8 @@ export async function tradingRoutes(app: FastifyInstance) {
   // the *write* guard so it is visible to full traders only; the trading_viewer
   // (view-only) role is rejected, per the desk's request to keep capital off the
   // view-only role.
-  app.get('/api/trading/oanda-capital', write, async () => {
-    return getOandaCapital();
+  app.get('/api/trading/oanda-capital', write, async (request) => {
+    return getOandaCapital(request.currentUser!);
   });
 
   // Read the current balance/equity off an FTP-account screenshot (Opus 4.8
@@ -457,7 +461,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add trade' });
     }
-    return getTrades(u.id, isDemoUser(u));
+    return getTrades(u, isDemoUser(u));
   });
 
   app.patch('/api/trading/trades/:id', write, async (request, reply) => {
@@ -472,7 +476,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update trade' });
     }
-    return getTrades(u.id, isDemoUser(u));
+    return getTrades(u, isDemoUser(u));
   });
 
   app.delete('/api/trading/trades/:id', write, async (request) => {
@@ -491,7 +495,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     // collide across the two tables, so this is a no-op when the id isn't a
     // position.
     if (!removed) await removePosition(u.id, id, admin);
-    const data = await getTrades(u.id, isDemoUser(u));
+    const data = await getTrades(u, isDemoUser(u));
     return { ...data, removed };
   });
 
@@ -502,7 +506,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
     const u = request.currentUser!;
     await restoreTrade(u.id, parsed.data);
-    return getTrades(u.id, isDemoUser(u));
+    return getTrades(u, isDemoUser(u));
   });
 
   // ---- TradingView alerts (FTP/prop replacement) ----

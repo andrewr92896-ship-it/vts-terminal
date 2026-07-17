@@ -410,9 +410,10 @@ export interface FundedOpenPosition {
   openedAt: number | null;
 }
 
-// Every open funded position across the trading desk (owner-tagged), for the
-// shared Live Wall. Demo and non-trading users are excluded, mirroring the wall.
-export async function getDeskFundedOpenPositions(): Promise<FundedOpenPosition[]> {
+// Open funded positions (owner-tagged) for the Live Wall, restricted to the
+// viewer's team via `scopeIds`. Demo and non-trading users are excluded,
+// mirroring the wall.
+export async function getDeskFundedOpenPositions(scopeIds: Set<string>): Promise<FundedOpenPosition[]> {
   const rows = await db
     .select({ t: fundedTrades, acct: fundedAccounts, username: users.username, roles: users.roles })
     .from(fundedTrades)
@@ -421,6 +422,7 @@ export async function getDeskFundedOpenPositions(): Promise<FundedOpenPosition[]
     .where(and(eq(fundedTrades.status, 'open'), isNull(fundedTrades.exitPrice)));
   const out: FundedOpenPosition[] = [];
   for (const r of rows) {
+    if (!scopeIds.has(r.t.userId)) continue; // only the viewer's team
     if (r.username === DEMO_USERNAME) continue;
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     if (r.t.entryPrice == null) continue; // need a fill price to mark it

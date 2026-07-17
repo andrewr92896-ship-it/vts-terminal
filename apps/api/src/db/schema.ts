@@ -37,8 +37,9 @@ export const users = sqliteTable('users', {
   // (see auth/rbac.ts ROLE_KEYS), e.g. ["admin"] or ["sales","studies"].
   roles: text('roles'),
   // The trading team this user belongs to (trading_teams.id), or null for none.
-  // Admin-assigned. Scopes the Studies leaderboards to teammates; the Trading
-  // workspace itself stays shared across teams.
+  // Admin-assigned. Scopes both the Studies leaderboards and all trade data (Live
+  // Wall, Trade Log, History, broker capital) to teammates — a user sees only
+  // their own team's trades, or just their own when they have no team.
   teamId: text('team_id'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
