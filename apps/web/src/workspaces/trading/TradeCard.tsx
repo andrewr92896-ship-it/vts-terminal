@@ -238,7 +238,7 @@ export function TradeCard({
           ) : (
             <div>
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 9, lineHeight: 1.45 }}>
-                Paste or upload a screenshot of the <b>closed</b> trade — Claude reads the exit price and P/L to finalize it, and
+                Paste or upload a screenshot of the <b>closed</b> trade — VTS AI reads the exit price and P/L to finalize it, and
                 it drops off the wall into your funded account’s logged P/L. Or cancel to leave it open.
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

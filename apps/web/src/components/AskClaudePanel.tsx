@@ -62,7 +62,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
       const msg =
         e instanceof ApiError
           ? e.status === 503
-            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            ? 'VTS AI isn’t configured yet — an API key needs to be set on the server.'
             : e.status === 429
               ? e.message
               : e.message
@@ -103,9 +103,9 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', borderBottom: `1px solid ${theme.navBorder}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: accentGradient(theme) }} />
-            <strong style={{ fontSize: 14, color: '#eef3ff' }}>Ask Claude</strong>
+            <strong style={{ fontSize: 14, color: '#eef3ff' }}>Ask VTS AI</strong>
             {workspaceLabel && <span style={{ fontSize: 11, color: '#7e92c0' }}>· {workspaceLabel}</span>}
-            <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>Sonnet</span>
+            <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>VTS AI</span>
             {remaining != null && (
               <span title="AI requests left this month" style={{ fontSize: 9.5, color: remaining <= 5 ? '#e0a23a' : '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}>
                 {remaining} left
@@ -124,7 +124,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.length === 0 && !busy && (
             <div style={{ color: '#aebcd8', fontSize: 13, lineHeight: 1.6 }}>
-              <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the portal.` : 'Ask anything about the portal, your workflow, trading, or finances.'} Powered by Claude Sonnet.</p>
+              <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the portal.` : 'Ask anything about the portal, your workflow, trading, or finances.'} Powered by VTS AI.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
                 {suggestions.map((s) => (
                   <button key={s} onClick={() => void send(s)} style={chip(theme)}>{s}</button>
@@ -150,7 +150,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
               </div>
             </div>
           ))}
-          {busy && <div style={{ alignSelf: 'flex-start', color: '#7488b5', fontSize: 12, fontStyle: 'italic' }}>Claude is thinking…</div>}
+          {busy && <div style={{ alignSelf: 'flex-start', color: '#7488b5', fontSize: 12, fontStyle: 'italic' }}>VTS AI is thinking…</div>}
           {error && <div style={{ color: '#ffb4ab', fontSize: 12.5, background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 11px' }}>{error}</div>}
         </div>
 
@@ -161,7 +161,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={onKey}
-              placeholder="Ask Claude…  (Enter to send)"
+              placeholder="Ask VTS AI…  (Enter to send)"
               rows={2}
               // fontSize must be >= 16px so iOS Safari doesn't auto-zoom the viewport when the field is focused.
               style={{ flex: 1, resize: 'none', background: 'rgba(6,15,36,.6)', border: '1px solid #1d3560', borderRadius: 9, color: '#dfe7fa', padding: 11, fontSize: 16, outline: 'none', fontFamily: 'inherit' }}

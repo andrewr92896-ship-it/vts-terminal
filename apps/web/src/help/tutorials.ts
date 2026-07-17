@@ -46,7 +46,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
 
   alerts: {
     title: 'Using Alerts',
-    intro: 'TradingView alerts arrive here automatically by webhook (the prop/FTP trades that have no broker API). Paste a chart screenshot and Claude (Opus 4.8) analyzes the trade and logs it for you.',
+    intro: 'TradingView alerts arrive here automatically by webhook (the prop/FTP trades that have no broker API). Paste a chart screenshot and VTS AI analyzes the trade and logs it for you.',
     steps: [
       {
         title: 'Connect TradingView',
@@ -57,8 +57,8 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'On a new alert, paste a chart screenshot (Ctrl/Cmd-V) into the drop area, or use Upload. A preview appears so you can confirm it before analyzing.',
       },
       {
-        title: 'Analyze with Claude',
-        body: 'Click “Analyze with Opus 4.8”. Claude reads the chart against the alert and reports the fill vs. planned price, slippage, setup quality, risk, and a verdict.',
+        title: 'Analyze with VTS AI',
+        body: 'Click “Analyze with VTS AI”. VTS AI reads the chart against the alert and reports the fill vs. planned price, slippage, setup quality, risk, and a verdict.',
       },
       {
         title: 'It lands in your Trade Log',
@@ -92,7 +92,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Place a trade',
-        body: 'Add a trade by hand with “+ Trade” (instrument, side, size, entry/exit, P/L), or use “Import from screenshot” to read a batch off a trade-history photo — Claude parses the rows, skips duplicates (by time + profit), and sets the balance if it’s shown.',
+        body: 'Add a trade by hand with “+ Trade” (instrument, side, size, entry/exit, P/L), or use “Import from screenshot” to read a batch off a trade-history photo — VTS AI parses the rows, skips duplicates (by time + profit), and sets the balance if it’s shown.',
       },
       {
         title: 'Track an open position live',
@@ -115,7 +115,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Keep equity current',
-        body: 'No API here — type your equity, or use “Update balance from a screenshot”: upload or paste (⌘/Ctrl+V) a screenshot of your account and Claude reads the balance and sets your equity. You can also pull equity from the Trade Log.',
+        body: 'No API here — type your equity, or use “Update balance from a screenshot”: upload or paste (⌘/Ctrl+V) a screenshot of your account and VTS AI reads the balance and sets your equity. You can also pull equity from the Trade Log.',
       },
       {
         title: 'Who can see it',
@@ -164,8 +164,8 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Click “+ Calendar event” to add a release (e.g. CPI, FOMC). Enter the time in your local zone and it’s shown to everyone in Eastern Time, grouped by day, with forecast/previous/actual figures and an impact dot.',
       },
       {
-        title: 'Claude desk brief',
-        body: 'Click “✨ Brief me” for a quick Claude (Sonnet) read on the current headlines — overall risk tone and what to watch. Nothing is stored; it just summarizes what’s on the board.',
+        title: 'VTS AI desk brief',
+        body: 'Click “✨ Brief me” for a quick VTS AI read on the current headlines — overall risk tone and what to watch. Nothing is stored; it just summarizes what’s on the board.',
       },
     ],
   },
@@ -300,8 +300,8 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'When you remove a task or check one off, a short Undo bar appears at the bottom. Click Undo to put it back or restore the prior checked state.',
       },
       {
-        title: 'Ask Claude / command',
-        body: 'Type a plain-English instruction in the "Ask Claude / command" box and click Run. Claude (Sonnet) updates the list for you — e.g. "add to Finance: pay rent", "new section Garden", "move 1.2 to top", "done 1.2", "remove 3.1", or several at once separated by "·". It shows what it changed and skips anything it can\'t match.',
+        title: 'Ask VTS AI / command',
+        body: 'Type a plain-English instruction in the "Ask VTS AI / command" box and click Run. VTS AI updates the list for you — e.g. "add to Finance: pay rent", "new section Garden", "move 1.2 to top", "done 1.2", "remove 3.1", or several at once separated by "·". It shows what it changed and skips anything it can\'t match.',
       },
       {
         title: 'Life Changes',
@@ -335,7 +335,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Build your own subsection',
-        body: 'Want to drill something narrower, like Bonds or Compliance? Click “✦ New subsection”, type a topic name, and Claude scans the whole question bank and gathers every question that fits into its own chip. Delete a subsection anytime with the × on its chip.',
+        body: 'Want to drill something narrower, like Bonds or Compliance? Click “✦ New subsection”, type a topic name, and VTS AI scans the whole question bank and gathers every question that fits into its own chip. Delete a subsection anytime with the × on its chip.',
       },
       {
         title: 'Practice mode (no scoring)',

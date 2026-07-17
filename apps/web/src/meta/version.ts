@@ -83,7 +83,7 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 2.2',
     date: 'July 5, 2026',
     notes: [
-      'Study Game: build your own subsections. Click “✦ New subsection”, name a topic like Bonds or Compliance, and Claude scans all questions and gathers the ones that fit into a chip you can drill.',
+      'Study Game: build your own subsections. Click “✦ New subsection”, name a topic like Bonds or Compliance, and VTS AI scans all questions and gathers the ones that fit into a chip you can drill.',
       'Study Game: new Practice mode toggle — answer freely without affecting your score, levels, or totals, so you can grind a specific subsection with no risk to your stats.',
     ],
   },
@@ -101,23 +101,23 @@ export const PATCH_NOTES: PatchNote[] = [
     notes: [
       'The portal is now in Beta (V2.0) — thanks for helping shape it through Alpha.',
       'Flashcards: a new "All terms" list below the card gives every term its own Reveal button, so you can check any definition without flipping through the whole deck.',
-      'Flashcards: opening "More Details" or asking Claude a question now stops auto-rotate, so the card stays put while you read the reply.',
+      'Flashcards: opening "More Details" or asking VTS AI a question now stops auto-rotate, so the card stays put while you read the reply.',
     ],
   },
   {
     version: 'Alpha V 1.17',
     date: 'June 28, 2026',
     notes: [
-      'Ask Claude is now a real back-and-forth chat — ask follow-up questions about a quiz question or a flashcard and Claude keeps the context. "More Details" starts the conversation, and you can keep going from there.',
+      'Ask VTS AI is now a real back-and-forth chat — ask follow-up questions about a quiz question or a flashcard and VTS AI keeps the context. "More Details" starts the conversation, and you can keep going from there.',
     ],
   },
   {
     version: 'Alpha V 1.16',
     date: 'June 28, 2026',
     notes: [
-      'Flashcards: add your own words — type a term and Claude writes a Series 65 definition and files it under the right topic. Your custom words sync across devices and can be removed anytime.',
+      'Flashcards: add your own words — type a term and VTS AI writes a Series 65 definition and files it under the right topic. Your custom words sync across devices and can be removed anytime.',
       'Study Game: star any question (☆) to save it, then switch to the new "Starred" tab to drill just the ones you flagged. Your starred set syncs across devices.',
-      'Ask Claude about a question or a flashcard: the "Explain with Claude" button is now "More Details", with an "Ask Claude…" box next to it for your own follow-up questions.',
+      'Ask VTS AI about a question or a flashcard: the "Explain with VTS AI" button is now "More Details", with an "Ask VTS AI…" box next to it for your own follow-up questions.',
       'Fixed an occasional crash when opening the Studies section after an app update.',
     ],
   },
@@ -162,7 +162,7 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Alpha V 1.10',
     date: 'June 24, 2026',
     notes: [
-      'Ask Claude in the Kia workspace now uses the dedicated Kia product expert.',
+      'Ask VTS AI in the Kia workspace now uses the dedicated Kia product expert.',
       'Market News headline times ("x ago") stay current instead of going stale between refreshes.',
     ],
   },
@@ -177,7 +177,7 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Alpha V 1.8',
     date: 'June 24, 2026',
     notes: [
-      'Cleaner small screens: the top bar now tucks the clock, privacy, trade alert sound, and admin into a single "More" menu, leaving just Ask Claude and your account in view.',
+      'Cleaner small screens: the top bar now tucks the clock, privacy, trade alert sound, and admin into a single "More" menu, leaving just Ask VTS AI and your account in view.',
       'On phones, a workspace\'s sections are now a dropdown picker instead of a row that ran off the edge.',
     ],
   },
@@ -240,7 +240,7 @@ export const PATCH_NOTES: PatchNote[] = [
     date: 'Initial release',
     notes: [
       'VTS Portal: Trading, Kia Sales, Wealth Management, Personal Finance, Series 65 Studies, and a shared To-Do list.',
-      'The Ask Claude assistant is available on every screen.',
+      'The Ask VTS AI assistant is available on every screen.',
     ],
   },
 ];

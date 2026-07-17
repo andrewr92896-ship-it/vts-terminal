@@ -76,7 +76,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Alerts</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            TradingView alerts arrive by webhook. Paste a chart screenshot and Claude (Opus 4.8) analyzes the trade.
+            TradingView alerts arrive by webhook. Paste a chart screenshot and VTS AI analyzes the trade.
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -89,7 +89,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
 
       {!data.aiConfigured && (
         <div style={warnBanner}>
-          Claude isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server.
+          VTS AI isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server.
         </div>
       )}
 
@@ -311,10 +311,10 @@ function AlertCard({
             <button
               onClick={analyze}
               disabled={busy || !image || !aiConfigured}
-              title={!aiConfigured ? 'Claude API key not configured on the server' : undefined}
+              title={!aiConfigured ? 'VTS AI API key not configured on the server' : undefined}
               style={{ ...goldBtn, opacity: busy || !image || !aiConfigured ? 0.55 : 1 }}
             >
-              {busy ? 'Analyzing…' : 'Analyze with Opus 4.8'}
+              {busy ? 'Analyzing…' : 'Analyze with VTS AI'}
             </button>
             {image && (
               <button onClick={() => setImage(null)} style={ghostBtn}>Clear image</button>
@@ -344,7 +344,7 @@ function Analysis({
   return (
     <div style={{ borderTop: `1px solid ${BORDER}`, background: PANEL, padding: '12px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>Claude analysis</span>
+        <span style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>VTS AI analysis</span>
         {v && <span style={{ ...badge, color: v.color, border: `1px solid ${v.color}` }}>{v.label}</span>}
         <span style={{ fontSize: 9.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace", marginLeft: 'auto' }}>{model}</span>
       </div>

@@ -154,7 +154,7 @@ export function TodoAll() {
       setActionError(
         e instanceof ApiError
           ? e.status === 503
-            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            ? 'VTS AI isn’t configured yet — an API key needs to be set on the server.'
             : e.message
           : 'Command failed',
       );
@@ -297,7 +297,7 @@ export function TodoAll() {
           </div>
         </div>
 
-        {/* Command bar — Claude parses a free-text instruction into list actions */}
+        {/* Command bar — VTS AI parses a free-text instruction into list actions */}
         <div style={panelStyle}>
           <div style={panelLabelStyle}>
             <span
@@ -317,8 +317,8 @@ export function TodoAll() {
             >
               ✦
             </span>
-            Ask Claude / command
-            <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: '#5f7d8c', letterSpacing: 0 }}>Sonnet</span>
+            Ask VTS AI / command
+            <span style={{ marginLeft: 'auto', fontFamily: "'IBM Plex Mono', monospace", fontSize: 9.5, color: '#5f7d8c', letterSpacing: 0 }}>VTS AI</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input

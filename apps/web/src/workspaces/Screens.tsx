@@ -14,7 +14,7 @@ interface ScreenInfo {
 const SCREENS: Record<string, ScreenInfo> = {
   // Trading
   live: { title: 'Live Wall', blurb: 'Live trade cards with planned entry, actual fill, slippage, TP, SL, strategy, timeframe, and lots — streamed from the brokers.', stage: 2 },
-  alerts: { title: 'Alerts', blurb: 'TradingView alerts arrive by webhook; paste a chart screenshot and Claude (Opus 4.8) analyzes the trade and logs it.', stage: 2 },
+  alerts: { title: 'Alerts', blurb: 'TradingView alerts arrive by webhook; paste a chart screenshot and VTS AI analyzes the trade and logs it.', stage: 2 },
   log: { title: 'Trade Log', blurb: 'Full fill history with Deck and Tape layouts, computed slippage versus the alert price per trade.', stage: 2 },
   sessions: { title: 'Strategy Sessions', blurb: 'Active, opening, and closing strategy windows with bull and bear playbooks per instrument.', stage: 2 },
   funded: { title: 'Manual Trades', blurb: 'A self-managed book of accounts kept by hand — place trades by typing them in or reading them off a screenshot, track open positions live on the Live Wall, and see each account’s balance and daily / weekly / 30-day trade P/L.', stage: 2 },
@@ -25,7 +25,7 @@ const SCREENS: Record<string, ScreenInfo> = {
   td_trading: { title: 'Trading To Do', blurb: 'Trading tasks, also visible in your full To Do List workspace.', stage: 3 },
   admin: { title: 'Admin', blurb: 'User and role management, broker connection health, and audit settings.', stage: 3 },
   // To Do
-  td_all: { title: 'All Tasks', blurb: 'Numbered sections, recurring tasks with reset intervals, due and overdue flags, and a Claude command parser.', stage: 3 },
+  td_all: { title: 'All Tasks', blurb: 'Numbered sections, recurring tasks with reset intervals, due and overdue flags, and a VTS AI command parser.', stage: 3 },
   // Studies
   st_home: { title: 'Study Hub', blurb: 'Pick a subject (Series 65 first). Each track has its own flashcards, quizzes, and progress.', stage: 3 },
   st_quiz: { title: 'Practice Quiz', blurb: 'One question at a time, rotating topics, with scoring.', stage: 3 },
