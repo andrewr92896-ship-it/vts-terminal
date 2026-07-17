@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ApiError } from '../api/client';
 
-// Reusable "Brief me" support for dashboards: a hook that asks Claude (Sonnet)
+// Reusable "Brief me" support for dashboards: a hook that asks VTS AI
 // for a short plain-text read of the screen, plus presentational cards. Each
 // screen passes its own fetcher (an api.* call) and accent color.
 export function useAiBrief(fetcher: () => Promise<{ brief: string }>) {
@@ -19,7 +19,7 @@ export function useAiBrief(fetcher: () => Promise<{ brief: string }>) {
       setError(
         e instanceof ApiError
           ? e.status === 503
-            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            ? 'VTS AI isn’t configured yet — an API key needs to be set on the server.'
             : e.message
           : 'Brief failed',
       );
@@ -42,7 +42,7 @@ export function BriefButton({ onClick, busy, accent, accentText = '#05231a' }: {
 export function BriefCard({ brief, accent, onDismiss }: { brief: string; accent: string; onDismiss: () => void }) {
   return (
     <div style={{ position: 'relative', background: 'rgba(255,255,255,.03)', border: `1px solid ${accent}55`, borderLeft: `3px solid ${accent}`, borderRadius: 12, padding: '13px 15px', marginBottom: 16 }}>
-      <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: accent, marginBottom: 6 }}>Claude · Sonnet</div>
+      <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: accent, marginBottom: 6 }}>VTS AI</div>
       <div style={{ fontSize: 13, lineHeight: 1.6, color: '#dfe7fa', whiteSpace: 'pre-wrap' }}>{brief}</div>
       <button onClick={onDismiss} style={{ position: 'absolute', top: 9, right: 12, background: 'none', border: 'none', color: '#7488a5', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}>×</button>
     </div>

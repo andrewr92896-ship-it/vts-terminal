@@ -267,7 +267,7 @@ export function TopBar(props: TopBarProps) {
           }}
         >
           <Icon name="sparkles" size={14} />
-          {!isPhone && 'Ask Claude'}
+          {!isPhone && 'Ask VTS AI'}
         </button>
 
         {/* Notifications */}

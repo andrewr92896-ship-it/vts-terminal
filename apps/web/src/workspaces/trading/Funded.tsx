@@ -301,7 +301,7 @@ function AccountCard({
           <div style={panel}>
             <div style={panelLabel}>Track an active trade on the Live Wall</div>
             <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
-              Paste or upload a photo of an <b>open</b> position. Claude reads the fill price and lot size, and it shows on the
+              Paste or upload a photo of an <b>open</b> position. VTS AI reads the fill price and lot size, and it shows on the
               Live Wall with live P/L marked against the desk’s OANDA price — while staying off the Trade Log and Live Brokers totals.
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -414,7 +414,7 @@ function TradeRow({
   const showLive = isOpen && liveMark != null;
 
   // Close flow for an OPEN position: paste/upload a trade-result screenshot that
-  // Claude reads to finalize this trade (exit + P/L), or cancel and change nothing.
+  // VTS AI reads to finalize this trade (exit + P/L), or cancel and change nothing.
   const [closing, setClosing] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
   const [closeMsg, setCloseMsg] = useState<string | null>(null);
@@ -484,7 +484,7 @@ function TradeRow({
           <div style={panel}>
             <div style={panelLabel}>Close {t.instrument} — paste the trade result</div>
             <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
-              Paste or upload a screenshot of the <b>closed</b> trade. Claude reads the exit price and P/L and finalizes it — the
+              Paste or upload a screenshot of the <b>closed</b> trade. VTS AI reads the exit price and P/L and finalizes it — the
               position drops off the Live Wall and lands in this account’s logged P/L. Or cancel to leave the trade open.
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>

@@ -140,7 +140,7 @@ export function MarketNews() {
       }
       setBrief((await api.feedBrief(payload)).brief); setErr(null);
     }
-    catch (e) { setErr(e instanceof ApiError ? (e.status === 503 ? 'Claude isn’t configured yet — an API key needs to be set on the server.' : e.message) : 'Overview failed'); }
+    catch (e) { setErr(e instanceof ApiError ? (e.status === 503 ? 'VTS AI isn’t configured yet — an API key needs to be set on the server.' : e.message) : 'Overview failed'); }
     finally { setBriefBusy(false); }
   }
 
@@ -220,7 +220,7 @@ export function MarketNews() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Market News</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Live headlines across the desk's markets, each read by Claude for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time).
+            Live headlines across the desk's markets, each read by VTS AI for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time).
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -240,7 +240,7 @@ export function MarketNews() {
 
       {brief && (
         <div style={{ ...card, borderLeft: `3px solid ${GOLD}`, marginBottom: 16, position: 'relative' }}>
-          <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: GOLD, marginBottom: 6 }}>AI overview · Claude</div>
+          <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: GOLD, marginBottom: 6 }}>AI overview · VTS AI</div>
           <div style={{ fontSize: 13, lineHeight: 1.6, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{brief}</div>
           <button onClick={() => setBrief(null)} style={{ position: 'absolute', top: 10, right: 12, background: 'none', border: 'none', color: FAINT, fontSize: 16, cursor: 'pointer' }}>×</button>
         </div>
@@ -409,7 +409,7 @@ function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: N
       </div>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>{decodeEntities(h.title)}</div>
       {h.tradeNote ? (
-        // Claude's desk read — only labelled when it's an actual AI note.
+        // VTS AI's desk read — only labelled when it's an actual AI note.
         <div style={{ marginTop: 8, padding: '8px 11px', background: 'rgba(255,255,255,.03)', borderRadius: 8, border: `1px solid ${BORDER}` }}>
           <div style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: bi.color, fontWeight: 700, marginBottom: 3 }}>How it could affect us</div>
           <div style={{ fontSize: 12.5, color: '#d4def5', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{decodeEntities(h.tradeNote)}</div>

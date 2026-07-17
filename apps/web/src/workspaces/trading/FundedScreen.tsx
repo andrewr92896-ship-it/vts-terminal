@@ -61,7 +61,7 @@ export function FundedScreen() {
 }
 
 // ---- Paste/upload completed trades ----
-// The trades are saved to a chosen account; Claude reads the trades (and the
+// The trades are saved to a chosen account; VTS AI reads the trades (and the
 // account balance, if shown) off the screenshot. Duplicates are skipped by time
 // + profit. A handy way to place a batch of past trades without typing each one.
 function FundedImportPanel({ onClose }: { onClose: () => void }) {
@@ -147,7 +147,7 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
     <div style={{ ...panel, marginBottom: 16 }}>
       <div style={panelLabel}>Place trades from a screenshot</div>
       <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
-        Paste or upload a photo of your trade history. Claude reads the trades (and the account balance, if shown)
+        Paste or upload a photo of your trade history. VTS AI reads the trades (and the account balance, if shown)
         off the image and logs them on the chosen account. Duplicates are skipped by time + profit.
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

@@ -2,14 +2,14 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { type Theme, type WorkspaceKey, accentGradient } from '../theme/themes';
 
 // A guided, slideshow-style walkthrough for the public demo. Each step can drive
-// the portal to a real screen (and optionally open the Ask Claude panel) so the
+// the portal to a real screen (and optionally open the VTS AI panel) so the
 // reviewer sees the actual product while the card explains it. It is non-modal:
 // there is no backdrop, so the app stays fully visible and clickable behind it.
 
 export interface TourStep {
   workspace?: WorkspaceKey;
   screen?: string;
-  openClaude?: boolean;
+  openClaude?: boolean; // opens the VTS AI assistant panel for this step
   title: string;
   body: string;
 }
@@ -20,25 +20,25 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'trading',
     screen: 'live',
     title: 'Welcome to VTS Portal',
-    body: 'A private trading and operations portal: live trading, a hand-kept trade book, Series 65 study tools, a shared to-do list, and an AI assistant. This is a read-only demo with simulated data.',
+    body: 'A private trading and operations hub: live trading across any broker with an API, a hand-kept trade book, a build-your-own study game, a shared to-do list, and a built-in VTS AI assistant. This is a read-only demo with simulated data — click around freely.',
   },
   {
     workspace: 'trading',
     screen: 'live',
-    title: 'Live Wall',
-    body: 'Open positions stream from your own broker (OANDA or Kraken). For forex it computes the live price, P/L in pips, money-per-pip, and your risk/reward to the stop and target in both dollars and pips.',
+    title: 'Live Wall — your command center',
+    body: 'The Master board is a drag-and-drop grid of charts, watchlists, market news, and the economic calendar — arrange and resize the tiles, then save your own presets. Flip to Positions and open trades stream in from any broker with an API (OANDA, Kraken, TradeStation, and more), every instrument normalized — forex, indices, crypto, futures, stocks — with live price, open P/L, and risk/reward to your stop and target.',
   },
   {
     workspace: 'trading',
     screen: 'alerts',
-    title: 'AI trade analysis',
-    body: 'TradingView alerts arrive by webhook. Paste a chart screenshot and Claude (Opus) grades the trade: entry quality, risk, and a verdict. One alert here is already analyzed so you can see the result.',
+    title: 'Alerts — VTS AI trade analysis',
+    body: 'TradingView alerts land here by webhook. Paste a chart screenshot and VTS AI grades the trade: fill vs. planned entry, slippage, setup quality, risk, and a verdict. One alert here is already analyzed so you can see the result.',
   },
   {
     workspace: 'trading',
     screen: 'desk',
     title: 'Trade Desk',
-    body: 'The Trade Log, Live Brokers, and History views in one place: a full journal of every trade with slippage and realized P/L, live broker capital, and a breakdown of closed results. Plain-English logging and recaps are powered by Claude.',
+    body: 'The Trade Log, Live Brokers, and History views in one place — a full journal of every fill with slippage and realized P/L, live broker capital, and closed-trade breakdowns by strategy and instrument. Log trades in plain English and get recaps from VTS AI.',
   },
   {
     workspace: 'trading',
@@ -48,22 +48,40 @@ export const DEMO_STEPS: TourStep[] = [
   },
   {
     workspace: 'trading',
-    screen: 'live',
-    openClaude: true,
-    title: 'Ask Claude, anywhere',
-    body: 'The assistant is one click away on every screen and knows which workspace you are in. In the demo its replies are scripted; the live portal answers with Claude (Sonnet).',
+    screen: 'sessions',
+    title: 'Strategy Sessions',
+    body: 'Your trading windows in Eastern Time, each with a bias and bull/bear playbooks per instrument. Cards regroup themselves as sessions open, go active, and close, so you always know what you’re watching for.',
   },
   {
     workspace: 'studies',
-    screen: 'st_home',
-    title: 'Series 65 study tools',
-    body: 'Exam prep with a 400-question bank, a study game, and an AI tutor that explains why an answer is right and the distractors are wrong.',
+    screen: 'st_decks',
+    title: 'Build-your-own study game',
+    body: 'Turn any topic — or a file you upload — into a study game: VTS AI writes the questions, then you play it as a leveling game with scoring and a team leaderboard. Perfect for drilling a trading playbook or any subject you like.',
+  },
+  {
+    workspace: 'todo',
+    screen: 'td_all',
+    title: 'To Do — just type it',
+    body: 'A shared task list with numbered sections, recurring resets, and due-date flags. Type a plain-English instruction in the command box — “new section Garden”, “add to Priority: fund the account”, “done 1.2” — and VTS AI updates the list for you.',
   },
   {
     workspace: 'trading',
     screen: 'live',
-    title: 'That is the tour',
-    body: 'Everything here is simulated and read-only, so explore freely. The real, live portal, built end to end with AI, is available on request. Thanks for looking.',
+    openClaude: true,
+    title: 'VTS AI, on every screen',
+    body: 'The assistant is one click away anywhere and knows which workspace you’re in — ask about a trade, a task, or a study question. In this demo the replies are scripted; the live portal answers with VTS AI.',
+  },
+  {
+    workspace: 'trading',
+    screen: 'desk',
+    title: 'Private by design',
+    body: 'Trade data is scoped to your team — you never see another team’s trades, positions, or capital. And “Hide $” or Privacy mode masks every dollar figure on screen instantly, so you can share your screen without sharing your book.',
+  },
+  {
+    workspace: 'trading',
+    screen: 'live',
+    title: 'That’s the tour',
+    body: 'Everything here is simulated and read-only, so explore freely. The real, live portal — built end to end with VTS AI — is available on request. Thanks for looking.',
   },
 ];
 
@@ -79,7 +97,7 @@ export function DemoTour({ theme, onGo, onOpenClaude, onClose }: DemoTourProps) 
   const step = DEMO_STEPS[index];
   const last = index === DEMO_STEPS.length - 1;
 
-  // Drive the portal to this step's screen (and optionally open Ask Claude).
+  // Drive the portal to this step's screen (and optionally open the VTS AI panel).
   useEffect(() => {
     if (step.workspace && step.screen) onGo(step.workspace, step.screen);
     if (step.openClaude) onOpenClaude();

@@ -436,7 +436,7 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
   const [tp, setTp] = useState('');
   const [sl, setSl] = useState('');
 
-  // Screenshot → position: paste/upload an order ticket and Claude reads it.
+  // Screenshot → position: paste/upload an order ticket and VTS AI reads it.
   const [shotImage, setShotImage] = useState<string | null>(null);
   const [shotMedia, setShotMedia] = useState('image/png');
   const [reading, setReading] = useState(false);
@@ -598,7 +598,7 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
       )}
 
       {/* Screenshot → position. For funded accounts with no API: paste the
-          filled order ticket and Claude reads it into a position. */}
+          filled order ticket and VTS AI reads it into a position. */}
       {!editId && (
         <div style={{ marginBottom: 14 }}>
           <div style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED, marginBottom: 8 }}>

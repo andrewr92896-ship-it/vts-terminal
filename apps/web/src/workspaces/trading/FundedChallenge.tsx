@@ -152,7 +152,7 @@ export function FundedChallengeScreen() {
           <div style={{ flex: '1 1 240px' }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: TEXT }}>Update balance from a screenshot</div>
             <div style={{ fontSize: 11, color: FAINT, marginTop: 3 }}>
-              No API here — upload or paste (⌘/Ctrl+V) a screenshot of your account and Claude reads the balance, then sets your equity here.
+              No API here — upload or paste (⌘/Ctrl+V) a screenshot of your account and VTS AI reads the balance, then sets your equity here.
             </div>
             {shotMsg && <div style={{ fontSize: 11.5, color: GREEN, marginTop: 6 }}>{shotMsg}</div>}
           </div>

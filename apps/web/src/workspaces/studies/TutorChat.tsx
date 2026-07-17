@@ -15,7 +15,7 @@ export function TutorChat({
   context,
   seedLabel,
   seedPrompt,
-  placeholder = 'Ask Claude…',
+  placeholder = 'Ask VTS AI…',
   isPhone = false,
   onActivity,
 }: {
@@ -64,7 +64,7 @@ export function TutorChat({
       setErr(
         e instanceof ApiError
           ? e.status === 503
-            ? 'Claude isn’t configured yet — an API key needs to be set on the server.'
+            ? 'VTS AI isn’t configured yet — an API key needs to be set on the server.'
             : e.message
           : 'Could not reach the tutor.',
       );
@@ -92,7 +92,7 @@ export function TutorChat({
               <div style={m.role === 'user' ? userBubble(theme) : assistantBubble(theme, isPhone)}>
                 {m.role === 'assistant' && (
                   <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, marginBottom: 4 }}>
-                    Claude tutor · Sonnet
+                    VTS AI tutor
                   </div>
                 )}
                 {m.content}
@@ -139,7 +139,7 @@ export function TutorChat({
             }}
             disabled={busy}
             placeholder={chat.length ? 'Ask a follow-up…' : placeholder}
-            aria-label="Ask Claude"
+            aria-label="Ask VTS AI"
             maxLength={2000}
             style={{
               flex: 1,
@@ -157,7 +157,7 @@ export function TutorChat({
           <button
             onClick={() => void send(input)}
             disabled={busy || !input.trim()}
-            aria-label="Send message to Claude"
+            aria-label="Send message to VTS AI"
             style={{
               border: 'none',
               background: accentGrad,

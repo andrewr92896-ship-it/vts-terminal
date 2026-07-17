@@ -125,7 +125,7 @@ function StudyGameInner({ theme, initialView, bank }: { theme: Theme; initialVie
   // the current starred set when it empties.
   const starredQueueRef = useRef<number[]>([]);
   // Learner-defined subsections (e.g. "Bonds"), synced from the account. Each is
-  // a named set of question ids Claude classified from the static bank.
+  // a named set of question ids VTS AI classified from the static bank.
   const [sections, setSections] = useState<StudySection[]>([]);
   // Practice mode: while on, answering never touches the score, levels, or
   // lifetime totals — so drilling a specific subsection can't hurt your stats.
@@ -332,7 +332,7 @@ function StudyGameInner({ theme, initialView, bank }: { theme: Theme; initialVie
     };
   }, []);
 
-  // Ask Claude to build a subsection from the whole bank, then switch to it.
+  // Ask VTS AI to build a subsection from the whole bank, then switch to it.
   async function createSection() {
     const name = newSectionName.trim();
     if (!name || creating) return;
@@ -837,7 +837,7 @@ function StudyGameInner({ theme, initialView, bank }: { theme: Theme; initialVie
           }}
         >
           <div style={{ fontSize: 12, color: '#e7e0ff', marginBottom: 8, lineHeight: 1.5 }}>
-            Name a topic and Claude will scan all {questions.length} questions and gather the ones that fit — e.g. <em>Bonds</em>, <em>Compliance</em>, <em>Options</em>, <em>Retirement plans</em>.
+            Name a topic and VTS AI will scan all {questions.length} questions and gather the ones that fit — e.g. <em>Bonds</em>, <em>Compliance</em>, <em>Options</em>, <em>Retirement plans</em>.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
             <input
@@ -876,7 +876,7 @@ function StudyGameInner({ theme, initialView, bank }: { theme: Theme; initialVie
                 whiteSpace: 'nowrap',
               }}
             >
-              {creating ? 'Building…' : '✦ Build with Claude'}
+              {creating ? 'Building…' : '✦ Build with VTS AI'}
             </button>
           </div>
           {createError && (
