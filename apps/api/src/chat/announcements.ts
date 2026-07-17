@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { announcements, chatMessages, users, type AnnouncementRow } from '../db/schema.js';
 import { parseRoles } from '../auth/rbac.js';
 import { TEAM_CHANNEL } from './service.js';
+import { getTeamChatWelcome } from './welcome.js';
 import { DEFAULT_TEAM_ID } from '../teams/service.js';
 
 // Announcements are a separate, admin-managed broadcast list shown to every
@@ -120,8 +121,11 @@ export async function seedWelcome(): Promise<void> {
   const owner = await resolveOwner();
   if (!owner) return;
 
+  // The first message is the admin-configurable "default first team chat"
+  // welcome; the rest are fixed starter prompts.
+  const welcome = await getTeamChatWelcome();
   await seedTeamChat(DEFAULT_TEAM_ID, owner, [
-    'Welcome to the team chat. This channel is just for you and your trading team — share setups, levels, and trade ideas here.',
+    welcome,
     'A quick reminder to keep risk in check and trade your plan. Post your bias for the session here before the open.',
     'Questions about the platform or a connection are welcome too — we are all here to help each other improve.',
   ]);

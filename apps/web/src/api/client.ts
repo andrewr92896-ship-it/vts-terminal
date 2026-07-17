@@ -278,6 +278,19 @@ export const api = {
     return request(`/api/admin/ai-prompts/${id}`, { method: 'DELETE' });
   },
 
+  // ---- Default first team-chat (welcome) message ----
+  // The greeting new teams start with in their team chat. Admins can reword it
+  // or reset it back to the built-in default.
+  adminTeamChatWelcome(): Promise<{ value: string; def: string; overridden: boolean }> {
+    return request('/api/admin/teamchat-welcome');
+  },
+  adminSaveTeamChatWelcome(value: string): Promise<{ value: string; overridden: boolean }> {
+    return request('/api/admin/teamchat-welcome', { method: 'PUT', body: JSON.stringify({ value }) });
+  },
+  adminResetTeamChatWelcome(): Promise<{ value: string; overridden: boolean }> {
+    return request('/api/admin/teamchat-welcome', { method: 'DELETE' });
+  },
+
   // ---- Patch notes ----
   // Published release notes for members (Site Help).
   patchNotes(): Promise<{ notes: PatchNoteEntry[] }> {

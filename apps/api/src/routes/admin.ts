@@ -87,7 +87,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const parsed = teamCreateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A team name is required' });
     try {
-      const team = await createTeam(parsed.data.name);
+      const team = await createTeam(parsed.data.name, request.currentUser!);
       return { team, teams: await listTeams() };
     } catch (err) {
       if (err instanceof TeamError) return reply.code(400).send({ error: err.message });

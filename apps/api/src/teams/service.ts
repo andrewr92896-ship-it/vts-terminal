@@ -3,6 +3,7 @@ import { eq, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingTeams, users } from '../db/schema.js';
 import { parseRoles, type RoleKey } from '../auth/rbac.js';
+import { seedTeamChatWelcome } from '../chat/welcome.js';
 
 // Trading teams: admin-managed groups a trader belongs to. A user is a member of
 // at most one team (users.team_id). Teams scope the Studies leaderboards AND all
@@ -91,7 +92,10 @@ export async function listTeams(): Promise<TeamView[]> {
   return views;
 }
 
-export async function createTeam(name: string): Promise<TeamView> {
+export async function createTeam(
+  name: string,
+  author?: { id: string; displayName: string },
+): Promise<TeamView> {
   const clean = name.trim();
   if (!clean) throw new TeamError('A team name is required');
   if (clean.length > 80) throw new TeamError('Team name is too long');
@@ -100,6 +104,15 @@ export async function createTeam(name: string): Promise<TeamView> {
   const now = new Date();
   const row = { id: crypto.randomUUID(), name: clean, createdAt: now, updatedAt: now };
   await db.insert(tradingTeams).values(row);
+  // Seed the team's chat with the admin-configurable welcome message, authored
+  // by the admin who created the team. Best-effort — never block creation on it.
+  if (author) {
+    try {
+      await seedTeamChatWelcome(row.id, author);
+    } catch {
+      /* seeding the welcome message is non-critical */
+    }
+  }
   return { id: row.id, name: row.name, memberCount: 0, members: [], createdAt: now.getTime() };
 }
 

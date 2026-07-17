@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware.js';
 import { PROMPT_DEFS, promptDefault } from '../ai/prompts.js';
 import { getSetting, setSetting, clearSetting, getSettingsByPrefix } from '../settings/service.js';
+import { TEAM_CHAT_WELCOME_KEY, DEFAULT_TEAM_CHAT_WELCOME } from '../chat/welcome.js';
 import {
   BadgeError,
   createBadgeType,
@@ -48,6 +49,7 @@ const noteUpdateSchema = z.object({
 });
 const noteStatusSchema = z.object({ status: z.enum(['draft', 'published']) });
 const howtoSchema = z.object({ value: z.string().max(20000) });
+const welcomeSchema = z.object({ value: z.string().max(1000) });
 
 export async function contentRoutes(app: FastifyInstance) {
   const adminGuard = { preHandler: requireAdmin };
@@ -117,6 +119,36 @@ export async function contentRoutes(app: FastifyInstance) {
     }
     await clearSetting(`ai.${id}`);
     return { value: promptDefault(id), overridden: false };
+  });
+
+  // ---- Admin: default first team-chat (welcome) message ----
+  // The greeting seeded as the first message in a new team's chat. Stored under
+  // `teamchat.welcome`; a missing/blank override means "use the built-in text".
+  app.get('/api/admin/teamchat-welcome', adminGuard, async () => {
+    const override = await getSetting(TEAM_CHAT_WELCOME_KEY);
+    return {
+      value: override ?? DEFAULT_TEAM_CHAT_WELCOME,
+      def: DEFAULT_TEAM_CHAT_WELCOME,
+      overridden: override != null,
+    };
+  });
+
+  app.put('/api/admin/teamchat-welcome', adminGuard, async (request, reply) => {
+    const parsed = welcomeSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid message' });
+    const value = parsed.data.value;
+    // An empty value, or one identical to the default, clears the override.
+    if (!value.trim() || value.trim() === DEFAULT_TEAM_CHAT_WELCOME.trim()) {
+      await clearSetting(TEAM_CHAT_WELCOME_KEY);
+      return { value: DEFAULT_TEAM_CHAT_WELCOME, overridden: false };
+    }
+    await setSetting(TEAM_CHAT_WELCOME_KEY, value);
+    return { value, overridden: true };
+  });
+
+  app.delete('/api/admin/teamchat-welcome', adminGuard, async () => {
+    await clearSetting(TEAM_CHAT_WELCOME_KEY);
+    return { value: DEFAULT_TEAM_CHAT_WELCOME, overridden: false };
   });
 
   // ---- Admin: badge registry management ----

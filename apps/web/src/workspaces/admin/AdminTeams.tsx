@@ -8,6 +8,7 @@ import {
   Badge,
   SectionHeader,
   dangerSolidBtn,
+  fieldLabel,
   ghostBtn,
   ghostDangerBtn,
   inputStyle,
@@ -37,6 +38,13 @@ export function AdminTeams({ theme }: { theme: Theme }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [movingUserId, setMovingUserId] = useState<string | null>(null);
 
+  // The default first team-chat (welcome) message new teams start with.
+  const [welcome, setWelcome] = useState('');
+  const [welcomeDraft, setWelcomeDraft] = useState('');
+  const [welcomeOverridden, setWelcomeOverridden] = useState(false);
+  const [welcomeBusy, setWelcomeBusy] = useState(false);
+  const [welcomeMsg, setWelcomeMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   async function reload() {
     const r = await api.adminListTeams();
     setTeams(r.teams);
@@ -49,10 +57,56 @@ export function AdminTeams({ theme }: { theme: Theme }) {
       .then((r) => alive && setTeams(r.teams))
       .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load teams'))
       .finally(() => alive && setLoading(false));
+    api
+      .adminTeamChatWelcome()
+      .then((r) => {
+        if (!alive) return;
+        setWelcome(r.value);
+        setWelcomeDraft(r.value);
+        setWelcomeOverridden(r.overridden);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
   }, []);
+
+  async function saveWelcome() {
+    if (welcomeBusy) return;
+    setWelcomeBusy(true);
+    setWelcomeMsg(null);
+    try {
+      const r = await api.adminSaveTeamChatWelcome(welcomeDraft);
+      setWelcome(r.value);
+      setWelcomeDraft(r.value);
+      setWelcomeOverridden(r.overridden);
+      setWelcomeMsg({
+        ok: true,
+        text: r.overridden ? 'Saved. New teams will start with this message.' : 'Matches the default — override cleared.',
+      });
+    } catch (e) {
+      setWelcomeMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Could not save' });
+    } finally {
+      setWelcomeBusy(false);
+    }
+  }
+
+  async function resetWelcome() {
+    if (welcomeBusy) return;
+    setWelcomeBusy(true);
+    setWelcomeMsg(null);
+    try {
+      const r = await api.adminResetTeamChatWelcome();
+      setWelcome(r.value);
+      setWelcomeDraft(r.value);
+      setWelcomeOverridden(r.overridden);
+      setWelcomeMsg({ ok: true, text: 'Reset to the built-in default.' });
+    } catch (e) {
+      setWelcomeMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Could not reset' });
+    } finally {
+      setWelcomeBusy(false);
+    }
+  }
 
   // Move a member to another team (or clear their team). Goes through the same
   // user-update endpoint the Users section uses, then reloads the rosters.
@@ -125,6 +179,48 @@ export function AdminTeams({ theme }: { theme: Theme }) {
         title="Teams"
         subtitle="Teams group traders into their own desk. The Studies leaderboard ranks a learner only against their team; the Trading workspace stays shared across every team. Expand a team to see its members and move anyone between teams."
       />
+
+      {/* Default first team-chat message: seeded as the first message when a new
+          team is created, so its channel greets the desk instead of sitting empty. */}
+      <div style={{ ...panel(theme), marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#eef3ff' }}>Default first team chat</span>
+          {welcomeOverridden ? <Badge color={theme.accent}>Customized</Badge> : <Badge color="#7488b5">Default</Badge>}
+        </div>
+        <p style={{ margin: '0 0 10px', fontSize: 12, color: '#9fb0d6', lineHeight: 1.5 }}>
+          The welcome message seeded as the first message in a team’s chat when it’s created. Existing
+          teams keep the messages they already have.
+        </p>
+        <label style={fieldLabel}>Welcome message</label>
+        <textarea
+          value={welcomeDraft}
+          onChange={(e) => setWelcomeDraft(e.target.value)}
+          rows={3}
+          maxLength={1000}
+          placeholder="Welcome to the team chat…"
+          style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }}
+        />
+        {welcomeMsg && <div style={msgStyle(welcomeMsg.ok)}>{welcomeMsg.text}</div>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <button
+            onClick={saveWelcome}
+            disabled={welcomeBusy || welcomeDraft === welcome}
+            style={{ ...primaryBtn(theme, accentGrad), opacity: welcomeBusy || welcomeDraft === welcome ? 0.55 : 1 }}
+          >
+            {welcomeBusy ? 'Saving…' : 'Save'}
+          </button>
+          {welcomeDraft !== welcome && (
+            <button onClick={() => setWelcomeDraft(welcome)} disabled={welcomeBusy} style={ghostBtn}>
+              Undo changes
+            </button>
+          )}
+          {welcomeOverridden && (
+            <button onClick={resetWelcome} disabled={welcomeBusy} style={ghostBtn}>
+              Reset to default
+            </button>
+          )}
+        </div>
+      </div>
 
       <div style={panel(theme)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
