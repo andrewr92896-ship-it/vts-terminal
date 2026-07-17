@@ -13,8 +13,6 @@ export const ROLE_KEYS = [
   'funded',
   'studies',
   'todo',
-  'wealth',
-  'finance',
 ] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
 
@@ -25,8 +23,6 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   funded: 'Funded',
   studies: 'Studies',
   todo: 'To Do',
-  wealth: 'Wealth Management',
-  finance: 'Finance',
 };
 
 export function isRoleKey(v: unknown): v is RoleKey {
@@ -49,13 +45,16 @@ export function isAdmin(roles: RoleKey[]): boolean {
   return roles.includes('admin');
 }
 
-// Which role keys grant access to a given workspace (admin grants all).
+// Which role keys grant access to a given workspace (admin grants all). The
+// Wealth Management and Finance workspaces were retired from the nav; their
+// dedicated roles are gone, so no role grants them (their feature code/tables
+// remain but are unreachable in the UI).
 const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
   todo: ['todo'],
   studies: ['studies'],
-  wealth: ['wealth'],
-  finance: ['finance'],
+  wealth: [],
+  finance: [],
 };
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {

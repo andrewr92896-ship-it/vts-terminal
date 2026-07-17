@@ -12,8 +12,6 @@ export const ALL_ROLES: RoleKey[] = [
   'funded',
   'studies',
   'todo',
-  'wealth',
-  'finance',
 ];
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
@@ -23,8 +21,6 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   funded: 'Funded',
   studies: 'Studies',
   todo: 'To Do',
-  wealth: 'Wealth Management',
-  finance: 'Finance',
 };
 
 // Short descriptions shown next to each role in the admin picker.
@@ -35,8 +31,6 @@ export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
   funded: 'Private — reveals the Funded (prop-challenge) section in Trading',
   studies: 'Studies workspace',
   todo: 'Personal To Do List workspace',
-  wealth: 'Vitalis Retirement & Wealth Management workspace',
-  finance: 'Personal Finance workspace',
 };
 
 export function isAdmin(roles: RoleKey[]): boolean {
@@ -61,8 +55,9 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
   todo: ['todo'],
   studies: ['studies'],
-  wealth: ['wealth'],
-  finance: ['finance'],
+  // Wealth Management and Finance were retired from the nav; no role grants them.
+  wealth: [],
+  finance: [],
 };
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
