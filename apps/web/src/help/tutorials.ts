@@ -146,6 +146,29 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
+  prop: {
+    title: 'Funded',
+    intro: 'A private prop-firm challenge dashboard — equity vs. target plus daily / max drawdown buffers. This section is only visible to accounts an admin has granted the Funded role; it never appears in the demo or to the public. Hand-logged trades live on the separate Manual Trades tab.',
+    steps: [
+      {
+        title: 'Set up the challenge',
+        body: 'Click Edit to set account size, profit target %, and daily / max drawdown %. The card shows equity, progress to target, and two drawdown gauges; the status pill flips to Breached or Target Reached.',
+      },
+      {
+        title: 'Keep equity current',
+        body: 'No API here — type your equity, or use “Update balance from a screenshot”: upload or paste (⌘/Ctrl+V) a screenshot of your account and Claude reads the balance and sets your equity. You can also pull equity from the Trade Log.',
+      },
+      {
+        title: 'Who can see it',
+        body: 'An admin grants the Funded role per account under Admin → Users. Without it, the section is hidden from the sidebar entirely.',
+      },
+      {
+        title: 'Hide dollar details',
+        body: 'Use “Hide $” or Privacy mode to mask every figure on the page at once. Percentages and drawdown buffers still show.',
+      },
+    ],
+  },
+
   metrics: {
     title: 'Live Brokers',
     intro: 'Your live broker capital, pulled from the broker API so it updates as trades are placed. Capital figures are shown to full traders only; hand-kept accounts live on the Manual Trades tab.',

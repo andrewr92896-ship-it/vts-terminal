@@ -9,6 +9,7 @@ export const ALL_ROLES: RoleKey[] = [
   'admin',
   'trading',
   'trading_viewer',
+  'funded',
   'studies',
   'todo',
   'wealth',
@@ -19,6 +20,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   admin: 'Admin',
   trading: 'Trading',
   trading_viewer: 'Trading (View only)',
+  funded: 'Funded',
   studies: 'Studies',
   todo: 'To Do',
   wealth: 'Wealth Management',
@@ -30,6 +32,7 @@ export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
   admin: 'Manage users and see every workspace',
   trading: 'Trading workspace (full access)',
   trading_viewer: 'Trading workspace (read-only)',
+  funded: 'Private — reveals the Funded (prop-challenge) section in Trading',
   studies: 'Studies workspace',
   todo: 'Personal To Do List workspace',
   wealth: 'Vitalis Retirement & Wealth Management workspace',
@@ -65,6 +68,14 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
   if (isAdmin(roles)) return true;
   return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
+}
+
+// The private Funded (prop-challenge) section is revealed to holders of the
+// admin-assigned `funded` role (admins included). Mirror of the backend
+// canAccessFunded; the server is the enforcer, this just drives nav/screen
+// gating and the "view as" preview.
+export function canAccessFunded(roles: RoleKey[]): boolean {
+  return isAdmin(roles) || roles.includes('funded');
 }
 
 // Trading is read-only when the user only has the viewer role (mirror of the

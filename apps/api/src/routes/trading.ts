@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
+import { requireFunded, requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
 import { getLiveWall } from '../trading/service.js';
 import {
   addTrade,
@@ -117,6 +117,10 @@ const restoreSchema = z.object({
 export async function tradingRoutes(app: FastifyInstance) {
   const read = { preHandler: requireWorkspace('trading') };
   const write = { preHandler: requireWorkspaceWrite('trading') };
+  // The Funded (prop-challenge) endpoints are a private, role-gated add-on: the
+  // caller needs Trading access *and* the admin-assigned `funded` role.
+  const fundedRead = { preHandler: [requireWorkspace('trading'), requireFunded] };
+  const fundedWrite = { preHandler: [requireWorkspaceWrite('trading'), requireFunded] };
 
   // The trading desk is a shared team: every endpoint here is behind the
   // `trading` workspace guard, so any caller holds a trading role (full or
@@ -186,14 +190,14 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { ...settings, instruments };
   });
 
-  // ---- Account Metrics (prop-firm challenge) ----
-  app.get('/api/trading/challenge', read, async (request) => {
+  // ---- Account Metrics (prop-firm challenge) — private, `funded`-role only ----
+  app.get('/api/trading/challenge', fundedRead, async (request) => {
     const u = request.currentUser!;
     return getChallenge(u.id, SEE_BALANCES);
   });
 
   // Claude (Sonnet) read of the prop-challenge dashboard.
-  app.post('/api/trading/metrics/brief', read, async (request, reply) => {
+  app.post('/api/trading/metrics/brief', fundedRead, async (request, reply) => {
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     const u = request.currentUser!;
     const c = await getChallenge(u.id, SEE_BALANCES);
@@ -217,7 +221,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch('/api/trading/challenge', write, async (request, reply) => {
+  app.patch('/api/trading/challenge', fundedWrite, async (request, reply) => {
     const parsed = challengeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Check the challenge settings and try again' });
@@ -226,7 +230,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return updateChallenge(u.id, parsed.data, SEE_BALANCES);
   });
 
-  app.post('/api/trading/challenge/sync-equity', write, async (request) => {
+  app.post('/api/trading/challenge/sync-equity', fundedWrite, async (request) => {
     const u = request.currentUser!;
     return syncEquityFromTradeLog(u.id, SEE_BALANCES);
   });
@@ -246,7 +250,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   // Account Metrics current from the prop dashboard. Screenshots are sizeable.
   app.post(
     '/api/trading/challenge/analyze',
-    { preHandler: requireWorkspaceWrite('trading'), bodyLimit: 12 * 1024 * 1024 },
+    { preHandler: [requireWorkspaceWrite('trading'), requireFunded], bodyLimit: 12 * 1024 * 1024 },
     async (request, reply) => {
       if (!aiConfigured()) {
         return reply.code(503).send({ error: 'AI is not configured (no API key set)' });

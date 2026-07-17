@@ -10,6 +10,7 @@ export const ROLE_KEYS = [
   'admin',
   'trading',
   'trading_viewer',
+  'funded',
   'studies',
   'todo',
   'wealth',
@@ -21,6 +22,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   admin: 'Admin',
   trading: 'Trading',
   trading_viewer: 'Trading (View only)',
+  funded: 'Funded',
   studies: 'Studies',
   todo: 'To Do',
   wealth: 'Wealth Management',
@@ -59,6 +61,14 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
   if (isAdmin(roles)) return true;
   return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
+}
+
+// The private Funded section (the prop-firm challenge dashboard) is an add-on
+// inside Trading, revealed only to holders of the admin-assigned `funded` role
+// (admins included). It grants no workspace on its own — a funded user still
+// needs Trading access to reach the section, and it is never shown to the demo.
+export function canAccessFunded(roles: RoleKey[]): boolean {
+  return isAdmin(roles) || roles.includes('funded');
 }
 
 // Trading is read-only when the user only has the viewer role (and is not an
@@ -101,6 +111,9 @@ export interface PublicUser {
     label: string;
     workspaces: WorkspaceKey[];
     readOnlyWorkspaces: WorkspaceKey[];
+    // Whether the private Funded (prop-challenge) section is revealed. Never true
+    // for the demo account.
+    funded: boolean;
   };
 }
 
@@ -129,6 +142,7 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
       // reach is read-only, so the UI hides all add/edit/delete controls (the
       // demoGuard already refuses the writes server-side regardless).
       readOnlyWorkspaces: isDemo ? workspaces : workspaces.filter((ws) => isWorkspaceReadOnly(roles, ws)),
+      funded: !isDemo && canAccessFunded(roles),
     },
   };
 }
