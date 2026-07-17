@@ -22,6 +22,8 @@ import { feedbackRoutes } from './routes/feedback.js';
 import { studiesRoutes } from './routes/studies.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
+import { contentRoutes } from './routes/content.js';
+import { seedBadges } from './badges/service.js';
 import { runMigrations } from './db/migrate.js';
 import { waitForDatabase } from './db/index.js';
 import { seedAdmin, seedDemo, backfillEmails } from './seed.js';
@@ -90,6 +92,7 @@ export async function buildServer() {
   await app.register(studiesRoutes);
   await app.register(pushRoutes);
   await app.register(pushoverRoutes);
+  await app.register(contentRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).
@@ -122,6 +125,8 @@ async function bootstrapDatabase(): Promise<void> {
   // fresh database).
   await seedDefaultTeam();
   await seedWelcome();
+  // Seed the built-in recognition badges (early-release star, admin shield).
+  await seedBadges();
 }
 
 async function main() {

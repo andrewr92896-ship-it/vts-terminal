@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { chatMessages, users, type ChatMessageRow } from '../db/schema.js';
+import { parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 
 // The Team Chat: one private conversation per trading team. Every message is
 // stamped with the sender's team id (users.team_id at send time) and channel
@@ -16,6 +17,10 @@ export interface ChatMessageView {
   id: string;
   author: string;
   avatar: string | null; // sender's current profile picture (data URL), or null
+  // The sender's current roles + assigned badge keys, joined live so their
+  // recognition icons render next to the name (matches the rest of the app).
+  roles: RoleKey[];
+  badges: string[];
   body: string;
   createdAt: number;
   mine: boolean; // true when the current user wrote it
@@ -24,13 +29,19 @@ export interface ChatMessageView {
 const MAX_BODY = 1000;
 
 function toView(
-  row: Pick<ChatMessageRow, 'id' | 'author' | 'body' | 'createdAt' | 'userId'> & { avatar: string | null },
+  row: Pick<ChatMessageRow, 'id' | 'author' | 'body' | 'createdAt' | 'userId'> & {
+    avatar: string | null;
+    roles: string | null;
+    badges: string | null;
+  },
   currentUserId: string,
 ): ChatMessageView {
   return {
     id: row.id,
     author: row.author,
     avatar: row.avatar,
+    roles: parseRoles({ roles: row.roles }),
+    badges: parseBadges({ badges: row.badges }),
     body: row.body,
     createdAt: row.createdAt.getTime(),
     mine: row.userId === currentUserId,
@@ -53,6 +64,8 @@ export async function listTeamMessages(
       createdAt: chatMessages.createdAt,
       userId: chatMessages.userId,
       avatar: users.avatar,
+      roles: users.roles,
+      badges: users.badges,
     })
     .from(chatMessages)
     .leftJoin(users, eq(users.id, chatMessages.userId))
@@ -61,7 +74,9 @@ export async function listTeamMessages(
     .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
     .limit(limit);
   // Newest-first from the query; reverse so the client renders oldest-first.
-  return rows.reverse().map((r) => toView({ ...r, avatar: r.avatar ?? null }, currentUserId));
+  return rows.reverse().map((r) =>
+    toView({ ...r, avatar: r.avatar ?? null, roles: r.roles ?? null, badges: r.badges ?? null }, currentUserId),
+  );
 }
 
 // The timestamp (ms) of the most recent team message for the given team, or 0

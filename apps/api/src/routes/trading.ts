@@ -62,6 +62,7 @@ import {
 } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
+import { getPrompt } from '../ai/prompts.js';
 import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
@@ -215,8 +216,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       m.breaches.daily ? 'Daily drawdown breached.' : '',
       m.breaches.max ? 'Max drawdown breached.' : '',
     ].filter(Boolean).join('\n');
-    const system =
-      'You are a prop-firm trading coach. Given a funded-account challenge dashboard (profit vs target, drawdown buffers, status), write a short, practical read: where the account stands, the main risk right now (which buffer is tight), and disciplined next steps. Under 130 words, plain text, no markdown headers. Do not invent dollar figures.';
+    const system = await getPrompt('metrics_coach');
     try {
       return { brief: await generateBrief(u.id, 'metrics_brief', system, data) };
     } catch (err) {
@@ -439,8 +439,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     const data = parts.join('\n\n');
     if (!data) return { brief: 'Nothing in this feed yet to summarize — it fills in as the feeds update.' };
 
-    const system =
-      `You are a trading-desk analyst for a desk that trades EUR/USD, Bitcoin, gold (futures), Nasdaq (futures), and the S&P 500 (ETF + futures); the trader is also an investment adviser. You are given the current "${label}" feed from the desk's Market News — it may hold headlines (with impact/bias tags), upcoming economic-calendar releases, and/or Trump Truth Social posts. Write a brief overview for this trader: the few things that matter most here, the concrete read-through to the desk's instruments (direction and risk), and what to watch next. Concise (under 170 words), plain text, no markdown headers. Times are Eastern.`;
+    const system = (await getPrompt('market_overview')).replace(/\{label\}/g, label);
     try {
       const brief = await generateBrief(request.currentUser!.id, 'feed_brief', system, data);
       return { brief };

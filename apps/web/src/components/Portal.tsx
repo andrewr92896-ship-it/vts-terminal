@@ -22,6 +22,7 @@ import { TopBar } from './TopBar';
 import { Icon } from './Icon';
 import { InstallPrompt } from './InstallPrompt';
 import { AskClaudePanel } from './AskClaudePanel';
+import { BadgesProvider } from './UserBadges';
 import { AccountSettings } from './AccountSettings';
 import { DeviceSettings } from './DeviceSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
@@ -35,6 +36,10 @@ import {
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/admin/AdminUsers';
 import { AdminTeams } from '../workspaces/admin/AdminTeams';
+import { AdminBadges } from '../workspaces/admin/AdminBadges';
+import { AdminAiInstructions } from '../workspaces/admin/AdminAiInstructions';
+import { AdminPatchNotes } from '../workspaces/admin/AdminPatchNotes';
+import { AdminContent } from '../workspaces/admin/AdminContent';
 import { AdminEarlyAccess } from '../workspaces/admin/AdminEarlyAccess';
 import { AdminViewAs } from '../workspaces/admin/AdminViewAs';
 import { AdminSuggestions } from '../workspaces/admin/AdminSuggestions';
@@ -142,6 +147,14 @@ function renderScreen(
       return <AdminUsers theme={theme} />;
     case 'ad_teams':
       return <AdminTeams theme={theme} />;
+    case 'ad_badges':
+      return <AdminBadges theme={theme} />;
+    case 'ad_ai':
+      return <AdminAiInstructions theme={theme} />;
+    case 'ad_notes':
+      return <AdminPatchNotes theme={theme} />;
+    case 'ad_content':
+      return <AdminContent theme={theme} />;
     case 'ad_early':
       return <AdminEarlyAccess theme={theme} />;
     default:
@@ -467,6 +480,7 @@ export function Portal() {
 
   return (
     <PrivacyProvider>
+      <BadgesProvider>
       <AlertSoundProvider>
           {canAccessWorkspace(effectiveRoles, 'trading') && <AlertSoundWatcher />}
 
@@ -535,6 +549,7 @@ export function Portal() {
             <DemoTour theme={theme} onGo={goTo} onOpenClaude={() => setAiOpen(true)} onClose={closeTour} />
           )}
       </AlertSoundProvider>
+      </BadgesProvider>
     </PrivacyProvider>
   );
 }

@@ -71,6 +71,9 @@ export interface User {
   // The user's profile picture as a data URL, or null when unset.
   avatarUrl: string | null;
   roles: RoleKey[];
+  // Admin-assigned recognition badge keys (see BadgeType). Unioned with the
+  // auto badges from the badge registry when rendered next to the name.
+  badges: string[];
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards to teammates; the Trading workspace itself stays shared.
   teamId: string | null;
@@ -88,13 +91,64 @@ export interface User {
   };
 }
 
+// A member of a team, as shown in the admin Teams roster.
+export interface TeamMember {
+  id: string;
+  displayName: string;
+  username: string;
+  roles: RoleKey[];
+  active: boolean;
+}
+
 // A trading team as shown in the admin team-management panel (mirror of the
 // backend TeamView).
 export interface Team {
   id: string;
   name: string;
   memberCount: number;
+  members: TeamMember[];
   createdAt: number;
+}
+
+// A recognition badge type (mirror of the backend BadgeTypeView). Rendered as a
+// small icon next to a member's name. `autoRole`, when set, means everyone with
+// that role shows the badge automatically.
+export interface BadgeType {
+  id: string;
+  key: string;
+  label: string;
+  icon: string;
+  color: string;
+  description: string | null;
+  autoRole: string | null;
+  builtin: boolean;
+  position: number;
+}
+
+// One editable AI system prompt (mirror of the backend admin ai-prompts view).
+export interface AiPrompt {
+  id: string;
+  label: string;
+  group: string;
+  description: string;
+  def: string; // the built-in default
+  placeholder: string | null;
+  multiline: boolean;
+  value: string; // the effective text (override or default)
+  overridden: boolean;
+}
+
+// One release note (mirror of the backend PatchNoteView).
+export interface PatchNoteEntry {
+  id: string;
+  version: string;
+  dateLabel: string;
+  notes: string[];
+  status: 'draft' | 'published';
+  position: number;
+  publishedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 // A team reference attached to leaderboard responses so the board can be
@@ -125,6 +179,7 @@ export interface AdminUser {
   displayName: string;
   email: string | null;
   roles: RoleKey[];
+  badges: string[];
   teamId: string | null;
   active: boolean;
   viewBrokerage: boolean;
@@ -865,6 +920,10 @@ export interface ChatMessage {
   id: string;
   author: string;
   avatar: string | null;
+  // The sender's roles + assigned badge keys, so their recognition icons render
+  // next to the name in the feed.
+  roles: RoleKey[];
+  badges: string[];
   body: string;
   createdAt: number;
   mine: boolean;

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireWorkspace } from '../auth/middleware.js';
 import { canAccessWorkspace, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
+import { getPrompt } from '../ai/prompts.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
 
 const schema = z.object({
@@ -13,56 +14,32 @@ const schema = z.object({
   workspace: z.string().max(40).optional(),
 });
 
-// Per-workspace guidance so the assistant behaves like a focused helper for
-// whatever area the user is in. Keyed by workspace key (see web access.ts).
-const WORKSPACE_GUIDE: Record<string, { label: string; guide: string }> = {
-  trading: {
-    label: 'Trading',
-    guide:
-      'Help with live broker positions, the trade log and slippage, strategy sessions, the prop-firm (FTP) challenge metrics (profit target, daily and trailing drawdown), market news, and trade journaling. Be precise and risk-aware; emphasize protecting drawdown buffers. This is not personalized investment advice.',
-  },
-  finance: {
-    label: 'Personal Finance',
-    guide:
-      'Help with personal finances — take-home across jobs and businesses, monthly expenses and bills, FTP payout scaling, and net worth. Be encouraging but honest, and suggest concrete next steps.',
-  },
-  wealth: {
-    label: 'Vitalis Wealth',
-    guide:
-      'Help run the advisory practice: client book, model portfolios and allocations, retirement planning scenarios, and RIA compliance recordkeeping. This is practice-management help, not personalized investment advice for the user.',
-  },
-  studies: {
-    label: 'Studies',
-    guide:
-      'Help the user study for the Series 65 (Uniform Investment Adviser Law Exam): explain concepts clearly, give memory hooks, and quiz them when asked.',
-  },
-  todo: {
-    label: 'To-Do',
-    guide:
-      'Help organize tasks and routines. Mention they can also use the "Ask Claude / command" bar on the To-Do screen to add, check, or remove tasks directly.',
-  },
+// The label shown for each workspace the Ask Claude persona can adopt, plus the
+// prompt id whose (admin-editable) text carries that workspace's guidance. Only
+// the three live workspaces are here; the guidance strings live in ai/prompts.ts
+// so an admin can edit them from Admin ▸ AI Instructions.
+const WORKSPACE_GUIDE: Record<string, { label: string; promptId: string }> = {
+  trading: { label: 'Trading', promptId: 'ws.trading' },
+  studies: { label: 'Studies', promptId: 'ws.studies' },
+  todo: { label: 'To-Do', promptId: 'ws.todo' },
 };
 
 // Short, friendly context so the assistant knows what app it lives in, plus
-// focused guidance for the current workspace.
-function systemPrompt(workspaceKey: string | undefined, displayName: string): string {
+// focused guidance for the current workspace. The base persona and each
+// workspace's guidance are admin-editable (ai/prompts.ts); "{workspace}" and
+// "{name}" in the base persona are filled in here.
+async function systemPrompt(workspaceKey: string | undefined, displayName: string): Promise<string> {
   const ws = workspaceKey ? WORKSPACE_GUIDE[workspaceKey] : undefined;
-  return [
-    'You are the built-in assistant inside VTS Portal — a private dark "pro-terminal" web app for Andrew and a few invited users.',
-    'It bundles several workspaces: Trading, Studies (Series 65), a To-Do list, Vitalis Wealth Management, and Personal Finance.',
-    ws ? `The user is currently in the ${ws.label} workspace. ${ws.guide}` : '',
-    `You are talking to ${displayName}.`,
-    'Be concise, practical, and direct. You do not have live access to their data; if they ask for specific numbers, point them to the relevant screen. Use plain text (no markdown headers).',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const base = await getPrompt('global');
+  const guide = ws ? await getPrompt(ws.promptId) : '';
+  const workspaceText = ws && guide ? `The user is currently in the ${ws.label} workspace. ${guide}` : '';
+  return base
+    .replace(/\{workspace\}/g, workspaceText)
+    .replace(/\{name\}/g, displayName)
+    // Collapse any double spaces left when a placeholder resolved to empty.
+    .replace(/\s{2,}/g, ' ')
+    .trim();
 }
-
-const TUTOR_SYSTEM = [
-  'You are a patient Series 65 (Uniform Investment Adviser Law Exam) tutor.',
-  'Explain clearly and concisely for an exam candidate: the key concept, why the correct answer is right and the tempting wrong ones are wrong, and a short memory hook when it helps.',
-  'Keep it under 160 words. Plain text, no markdown headers.',
-].join(' ');
 
 const tutorSchema = z.object({
   explain: z
@@ -109,7 +86,7 @@ export async function aiRoutes(app: FastifyInstance) {
         : undefined;
     try {
       await enforceAiLimit(user.id, 'ask');
-      const text = await chatClaude(parsed.data.messages, systemPrompt(ws, user.displayName));
+      const text = await chatClaude(parsed.data.messages, await systemPrompt(ws, user.displayName));
       return { reply: text };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
@@ -150,7 +127,7 @@ export async function aiRoutes(app: FastifyInstance) {
     }
     try {
       await enforceAiLimit(request.currentUser!.id, 'studies_tutor');
-      return { reply: await chatClaude(messages, TUTOR_SYSTEM) };
+      return { reply: await chatClaude(messages, await getPrompt('tutor')) };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
