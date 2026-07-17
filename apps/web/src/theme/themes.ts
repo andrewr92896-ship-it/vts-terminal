@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'admin' | 'help';
+export type WorkspaceKey = 'trading' | 'studies' | 'admin' | 'help';
 
 export interface Theme {
   pageBg: string;
@@ -34,16 +34,6 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent: '#EBCB74',
     accent2: '#C9A24B',
     accentText: '#0c2768',
-  },
-  todo: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1b2c3b 0%,#0d1620 60%)',
-    headerBg: 'linear-gradient(90deg,#15212e 0%,#1d3344 100%)',
-    headerBorder: '#284158',
-    navBg: '#15212e',
-    navBorder: '#1d3344',
-    accent: '#46c2a8',
-    accent2: '#2f9e86',
-    accentText: '#06231d',
   },
   // The Admin workspace: a slate background with a rose accent to signal an
   // elevated, privileged area distinct from the three member workspaces.
@@ -102,13 +92,6 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     size: '21px',
     letterSpacing: '2px',
   },
-  todo: {
-    name: (userName: string) => `${userName}'s To Do List`,
-    sub: 'Personal workspace',
-    color: '#bfeee2',
-    size: '19px',
-    letterSpacing: '0.5px',
-  },
   admin: {
     name: () => 'ADMIN',
     sub: 'Portal administration',
@@ -148,7 +131,6 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'news', label: 'Market News', dot: '#ef5468' },
     { key: 'td_trading', label: 'To Do' },
   ],
-  todo: [{ key: 'td_all', label: 'All Tasks' }],
   admin: [
     { key: 'ad_users', label: 'Users' },
     { key: 'ad_teams', label: 'Teams' },
@@ -168,14 +150,12 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'live',
-  todo: 'td_all',
   studies: 'st_home',
   admin: 'ad_users',
   help: 'hp_howto',
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
-  todo: 'To Do List',
   trading: 'Trading',
   studies: 'Studies',
   admin: 'Admin',

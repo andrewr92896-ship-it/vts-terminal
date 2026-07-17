@@ -7,8 +7,7 @@ export type RoleKey =
   | 'trading'
   | 'trading_viewer'
   | 'funded'
-  | 'studies'
-  | 'todo';
+  | 'studies';
 
 // One row in the Study Game high-score table. Mirrors the backend's
 // LeaderboardEntry (studies/game.ts). A row is either a player's current live

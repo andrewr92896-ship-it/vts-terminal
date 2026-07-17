@@ -1,7 +1,7 @@
 import type { UserRow } from '../db/schema.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 
-export type WorkspaceKey = 'trading' | 'todo' | 'studies';
+export type WorkspaceKey = 'trading' | 'studies';
 
 // Granular, admin-assigned roles. A user can hold any combination. `admin`
 // grants everything (including user management); `trading_viewer` is read-only
@@ -12,7 +12,6 @@ export const ROLE_KEYS = [
   'trading_viewer',
   'funded',
   'studies',
-  'todo',
 ] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
 
@@ -22,7 +21,6 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   trading_viewer: 'Trading (View only)',
   funded: 'Funded',
   studies: 'Studies',
-  todo: 'To Do',
 };
 
 export function isRoleKey(v: unknown): v is RoleKey {
@@ -63,7 +61,6 @@ export function parseBadges(u: { badges?: string | null }): string[] {
 // Which role keys grant access to a given workspace (admin grants all).
 const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
-  todo: ['todo'],
   studies: ['studies'],
 };
 
@@ -90,7 +87,7 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
 
 // Ordered as the sidebar shows them.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['trading', 'studies', 'todo'];
+  const order: WorkspaceKey[] = ['trading', 'studies'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 

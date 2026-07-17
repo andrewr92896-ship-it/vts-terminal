@@ -51,7 +51,6 @@ import {
   HelpBugReport,
   HelpSuggestion,
 } from '../workspaces/help/HelpScreens';
-import { TodoAll } from '../workspaces/TodoAll';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
 import { Alerts } from '../workspaces/trading/Alerts';
@@ -129,8 +128,6 @@ function renderScreen(
       return <MarketNews />;
     case 'td_trading':
       return <TradingTodo />;
-    case 'td_all':
-      return <TodoAll />;
     case 'st_home':
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
     // Keyed distinctly so switching between the Study Game and Test Mode (both

@@ -22,10 +22,8 @@ const SCREENS: Record<string, ScreenInfo> = {
   metrics: { title: 'Live Brokers', blurb: 'Live broker capital (OANDA): NAV, balance, open P/L, and trade P/L over daily / weekly / 30-day windows, pulled from the broker API.', stage: 2 },
   news: { title: 'Market News', blurb: 'Market and geopolitical headlines with impact and bias tags, plus the economic calendar in ET.', stage: 2 },
   history: { title: 'History', blurb: 'Historical performance, closed trades, and per-strategy results over time.', stage: 2 },
-  td_trading: { title: 'Trading To Do', blurb: 'Trading tasks, also visible in your full To Do List workspace.', stage: 3 },
+  td_trading: { title: 'Trading To Do', blurb: 'Trading tasks and reminders, shared with your team.', stage: 3 },
   admin: { title: 'Admin', blurb: 'User and role management, broker connection health, and audit settings.', stage: 3 },
-  // To Do
-  td_all: { title: 'All Tasks', blurb: 'Numbered sections, recurring tasks with reset intervals, due and overdue flags, and a VTS AI command parser.', stage: 3 },
   // Studies
   st_home: { title: 'Study Hub', blurb: 'Pick a subject (Series 65 first). Each track has its own flashcards, quizzes, and progress.', stage: 3 },
   st_quiz: { title: 'Practice Quiz', blurb: 'One question at a time, rotating topics, with scoring.', stage: 3 },

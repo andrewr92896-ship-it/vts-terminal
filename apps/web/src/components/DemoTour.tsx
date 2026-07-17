@@ -65,12 +65,6 @@ export const DEMO_STEPS: TourStep[] = [
     body: 'Build a study guide as a slide deck: go back and forth with VTS AI to draft and refine the slides, drop in your own screenshots, then present it like a guided walkthrough — the same stepped, slide-by-slide format as this tour.',
   },
   {
-    workspace: 'todo',
-    screen: 'td_all',
-    title: 'To Do — just type it',
-    body: 'A shared task list with numbered sections, recurring resets, and due-date flags. Type a plain-English instruction in the command box — “new section Garden”, “add to Priority: fund the account”, “done 1.2” — and VTS AI updates the list for you.',
-  },
-  {
     workspace: 'trading',
     screen: 'live',
     openClaude: true,
