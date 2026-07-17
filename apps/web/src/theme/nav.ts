@@ -54,6 +54,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'st_test', label: 'Test Mode', icon: 'file-check-2' },
       { key: 'st_progress', label: 'Progress', icon: 'trending-up' },
       { key: 'st_decks', label: 'Study Creation', icon: 'library' },
+      { key: 'st_guides', label: 'Study Guides', icon: 'presentation' },
     ],
   },
   {

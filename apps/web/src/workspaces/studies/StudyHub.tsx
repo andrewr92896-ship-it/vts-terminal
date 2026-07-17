@@ -98,15 +98,18 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
           </span>
         </div>
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
-          Build your own study content for your team on any subject. Make a study game — have AI
-          generate the questions from a topic you name, or upload a text file of your own questions or
-          notes — and everyone can play it, level up, and compete on your team’s leaderboard. Or build
-          a study guide: go back and forth with VTS AI to draft a slide deck, add your own screenshots,
-          and present it like a walkthrough.
+          Build your own study content for your team on any subject. In <strong>Study Creation</strong>,
+          make a study game — have AI generate the questions from a topic you name, or upload a text file
+          of your own questions or notes — and everyone can play it, level up, and compete on your team’s
+          leaderboard. In <strong>Study Guides</strong>, go back and forth with VTS AI to draft a slide
+          deck, add your own screenshots, and present it like a walkthrough.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           <button onClick={() => onNavigate('st_decks')} style={primaryBtn(theme, accentGrad)}>
             Open Study Creation
+          </button>
+          <button onClick={() => onNavigate('st_guides')} style={ghostBtn(theme)}>
+            Open Study Guides
           </button>
         </div>
       </div>

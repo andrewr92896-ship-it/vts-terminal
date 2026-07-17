@@ -94,10 +94,10 @@ export function StudyGuides({ theme }: { theme: Theme }) {
   }
 
   return (
-    <div style={{ color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
+    <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#fff' }}>Study guides</h3>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Guides</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
             Build a slide-by-slide study guide with VTS AI, add your own screenshots, and present it like a walkthrough.
           </p>
