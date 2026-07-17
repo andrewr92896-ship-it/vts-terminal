@@ -109,6 +109,7 @@ export interface EarlyAccessRequest {
   firstName: string;
   lastName: string | null;
   email: string;
+  phone: string | null;
   source: string;
   createdAt: number;
 }

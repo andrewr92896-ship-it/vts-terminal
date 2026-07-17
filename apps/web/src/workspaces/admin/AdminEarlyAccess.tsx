@@ -105,6 +105,16 @@ export function AdminEarlyAccess({ theme }: { theme: Theme }) {
                       {r.email}
                     </a>
                   </div>
+                  {r.phone && (
+                    <div style={{ marginTop: 3 }}>
+                      <a
+                        href={`sms:${r.phone}`}
+                        style={{ fontSize: 12.5, color: '#7c9ce0', fontFamily: "'IBM Plex Mono', monospace" }}
+                      >
+                        {r.phone}
+                      </a>
+                    </div>
+                  )}
                   <div style={{ fontSize: 12, color: '#8ea3cc', marginTop: 8 }}>
                     <span style={{ color: '#6f84b2' }}>Heard about us via: </span>
                     <span style={{ color: '#cfe0ff' }}>{r.source}</span>
@@ -118,6 +128,11 @@ export function AdminEarlyAccess({ theme }: { theme: Theme }) {
                   <a href={`mailto:${r.email}`} style={{ ...ghostBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
                     Email
                   </a>
+                  {r.phone && (
+                    <a href={`sms:${r.phone}`} style={{ ...ghostBtn, textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>
+                      Text
+                    </a>
+                  )}
                   {confirmId === r.id ? (
                     <>
                       <button onClick={() => remove(r.id)} disabled={busyId === r.id} style={dangerSolidBtn}>

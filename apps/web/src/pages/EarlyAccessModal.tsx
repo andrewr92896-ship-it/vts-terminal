@@ -1,27 +1,17 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import { api, ApiError } from '../api/client';
 
-// How-did-you-hear options. "Other" reveals a free-text field; whatever is
-// chosen (or typed) is sent as the request's `source`.
-const SOURCES = [
-  'Search engine',
-  'Social media',
-  'Friend or colleague',
-  'Industry event',
-  'Other',
-] as const;
-
 export function EarlyAccessModal({ onClose }: { onClose: () => void }) {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [source, setSource] = useState('');
-  const [otherSource, setOtherSource] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  const resolvedSource = source === 'Other' ? otherSource.trim() : source;
+  const resolvedSource = source.trim();
   const canSubmit =
     !!firstName.trim() && !!email.trim() && !!resolvedSource && !busy;
 
@@ -37,6 +27,7 @@ export function EarlyAccessModal({ onClose }: { onClose: () => void }) {
         firstName: firstName.trim(),
         lastName: lastName.trim() || undefined,
         email: email.trim(),
+        phone: phone.trim() || undefined,
         source: resolvedSource,
       });
       setDone(true);
@@ -139,27 +130,28 @@ export function EarlyAccessModal({ onClose }: { onClose: () => void }) {
             </div>
 
             <div style={{ marginTop: 14 }}>
+              <label style={labelStyle}>
+                Phone number <span style={{ color: '#5d72a0', textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="(555) 123-4567"
+                autoComplete="tel"
+                style={inputStyle}
+              />
+              <p style={helpStyle}>We’ll text you here if you’re accepted into early access.</p>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
               <label style={labelStyle}>How did you hear about us?</label>
-              <select
+              <input
                 value={source}
                 onChange={(e) => setSource(e.target.value)}
-                style={{ ...inputStyle, cursor: 'pointer' }}
-              >
-                <option value="">Select one…</option>
-                {SOURCES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              {source === 'Other' && (
-                <input
-                  value={otherSource}
-                  onChange={(e) => setOtherSource(e.target.value)}
-                  placeholder="Tell us how you found us"
-                  style={{ ...inputStyle, marginTop: 10 }}
-                />
-              )}
+                placeholder="Tell us how you found us"
+                style={inputStyle}
+              />
             </div>
 
             {error && <div style={errorStyle}>{error}</div>}
@@ -226,6 +218,14 @@ const labelStyle: CSSProperties = {
   textTransform: 'uppercase',
   color: '#8ea3cc',
   marginBottom: 7,
+};
+
+const helpStyle: CSSProperties = {
+  margin: '7px 0 0',
+  fontSize: 10.5,
+  color: '#6f84b2',
+  letterSpacing: '0.2px',
+  lineHeight: 1.5,
 };
 
 const inputStyle: CSSProperties = {

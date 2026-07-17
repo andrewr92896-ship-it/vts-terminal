@@ -13,6 +13,7 @@ const submitSchema = z.object({
   firstName: z.string().trim().min(1).max(120),
   lastName: z.string().trim().max(120).optional(),
   email: z.string().trim().email().max(255),
+  phone: z.string().trim().max(40).optional(),
   source: z.string().trim().min(1).max(500),
 });
 
