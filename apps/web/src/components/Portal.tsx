@@ -310,7 +310,9 @@ export function Portal() {
     (ws: WorkspaceKey) => {
       setWorkspace(ws);
       setScreen(DEFAULT_SCREEN[ws]);
-      setNavOpen(false);
+      // Keep the mobile nav drawer open when switching workspaces so the owner
+      // can pick a section next; the drawer closes only on a section select
+      // (see selectScreen).
       resetScroll();
     },
     [resetScroll],
