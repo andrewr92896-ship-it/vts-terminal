@@ -43,6 +43,9 @@ import type {
   LeaderboardEntry,
   Team,
   TeamRef,
+  BadgeType,
+  AiPrompt,
+  PatchNoteEntry,
   TestBreakdown,
   TestLeaderboardEntry,
   TestResult,
@@ -207,6 +210,7 @@ export const api = {
       displayName?: string;
       email?: string;
       roles?: RoleKey[];
+      badges?: string[];
       active?: boolean;
       viewBrokerage?: boolean;
       teamId?: string | null;
@@ -234,6 +238,87 @@ export const api = {
   },
   adminDeleteTeam(id: string): Promise<{ ok: boolean; teams: Team[] }> {
     return request(`/api/admin/teams/${id}`, { method: 'DELETE' });
+  },
+
+  // ---- Badges (recognition icons next to a member's name) ----
+  // The badge registry, for rendering the icons (any signed-in user).
+  badges(): Promise<{ badges: BadgeType[] }> {
+    return request('/api/badges');
+  },
+  adminCreateBadge(input: {
+    label: string;
+    icon: string;
+    color?: string;
+    description?: string | null;
+  }): Promise<{ badge: BadgeType; badges: BadgeType[] }> {
+    return request('/api/admin/badge-types', { method: 'POST', body: JSON.stringify(input) });
+  },
+  adminUpdateBadge(
+    id: string,
+    patch: { label?: string; icon?: string; color?: string; description?: string | null },
+  ): Promise<{ badge: BadgeType; badges: BadgeType[] }> {
+    return request(`/api/admin/badge-types/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  adminDeleteBadge(id: string): Promise<{ ok: boolean; badges: BadgeType[] }> {
+    return request(`/api/admin/badge-types/${id}`, { method: 'DELETE' });
+  },
+
+  // ---- AI instructions (admin-editable system prompts) ----
+  adminAiPrompts(): Promise<{ prompts: AiPrompt[] }> {
+    return request('/api/admin/ai-prompts');
+  },
+  adminSaveAiPrompt(id: string, value: string): Promise<{ value: string; overridden: boolean }> {
+    return request(`/api/admin/ai-prompts/${id}`, { method: 'PUT', body: JSON.stringify({ value }) });
+  },
+  adminResetAiPrompt(id: string): Promise<{ value: string; overridden: boolean }> {
+    return request(`/api/admin/ai-prompts/${id}`, { method: 'DELETE' });
+  },
+
+  // ---- Patch notes ----
+  // Published release notes for members (Site Help).
+  patchNotes(): Promise<{ notes: PatchNoteEntry[] }> {
+    return request('/api/patch-notes');
+  },
+  adminPatchNotes(): Promise<{ notes: PatchNoteEntry[] }> {
+    return request('/api/admin/patch-notes');
+  },
+  adminCreatePatchNote(input: {
+    version: string;
+    dateLabel?: string;
+    notes: string[];
+  }): Promise<{ note: PatchNoteEntry; notes: PatchNoteEntry[] }> {
+    return request('/api/admin/patch-notes', { method: 'POST', body: JSON.stringify(input) });
+  },
+  adminUpdatePatchNote(
+    id: string,
+    patch: { version?: string; dateLabel?: string; notes?: string[] },
+  ): Promise<{ note: PatchNoteEntry; notes: PatchNoteEntry[] }> {
+    return request(`/api/admin/patch-notes/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  adminSetPatchNoteStatus(
+    id: string,
+    status: 'draft' | 'published',
+  ): Promise<{ note: PatchNoteEntry; notes: PatchNoteEntry[] }> {
+    return request(`/api/admin/patch-notes/${id}/status`, { method: 'POST', body: JSON.stringify({ status }) });
+  },
+  adminDeletePatchNote(id: string): Promise<{ ok: boolean; notes: PatchNoteEntry[] }> {
+    return request(`/api/admin/patch-notes/${id}`, { method: 'DELETE' });
+  },
+
+  // ---- Editable site content (How-to overrides) ----
+  // Members read the merged content; the client applies overrides over its
+  // bundled defaults. Values are JSON blobs keyed by screen.
+  siteContent(): Promise<{ howto: Record<string, string> }> {
+    return request('/api/site-content');
+  },
+  adminSiteContent(): Promise<{ howto: Record<string, string> }> {
+    return request('/api/admin/site-content');
+  },
+  adminSaveHowto(screen: string, value: string): Promise<{ ok: boolean; cleared: boolean }> {
+    return request(`/api/admin/site-content/howto/${screen}`, { method: 'PUT', body: JSON.stringify({ value }) });
+  },
+  adminResetHowto(screen: string): Promise<{ ok: boolean }> {
+    return request(`/api/admin/site-content/howto/${screen}`, { method: 'DELETE' });
   },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');

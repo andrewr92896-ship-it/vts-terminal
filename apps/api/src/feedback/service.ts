@@ -10,6 +10,7 @@ import {
   type SuggestionRow,
 } from '../db/schema.js';
 import { aiConfigured, chatClaude, extractJson } from '../ai/claude.js';
+import { getPrompt } from '../ai/prompts.js';
 
 // Suggestions & bug reports submitted from the Site Help workspace. Both land in
 // the Admin workspace. Suggestions are a plain note; bug reports run through a
@@ -118,14 +119,8 @@ async function toBugReportView(row: BugReportRow): Promise<BugReportView> {
   };
 }
 
-const BUG_TRIAGE_SYSTEM = [
-  'You are the friendly support intake assistant for the VTS Portal, a private trading/studies web app.',
-  'A user is reporting a bug. Your job is to make sure the report is clear enough for the developers to act on: what they were doing, what they expected, and what actually happened (plus where in the app it occurred).',
-  'If the latest report is missing an important detail, ask ONE short, specific clarifying question to fill the biggest gap. Do not pile on multiple questions.',
-  'If you already have enough to file a useful ticket, do NOT ask anything more — warmly thank them for the report and tell them the ticket has been sent to the admins.',
-  'Be concise and personable (2-4 sentences). Never invent a fix or promise a timeline.',
-  'Respond with ONLY a JSON object of exactly this shape and nothing else: {"needMore": boolean, "reply": string}. Set needMore=true only when you asked a clarifying question.',
-].join(' ');
+// The support-intake persona is admin-editable (Admin ▸ AI Instructions,
+// prompt id "support"); the default lives in ai/prompts.ts.
 
 function fallbackReply(needMore: boolean): { needMore: boolean; reply: string } {
   return needMore
@@ -162,7 +157,7 @@ async function triage(
     });
   }
   try {
-    const raw = await chatClaude(messages, BUG_TRIAGE_SYSTEM);
+    const raw = await chatClaude(messages, await getPrompt('support'));
     const parsed = extractJson(raw) as { needMore?: unknown; reply?: unknown } | null;
     const reply = parsed && typeof parsed.reply === 'string' && parsed.reply.trim() ? parsed.reply.trim() : '';
     const needMore = !forceFile && parsed?.needMore === true;

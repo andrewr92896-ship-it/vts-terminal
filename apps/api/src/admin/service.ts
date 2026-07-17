@@ -18,8 +18,9 @@ import {
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
-import { isRoleKey, parseRoles, type RoleKey } from '../auth/rbac.js';
+import { isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
+import { assignableBadgeKeys } from '../badges/service.js';
 
 // A user row as shown in the admin user-management screen. Never includes the
 // password hash. `createdUsername` is the username the account was created
@@ -32,6 +33,8 @@ export interface AdminUserView {
   displayName: string;
   email: string | null;
   roles: RoleKey[];
+  // Admin-assigned recognition badge keys (see badge_types).
+  badges: string[];
   teamId: string | null;
   active: boolean;
   viewBrokerage: boolean;
@@ -47,12 +50,20 @@ function toView(u: typeof users.$inferSelect): AdminUserView {
     displayName: u.displayName,
     email: u.email,
     roles: parseRoles(u),
+    badges: parseBadges(u),
     teamId: u.teamId ?? null,
     active: u.active,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
     createdAt: u.createdAt.getTime(),
   };
+}
+
+// Keep only badge keys that exist and are assignable (not auto-granted by role),
+// de-duplicated. Used when an admin sets a user's badges.
+async function cleanBadges(badges: string[]): Promise<string[]> {
+  const allowed = await assignableBadgeKeys();
+  return [...new Set(badges.filter((b) => allowed.has(b)))];
 }
 
 // Validate an admin-supplied team assignment: null clears the team; a non-null
@@ -128,6 +139,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     passwordHash: await hashPassword(input.password),
     role: 'Viewer' as const, // legacy column, unused; kept populated for type/back-compat
     roles: JSON.stringify(roles),
+    badges: null,
     teamId,
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,
@@ -144,6 +156,9 @@ export interface UpdateUserInput {
   displayName?: string;
   email?: string;
   roles?: string[];
+  // Recognition badge keys to assign (replaces the current set). Invalid or
+  // auto-granted keys are dropped.
+  badges?: string[];
   active?: boolean;
   viewBrokerage?: boolean;
   // The trading team to assign. `null` clears the team; a non-null id must
@@ -187,6 +202,7 @@ export async function updateUser(
     patch.email = email;
   }
   if (input.roles != null) patch.roles = JSON.stringify(cleanRoles(input.roles));
+  if (input.badges != null) patch.badges = JSON.stringify(await cleanBadges(input.badges));
   if (input.active != null) patch.active = input.active;
   if (input.viewBrokerage != null) patch.viewBrokerage = input.viewBrokerage;
   if (input.teamId !== undefined) patch.teamId = await resolveTeamId(input.teamId);

@@ -19,6 +19,7 @@ const updateSchema = z.object({
   displayName: z.string().trim().min(1).max(120).optional(),
   email: z.string().trim().email().max(255).optional(),
   roles: z.array(z.enum(ROLE_KEYS)).optional(),
+  badges: z.array(z.string().max(40)).max(20).optional(),
   active: z.boolean().optional(),
   viewBrokerage: z.boolean().optional(),
   teamId: z.string().min(1).max(64).nullable().optional(),

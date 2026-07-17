@@ -46,6 +46,11 @@ export const users = sqliteTable('users', {
   // Wall, Trade Log, History, broker capital) to teammates — a user sees only
   // their own team's trades, or just their own when they have no team.
   teamId: text('team_id'),
+  // Admin-assigned recognition badges, stored as a JSON array of badge_types.key
+  // (e.g. ["early"]). Rendered as small icons next to the user's name. Auto
+  // badges (e.g. the Admin shield, derived from the admin role) are added on top
+  // of these at serialization time and are not stored here. Null/absent = none.
+  badges: text('badges'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
   viewBrokerage: integer('view_brokerage', { mode: 'boolean' })
@@ -903,3 +908,66 @@ export const earlyAccessRequests = sqliteTable('early_access_requests', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type EarlyAccessRequestRow = typeof earlyAccessRequests.$inferSelect;
+
+// ---- App settings (generic key/value store) ----
+// A small key/value table for admin-editable site configuration that used to be
+// hardcoded in source: AI system-prompt overrides (keys "ai.<id>") and editable
+// site copy such as the How-to walkthroughs (keys "howto.<screen>"). `value` is
+// opaque text — a plain string for a prompt, or JSON for structured content.
+// Absence of a key means "use the built-in default" — nothing is seeded here, so
+// the code defaults always apply until an admin overrides them.
+export const appSettings = sqliteTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type AppSettingRow = typeof appSettings.$inferSelect;
+
+// ---- Patch notes (release notes, admin-authored) ----
+// The changelog the owner writes on each release. Unlike the old compiled-in
+// PATCH_NOTES array, these are authored in the Admin workspace: an admin drafts
+// an entry, reviews it, then releases it. Only 'published' notes appear in Site
+// Help. `notes` is a JSON array of bullet strings; `dateLabel` is the free-text
+// date shown (e.g. "July 17, 2026"); `position` orders entries (higher = newer).
+export const PATCH_NOTE_STATUSES = ['draft', 'published'] as const;
+export type PatchNoteStatus = (typeof PATCH_NOTE_STATUSES)[number];
+
+export const patchNotes = sqliteTable('patch_notes', {
+  id: text('id').primaryKey(),
+  version: text('version').notNull(),
+  dateLabel: text('date_label').notNull(),
+  notes: text('notes').notNull(), // JSON string[] of bullet points
+  status: text('status', { enum: PATCH_NOTE_STATUSES }).notNull().default('draft'),
+  position: integer('position').notNull().default(0),
+  publishedAt: integer('published_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type PatchNoteRow = typeof patchNotes.$inferSelect;
+
+// ---- Badge types (recognition icons shown next to a user's name) ----
+// An admin-managed registry of the badges that can appear next to a member's
+// name (e.g. a star for early-release members, a shield for admins). Two are
+// seeded and marked builtin so they can't be deleted; admins can create their
+// own. `icon` is an Icon glyph name (see web components/Icon), `color` a hex
+// accent. `autoRole`, when set to a role key (e.g. "admin"), means every user
+// holding that role shows the badge automatically — otherwise the badge is
+// assigned per user (users.badges).
+export const badgeTypes = sqliteTable('badge_types', {
+  id: text('id').primaryKey(),
+  // Stable key referenced by users.badges (e.g. "early", "admin"). Lowercase.
+  key: text('key').notNull().unique(),
+  label: text('label').notNull(),
+  icon: text('icon').notNull(),
+  color: text('color').notNull().default('#EBCB74'),
+  description: text('description'),
+  // A role key that auto-grants this badge to every holder (e.g. "admin"), or
+  // null for a manually-assigned badge.
+  autoRole: text('auto_role'),
+  // Builtin badges (early, admin) can be edited but not deleted.
+  builtin: integer('builtin', { mode: 'boolean' }).notNull().default(false),
+  position: integer('position').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type BadgeTypeRow = typeof badgeTypes.$inferSelect;

@@ -76,6 +76,10 @@ export const NAV: NavWorkspace[] = [
     sections: [
       { key: 'ad_users', label: 'Users', icon: 'users' },
       { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
+      { key: 'ad_badges', label: 'Badges', icon: 'star' },
+      { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
+      { key: 'ad_notes', label: 'Patch Notes', icon: 'file-text' },
+      { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
       { key: 'ad_early', label: 'Early Access', icon: 'sparkles' },
       { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },

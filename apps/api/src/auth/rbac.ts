@@ -45,6 +45,21 @@ export function isAdmin(roles: RoleKey[]): boolean {
   return roles.includes('admin');
 }
 
+// Parse the stored JSON `badges` array (admin-assigned recognition badge keys)
+// into a clean, de-duplicated list of strings. Auto badges (e.g. the Admin
+// shield derived from the admin role) are added by the client from the badge
+// registry, not stored here.
+export function parseBadges(u: { badges?: string | null }): string[] {
+  if (!u.badges) return [];
+  try {
+    const raw = JSON.parse(u.badges);
+    if (!Array.isArray(raw)) return [];
+    return [...new Set(raw.filter((b): b is string => typeof b === 'string'))];
+  } catch {
+    return [];
+  }
+}
+
 // Which role keys grant access to a given workspace (admin grants all).
 const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
@@ -95,6 +110,10 @@ export interface PublicUser {
   // The user's profile picture as a data URL, or null when unset.
   avatarUrl: string | null;
   roles: RoleKey[];
+  // Admin-assigned recognition badge keys (see badge_types). The client unions
+  // these with any auto badges (e.g. the Admin shield) from the badge registry
+  // when rendering the icons next to the name.
+  badges: string[];
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards; the name is resolved from trading_teams by the caller.
   teamId: string | null;
@@ -126,6 +145,7 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
     email: u.username === DEMO_USERNAME ? null : u.email,
     avatarUrl: u.avatar ?? null,
     roles,
+    badges: parseBadges(u),
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,
     viewBrokerage: u.viewBrokerage,

@@ -434,3 +434,46 @@ export const DEFAULT_TUTORIAL: Tutorial = {
 export function tutorialFor(screen: string): Tutorial {
   return TUTORIALS[screen] ?? DEFAULT_TUTORIAL;
 }
+
+// The curated set of screens shown in Site Help ▸ How to and offered in the
+// admin Site Wording editor. Shared so both stay in sync.
+export const HOWTO_TOPICS: { key: string; label: string }[] = [
+  { key: 'live', label: 'Live Wall' },
+  { key: 'alerts', label: 'Alerts' },
+  { key: 'desk', label: 'Trade Desk' },
+  { key: 'sessions', label: 'Strategy Sessions' },
+  { key: 'funded', label: 'Manual Trades' },
+  { key: 'news', label: 'Market News' },
+  { key: 'td_all', label: 'To Do List' },
+  { key: 'st_game', label: 'Study Game' },
+  { key: 'st_home', label: 'Study Hub' },
+];
+
+// Parse an admin override (stored JSON) into a Tutorial, keeping only the fields
+// we render. Returns null when the JSON is missing/invalid so callers fall back
+// to the bundled default.
+export function parseHowtoOverride(json: string | undefined | null): Tutorial | null {
+  if (!json) return null;
+  try {
+    const raw = JSON.parse(json) as Partial<Tutorial>;
+    if (!raw || typeof raw.title !== 'string') return null;
+    const steps = Array.isArray(raw.steps)
+      ? raw.steps
+          .filter((s): s is TutorialStep => !!s && typeof s.title === 'string' && typeof s.body === 'string')
+          .map((s) => ({ title: s.title, body: s.body }))
+      : [];
+    return { title: raw.title, intro: typeof raw.intro === 'string' ? raw.intro : undefined, steps };
+  } catch {
+    return null;
+  }
+}
+
+export function serializeTutorial(t: Tutorial): string {
+  return JSON.stringify({ title: t.title, intro: t.intro ?? '', steps: t.steps.map((s) => ({ title: s.title, body: s.body })) });
+}
+
+// The effective How-to for a screen: an admin override if present, else the
+// bundled default.
+export function mergedTutorial(screen: string, overrides: Record<string, string>): Tutorial {
+  return parseHowtoOverride(overrides[screen]) ?? tutorialFor(screen);
+}

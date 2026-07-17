@@ -6,6 +6,8 @@ import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../../auth/access';
 import type { AdminUser, RoleKey, Team } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
+import { Icon } from '../../components/Icon';
+import { UserBadges, useBadgeRegistry } from '../../components/UserBadges';
 import {
   Badge,
   SectionHeader,
@@ -35,10 +37,17 @@ function toggle(roles: RoleKey[], r: RoleKey): RoleKey[] {
   return roles.includes(r) ? roles.filter((x) => x !== r) : [...roles, r];
 }
 
+function toggleKey(list: string[], k: string): string[] {
+  return list.includes(k) ? list.filter((x) => x !== k) : [...list, k];
+}
+
 export function AdminUsers({ theme }: { theme: Theme }) {
   const { user: me } = useAuth();
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
+  const badgeRegistry = useBadgeRegistry();
+  // Only non-auto badges are hand-assigned; auto badges (e.g. Admin) come from roles.
+  const assignableBadges = badgeRegistry.filter((b) => !b.autoRole);
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -271,9 +280,10 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#eef3ff' }}>
-                    {u.displayName}
-                    {isSelf && <span style={{ color: theme.accent, fontWeight: 600 }}> · you</span>}
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#eef3ff', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span>{u.displayName}</span>
+                    <UserBadges roles={u.roles} badges={u.badges} size={14} />
+                    {isSelf && <span style={{ color: theme.accent, fontWeight: 600 }}>· you</span>}
                   </div>
                   <div style={{ fontSize: 11.5, color: '#8ea3cc', fontFamily: "'IBM Plex Mono', monospace", marginTop: 3 }}>
                     @{u.username}
@@ -385,6 +395,42 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                   disabled={busyId === u.id}
                 />
               </div>
+
+              {/* Badge assignment (auto badges like Admin are granted by role) */}
+              {assignableBadges.length > 0 && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ ...fieldLabel, marginBottom: 8 }}>Badges</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {assignableBadges.map((b) => {
+                      const on = u.badges.includes(b.key);
+                      return (
+                        <button
+                          key={b.key}
+                          onClick={() => patch(u.id, { badges: toggleKey(u.badges, b.key) })}
+                          disabled={busyId === u.id}
+                          title={b.description || b.label}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            padding: '6px 11px',
+                            borderRadius: 999,
+                            cursor: busyId === u.id ? 'default' : 'pointer',
+                            color: on ? '#0a1226' : '#aebcd8',
+                            background: on ? b.color : 'transparent',
+                            border: `1px solid ${on ? b.color : theme.navBorder}`,
+                          }}
+                        >
+                          <Icon name={b.icon} size={13} color={on ? '#0a1226' : b.color} />
+                          {b.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {resetFor === u.id && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>

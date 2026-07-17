@@ -6,6 +6,7 @@ import { isAdmin } from '../auth/access';
 import type { ChatMessage, TeamChatReason, User } from '../api/types';
 import { Icon } from './Icon';
 import { Avatar } from './Avatar';
+import { UserBadges } from './UserBadges';
 
 // The lower-right corner widget: the Team Chat, and only the team chat. The
 // how-to guides, announcements, and patch notes now live in the Site Help
@@ -274,7 +275,12 @@ export function TeamChat({
                       <div key={m.id} style={{ display: 'flex', gap: 8, flexDirection: m.mine ? 'row-reverse' : 'row', alignItems: 'flex-end' }}>
                         <Avatar name={m.author} src={m.avatar} size={28} accent={theme.accent} />
                         <div style={{ maxWidth: '78%', display: 'flex', flexDirection: 'column', alignItems: m.mine ? 'flex-end' : 'flex-start' }}>
-                          {!m.mine && <div style={{ fontSize: 10, color: '#7e92c0', margin: '0 0 2px 2px' }}>{m.author}</div>}
+                          {!m.mine && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '0 0 2px 2px' }}>
+                              <span style={{ fontSize: 10, color: '#7e92c0' }}>{m.author}</span>
+                              <UserBadges roles={m.roles} badges={m.badges} size={11} gap={2} />
+                            </div>
+                          )}
                           <div
                             style={{
                               fontSize: 12.5,

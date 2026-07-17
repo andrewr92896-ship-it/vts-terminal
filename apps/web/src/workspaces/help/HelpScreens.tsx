@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { accentGradient, type Theme } from '../../theme/themes';
-import { tutorialFor } from '../../help/tutorials';
+import { HOWTO_TOPICS, mergedTutorial } from '../../help/tutorials';
 import { PATCH_NOTES } from '../../meta/version';
 import { api, ApiError } from '../../api/client';
-import type { Announcement, BugReport, User } from '../../api/types';
+import type { Announcement, BugReport, PatchNoteEntry, User } from '../../api/types';
 import { Icon } from '../../components/Icon';
 
 // The Site Help workspace screens: How to, Announcements, Patch notes, Report a
@@ -59,22 +59,22 @@ function primaryBtn(theme: Theme, disabled = false): CSSProperties {
 }
 
 // ---- How to ----
-// A curated set of the portal's key screens; picking one shows its walkthrough.
-const HOWTO_TOPICS: { key: string; label: string }[] = [
-  { key: 'live', label: 'Live Wall' },
-  { key: 'alerts', label: 'Alerts' },
-  { key: 'desk', label: 'Trade Desk' },
-  { key: 'sessions', label: 'Strategy Sessions' },
-  { key: 'funded', label: 'Manual Trades' },
-  { key: 'news', label: 'Market News' },
-  { key: 'td_all', label: 'To Do List' },
-  { key: 'st_game', label: 'Study Game' },
-  { key: 'st_home', label: 'Study Hub' },
-];
-
+// Topics come from the shared HOWTO_TOPICS list (help/tutorials); the walkthrough
+// text is the built-in copy with any admin overrides (Site Wording) layered on.
 export function HelpHowTo({ theme }: { theme: Theme }) {
   const [topic, setTopic] = useState(HOWTO_TOPICS[0].key);
-  const t = tutorialFor(topic);
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let alive = true;
+    api
+      .siteContent()
+      .then((r) => alive && setOverrides(r.howto))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const t = mergedTutorial(topic, overrides);
   return page(
     <>
       <Header title="How to" subtitle="Step-by-step walkthroughs for the main areas of the portal." />
@@ -118,13 +118,51 @@ export function HelpHowTo({ theme }: { theme: Theme }) {
 }
 
 // ---- Patch notes ----
+// One display row, whether from the admin-authored (published) notes or the
+// bundled historical archive.
+interface DisplayNote {
+  key: string;
+  version: string;
+  date: string;
+  notes: string[];
+}
+
 export function HelpPatchNotes({ theme }: { theme: Theme }) {
+  // Admin-published notes come first (newest releases); the bundled PATCH_NOTES
+  // fill in the historical archive for versions that predate the DB store.
+  const [published, setPublished] = useState<PatchNoteEntry[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api
+      .patchNotes()
+      .then((r) => alive && setPublished(r.notes))
+      .catch(() => alive && setPublished([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const dbNotes: DisplayNote[] = (published ?? []).map((p) => ({
+    key: `db:${p.id}`,
+    version: p.version,
+    date: p.dateLabel,
+    notes: p.notes,
+  }));
+  const dbVersions = new Set(dbNotes.map((n) => n.version));
+  const archive: DisplayNote[] = PATCH_NOTES.filter((p) => !dbVersions.has(p.version)).map((p) => ({
+    key: `bundled:${p.version}`,
+    version: p.version,
+    date: p.date,
+    notes: p.notes,
+  }));
+  const all = [...dbNotes, ...archive];
+
   return page(
     <>
       <Header title="Patch notes" subtitle="What changed in each release of the portal." />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {PATCH_NOTES.map((p) => (
-          <div key={p.version} style={panel(theme)}>
+        {all.map((p) => (
+          <div key={p.key} style={panel(theme)}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: theme.accent }}>{p.version}</span>
               <span style={{ fontSize: 11, color: '#7488b5', fontFamily: "'IBM Plex Mono', monospace" }}>{p.date}</span>

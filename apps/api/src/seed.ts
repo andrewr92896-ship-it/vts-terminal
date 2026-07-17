@@ -5,6 +5,7 @@ import { db } from './db/index.js';
 import { tradingTeams, users } from './db/schema.js';
 import { hashPassword } from './auth/passwords.js';
 import { seedConnectionsFromEnv } from './trading/connections.js';
+import { seedBadges } from './badges/service.js';
 import {
   DEMO_USERNAME,
   DEMO_DISPLAY_NAME,
@@ -221,6 +222,7 @@ if (isMain) {
   seedAdmin()
     .then(() => backfillEmails())
     .then(() => seedDemo())
+    .then(() => seedBadges())
     .then(() => process.exit(0))
     .catch((err) => {
       console.error('Seed failed:', err);

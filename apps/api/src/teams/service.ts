@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { eq, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingTeams, users } from '../db/schema.js';
+import { parseRoles, type RoleKey } from '../auth/rbac.js';
 
 // Trading teams: admin-managed groups a trader belongs to. A user is a member of
 // at most one team (users.team_id). Teams scope the Studies leaderboards AND all
@@ -17,12 +18,22 @@ export const DEFAULT_TEAM_NAME = 'Vitalis Trading Team';
 
 export class TeamError extends Error {}
 
+// A member of a team, as shown in the admin Teams roster.
+export interface TeamMemberView {
+  id: string;
+  displayName: string;
+  username: string;
+  roles: RoleKey[];
+  active: boolean;
+}
+
 // One team as shown in the admin team-management panel, with its current member
-// count so the admin can see how the roster is split.
+// count and roster so the admin can see and adjust who is on which team.
 export interface TeamView {
   id: string;
   name: string;
   memberCount: number;
+  members: TeamMemberView[];
   createdAt: number;
 }
 
@@ -36,18 +47,41 @@ export interface TeamRef {
 export async function listTeams(): Promise<TeamView[]> {
   const [teamRows, memberRows] = await Promise.all([
     db.select().from(tradingTeams),
-    db.select({ teamId: users.teamId }).from(users),
+    db
+      .select({
+        id: users.id,
+        displayName: users.displayName,
+        username: users.username,
+        roles: users.roles,
+        active: users.active,
+        teamId: users.teamId,
+      })
+      .from(users),
   ]);
-  const counts = new Map<string, number>();
+  const byTeam = new Map<string, TeamMemberView[]>();
   for (const m of memberRows) {
-    if (m.teamId) counts.set(m.teamId, (counts.get(m.teamId) ?? 0) + 1);
+    if (!m.teamId) continue;
+    const member: TeamMemberView = {
+      id: m.id,
+      displayName: m.displayName,
+      username: m.username,
+      roles: parseRoles({ roles: m.roles }),
+      active: m.active,
+    };
+    const list = byTeam.get(m.teamId);
+    if (list) list.push(member);
+    else byTeam.set(m.teamId, [member]);
   }
-  const views = teamRows.map((t) => ({
-    id: t.id,
-    name: t.name,
-    memberCount: counts.get(t.id) ?? 0,
-    createdAt: t.createdAt.getTime(),
-  }));
+  const views: TeamView[] = teamRows.map((t) => {
+    const members = (byTeam.get(t.id) ?? []).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    return {
+      id: t.id,
+      name: t.name,
+      memberCount: members.length,
+      members,
+      createdAt: t.createdAt.getTime(),
+    };
+  });
   // Alphabetical, but keep the seeded default team pinned to the top.
   views.sort((a, b) => {
     if (a.id === DEFAULT_TEAM_ID) return -1;
@@ -66,7 +100,7 @@ export async function createTeam(name: string): Promise<TeamView> {
   const now = new Date();
   const row = { id: crypto.randomUUID(), name: clean, createdAt: now, updatedAt: now };
   await db.insert(tradingTeams).values(row);
-  return { id: row.id, name: row.name, memberCount: 0, createdAt: now.getTime() };
+  return { id: row.id, name: row.name, memberCount: 0, members: [], createdAt: now.getTime() };
 }
 
 export async function renameTeam(id: string, name: string): Promise<TeamView> {
@@ -79,7 +113,7 @@ export async function renameTeam(id: string, name: string): Promise<TeamView> {
   if (dup && dup.id !== id) throw new TeamError('A team with that name already exists');
   await db.update(tradingTeams).set({ name: clean, updatedAt: new Date() }).where(eq(tradingTeams.id, id));
   const memberRows = await db.select({ teamId: users.teamId }).from(users).where(eq(users.teamId, id));
-  return { id, name: clean, memberCount: memberRows.length, createdAt: team.createdAt.getTime() };
+  return { id, name: clean, memberCount: memberRows.length, members: [], createdAt: team.createdAt.getTime() };
 }
 
 // Delete a team. Its members are unassigned (team_id set to null) first, so no

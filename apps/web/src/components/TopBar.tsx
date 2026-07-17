@@ -9,6 +9,7 @@ import { useAlertSound, ALERT_SOUNDS } from '../sound/alertSound';
 import { Clock } from './Clock';
 import { Icon } from './Icon';
 import { Avatar } from './Avatar';
+import { UserBadges } from './UserBadges';
 
 interface TopBarProps {
   user: User;
@@ -563,7 +564,10 @@ export function TopBar(props: TopBarProps) {
             <Avatar name={user.displayName || userName} src={user.avatarUrl} size={32} accent={accent} />
             {!isPhone && (
               <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{userName}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{userName}</span>
+                  <UserBadges roles={user.roles} badges={user.badges} size={13} />
+                </div>
                 <div style={{ fontSize: 9.5, color: accent, letterSpacing: '0.6px', textTransform: 'uppercase' }}>
                   {rolesSummary(effectiveRoles)}
                   {actingRole ? ' · preview' : ''}
