@@ -32,7 +32,9 @@ import {
   studyBgTint,
 } from '../workspaces/studies/studyTheme';
 import { Screen } from '../workspaces/Screens';
-import { AdminUsers } from '../workspaces/AdminUsers';
+import { AdminUsers } from '../workspaces/admin/AdminUsers';
+import { AdminTeams } from '../workspaces/admin/AdminTeams';
+import { AdminEarlyAccess } from '../workspaces/admin/AdminEarlyAccess';
 import { TodoAll } from '../workspaces/TodoAll';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
@@ -123,6 +125,14 @@ function renderScreen(
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     case 'st_decks':
       return <TeamStudyDecks theme={theme} />;
+    // Admin workspace sections. Access is gated by the sidebar/workspace filter
+    // (admins only) and enforced server-side on every admin endpoint.
+    case 'ad_users':
+      return <AdminUsers theme={theme} />;
+    case 'ad_teams':
+      return <AdminTeams theme={theme} />;
+    case 'ad_early':
+      return <AdminEarlyAccess theme={theme} />;
     default:
       return null;
   }
@@ -201,7 +211,6 @@ export function Portal() {
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
   // Sidebar collapse (desktop) — persisted per the design handoff.
@@ -368,7 +377,6 @@ export function Portal() {
       onOpenNav={() => setNavOpen(true)}
       onOpenClaude={() => setAiOpen(true)}
       onOpenAccount={() => setAccountOpen(true)}
-      onOpenAdmin={() => setAdminOpen(true)}
       onSetActingRole={changeActingRole}
       onLogout={logout}
     />
@@ -472,60 +480,6 @@ export function Portal() {
             onClose={() => setAiOpen(false)}
           />
           <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
-
-          {/* User management — opened from the avatar menu (admins only). */}
-          {adminOpen && (
-            <>
-              <div
-                onClick={() => setAdminOpen(false)}
-                style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 60, animation: 'fadeIn .2s ease' }}
-              />
-              <div
-                role="dialog"
-                aria-modal="true"
-                style={{
-                  position: 'fixed',
-                  top: isPhone ? 0 : '4vh',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: isPhone ? '100%' : 'min(1040px, 94vw)',
-                  height: isPhone ? '100%' : '92vh',
-                  overflowY: 'auto',
-                  background: C.bg,
-                  border: isPhone ? 'none' : `1px solid ${C.line2}`,
-                  borderRadius: isPhone ? 0 : 14,
-                  boxShadow: '0 24px 60px rgba(0,0,0,.55)',
-                  zIndex: 61,
-                  animation: 'popIn .25s ease',
-                }}
-              >
-                <div
-                  style={{
-                    position: 'sticky',
-                    top: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '14px 18px',
-                    background: C.side,
-                    borderBottom: `1px solid ${C.line}`,
-                  }}
-                >
-                  <strong style={{ fontSize: 15, color: C.text }}>User Management</strong>
-                  <button
-                    onClick={() => setAdminOpen(false)}
-                    aria-label="Close"
-                    style={{ background: 'none', border: 'none', color: C.muted, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div style={{ padding: isPhone ? '16px 14px' : '20px 22px' }}>
-                  <AdminUsers theme={theme} />
-                </div>
-              </div>
-            </>
-          )}
 
           <HelpHub screen={screen} theme={theme} user={user!} />
 

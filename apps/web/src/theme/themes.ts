@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'todo' | 'studies';
+export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'admin';
 
 export interface Theme {
   pageBg: string;
@@ -45,6 +45,18 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#2f9e86',
     accentText: '#06231d',
   },
+  // The Admin workspace: a slate background with a rose accent to signal an
+  // elevated, privileged area distinct from the three member workspaces.
+  admin: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#2b2530 0%,#15131a 60%)',
+    headerBg: 'linear-gradient(90deg,#241f29 0%,#33283c 100%)',
+    headerBorder: '#3d3346',
+    navBg: '#1b171f',
+    navBorder: '#2c2633',
+    accent: '#e0708f',
+    accent2: '#c14e6e',
+    accentText: '#2a0f19',
+  },
 };
 
 export function accentGradient(t: Theme): string {
@@ -85,6 +97,13 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     size: '19px',
     letterSpacing: '0.5px',
   },
+  admin: {
+    name: () => 'ADMIN',
+    sub: 'Portal administration',
+    color: '#f0a8bf',
+    size: '21px',
+    letterSpacing: '2px',
+  },
 };
 
 export interface TabDef {
@@ -111,16 +130,23 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'td_trading', label: 'To Do' },
   ],
   todo: [{ key: 'td_all', label: 'All Tasks' }],
+  admin: [
+    { key: 'ad_users', label: 'Users' },
+    { key: 'ad_teams', label: 'Teams' },
+    { key: 'ad_early', label: 'Early Access' },
+  ],
 };
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'live',
   todo: 'td_all',
   studies: 'st_home',
+  admin: 'ad_users',
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   todo: 'To Do List',
   trading: 'Trading',
   studies: 'Studies',
+  admin: 'Admin',
 };

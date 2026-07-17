@@ -64,6 +64,21 @@ export const NAV: NavWorkspace[] = [
     group: 'Tasks',
     sections: [{ key: 'td_all', label: 'All Tasks', icon: 'list-checks' }],
   },
+  // Admin-only. Shown in the sidebar only to admins (Portal filters the
+  // workspaces list via workspacesForRoles); consolidates the portal's admin
+  // tools into one workspace.
+  {
+    key: 'admin',
+    label: 'Admin',
+    icon: 'shield-check',
+    accent: '#E0708F',
+    group: 'Administration',
+    sections: [
+      { key: 'ad_users', label: 'Users', icon: 'users' },
+      { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
+      { key: 'ad_early', label: 'Early Access', icon: 'sparkles' },
+    ],
+  },
 ];
 
 export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {

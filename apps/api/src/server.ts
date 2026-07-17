@@ -9,6 +9,7 @@ import { config } from './config.js';
 import { loadUser } from './auth/middleware.js';
 import { authRoutes } from './routes/auth.js';
 import { adminRoutes } from './routes/admin.js';
+import { earlyAccessRoutes } from './routes/earlyAccess.js';
 import { brokerRoutes } from './routes/brokers.js';
 import { healthRoutes } from './routes/health.js';
 import { todoRoutes } from './routes/todo.js';
@@ -76,6 +77,7 @@ export async function buildServer() {
   await app.register(healthRoutes);
   await app.register(authRoutes);
   await app.register(adminRoutes);
+  await app.register(earlyAccessRoutes);
   await app.register(brokerRoutes);
   await app.register(tradingRoutes);
   await app.register(webhookRoutes);

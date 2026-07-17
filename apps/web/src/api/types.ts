@@ -102,6 +102,17 @@ export interface TeamRef {
   name: string;
 }
 
+// A public early-access lead submitted from the login screen (mirror of the
+// backend EarlyAccessView).
+export interface EarlyAccessRequest {
+  id: string;
+  firstName: string;
+  lastName: string | null;
+  email: string;
+  source: string;
+  createdAt: number;
+}
+
 // Admin user-management view (matches the backend AdminUserView). Includes
 // the original created username, which never changes when a user renames.
 export interface AdminUser {
