@@ -45,10 +45,21 @@ const profileSchema = z
     username: z.string().trim().min(1).max(64).optional(),
     displayName: z.string().trim().min(1).max(120).optional(),
     email: z.string().trim().email().max(255).optional(),
+    // A client-resized profile picture as a data URL (~128px JPEG/PNG), or an
+    // empty string / null to remove it. Capped to keep the inline blob small.
+    avatar: z
+      .string()
+      .max(400_000)
+      .refine((v) => v === '' || /^data:image\/(png|jpe?g|webp);base64,/.test(v), {
+        message: 'Invalid image',
+      })
+      .nullable()
+      .optional(),
   })
-  .refine((v) => v.username != null || v.displayName != null || v.email != null, {
-    message: 'Nothing to update',
-  });
+  .refine(
+    (v) => v.username != null || v.displayName != null || v.email != null || v.avatar !== undefined,
+    { message: 'Nothing to update' },
+  );
 
 export async function authRoutes(app: FastifyInstance) {
   app.post('/api/auth/login', async (request, reply) => {
@@ -175,9 +186,20 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Nothing to update' });
     }
     const me = request.currentUser!;
-    const patch: { username?: string; displayName?: string; email?: string; updatedAt: Date } = {
+    const patch: {
+      username?: string;
+      displayName?: string;
+      email?: string;
+      avatar?: string | null;
+      updatedAt: Date;
+    } = {
       updatedAt: new Date(),
     };
+
+    if (parsed.data.avatar !== undefined) {
+      // An empty string clears the picture; a data URL sets it.
+      patch.avatar = parsed.data.avatar ? parsed.data.avatar : null;
+    }
 
     if (parsed.data.username != null) {
       const username = parsed.data.username.toLowerCase();

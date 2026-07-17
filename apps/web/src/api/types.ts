@@ -68,6 +68,8 @@ export interface User {
   username: string;
   displayName: string;
   email: string | null;
+  // The user's profile picture as a data URL, or null when unset.
+  avatarUrl: string | null;
   roles: RoleKey[];
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards to teammates; the Trading workspace itself stays shared.
@@ -857,21 +859,71 @@ export interface AlertsData {
 }
 
 // ---- Chat + announcements (mirror of apps/api/src/chat) ----
-export type ChatChannel = 'trading' | 'general';
+// The Team Chat message. Scoped to the sender's trading team; the avatar is the
+// sender's current profile picture (data URL) or null.
 export interface ChatMessage {
   id: string;
-  channel: ChatChannel;
   author: string;
+  avatar: string | null;
   body: string;
   createdAt: number;
   mine: boolean;
 }
+
+// The team-chat feed response. `eligible` is false when the viewer is not on a
+// trading team (see `reason`), so the UI can explain the trading-team feature.
+export type TeamChatReason = 'ok' | 'no_trading' | 'no_team';
+export interface TeamChatFeed {
+  eligible: boolean;
+  reason: TeamChatReason;
+  teamName: string | null;
+  messages: ChatMessage[];
+}
+
+// One in-portal notification (shown in the top-bar bell). Chat notifications
+// carry the teammate's avatar; suggestion/bug notifications are admin-only.
+export type NotificationKind = 'chat' | 'suggestion' | 'bug';
+export interface NotificationItem {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  author: string;
+  avatar: string | null;
+  createdAt: number;
+}
+
 export interface Announcement {
   id: string;
   author: string;
   title: string;
   body: string;
   createdAt: number;
+}
+
+// ---- Feedback: suggestions & bug reports (mirror of apps/api/src/feedback) ----
+export interface Suggestion {
+  id: string;
+  author: string;
+  body: string;
+  status: string; // 'new' | 'reviewed'
+  createdAt: number;
+}
+
+export interface BugMessage {
+  id: string;
+  role: 'user' | 'ai';
+  body: string;
+  createdAt: number;
+}
+export interface BugReport {
+  id: string;
+  author: string;
+  summary: string;
+  status: string; // 'open' | 'submitted' | 'resolved'
+  createdAt: number;
+  updatedAt: number;
+  messages: BugMessage[];
 }
 
 // A Trump Truth Social post pulled by the live feed (mirror of

@@ -1,12 +1,14 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
-import type { BrokerStatus, RoleKey, User } from '../api/types';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import type { BrokerStatus, NotificationItem, RoleKey, User } from '../api/types';
 import { C, GOLD_GRADIENT, tint } from '../theme/tokens';
-import { ALL_ROLES, ROLE_LABELS, isAdmin, rolesSummary } from '../auth/access';
+import { rolesSummary } from '../auth/access';
+import { api } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { usePrivacy } from '../privacy/privacy';
 import { useAlertSound, ALERT_SOUNDS } from '../sound/alertSound';
 import { Clock } from './Clock';
 import { Icon } from './Icon';
+import { Avatar } from './Avatar';
 
 interface TopBarProps {
   user: User;
@@ -21,9 +23,28 @@ interface TopBarProps {
   onOpenNav: () => void;
   onOpenClaude: () => void;
   onOpenAccount: () => void;
-  onSetActingRole: (r: RoleKey | null) => void;
+  onOpenChat: () => void;
   onLogout: () => void;
 }
+
+const NOTIF_SEEN_KEY = 'vts-notif-seen';
+const NOTIF_POLL_MS = 20000;
+
+function timeAgo(ms: number): string {
+  const s = Math.max(0, Math.floor((Date.now() - ms) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+const NOTIF_ICON: Record<NotificationItem['kind'], string> = {
+  chat: 'message-circle',
+  suggestion: 'lightbulb',
+  bug: 'bug',
+};
 
 function brokerDotColor(status: BrokerStatus['status']): string {
   switch (status) {
@@ -130,7 +151,7 @@ export function TopBar(props: TopBarProps) {
     onOpenNav,
     onOpenClaude,
     onOpenAccount,
-    onSetActingRole,
+    onOpenChat,
     onLogout,
   } = props;
 
@@ -141,7 +162,48 @@ export function TopBar(props: TopBarProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [viewAsOpen, setViewAsOpen] = useState(false);
+
+  // In-portal notifications (new team chat + admin suggestions/bugs). Unread is
+  // computed from a locally stored last-seen timestamp so it survives reloads.
+  const [notifs, setNotifs] = useState<NotificationItem[]>([]);
+  const [notifSeen, setNotifSeen] = useState<number>(() => {
+    const v = typeof localStorage !== 'undefined' ? localStorage.getItem(NOTIF_SEEN_KEY) : null;
+    return v ? Number(v) : 0;
+  });
+  useEffect(() => {
+    let alive = true;
+    async function tick() {
+      try {
+        const r = await api.notifications();
+        if (alive) setNotifs(r.items);
+      } catch {
+        /* transient — keep last values */
+      }
+    }
+    void tick();
+    const id = window.setInterval(tick, NOTIF_POLL_MS);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, []);
+  const unreadCount = notifs.filter((n) => n.createdAt > notifSeen).length;
+  function markNotifsSeen() {
+    const latest = notifs.reduce((m, n) => Math.max(m, n.createdAt), notifSeen);
+    setNotifSeen(latest);
+    try {
+      localStorage.setItem(NOTIF_SEEN_KEY, String(latest));
+    } catch {
+      /* storage may be blocked */
+    }
+  }
+  function openNotifs() {
+    setNotifOpen((v) => {
+      const next = !v;
+      if (next) markNotifsSeen();
+      return next;
+    });
+  }
 
   const userName = user.displayName.split(' ')[0] || user.username;
   const hasBrokerStatus = canTrade && brokers.length > 0;
@@ -269,14 +331,77 @@ export function TopBar(props: TopBarProps) {
 
         {/* Notifications */}
         <div style={{ position: 'relative', flex: 'none' }}>
-          <button onClick={() => setNotifOpen((v) => !v)} aria-label="Notifications" style={iconBtn(notifOpen)}>
+          <button onClick={openNotifs} aria-label="Notifications" style={iconBtn(notifOpen)}>
             <Icon name="bell" size={17} />
+            {unreadCount > 0 && !notifOpen && (
+              <span
+                aria-hidden
+                style={{
+                  position: 'absolute',
+                  top: -4,
+                  right: -4,
+                  minWidth: 15,
+                  height: 15,
+                  padding: '0 3px',
+                  borderRadius: 8,
+                  background: C.red,
+                  color: '#fff',
+                  fontSize: 9,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '2px solid ' + C.side,
+                }}
+              >
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
           </button>
-          <Dropdown open={notifOpen} onClose={() => setNotifOpen(false)} width={280}>
+          <Dropdown open={notifOpen} onClose={() => setNotifOpen(false)} width={300}>
             <div style={menuLabel}>Notifications</div>
-            <div style={{ padding: '14px 10px', textAlign: 'center', color: C.faint, fontSize: 12.5 }}>
-              You're all caught up.
-            </div>
+            {notifs.length === 0 ? (
+              <div style={{ padding: '14px 10px', textAlign: 'center', color: C.faint, fontSize: 12.5 }}>
+                You're all caught up.
+              </div>
+            ) : (
+              <div style={{ maxHeight: 340, overflowY: 'auto' }}>
+                {notifs.slice(0, 20).map((n) => (
+                  <button
+                    key={n.id}
+                    onClick={() => {
+                      setNotifOpen(false);
+                      if (n.kind === 'chat') onOpenChat();
+                    }}
+                    style={{
+                      ...menuItem,
+                      alignItems: 'flex-start',
+                      gap: 9,
+                      background: n.createdAt > notifSeen ? tint(C.gold, 0.06) : 'transparent',
+                    }}
+                  >
+                    {n.kind === 'chat' ? (
+                      <Avatar name={n.author} src={n.avatar} size={26} accent={C.gold} />
+                    ) : (
+                      <span style={{ flex: 'none', width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,.05)', border: `1px solid ${C.line2}` }}>
+                        <Icon name={NOTIF_ICON[n.kind]} size={13} color={C.muted} />
+                      </span>
+                    )}
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 6 }}>
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: C.text }}>
+                          {n.kind === 'chat' ? n.author : n.title}
+                        </span>
+                        <span style={{ fontSize: 9.5, color: C.faint, flex: 'none' }}>{timeAgo(n.createdAt)}</span>
+                      </span>
+                      <span style={{ display: 'block', fontSize: 11.5, color: C.muted, lineHeight: 1.45, whiteSpace: 'normal', overflow: 'hidden', textOverflow: 'ellipsis', maxHeight: 32 }}>
+                        {n.kind === 'chat' ? n.body : `${n.author}: ${n.body}`}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
           </Dropdown>
         </div>
 
@@ -417,25 +542,7 @@ export function TopBar(props: TopBarProps) {
             onClick={() => setMenuOpen((v) => !v)}
             style={{ display: 'flex', alignItems: 'center', gap: 9, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg,#143FA0,#0A2A6B)',
-                border: `1px solid ${accent}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontFamily: C.mono,
-                fontWeight: 600,
-                fontSize: 13,
-                color: accent,
-                flex: 'none',
-              }}
-            >
-              {userName.charAt(0).toUpperCase()}
-            </div>
+            <Avatar name={user.displayName || userName} src={user.avatarUrl} size={32} accent={accent} />
             {!isPhone && (
               <div style={{ lineHeight: 1.2, textAlign: 'left' }}>
                 <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text }}>{userName}</div>
@@ -452,56 +559,8 @@ export function TopBar(props: TopBarProps) {
               Signed in as <b style={{ color: C.text }}>{user.email ?? user.username}</b>
               <br />
               Roles: {rolesSummary(user.roles)}
+              {actingRole && <><br />Previewing as a member role · manage in Admin → View as role</>}
             </div>
-
-            {isAdmin(user.roles) && (
-              <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
-                <button onClick={() => setViewAsOpen((v) => !v)} style={menuItem}>
-                  <Icon name="eye" size={15} color={C.faint} />
-                  View as role
-                  {actingRole && <span style={{ fontSize: 10, color: C.gold }}>· {ROLE_LABELS[actingRole]}</span>}
-                  <span style={{ marginLeft: 'auto', fontSize: 10, color: C.faint }}>{viewAsOpen ? '▴' : '▾'}</span>
-                </button>
-                {viewAsOpen && (
-                  <div>
-                    <button
-                      onClick={() => {
-                        onSetActingRole(null);
-                        setMenuOpen(false);
-                      }}
-                      style={{
-                        ...menuItem,
-                        paddingLeft: 18,
-                        color: !actingRole ? C.gold : C.text,
-                        background: !actingRole ? tint(C.gold, 0.1) : 'transparent',
-                      }}
-                    >
-                      My access (all my roles)
-                    </button>
-                    {ALL_ROLES.map((r) => {
-                      const on = actingRole === r;
-                      return (
-                        <button
-                          key={r}
-                          onClick={() => {
-                            onSetActingRole(on ? null : r);
-                            setMenuOpen(false);
-                          }}
-                          style={{
-                            ...menuItem,
-                            paddingLeft: 18,
-                            color: on ? C.gold : C.text,
-                            background: on ? tint(C.gold, 0.1) : 'transparent',
-                          }}
-                        >
-                          {ROLE_LABELS[r]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
 
             <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
               <button

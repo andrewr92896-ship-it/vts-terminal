@@ -18,6 +18,7 @@ import { webhookRoutes } from './routes/webhooks.js';
 import { tvWebhookRoutes } from './routes/tvWebhook.js';
 import { aiRoutes } from './routes/ai.js';
 import { chatRoutes } from './routes/chat.js';
+import { feedbackRoutes } from './routes/feedback.js';
 import { studiesRoutes } from './routes/studies.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
@@ -85,6 +86,7 @@ export async function buildServer() {
   await app.register(todoRoutes);
   await app.register(aiRoutes);
   await app.register(chatRoutes);
+  await app.register(feedbackRoutes);
   await app.register(studiesRoutes);
   await app.register(pushRoutes);
   await app.register(pushoverRoutes);

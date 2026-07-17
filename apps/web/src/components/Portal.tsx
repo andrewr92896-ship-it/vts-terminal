@@ -24,7 +24,7 @@ import { InstallPrompt } from './InstallPrompt';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
-import { HelpHub } from './HelpHub';
+import { TeamChat } from './TeamChat';
 import {
   currentStudyLevel,
   currentStudyTheme,
@@ -35,6 +35,16 @@ import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/admin/AdminUsers';
 import { AdminTeams } from '../workspaces/admin/AdminTeams';
 import { AdminEarlyAccess } from '../workspaces/admin/AdminEarlyAccess';
+import { AdminViewAs } from '../workspaces/admin/AdminViewAs';
+import { AdminSuggestions } from '../workspaces/admin/AdminSuggestions';
+import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
+import {
+  HelpHowTo,
+  HelpAnnouncements,
+  HelpPatchNotes,
+  HelpBugReport,
+  HelpSuggestion,
+} from '../workspaces/help/HelpScreens';
 import { TodoAll } from '../workspaces/TodoAll';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
@@ -211,6 +221,7 @@ export function Portal() {
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
   // Sidebar collapse (desktop) — persisted per the design handoff.
@@ -349,6 +360,33 @@ export function Portal() {
   const canTrade = canAccessWorkspace(effectiveRoles, 'trading');
   const canSeries65 = canUseSeries65(user);
 
+  // Screens that need the live user or the acting-role controls (which the
+  // stateless renderScreen doesn't have): the Site Help workspace and the Admin
+  // View-as / Suggestions / Bug Reports sections. Returns null for anything else
+  // so it falls through to renderScreen and then the placeholder.
+  function renderExtra(scr: string): React.ReactNode {
+    switch (scr) {
+      case 'hp_howto':
+        return <HelpHowTo theme={theme} />;
+      case 'hp_news':
+        return <HelpAnnouncements theme={theme} user={user!} />;
+      case 'hp_notes':
+        return <HelpPatchNotes theme={theme} />;
+      case 'hp_bug':
+        return <HelpBugReport theme={theme} user={user!} />;
+      case 'hp_suggest':
+        return <HelpSuggestion theme={theme} user={user!} />;
+      case 'ad_viewas':
+        return <AdminViewAs theme={theme} actingRole={actingRole} onSetActingRole={changeActingRole} />;
+      case 'ad_suggestions':
+        return <AdminSuggestions theme={theme} />;
+      case 'ad_bugs':
+        return <AdminBugReports theme={theme} />;
+      default:
+        return null;
+    }
+  }
+
   const sidebar = (
     <Sidebar
       workspace={workspace}
@@ -377,7 +415,7 @@ export function Portal() {
       onOpenNav={() => setNavOpen(true)}
       onOpenClaude={() => setAiOpen(true)}
       onOpenAccount={() => setAccountOpen(true)}
-      onSetActingRole={changeActingRole}
+      onOpenChat={() => setChatOpen(true)}
       onLogout={logout}
     />
   );
@@ -401,7 +439,7 @@ export function Portal() {
       >
         <ErrorBoundary resetKey={screen}>
           <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
-            {renderScreen(screen, theme, selectScreen, canSeries65, canFunded) ?? <Screen screen={screen} theme={theme} />}
+            {renderExtra(screen) ?? renderScreen(screen, theme, selectScreen, canSeries65, canFunded) ?? <Screen screen={screen} theme={theme} />}
           </Suspense>
         </ErrorBoundary>
         <footer
@@ -481,7 +519,13 @@ export function Portal() {
           />
           <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
 
-          <HelpHub screen={screen} theme={theme} user={user!} />
+          <TeamChat
+            open={chatOpen}
+            onOpen={() => setChatOpen(true)}
+            onClose={() => setChatOpen(false)}
+            theme={theme}
+            user={user!}
+          />
 
           {isDemo && tourOpen && (
             <DemoTour theme={theme} onGo={goTo} onOpenClaude={() => setAiOpen(true)} onClose={closeTour} />

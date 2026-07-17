@@ -29,6 +29,11 @@ export const users = sqliteTable('users', {
   createdUsername: text('created_username'),
   displayName: text('display_name').notNull(),
   email: text('email'),
+  // Optional profile picture, stored as a small data URL (a client-resized
+  // JPEG/PNG, ~128px). Null when the user has not set one — the UI then falls
+  // back to their initial. Kept inline (no object store) since the portal is a
+  // single-service deploy with no blob storage configured.
+  avatar: text('avatar'),
   passwordHash: text('password_hash').notNull(),
   // Legacy single-role column. Superseded by `roles` (JSON array) below and no
   // longer read by the app; kept with its default so old rows stay valid.
@@ -551,7 +556,13 @@ export type TruthPostRow = typeof truthPosts.$inferSelect;
 // a separate, admin-managed broadcast list shown to everyone.
 export const chatMessages = sqliteTable('chat_messages', {
   id: text('id').primaryKey(),
-  channel: text('channel').notNull(), // 'trading' | 'general'
+  // The chat channel. Historically 'trading' | 'general'; the team chat now uses
+  // 'team' and scopes every message to one trading team via `teamId`, so a desk
+  // only ever sees its own conversation.
+  channel: text('channel').notNull(),
+  // The trading team this message belongs to (users.team_id at send time). Null
+  // for the legacy 'trading'/'general' channels. Team-chat reads filter on it.
+  teamId: text('team_id'),
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
@@ -572,6 +583,63 @@ export const announcements = sqliteTable('announcements', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type AnnouncementRow = typeof announcements.$inferSelect;
+
+// ---- Feedback: suggestions & bug reports (from the Site Help workspace) ----
+// A member sends a suggestion or a bug report from Site Help; both land in the
+// Admin workspace (Suggestions / Bug Reports sections). Suggestions are a plain
+// note. Bug reports carry an AI-assisted intake conversation (see
+// bugReportMessages) so the reporter is asked for clarification when needed and
+// thanked once the ticket is complete. Author display name is denormalized so
+// the admin view survives a later rename.
+export const FEEDBACK_STATUSES = ['new', 'reviewed'] as const;
+export type FeedbackStatus = (typeof FEEDBACK_STATUSES)[number];
+
+export const suggestions = sqliteTable('suggestions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  author: text('author').notNull(),
+  teamId: text('team_id'),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('new'), // 'new' | 'reviewed'
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type SuggestionRow = typeof suggestions.$inferSelect;
+
+// One bug report. `status`: 'open' while the AI is still gathering detail from
+// the reporter; 'submitted' once the AI has enough and the ticket is filed for
+// the admins; 'resolved' when an admin marks it done. `summary` is the first
+// line of the reporter's initial message, for the admin list.
+export const BUG_REPORT_STATUSES = ['open', 'submitted', 'resolved'] as const;
+export type BugReportStatus = (typeof BUG_REPORT_STATUSES)[number];
+
+export const bugReports = sqliteTable('bug_reports', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  author: text('author').notNull(),
+  teamId: text('team_id'),
+  summary: text('summary').notNull(),
+  status: text('status').notNull().default('open'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type BugReportRow = typeof bugReports.$inferSelect;
+
+// The intake conversation for a bug report: alternating reporter ('user') and
+// assistant ('ai') turns, oldest-first by createdAt.
+export const bugReportMessages = sqliteTable('bug_report_messages', {
+  id: text('id').primaryKey(),
+  reportId: text('report_id')
+    .notNull()
+    .references(() => bugReports.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user' | 'ai'
+  body: text('body').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type BugReportMessageRow = typeof bugReportMessages.$inferSelect;
 
 // ---- AI usage (per-user guardrails) ----
 // One row per Claude call, used to enforce a monthly cap. `kind` records which

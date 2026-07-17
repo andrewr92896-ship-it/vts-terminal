@@ -1,8 +1,10 @@
 import crypto from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { announcements, chatMessages, users, type AnnouncementRow } from '../db/schema.js';
 import { parseRoles } from '../auth/rbac.js';
+import { TEAM_CHANNEL } from './service.js';
+import { DEFAULT_TEAM_ID } from '../teams/service.js';
 
 // Announcements are a separate, admin-managed broadcast list shown to every
 // signed-in user. seedWelcome seeds a little starter content (chat + a couple
@@ -83,15 +85,18 @@ async function resolveOwner(): Promise<{ id: string; displayName: string } | nul
   return owner ? { id: owner.id, displayName: owner.displayName } : null;
 }
 
-async function seedChannel(
-  channel: 'trading' | 'general',
+// Seed the owner's team chat with a couple of starter messages (only when that
+// team's chat is empty). The Team Chat is scoped by teamId, so the owner's team
+// is where the seed content lands.
+async function seedTeamChat(
+  teamId: string,
   owner: { id: string; displayName: string },
   bodies: string[],
 ): Promise<void> {
   const existing = await db
     .select({ id: chatMessages.id })
     .from(chatMessages)
-    .where(eq(chatMessages.channel, channel))
+    .where(and(eq(chatMessages.channel, TEAM_CHANNEL), eq(chatMessages.teamId, teamId)))
     .limit(1);
   if (existing.length > 0) return;
   // Space the seeded timestamps so they keep their intended order.
@@ -99,7 +104,8 @@ async function seedChannel(
   for (let i = 0; i < bodies.length; i++) {
     await db.insert(chatMessages).values({
       id: crypto.randomUUID(),
-      channel,
+      channel: TEAM_CHANNEL,
+      teamId,
       userId: owner.id,
       author: owner.displayName,
       body: bodies[i],
@@ -114,15 +120,10 @@ export async function seedWelcome(): Promise<void> {
   const owner = await resolveOwner();
   if (!owner) return;
 
-  await seedChannel('trading', owner, [
-    'Welcome to the trading desk channel. Use this space to share setups, levels, and trade ideas with the team.',
+  await seedTeamChat(DEFAULT_TEAM_ID, owner, [
+    'Welcome to the team chat. This channel is just for you and your trading team — share setups, levels, and trade ideas here.',
     'A quick reminder to keep risk in check and trade your plan. Post your bias for the session here before the open.',
-    'Questions about the platform or a connection are welcome too. We are all here to help each other improve.',
-  ]);
-
-  await seedChannel('general', owner, [
-    'Welcome to the VTS Portal general channel. This is the place for company news, casual conversation, and anything that does not fit a specific workspace.',
-    'Feel free to introduce yourself and let the team know what you are working on this week.',
+    'Questions about the platform or a connection are welcome too — we are all here to help each other improve.',
   ]);
 
   const existing = await db.select({ id: announcements.id }).from(announcements).limit(1);

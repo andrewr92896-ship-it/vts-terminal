@@ -92,6 +92,8 @@ export interface PublicUser {
   username: string;
   displayName: string;
   email: string | null;
+  // The user's profile picture as a data URL, or null when unset.
+  avatarUrl: string | null;
   roles: RoleKey[];
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards; the name is resolved from trading_teams by the caller.
@@ -122,6 +124,7 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
     displayName: u.displayName,
     // The demo account stores its seed version in the email column; never expose it.
     email: u.username === DEMO_USERNAME ? null : u.email,
+    avatarUrl: u.avatar ?? null,
     roles,
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,

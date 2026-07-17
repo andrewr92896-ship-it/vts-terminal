@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api, ApiError } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
@@ -8,6 +8,7 @@ import { usePushNotifications } from '../push/usePushNotifications';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 import { APP_VERSION } from '../meta/version';
+import { Avatar } from './Avatar';
 
 interface AccountSettingsProps {
   open: boolean;
@@ -39,6 +40,10 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pwBusy, setPwBusy] = useState(false);
 
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
   // Seed the form from the current user whenever the panel opens.
   useEffect(() => {
     if (open && user) {
@@ -68,6 +73,40 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
     displayName.trim() !== user.displayName ||
     username.trim().toLowerCase() !== user.username ||
     emailChanged;
+
+  // Read a picked image file, crop it to a centered square, and shrink it to a
+  // 256px JPEG data URL — small enough to store inline. Then save it.
+  async function onPickAvatar(file: File) {
+    setAvatarMsg(null);
+    if (!file.type.startsWith('image/')) {
+      setAvatarMsg({ ok: false, text: 'Please choose an image file.' });
+      return;
+    }
+    setAvatarBusy(true);
+    try {
+      const dataUrl = await fileToSquareDataUrl(file, 256);
+      await updateProfile({ avatar: dataUrl });
+      setAvatarMsg({ ok: true, text: 'Photo updated.' });
+    } catch (err) {
+      setAvatarMsg({ ok: false, text: err instanceof ApiError ? err.message : 'Could not update photo.' });
+    } finally {
+      setAvatarBusy(false);
+      if (fileRef.current) fileRef.current.value = '';
+    }
+  }
+
+  async function removeAvatar() {
+    setAvatarMsg(null);
+    setAvatarBusy(true);
+    try {
+      await updateProfile({ avatar: '' });
+      setAvatarMsg({ ok: true, text: 'Photo removed.' });
+    } catch (err) {
+      setAvatarMsg({ ok: false, text: err instanceof ApiError ? err.message : 'Could not remove photo.' });
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function saveProfile() {
     if (!user) return;
@@ -196,6 +235,71 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
           {/* Profile */}
           <section>
             <div style={sectionLabel}>Profile</div>
+
+            {/* Profile picture */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+              <Avatar name={user.displayName} src={user.avatarUrl} size={64} accent="#EBCB74" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {!isDemo && (
+                    <>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void onPickAvatar(f);
+                        }}
+                      />
+                      <button
+                        onClick={() => fileRef.current?.click()}
+                        disabled={avatarBusy}
+                        style={{
+                          background: 'rgba(255,255,255,.05)',
+                          border: '1px solid #1d3560',
+                          color: '#dfe7fa',
+                          fontWeight: 600,
+                          fontSize: 12.5,
+                          padding: '9px 14px',
+                          borderRadius: 8,
+                          cursor: avatarBusy ? 'default' : 'pointer',
+                          opacity: avatarBusy ? 0.6 : 1,
+                          minHeight: 38,
+                        }}
+                      >
+                        {avatarBusy ? 'Saving…' : user.avatarUrl ? 'Change photo' : 'Add a photo'}
+                      </button>
+                      {user.avatarUrl && (
+                        <button
+                          onClick={() => void removeAvatar()}
+                          disabled={avatarBusy}
+                          style={{
+                            background: 'rgba(255,255,255,.05)',
+                            border: '1px solid #1d3560',
+                            color: '#ff9a9a',
+                            fontWeight: 600,
+                            fontSize: 12.5,
+                            padding: '9px 14px',
+                            borderRadius: 8,
+                            cursor: 'pointer',
+                            minHeight: 38,
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+                <p style={{ ...hintStyle, margin: 0 }}>
+                  {isDemo ? 'The demo can’t change its profile picture.' : 'A square image works best (JPG or PNG).'}
+                </p>
+              </div>
+            </div>
+            {avatarMsg && <div style={{ ...msgStyle(avatarMsg.ok), marginTop: 0, marginBottom: 14 }}>{avatarMsg.text}</div>}
+
             <label style={fieldLabel}>Display name</label>
             <input
               value={displayName}
@@ -779,4 +883,35 @@ function msgStyle(ok: boolean): React.CSSProperties {
     borderRadius: 7,
     padding: '9px 12px',
   };
+}
+
+// Load an image file, center-crop it to a square, and downscale to `size`px,
+// returning a compact JPEG data URL suitable for storing inline as an avatar.
+function fileToSquareDataUrl(file: File, size: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return reject(new Error('Canvas unavailable'));
+        const scale = Math.max(size / img.width, size / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      } catch (err) {
+        reject(err instanceof Error ? err : new Error('Could not process image'));
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read that image'));
+    };
+    img.src = url;
+  });
 }
