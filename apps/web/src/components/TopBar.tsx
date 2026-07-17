@@ -23,6 +23,7 @@ interface TopBarProps {
   onOpenNav: () => void;
   onOpenClaude: () => void;
   onOpenAccount: () => void;
+  onOpenDeviceSettings: () => void;
   onOpenChat: () => void;
   onLogout: () => void;
 }
@@ -151,6 +152,7 @@ export function TopBar(props: TopBarProps) {
     onOpenNav,
     onOpenClaude,
     onOpenAccount,
+    onOpenDeviceSettings,
     onOpenChat,
     onLogout,
   } = props;
@@ -533,6 +535,22 @@ export function TopBar(props: TopBarProps) {
                 </div>
               </div>
             )}
+
+            {/* Phone notifications, Pushover, broker connections, and app
+                updates open in their own panel from here. */}
+            <div style={{ borderTop: `1px solid ${C.line2}`, marginTop: 6, paddingTop: 6 }}>
+              <button
+                onClick={() => {
+                  setSettingsOpen(false);
+                  onOpenDeviceSettings();
+                }}
+                style={menuItem}
+              >
+                <Icon name="bell-plus" size={15} color={C.faint} />
+                Notifications & connections
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: C.faint }}>›</span>
+              </button>
+            </div>
           </Dropdown>
         </div>
 

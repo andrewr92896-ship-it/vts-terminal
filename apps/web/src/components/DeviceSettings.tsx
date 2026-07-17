@@ -1,0 +1,567 @@
+import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { api, ApiError } from '../api/client';
+import { useResponsive } from '../hooks/useMediaQuery';
+import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
+import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
+import { usePushNotifications } from '../push/usePushNotifications';
+import type { Theme } from '../theme/themes';
+import { accentGradient } from '../theme/themes';
+import { APP_VERSION } from '../meta/version';
+
+interface DeviceSettingsProps {
+  open: boolean;
+  theme: Theme;
+  onClose: () => void;
+}
+
+// Device & connection settings, opened from the top-bar settings cog. Holds the
+// per-device / account-connection controls that used to live in Account
+// settings: phone notifications, Pushover, broker connections, and app updates.
+// Account settings now keeps only who-you-are (profile, picture, password).
+export function DeviceSettings({ open, theme, onClose }: DeviceSettingsProps) {
+  const { user } = useAuth();
+  const { isPhone } = useResponsive();
+  const accentGrad = accentGradient(theme);
+  const isDemo = !!user?.isDemo;
+
+  if (!open || !user) return null;
+
+  // Only full trading users (not view-only) may add their own broker APIs. The
+  // server enforces this on every connection write too.
+  const canManageBrokers =
+    canAccessWorkspace(user.roles, 'trading') && !isWorkspaceReadOnly(user.roles, 'trading');
+  // Anyone on the trading desk (full or view-only) can turn on phone alerts for
+  // their own device. The demo is look-only and never subscribes.
+  const canUsePush = !isDemo && canAccessWorkspace(user.roles, 'trading');
+
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          background: 'rgba(0,0,0,.5)',
+          zIndex: 60,
+          animation: 'fadeIn .2s ease',
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        style={{
+          position: 'fixed',
+          top: isPhone ? 0 : '50%',
+          left: '50%',
+          transform: isPhone ? 'translateX(-50%)' : 'translate(-50%,-50%)',
+          width: isPhone ? '100%' : 'min(460px, 94vw)',
+          maxHeight: isPhone ? '100%' : '90vh',
+          height: isPhone ? '100%' : undefined,
+          overflowY: 'auto',
+          background: 'linear-gradient(180deg,#0b1a3a,#081226)',
+          border: '1px solid #1d3560',
+          borderRadius: isPhone ? 0 : 14,
+          boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+          zIndex: 61,
+          animation: 'popIn .25s ease',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '18px 20px',
+            borderBottom: '1px solid #1d3560',
+            position: 'sticky',
+            top: 0,
+            background: '#0b1a3a',
+          }}
+        >
+          <strong style={{ fontSize: 15, color: '#eef3ff' }}>Notifications & connections</strong>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            style={{
+              background: 'none',
+              border: 'none',
+              color: '#7488b5',
+              fontSize: 22,
+              lineHeight: 1,
+              cursor: 'pointer',
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Phone notifications — any trading-desk user, their own device. */}
+          {canUsePush && (
+            <>
+              <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
+              <div style={{ height: 1, background: '#1d3560' }} />
+              <PushoverSection accent={accentGrad} accentText={theme.accentText} />
+            </>
+          )}
+
+          {/* Broker connections, for full trading users only. */}
+          {canManageBrokers && (
+            <>
+              {canUsePush && <div style={{ height: 1, background: '#1d3560' }} />}
+              <section>
+                <div style={sectionLabel}>Broker connections</div>
+                <BrokerConnectionsPanel />
+              </section>
+            </>
+          )}
+
+          {/* App updates — for everyone. */}
+          {(canUsePush || canManageBrokers) && <div style={{ height: 1, background: '#1d3560' }} />}
+          <AppUpdateSection accent={accentGrad} accentText={theme.accentText} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// Self-serve phone-alert opt-in, shown so every trader can turn it on for their
+// own device (alerts + trade open/close). Push is per-device, so each person
+// enables it once on each phone/laptop they want buzzed.
+function PhoneNotificationsSection({ accent, accentText }: { accent: string; accentText: string }) {
+  const { state, busy, error, enable, disable, sendTest } = usePushNotifications();
+
+  const primaryBtn: React.CSSProperties = {
+    border: 'none',
+    background: accent,
+    color: accentText,
+    fontWeight: 600,
+    fontSize: 13,
+    padding: '10px 16px',
+    borderRadius: 8,
+    cursor: busy ? 'default' : 'pointer',
+    opacity: busy ? 0.6 : 1,
+    minHeight: 40,
+  };
+  const ghost: React.CSSProperties = {
+    background: 'rgba(255,255,255,.05)',
+    border: '1px solid #1d3560',
+    color: '#dfe7fa',
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: '10px 14px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    minHeight: 40,
+  };
+
+  return (
+    <section>
+      <div style={sectionLabel}>Phone notifications</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Get a push on this device when a trade opens or closes and when alerts fire — even with the
+        app closed.
+      </p>
+
+      {state === 'unsupported' ? (
+        <div style={hintStyle}>
+          This device can’t receive web push here. On iPhone, add the portal to your Home Screen
+          (Share → Add to Home Screen) and open it from that icon, then turn this on.
+        </div>
+      ) : state === 'unconfigured' ? (
+        <div style={hintStyle}>Push isn’t set up on the server yet.</div>
+      ) : state === 'denied' ? (
+        <div style={hintStyle}>
+          Notifications are blocked for this site. Turn them on in your browser or phone settings,
+          then reopen this panel.
+        </div>
+      ) : state === 'on' ? (
+        <>
+          <div style={{ fontSize: 12.5, color: '#7fd6a3', marginBottom: 10, fontWeight: 600 }}>
+            On for this device ✓
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => void sendTest()} style={ghost}>Send test</button>
+            <button onClick={() => void disable()} disabled={busy} style={{ ...ghost, color: '#ff9a9a' }}>
+              Turn off
+            </button>
+          </div>
+        </>
+      ) : (
+        <button onClick={() => void enable()} disabled={busy} style={primaryBtn}>
+          {busy ? 'Turning on…' : 'Turn on phone alerts'}
+        </button>
+      )}
+
+      <p style={{ ...hintStyle, marginTop: 12, marginBottom: 0 }}>
+        On iPhone this only works once the portal is installed to your Home Screen. Each device you
+        want buzzed needs to be turned on once.
+      </p>
+      {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
+    </section>
+  );
+}
+
+// Pushover lets a trader get trade/alert notifications with a custom, can't-miss
+// sound (chosen in the Pushover app). They paste their personal "user key" once;
+// the app token lives on the server.
+function PushoverSection({ accent, accentText }: { accent: string; accentText: string }) {
+  const [configured, setConfigured] = useState<boolean | null>(null);
+  const [connected, setConnected] = useState(false);
+  const [keyInput, setKeyInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .pushoverStatus()
+      .then((s) => alive && (setConfigured(s.configured), setConnected(s.connected)))
+      .catch(() => alive && setConfigured(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function run(p: Promise<unknown>, okText: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await p;
+      setMsg({ ok: true, text: okText });
+      return true;
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Something went wrong' });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const primaryBtn: React.CSSProperties = {
+    border: 'none',
+    background: accent,
+    color: accentText,
+    fontWeight: 600,
+    fontSize: 13,
+    padding: '10px 16px',
+    borderRadius: 8,
+    cursor: busy ? 'default' : 'pointer',
+    opacity: busy ? 0.6 : 1,
+    minHeight: 40,
+  };
+  const ghost: React.CSSProperties = {
+    background: 'rgba(255,255,255,.05)',
+    border: '1px solid #1d3560',
+    color: '#dfe7fa',
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: '10px 14px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    minHeight: 40,
+  };
+
+  return (
+    <section>
+      <div style={sectionLabel}>Pushover (custom alert sound)</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Get trade and alert notifications through{' '}
+        <a href="https://pushover.net/" target="_blank" rel="noreferrer" style={{ color: '#8ea3cc' }}>Pushover</a>{' '}
+        with your own loud, custom sound — pick or upload it right in the Pushover app.
+      </p>
+
+      {configured === false ? (
+        <div style={hintStyle}>Pushover isn’t set up on the server yet.</div>
+      ) : configured == null ? (
+        <div style={hintStyle}>Checking…</div>
+      ) : connected ? (
+        <>
+          <div style={{ fontSize: 12.5, color: '#7fd6a3', marginBottom: 10, fontWeight: 600 }}>Connected ✓</div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => void run(api.pushoverTest(), 'Test sent — check your phone.')} disabled={busy} style={ghost}>
+              Send test
+            </button>
+            <button
+              onClick={async () => {
+                if (await run(api.pushoverDisconnect(), 'Disconnected.')) setConnected(false);
+              }}
+              disabled={busy}
+              style={{ ...ghost, color: '#ff9a9a' }}
+            >
+              Disconnect
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <input
+            value={keyInput}
+            onChange={(e) => setKeyInput(e.target.value)}
+            placeholder="Your Pushover user key"
+            autoCapitalize="none"
+            autoCorrect="off"
+            style={inputStyle}
+          />
+          <p style={hintStyle}>
+            Install the Pushover app, and copy your <b>User Key</b> from its home screen (or
+            pushover.net). Each device you want buzzed needs the app installed.
+          </p>
+          <div style={{ marginTop: 4 }}>
+            <button
+              onClick={async () => {
+                if (await run(api.pushoverConnect(keyInput.trim()), 'Connected — sending a test…')) {
+                  setConnected(true);
+                  setKeyInput('');
+                  void api.pushoverTest().catch(() => {});
+                }
+              }}
+              disabled={busy || keyInput.trim().length < 20}
+              style={{ ...primaryBtn, opacity: busy || keyInput.trim().length < 20 ? 0.6 : 1 }}
+            >
+              {busy ? 'Connecting…' : 'Connect Pushover'}
+            </button>
+          </div>
+        </>
+      )}
+      {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
+    </section>
+  );
+}
+
+// Manual "check for updates" control. The portal is a PWA in prompt mode, so a
+// new deploy normally surfaces on its own (see UpdatePrompt). But a device can
+// fall behind — an old browser that isn't re-checking the service worker, or a
+// worker that cached an old shell — and keep showing a stale layout. This asks
+// the browser to look for a fresh build right now, applies it on demand, and
+// offers a hard reset (drop the worker + caches) as a last resort.
+type UpdateState =
+  | 'idle'
+  | 'checking'
+  | 'uptodate'
+  | 'found'
+  | 'applying'
+  | 'unsupported'
+  | 'error';
+
+function AppUpdateSection({ accent, accentText }: { accent: string; accentText: string }) {
+  const swSupported = typeof navigator !== 'undefined' && 'serviceWorker' in navigator;
+  const [state, setState] = useState<UpdateState>(swSupported ? 'idle' : 'unsupported');
+
+  async function check() {
+    if (!swSupported) {
+      setState('unsupported');
+      return;
+    }
+    setState('checking');
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      // No worker at all: a normal reload already fetches the freshest shell.
+      if (!reg) {
+        setState('uptodate');
+        return;
+      }
+      // A build is already downloaded and waiting to take over.
+      if (reg.waiting) {
+        setState('found');
+        return;
+      }
+      // Ask the browser to fetch the current service worker and compare.
+      await reg.update();
+      if (reg.waiting) {
+        setState('found');
+        return;
+      }
+      // A new worker may now be installing — wait for it to settle.
+      const installing = reg.installing;
+      if (!installing) {
+        setState('uptodate');
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        const finish = () => {
+          installing.removeEventListener('statechange', onChange);
+          resolve();
+        };
+        const onChange = () => {
+          if (installing.state === 'installed' || installing.state === 'activated') finish();
+        };
+        installing.addEventListener('statechange', onChange);
+        // Never leave the button spinning forever on a slow/flaky network.
+        setTimeout(finish, 10_000);
+      });
+      setState(reg.waiting ? 'found' : 'uptodate');
+    } catch {
+      setState('error');
+    }
+  }
+
+  // Tell the waiting worker to activate, then reload into the new build once it
+  // controls the page.
+  async function apply() {
+    setState('applying');
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      const waiting = reg?.waiting;
+      if (!waiting) {
+        window.location.reload();
+        return;
+      }
+      let reloaded = false;
+      const reload = () => {
+        if (reloaded) return;
+        reloaded = true;
+        window.location.reload();
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', reload, { once: true });
+      waiting.postMessage({ type: 'SKIP_WAITING' });
+      // Fallback if controllerchange never fires (belt and suspenders).
+      setTimeout(reload, 3000);
+    } catch {
+      window.location.reload();
+    }
+  }
+
+  // Last resort for a device wedged on an old build: drop every service worker
+  // and cache, then reload straight from the network.
+  async function forceRefresh() {
+    setState('applying');
+    try {
+      if (swSupported) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if (typeof caches !== 'undefined') {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      /* ignore — we reload regardless */
+    } finally {
+      window.location.reload();
+    }
+  }
+
+  const primaryBtn: React.CSSProperties = {
+    border: 'none',
+    background: accent,
+    color: accentText,
+    fontWeight: 600,
+    fontSize: 13,
+    padding: '10px 16px',
+    borderRadius: 8,
+    cursor: state === 'checking' || state === 'applying' ? 'default' : 'pointer',
+    opacity: state === 'checking' || state === 'applying' ? 0.6 : 1,
+    minHeight: 40,
+  };
+  const ghost: React.CSSProperties = {
+    background: 'rgba(255,255,255,.05)',
+    border: '1px solid #1d3560',
+    color: '#dfe7fa',
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: '10px 14px',
+    borderRadius: 8,
+    cursor: 'pointer',
+    minHeight: 40,
+  };
+
+  return (
+    <section>
+      <div style={sectionLabel}>App updates</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        You’re on <b style={{ color: '#cfe0ff' }}>{APP_VERSION}</b>. New versions usually update on
+        their own, but if this device is showing an old layout you can check and apply the latest
+        build here.
+      </p>
+
+      {state === 'found' ? (
+        <>
+          <div style={{ fontSize: 12.5, color: '#7fd6a3', marginBottom: 10, fontWeight: 600 }}>
+            A new version is ready ✓
+          </div>
+          <button onClick={() => void apply()} style={primaryBtn}>
+            Update now
+          </button>
+        </>
+      ) : (
+        <button
+          onClick={() => void check()}
+          disabled={state === 'checking' || state === 'applying'}
+          style={primaryBtn}
+        >
+          {state === 'checking'
+            ? 'Checking…'
+            : state === 'applying'
+              ? 'Updating…'
+              : 'Check for updates'}
+        </button>
+      )}
+
+      {state === 'uptodate' && (
+        <div style={msgStyle(true)}>You’re on the latest version.</div>
+      )}
+      {state === 'unsupported' && (
+        <div style={hintStyle}>
+          This browser can’t check automatically. Use “Force refresh” below to reload the newest
+          version.
+        </div>
+      )}
+      {state === 'error' && (
+        <div style={msgStyle(false)}>Couldn’t check for updates. Try “Force refresh” below.</div>
+      )}
+
+      <p style={{ ...hintStyle, marginBottom: 6 }}>
+        Still seeing the old layout after updating? Force a full refresh — it clears this device’s
+        cached copy and reloads from scratch.
+      </p>
+      <button
+        onClick={() => void forceRefresh()}
+        disabled={state === 'applying'}
+        style={{ ...ghost, opacity: state === 'applying' ? 0.6 : 1 }}
+      >
+        Force refresh
+      </button>
+    </section>
+  );
+}
+
+const sectionLabel: React.CSSProperties = {
+  fontSize: 10.5,
+  letterSpacing: '0.6px',
+  textTransform: 'uppercase',
+  color: '#7488b5',
+  marginBottom: 12,
+  fontWeight: 600,
+};
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '11px 13px',
+  fontSize: 14,
+  color: '#eef3ff',
+  background: 'rgba(6,15,36,.6)',
+  border: '1px solid #1d3560',
+  borderRadius: 8,
+  outline: 'none',
+};
+
+const hintStyle: React.CSSProperties = {
+  margin: '8px 0 0',
+  fontSize: 11.5,
+  color: '#6f84b2',
+  lineHeight: 1.5,
+};
+
+function msgStyle(ok: boolean): React.CSSProperties {
+  return {
+    marginTop: 12,
+    fontSize: 12.5,
+    color: ok ? '#7fe0c0' : '#ff8a80',
+    background: ok ? 'rgba(53,196,123,.1)' : 'rgba(239,84,104,.1)',
+    border: `1px solid ${ok ? 'rgba(53,196,123,.4)' : 'rgba(239,84,104,.4)'}`,
+    borderRadius: 7,
+    padding: '9px 12px',
+  };
+}
