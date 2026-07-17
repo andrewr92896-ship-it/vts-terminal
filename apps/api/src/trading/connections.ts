@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   brokerConnections,
@@ -175,11 +175,15 @@ export async function getActiveDecrypted(userId: string): Promise<DecryptedConne
   return out;
 }
 
-// Every active connection across the whole trading team, decrypted and tagged
-// with its owner. Powers the shared Live Wall so each trader sees everyone's
-// open positions. Only connections owned by a user who currently has trading
-// access are included, so a revoked teammate drops off automatically.
-export async function getAllActiveDecrypted(): Promise<OwnedConnection[]> {
+// Active broker connections, decrypted and tagged with their owner. Only
+// connections owned by a user who currently has trading access are included, so
+// a revoked teammate drops off automatically.
+//
+// `scopeIds` restricts the result to connections owned by those userIds — the
+// viewer's team — so the Live Wall and broker capital only ever surface a team's
+// own positions. Omit it (background desk reconcile) to load the whole install;
+// no viewer sees that result, it only records each owner's positions to History.
+export async function getAllActiveDecrypted(scopeIds?: Set<string>): Promise<OwnedConnection[]> {
   const rows = await db
     .select({
       conn: brokerConnections,
@@ -188,7 +192,11 @@ export async function getAllActiveDecrypted(): Promise<OwnedConnection[]> {
     })
     .from(brokerConnections)
     .innerJoin(users, eq(users.id, brokerConnections.userId))
-    .where(eq(brokerConnections.active, true));
+    .where(
+      scopeIds
+        ? and(eq(brokerConnections.active, true), inArray(brokerConnections.userId, [...scopeIds]))
+        : eq(brokerConnections.active, true),
+    );
 
   const out: OwnedConnection[] = [];
   for (const r of rows) {

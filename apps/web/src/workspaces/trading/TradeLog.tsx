@@ -385,7 +385,7 @@ export function TradeLog() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Trade Log</h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Shared desk log — every trader’s fills, tagged by trader, with slippage and realized P/L. Trades from a
+            Your team’s trade log — every teammate’s fills, tagged by trader, with slippage and realized P/L. Trades from a
             connected broker (e.g. OANDA) show up here automatically; hand-kept trades stay on the Manual Trades tab.
           </div>
         </div>
@@ -467,7 +467,7 @@ export function TradeLog() {
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
           {selectedTraderName
             ? `No trades logged by @${selectedTraderName}.`
-            : `No trades logged on the desk yet.${!readOnly ? ' Use “+ Log a trade” to add the first one.' : ''}`}
+            : `No trades logged for your team yet.${!readOnly ? ' Use “+ Log a trade” to add the first one.' : ''}`}
         </div>
       ) : layout === 'deck' ? (
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(290px,1fr))', gap: 13 }}>

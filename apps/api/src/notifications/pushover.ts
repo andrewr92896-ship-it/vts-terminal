@@ -107,7 +107,11 @@ export async function sendPushoverToUsers(userIds: string[], msg: PushoverMessag
 
 // Send to every trading-desk user who has connected Pushover (excludes the
 // demo). The trader who caused the event can be excluded if desired.
-export async function sendPushoverToDesk(msg: PushoverMessage, excludeUserId?: string): Promise<void> {
+export async function sendPushoverToDesk(
+  msg: PushoverMessage,
+  excludeUserId?: string,
+  scopeIds?: Set<string>,
+): Promise<void> {
   if (!pushoverConfigured()) return;
   const rows = await db
     .select({ id: users.id, roles: users.roles, username: users.username })
@@ -116,6 +120,7 @@ export async function sendPushoverToDesk(msg: PushoverMessage, excludeUserId?: s
   const recipients: string[] = [];
   for (const r of rows) {
     if (r.id === excludeUserId) continue;
+    if (scopeIds && !scopeIds.has(r.id)) continue; // only the owner's team
     if (isDemoUser({ username: r.username })) continue;
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     recipients.push(r.id);

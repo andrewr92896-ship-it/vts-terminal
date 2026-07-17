@@ -39,18 +39,20 @@ export function assignTradeCodes(items: { id: string; openedAt: number }[]): Map
   return codes;
 }
 
-// A desk-wide code index across BOTH hand-logged trades and broker/manual
+// A team-scoped code index across BOTH hand-logged trades and broker/manual
 // positions, so a single trade carries one stable code everywhere it appears
-// (Trade Log and History). Demo and non-trading accounts are excluded so a real
-// trader's daily numbering has no phantom gaps.
-export async function deskTradeCodeIndex(): Promise<Map<string, string>> {
+// (Trade Log and History). `scopeIds` restricts numbering to the viewer's team,
+// matching what the Trade Log / History actually show. Demo and non-trading
+// accounts are excluded so a real trader's daily numbering has no phantom gaps.
+export async function deskTradeCodeIndex(scopeIds: Set<string>): Promise<Map<string, string>> {
   const trades = await db
-    .select({ id: tradingTrades.id, openedAt: tradingTrades.openedAt, roles: users.roles, username: users.username })
+    .select({ id: tradingTrades.id, userId: tradingTrades.userId, openedAt: tradingTrades.openedAt, roles: users.roles, username: users.username })
     .from(tradingTrades)
     .innerJoin(users, eq(users.id, tradingTrades.userId));
   const positions = await db
     .select({
       id: tradingPositions.id,
+      userId: tradingPositions.userId,
       openedAt: tradingPositions.openedAt,
       firstSeenAt: tradingPositions.firstSeenAt,
       roles: users.roles,
@@ -61,11 +63,13 @@ export async function deskTradeCodeIndex(): Promise<Map<string, string>> {
 
   const items: { id: string; openedAt: number }[] = [];
   for (const t of trades) {
+    if (!scopeIds.has(t.userId)) continue; // only the viewer's team
     if (t.username === DEMO_USERNAME) continue;
     if (!canAccessWorkspace(parseRoles({ roles: t.roles }), 'trading')) continue;
     items.push({ id: t.id, openedAt: t.openedAt.getTime() });
   }
   for (const p of positions) {
+    if (!scopeIds.has(p.userId)) continue; // only the viewer's team
     if (p.username === DEMO_USERNAME) continue;
     if (!canAccessWorkspace(parseRoles({ roles: p.roles }), 'trading')) continue;
     // openedAt can be null on a position we first saw already-open; fall back to

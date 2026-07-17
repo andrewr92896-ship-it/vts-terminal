@@ -14,6 +14,7 @@ import { addTrade } from './trades.js';
 import { aiConfigured, analyzeTradeScreenshot, type AnalyzeResult } from '../ai/claude.js';
 import { sendToTradingDesk } from '../notifications/push.js';
 import { sendPushoverToDesk } from '../notifications/pushover.js';
+import { scopedTraderIdsForUser } from './scope.js';
 
 // TradingView alerts are the FTP/prop-trade replacement. The webhook is
 // unauthenticated, so each alert is attributed to the owner (the earliest
@@ -109,19 +110,21 @@ export async function ingestAlert(body: Record<string, unknown>, rawPayload: str
   const price = asNum(body.price ?? body.close ?? body.entry);
   const parts = [side ? side.toUpperCase() : null, price != null ? `@ ${price}` : null].filter(Boolean);
   const summary = parts.length ? parts.join(' ') : 'New TradingView alert';
+  // Only the alert owner's team is notified — trade signals never fan out past it.
+  const teamIds = await scopedTraderIdsForUser(ownerId);
   void sendToTradingDesk({
     title: `Alert · ${instrument}`,
     body: summary,
     url: '/?screen=alerts',
     tag: 'vts-alert',
-  }).catch(() => {});
+  }, undefined, teamIds).catch(() => {});
   void sendPushoverToDesk({
     title: `Alert · ${instrument}`,
     message: summary,
     priority: 1, // high — alerts are time-sensitive
     url: '/?screen=alerts',
     urlTitle: 'Open the desk',
-  }).catch(() => {});
+  }, undefined, teamIds).catch(() => {});
 
   return id;
 }

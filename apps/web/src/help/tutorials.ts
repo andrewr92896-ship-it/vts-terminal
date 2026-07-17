@@ -207,7 +207,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'History',
-        body: 'Closed trades across the desk, recorded automatically when a Live Wall position closes, with “By Strategy” and “By Instrument” breakdowns so you can see what’s working.',
+        body: 'Closed trades across your team, recorded automatically when a Live Wall position closes, with “By Strategy” and “By Instrument” breakdowns so you can see what’s working.',
       },
       {
         title: 'Hide dollar details',

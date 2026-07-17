@@ -17,6 +17,7 @@ import { DEMO_USERNAME } from '../demo/identity.js';
 import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEvenOverride } from './outcome.js';
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
+import { scopedTraderIds, type Viewer } from './scope.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
 // (full or view-only) sees every other trading user's trades in full — capital
@@ -238,10 +239,15 @@ function summarizeRecords(records: TradeRecord[], config: BreakEvenConfig): Trad
   };
 }
 
-export async function getTrades(viewerId: string, viewerIsDemo = false): Promise<TradeLogData> {
+export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<TradeLogData> {
+  const viewerId = viewer.id;
+  // Trade data is scoped to the viewer's team (or just the viewer, if teamless):
+  // the Trade Log only shows that team's trades, never the whole install.
+  const scopeIds = await scopedTraderIds(viewer);
+
   // Pull every trade alongside its owner's username and roles, then keep only
-  // those owned by a user who currently has trading access (full or view-only).
-  // Joining live keeps the desk view correct as people's roles change.
+  // those on the viewer's team whose owner currently has trading access (full or
+  // view-only). Joining live keeps the view correct as people's roles change.
   const rows = await db
     .select({
       trade: tradingTrades,
@@ -252,10 +258,10 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
     .innerJoin(users, eq(users.id, tradingTrades.userId));
 
   const visible = rows.filter((r) => {
+    if (!scopeIds.has(r.trade.userId)) return false; // only the viewer's team
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) return false;
     // The public demo is sandboxed: a real trader never sees the demo's
-    // showcase trades on the shared desk, and the demo only sees its own
-    // showcase — never the real desk.
+    // showcase trades, and the demo only sees its own showcase.
     return viewerIsDemo ? r.username === DEMO_USERNAME : r.username !== DEMO_USERNAME;
   });
 
@@ -272,6 +278,7 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
       .from(tradingPositions)
       .innerJoin(users, eq(users.id, tradingPositions.userId));
     for (const r of posRows) {
+      if (!scopeIds.has(r.pos.userId)) continue; // only the viewer's team
       if (r.username === DEMO_USERNAME) continue;
       if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
       records.push(positionToRecord(r.pos, r.username, viewerId));
@@ -289,7 +296,7 @@ export async function getTrades(viewerId: string, viewerIsDemo = false): Promise
   // null code set in the mappers.
   const settings = await getDeskSettings();
   if (!viewerIsDemo) {
-    const codes = await deskTradeCodeIndex();
+    const codes = await deskTradeCodeIndex(scopeIds);
     for (const r of sorted) r.code = codes.get(r.id) ?? null;
   }
   return {
