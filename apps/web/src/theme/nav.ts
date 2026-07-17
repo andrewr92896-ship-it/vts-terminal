@@ -53,7 +53,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'st_game', label: 'Study Game', icon: 'gamepad-2' },
       { key: 'st_test', label: 'Test Mode', icon: 'file-check-2' },
       { key: 'st_progress', label: 'Progress', icon: 'trending-up' },
-      { key: 'st_decks', label: 'Study Games', icon: 'library' },
+      { key: 'st_decks', label: 'Study Creation', icon: 'library' },
     ],
   },
   {
@@ -111,7 +111,7 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
 
 // Studies sections that belong to the Series 65 track (the owner's licensed
 // content). The sidebar hides these for teams that can't use Series 65; the
-// Subjects hub and the team-built Study Games stay visible to everyone.
+// Subjects hub and the team-built Study Creation section stay visible to everyone.
 export const SERIES65_ONLY_SECTIONS = new Set(['st_game', 'st_test', 'st_progress']);
 
 // Trading sections gated behind the admin-assigned `funded` role. The sidebar

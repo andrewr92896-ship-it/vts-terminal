@@ -273,6 +273,41 @@ export interface TeamDeckDetail extends TeamDeck {
   questions: DeckQuestion[];
 }
 
+// ---- Team-authored study guides (slide presentations) ----
+// A study guide a team built: an ordered slideshow of slides, each with a title,
+// a body, and an optional screenshot. Built through a back-and-forth chat with
+// VTS AI (which drafts the slide text) plus screenshots the author attaches.
+export interface GuideSlide {
+  title: string;
+  body: string;
+  // A base64 data URL of a screenshot the author attached, or null/absent.
+  image?: string | null;
+}
+
+export interface StudyGuide {
+  id: string;
+  name: string;
+  description: string | null;
+  slideCount: number;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface StudyGuideDetail extends StudyGuide {
+  slides: GuideSlide[];
+}
+
+// One slide as the guide-builder conversation returns it: the model echoes the
+// `id` of a slide it kept (so the client can preserve an attached screenshot) or
+// the literal "new" for a slide it just created.
+export interface GuideDraftSlide {
+  id: string;
+  title: string;
+  body: string;
+}
+
 export interface TodoSection {
   id: string;
   n: number;

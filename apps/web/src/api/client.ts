@@ -57,6 +57,10 @@ import type {
   StudySection,
   TeamDeck,
   TeamDeckDetail,
+  StudyGuide,
+  StudyGuideDetail,
+  GuideSlide,
+  GuideDraftSlide,
   TradingSignals,
   User,
 } from './types';
@@ -710,6 +714,42 @@ export const api = {
   },
   studyDeckLeaderboard(id: string): Promise<{ entries: LeaderboardEntry[] }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}/leaderboard`);
+  },
+  // ---- Team study guides (slide presentations) ----
+  // A team builds a study guide by conversing with VTS AI (which drafts the slide
+  // text) and attaching its own screenshots, then presents it like a slideshow.
+  studyGuides(): Promise<{ guides: StudyGuide[] }> {
+    return request('/api/studies/guides');
+  },
+  // One turn of the guide-builder conversation. Sends the running transcript
+  // (assistant turns carry the model's prior JSON) and gets back the reply plus
+  // the complete current slide draft.
+  studyGuideChat(
+    messages: { role: 'user' | 'assistant'; content: string }[],
+  ): Promise<{ reply: string; slides: GuideDraftSlide[] }> {
+    return request('/api/studies/guides/chat', { method: 'POST', body: JSON.stringify({ messages }) });
+  },
+  saveStudyGuide(input: {
+    name: string;
+    description?: string;
+    slides: GuideSlide[];
+  }): Promise<{ guide: StudyGuideDetail; guides: StudyGuide[] }> {
+    return request('/api/studies/guides', { method: 'POST', body: JSON.stringify(input) });
+  },
+  studyGuide(id: string): Promise<{ guide: StudyGuideDetail }> {
+    return request(`/api/studies/guides/${encodeURIComponent(id)}`);
+  },
+  updateStudyGuide(
+    id: string,
+    patch: { name?: string; description?: string | null; slides?: GuideSlide[] },
+  ): Promise<{ guide: StudyGuideDetail; guides: StudyGuide[] }> {
+    return request(`/api/studies/guides/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+  },
+  deleteStudyGuide(id: string): Promise<{ guides: StudyGuide[] }> {
+    return request(`/api/studies/guides/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
   announcements(): Promise<{ announcements: Announcement[]; canManage: boolean }> {
     return request('/api/announcements');

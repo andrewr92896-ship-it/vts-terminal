@@ -853,6 +853,27 @@ export const studyDeckRuns = sqliteTable('study_deck_runs', {
 });
 export type StudyDeckRunRow = typeof studyDeckRuns.$inferSelect;
 
+// ---- Team-authored study guides (presentations) ----
+// A team builds a slide-deck study guide — a presentation of titled slides, each
+// with a body and an optional screenshot — through a back-and-forth conversation
+// with Claude that drafts and revises the slides. A guide is team-SHARED: any
+// member builds it, the whole team can present it. Slides (including the base64
+// screenshot data URLs) are stored as one JSON blob so the guide travels as a
+// unit; `slideCount` is denormalized so the list view never parses the blob.
+export const studyGuides = sqliteTable('study_guides', {
+  id: text('id').primaryKey(),
+  teamId: text('team_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  // The member who built it; null if that account is later deleted.
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  slides: text('slides').notNull(), // JSON [{ title, body, image? } ...]
+  slideCount: integer('slide_count').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyGuideRow = typeof studyGuides.$inferSelect;
+
 // ---- Studies: completed mock tests (per user) ----
 // One row per finished Series 65 mock test (a fixed 100-question exam drawn to
 // the real exam blueprint: 25 Investments, 30 Client Management, 30 Regulations
