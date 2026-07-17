@@ -20,7 +20,7 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'trading',
     screen: 'live',
     title: 'Welcome to VTS Portal',
-    body: 'A private trading and operations portal: live trading, Series 65 study tools, a shared to-do list, and an AI assistant. This is a read-only demo with simulated data.',
+    body: 'A private trading and operations portal: live trading, a hand-kept trade book, Series 65 study tools, a shared to-do list, and an AI assistant. This is a read-only demo with simulated data.',
   },
   {
     workspace: 'trading',
@@ -39,6 +39,12 @@ export const DEMO_STEPS: TourStep[] = [
     screen: 'desk',
     title: 'Trade Desk',
     body: 'The Trade Log, Live Brokers, and History views in one place: a full journal of every trade with slippage and realized P/L, live broker capital, and a breakdown of closed results. Plain-English logging and recaps are powered by Claude.',
+  },
+  {
+    workspace: 'trading',
+    screen: 'funded',
+    title: 'Manual Trades',
+    body: 'A self-managed book for accounts you keep by hand — add an account, log trades by typing them in or reading them off a screenshot, and watch each account’s balance and Today / This week / 30-day P/L. Nothing here connects to an outside platform.',
   },
   {
     workspace: 'trading',

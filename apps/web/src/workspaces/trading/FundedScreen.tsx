@@ -53,13 +53,9 @@ export function FundedScreen() {
 
       {!readOnly && importing && <FundedImportPanel onClose={() => setImporting(false)} />}
 
-      {readOnly ? (
-        <div style={{ ...panel, fontSize: 12.5, color: MUTED }}>
-          Your account has view-only access to Trading, so the manual book’s figures are hidden.
-        </div>
-      ) : (
-        <FundedManager showMoney={showMoney} readOnly={readOnly} />
-      )}
+      {/* Shown to everyone with Trading access — read-only viewers (and the demo)
+          see the book without the add/edit/delete controls. */}
+      <FundedManager showMoney={showMoney} readOnly={readOnly} />
     </div>
   );
 }
