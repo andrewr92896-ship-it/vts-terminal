@@ -6,20 +6,12 @@ import {
   sessions,
   todoSections,
   todoItems,
-  wealthClients,
-  wealthPortfolios,
-  wealthAllocations,
-  wealthPlans,
-  wealthCompliance,
   tradingTrades,
   tradingAlerts,
   tradingPositions,
   tradingSessions,
   brokerConnections,
   tradingChallenges,
-  financeSettings,
-  financeExpenses,
-  financeNetWorth,
   tradingNews,
   tradingCalendar,
   aiUsage,
@@ -249,11 +241,6 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
   await db.transaction(async (tx) => {
     await tx.delete(todoItems).where(eq(todoItems.userId, targetId));
     await tx.delete(todoSections).where(eq(todoSections.userId, targetId));
-    await tx.delete(wealthClients).where(eq(wealthClients.userId, targetId));
-    await tx.delete(wealthAllocations).where(eq(wealthAllocations.userId, targetId));
-    await tx.delete(wealthPortfolios).where(eq(wealthPortfolios.userId, targetId));
-    await tx.delete(wealthPlans).where(eq(wealthPlans.userId, targetId));
-    await tx.delete(wealthCompliance).where(eq(wealthCompliance.userId, targetId));
     await tx.delete(aiUsage).where(eq(aiUsage.userId, targetId));
     await tx.delete(tradingTrades).where(eq(tradingTrades.userId, targetId));
     await tx.delete(tradingAlerts).where(eq(tradingAlerts.userId, targetId));
@@ -261,9 +248,6 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));
     await tx.delete(tradingChallenges).where(eq(tradingChallenges.userId, targetId));
-    await tx.delete(financeExpenses).where(eq(financeExpenses.userId, targetId));
-    await tx.delete(financeNetWorth).where(eq(financeNetWorth.userId, targetId));
-    await tx.delete(financeSettings).where(eq(financeSettings.userId, targetId));
     // Market News and the economic calendar are a shared desk feed, so they
     // survive the user — just drop the authorship link.
     await tx.update(tradingNews).set({ authorId: null }).where(eq(tradingNews.authorId, targetId));

@@ -24,12 +24,7 @@ import type {
   AnalyzePositionResult,
   OwnedBrokerConnection,
   TruthPost,
-  Expense,
-  FinanceOverview,
-  FtpPhase,
   HistoryData,
-  NetWorthData,
-  NetWorthKind,
   SessionInput,
   StrategySession,
   TradingBoard,
@@ -48,15 +43,6 @@ import type {
   TestLeaderboardEntry,
   TestResult,
   RemovedTodoItem,
-  PracticeOverview,
-  PortfoliosData,
-  PortfolioInput,
-  AllocationInput,
-  PlansData,
-  PlanInput,
-  ComplianceData,
-  ComplianceInput,
-  RemovedWealthClient,
   RoleKey,
   TodoItemState,
   TodoCommandResult,
@@ -66,8 +52,6 @@ import type {
   TeamDeckDetail,
   TradingSignals,
   User,
-  WealthClientStatus,
-  WealthClientsData,
 } from './types';
 
 // A flashcard the user added to their own deck; topic matches the Series 65
@@ -673,134 +657,6 @@ export const api = {
     return request('/api/todo/items/restore', {
       method: 'POST',
       body: JSON.stringify(item),
-    });
-  },
-  // ---- Personal Finance ----
-  financeOverview(): Promise<FinanceOverview> {
-    return request('/api/finance/overview');
-  },
-  financeOverviewBrief(): Promise<{ brief: string }> {
-    return request('/api/finance/overview/brief', { method: 'POST', body: JSON.stringify({}) });
-  },
-  financeUpdateSettings(patch: { ftpPhase?: FtpPhase; ftpDivisor?: number; ftpPayoutPct?: number }): Promise<FinanceOverview> {
-    return request('/api/finance/settings', { method: 'PATCH', body: JSON.stringify(patch) });
-  },
-  financeExpenses(): Promise<{ expenses: Expense[] }> {
-    return request('/api/finance/expenses');
-  },
-  financeAddExpense(input: { label: string; amount: number; dayOfMonth: number; category?: string | null }): Promise<{ expenses: Expense[] }> {
-    return request('/api/finance/expenses', { method: 'POST', body: JSON.stringify(input) });
-  },
-  financeUpdateExpense(id: string, patch: { label?: string; amount?: number; dayOfMonth?: number; category?: string | null; active?: boolean }): Promise<{ expenses: Expense[] }> {
-    return request(`/api/finance/expenses/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-  },
-  financeRemoveExpense(id: string): Promise<{ expenses: Expense[] }> {
-    return request(`/api/finance/expenses/${id}`, { method: 'DELETE' });
-  },
-  financeNetWorth(): Promise<NetWorthData> {
-    return request('/api/finance/net-worth');
-  },
-  financeAddNetWorth(input: { label: string; amount: number; kind: NetWorthKind }): Promise<NetWorthData> {
-    return request('/api/finance/net-worth', { method: 'POST', body: JSON.stringify(input) });
-  },
-  financeUpdateNetWorth(id: string, patch: { label?: string; amount?: number; kind?: NetWorthKind }): Promise<NetWorthData> {
-    return request(`/api/finance/net-worth/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-  },
-  financeRemoveNetWorth(id: string): Promise<NetWorthData> {
-    return request(`/api/finance/net-worth/${id}`, { method: 'DELETE' });
-  },
-  wealthOverview(): Promise<PracticeOverview> {
-    return request('/api/wealth/overview');
-  },
-  wealthOverviewBrief(): Promise<{ brief: string }> {
-    return request('/api/wealth/overview/brief', { method: 'POST', body: JSON.stringify({}) });
-  },
-  wealthPortfolios(): Promise<PortfoliosData> {
-    return request('/api/wealth/portfolios');
-  },
-  wealthAddPortfolio(input: PortfolioInput): Promise<PortfoliosData> {
-    return request('/api/wealth/portfolios', { method: 'POST', body: JSON.stringify(input) });
-  },
-  wealthUpdatePortfolio(id: string, patch: PortfolioInput): Promise<PortfoliosData> {
-    return request(`/api/wealth/portfolios/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-  },
-  wealthRemovePortfolio(id: string): Promise<PortfoliosData> {
-    return request(`/api/wealth/portfolios/${id}`, { method: 'DELETE' });
-  },
-  wealthAddAllocation(portfolioId: string, input: AllocationInput): Promise<PortfoliosData> {
-    return request(`/api/wealth/portfolios/${portfolioId}/allocations`, { method: 'POST', body: JSON.stringify(input) });
-  },
-  wealthUpdateAllocation(id: string, patch: AllocationInput): Promise<PortfoliosData> {
-    return request(`/api/wealth/allocations/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-  },
-  wealthRemoveAllocation(id: string): Promise<PortfoliosData> {
-    return request(`/api/wealth/allocations/${id}`, { method: 'DELETE' });
-  },
-  wealthPlans(): Promise<PlansData> {
-    return request('/api/wealth/plans');
-  },
-  wealthAddPlan(input: PlanInput): Promise<PlansData> {
-    return request('/api/wealth/plans', { method: 'POST', body: JSON.stringify(input) });
-  },
-  wealthUpdatePlan(id: string, patch: PlanInput): Promise<PlansData> {
-    return request(`/api/wealth/plans/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-  },
-  wealthRemovePlan(id: string): Promise<PlansData> {
-    return request(`/api/wealth/plans/${id}`, { method: 'DELETE' });
-  },
-  wealthCompliance(): Promise<ComplianceData> {
-    return request('/api/wealth/compliance');
-  },
-  wealthAddCompliance(input: ComplianceInput): Promise<ComplianceData> {
-    return request('/api/wealth/compliance', { method: 'POST', body: JSON.stringify(input) });
-  },
-  wealthUpdateCompliance(id: string, patch: ComplianceInput): Promise<ComplianceData> {
-    return request(`/api/wealth/compliance/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
-  },
-  wealthRemoveCompliance(id: string): Promise<ComplianceData> {
-    return request(`/api/wealth/compliance/${id}`, { method: 'DELETE' });
-  },
-  wealthClients(): Promise<WealthClientsData> {
-    return request('/api/wealth/clients');
-  },
-  wealthAddClient(client: {
-    name: string;
-    email?: string;
-    phone?: string;
-    accountValue?: number;
-    status?: WealthClientStatus;
-    notes?: string;
-  }): Promise<WealthClientsData> {
-    return request('/api/wealth/clients', {
-      method: 'POST',
-      body: JSON.stringify(client),
-    });
-  },
-  wealthUpdateClient(
-    id: string,
-    patch: {
-      name?: string;
-      email?: string;
-      phone?: string;
-      accountValue?: number | null;
-      status?: WealthClientStatus;
-      notes?: string;
-    },
-  ): Promise<WealthClientsData> {
-    return request(`/api/wealth/clients/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(patch),
-    });
-  },
-  wealthRemoveClient(
-    id: string,
-  ): Promise<WealthClientsData & { removed: RemovedWealthClient | null }> {
-    return request(`/api/wealth/clients/${id}`, { method: 'DELETE' });
-  },
-  wealthRestoreClient(client: RemovedWealthClient): Promise<WealthClientsData> {
-    return request('/api/wealth/clients/restore', {
-      method: 'POST',
-      body: JSON.stringify(client),
     });
   },
 };

@@ -116,37 +116,11 @@ export const todoItems = sqliteTable('todo_items', {
 export type TodoSectionRow = typeof todoSections.$inferSelect;
 export type TodoItemRow = typeof todoItems.$inferSelect;
 
-// ---- Vitalis Wealth Management ----
-// Per-user client list for the advisory practice. Like every other workspace,
-// each row is keyed by userId so a new user's list starts empty. Account value
-// is stored as whole US dollars (integer); contact fields are optional.
-export const WEALTH_CLIENT_STATUSES = ['prospect', 'onboarding', 'active', 'inactive'] as const;
-export type WealthClientStatus = (typeof WEALTH_CLIENT_STATUSES)[number];
-
-export const wealthClients = sqliteTable('wealth_clients', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  email: text('email'),
-  phone: text('phone'),
-  // Assets under management for this client, in whole US dollars. Null when
-  // not yet known (e.g. a prospect).
-  accountValue: integer('account_value'),
-  status: text('status', { enum: WEALTH_CLIENT_STATUSES }).notNull().default('prospect'),
-  notes: text('notes'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-
-export type WealthClientRow = typeof wealthClients.$inferSelect;
-
 // ---- Trading — Trade Log ----
 // Per-user record of trades (the trader's own log), keyed by userId so a new
 // user starts empty. Prices and sizes are stored as reals (forex/crypto prices
-// need decimals, so the whole-dollar integer convention used for Wealth
-// does not apply here); realized P/L is a real in account currency. The planned
+// need decimals, so a whole-dollar integer convention does not apply here);
+// realized P/L is a real in account currency. The planned
 // (alert) entry is what the broker position feed cannot supply — it is recorded
 // here so slippage (entry vs. plan) can be computed for the Trade Log.
 export const TRADE_SIDES = ['long', 'short'] as const;
@@ -452,59 +426,6 @@ export const fundedTrades = sqliteTable('funded_trades', {
 });
 export type FundedTradeRow = typeof fundedTrades.$inferSelect;
 
-// ---- Personal Finance ----
-// Per-user settings for how Funded Trading Plus (a simulation) earnings scale
-// into real take-home. Testing phase: simulated P/L ÷ divisor (18 by default).
-// Funded phase: P/L × payout (80% by default).
-export const FTP_PHASES = ['testing', 'funded'] as const;
-export type FtpPhase = (typeof FTP_PHASES)[number];
-
-export const financeSettings = sqliteTable('finance_settings', {
-  userId: text('user_id')
-    .primaryKey()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  ftpPhase: text('ftp_phase', { enum: FTP_PHASES }).notNull().default('testing'),
-  ftpDivisor: real('ftp_divisor').notNull().default(18),
-  ftpPayoutBp: integer('ftp_payout_bp').notNull().default(8000), // 80%
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-
-// Recurring monthly expenses, each with the day of month it leaves the bank.
-export const financeExpenses = sqliteTable('finance_expenses', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  label: text('label').notNull(),
-  amount: real('amount').notNull().default(0),
-  dayOfMonth: integer('day_of_month').notNull().default(1), // 1–31
-  category: text('category'),
-  active: integer('active', { mode: 'boolean' }).notNull().default(true),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-
-// Net-worth line items: assets (positive contribution) and liabilities.
-export const NET_WORTH_KINDS = ['asset', 'liability'] as const;
-export type NetWorthKind = (typeof NET_WORTH_KINDS)[number];
-
-export const financeNetWorth = sqliteTable('finance_net_worth', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  label: text('label').notNull(),
-  amount: real('amount').notNull().default(0), // stored positive; kind sets sign
-  kind: text('kind', { enum: NET_WORTH_KINDS }).notNull().default('asset'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-
-export type FinanceSettingsRow = typeof financeSettings.$inferSelect;
-export type FinanceExpenseRow = typeof financeExpenses.$inferSelect;
-export type FinanceNetWorthRow = typeof financeNetWorth.$inferSelect;
-
 // ---- Trading — Strategy Sessions ----
 // Per-user trading-session windows (e.g. London Open) with a bias and bull/bear
 // playbooks per instrument. Times are 'HH:MM' in Eastern Time; status (active /
@@ -621,109 +542,6 @@ export const truthPosts = sqliteTable('truth_posts', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TruthPostRow = typeof truthPosts.$inferSelect;
-
-// ---- Wealth — Model Portfolios & target allocations (per advisor) ----
-// A model portfolio is a named target allocation an advisor maintains; each
-// allocation row is a sleeve (asset class / holding) with a target weight in
-// basis points (10000 = 100%). Both are scoped to the owning user.
-export const PORTFOLIO_RISKS = [
-  'conservative',
-  'moderate_conservative',
-  'moderate',
-  'moderate_aggressive',
-  'aggressive',
-] as const;
-export type PortfolioRisk = (typeof PORTFOLIO_RISKS)[number];
-
-export const ASSET_CLASSES = [
-  'us_equity',
-  'intl_equity',
-  'fixed_income',
-  'real_assets',
-  'cash',
-  'alternative',
-  'other',
-] as const;
-export type AssetClass = (typeof ASSET_CLASSES)[number];
-
-export const wealthPortfolios = sqliteTable('wealth_portfolios', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  risk: text('risk', { enum: PORTFOLIO_RISKS }).notNull().default('moderate'),
-  notes: text('notes'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-export type WealthPortfolioRow = typeof wealthPortfolios.$inferSelect;
-
-export const wealthAllocations = sqliteTable('wealth_allocations', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  portfolioId: text('portfolio_id')
-    .notNull()
-    .references(() => wealthPortfolios.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  assetClass: text('asset_class', { enum: ASSET_CLASSES }).notNull().default('other'),
-  targetBp: integer('target_bp').notNull().default(0), // basis points; 10000 = 100%
-  position: integer('position').notNull().default(0),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-});
-export type WealthAllocationRow = typeof wealthAllocations.$inferSelect;
-
-// ---- Wealth — Planning (retirement projection scenarios, per advisor) ----
-// A scenario stores the inputs of a retirement projection; the math is computed
-// on read. Money is whole US dollars; rates are basis points (600 = 6.00%).
-// clientId optionally ties a scenario to a client (loose link, no FK).
-export const wealthPlans = sqliteTable('wealth_plans', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  clientId: text('client_id'),
-  currentAge: integer('current_age').notNull().default(35),
-  retirementAge: integer('retirement_age').notNull().default(65),
-  endAge: integer('end_age').notNull().default(90),
-  currentSavings: integer('current_savings').notNull().default(0),
-  annualContribution: integer('annual_contribution').notNull().default(0),
-  returnBp: integer('return_bp').notNull().default(600),
-  inflationBp: integer('inflation_bp').notNull().default(250),
-  incomeGoal: integer('income_goal').notNull().default(60000),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-export type WealthPlanRow = typeof wealthPlans.$inferSelect;
-
-// ---- Wealth — Compliance (RIA recordkeeping register, per advisor) ----
-// Each row is a compliance obligation/record (a filing, disclosure, policy,
-// client document, or review) with a status and optional due date. Overdue is
-// derived (status != complete and dueAt in the past). clientId is a loose link.
-export const COMPLIANCE_CATEGORIES = ['filing', 'disclosure', 'policy', 'client_doc', 'review', 'other'] as const;
-export type ComplianceCategory = (typeof COMPLIANCE_CATEGORIES)[number];
-export const COMPLIANCE_STATUSES = ['not_started', 'in_progress', 'complete'] as const;
-export type ComplianceStatus = (typeof COMPLIANCE_STATUSES)[number];
-
-export const wealthCompliance = sqliteTable('wealth_compliance', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  category: text('category', { enum: COMPLIANCE_CATEGORIES }).notNull().default('filing'),
-  title: text('title').notNull(),
-  status: text('status', { enum: COMPLIANCE_STATUSES }).notNull().default('not_started'),
-  dueAt: integer('due_at', { mode: 'timestamp_ms' }),
-  completedAt: integer('completed_at', { mode: 'timestamp_ms' }),
-  clientId: text('client_id'),
-  notes: text('notes'),
-  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
-export type WealthComplianceRow = typeof wealthCompliance.$inferSelect;
 
 // ---- Chat & Announcements ----
 // A shared desk chat with two channels: 'trading' (gated to the Trading

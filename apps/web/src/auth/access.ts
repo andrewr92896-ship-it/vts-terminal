@@ -55,9 +55,6 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
   todo: ['todo'],
   studies: ['studies'],
-  // Wealth Management and Finance were retired from the nav; no role grants them.
-  wealth: [],
-  finance: [],
 };
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
@@ -82,8 +79,7 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
   return roles.includes('trading_viewer');
 }
 
-// Ordered as the sidebar shows them. Wealth Management and Finance are removed
-// from the Meridian nav.
+// Ordered as the sidebar shows them.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
   const order: WorkspaceKey[] = ['trading', 'studies', 'todo'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));

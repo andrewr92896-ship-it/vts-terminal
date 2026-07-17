@@ -5,20 +5,12 @@ import {
   todoSections,
   todoItems,
   tradingAlerts,
-  wealthClients,
-  wealthPortfolios,
-  wealthAllocations,
-  wealthPlans,
-  wealthCompliance,
   tradingTrades,
   tradingSessions,
   tradingNews,
   tradingCalendar,
   tradingPositions,
   tradingChallenges,
-  financeSettings,
-  financeExpenses,
-  financeNetWorth,
   brokerConnections,
   aiUsage,
   studyDecks,
@@ -29,15 +21,6 @@ import type { AnalyzeResult } from '../ai/claude.js';
 import { createDeck } from '../studies/deckStore.js';
 import { DEMO_TEAM_ID } from './identity.js';
 
-import {
-  addExpense,
-  addNetWorth,
-  updateSettings as updateFinanceSettings,
-} from '../finance/service.js';
-import { addClient } from '../wealth/service.js';
-import { addPortfolio, addAllocation, getPortfolios } from '../wealth/portfolios.js';
-import { addPlan } from '../wealth/planning.js';
-import { addItem as addComplianceItem } from '../wealth/compliance.js';
 import { addTrade } from '../trading/trades.js';
 import { addSession } from '../trading/sessions.js';
 import { ensureSeed as ensureTodoSeed } from '../todo/service.js';
@@ -57,19 +40,11 @@ export async function clearDemoData(userId: string): Promise<void> {
   const tables = [
     todoItems,
     todoSections,
-    wealthAllocations,
-    wealthCompliance,
-    wealthPlans,
-    wealthPortfolios,
-    wealthClients,
     tradingAlerts,
     tradingSessions,
     tradingTrades,
     tradingPositions,
     tradingChallenges,
-    financeExpenses,
-    financeNetWorth,
-    financeSettings,
     brokerConnections,
     aiUsage,
     studyDeckGame,
@@ -105,229 +80,6 @@ export async function clearDemoData(userId: string): Promise<void> {
 }
 
 export async function seedDemoData(userId: string): Promise<void> {
-  // ---- Finance ----
-  try {
-    const expenses: Array<{ label: string; amount: number; dayOfMonth: number; category: string }> = [
-      { label: 'Mortgage', amount: 2150, dayOfMonth: 1, category: 'Housing' },
-      { label: 'Car Insurance', amount: 168, dayOfMonth: 5, category: 'Insurance' },
-      { label: 'Electric (PSE&G)', amount: 142, dayOfMonth: 8, category: 'Utilities' },
-      { label: 'Internet (Fios)', amount: 89, dayOfMonth: 10, category: 'Utilities' },
-      { label: 'Phone (Verizon)', amount: 95, dayOfMonth: 12, category: 'Utilities' },
-      { label: 'Gym Membership', amount: 45, dayOfMonth: 15, category: 'Health' },
-      { label: 'Student Loan', amount: 312, dayOfMonth: 18, category: 'Debt' },
-      { label: 'Streaming Bundle', amount: 38, dayOfMonth: 20, category: 'Entertainment' },
-      { label: 'Groceries (budget)', amount: 650, dayOfMonth: 22, category: 'Food' },
-      { label: 'Pet Insurance', amount: 52, dayOfMonth: 26, category: 'Insurance' },
-    ];
-    for (const e of expenses) {
-      await addExpense(userId, {
-        label: e.label,
-        amount: e.amount,
-        dayOfMonth: e.dayOfMonth,
-        category: e.category,
-      });
-    }
-
-    const netWorth: Array<{ label: string; amount: number; kind: 'asset' | 'liability' }> = [
-      { label: 'Brokerage (Schwab)', amount: 48200, kind: 'asset' },
-      { label: 'Roth IRA', amount: 31500, kind: 'asset' },
-      { label: 'Home Equity', amount: 92000, kind: 'asset' },
-      { label: 'Emergency Fund (HYSA)', amount: 18000, kind: 'asset' },
-      { label: 'Mortgage Balance', amount: 268000, kind: 'liability' },
-      { label: 'Auto Loan', amount: 14300, kind: 'liability' },
-      { label: 'Student Loans', amount: 21750, kind: 'liability' },
-    ];
-    for (const n of netWorth) {
-      await addNetWorth(userId, { label: n.label, amount: n.amount, kind: n.kind });
-    }
-
-    // Funded FTP account: payout is 80% of the prop-account P/L. This is the
-    // main income line that lands "left after bills" in a realistic range.
-    await updateFinanceSettings(userId, { ftpPhase: 'funded', ftpDivisor: 18, ftpPayoutPct: 80 });
-  } catch (err) {
-    console.error('demo seed finance failed:', err);
-  }
-
-  // ---- Wealth ----
-  try {
-    const clients: Array<{
-      name: string;
-      email: string;
-      phone: string;
-      accountValue: number;
-      status: 'prospect' | 'onboarding' | 'active' | 'inactive';
-      notes: string;
-    }> = [
-      {
-        name: 'Robert & Linda Carmichael',
-        email: 'carmichael.family@example.com',
-        phone: '(201) 555-0142',
-        accountValue: 1280000,
-        status: 'active',
-        notes: 'Retired couple, conservative income focus. Annual review in Q3.',
-      },
-      {
-        name: 'Sofia Mendez',
-        email: 'sofia.mendez@example.com',
-        phone: '(908) 555-0188',
-        accountValue: 615000,
-        status: 'active',
-        notes: 'Tech executive, growth tilt, maxing backdoor Roth.',
-      },
-      {
-        name: 'James Okafor',
-        email: 'j.okafor@example.com',
-        phone: '(732) 555-0119',
-        accountValue: 340000,
-        status: 'onboarding',
-        notes: 'Rollover from former 401(k) in progress.',
-      },
-      {
-        name: 'The Whitmore Trust',
-        email: 'trustee@example.com',
-        phone: '(609) 555-0173',
-        accountValue: 2150000,
-        status: 'active',
-        notes: 'Multi-generational trust; coordinate with estate attorney.',
-      },
-      {
-        name: 'Aaron Kelly',
-        email: 'aaron.kelly@example.com',
-        phone: '(862) 555-0150',
-        accountValue: 0,
-        status: 'prospect',
-        notes: 'Referral from Sofia Mendez. Intro meeting scheduled.',
-      },
-    ];
-    for (const c of clients) {
-      await addClient(userId, c);
-    }
-
-    // Two model portfolios, each with 3-4 sleeves (target weights in bps).
-    const models: Array<{
-      name: string;
-      risk:
-        | 'conservative'
-        | 'moderate_conservative'
-        | 'moderate'
-        | 'moderate_aggressive'
-        | 'aggressive';
-      notes: string;
-      sleeves: Array<{
-        name: string;
-        assetClass:
-          | 'us_equity'
-          | 'intl_equity'
-          | 'fixed_income'
-          | 'real_assets'
-          | 'cash'
-          | 'alternative'
-          | 'other';
-        targetBp: number;
-      }>;
-    }> = [
-      {
-        name: 'Core Growth 80/20',
-        risk: 'moderate_aggressive',
-        notes: 'Long-horizon accumulation sleeve.',
-        sleeves: [
-          { name: 'US Total Market', assetClass: 'us_equity', targetBp: 4500 },
-          { name: 'International Developed', assetClass: 'intl_equity', targetBp: 2500 },
-          { name: 'Aggregate Bond', assetClass: 'fixed_income', targetBp: 2000 },
-          { name: 'REIT Sleeve', assetClass: 'real_assets', targetBp: 1000 },
-        ],
-      },
-      {
-        name: 'Income & Preservation 40/60',
-        risk: 'moderate_conservative',
-        notes: 'Near-retirement income tilt.',
-        sleeves: [
-          { name: 'Dividend Equity', assetClass: 'us_equity', targetBp: 3000 },
-          { name: 'Intermediate Bond', assetClass: 'fixed_income', targetBp: 4500 },
-          { name: 'Short-Term Cash', assetClass: 'cash', targetBp: 1500 },
-          { name: 'Inflation-Protected', assetClass: 'real_assets', targetBp: 1000 },
-        ],
-      },
-    ];
-    for (const m of models) {
-      const before = (await getPortfolios(userId)).portfolios.map((p) => p.id);
-      await addPortfolio(userId, { name: m.name, risk: m.risk, notes: m.notes });
-      const after = await getPortfolios(userId);
-      const created =
-        after.portfolios.find((p) => p.name === m.name && !before.includes(p.id)) ??
-        after.portfolios.find((p) => p.name === m.name);
-      if (created) {
-        for (const s of m.sleeves) {
-          await addAllocation(userId, created.id, {
-            name: s.name,
-            assetClass: s.assetClass,
-            targetBp: s.targetBp,
-          });
-        }
-      }
-    }
-
-    // Planning scenarios (money in whole dollars, rates in bps).
-    await addPlan(userId, {
-      name: 'Mendez, Retire at 60',
-      currentAge: 42,
-      retirementAge: 60,
-      endAge: 92,
-      currentSavings: 615000,
-      annualContribution: 46000,
-      returnBp: 650,
-      inflationBp: 250,
-      incomeGoal: 140000,
-    });
-    await addPlan(userId, {
-      name: 'Okafor, Catch-Up Plan',
-      currentAge: 51,
-      retirementAge: 67,
-      endAge: 90,
-      currentSavings: 340000,
-      annualContribution: 30000,
-      returnBp: 600,
-      inflationBp: 250,
-      incomeGoal: 85000,
-    });
-    await addPlan(userId, {
-      name: 'Carmichael, Drawdown',
-      currentAge: 68,
-      retirementAge: 68,
-      endAge: 95,
-      currentSavings: 1280000,
-      annualContribution: 0,
-      returnBp: 450,
-      inflationBp: 250,
-      incomeGoal: 90000,
-    });
-
-    // Compliance items with due dates (ms epoch).
-    const now = Date.now();
-    await addComplianceItem(userId, {
-      category: 'filing',
-      title: 'Form ADV Annual Amendment',
-      status: 'in_progress',
-      dueAt: now + 21 * DAY_MS,
-      notes: 'Annual updating amendment within 90 days of fiscal year end.',
-    });
-    await addComplianceItem(userId, {
-      category: 'review',
-      title: 'Quarterly Account Suitability Review',
-      status: 'not_started',
-      dueAt: now + 9 * DAY_MS,
-      notes: 'Review discretionary accounts against IPS.',
-    });
-    await addComplianceItem(userId, {
-      category: 'disclosure',
-      title: 'Deliver Updated Form CRS to New Clients',
-      status: 'complete',
-      dueAt: now - 5 * DAY_MS,
-    });
-  } catch (err) {
-    console.error('demo seed wealth failed:', err);
-  }
-
   // ---- Trading ----
   try {
     const now = Date.now();
@@ -435,9 +187,8 @@ export async function seedDemoData(userId: string): Promise<void> {
       notes: 'Rejected daily supply, partial fill at target.',
     });
 
-    // Funded (FTP) prop-account trades closed this month. Their raw P/L drives
-    // the Personal Finance "FTP payout" income (scaled by the payout percent),
-    // which is what puts the monthly "left after bills" comfortably positive.
+    // A batch of prop-account trades closed this month, so the demo's Manual
+    // Trades book and history look active.
     const ftpResults: Array<{
       instrument: string;
       side: 'long' | 'short';
@@ -652,8 +403,8 @@ export async function seedDemoData(userId: string): Promise<void> {
     };
 
     await seedItems('Priority', [
-      { text: 'Finalize Q3 client review deck', done: false },
-      { text: 'Submit Form ADV amendment', done: false },
+      { text: 'Review this week’s trade log for slippage', done: false },
+      { text: 'Update the funded challenge equity', done: false },
       { text: 'Renew Series 65 registration', done: true },
     ]);
     await seedItems('Finance', [

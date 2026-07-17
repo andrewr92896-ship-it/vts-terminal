@@ -9,9 +9,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 2.9';
+export const APP_VERSION = 'Beta V 3.0';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.0',
+    date: 'July 17, 2026',
+    notes: [
+      'Reworked the Trading “Funded” tab into “Manual Trades” — a self-managed book where you place trades for accounts by hand, with nothing tied to an outside funded platform.',
+      'Added a private “Funded” section (the prop-firm challenge dashboard: equity vs. target and daily / max drawdown buffers) that only appears for accounts an admin grants the new Funded role. It is never shown in the demo or to the public.',
+      'Cleaned up the assignable roles: removed the retired Wealth Management and Finance roles, leaving Admin, Trading, Trading (View only), Funded, Studies, and To Do.',
+      'Removed the Wealth Management and Personal Finance workspaces entirely — their screens, API, and stored data are gone. The portal now focuses on Trading, Studies, and To Do.',
+    ],
+  },
   {
     version: 'Beta V 2.9',
     date: 'July 16, 2026',

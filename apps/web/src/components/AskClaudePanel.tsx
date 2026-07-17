@@ -6,7 +6,7 @@ import { api, ApiError } from '../api/client';
 interface AskClaudePanelProps {
   open: boolean;
   theme: Theme;
-  workspace?: string; // workspace key (trading, finance, ...) for context
+  workspace?: string; // workspace key (trading, studies, ...) for context
   workspaceLabel?: string; // human label, for display
   onClose: () => void;
 }
@@ -19,8 +19,6 @@ interface Msg {
 // Suggested prompts tailored to the current workspace.
 const SUGGESTIONS_BY_WS: Record<string, string[]> = {
   trading: ['How do I log a trade by hand?', 'What’s a healthy daily drawdown buffer?', 'How do I read slippage in my trade log?'],
-  finance: ['Tips for tracking monthly expenses', 'How does FTP payout scaling work?', 'Ways to improve my net worth'],
-  wealth: ['How should I structure model portfolios?', 'What goes in an IPS?', 'Key RIA compliance filings to track'],
   studies: ['Explain the brochure rule (Series 65)', 'Quiz me on fiduciary duty', 'Define a discretionary account'],
   todo: ['How do recurring tasks work?', 'What can the command bar do?', 'Help me plan my week'],
 };

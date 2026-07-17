@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'wealth' | 'finance';
+export type WorkspaceKey = 'trading' | 'todo' | 'studies';
 
 export interface Theme {
   pageBg: string;
@@ -15,16 +15,6 @@ export interface Theme {
 }
 
 export const THEMES: Record<WorkspaceKey, Theme> = {
-  wealth: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0c2a20 0%,#06140e 60%)',
-    headerBg: 'linear-gradient(90deg,#0a241b 0%,#0f3527 100%)',
-    headerBorder: '#1d4a38',
-    navBg: '#0a201a',
-    navBorder: '#173f30',
-    accent: '#34b87a',
-    accent2: '#239160',
-    accentText: '#05231a',
-  },
   studies: {
     pageBg: 'radial-gradient(1200px 600px at 70% -10%,#241a3d 0%,#120d22 60%)',
     headerBg: 'linear-gradient(90deg,#1c1436 0%,#2a1f4e 100%)',
@@ -55,16 +45,6 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#2f9e86',
     accentText: '#06231d',
   },
-  finance: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#1a1f44 0%,#0a0e22 60%)',
-    headerBg: 'linear-gradient(90deg,#15193a 0%,#222a5e 100%)',
-    headerBorder: '#2e3766',
-    navBg: '#12162f',
-    navBorder: '#262e57',
-    accent: '#6f8bff',
-    accent2: '#4f63d6',
-    accentText: '#0a0e22',
-  },
 };
 
 export function accentGradient(t: Theme): string {
@@ -78,7 +58,7 @@ export interface BrandMeta {
   size: string;
   letterSpacing: string;
   // When set, the header and background watermark use this wordmark image
-  // instead of the styled text brand (Trading and Wealth Management).
+  // instead of the styled text brand (e.g. Trading).
   wordmark?: string;
 }
 
@@ -104,22 +84,6 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     color: '#bfeee2',
     size: '19px',
     letterSpacing: '0.5px',
-  },
-  wealth: {
-    name: () => 'VITALIS',
-    sub: 'Retirement & Wealth Management',
-    color: '#a9ecce',
-    size: '22px',
-    letterSpacing: '2px',
-    // Same Vitalis logo as Trading, with the Retirement & Wealth subtitle.
-    wordmark: '/brand/vitalis-wealth-wordmark.svg',
-  },
-  finance: {
-    name: () => 'FINANCE',
-    sub: 'Personal Finance',
-    color: '#9fb0ff',
-    size: '21px',
-    letterSpacing: '2px',
   },
 };
 
@@ -147,32 +111,16 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'td_trading', label: 'To Do' },
   ],
   todo: [{ key: 'td_all', label: 'All Tasks' }],
-  wealth: [
-    { key: 'wm_home', label: 'Overview' },
-    { key: 'wm_clients', label: 'Clients' },
-    { key: 'wm_portfolios', label: 'Portfolios' },
-    { key: 'wm_planning', label: 'Planning' },
-    { key: 'wm_compliance', label: 'Compliance' },
-  ],
-  finance: [
-    { key: 'fin_overview', label: 'Overview' },
-    { key: 'fin_expenses', label: 'Expenses' },
-    { key: 'fin_networth', label: 'Net Worth' },
-  ],
 };
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'live',
   todo: 'td_all',
   studies: 'st_home',
-  wealth: 'wm_home',
-  finance: 'fin_overview',
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   todo: 'To Do List',
   trading: 'Trading',
   studies: 'Studies',
-  wealth: 'Wealth Management',
-  finance: 'Finance',
 };

@@ -1,7 +1,7 @@
 import type { UserRow } from '../db/schema.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 
-export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'wealth' | 'finance';
+export type WorkspaceKey = 'trading' | 'todo' | 'studies';
 
 // Granular, admin-assigned roles. A user can hold any combination. `admin`
 // grants everything (including user management); `trading_viewer` is read-only
@@ -45,16 +45,11 @@ export function isAdmin(roles: RoleKey[]): boolean {
   return roles.includes('admin');
 }
 
-// Which role keys grant access to a given workspace (admin grants all). The
-// Wealth Management and Finance workspaces were retired from the nav; their
-// dedicated roles are gone, so no role grants them (their feature code/tables
-// remain but are unreachable in the UI).
+// Which role keys grant access to a given workspace (admin grants all).
 const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   trading: ['trading', 'trading_viewer'],
   todo: ['todo'],
   studies: ['studies'],
-  wealth: [],
-  finance: [],
 };
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
@@ -78,8 +73,7 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
   return roles.includes('trading_viewer');
 }
 
-// Ordered as the sidebar shows them. Wealth Management and Finance are removed
-// from the Meridian nav.
+// Ordered as the sidebar shows them.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
   const order: WorkspaceKey[] = ['trading', 'studies', 'todo'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
