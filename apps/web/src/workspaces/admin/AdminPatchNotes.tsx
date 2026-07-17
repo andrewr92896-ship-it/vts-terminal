@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../api/client';
 import type { PatchNoteEntry } from '../../api/types';
+import { PATCH_NOTES } from '../../meta/version';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import {
@@ -127,6 +128,14 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
 
   if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>Loading patch notes...</div>;
 
+  // The member-facing Site Help ▸ Patch notes merges these DB entries with the
+  // compiled-in PATCH_NOTES history. Show that same bundled archive here (read
+  // only) so the admin sees everything that is currently live, not just the
+  // notes authored into the database. A DB entry that reuses a bundled version
+  // label supersedes the bundled one, matching the member view.
+  const dbVersions = new Set(notes.map((n) => n.version));
+  const archive = PATCH_NOTES.filter((p) => !dbVersions.has(p.version));
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
@@ -172,7 +181,9 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
 
       {/* Existing notes */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {notes.length === 0 && <div style={{ fontSize: 12.5, color: '#8ea3cc' }}>No patch notes yet.</div>}
+        {notes.length === 0 && archive.length === 0 && (
+          <div style={{ fontSize: 12.5, color: '#8ea3cc' }}>No patch notes yet.</div>
+        )}
         {notes.map((n) =>
           editId === n.id ? (
             <div key={n.id} style={{ ...panel(theme), border: `1px solid ${theme.accent}` }}>
@@ -228,6 +239,32 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
             </div>
           ),
         )}
+
+        {/* Bundled archive — the compiled-in history members already see. These
+            predate the database store, so they are read only here. */}
+        {archive.length > 0 && (
+          <div style={{ marginTop: notes.length > 0 ? 10 : 0, marginBottom: 2 }}>
+            <div style={panelLabel}>Archive — live for members</div>
+            <div style={{ fontSize: 11.5, color: '#7488b5', lineHeight: 1.5 }}>
+              These releases ship with the app and already appear in Site Help ▸ Patch notes. They are
+              read only; to change history, re-create a release above.
+            </div>
+          </div>
+        )}
+        {archive.map((p) => (
+          <div key={`bundled:${p.version}`} style={{ ...panel(theme), opacity: 0.9 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: theme.accent }}>{p.version}</span>
+              <span style={{ fontSize: 11, color: '#7488b5', fontFamily: "'IBM Plex Mono', monospace" }}>{p.date}</span>
+              <Badge color="#6E7EA8">Archived</Badge>
+            </div>
+            <ul style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {p.notes.map((note, i) => (
+                <li key={i} style={{ fontSize: 12.5, color: '#ccd7ef', lineHeight: 1.55 }}>{note}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </div>
   );
