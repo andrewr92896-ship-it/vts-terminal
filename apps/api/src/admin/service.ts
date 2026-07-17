@@ -124,6 +124,7 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     createdUsername: username, // preserved even if the user renames later
     displayName,
     email,
+    avatar: null,
     passwordHash: await hashPassword(input.password),
     role: 'Viewer' as const, // legacy column, unused; kept populated for type/back-compat
     roles: JSON.stringify(roles),

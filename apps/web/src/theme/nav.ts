@@ -77,6 +77,26 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_users', label: 'Users', icon: 'users' },
       { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
       { key: 'ad_early', label: 'Early Access', icon: 'sparkles' },
+      { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
+      { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
+      { key: 'ad_bugs', label: 'Bug Reports', icon: 'bug' },
+    ],
+  },
+  // Site Help — available to every signed-in user. Consolidates the how-to
+  // guides, announcements, patch notes, and the bug-report / suggestion forms
+  // that used to live in the corner help hub.
+  {
+    key: 'help',
+    label: 'Site Help',
+    icon: 'life-buoy',
+    accent: '#6C9EFF',
+    group: 'Help & support',
+    sections: [
+      { key: 'hp_howto', label: 'How to', icon: 'book-open' },
+      { key: 'hp_news', label: 'Announcements', icon: 'megaphone' },
+      { key: 'hp_notes', label: 'Patch notes', icon: 'file-text' },
+      { key: 'hp_bug', label: 'Report a bug', icon: 'bug' },
+      { key: 'hp_suggest', label: 'Suggestion', icon: 'lightbulb' },
     ],
   },
 ];

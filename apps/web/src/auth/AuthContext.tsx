@@ -17,7 +17,7 @@ interface AuthState {
   logout: () => Promise<void>;
   // Self-service account actions; each updates the cached user on success.
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  updateProfile: (patch: { username?: string; displayName?: string; email?: string }) => Promise<void>;
+  updateProfile: (patch: { username?: string; displayName?: string; email?: string; avatar?: string }) => Promise<void>;
 }
 
 const AuthCtx = createContext<AuthState | null>(null);
@@ -71,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    async (patch: { username?: string; displayName?: string; email?: string }) => {
+    async (patch: { username?: string; displayName?: string; email?: string; avatar?: string }) => {
       const r = await api.updateProfile(patch);
       setUser(r.user);
     },

@@ -58,9 +58,13 @@ const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
   // The Admin workspace is reserved for admins; no member role grants it. The
   // isAdmin short-circuit in canAccessWorkspace is what actually lets admins in.
   admin: [],
+  // Site Help is open to everyone signed in (handled in canAccessWorkspace).
+  help: [],
 };
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
+  // Site Help is available to every signed-in user, whatever their roles.
+  if (ws === 'help') return true;
   if (isAdmin(roles)) return true;
   return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
 }
@@ -82,10 +86,10 @@ export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean
   return roles.includes('trading_viewer');
 }
 
-// Ordered as the sidebar shows them. The Admin workspace comes last and only
-// for admins.
+// Ordered as the sidebar shows them. Site Help is available to everyone; the
+// Admin workspace comes last and only for admins.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['trading', 'studies', 'todo', 'admin'];
+  const order: WorkspaceKey[] = ['trading', 'studies', 'todo', 'help', 'admin'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 

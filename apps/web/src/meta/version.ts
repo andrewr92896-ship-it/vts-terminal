@@ -9,9 +9,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.0';
+export const APP_VERSION = 'Beta V 3.1';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.1',
+    date: 'July 17, 2026',
+    notes: [
+      'New Site Help workspace gathers everything support-related in one place: How-to guides, Announcements (formerly News), Patch notes, Report a bug, and Suggestion.',
+      'The lower-right corner is now your Team Chat — a private channel just for you and your trading team, with each teammate’s profile picture beside their messages. New messages show up in the top-bar notification bell. Not on a trading team yet? The panel explains how the feature works.',
+      'Report a bug from Site Help and our assistant reads it, asks for anything that’s missing, then thanks you and files the ticket for the admins.',
+      'Add a profile picture in Account settings — it appears in the top bar, your account menu, and next to your team-chat messages.',
+      'Admins: “View as role”, “Suggestions”, and “Bug Reports” now each have their own section in the Admin workspace. Suggestions and bug reports land there automatically.',
+      'The corner chat button is now a chat bubble.',
+    ],
+  },
   {
     version: 'Beta V 3.0',
     date: 'July 17, 2026',

@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'admin';
+export type WorkspaceKey = 'trading' | 'todo' | 'studies' | 'admin' | 'help';
 
 export interface Theme {
   pageBg: string;
@@ -57,6 +57,18 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#c14e6e',
     accentText: '#2a0f19',
   },
+  // Site Help: a calm sky-blue accent, distinct from the trading gold, for the
+  // support/help area (how-to, announcements, patch notes, bug/suggestion).
+  help: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0d2444 0%,#060f24 60%)',
+    headerBg: 'linear-gradient(90deg,#0a1f3d 0%,#0c2a54 100%)',
+    headerBorder: '#1c3a6a',
+    navBg: '#0a1834',
+    navBorder: '#16294f',
+    accent: '#6C9EFF',
+    accent2: '#4b7fe0',
+    accentText: '#06122c',
+  },
 };
 
 export function accentGradient(t: Theme): string {
@@ -104,6 +116,13 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     size: '21px',
     letterSpacing: '2px',
   },
+  help: {
+    name: () => 'SITE HELP',
+    sub: 'Help & support',
+    color: '#a9c6ff',
+    size: '21px',
+    letterSpacing: '2px',
+  },
 };
 
 export interface TabDef {
@@ -134,6 +153,16 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'ad_users', label: 'Users' },
     { key: 'ad_teams', label: 'Teams' },
     { key: 'ad_early', label: 'Early Access' },
+    { key: 'ad_viewas', label: 'View as role' },
+    { key: 'ad_suggestions', label: 'Suggestions' },
+    { key: 'ad_bugs', label: 'Bug Reports' },
+  ],
+  help: [
+    { key: 'hp_howto', label: 'How to' },
+    { key: 'hp_news', label: 'Announcements' },
+    { key: 'hp_notes', label: 'Patch notes' },
+    { key: 'hp_bug', label: 'Report a bug' },
+    { key: 'hp_suggest', label: 'Suggestion' },
   ],
 };
 
@@ -142,6 +171,7 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   todo: 'td_all',
   studies: 'st_home',
   admin: 'ad_users',
+  help: 'hp_howto',
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
@@ -149,4 +179,5 @@ export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   trading: 'Trading',
   studies: 'Studies',
   admin: 'Admin',
+  help: 'Site Help',
 };

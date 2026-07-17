@@ -4,8 +4,11 @@ import type {
   AiUsage,
   AlertsData,
   Announcement,
-  ChatChannel,
   ChatMessage,
+  TeamChatFeed,
+  NotificationItem,
+  Suggestion,
+  BugReport,
   BrokerConnection,
   BrokerStatus,
   ChallengeData,
@@ -152,6 +155,8 @@ export const api = {
     username?: string;
     displayName?: string;
     email?: string;
+    // A data URL to set the profile picture, or '' to remove it.
+    avatar?: string;
   }): Promise<{ user: User }> {
     return request('/api/auth/profile', {
       method: 'PATCH',
@@ -428,20 +433,57 @@ export const api = {
   tradingAlerts(): Promise<AlertsData> {
     return request('/api/trading/alerts');
   },
-  chatMessages(channel: ChatChannel): Promise<{ messages: ChatMessage[] }> {
-    return request(`/api/chat/${channel}`);
+  // ---- Team chat ----
+  teamChat(): Promise<TeamChatFeed> {
+    return request('/api/chat/team');
   },
-  hubActivity(): Promise<{ chat: number; announcements: number; news: number; truth: number }> {
+  sendTeamChat(body: string): Promise<{ messages: ChatMessage[] }> {
+    return request('/api/chat/team', { method: 'POST', body: JSON.stringify({ body }) });
+  },
+  deleteTeamChat(id: string): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/chat/team/${id}`, { method: 'DELETE' });
+  },
+  // In-portal notifications (top-bar bell).
+  notifications(): Promise<{ items: NotificationItem[]; latestAt: number }> {
+    return request('/api/notifications');
+  },
+  hubActivity(): Promise<{ chat: number; announcements: number; suggestions: number; bugs: number }> {
     return request('/api/chat/activity');
   },
   tradingTruth(): Promise<{ posts: TruthPost[] }> {
     return request('/api/trading/truth');
   },
-  sendChat(channel: ChatChannel, body: string): Promise<{ messages: ChatMessage[] }> {
-    return request(`/api/chat/${channel}`, { method: 'POST', body: JSON.stringify({ body }) });
+  // ---- Feedback: suggestions ----
+  sendSuggestion(body: string): Promise<{ suggestion: Suggestion }> {
+    return request('/api/feedback/suggestions', { method: 'POST', body: JSON.stringify({ body }) });
   },
-  deleteChat(channel: ChatChannel, id: string): Promise<{ messages: ChatMessage[] }> {
-    return request(`/api/chat/${channel}/${id}`, { method: 'DELETE' });
+  adminSuggestions(): Promise<{ suggestions: Suggestion[] }> {
+    return request('/api/admin/suggestions');
+  },
+  adminSetSuggestionStatus(id: string, status: 'new' | 'reviewed'): Promise<{ suggestions: Suggestion[] }> {
+    return request(`/api/admin/suggestions/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  },
+  adminDeleteSuggestion(id: string): Promise<{ suggestions: Suggestion[] }> {
+    return request(`/api/admin/suggestions/${id}`, { method: 'DELETE' });
+  },
+  // ---- Feedback: bug reports (AI intake) ----
+  createBugReport(body: string): Promise<{ report: BugReport }> {
+    return request('/api/feedback/bugs', { method: 'POST', body: JSON.stringify({ body }) });
+  },
+  replyBugReport(id: string, body: string): Promise<{ report: BugReport }> {
+    return request(`/api/feedback/bugs/${id}/reply`, { method: 'POST', body: JSON.stringify({ body }) });
+  },
+  myBugReports(): Promise<{ reports: BugReport[] }> {
+    return request('/api/feedback/bugs');
+  },
+  adminBugReports(): Promise<{ reports: BugReport[] }> {
+    return request('/api/admin/bugs');
+  },
+  adminSetBugStatus(id: string, status: 'open' | 'submitted' | 'resolved'): Promise<{ reports: BugReport[] }> {
+    return request(`/api/admin/bugs/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  },
+  adminDeleteBug(id: string): Promise<{ reports: BugReport[] }> {
+    return request(`/api/admin/bugs/${id}`, { method: 'DELETE' });
   },
   studyLearned(): Promise<{ terms: string[] }> {
     return request('/api/studies/learned');
