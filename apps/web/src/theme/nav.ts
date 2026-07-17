@@ -4,8 +4,7 @@ import { C } from './tokens';
 // The Meridian sidebar's two-tier navigation model: a Workspaces list, and the
 // current workspace's Sections list under a group label. Section keys are the
 // app's existing screen keys (see Portal.renderScreen), so restyling the shell
-// never changes routing. Wealth Management and Finance are intentionally absent
-// — the redesign removes them from the nav (their data/routes are left intact).
+// never changes routing.
 
 export interface NavSection {
   key: string; // an existing screen key

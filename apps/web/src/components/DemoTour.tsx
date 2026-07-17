@@ -20,7 +20,7 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'trading',
     screen: 'live',
     title: 'Welcome to VTS Portal',
-    body: 'A private trading and operations portal: live trading, wealth management, personal finance, Series 65 study tools, and an AI assistant. This is a read-only demo with simulated data.',
+    body: 'A private trading and operations portal: live trading, Series 65 study tools, a shared to-do list, and an AI assistant. This is a read-only demo with simulated data.',
   },
   {
     workspace: 'trading',
@@ -46,18 +46,6 @@ export const DEMO_STEPS: TourStep[] = [
     openClaude: true,
     title: 'Ask Claude, anywhere',
     body: 'The assistant is one click away on every screen and knows which workspace you are in. In the demo its replies are scripted; the live portal answers with Claude (Sonnet).',
-  },
-  {
-    workspace: 'wealth',
-    screen: 'wm_home',
-    title: 'Wealth Management',
-    body: 'Runs an advisory practice: client book, model portfolios with allocation sleeves, retirement planning scenarios, and RIA compliance tracking, with AI briefs over the whole practice.',
-  },
-  {
-    workspace: 'finance',
-    screen: 'fin_overview',
-    title: 'Personal Finance',
-    body: 'Income across jobs, monthly bills, net worth, and prop-firm payout scaling. The "Brief me" button writes a quick AI read of where things stand.',
   },
   {
     workspace: 'studies',
