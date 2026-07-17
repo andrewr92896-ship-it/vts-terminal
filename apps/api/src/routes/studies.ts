@@ -17,6 +17,7 @@ import {
 } from '../studies/tests.js';
 import {
   aiConfigured,
+  chatStudyGuide,
   classifyQuestionsIntoSection,
   defineSeries65Term,
   generateDeckQuestions,
@@ -30,6 +31,7 @@ import { SERIES65_EXPLANATIONS } from '../studies/series65/explanations.js';
 import { SERIES65_VOCAB } from '../studies/series65/vocab.js';
 import { createDeck, deleteDeck, getDeck, listDecks } from '../studies/deckStore.js';
 import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
+import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
@@ -86,6 +88,33 @@ const deckImportSchema = z.object({
   text: z.string().min(1).max(100_000),
   instructions: z.string().trim().max(2000).optional(),
   count: z.number().int().min(1).max(50).optional(),
+});
+
+// ---- Team study guides (slide presentations) ----
+// One turn of the guide-builder conversation: the running transcript (the
+// assistant turns carry the model's own prior JSON so it sees the last draft).
+const guideChatSchema = z.object({
+  messages: z
+    .array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().min(1).max(20_000) }))
+    .min(1)
+    .max(40),
+});
+// One presentation slide the author is saving: title, body, and an optional
+// screenshot as a base64 data URL. The store re-sanitizes and caps these.
+const guideSlideSchema = z.object({
+  title: z.string().max(400).optional(),
+  body: z.string().max(6000).optional(),
+  image: z.string().max(4_000_000).nullable().optional(),
+});
+const guideCreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).optional(),
+  slides: z.array(guideSlideSchema).min(1).max(40),
+});
+const guideUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  description: z.string().trim().max(500).nullable().optional(),
+  slides: z.array(guideSlideSchema).min(1).max(40).optional(),
 });
 
 export async function studiesRoutes(app: FastifyInstance) {
@@ -240,6 +269,94 @@ export async function studiesRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     if (!me.teamId || !(await getDeck(id, me.teamId))) return reply.code(404).send({ error: 'Not found' });
     return { entries: await getDeckLeaderboard(id, me.id) };
+  });
+
+  // ---- Team study guides (slide presentations) ----
+  // A team builds a study guide by conversing with Claude (which drafts the slide
+  // text) and attaching its own screenshots, then presents it like a slideshow.
+
+  // The list of the caller's team guides (metadata only — no slide blob).
+  app.get('/api/studies/guides', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.send({ guides: [] });
+    return { guides: await listGuides(teamId) };
+  });
+
+  // One turn of the guide-builder conversation. Returns the assistant's reply
+  // plus the complete current slide draft. Persists nothing — the client saves
+  // the finished guide with POST /guides once the author is happy.
+  app.post('/api/studies/guides/chat', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study guide.' });
+    const parsed = guideChatSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A conversation message is required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_guide_chat');
+      const result = await chatStudyGuide(parsed.data.messages);
+      return { reply: result.reply, slides: result.slides };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not reach the guide builder' });
+    }
+  });
+
+  // Save a finished guide (slides + any attached screenshots). The larger body
+  // limit accommodates the embedded base64 screenshots.
+  app.post('/api/studies/guides', { ...guard, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study guide.' });
+    const parsed = guideCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one slide are required' });
+    const guide = await createGuide({
+      teamId,
+      name: parsed.data.name,
+      description: parsed.data.description,
+      createdBy: request.currentUser!.id,
+      slides: parsed.data.slides.map((s) => ({ title: s.title ?? '', body: s.body ?? '', image: s.image ?? null })),
+    });
+    if (guide.slideCount === 0) {
+      // Every slide was empty (no text, no image); nothing worth keeping.
+      await deleteGuide(guide.id, teamId, request.currentUser!.id, true);
+      return reply.code(422).send({ error: 'A study guide needs at least one slide with text or a screenshot.' });
+    }
+    return { guide, guides: await listGuides(teamId) };
+  });
+
+  // One guide with its slides (team-scoped).
+  app.get('/api/studies/guides/:id', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    const id = (request.params as { id: string }).id;
+    if (!teamId) return reply.code(404).send({ error: 'Not found' });
+    const guide = await getGuide(id, teamId);
+    if (!guide) return reply.code(404).send({ error: 'Study guide not found' });
+    return { guide };
+  });
+
+  // Update a guide's name/description/slides (creator or a team admin).
+  app.put('/api/studies/guides/:id', { ...guard, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
+    const parsed = guideUpdateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
+    const guide = await updateGuide(id, me.teamId, me.id, isAdmin(parseRoles(me)), {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      slides: parsed.data.slides?.map((s) => ({ title: s.title ?? '', body: s.body ?? '', image: s.image ?? null })),
+    });
+    if (!guide) return reply.code(403).send({ error: 'You can only edit study guides you created.' });
+    return { guide, guides: await listGuides(me.teamId) };
+  });
+
+  // Delete a guide (creator or a team admin).
+  app.delete('/api/studies/guides/:id', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
+    const ok = await deleteGuide(id, me.teamId, me.id, isAdmin(parseRoles(me)));
+    if (!ok) return reply.code(403).send({ error: 'You can only delete study guides you created.' });
+    return { guides: await listGuides(me.teamId) };
   });
 
   app.get('/api/studies/learned', guard, async (request) => {

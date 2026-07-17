@@ -467,11 +467,13 @@ export interface ChatMessage {
   content: string;
 }
 
-// Sonnet 4.6 multi-turn chat — powers the global Ask Claude panel.
-export async function chatClaude(messages: ChatMessage[], system?: string): Promise<string> {
+// Sonnet 4.6 multi-turn chat — powers the global Ask Claude panel. maxTokens
+// defaults to 4000; the study-guide builder passes a larger budget since a draft
+// of many slides is a big JSON response.
+export async function chatClaude(messages: ChatMessage[], system?: string, maxTokens = 4000): Promise<string> {
   const message = await getClient().messages.create({
     model: config.ANTHROPIC_MODEL_DEFAULT,
-    max_tokens: 4000,
+    max_tokens: maxTokens,
     ...(system ? { system } : {}),
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   });
@@ -702,4 +704,72 @@ export async function parseDeckFromText(input: {
     .join('\n');
   const raw = await askClaude(prompt, system, deckMaxTokens(count));
   return parseGeneratedQuestions(raw, count, [], 'General');
+}
+
+// ---- Team study-guide builder (a slide presentation, built by conversation) ----
+// A team builds a study guide — a presentation of titled slides, each with a
+// short body — through a back-and-forth chat. Claude drafts and revises the
+// slide TEXT; the author attaches screenshots to slides themselves (the model
+// never sees or emits images). On every turn the model returns BOTH a
+// conversational reply and the complete current slide draft, so the client can
+// show the chat and a live preview that survives edits.
+
+// One slide as the model returns it. `id` echoes an id from the previous draft
+// (so the client can preserve a screenshot the author attached to that slide) or
+// is the literal "new" for a slide the model just created.
+export interface GuideDraftSlide {
+  id: string;
+  title: string;
+  body: string;
+}
+
+export interface GuideChatResult {
+  reply: string;
+  slides: GuideDraftSlide[];
+}
+
+const GUIDE_SYSTEM = [
+  'You help a user build a STUDY GUIDE presentation — an ordered slideshow of slides, each with a short title and a body — through a back-and-forth conversation. You write and revise the slide TEXT only; the user attaches any screenshots themselves, so never mention adding images yourself.',
+  'On EVERY turn respond with ONLY a JSON object of exactly this shape and nothing else (no prose or code fences outside it):',
+  '{"reply":"a short, friendly message to the user about what you changed or a question back to them","slides":[{"id":"s1","title":"...","body":"..."}]}',
+  'Rules:',
+  '- "slides" is the COMPLETE current draft in presentation order every time — never a partial list of just the changes.',
+  '- Preserve the "id" of any slide you keep from the previous draft (the previous draft is shown in your last message). For a brand-new slide, set "id" to "new".',
+  '- Keep each "body" concise enough for one slide — a few short sentences or a handful of bullet lines. Use "\\n" for line breaks; do not use markdown headings.',
+  '- The user may ask you to add, remove, reorder, rewrite, split, or merge slides — reflect all of it in the returned array.',
+  '- Aim for a clear teaching flow: an opening/overview slide, focused topic slides, and a short recap. Only produce slides the material supports.',
+].join('\n');
+
+function coerceDraftSlides(raw: unknown): GuideDraftSlide[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: GuideDraftSlide[] = [];
+  for (const item of list) {
+    const o = (item ?? {}) as Record<string, unknown>;
+    const title = typeof o.title === 'string' ? o.title.trim().slice(0, 200) : '';
+    const body = typeof o.body === 'string' ? o.body.trim().slice(0, 4000) : '';
+    if (!title && !body) continue;
+    const id = typeof o.id === 'string' && o.id.trim() ? o.id.trim().slice(0, 40) : 'new';
+    out.push({ id, title, body });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
+// Parse the model's {"reply":...,"slides":[...]} turn. Exported so the structural
+// contract can be unit-tested without a live model call.
+export function parseGuideChat(raw: string): GuideChatResult {
+  const parsed = extractJson(raw) as { reply?: unknown; slides?: unknown } | null;
+  const reply =
+    parsed && typeof parsed.reply === 'string' && parsed.reply.trim()
+      ? parsed.reply.trim().slice(0, 2000)
+      : 'Here is the updated draft.';
+  return { reply, slides: coerceDraftSlides(parsed?.slides) };
+}
+
+// Run one turn of the study-guide builder conversation. `messages` is the running
+// transcript; the assistant turns carry the model's own prior JSON (so it sees
+// the previous slide draft and its ids). Returns the reply plus the full draft.
+export async function chatStudyGuide(messages: ChatMessage[]): Promise<GuideChatResult> {
+  const raw = await chatClaude(messages, GUIDE_SYSTEM, 8000);
+  return parseGuideChat(raw);
 }

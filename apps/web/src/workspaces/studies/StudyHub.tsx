@@ -92,20 +92,21 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>Team Study Games</h3>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>Team Study Creation</h3>
           <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '3px 8px' }}>
             Your team
           </span>
         </div>
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
-          Build a study game for your team on any subject. Have AI generate the questions from a
-          topic you name, or upload a text file of your own questions or notes and let AI turn it
-          into a quiz. Everyone on your team can play it, level up, and compete on your team’s
-          leaderboard.
+          Build your own study content for your team on any subject. Make a study game — have AI
+          generate the questions from a topic you name, or upload a text file of your own questions or
+          notes — and everyone can play it, level up, and compete on your team’s leaderboard. Or build
+          a study guide: go back and forth with VTS AI to draft a slide deck, add your own screenshots,
+          and present it like a walkthrough.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           <button onClick={() => onNavigate('st_decks')} style={primaryBtn(theme, accentGrad)}>
-            Open Study Games
+            Open Study Creation
           </button>
         </div>
       </div>
