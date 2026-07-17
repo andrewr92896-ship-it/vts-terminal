@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
+import { EarlyAccessModal } from './EarlyAccessModal';
 
 export function Login() {
   const { login, demoLogin } = useAuth();
@@ -9,6 +10,7 @@ export function Login() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
+  const [earlyAccessOpen, setEarlyAccessOpen] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -194,6 +196,29 @@ export function Login() {
           A read-only tour with simulated data. No account needed.
         </p>
 
+        <button
+          type="button"
+          onClick={() => setEarlyAccessOpen(true)}
+          style={{
+            width: '100%',
+            marginTop: 14,
+            padding: '11px',
+            borderRadius: 8,
+            cursor: 'pointer',
+            fontSize: 13,
+            fontWeight: 600,
+            letterSpacing: '0.3px',
+            color: '#EBCB74',
+            background: 'transparent',
+            border: '1px solid rgba(235,203,116,.45)',
+          }}
+        >
+          Request Early Access
+        </button>
+        <p style={{ textAlign: 'center', margin: '8px 0 0', fontSize: 10.5, color: '#6f84b2', lineHeight: 1.5 }}>
+          Not a member yet? Ask to join.
+        </p>
+
         <p
           style={{
             textAlign: 'center',
@@ -222,6 +247,8 @@ export function Login() {
           </a>
         </p>
       </form>
+
+      {earlyAccessOpen && <EarlyAccessModal onClose={() => setEarlyAccessOpen(false)} />}
     </div>
   );
 }

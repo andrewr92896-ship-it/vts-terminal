@@ -1,5 +1,6 @@
 import type {
   AdminUser,
+  EarlyAccessRequest,
   AiUsage,
   AlertsData,
   Announcement,
@@ -156,6 +157,26 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });
+  },
+  // ---- Early access ----
+  // Public: submit a request from the login screen. No auth.
+  requestEarlyAccess(input: {
+    firstName: string;
+    lastName?: string;
+    email: string;
+    source: string;
+  }): Promise<{ ok: true }> {
+    return request('/api/early-access', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  // Admin: review and clear the submitted leads.
+  adminListEarlyAccess(): Promise<{ requests: EarlyAccessRequest[] }> {
+    return request('/api/admin/early-access');
+  },
+  adminDeleteEarlyAccess(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/admin/early-access/${id}`, { method: 'DELETE' });
   },
   adminListUsers(): Promise<{ users: AdminUser[] }> {
     return request('/api/admin/users');

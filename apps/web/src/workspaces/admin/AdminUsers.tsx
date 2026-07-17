@@ -1,11 +1,25 @@
 import { useEffect, useState, type CSSProperties } from 'react';
-import { api, ApiError } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { useResponsive } from '../hooks/useMediaQuery';
-import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../auth/access';
-import type { AdminUser, RoleKey, Team } from '../api/types';
-import type { Theme } from '../theme/themes';
-import { accentGradient } from '../theme/themes';
+import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
+import { useResponsive } from '../../hooks/useMediaQuery';
+import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../../auth/access';
+import type { AdminUser, RoleKey, Team } from '../../api/types';
+import type { Theme } from '../../theme/themes';
+import { accentGradient } from '../../theme/themes';
+import {
+  Badge,
+  SectionHeader,
+  dangerBtn,
+  dangerSolidBtn,
+  fieldLabel,
+  ghostBtn,
+  ghostDangerBtn,
+  inputStyle,
+  msgStyle,
+  panel,
+  panelLabel,
+  primaryBtn,
+} from './adminUi';
 
 // Generate a readable temporary password the admin can hand to the new user.
 function genPassword(): string {
@@ -148,22 +162,9 @@ export function AdminUsers({ theme }: { theme: Theme }) {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>Users</h2>
-        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc' }}>
-          Create accounts and assign roles. A user can hold several roles; only admins can change
-          them. New users start empty and set their own password on first sign-in.
-        </p>
-      </div>
-
-      {/* Trading teams */}
-      <TeamsManager
-        teams={teams}
-        setTeams={setTeams}
-        onMembersChanged={refresh}
-        onError={setActionError}
-        theme={theme}
-        accentGrad={accentGrad}
+      <SectionHeader
+        title="Users"
+        subtitle="Create accounts and assign roles. A user can hold several roles; only admins can change them. New users set their own password on first sign-in."
       />
 
       {/* Create a user */}
@@ -471,8 +472,7 @@ function RoleToggle({
   );
 }
 
-// A native dropdown for picking a user's trading team (or none). Kept simple so
-// it inherits the dark theme via inline styles like everything else here.
+// A native dropdown for picking a user's trading team (or none).
 function TeamSelect({
   value,
   onChange,
@@ -484,13 +484,13 @@ function TeamSelect({
   teams: Team[];
   disabled?: boolean;
 }) {
+  const selectStyle: CSSProperties = {
+    ...inputStyle,
+    opacity: disabled ? 0.6 : 1,
+    cursor: disabled ? 'default' : 'pointer',
+  };
   return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      disabled={disabled}
-      style={{ ...inputStyle, opacity: disabled ? 0.6 : 1, cursor: disabled ? 'default' : 'pointer' }}
-    >
+    <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} style={selectStyle}>
       <option value="">No team</option>
       {teams.map((t) => (
         <option key={t.id} value={t.id}>
@@ -499,321 +499,4 @@ function TeamSelect({
       ))}
     </select>
   );
-}
-
-// Admin panel to create, rename, and delete trading teams. Team membership is
-// assigned per user (the TeamSelect above); this manages the team list itself.
-// Deleting a team unassigns its members server-side, so we refresh the user
-// list afterward via onMembersChanged.
-function TeamsManager({
-  teams,
-  setTeams,
-  onMembersChanged,
-  onError,
-  theme,
-  accentGrad,
-}: {
-  teams: Team[];
-  setTeams: (t: Team[]) => void;
-  onMembersChanged: () => Promise<void> | void;
-  onError: (msg: string | null) => void;
-  theme: Theme;
-  accentGrad: string;
-}) {
-  const [newName, setNewName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const [renameVal, setRenameVal] = useState('');
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
-  async function add() {
-    const name = newName.trim();
-    if (!name) return;
-    setBusy(true);
-    onError(null);
-    try {
-      const r = await api.adminCreateTeam(name);
-      setTeams(r.teams);
-      setNewName('');
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : 'Could not create the team.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function rename(id: string) {
-    const name = renameVal.trim();
-    if (!name) return;
-    setBusy(true);
-    onError(null);
-    try {
-      const r = await api.adminRenameTeam(id, name);
-      setTeams(r.teams);
-      setRenamingId(null);
-      setRenameVal('');
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : 'Could not rename the team.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remove(id: string) {
-    setBusy(true);
-    onError(null);
-    try {
-      const r = await api.adminDeleteTeam(id);
-      setTeams(r.teams);
-      setConfirmDeleteId(null);
-      await onMembersChanged();
-    } catch (e) {
-      onError(e instanceof ApiError ? e.message : 'Could not delete the team.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div style={{ ...panel(theme), marginBottom: 18 }}>
-      <div style={panelLabel}>Trading teams</div>
-      <p style={{ margin: '0 0 12px', fontSize: 12, color: '#8ea3cc', lineHeight: 1.5 }}>
-        Teams group traders into their own desk. The Studies leaderboard ranks a learner only
-        against their team; the Trading workspace (Live Wall presets, Trade Desk, alerts, sessions,
-        funded) stays shared across every team. Assign a user to a team below.
-      </p>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {teams.length === 0 && (
-          <div style={{ fontSize: 12.5, color: '#8ea3cc' }}>No teams yet — add one below.</div>
-        )}
-        {teams.map((t) => (
-          <div
-            key={t.id}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              flexWrap: 'wrap',
-              padding: '8px 10px',
-              borderRadius: 8,
-              border: `1px solid ${theme.navBorder}`,
-              background: 'rgba(0,0,0,.18)',
-            }}
-          >
-            {renamingId === t.id ? (
-              <>
-                <input
-                  value={renameVal}
-                  onChange={(e) => setRenameVal(e.target.value)}
-                  autoFocus
-                  style={{ ...inputStyle, flex: '1 1 180px', minHeight: 36 }}
-                />
-                <button onClick={() => rename(t.id)} disabled={busy} style={primaryBtn(theme, accentGrad)}>
-                  Save
-                </button>
-                <button onClick={() => setRenamingId(null)} disabled={busy} style={ghostBtn}>
-                  Cancel
-                </button>
-              </>
-            ) : (
-              <>
-                <span style={{ fontSize: 13.5, fontWeight: 600, color: '#eef3ff', flex: '1 1 auto' }}>
-                  {t.name}
-                </span>
-                <Badge color="#8ea3cc">
-                  {t.memberCount} {t.memberCount === 1 ? 'member' : 'members'}
-                </Badge>
-                <button
-                  onClick={() => {
-                    setRenamingId(t.id);
-                    setRenameVal(t.name);
-                    setConfirmDeleteId(null);
-                  }}
-                  disabled={busy}
-                  style={ghostBtn}
-                >
-                  Rename
-                </button>
-                {confirmDeleteId === t.id ? (
-                  <>
-                    <button onClick={() => remove(t.id)} disabled={busy} style={dangerSolidBtn}>
-                      {busy ? 'Deleting…' : 'Confirm'}
-                    </button>
-                    <button onClick={() => setConfirmDeleteId(null)} disabled={busy} style={ghostBtn}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => setConfirmDeleteId(t.id)}
-                    disabled={busy}
-                    style={ghostDangerBtn}
-                    title="Delete this team; its members become unassigned"
-                  >
-                    Delete
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {confirmDeleteId && (
-        <div style={{ ...msgStyle(false), marginTop: 10 }}>
-          Deleting a team unassigns everyone on it (their data is untouched). This can't be undone.
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
-          placeholder="New team name"
-          style={{ ...inputStyle, flex: '1 1 200px' }}
-        />
-        <button onClick={add} disabled={busy || !newName.trim()} style={primaryBtn(theme, accentGrad)}>
-          Add team
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function Badge({ color, children }: { color: string; children: React.ReactNode }) {
-  return (
-    <span
-      style={{
-        fontFamily: "'IBM Plex Mono', monospace",
-        fontSize: 9.5,
-        fontWeight: 600,
-        letterSpacing: '0.4px',
-        color,
-        border: `1px solid ${color}`,
-        borderRadius: 4,
-        padding: '2px 7px',
-      }}
-    >
-      {children}
-    </span>
-  );
-}
-
-function panel(theme: Theme): CSSProperties {
-  return {
-    background: 'rgba(11,26,58,.5)',
-    border: `1px solid ${theme.navBorder}`,
-    borderRadius: 10,
-    padding: '15px 16px',
-  };
-}
-
-const panelLabel: CSSProperties = {
-  fontSize: 10.5,
-  letterSpacing: '0.6px',
-  textTransform: 'uppercase',
-  color: '#7488b5',
-  marginBottom: 12,
-  fontWeight: 600,
-};
-
-const fieldLabel: CSSProperties = {
-  display: 'block',
-  fontSize: 10.5,
-  letterSpacing: '0.4px',
-  textTransform: 'uppercase',
-  color: '#8ea3cc',
-  marginBottom: 6,
-};
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  padding: '10px 12px',
-  fontSize: 13,
-  color: '#eef3ff',
-  background: 'rgba(6,15,36,.6)',
-  border: '1px solid #1d3560',
-  borderRadius: 8,
-  outline: 'none',
-  minHeight: 40,
-};
-
-function primaryBtn(theme: Theme, grad: string): CSSProperties {
-  return {
-    border: 'none',
-    background: grad,
-    color: theme.accentText,
-    fontWeight: 600,
-    fontSize: 13,
-    padding: '10px 16px',
-    borderRadius: 8,
-    cursor: 'pointer',
-    minHeight: 40,
-  };
-}
-
-const ghostBtn: CSSProperties = {
-  border: '1px solid #2a4170',
-  background: 'rgba(0,0,0,.18)',
-  color: '#cfe0ff',
-  fontSize: 12.5,
-  fontWeight: 600,
-  padding: '9px 13px',
-  borderRadius: 8,
-  cursor: 'pointer',
-  minHeight: 40,
-};
-
-const dangerBtn: CSSProperties = {
-  border: '1px solid rgba(239,84,104,.4)',
-  background: 'rgba(239,84,104,.1)',
-  color: '#ff8a80',
-  fontSize: 12.5,
-  fontWeight: 600,
-  padding: '9px 13px',
-  borderRadius: 8,
-  cursor: 'pointer',
-  minHeight: 40,
-};
-
-// A more muted danger outline for the first "Delete" click, so it reads as
-// distinct from the (also red) Deactivate button next to it.
-const ghostDangerBtn: CSSProperties = {
-  border: '1px solid rgba(239,84,104,.3)',
-  background: 'rgba(0,0,0,.18)',
-  color: '#e69a96',
-  fontSize: 12.5,
-  fontWeight: 600,
-  padding: '9px 13px',
-  borderRadius: 8,
-  cursor: 'pointer',
-  minHeight: 40,
-};
-
-// Solid red for the irreversible "Confirm delete" action.
-const dangerSolidBtn: CSSProperties = {
-  border: '1px solid #ef5468',
-  background: 'linear-gradient(180deg,#ef5468,#c8324a)',
-  color: '#fff',
-  fontSize: 12.5,
-  fontWeight: 700,
-  padding: '9px 13px',
-  borderRadius: 8,
-  cursor: 'pointer',
-  minHeight: 40,
-};
-
-function msgStyle(ok: boolean): CSSProperties {
-  return {
-    marginTop: 12,
-    fontSize: 12.5,
-    color: ok ? '#7fe0c0' : '#ff8a80',
-    background: ok ? 'rgba(53,196,123,.1)' : 'rgba(239,84,104,.1)',
-    border: `1px solid ${ok ? 'rgba(53,196,123,.4)' : 'rgba(239,84,104,.4)'}`,
-    borderRadius: 7,
-    padding: '9px 12px',
-    lineHeight: 1.5,
-  };
 }

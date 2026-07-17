@@ -21,7 +21,6 @@ interface TopBarProps {
   onOpenNav: () => void;
   onOpenClaude: () => void;
   onOpenAccount: () => void;
-  onOpenAdmin: () => void;
   onSetActingRole: (r: RoleKey | null) => void;
   onLogout: () => void;
 }
@@ -131,7 +130,6 @@ export function TopBar(props: TopBarProps) {
     onOpenNav,
     onOpenClaude,
     onOpenAccount,
-    onOpenAdmin,
     onSetActingRole,
     onLogout,
   } = props;
@@ -145,7 +143,6 @@ export function TopBar(props: TopBarProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [viewAsOpen, setViewAsOpen] = useState(false);
 
-  const canAdmin = isAdmin(effectiveRoles);
   const userName = user.displayName.split(' ')[0] || user.username;
   const hasBrokerStatus = canTrade && brokers.length > 0;
 
@@ -456,21 +453,6 @@ export function TopBar(props: TopBarProps) {
               <br />
               Roles: {rolesSummary(user.roles)}
             </div>
-
-            {canAdmin && (
-              <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 4 }}>
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onOpenAdmin();
-                  }}
-                  style={menuItem}
-                >
-                  <Icon name="users" size={15} color={C.faint} />
-                  User management
-                </button>
-              </div>
-            )}
 
             {isAdmin(user.roles) && (
               <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
