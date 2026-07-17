@@ -26,3 +26,20 @@ review step and no other users to protect from a bad merge. Because of that:
   manual deploy button or Railway CLI in this environment — merging to `main`
   is the only deploy trigger.
 - Prefer **squash merges** to keep `main` history clean.
+
+## Frontend conventions
+
+### Mobile input zoom (iOS)
+
+iOS Safari auto-zooms the viewport whenever a focused text field has a
+font-size **below 16px**. To prevent this, a global rule in
+`apps/web/src/styles/global.css` floors every `input`, `textarea`, `select`,
+and `[contenteditable]` at `16px` on touch devices (`@media (pointer: coarse)`,
+with `!important` so it beats inline styles).
+
+- **This is the site-wide default — do not add per-component font-size fixes
+  for the zoom.** Any new text box is covered automatically.
+- You may still set whatever inline/design `font-size` you want for desktop; it
+  applies on fine-pointer devices and is overridden to 16px only on touch.
+- If you ever change that global rule, keep the 16px floor — dropping below it
+  reintroduces the zoom on every input at once.

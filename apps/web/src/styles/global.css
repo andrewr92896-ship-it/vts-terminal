@@ -59,6 +59,21 @@ textarea {
   font-family: inherit;
 }
 
+/* iOS Safari auto-zooms the viewport whenever a focused text field has a
+   font-size below 16px. On touch devices, floor every form control at 16px so
+   tapping ANY input/textarea/select never triggers that zoom. This is the
+   site-wide default — individual components should NOT need their own fix.
+   `!important` is required because most inputs set font-size via inline styles,
+   which would otherwise win. Desktop (fine pointers) keeps its designed sizes. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select,
+  [contenteditable] {
+    font-size: 16px !important;
+  }
+}
+
 a {
   color: inherit;
 }
