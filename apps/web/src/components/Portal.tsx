@@ -73,8 +73,11 @@ const StudyHub = lazy(() =>
 const StudyProgress = lazy(() =>
   import('../workspaces/studies/StudyProgress').then((m) => ({ default: m.StudyProgress })),
 );
-const StudyCreation = lazy(() =>
-  import('../workspaces/studies/StudyCreation').then((m) => ({ default: m.StudyCreation })),
+const TeamStudyDecks = lazy(() =>
+  import('../workspaces/studies/TeamStudyDecks').then((m) => ({ default: m.TeamStudyDecks })),
+);
+const StudyGuides = lazy(() =>
+  import('../workspaces/studies/StudyGuides').then((m) => ({ default: m.StudyGuides })),
 );
 
 // Screens that have real implementations; everything else falls back to the
@@ -140,7 +143,9 @@ function renderScreen(
     case 'st_progress':
       return <StudyProgress theme={theme} onNavigate={onNavigate} />;
     case 'st_decks':
-      return <StudyCreation theme={theme} />;
+      return <TeamStudyDecks theme={theme} />;
+    case 'st_guides':
+      return <StudyGuides theme={theme} />;
     // Admin workspace sections. Access is gated by the sidebar/workspace filter
     // (admins only) and enforced server-side on every admin endpoint.
     case 'ad_users':
