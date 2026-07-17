@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
+import { FundedLiveTrades } from './FundedLiveTrades';
 import type { ChallengeData, ChallengeInput } from '../../api/types';
 
 // The private Funded section: a prop-firm challenge dashboard (equity vs. target
@@ -208,6 +209,10 @@ export function FundedChallengeScreen() {
         <Gauge title="Max Drawdown" subtitle={`${data.trailing ? 'Trailing' : 'Static'} · ${data.maxDdPct}%`} floorLabel="Floor" floor={dollars(m.maxFloor)} headroom={dollars(m.maxHeadroom)} headroomPct={m.maxHeadroomPct} breached={m.breaches.max} canSee={canSee} showMoney={showMoney} />
         <Gauge title="Daily Drawdown" subtitle={`Resets daily · ${data.dailyDdPct}%`} floorLabel="Today's floor" floor={dollars(m.dailyFloor)} headroom={dollars(m.dailyHeadroom)} headroomPct={m.dailyHeadroomPct} breached={m.breaches.daily} canSee={canSee} showMoney={showMoney} />
       </div>
+
+      {/* Live funded trades: open positions marked live, closed from a result
+          screenshot. Only for full traders — the funded book is write-gated. */}
+      {!readOnly && <FundedLiveTrades showMoney={showMoney} readOnly={readOnly} />}
 
       {!canSee && (
         <div style={{ ...panel, marginTop: 14, fontSize: 12, color: MUTED }}>
