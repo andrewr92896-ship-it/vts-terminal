@@ -23,6 +23,7 @@ import { Icon } from './Icon';
 import { InstallPrompt } from './InstallPrompt';
 import { AskClaudePanel } from './AskClaudePanel';
 import { AccountSettings } from './AccountSettings';
+import { DeviceSettings } from './DeviceSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
 import { TeamChat } from './TeamChat';
 import {
@@ -221,6 +222,7 @@ export function Portal() {
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
@@ -415,6 +417,7 @@ export function Portal() {
       onOpenNav={() => setNavOpen(true)}
       onOpenClaude={() => setAiOpen(true)}
       onOpenAccount={() => setAccountOpen(true)}
+      onOpenDeviceSettings={() => setDeviceSettingsOpen(true)}
       onOpenChat={() => setChatOpen(true)}
       onLogout={logout}
     />
@@ -518,6 +521,7 @@ export function Portal() {
             onClose={() => setAiOpen(false)}
           />
           <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
+          <DeviceSettings open={deviceSettingsOpen} theme={theme} onClose={() => setDeviceSettingsOpen(false)} />
 
           <TeamChat
             open={chatOpen}
