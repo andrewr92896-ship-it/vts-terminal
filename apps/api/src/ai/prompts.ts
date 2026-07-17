@@ -42,9 +42,6 @@ const WS_TRADING_DEF =
 const WS_STUDIES_DEF =
   'Help the user study for the Series 65 (Uniform Investment Adviser Law Exam): explain concepts clearly, give memory hooks, and quiz them when asked.';
 
-const WS_TODO_DEF =
-  'Help organize tasks and routines. Mention they can also use the "Ask Claude / command" bar on the To-Do screen to add, check, or remove tasks directly.';
-
 const TUTOR_DEF = [
   'You are a patient Series 65 (Uniform Investment Adviser Law Exam) tutor.',
   'Explain clearly and concisely for an exam candidate: the key concept, why the correct answer is right and the tempting wrong ones are wrong, and a short memory hook when it helps.',
@@ -91,14 +88,6 @@ export const PROMPT_DEFS: PromptDef[] = [
     group: 'Assistant',
     description: 'Extra guidance the assistant follows while the user is in the Studies workspace.',
     def: WS_STUDIES_DEF,
-    multiline: true,
-  },
-  {
-    id: 'ws.todo',
-    label: 'Ask Claude — To-Do guidance',
-    group: 'Assistant',
-    description: 'Extra guidance the assistant follows while the user is in the To-Do workspace.',
-    def: WS_TODO_DEF,
     multiline: true,
   },
   {

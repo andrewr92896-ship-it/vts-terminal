@@ -57,14 +57,6 @@ export const NAV: NavWorkspace[] = [
       { key: 'st_guides', label: 'Study Guides', icon: 'presentation' },
     ],
   },
-  {
-    key: 'todo',
-    label: 'To Do',
-    icon: 'list-todo',
-    accent: '#46C2A8',
-    group: 'Tasks',
-    sections: [{ key: 'td_all', label: 'All Tasks', icon: 'list-checks' }],
-  },
   // Admin-only. Shown in the sidebar only to admins (Portal filters the
   // workspaces list via workspacesForRoles); consolidates the portal's admin
   // tools into one workspace.

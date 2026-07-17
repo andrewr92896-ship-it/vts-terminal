@@ -8,9 +8,9 @@ import type { RemovedTodoItem, TodoItem, TodoSection } from '../../api/types';
 const GOLD = '#EBCB74';
 const GOLD2 = '#C9A24B';
 
-// The Trading To Do tab is a filtered view of the shared To Do list: the
-// trading-tagged section (Vitalis Trading). It uses the same todo endpoints,
-// so changes here also show in the To Do List workspace.
+// The Trading To Do tab shows the shared trading task list: the trading-tagged
+// section (Vitalis Trading) of the todo store, so tasks here are shared with the
+// team.
 export function TradingTodo() {
   const { user } = useAuth();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
@@ -94,7 +94,7 @@ export function TradingTodo() {
     <div style={{ maxWidth: 720, color: '#dfe6f5', animation: 'fadeIn .25s ease' }}>
       <h2 style={{ margin: '0 0 4px', fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>Trading To-Do</h2>
       <p style={{ margin: '0 0 16px', fontSize: 12.5, color: '#8b97b3' }}>
-        Trading tasks and reminders. Also visible in your full To Do List workspace.
+        Trading tasks and reminders, shared with your team.
       </p>
 
       {actionError && (

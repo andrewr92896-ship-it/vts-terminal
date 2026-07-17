@@ -16,12 +16,11 @@ const schema = z.object({
 
 // The label shown for each workspace the Ask Claude persona can adopt, plus the
 // prompt id whose (admin-editable) text carries that workspace's guidance. Only
-// the three live workspaces are here; the guidance strings live in ai/prompts.ts
+// the live workspaces are here; the guidance strings live in ai/prompts.ts
 // so an admin can edit them from Admin ▸ AI Instructions.
 const WORKSPACE_GUIDE: Record<string, { label: string; promptId: string }> = {
   trading: { label: 'Trading', promptId: 'ws.trading' },
   studies: { label: 'Studies', promptId: 'ws.studies' },
-  todo: { label: 'To-Do', promptId: 'ws.todo' },
 };
 
 // Short, friendly context so the assistant knows what app it lives in, plus

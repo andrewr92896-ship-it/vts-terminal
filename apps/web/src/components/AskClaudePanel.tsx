@@ -20,7 +20,6 @@ interface Msg {
 const SUGGESTIONS_BY_WS: Record<string, string[]> = {
   trading: ['How do I log a trade by hand?', 'What’s a healthy daily drawdown buffer?', 'How do I read slippage in my trade log?'],
   studies: ['Explain the brochure rule (Series 65)', 'Quiz me on fiduciary duty', 'Define a discretionary account'],
-  todo: ['How do recurring tasks work?', 'What can the command bar do?', 'Help me plan my week'],
 };
 const DEFAULT_SUGGESTIONS = ['Summarize what this portal can do', 'What can you help me with here?'];
 

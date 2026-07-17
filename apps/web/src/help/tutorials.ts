@@ -245,67 +245,19 @@ export const TUTORIALS: Record<string, Tutorial> = {
 
   td_trading: {
     title: 'Trading To-Do',
-    intro: 'Your trading tasks and reminders — a focused view of the trading parts of your full To Do List.',
+    intro: 'Your trading tasks and reminders, shared with your team.',
     steps: [
       {
         title: 'Add a trading task',
         body: 'Type a task in the box and click Add. It is filed under Vitalis Trading.',
       },
       {
-        title: 'Shared with your To Do List',
-        body: 'These tasks also appear in the full To Do List workspace, so anything you add here shows up there too.',
+        title: 'Shared with your team',
+        body: 'These tasks are the shared Vitalis Trading list, so anything you add here is visible to your team.',
       },
       {
         title: 'Check things off',
         body: 'Tick the checkbox to complete a task. Completed tasks get a line through them; click the × to remove one, with a short Undo bar to restore it.',
-      },
-    ],
-  },
-
-  // ---- To Do List ----
-  td_all: {
-    title: 'Using your To Do List',
-    intro: 'Your personal list, organized into numbered categories. New accounts start with empty categories — add your own tasks.',
-    steps: [
-      {
-        title: 'Add a task',
-        body: 'In the "Add a task" box, choose a category from the dropdown, type your task, and press Enter or click Add. New tasks appear at the top of their category.',
-      },
-      {
-        title: 'Add a section',
-        body: 'Use the "Add a section" box to create your own category. Type a name, pick a type — Checklist (tickable tasks), Daily routine (resets each day), or Notes (bullet points) — and click Add. It appears at the end of your list, ready for tasks.',
-      },
-      {
-        title: 'Reorder tasks',
-        body: 'Use the ▲ / ▼ arrows on the right of a task to move it up or down within its category. You can also tell the command bar things like "move 1.2 to the top" or "move 3.1 up 2".',
-      },
-      {
-        title: 'Check things off',
-        body: 'Click the square checkbox to mark a task done. Completed tasks get a line through them and float to the top of the section.',
-      },
-      {
-        title: 'Recurring tasks',
-        body: 'Tasks in Weekly / Monthly (and similar) categories show a timer like "+3 days", "due today", or an overdue count. When you complete one, it automatically schedules the next cycle.',
-      },
-      {
-        title: 'Daily Routine resets each day',
-        body: 'Daily Routine items are checkboxes you tick as you do them; they automatically uncheck at the start of the next day so the list is fresh each morning.',
-      },
-      {
-        title: 'Remove a task',
-        body: 'Click the × on the right side of any task to delete it.',
-      },
-      {
-        title: 'Undo',
-        body: 'When you remove a task or check one off, a short Undo bar appears at the bottom. Click Undo to put it back or restore the prior checked state.',
-      },
-      {
-        title: 'Ask VTS AI / command',
-        body: 'Type a plain-English instruction in the "Ask VTS AI / command" box and click Run. VTS AI updates the list for you — e.g. "add to Finance: pay rent", "new section Garden", "move 1.2 to top", "done 1.2", "remove 3.1", or several at once separated by "·". It shows what it changed and skips anything it can\'t match.',
-      },
-      {
-        title: 'Life Changes',
-        body: 'Use the "Show Life Changes / Hide Life Changes" button at the top right to reveal or hide reflective note sections, which are kept separate from your checkable tasks.',
       },
     ],
   },
@@ -426,7 +378,7 @@ export const DEFAULT_TUTORIAL: Tutorial = {
     },
     {
       title: 'Switch workspaces',
-      body: 'Use the workspace switcher in the top bar to move between To Do List, Trading, and the other areas you have access to.',
+      body: 'Use the workspace switcher in the top bar to move between Trading, Studies, and the other areas you have access to.',
     },
   ],
 };
@@ -444,7 +396,7 @@ export const HOWTO_TOPICS: { key: string; label: string }[] = [
   { key: 'sessions', label: 'Strategy Sessions' },
   { key: 'funded', label: 'Manual Trades' },
   { key: 'news', label: 'Market News' },
-  { key: 'td_all', label: 'To Do List' },
+  { key: 'td_trading', label: 'Trading To-Do' },
   { key: 'st_game', label: 'Study Game' },
   { key: 'st_home', label: 'Study Hub' },
 ];

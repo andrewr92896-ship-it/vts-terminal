@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace } from '../auth/middleware.js';
+import { requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
 import {
   addItem,
   addSection,
@@ -56,15 +56,19 @@ const restoreSchema = z.object({
 });
 
 export async function todoRoutes(app: FastifyInstance) {
-  // Personal workspace: requires To Do access (Admin, Trader, Sales).
-  const guard = { preHandler: requireWorkspace('todo') };
+  // The shared to-do list now lives inside Trading (the Trading ▸ To Do tab),
+  // so it requires Trading access. Reads are open to any Trading viewer; writes
+  // are blocked for read-only trading viewers (mirroring the Trading routes).
+  // Admins are always allowed via requireWorkspace.
+  const read = { preHandler: requireWorkspace('trading') };
+  const write = { preHandler: requireWorkspaceWrite('trading') };
 
-  app.get('/api/todo', guard, async (request) => {
+  app.get('/api/todo', read, async (request) => {
     const sections = await getTodo(request.currentUser!.id);
     return { sections };
   });
 
-  app.post('/api/todo/items', guard, async (request, reply) => {
+  app.post('/api/todo/items', write, async (request, reply) => {
     const parsed = addSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'A section and task text are required' });
@@ -78,7 +82,7 @@ export async function todoRoutes(app: FastifyInstance) {
     return { sections: await getTodo(userId) };
   });
 
-  app.post('/api/todo/sections', guard, async (request, reply) => {
+  app.post('/api/todo/sections', write, async (request, reply) => {
     const parsed = addSectionSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'A section title is required' });
@@ -92,7 +96,7 @@ export async function todoRoutes(app: FastifyInstance) {
     return { sections: await getTodo(userId) };
   });
 
-  app.patch('/api/todo/items/:id/move', guard, async (request, reply) => {
+  app.patch('/api/todo/items/:id/move', write, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const parsed = moveSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -114,7 +118,7 @@ export async function todoRoutes(app: FastifyInstance) {
     return { sections: await getTodo(userId) };
   });
 
-  app.patch('/api/todo/items/:id/toggle', guard, async (request, reply) => {
+  app.patch('/api/todo/items/:id/toggle', write, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const userId = request.currentUser!.id;
     let previous;
@@ -129,7 +133,7 @@ export async function todoRoutes(app: FastifyInstance) {
   });
 
   // Undo a check/uncheck: restore an item's prior done flag and due date.
-  app.post('/api/todo/items/:id/state', guard, async (request, reply) => {
+  app.post('/api/todo/items/:id/state', write, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const userId = request.currentUser!.id;
     const parsed = stateSchema.safeParse(request.body);
@@ -140,7 +144,7 @@ export async function todoRoutes(app: FastifyInstance) {
     return { sections: await getTodo(userId) };
   });
 
-  app.delete('/api/todo/items/:id', guard, async (request) => {
+  app.delete('/api/todo/items/:id', write, async (request) => {
     const id = (request.params as { id: string }).id;
     const userId = request.currentUser!.id;
     const removed = await removeItem(userId, id);
@@ -148,7 +152,7 @@ export async function todoRoutes(app: FastifyInstance) {
   });
 
   // Claude command bar: parse a free-text command into list actions and apply.
-  app.post('/api/todo/command', guard, async (request, reply) => {
+  app.post('/api/todo/command', write, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }
@@ -166,7 +170,7 @@ export async function todoRoutes(app: FastifyInstance) {
   });
 
   // Undo a removal.
-  app.post('/api/todo/items/restore', guard, async (request, reply) => {
+  app.post('/api/todo/items/restore', write, async (request, reply) => {
     const parsed = restoreSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Could not restore task' });
