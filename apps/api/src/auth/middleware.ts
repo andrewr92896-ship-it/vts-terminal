@@ -6,6 +6,7 @@ import type {
 } from 'fastify';
 import { SESSION_COOKIE, getUserForToken } from './sessions.js';
 import {
+  canAccessFunded,
   canAccessWorkspace,
   isAdmin,
   isWorkspaceReadOnly,
@@ -62,6 +63,22 @@ export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
     }
   };
 }
+
+// Reject unless the user holds the admin-assigned `funded` role (admins pass).
+// Guards the private Funded (prop-challenge) endpoints. Pair with a Trading
+// workspace guard so the caller also holds Trading access.
+export const requireFunded: preHandlerHookHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const user = request.currentUser;
+  if (!user) {
+    return reply.code(401).send({ error: 'Not authenticated' });
+  }
+  if (!canAccessFunded(parseRoles(user))) {
+    return reply.code(403).send({ error: 'Forbidden' });
+  }
+};
 
 // Reject unless the user can *modify* the workspace. Read-only roles (today only
 // trading_viewer) can see the workspace but must not mutate it — use this on

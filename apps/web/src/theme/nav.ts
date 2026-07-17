@@ -36,6 +36,9 @@ export const NAV: NavWorkspace[] = [
       { key: 'desk', label: 'Trade Desk', icon: 'candlestick-chart' },
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
+      // Private, role-gated: only shown to holders of the `funded` role (see
+      // FUNDED_ONLY_SECTIONS + the sidebar filter). Never shown to the demo.
+      { key: 'prop', label: 'Funded', icon: 'shield-check' },
       { key: 'news', label: 'Market News', icon: 'newspaper' },
       { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
     ],
@@ -72,6 +75,11 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
 // content). The sidebar hides these for teams that can't use Series 65; the
 // Subjects hub and the team-built Study Games stay visible to everyone.
 export const SERIES65_ONLY_SECTIONS = new Set(['st_game', 'st_test', 'st_progress']);
+
+// Trading sections gated behind the admin-assigned `funded` role. The sidebar
+// hides these unless the viewer holds the role (see canAccessFunded); the demo
+// and the public never see them.
+export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
 
 // The signalling accent for a workspace (falls back to gold for anything not in
 // the Meridian nav, e.g. a legacy wealth/finance route reached by deep link).

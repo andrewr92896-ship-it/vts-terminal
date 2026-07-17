@@ -11,7 +11,7 @@ import {
 } from '../theme/themes';
 import { navFor, accentFor } from '../theme/nav';
 import { C } from '../theme/tokens';
-import { canAccessWorkspace, canUseSeries65, workspacesForRoles } from '../auth/access';
+import { canAccessFunded, canAccessWorkspace, canUseSeries65, workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
@@ -38,6 +38,7 @@ import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
 import { Alerts } from '../workspaces/trading/Alerts';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
+import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketNews } from '../workspaces/trading/MarketNews';
@@ -65,11 +66,21 @@ function renderScreen(
   theme: Theme,
   onNavigate: (screen: string) => void,
   canSeries65: boolean,
+  canFunded: boolean,
 ) {
   // Series 65 screens are the owner's licensed track — gate them defensively in
   // case a non-team member reaches one by a deep link.
   if (!canSeries65 && (screen === 'st_game' || screen === 'st_test' || screen === 'st_progress')) {
     return <Series65Unavailable theme={theme} onNavigate={onNavigate} />;
+  }
+  // The private Funded section is role-gated; refuse it defensively (a deep link
+  // or stale state) for anyone without the `funded` role.
+  if (screen === 'prop' && !canFunded) {
+    return (
+      <div style={{ maxWidth: 620, margin: '40px auto 0', textAlign: 'center', color: C.muted, fontSize: 13.5 }}>
+        This section isn’t enabled for your account.
+      </div>
+    );
   }
   switch (screen) {
     case 'live':
@@ -89,6 +100,8 @@ function renderScreen(
       return <TradingDesk initialView="brokers" />;
     case 'funded':
       return <FundedScreen />;
+    case 'prop':
+      return <FundedChallengeScreen />;
     case 'sessions':
       return <StrategySessions />;
     case 'news':
@@ -308,15 +321,21 @@ export function Portal() {
     }
   }
 
-  // Keep the selected screen valid for the current workspace.
+  // The private Funded section follows the same "view as role" preview as the
+  // rest of the nav; never revealed to the demo.
+  const canFunded = !user!.isDemo && canAccessFunded(effectiveRoles);
+
+  // Keep the selected screen valid for the current workspace. Also bounce a
+  // non-funded viewer off the private Funded section if stale state lands there.
   useEffect(() => {
     const nav = navFor(workspace);
     if (!nav) return;
     const legacyTradeDesk = screen === 'log' || screen === 'history' || screen === 'metrics';
-    if (!nav.sections.some((s) => s.key === screen) && !legacyTradeDesk) {
+    const fundedLocked = screen === 'prop' && !canFunded;
+    if ((!nav.sections.some((s) => s.key === screen) && !legacyTradeDesk) || fundedLocked) {
       setScreen(DEFAULT_SCREEN[workspace]);
     }
-  }, [workspace, screen]);
+  }, [workspace, screen, canFunded]);
 
   const canTrade = canAccessWorkspace(effectiveRoles, 'trading');
   const canSeries65 = canUseSeries65(user);
@@ -327,6 +346,7 @@ export function Portal() {
       screen={screen}
       workspaces={allowed}
       canSeries65={canSeries65}
+      canFunded={canFunded}
       collapsed={isPhone ? false : collapsed}
       onToggle={isPhone ? () => setNavOpen(false) : toggleCollapsed}
       onSelectWorkspace={selectWorkspace}
@@ -373,7 +393,7 @@ export function Portal() {
       >
         <ErrorBoundary resetKey={screen}>
           <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
-            {renderScreen(screen, theme, selectScreen, canSeries65) ?? <Screen screen={screen} theme={theme} />}
+            {renderScreen(screen, theme, selectScreen, canSeries65, canFunded) ?? <Screen screen={screen} theme={theme} />}
           </Suspense>
         </ErrorBoundary>
         <footer

@@ -6,6 +6,7 @@ export type RoleKey =
   | 'admin'
   | 'trading'
   | 'trading_viewer'
+  | 'funded'
   | 'studies'
   | 'todo'
   | 'wealth'
@@ -81,6 +82,9 @@ export interface User {
     label: string;
     workspaces: WorkspaceKey[];
     readOnlyWorkspaces: WorkspaceKey[];
+    // Whether the private Funded (prop-challenge) section is revealed. Never true
+    // for the demo account.
+    funded: boolean;
   };
 }
 
