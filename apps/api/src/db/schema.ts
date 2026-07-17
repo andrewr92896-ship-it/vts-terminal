@@ -822,13 +822,15 @@ export type StudyTestProgressRow = typeof studyTestProgress.$inferSelect;
 // ---- Early access requests ----
 // Submissions from the public "Request Early Access" form on the login screen.
 // No account is created — these are leads an admin reviews in the Admin
-// workspace. `lastName` is optional; `source` is the free-text "how did you hear
+// workspace. `lastName` and `phone` are optional; `phone` is where the person
+// wants a text message if accepted. `source` is the free-text "how did you hear
 // about the platform" answer.
 export const earlyAccessRequests = sqliteTable('early_access_requests', {
   id: text('id').primaryKey(),
   firstName: text('first_name').notNull(),
   lastName: text('last_name'),
   email: text('email').notNull(),
+  phone: text('phone'),
   source: text('source').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });

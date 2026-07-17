@@ -164,6 +164,7 @@ export const api = {
     firstName: string;
     lastName?: string;
     email: string;
+    phone?: string;
     source: string;
   }): Promise<{ ok: true }> {
     return request('/api/early-access', {

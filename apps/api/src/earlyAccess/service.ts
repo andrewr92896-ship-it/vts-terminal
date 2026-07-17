@@ -9,6 +9,7 @@ export interface EarlyAccessView {
   firstName: string;
   lastName: string | null;
   email: string;
+  phone: string | null;
   source: string;
   createdAt: number;
 }
@@ -19,6 +20,7 @@ function toView(r: typeof earlyAccessRequests.$inferSelect): EarlyAccessView {
     firstName: r.firstName,
     lastName: r.lastName,
     email: r.email,
+    phone: r.phone,
     source: r.source,
     createdAt: r.createdAt.getTime(),
   };
@@ -28,6 +30,7 @@ export interface CreateEarlyAccessInput {
   firstName: string;
   lastName?: string | null;
   email: string;
+  phone?: string | null;
   source: string;
 }
 
@@ -40,6 +43,7 @@ export async function createEarlyAccessRequest(
     firstName: input.firstName.trim(),
     lastName: input.lastName?.trim() || null,
     email: input.email.trim().toLowerCase(),
+    phone: input.phone?.trim() || null,
     source: input.source.trim(),
     createdAt: now,
   };
