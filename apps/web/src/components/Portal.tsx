@@ -66,6 +66,9 @@ import { MarketNews } from '../workspaces/trading/MarketNews';
 const Series65Game = lazy(() =>
   import('../workspaces/studies/StudyGame').then((m) => ({ default: m.StudyGame })),
 );
+const StudyGameHub = lazy(() =>
+  import('../workspaces/studies/StudyGameHub').then((m) => ({ default: m.StudyGameHub })),
+);
 const StudyHub = lazy(() =>
   import('../workspaces/studies/StudyHub').then((m) => ({ default: m.StudyHub })),
 );
@@ -90,7 +93,10 @@ function renderScreen(
 ) {
   // Series 65 screens are the owner's licensed track — gate them defensively in
   // case a non-team member reaches one by a deep link.
-  if (!canSeries65 && (screen === 'st_game' || screen === 'st_test' || screen === 'st_progress')) {
+  // Test Mode and Progress are Series 65-specific; the Study Game section is the
+  // shared game launcher (built-in Series 65 plus a team's own study games), so
+  // it stays open to everyone.
+  if (!canSeries65 && (screen === 'st_test' || screen === 'st_progress')) {
     return <Series65Unavailable theme={theme} onNavigate={onNavigate} />;
   }
   // The private Funded section is role-gated; refuse it defensively (a deep link
@@ -134,7 +140,7 @@ function renderScreen(
     // rendered by Series65Game) remounts with the right initial view instead of
     // React reusing the instance and keeping the previous view.
     case 'st_game':
-      return <Series65Game key="st_game" theme={theme} />;
+      return <StudyGameHub key="st_game" theme={theme} canSeries65={canSeries65} onNavigate={onNavigate} />;
     case 'st_test':
       return <Series65Game key="st_test" theme={theme} initialView="test" />;
     case 'st_progress':

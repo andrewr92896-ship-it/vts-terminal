@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.1';
+export const APP_VERSION = 'Beta V 4.2';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.2',
+    date: 'July 18, 2026',
+    notes: [
+      'Study Game vs Study Creation are now cleanly split. Study Creation is only for building study games — creating one no longer drops you into playing it there. Instead, the Study Game section is now a launcher where you pick which game to play: the built-in Series 65 quiz or any study game your team built. After you create a game it takes you to the launcher, and each game in Study Creation has a Play button that opens it in the Study Game section.',
+      'The Study Game section is now visible to every Studies user (not just the Series 65 team), since it also lists your team’s own study games.',
+    ],
+  },
   {
     version: 'Beta V 4.1',
     date: 'July 18, 2026',

@@ -80,7 +80,7 @@ const UNDO_COOLDOWN = 10;
 // team-gated server endpoint rather than bundled. This wrapper loads it once and
 // gates the game on it; the actual game body lives in StudyGameInner, which
 // receives the bank as a prop (and passes it down to Test Mode and Flashcards).
-export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: StudyView }) {
+export function StudyGame({ theme, initialView, onBack }: { theme: Theme; initialView?: StudyView; onBack?: () => void }) {
   const { bank, loading, error } = useSeries65Bank();
   if (loading) return <StudyGameNotice theme={theme}>Loading the Series 65 study set…</StudyGameNotice>;
   if (error || !bank) {
@@ -90,7 +90,7 @@ export function StudyGame({ theme, initialView }: { theme: Theme; initialView?: 
       </StudyGameNotice>
     );
   }
-  return <StudyGameInner theme={theme} initialView={initialView} bank={bank} />;
+  return <StudyGameInner theme={theme} initialView={initialView} bank={bank} onBack={onBack} />;
 }
 
 function StudyGameNotice({ theme, children }: { theme: Theme; children: ReactNode }) {
@@ -101,7 +101,7 @@ function StudyGameNotice({ theme, children }: { theme: Theme; children: ReactNod
   );
 }
 
-function StudyGameInner({ theme, initialView, bank }: { theme: Theme; initialView?: StudyView; bank: Series65Bank }) {
+function StudyGameInner({ theme, initialView, bank, onBack }: { theme: Theme; initialView?: StudyView; bank: Series65Bank; onBack?: () => void }) {
   const { questions, explanations } = bank;
   const { isPhone } = useResponsive();
   const { user } = useAuth();
@@ -644,7 +644,12 @@ function StudyGameInner({ theme, initialView, bank }: { theme: Theme; initialVie
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 10 }}>
       <div>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Study Game</h2>
+        {onBack && (
+          <button onClick={onBack} style={{ ...ghostBtn(theme), minHeight: 32, padding: '6px 12px', marginBottom: 8 }}>
+            ← All study games
+          </button>
+        )}
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Series 65 · Study Game</h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
           Series 65 · level up as you answer correctly · {STREAK_STEP} in a row for a multiplier · pass line {PASS_THRESHOLD.toFixed(1)}%
         </p>

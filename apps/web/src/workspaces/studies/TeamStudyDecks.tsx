@@ -5,15 +5,15 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { TeamStudyGame } from './TeamStudyGame';
+import { requestStudyDeck } from './studiesNav';
 
-// The Team Study Games hub: a team's own quizzes. Any member builds a deck
-// (AI-generated from a topic, or from an uploaded file); the whole team plays it
-// with the same mechanics as the Series 65 game. The public demo sees this
-// read-only, plus one neutral sample deck it can play.
+// The team study-game *maker*, shown in Study Creation. Any member builds a deck
+// (AI-generated from a topic, or from an uploaded file) and manages the team's
+// games here; the games themselves are *played* in the Study Game section. The
+// public demo sees this read-only.
 const MAX_FILE_CHARS = 100_000;
 
-export function TeamStudyDecks({ theme }: { theme: Theme }) {
+export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate?: (screen: string) => void }) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
@@ -23,8 +23,15 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
   const [decks, setDecks] = useState<TeamDeck[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [playing, setPlaying] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
+
+  // Play a team game in the Study Game section: request the deck, then navigate
+  // there (the launcher opens it). Falls back to a no-op if the shell didn't
+  // pass a navigator.
+  function play(id: string) {
+    requestStudyDeck(id);
+    onNavigate?.('st_game');
+  }
 
   useEffect(() => {
     let alive = true;
@@ -56,17 +63,13 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
     }
   }
 
-  if (playing) {
-    return <TeamStudyGame theme={theme} deckId={playing} onBack={() => setPlaying(null)} />;
-  }
-
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Games</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Your team’s own quizzes. Everyone on your team can play them and climb the leaderboard.
+            Build your team’s own quizzes here — play them from the <strong>Study Game</strong> section.
           </p>
         </div>
         {!readOnly && (
@@ -82,7 +85,9 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
           onCreated={(decks, newId) => {
             setDecks(decks);
             setComposerOpen(false);
-            setPlaying(newId);
+            // Creation lives here; playing lives in the Study Game section — send
+            // the author there and open the game they just built.
+            play(newId);
           }}
         />
       )}
@@ -118,7 +123,7 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
               muted={muted}
               readOnly={readOnly}
               canDelete={!readOnly && (d.createdBy === user?.id || user?.roles.includes('admin') === true)}
-              onPlay={() => setPlaying(d.id)}
+              onPlay={() => play(d.id)}
               onDelete={() => remove(d.id)}
             />
           ))}
