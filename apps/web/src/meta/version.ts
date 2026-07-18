@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.4';
+export const APP_VERSION = 'Beta V 3.5';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.5',
+    date: 'July 18, 2026',
+    notes: [
+      'Live Wall order is now Chief Strategist positions first, then Chief Analyst, then the rest of your on-book (broker) positions, with off-book (funded / FTP) positions grouped last.',
+      'Off-book positions now read in gray — no matter who placed them — so they’re clearly set apart from your live broker positions.',
+    ],
+  },
   {
     version: 'Beta V 3.4',
     date: 'July 18, 2026',

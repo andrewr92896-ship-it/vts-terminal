@@ -7,7 +7,7 @@ import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
-import { DesignationTag, designationTint } from './DesignationTag';
+import { DesignationTag, tileTint } from './DesignationTag';
 import type {
   RemovedTrade,
   TradeInput,
@@ -570,7 +570,7 @@ function DeckCard({
         // green, Chief Analyst = red) with a matching left accent, like the Live
         // Wall card.
         ...(t.designation
-          ? { borderLeft: `3px solid ${t.designation.color}`, background: designationTint(t.designation, CARD)! }
+          ? { borderLeft: `3px solid ${t.designation.color}`, background: tileTint(t.designation.color, CARD) }
           : {}),
       }}
     >
