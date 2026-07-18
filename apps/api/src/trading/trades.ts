@@ -18,6 +18,7 @@ import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEv
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
 import { scopedTraderIds, type Viewer } from './scope.js';
+import { backfillClosedTrades } from './backfill.js';
 import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
@@ -250,6 +251,12 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
   // Trade data is scoped to the viewer's team (or just the viewer, if teamless):
   // the Trade Log only shows that team's trades, never the whole install.
   const scopeIds = await scopedTraderIds(viewer);
+
+  // Pull the team's OANDA closed-trade history into `tradingPositions` before we
+  // read, so trades the live reconcile never caught (opened+closed between polls)
+  // still show up. Self-throttled per connection and best-effort — the demo is a
+  // sandbox with no real broker, so it's skipped.
+  if (!viewerIsDemo) await backfillClosedTrades(scopeIds).catch(() => {});
 
   // Pull every trade alongside its owner's username and roles, then keep only
   // those on the viewer's team whose owner currently has trading access (full or

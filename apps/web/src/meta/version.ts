@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.7';
+export const APP_VERSION = 'Beta V 3.8';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.8',
+    date: 'July 18, 2026',
+    notes: [
+      'Trade Desk & History now backfill from your broker’s own closed-trade record (OANDA), so trades that opened and closed between price polls no longer go missing — your full trade history shows up, not just the ones the Live Wall happened to catch live.',
+    ],
+  },
   {
     version: 'Beta V 3.7',
     date: 'July 18, 2026',

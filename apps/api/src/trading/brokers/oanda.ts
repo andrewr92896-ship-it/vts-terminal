@@ -76,7 +76,13 @@ export interface OandaClosedTradePnl {
 }
 
 interface OandaClosedTrade {
+  id?: string;
+  instrument?: string; // "EUR_USD"
+  price?: string; // average entry fill price
+  initialUnits?: string; // +long / -short, size at open
+  averageClosePrice?: string; // average exit fill price
   realizedPL?: string;
+  openTime?: string;
   closeTime?: string;
   state?: string;
 }
@@ -84,21 +90,66 @@ interface OandaTradesResponse {
   trades?: OandaClosedTrade[];
 }
 
-// Recent closed trades for an account (up to 500, OANDA's max page). Used to
-// total trade-only P/L over rolling windows on Account Metrics.
-export async function fetchOandaClosedTrades(cfg: OandaConfig): Promise<OandaClosedTradePnl[]> {
+// A fully-detailed closed trade, enough to reconstruct the trade as a History
+// row (instrument, direction, size, fills, timing) — not just its P/L. Used by
+// the closed-trade backfill so a trader's real broker history shows up even for
+// trades that opened and closed between (or without) any live poll.
+export interface OandaClosedTradeRow {
+  tradeId: string; // OANDA trade id (unique per account)
+  instrument: string; // display form "EUR/USD"
+  side: 'long' | 'short';
+  units: number; // absolute size at open
+  entryPrice: number;
+  exitPrice: number | null; // average close price, when reported
+  realizedPl: number;
+  openedAtMs: number | null;
+  closeTimeMs: number;
+}
+
+// Pure normalizer, exported so it can be unit-tested against recorded JSON
+// without any network access (mirrors mapOandaTrades). A trade missing any field
+// we need to reconstruct it (id, entry, size, P/L, close time) is skipped.
+export function mapOandaClosedTrades(json: OandaTradesResponse): OandaClosedTradeRow[] {
+  const out: OandaClosedTradeRow[] = [];
+  for (const t of json.trades ?? []) {
+    const pl = num(t.realizedPL);
+    const ct = t.closeTime ? Date.parse(t.closeTime) : NaN;
+    const units = num(t.initialUnits);
+    const entry = num(t.price);
+    if (!t.id || pl == null || !Number.isFinite(ct) || units == null || entry == null) continue;
+    const ot = t.openTime ? Date.parse(t.openTime) : NaN;
+    out.push({
+      tradeId: t.id,
+      instrument: (t.instrument ?? '').replace('_', '/'),
+      side: units >= 0 ? 'long' : 'short',
+      units: Math.abs(units),
+      entryPrice: entry,
+      exitPrice: num(t.averageClosePrice),
+      realizedPl: pl,
+      openedAtMs: Number.isFinite(ot) ? ot : null,
+      closeTimeMs: ct,
+    });
+  }
+  return out;
+}
+
+// Recent closed trades for an account (up to 500, OANDA's max page), with full
+// detail. This is the broker's authoritative record of what actually traded —
+// unlike the Live Wall reconcile, which can only see a trade if it was polled
+// while open. Best-effort at the call site.
+export async function fetchOandaClosedTradeRows(cfg: OandaConfig): Promise<OandaClosedTradeRow[]> {
   const res = await fetch(`${cfg.base}/v3/accounts/${cfg.accountId}/trades?state=CLOSED&count=500`, {
     headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },
   });
   if (!res.ok) throw new Error(`OANDA responded ${res.status}`);
-  const json = (await res.json()) as OandaTradesResponse;
-  const out: OandaClosedTradePnl[] = [];
-  for (const t of json.trades ?? []) {
-    const pl = num(t.realizedPL);
-    const ct = t.closeTime ? Date.parse(t.closeTime) : NaN;
-    if (pl != null && Number.isFinite(ct)) out.push({ realizedPl: pl, closeTimeMs: ct });
-  }
-  return out;
+  return mapOandaClosedTrades((await res.json()) as OandaTradesResponse);
+}
+
+// Recent closed trades for an account, reduced to realized P/L + close time.
+// Used to total trade-only P/L over rolling windows on Account Metrics.
+export async function fetchOandaClosedTrades(cfg: OandaConfig): Promise<OandaClosedTradePnl[]> {
+  const rows = await fetchOandaClosedTradeRows(cfg);
+  return rows.map((r) => ({ realizedPl: r.realizedPl, closeTimeMs: r.closeTimeMs }));
 }
 
 export async function fetchOandaAccountSummary(cfg: OandaConfig): Promise<OandaAccountCapital> {

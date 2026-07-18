@@ -8,6 +8,7 @@ import { scopedTraderIds } from './scope.js';
 import { sampleLiveTrades } from './sample.js';
 import { computeForex, forexPair } from './forex.js';
 import { reconcile } from './history.js';
+import { backfillClosedTrades } from './backfill.js';
 import {
   getAllActiveDecrypted,
   recordConnectionStatus,
@@ -381,6 +382,9 @@ export async function reconcileDeskPositions(): Promise<void> {
   const { brokers, raw } = await loadDesk(conns);
   const withSlip = withSlippage(fillManualMarks(raw));
   await reconcilePerOwner(conns, brokers, withSlip);
+  // Also fold in any closed trades the live pass missed (opened+closed between
+  // polls). Self-throttled per connection, so calling it every tick is cheap.
+  await backfillClosedTrades().catch(() => {});
 }
 
 // Poll cadence for the background trade watch — keeps the latency on a "trade

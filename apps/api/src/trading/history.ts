@@ -12,6 +12,7 @@ import { tradePips } from './forex.js';
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
 import { scopedTraderIds, scopedTraderIdsForUser, type Viewer } from './scope.js';
+import { backfillClosedTrades } from './backfill.js';
 import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 import type { LiveTrade } from './types.js';
 
@@ -473,6 +474,11 @@ export async function getHistory(
   // viewer, if teamless), tagged with the owner. Joined live with users so a
   // teammate who loses trading access drops off, mirroring the Live Wall/Trade Log.
   const scopeIds = await scopedTraderIds(viewer);
+
+  // Ingest the team's OANDA closed-trade history first, so trades the live
+  // reconcile never saw (opened+closed between polls) appear here too. Throttled
+  // per connection and best-effort.
+  await backfillClosedTrades(scopeIds).catch(() => {});
   const joined = await db
     .select({ pos: tradingPositions, username: users.username, roles: users.roles })
     .from(tradingPositions)
