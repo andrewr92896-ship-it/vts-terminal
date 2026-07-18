@@ -7,6 +7,7 @@ import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
+import { DesignationTag } from './DesignationTag';
 import type {
   RemovedTrade,
   TradeInput,
@@ -559,7 +560,17 @@ function DeckCard({
   const plPips = t.status === 'closed' ? pipsParenthetical(t.side, t.entryPrice, t.exitPrice, t.instrument, true) : '';
 
   return (
-    <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${sideColor}` }}>
+    <div
+      style={{
+        ...card,
+        padding: 0,
+        overflow: 'hidden',
+        borderTop: `2px solid ${sideColor}`,
+        // Left accent in the owner's designation colour (Chief Strategist =
+        // green, Chief Analyst = red), matching the Live Wall card.
+        ...(t.designation ? { borderLeft: `3px solid ${t.designation.color}` } : {}),
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px 8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{t.instrument}</span>
@@ -576,9 +587,10 @@ function DeckCard({
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px 8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 14px 8px', flexWrap: 'wrap' }}>
         <span style={ownerChip(t.isMine)}>@{t.owner}</span>
         {t.isMine && <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.4px', color: GOLD }}>YOU</span>}
+        <DesignationTag designation={t.designation} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '0 14px 9px', flexWrap: 'wrap' }}>
@@ -700,8 +712,9 @@ function Tape({
               {isBreakeven && <span style={{ fontSize: 8.5, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 4px' }} title="Break-even">B/E</span>}
               {t.source === 'broker' && t.broker && <span style={{ fontSize: 8.5, color: '#7fa8ff', border: '1px solid #3a5a9a', borderRadius: 3, padding: '1px 4px' }} title="Imported automatically from your broker">{t.broker.toUpperCase()}</span>}
             </span>
-            <span style={{ flex: '0 0 90px', color: t.isMine ? GOLD : MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
-              @{t.owner}
+            <span style={{ flex: '0 0 90px', display: 'flex', alignItems: 'center', gap: 4, color: t.isMine ? GOLD : MUTED, overflow: 'hidden' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
+              <DesignationTag designation={t.designation} variant="icon" size={12} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{t.owner}</span>
             </span>
             <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
             <span style={col}>{fmtPrice(t.entryPrice)}</span>

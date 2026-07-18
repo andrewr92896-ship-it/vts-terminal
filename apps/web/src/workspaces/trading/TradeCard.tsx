@@ -2,6 +2,7 @@ import { useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
+import { DesignationTag } from './DesignationTag';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
 
 // The full "trading card" for one open position — the rich card shown on the
@@ -155,7 +156,17 @@ export function TradeCard({
   }
 
   return (
-    <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${sideColor}` }}>
+    <div
+      style={{
+        ...card,
+        padding: 0,
+        overflow: 'hidden',
+        borderTop: `2px solid ${sideColor}`,
+        // A left accent in the owner's designation colour (Chief Strategist =
+        // green, Chief Analyst = red) so whose position it is reads at a glance.
+        ...(t.designation ? { borderLeft: `3px solid ${t.designation.color}` } : {}),
+      }}
+    >
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px 9px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -163,7 +174,10 @@ export function TradeCard({
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'LONG' : 'SHORT'}</span>
           {isBreakeven && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }} title="Break-even — inside the desk's break-even band">B/E</span>}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {/* The owner's Chief Strategist / Chief Analyst designation, shown on
+              every card (including the viewer's own) so their colour is consistent. */}
+          <DesignationTag designation={t.designation} />
           {/* On the viewer's own card the broker name already identifies it, so
               the owner tag is dropped. On teammates' cards show their handle
               (the part of the email before the domain) so it's clear whose it

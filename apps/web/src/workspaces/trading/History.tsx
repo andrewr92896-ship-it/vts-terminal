@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips } from './pips';
+import { DesignationTag } from './DesignationTag';
 import type { HistoryData, HistoryGroup, HistoryRecord, HistorySummary, TradeInput, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
@@ -433,8 +434,9 @@ function TradeRow({ t, config, isPhone, showMoney, canSeeBalances, canEdit, remo
         <span style={{ fontSize: 8.5, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 3, padding: '1px 4px' }}>{t.broker}</span>
         {isBreakeven && <span style={{ fontSize: 8.5, color: GOLD, border: `1px solid ${GOLD}`, borderRadius: 3, padding: '1px 4px' }} title="Break-even">B/E</span>}
       </span>
-      <span style={{ flex: '0 0 90px', color: t.isMine ? GOLD : MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
-        @{t.owner}{t.isMine ? ' · you' : ''}
+      <span style={{ flex: '0 0 90px', display: 'flex', alignItems: 'center', gap: 4, color: t.isMine ? GOLD : MUTED, overflow: 'hidden' }} title={t.isMine ? `${t.owner} (you)` : t.owner}>
+        <DesignationTag designation={t.designation} variant="icon" size={12} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{t.owner}{t.isMine ? ' · you' : ''}</span>
       </span>
       <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
       <span style={col}>{fmtPrice(t.entryPrice)}</span>

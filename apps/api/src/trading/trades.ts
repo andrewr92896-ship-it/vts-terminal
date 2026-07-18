@@ -18,6 +18,7 @@ import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEv
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
 import { scopedTraderIds, type Viewer } from './scope.js';
+import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
 // (full or view-only) sees every other trading user's trades in full — capital
@@ -58,6 +59,9 @@ export interface TradeRecord {
   // Human-friendly desk code, MMDDYY-N (N = order within the ET day). Stable and
   // shared with History. Null only for a sandboxed demo trade (no desk code).
   code: string | null;
+  // The owner's position designation (Chief Strategist / Chief Analyst), when
+  // they hold one — colours the row. Null otherwise. Filled in by getTrades.
+  designation: TradeDesignation | null;
 }
 
 export interface TradeSummary {
@@ -155,6 +159,7 @@ function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeR
     editable: true,
     source: 'manual',
     code: null, // filled in by getTrades from the desk-wide code index
+    designation: null, // filled in by getTrades from the owner's badges
   };
 }
 
@@ -192,6 +197,7 @@ function positionToRecord(row: TradingPositionRow, owner: string, viewerId: stri
     editable: false,
     source: 'broker',
     code: null, // filled in by getTrades from the desk-wide code index
+    designation: null, // filled in by getTrades from the owner's badges
   };
 }
 
@@ -299,6 +305,10 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     const codes = await deskTradeCodeIndex(scopeIds);
     for (const r of sorted) r.code = codes.get(r.id) ?? null;
   }
+  // Colour each row by its owner's position designation (Chief Strategist /
+  // Chief Analyst), when they hold one.
+  const designations = await designationsFor(sorted.map((r) => r.ownerId));
+  for (const r of sorted) r.designation = designations.get(r.ownerId) ?? null;
   return {
     trades: sorted,
     summary: summarizeRecords(sorted, configOf(settings)),
