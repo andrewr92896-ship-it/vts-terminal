@@ -55,6 +55,7 @@ import type {
   TodoCommandResult,
   TodoSection,
   StudySection,
+  DeckQuestion,
   TeamDeck,
   TeamDeckDetail,
   StudyGuide,
@@ -699,13 +700,20 @@ export const api = {
   }): Promise<{ deck: TeamDeckDetail; decks: TeamDeck[] }> {
     return request('/api/studies/decks/generate', { method: 'POST', body: JSON.stringify(input) });
   },
-  importStudyDeck(input: {
-    name: string;
+  // Step one of a file upload: AI formats the file text into questions the
+  // author reviews before anything is saved (no deck is created yet).
+  previewStudyDeck(input: {
     text: string;
     instructions?: string;
-    count?: number;
+  }): Promise<{ questions: DeckQuestion[] }> {
+    return request('/api/studies/decks/import/preview', { method: 'POST', body: JSON.stringify(input) });
+  },
+  // Step two: the author confirms the reviewed questions and the deck is created.
+  confirmStudyDeck(input: {
+    name: string;
+    questions: DeckQuestion[];
   }): Promise<{ deck: TeamDeckDetail; decks: TeamDeck[] }> {
-    return request('/api/studies/decks/import', { method: 'POST', body: JSON.stringify(input) });
+    return request('/api/studies/decks/import/confirm', { method: 'POST', body: JSON.stringify(input) });
   },
   studyDeck(id: string): Promise<{ deck: TeamDeckDetail }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}`);

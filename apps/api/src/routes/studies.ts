@@ -83,11 +83,35 @@ const deckGenerateSchema = z.object({
   instructions: z.string().trim().max(2000).optional(),
   count: z.number().int().min(1).max(50),
 });
-const deckImportSchema = z.object({
-  name: z.string().trim().min(1).max(120),
+// Step one of an upload: AI reads the raw file text and returns formatted
+// questions for the author to review. No deck is created yet.
+const deckImportPreviewSchema = z.object({
   text: z.string().min(1).max(100_000),
   instructions: z.string().trim().max(2000).optional(),
-  count: z.number().int().min(1).max(50).optional(),
+});
+// Step two: the author confirms the reviewed questions and the deck is created.
+// The questions come back from the client, so they are fully re-validated here.
+const deckLetterSchema = z.enum(['A', 'B', 'C', 'D']);
+const deckConfirmSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  questions: z
+    .array(
+      z.object({
+        topic: z.string().trim().min(1).max(60),
+        stem: z.string().trim().min(1).max(600),
+        options: z
+          .array(z.object({ label: deckLetterSchema, text: z.string().trim().min(1).max(400) }))
+          .length(4)
+          .refine(
+            (opts) => ['A', 'B', 'C', 'D'].every((l) => opts.some((o) => o.label === l)),
+            'Each question needs exactly one option labelled A, B, C, and D',
+          ),
+        answer: deckLetterSchema,
+        explanation: z.string().trim().max(400).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
 });
 
 // ---- Team study guides (slide presentations) ----
@@ -179,34 +203,56 @@ export async function studiesRoutes(app: FastifyInstance) {
     }
   });
 
-  // Create a deck from an uploaded text file (their own questions or notes).
-  app.post('/api/studies/decks/import', guard, async (request, reply) => {
+  // Step one of a file upload: AI reads the raw file text and formats it into
+  // questions the author can review before anything is saved. Returns the
+  // questions (with display sequence numbers) but does NOT create a deck.
+  app.post('/api/studies/decks/import/preview', guard, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
-    const parsed = deckImportSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'A name and the file text are required' });
+    const parsed = deckImportPreviewSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'The file text is required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     try {
       await enforceAiLimit(request.currentUser!.id, 'studies_deck_import');
       const questions = await parseDeckFromText({
         text: parsed.data.text,
         instructions: parsed.data.instructions,
-        count: parsed.data.count,
       });
       if (questions.length === 0) {
         return reply.code(422).send({ error: 'Claude could not build questions from that file. Make sure it contains questions or study material.' });
       }
+      return { questions: questions.map((q, i) => ({ seq: i + 1, ...q, explanation: q.explanation || null })) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not read that file' });
+    }
+  });
+
+  // Step two of a file upload: the author confirms the reviewed questions and
+  // the deck is created. No AI call — the questions were already formatted in
+  // the preview step and are re-validated by the schema.
+  app.post('/api/studies/decks/import/confirm', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
+    const parsed = deckConfirmSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one question are required' });
+    try {
       const deck = await createDeck({
         teamId,
         name: parsed.data.name,
         description: 'Imported from a file',
         createdBy: request.currentUser!.id,
         source: 'upload',
-        questions,
+        questions: parsed.data.questions.map((q) => ({
+          topic: q.topic,
+          stem: q.stem,
+          options: q.options,
+          answer: q.answer,
+          explanation: q.explanation ?? null,
+        })),
       });
       return { deck, decks: await listDecks(teamId) };
     } catch (err) {
-      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the study game' });
     }
   });
