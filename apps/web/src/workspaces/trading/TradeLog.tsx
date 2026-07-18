@@ -7,7 +7,7 @@ import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
-import { DesignationTag } from './DesignationTag';
+import { DesignationTag, designationTint } from './DesignationTag';
 import type {
   RemovedTrade,
   TradeInput,
@@ -566,9 +566,12 @@ function DeckCard({
         padding: 0,
         overflow: 'hidden',
         borderTop: `2px solid ${sideColor}`,
-        // Left accent in the owner's designation colour (Chief Strategist =
-        // green, Chief Analyst = red), matching the Live Wall card.
-        ...(t.designation ? { borderLeft: `3px solid ${t.designation.color}` } : {}),
+        // Tint the tile in the owner's designation colour (Chief Strategist =
+        // green, Chief Analyst = red) with a matching left accent, like the Live
+        // Wall card.
+        ...(t.designation
+          ? { borderLeft: `3px solid ${t.designation.color}`, background: designationTint(t.designation, CARD)! }
+          : {}),
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 14px 8px' }}>

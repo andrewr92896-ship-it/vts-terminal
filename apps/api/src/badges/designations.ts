@@ -16,6 +16,14 @@ import { parseBadges } from '../auth/rbac.js';
 export const DESIGNATION_BADGE_KEYS = ['chief-strategist', 'chief-analyst'] as const;
 export type DesignationKey = (typeof DESIGNATION_BADGE_KEYS)[number];
 
+// Sort rank for a designation key: lower sorts first. Chief Strategist (0) leads,
+// then Chief Analyst (1), then everything undesignated (2) — so the Live Wall can
+// always float the strategist's positions to the top.
+export function designationRank(key: string | null | undefined): number {
+  const i = key ? DESIGNATION_BADGE_KEYS.indexOf(key as DesignationKey) : -1;
+  return i === -1 ? DESIGNATION_BADGE_KEYS.length : i;
+}
+
 // A colored circle stand-in for each designation, used in push/Pushover
 // notifications where an SVG icon and a hex colour can't render — the emoji
 // carries the "colour designation" into the notification text instead.

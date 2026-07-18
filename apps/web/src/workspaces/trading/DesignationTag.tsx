@@ -36,6 +36,18 @@ export function DesignationTag({
   );
 }
 
+// A subtle wash of the designation colour blended into a card's base background,
+// so the whole trade tile reads in the owner's colour (green for Chief
+// Strategist, red for Chief Analyst). Returns null when there's no designation,
+// so callers can fall back to the untinted background.
+export function designationTint(
+  designation: TradeDesignation | null | undefined,
+  base: string,
+): string | null {
+  if (!designation) return null;
+  return `color-mix(in srgb, ${designation.color} 13%, ${base})`;
+}
+
 function chip(color: string): CSSProperties {
   return {
     display: 'inline-flex',

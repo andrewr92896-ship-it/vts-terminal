@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.3';
+export const APP_VERSION = 'Beta V 3.4';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.4',
+    date: 'July 18, 2026',
+    notes: [
+      'Position designations now tint the whole trade tile in the trader’s colour — a green wash for Chief Strategist, red for Chief Analyst — on the Live Wall and Trade Log, not just the accent stripe.',
+      'The Live Wall now floats the Chief Strategist’s open positions to the top, followed by the Chief Analyst’s, then everyone else (newest first within each).',
+    ],
+  },
   {
     version: 'Beta V 3.3',
     date: 'July 18, 2026',
