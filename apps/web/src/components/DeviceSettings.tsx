@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { api, ApiError } from '../api/client';
+import { api, ApiError, type NotifTarget, type NotifPrefFlags } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
@@ -103,6 +103,8 @@ export function DeviceSettings({ open, theme, onClose }: DeviceSettingsProps) {
               <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
               <div style={{ height: 1, background: '#1d3560' }} />
               <PushoverSection accent={accentGrad} accentText={theme.accentText} />
+              <div style={{ height: 1, background: '#1d3560' }} />
+              <PerUserNotificationsSection accent={accentGrad} accentText={theme.accentText} />
             </>
           )}
 
@@ -327,6 +329,163 @@ function PushoverSection({ accent, accentText }: { accent: string; accentText: s
       )}
       {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
     </section>
+  );
+}
+
+// The six trade events a trader can toggle per watched teammate, in display
+// order. Order pairs each level's place/move so the panel reads top-to-bottom.
+const NOTIF_EVENT_ROWS: { key: keyof NotifPrefFlags; label: string }[] = [
+  { key: 'open', label: 'Placing trades' },
+  { key: 'close', label: 'Closing trades' },
+  { key: 'placeSl', label: 'Placing SL' },
+  { key: 'moveSl', label: 'Moving SL' },
+  { key: 'placeTp', label: 'Placing TP' },
+  { key: 'moveTp', label: 'Moving TP' },
+];
+
+// Choose which teammate you want trade notifications about, and — per teammate —
+// which trade events buzz you. Prefs are per recipient (this user), so everyone
+// tunes their own feed. A teammate you've never touched defaults to everything
+// on, matching the old whole-team behaviour.
+function PerUserNotificationsSection({ accent, accentText }: { accent: string; accentText: string }) {
+  const [targets, setTargets] = useState<NotifTarget[] | null>(null);
+  const [prefs, setPrefs] = useState<Record<string, NotifPrefFlags>>({});
+  const [selected, setSelected] = useState<string>('');
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .notificationPrefs()
+      .then((d) => {
+        if (!alive) return;
+        setTargets(d.targets);
+        setPrefs(d.prefs);
+        if (d.targets.length) setSelected(d.targets[0].id);
+      })
+      .catch(() => alive && setTargets([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function toggle(key: keyof NotifPrefFlags) {
+    if (!selected) return;
+    const current = prefs[selected];
+    if (!current) return;
+    const next = { ...current, [key]: !current[key] };
+    setPrefs((p) => ({ ...p, [selected]: next }));
+    setError(null);
+    try {
+      await api.setNotificationPref(selected, next);
+    } catch (e) {
+      // Revert the optimistic flip on failure.
+      setPrefs((p) => ({ ...p, [selected]: current }));
+      setError(e instanceof ApiError ? e.message : 'Couldn’t save that — try again.');
+    }
+  }
+
+  const flags = selected ? prefs[selected] : undefined;
+
+  return (
+    <section>
+      <div style={sectionLabel}>Notify me about a trader</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Pick a teammate and choose exactly which of their trade actions buzz your phone. Everyone’s
+        on by default — turn off what you don’t want to hear about.
+      </p>
+
+      {targets == null ? (
+        <div style={hintStyle}>Loading…</div>
+      ) : targets.length === 0 ? (
+        <div style={hintStyle}>No teammates to watch yet.</div>
+      ) : (
+        <>
+          <select
+            value={selected}
+            onChange={(e) => setSelected(e.target.value)}
+            style={{ ...inputStyle, marginBottom: 14, cursor: 'pointer' }}
+          >
+            {targets.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.isSelf ? ' (you)' : ''}
+              </option>
+            ))}
+          </select>
+
+          {flags && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {NOTIF_EVENT_ROWS.map((row) => (
+                <label
+                  key={row.key}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 2px',
+                    cursor: 'pointer',
+                    fontSize: 13.5,
+                    color: '#dfe7fa',
+                  }}
+                >
+                  <span>{row.label}</span>
+                  <ToggleSwitch on={flags[row.key]} accent={accent} accentText={accentText} onClick={() => void toggle(row.key)} />
+                </label>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
+    </section>
+  );
+}
+
+// A small on/off pill switch. Kept local to this file — the only toggle UI here.
+function ToggleSwitch({
+  on,
+  accent,
+  accentText,
+  onClick,
+}: {
+  on: boolean;
+  accent: string;
+  accentText: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onClick}
+      style={{
+        position: 'relative',
+        width: 44,
+        height: 26,
+        flexShrink: 0,
+        borderRadius: 999,
+        border: '1px solid #1d3560',
+        background: on ? accent : 'rgba(255,255,255,.06)',
+        cursor: 'pointer',
+        padding: 0,
+        transition: 'background .15s ease',
+      }}
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 2,
+          left: on ? 20 : 2,
+          width: 20,
+          height: 20,
+          borderRadius: '50%',
+          background: on ? accentText : '#8ea3cc',
+          transition: 'left .15s ease',
+        }}
+      />
+    </button>
   );
 }
 

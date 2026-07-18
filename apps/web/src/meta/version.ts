@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.5';
+export const APP_VERSION = 'Beta V 3.6';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.6',
+    date: 'July 18, 2026',
+    notes: [
+      'Notification settings are now per-trader: in Notifications & connections, pick a specific teammate and choose exactly which of their trade actions buzz you.',
+      'Each trader now has independent toggles for placing trades, closing trades, and placing vs. moving the stop-loss and take-profit — so you can, say, hear only when someone moves a stop and stay quiet on everything else. Everyone stays on by default until you change it.',
+    ],
+  },
   {
     version: 'Beta V 3.5',
     date: 'July 18, 2026',

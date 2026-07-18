@@ -6,6 +6,7 @@ import { pushSubscriptions, users } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
 import { config } from '../config.js';
+import { recipientsWantingEvent, type NotifEvent } from './prefs.js';
 
 // Web Push (VAPID) delivery for phone notifications. Everything is best-effort:
 // a failed send never throws into the caller (an alert or a trade event must
@@ -116,17 +117,25 @@ export async function sendToUsers(userIds: string[], payload: PushPayload): Prom
   );
 }
 
-// Send a trading notification to a team (everyone who can access the Trading
-// workspace and has a subscription), optionally excluding one user (e.g. the
-// trader who caused the event). `scopeIds` restricts recipients to one team so a
+// Options for a desk send. `scopeIds` restricts recipients to one team so a
 // fill/alert only reaches the owner's teammates — trade info never fans out
-// across teams. Omit it only for genuinely install-wide notices. Demo never notified.
-export async function sendToTradingDesk(
-  payload: PushPayload,
-  excludeUserId?: string,
-  scopeIds?: Set<string>,
-): Promise<void> {
+// across teams; omit it only for genuinely install-wide notices. `excludeUserId`
+// drops one recipient (e.g. the trader who caused the event). When both
+// `ownerId` and `event` are given, each remaining recipient is further filtered
+// by their per-user notification preference for that trader + event; omit them
+// for notices that carry no per-trader event (e.g. TradingView alerts).
+export interface DeskSendOpts {
+  excludeUserId?: string;
+  scopeIds?: Set<string>;
+  ownerId?: string;
+  event?: NotifEvent;
+}
+
+// Send a trading notification to a team (everyone who can access the Trading
+// workspace and has a subscription). Demo never notified.
+export async function sendToTradingDesk(payload: PushPayload, opts: DeskSendOpts = {}): Promise<void> {
   if (!configured) return;
+  const { excludeUserId, scopeIds, ownerId, event } = opts;
   const rows = await db
     .select({ id: users.id, roles: users.roles, username: users.username })
     .from(pushSubscriptions)
@@ -139,7 +148,11 @@ export async function sendToTradingDesk(
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     recipients.add(r.id);
   }
-  await sendToUsers([...recipients], payload);
+  let ids = [...recipients];
+  // Honour each recipient's per-trader event preference when this is a per-trader
+  // trade event; a recipient with no stored pref keeps the default (on).
+  if (ownerId && event) ids = await recipientsWantingEvent(ids, ownerId, event);
+  await sendToUsers(ids, payload);
 }
 
 // Used by tests / a manual "send test" so a user can confirm a device works.

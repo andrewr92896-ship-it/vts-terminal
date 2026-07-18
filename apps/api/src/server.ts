@@ -22,6 +22,7 @@ import { feedbackRoutes } from './routes/feedback.js';
 import { studiesRoutes } from './routes/studies.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
+import { notificationPrefsRoutes } from './routes/notificationPrefs.js';
 import { contentRoutes } from './routes/content.js';
 import { seedBadges } from './badges/service.js';
 import { runMigrations } from './db/migrate.js';
@@ -92,6 +93,7 @@ export async function buildServer() {
   await app.register(studiesRoutes);
   await app.register(pushRoutes);
   await app.register(pushoverRoutes);
+  await app.register(notificationPrefsRoutes);
   await app.register(contentRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.

@@ -73,6 +73,22 @@ export interface CustomVocabCard {
   topic: string;
 }
 
+// A teammate a trader can choose to be notified about, and the per-event toggles
+// they can set for that teammate. `isSelf` marks the trader's own row.
+export interface NotifTarget {
+  id: string;
+  name: string;
+  isSelf: boolean;
+}
+export interface NotifPrefFlags {
+  open: boolean;
+  close: boolean;
+  placeSl: boolean;
+  moveSl: boolean;
+  placeTp: boolean;
+  moveTp: boolean;
+}
+
 // The team-gated Series 65 bank payload (the licensed content, served only to
 // the owner's team). Shapes come from the studies meta module so the study
 // screens and this client agree on one type.
@@ -794,6 +810,16 @@ export const api = {
   },
   pushoverTest(): Promise<{ ok: true }> {
     return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({}) });
+  },
+  // ---- Per-user notification preferences ----
+  notificationPrefs(): Promise<{ targets: NotifTarget[]; prefs: Record<string, NotifPrefFlags> }> {
+    return request('/api/notification-prefs');
+  },
+  setNotificationPref(targetUserId: string, flags: NotifPrefFlags): Promise<{ ok: true }> {
+    return request(`/api/notification-prefs/${targetUserId}`, {
+      method: 'PUT',
+      body: JSON.stringify(flags),
+    });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
     return request('/api/todo');

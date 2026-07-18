@@ -4,6 +4,7 @@ import { pushoverUsers, users } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
 import { config } from '../config.js';
+import { recipientsWantingEvent, type NotifEvent } from './prefs.js';
 
 // Pushover delivery for trade/alert notifications with a custom, attention-
 // grabbing sound (the whole reason we use it over plain web push: Pushover lets
@@ -105,14 +106,20 @@ export async function sendPushoverToUsers(userIds: string[], msg: PushoverMessag
   );
 }
 
+// Options mirror the Web Push `sendToTradingDesk` — see DeskSendOpts there.
+export interface PushoverDeskOpts {
+  excludeUserId?: string;
+  scopeIds?: Set<string>;
+  ownerId?: string;
+  event?: NotifEvent;
+}
+
 // Send to every trading-desk user who has connected Pushover (excludes the
-// demo). The trader who caused the event can be excluded if desired.
-export async function sendPushoverToDesk(
-  msg: PushoverMessage,
-  excludeUserId?: string,
-  scopeIds?: Set<string>,
-): Promise<void> {
+// demo). The trader who caused the event can be excluded if desired, and a
+// per-trader trade event is filtered by each recipient's notification prefs.
+export async function sendPushoverToDesk(msg: PushoverMessage, opts: PushoverDeskOpts = {}): Promise<void> {
   if (!pushoverConfigured()) return;
+  const { excludeUserId, scopeIds, ownerId, event } = opts;
   const rows = await db
     .select({ id: users.id, roles: users.roles, username: users.username })
     .from(pushoverUsers)
@@ -125,7 +132,9 @@ export async function sendPushoverToDesk(
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     recipients.push(r.id);
   }
-  await sendPushoverToUsers(recipients, msg);
+  let ids = recipients;
+  if (ownerId && event) ids = await recipientsWantingEvent(ids, ownerId, event);
+  await sendPushoverToUsers(ids, msg);
 }
 
 export async function sendPushoverTest(userId: string): Promise<boolean> {
