@@ -11,7 +11,7 @@ import {
 } from '../theme/themes';
 import { navFor, accentFor } from '../theme/nav';
 import { C } from '../theme/tokens';
-import { canAccessFunded, canAccessWorkspace, canUseSeries65, workspacesForRoles } from '../auth/access';
+import { canAccessFunded, canAccessWorkspace, workspacesForRoles } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
@@ -27,12 +27,6 @@ import { AccountSettings } from './AccountSettings';
 import { DeviceSettings } from './DeviceSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
 import { TeamChat } from './TeamChat';
-import {
-  currentStudyLevel,
-  currentStudyTheme,
-  onStudyLevelChange,
-  studyBgTint,
-} from '../workspaces/studies/studyTheme';
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/admin/AdminUsers';
 import { AdminTeams } from '../workspaces/admin/AdminTeams';
@@ -60,20 +54,14 @@ import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketNews } from '../workspaces/trading/MarketNews';
 
-// The Studies screens bundle the 400-question Series 65 database, so they're
-// code-split into a lazy chunk that only loads when the Studies workspace is
-// opened — keeping the initial app load lean for everyone else.
-const Series65Game = lazy(() =>
-  import('../workspaces/studies/StudyGame').then((m) => ({ default: m.StudyGame })),
-);
+// The Studies screens are code-split into a lazy chunk that only loads when the
+// Studies workspace is opened — keeping the initial app load lean for everyone
+// else.
 const StudyGameHub = lazy(() =>
   import('../workspaces/studies/StudyGameHub').then((m) => ({ default: m.StudyGameHub })),
 );
 const StudyHub = lazy(() =>
   import('../workspaces/studies/StudyHub').then((m) => ({ default: m.StudyHub })),
-);
-const StudyProgress = lazy(() =>
-  import('../workspaces/studies/StudyProgress').then((m) => ({ default: m.StudyProgress })),
 );
 const StudyCreation = lazy(() =>
   import('../workspaces/studies/StudyCreation').then((m) => ({ default: m.StudyCreation })),
@@ -88,17 +76,8 @@ function renderScreen(
   screen: string,
   theme: Theme,
   onNavigate: (screen: string) => void,
-  canSeries65: boolean,
   canFunded: boolean,
 ) {
-  // Series 65 screens are the owner's licensed track — gate them defensively in
-  // case a non-team member reaches one by a deep link.
-  // Test Mode and Progress are Series 65-specific; the Study Game section is the
-  // shared game launcher (built-in Series 65 plus a team's own study games), so
-  // it stays open to everyone.
-  if (!canSeries65 && (screen === 'st_test' || screen === 'st_progress')) {
-    return <Series65Unavailable theme={theme} onNavigate={onNavigate} />;
-  }
   // The private Funded section is role-gated; refuse it defensively (a deep link
   // or stale state) for anyone without the `funded` role.
   if (screen === 'prop' && !canFunded) {
@@ -136,15 +115,15 @@ function renderScreen(
       return <TradingTodo />;
     case 'st_home':
       return <StudyHub theme={theme} onNavigate={onNavigate} />;
-    // Keyed distinctly so switching between the Study Game and Test Mode (both
-    // rendered by Series65Game) remounts with the right initial view instead of
-    // React reusing the instance and keeping the previous view.
+    // The Study Game, Test Mode, and Progress sections are all deck launchers
+    // over the team's own study games. Keyed distinctly so switching between them
+    // remounts with the right target instead of React reusing the instance.
     case 'st_game':
-      return <StudyGameHub key="st_game" theme={theme} canSeries65={canSeries65} onNavigate={onNavigate} />;
+      return <StudyGameHub key="st_game" theme={theme} target="play" onNavigate={onNavigate} />;
     case 'st_test':
-      return <Series65Game key="st_test" theme={theme} initialView="test" />;
+      return <StudyGameHub key="st_test" theme={theme} target="test" onNavigate={onNavigate} />;
     case 'st_progress':
-      return <StudyProgress theme={theme} onNavigate={onNavigate} />;
+      return <StudyGameHub key="st_progress" theme={theme} target="progress" onNavigate={onNavigate} />;
     case 'st_decks':
       return <StudyCreation theme={theme} onNavigate={onNavigate} />;
     case 'st_guides':
@@ -168,44 +147,6 @@ function renderScreen(
     default:
       return null;
   }
-}
-
-// Shown when a non-team member reaches a Series 65 screen by a deep link.
-function Series65Unavailable({ theme, onNavigate }: { theme: Theme; onNavigate: (screen: string) => void }) {
-  return (
-    <div style={{ maxWidth: 620, margin: '40px auto 0', textAlign: 'center', color: '#eef3ff' }}>
-      <div
-        style={{
-          background: 'linear-gradient(180deg,rgba(40,30,72,.5),rgba(28,20,54,.55))',
-          border: `1px solid ${theme.navBorder}`,
-          borderRadius: 14,
-          padding: '28px 26px',
-        }}
-      >
-        <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>Series 65 isn’t available for your team</h3>
-        <p style={{ margin: '10px 0 18px', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
-          The Series 65 study set is limited to its owner’s team. You can build your own team study
-          games instead — AI-generated from a topic, or from a file you upload.
-        </p>
-        <button
-          onClick={() => onNavigate('st_decks')}
-          style={{
-            border: 'none',
-            background: theme.accent,
-            color: theme.accentText,
-            fontSize: 13,
-            fontWeight: 700,
-            padding: '11px 18px',
-            borderRadius: 8,
-            cursor: 'pointer',
-            minHeight: 44,
-          }}
-        >
-          Open Study Creation
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
@@ -270,25 +211,8 @@ export function Portal() {
   // Mobile off-canvas nav drawer.
   const [navOpen, setNavOpen] = useState(false);
 
-  // Bumped whenever the Study Game level changes, so the Studies workspace
-  // re-tints to the new level's colour the moment the learner levels up.
-  const [studyLevelTick, setStudyLevelTick] = useState(0);
-  useEffect(() => onStudyLevelChange(() => setStudyLevelTick((t) => t + 1)), []);
-
-  // The Studies workspace recolours to the learner's current level; every other
-  // workspace uses its fixed theme.
-  const theme = useMemo(
-    () => (workspace === 'studies' ? currentStudyTheme(user?.id) : THEMES[workspace]),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [workspace, user?.id, studyLevelTick],
-  );
-  // A level-hued wash layered over the content area's dark background, so the
-  // whole study page carries the level colour (null for other workspaces).
-  const contentTint = useMemo(
-    () => (workspace === 'studies' ? studyBgTint(currentStudyLevel(user?.id)) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [workspace, user?.id, studyLevelTick],
-  );
+  const theme = THEMES[workspace];
+  const contentTint: string | null = null;
   const accent = accentFor(workspace);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -383,7 +307,6 @@ export function Portal() {
   }, [workspace, screen, canFunded]);
 
   const canTrade = canAccessWorkspace(effectiveRoles, 'trading');
-  const canSeries65 = canUseSeries65(user);
 
   // Screens that need the live user or the acting-role controls (which the
   // stateless renderScreen doesn't have): the Site Help workspace and the Admin
@@ -417,7 +340,6 @@ export function Portal() {
       workspace={workspace}
       screen={screen}
       workspaces={allowed}
-      canSeries65={canSeries65}
       canFunded={canFunded}
       collapsed={isPhone ? false : collapsed}
       onToggle={isPhone ? () => setNavOpen(false) : toggleCollapsed}
@@ -465,7 +387,7 @@ export function Portal() {
       >
         <ErrorBoundary resetKey={screen}>
           <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
-            {renderExtra(screen) ?? renderScreen(screen, theme, selectScreen, canSeries65, canFunded) ?? <Screen screen={screen} theme={theme} />}
+            {renderExtra(screen) ?? renderScreen(screen, theme, selectScreen, canFunded) ?? <Screen screen={screen} theme={theme} />}
           </Suspense>
         </ErrorBoundary>
         <footer

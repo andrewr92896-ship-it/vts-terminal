@@ -182,7 +182,7 @@ export const TODO_TEMPLATE: TemplateSection[] = [
       { text: 'Get EZ Pass' },
       { text: 'Lock private Discord chats and invite Dale' },
       { text: 'Make specific notification sounds for specific apps' },
-      { text: 'Finish Series 65 prep' },
+      { text: 'Finish exam prep' },
       { text: 'Return Amazon items' },
       { text: 'Sign up for graduate school' },
       { text: 'Fill out FAFSA for Krystal and I' },
@@ -234,7 +234,7 @@ export const TODO_TEMPLATE: TemplateSection[] = [
     items: [
       { text: 'Schedule eye doctor' },
       { text: 'Schedule primary doctor' },
-      { text: 'Post Series 65 prep' },
+      { text: 'Post exam prep' },
       { text: 'Get Spectrum Wireless Hotspot' },
       { text: 'Animal vet (was monthly routine)' },
     ],

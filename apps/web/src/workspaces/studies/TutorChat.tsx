@@ -5,7 +5,7 @@ import { accentGradient } from '../../theme/themes';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
-// A back-and-forth chat with the Series 65 tutor about one question or term.
+// A back-and-forth chat with the study tutor about one question or term.
 // `context` is a short preamble (the question text, or the term + definition)
 // that is folded into the first user turn so every reply stays on-topic, while
 // the user only ever sees what they typed. Mount with a `key` (question id or

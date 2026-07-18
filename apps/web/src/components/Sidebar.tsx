@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { WorkspaceKey } from '../theme/themes';
-import { NAV, navFor, SERIES65_ONLY_SECTIONS, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
+import { NAV, navFor, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
 import { APP_VERSION } from '../meta/version';
 import { Icon } from './Icon';
@@ -9,9 +9,6 @@ interface SidebarProps {
   workspace: WorkspaceKey;
   screen: string;
   workspaces: WorkspaceKey[]; // the ones this user may see, in nav order
-  // Whether this user's team may use the Series 65 track. When false, the
-  // Series 65 sections are hidden (the Subjects hub and Study Games stay).
-  canSeries65: boolean;
   // Whether the private Funded (prop-challenge) section is revealed.
   canFunded: boolean;
   collapsed: boolean;
@@ -31,18 +28,13 @@ const navLabel: CSSProperties = {
 };
 
 export function Sidebar(props: SidebarProps) {
-  const { workspace, screen, workspaces, canSeries65, canFunded, collapsed, onToggle, onSelectWorkspace, onSelectScreen } =
+  const { workspace, screen, workspaces, canFunded, collapsed, onToggle, onSelectWorkspace, onSelectScreen } =
     props;
 
   const current = navFor(workspace);
   const accent = current?.accent ?? C.gold;
-  // Hide the Series 65 sections for teams that can't use that track, and the
-  // private Funded section from anyone without the `funded` role.
-  const sections = (current?.sections ?? []).filter(
-    (s) =>
-      (canSeries65 || !SERIES65_ONLY_SECTIONS.has(s.key)) &&
-      (canFunded || !FUNDED_ONLY_SECTIONS.has(s.key)),
-  );
+  // Hide the private Funded section from anyone without the `funded` role.
+  const sections = (current?.sections ?? []).filter((s) => canFunded || !FUNDED_ONLY_SECTIONS.has(s.key));
   // Show only the workspaces this user can access, in the canonical nav order.
   const visible: NavWorkspace[] = NAV.filter((w) => workspaces.includes(w.key));
 

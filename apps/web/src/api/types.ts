@@ -31,7 +31,7 @@ export interface LeaderboardEntry {
 }
 
 // ---- Studies: mock tests (mirror of apps/api/src/studies/tests.ts) ----
-// Per-topic correct/total for a finished test, keyed by Series 65 topic name.
+// Per-topic correct/total for a finished test, keyed by topic name.
 export type TestBreakdown = Record<string, { correct: number; total: number }>;
 
 // One finished mock test, stamped with the learner's attempt number.
@@ -236,7 +236,7 @@ export interface TodoItem {
 }
 
 // A learner-defined Study Game subsection: a named focus area backed by the
-// question ids Claude classified into it from the static Series 65 bank.
+// question ids Claude classified into it from the study set.
 export interface StudySection {
   id: string;
   name: string;
@@ -245,7 +245,7 @@ export interface StudySection {
 
 // ---- Team-authored study games (decks) ----
 // A quiz a team built for itself (AI-generated or from an uploaded file). Shared
-// across the whole team; played with the same mechanics as the Series 65 game.
+// across the whole team; played with the level-up mechanics.
 export interface DeckQuestion {
   seq: number;
   topic: string;

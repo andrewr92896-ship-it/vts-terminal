@@ -3,14 +3,14 @@ import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyTestProgress, studyTests, users } from '../db/schema.js';
 
-// Per-user completed Series 65 mock tests. Each finished 100-question exam is
+// Per-user completed mock tests. Each finished exam is
 // recorded with its final score and the learner's attempt number (their Nth
 // completed test), so the test leaderboard can show a player's best run and at
 // which attempt they earned it. Mirrors the vocab / starred / sections services.
 
-export const TEST_PASS = 72; // Series 65 passing score (~72%)
+export const TEST_PASS = 72; // default passing score (~72%)
 
-// Per-topic correct/total, keyed by the four Series 65 topics.
+// Per-topic correct/total, keyed by topic name.
 export type TestBreakdown = Record<string, { correct: number; total: number }>;
 
 export interface TestResultInput {
@@ -186,7 +186,7 @@ export async function getTestLeaderboard(
 // ---- In-progress test (account-synced) ----
 // A test still in flight is stored as one opaque JSON blob per user, so an
 // unfinished sitting follows the learner across devices. The shape is owned by
-// the web client (series65Test.ts); the server persists and returns it verbatim,
+// the web client; the server persists and returns it verbatim,
 // and drops the row when the test is submitted or abandoned.
 
 const MAX_PROGRESS_BYTES = 64 * 1024;

@@ -476,7 +476,7 @@ export async function seedDemoData(userId: string): Promise<void> {
     await seedItems('Priority', [
       { text: 'Review this week’s trade log for slippage', done: false },
       { text: 'Update the funded challenge equity', done: false },
-      { text: 'Renew Series 65 registration', done: true },
+      { text: 'Renew registration', done: true },
     ]);
     await seedItems('Finance', [
       { text: 'Rebalance Roth IRA to target allocation', done: false },

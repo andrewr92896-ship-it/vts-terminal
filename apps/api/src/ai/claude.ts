@@ -480,31 +480,21 @@ export async function chatClaude(messages: ChatMessage[], system?: string, maxTo
   return textOf(message);
 }
 
-// The four Series 65 topics, mirrored from the web client (series65Questions.ts)
-// so a generated card lands under the same filters the built-in deck uses.
-export const SERIES65_TOPICS = [
-  'Economics',
-  'Investments',
-  'Client Management',
-  'Regulations & Ethics',
-] as const;
-export type Series65Topic = (typeof SERIES65_TOPICS)[number];
-
-export interface Series65Definition {
+export interface TermDefinition {
   def: string;
-  topic: Series65Topic;
+  topic: string;
 }
 
-// Generate a flashcard definition for a user-supplied Series 65 term: a concise
-// exam-style definition plus the topic it belongs to. Used when the learner adds
-// their own word to the flashcard deck.
-export async function defineSeries65Term(term: string): Promise<Series65Definition> {
+// Generate a flashcard definition for a user-supplied term: a concise definition
+// plus a short topic label VTS AI picks. Used when a learner adds their own word
+// to their personal flashcard deck without typing a definition.
+export async function defineTerm(term: string): Promise<TermDefinition> {
   const prompt = [
-    `Define the term "${term}" as it applies to the Series 65 (Uniform Investment Adviser Law Exam).`,
-    'Write a clear, exam-accurate definition of one to three sentences, the way a flashcard would phrase it.',
-    `Also classify the term into exactly one of these four topics: ${SERIES65_TOPICS.join(', ')}.`,
+    `Define the term "${term}" concisely, the way a study flashcard would phrase it.`,
+    'Write a clear, accurate definition of one to three sentences.',
+    'Also give a short topic label (one to three words) for the subject area the term belongs to.',
     'Respond with ONLY a JSON object of the form {"def": "...", "topic": "..."} and nothing else.',
-    'If the term is not a real finance or securities concept, still give your best concise definition and pick the closest topic.',
+    'If the term is obscure, still give your best concise definition and closest topic label.',
   ].join(' ');
 
   const raw = await askClaude(prompt);
@@ -514,11 +504,9 @@ export async function defineSeries65Term(term: string): Promise<Series65Definiti
   if (!def) throw new Error('Could not generate a definition for that term');
 
   const topicRaw = parsed && typeof parsed.topic === 'string' ? parsed.topic.trim() : '';
-  const topic =
-    (SERIES65_TOPICS as readonly string[]).find((t) => t.toLowerCase() === topicRaw.toLowerCase()) ??
-    'Investments';
+  const topic = (topicRaw || 'General').slice(0, 60);
 
-  return { def: def.slice(0, 1000), topic: topic as Series65Topic };
+  return { def: def.slice(0, 1000), topic };
 }
 
 // One question, condensed to what Claude needs to judge topical fit.
@@ -540,7 +528,7 @@ export async function classifyQuestionsIntoSection(
     .map((q) => `${q.id}\t${q.topic ? `[${q.topic}] ` : ''}${q.stem}`)
     .join('\n');
   const prompt = [
-    `A learner preparing for the Series 65 exam wants a focused practice subsection called "${name}".`,
+    `A learner wants a focused practice subsection called "${name}".`,
     `From the numbered question bank below, choose the id of EVERY question whose subject matter fits "${name}".`,
     'Include closely related concepts, but exclude questions that are clearly about something else.',
     'Each line is: id<TAB>[broad topic] question stem.',

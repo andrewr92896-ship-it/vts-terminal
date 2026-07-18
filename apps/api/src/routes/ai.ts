@@ -93,7 +93,7 @@ export async function aiRoutes(app: FastifyInstance) {
     }
   });
 
-  // Series 65 study tutor — explain a question or answer a study question.
+  // Study tutor — explain a question or answer a study question.
   app.post('/api/ai/tutor', { preHandler: requireWorkspace('studies') }, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
