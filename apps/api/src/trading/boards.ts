@@ -13,7 +13,7 @@ import { tradingBoards, type TradingBoardRow } from '../db/schema.js';
 // chart/watchlist details; the server only needs the grid geometry to be sane.
 export interface BoardTile {
   id: string;
-  kind: 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar';
+  kind: 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar' | 'alerts';
   x: number;
   y: number;
   w: number;
@@ -37,6 +37,8 @@ export interface BoardTile {
   newsFeed?: string;
   // News & Calendar tiles — lowest impact shown ('all' | 'medhigh' | 'high').
   minImpact?: 'all' | 'medhigh' | 'high';
+  // Alerts tiles — which TradingView alerts to show ('active' | 'new').
+  alertsFilter?: 'active' | 'new';
 }
 
 export interface BoardLayout {

@@ -735,7 +735,7 @@ export interface SessionInput {
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----
 // A saved, customizable grid of chart/watchlist tiles the trader arranges on
 // the Live Wall ("presets").
-export type BoardTileKind = 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar';
+export type BoardTileKind = 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar' | 'alerts';
 
 export interface BoardTile {
   id: string;
@@ -767,6 +767,9 @@ export interface BoardTile {
   // News & Calendar tiles — the lowest impact to show: 'all', 'medhigh'
   // (medium & up, the default) or 'high' (high only).
   minImpact?: 'all' | 'medhigh' | 'high';
+  // Alerts tiles — which TradingView alerts to show: 'active' (every
+  // non-dismissed alert, the default) or 'new' (unanalyzed alerts only).
+  alertsFilter?: 'active' | 'new';
 }
 
 export interface BoardLayout {

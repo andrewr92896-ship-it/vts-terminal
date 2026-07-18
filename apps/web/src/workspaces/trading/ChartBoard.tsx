@@ -10,6 +10,7 @@ import { WatchlistTile } from './WatchlistTile';
 import { PositionsTile } from './PositionsTile';
 import { NewsTile } from './NewsTile';
 import { CalendarTile } from './CalendarTile';
+import { AlertsTile } from './AlertsTile';
 import { MobileScrollLockBar } from './scrollLock';
 import { BORDER, BORDER2, FAINT, GOLD, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
 
@@ -107,7 +108,7 @@ export function ChartBoard() {
         // grid height to the reported row count so the cell grows per trade and
         // can't be hand-resized shorter (which would reintroduce a scroll).
         const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
-        const minH = t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'news' || t.kind === 'calendar' ? 5 : 8;
+        const minH = t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'news' || t.kind === 'calendar' || t.kind === 'alerts' ? 5 : 8;
         return {
           i: t.id,
           x: t.x,
@@ -297,6 +298,7 @@ export function ChartBoard() {
             <button onClick={() => addTile('positions')} style={ghostBtn}>+ Positions</button>
             <button onClick={() => addTile('news')} style={ghostBtn}>+ News</button>
             <button onClick={() => addTile('calendar')} style={ghostBtn}>+ Calendar</button>
+            <button onClick={() => addTile('alerts')} style={ghostBtn}>+ Alerts</button>
             {!isUnsaved && (
               <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>Rename</button>
             )}
@@ -370,6 +372,8 @@ export function ChartBoard() {
                 <NewsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : t.kind === 'calendar' ? (
                 <CalendarTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+              ) : t.kind === 'alerts' ? (
+                <AlertsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : (
                 <WatchlistTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               )}

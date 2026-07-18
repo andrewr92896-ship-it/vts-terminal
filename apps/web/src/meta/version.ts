@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.0';
+export const APP_VERSION = 'Beta V 4.1';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.1',
+    date: 'July 18, 2026',
+    notes: [
+      'Live Wall ▸ Master: you can now add an Alerts tile to any board. Turn on Edit layout and press “+ Alerts” to pin your TradingView alerts right next to your charts — the same webhook alerts from the Alerts section, in a compact live feed. Toggle it between all active alerts and just the new (unanalyzed) ones.',
+    ],
+  },
   {
     version: 'Beta V 4.0',
     date: 'July 18, 2026',
