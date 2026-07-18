@@ -171,9 +171,21 @@ gated to `team-vitalis` specifically.
   `DESK_WATCH_SECONDS`): reconciles broker positions so trade open/close/TP-SL
   notifications fire even with no client open. **Only runs if push is configured.**
 - **Notifications** fire (web push + Pushover together, team-scoped, demo
-  excluded, best-effort) on: a new TradingView alert, and each trade
-  **opened / closed / retargeted** during reconcile. Team chat is not pushed
-  (it has its own top-bar bell).
+  excluded, best-effort) on: a new TradingView alert, and per-trade events during
+  reconcile — **opened**, **closed**, and a stop/target change split into
+  **placeSl / moveSl / placeTp / moveTp** (a trade whose SL and TP both change
+  emits one notification per level). Team chat is not pushed (it has its own
+  top-bar bell).
+- **Per-user notification prefs** (`notifications/prefs.ts`, `notification_prefs`
+  table, `routes/notificationPrefs.ts`): each recipient can pick which teammate a
+  trade event is about and, per teammate, which of the six events buzz them
+  (`open / close / placeSl / moveSl / placeTp / moveTp`). A recipient with **no
+  stored row** for a trader defaults to **all events on** (preserves the old
+  whole-team feed), so the filter only ever mutes. `sendToTradingDesk` /
+  `sendPushoverToDesk` take an options object `{ excludeUserId?, scopeIds?,
+  ownerId?, event? }` and apply the pref filter only when both `ownerId` and
+  `event` are given — alerts pass neither (team-wide, not one trader's action).
+  UI is the "Notify me about a trader" section in `DeviceSettings.tsx`.
 
 ## Auth & security specifics
 

@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, unique } from 'drizzle-orm/sqlite-core';
 
 // The four roles match the prototype's access matrix exactly.
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
@@ -753,6 +753,38 @@ export const pushoverUsers = sqliteTable('pushover_users', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type PushoverUserRow = typeof pushoverUsers.$inferSelect;
+
+// ---- Per-user notification preferences ----
+// One row per (recipient, watched-trader) pair. Lets a trader pick which
+// teammate they want trade notifications about and, per teammate, which trade
+// events buzz them: a fresh fill (open), a close, and each stop/target action
+// split into placed-vs-moved for both SL and TP. A missing row means "notify me
+// about everything for that trader" — the historical default — so a user who
+// never opens the settings keeps getting the full team feed. Both foreign keys
+// cascade, so a row is removed when either the recipient or the watched trader
+// is deleted.
+export const notificationPrefs = sqliteTable(
+  'notification_prefs',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }), // the recipient
+    targetUserId: text('target_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }), // the trader being watched
+    notifyOpen: integer('notify_open', { mode: 'boolean' }).notNull().default(true),
+    notifyClose: integer('notify_close', { mode: 'boolean' }).notNull().default(true),
+    notifyPlaceSl: integer('notify_place_sl', { mode: 'boolean' }).notNull().default(true),
+    notifyMoveSl: integer('notify_move_sl', { mode: 'boolean' }).notNull().default(true),
+    notifyPlaceTp: integer('notify_place_tp', { mode: 'boolean' }).notNull().default(true),
+    notifyMoveTp: integer('notify_move_tp', { mode: 'boolean' }).notNull().default(true),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ userTarget: unique().on(t.userId, t.targetUserId) }),
+);
+export type NotificationPrefRow = typeof notificationPrefs.$inferSelect;
 
 // One row per user holding the serialized Study Game state (per-category levels,
 // scores, and answer history), so quiz progress follows the learner across

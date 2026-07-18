@@ -112,19 +112,21 @@ export async function ingestAlert(body: Record<string, unknown>, rawPayload: str
   const summary = parts.length ? parts.join(' ') : 'New TradingView alert';
   // Only the alert owner's team is notified — trade signals never fan out past it.
   const teamIds = await scopedTraderIdsForUser(ownerId);
+  // Alerts are a team-wide signal, not one trader's action, so they carry no
+  // per-trader event and bypass the per-user event prefs.
   void sendToTradingDesk({
     title: `Alert · ${instrument}`,
     body: summary,
     url: '/?screen=alerts',
     tag: 'vts-alert',
-  }, undefined, teamIds).catch(() => {});
+  }, { scopeIds: teamIds }).catch(() => {});
   void sendPushoverToDesk({
     title: `Alert · ${instrument}`,
     message: summary,
     priority: 1, // high — alerts are time-sensitive
     url: '/?screen=alerts',
     urlTitle: 'Open the desk',
-  }, undefined, teamIds).catch(() => {});
+  }, { scopeIds: teamIds }).catch(() => {});
 
   return id;
 }

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   users,
@@ -15,6 +15,7 @@ import {
   tradingNews,
   tradingCalendar,
   aiUsage,
+  notificationPrefs,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -265,6 +266,11 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));
     await tx.delete(tradingChallenges).where(eq(tradingChallenges.userId, targetId));
+    // Notification prefs reference the user on both sides (recipient and the
+    // watched trader), so clear rows pointing either way.
+    await tx
+      .delete(notificationPrefs)
+      .where(or(eq(notificationPrefs.userId, targetId), eq(notificationPrefs.targetUserId, targetId)));
     // Market News and the economic calendar are a shared desk feed, so they
     // survive the user — just drop the authorship link.
     await tx.update(tradingNews).set({ authorId: null }).where(eq(tradingNews.authorId, targetId));
