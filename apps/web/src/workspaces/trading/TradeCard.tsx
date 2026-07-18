@@ -2,7 +2,7 @@ import { useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
-import { DesignationTag, designationTint } from './DesignationTag';
+import { DesignationTag, tileTint } from './DesignationTag';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
 
 // The full "trading card" for one open position — the rich card shown on the
@@ -18,6 +18,9 @@ const RED = '#ef5468';
 const TEXT = '#eef3ff';
 const MUTED = '#9fb0d6';
 const FAINT = '#6f84b0';
+// Neutral gray used to mute off-book (funded/FTP) positions — they sit last on
+// the wall and never take a green/red designation tint.
+const GRAY = '#8892a6';
 const CARD = 'rgba(13,31,68,.5)';
 const PANEL = 'rgba(11,26,58,.5)';
 const BORDER = '#16294f';
@@ -103,6 +106,11 @@ export function TradeCard({
 }) {
   const long = t.side === 'long';
   const sideColor = long ? GREEN : RED;
+  // Off-book (funded/FTP) positions are muted gray and always sorted last on the
+  // wall, regardless of who placed them; on-book positions take their owner's
+  // designation colour (Chief Strategist green / Chief Analyst red), if any.
+  const offBook = t.broker === 'ftp';
+  const accent = offBook ? GRAY : t.designation?.color ?? null;
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
   // While open, a position sitting inside the desk's break-even band (its move
@@ -162,12 +170,10 @@ export function TradeCard({
         padding: 0,
         overflow: 'hidden',
         borderTop: `2px solid ${sideColor}`,
-        // Tint the whole tile in the owner's designation colour (Chief Strategist
-        // = green, Chief Analyst = red), with a matching left accent, so whose
-        // position it is reads at a glance.
-        ...(t.designation
-          ? { borderLeft: `3px solid ${t.designation.color}`, background: designationTint(t.designation, CARD)! }
-          : {}),
+        // Tint the whole tile in its accent colour with a matching left accent:
+        // the owner's designation colour on-book, or gray for an off-book
+        // (funded) position — so whose position it is reads at a glance.
+        ...(accent ? { borderLeft: `3px solid ${accent}`, background: tileTint(accent, CARD) } : {}),
       }}
     >
       {/* Header row */}
@@ -179,8 +185,9 @@ export function TradeCard({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {/* The owner's Chief Strategist / Chief Analyst designation, shown on
-              every card (including the viewer's own) so their colour is consistent. */}
-          <DesignationTag designation={t.designation} />
+              every card (including the viewer's own). On an off-book position it
+              renders in gray to match the muted tile. */}
+          <DesignationTag designation={t.designation} color={offBook ? GRAY : undefined} />
           {/* On the viewer's own card the broker name already identifies it, so
               the owner tag is dropped. On teammates' cards show their handle
               (the part of the email before the domain) so it's clear whose it

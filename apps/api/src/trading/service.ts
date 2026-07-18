@@ -37,11 +37,18 @@ function newestFirst(a: LiveTrade, b: LiveTrade): number {
   return (b.openedAt ?? -Infinity) - (a.openedAt ?? -Infinity);
 }
 
-// Order the wall by designation first (Chief Strategist on top, then Chief
-// Analyst, then everyone else), and newest-first within each group. Requires the
+// Sort rank for the Live Wall order: Chief Strategist (0) on top, then Chief
+// Analyst (1), then the rest of the on-book positions (2), then every off-book
+// (funded/FTP) position last (99) — regardless of who placed it. Requires the
 // designation to already be attached (see withDesignations).
-function byDesignationThenNewest(a: LiveTrade, b: LiveTrade): number {
-  return designationRank(a.designation?.key) - designationRank(b.designation?.key) || newestFirst(a, b);
+function wallOrderRank(t: LiveTrade): number {
+  if (t.broker === 'ftp') return 99; // off-book always sinks to the bottom
+  return designationRank(t.designation?.key);
+}
+
+// Order the wall by rank, newest-first within each group.
+function byWallOrder(a: LiveTrade, b: LiveTrade): number {
+  return wallOrderRank(a) - wallOrderRank(b) || newestFirst(a, b);
 }
 
 // Tag each position with its owner's designation (Chief Strategist / Chief
@@ -265,7 +272,7 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
       await withDesignations(
         gateBalances(enrichForex(withSlippage([...sample, ...fundedLive]), 'USD'), canSeeBalances),
       )
-    ).sort(byDesignationThenNewest);
+    ).sort(byWallOrder);
     const brokers: BrokerLiveResult[] = BROKER_META.map((m) => ({
       connectionId: `sample-${m.key}`,
       ownerId: user.id,
@@ -310,7 +317,7 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   // but never land in tradingPositions (Trade Log / History / Live Brokers).
   const trades = (
     await withDesignations(gateBalances([...withSlip, ...fundedLive], canSeeBalances))
-  ).sort(byDesignationThenNewest);
+  ).sort(byWallOrder);
   const failed = brokers.filter((b) => !b.ok);
   const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
 
