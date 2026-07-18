@@ -69,8 +69,12 @@ Four workspaces in the sidebar; sections a user lacks the role for are hidden.
   Strategy Sessions, Manual Trades (`funded` key, `FundedScreen`), **Funded**
   (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Test Mode
-  (`st_test`), Progress (`st_progress`), Study Creation (`st_decks`, team decks),
-  Study Guides (`st_guides`). **Series 65** is the first subject; its sections
+  (`st_test`), Progress (`st_progress`), Study Creation (`st_decks`), Study Guides
+  (`st_guides`). **Study Creation** (`StudyCreation`) is the make-things section:
+  it stacks the team study-game maker (`TeamStudyDecks`) and the study-guide
+  builder (`StudyGuideCreator` — build with VTS AI or upload a `.pptx`, parsed
+  client-side in `lib/pptx.ts`). **Study Guides** (`StudyGuidesLibrary`) is the
+  present/manage side — the finished guides only. **Series 65** is the first subject; its sections
   (`st_game`, `st_test`, `st_progress`, and the question bank) are gated to the
   owner's team only (`SERIES65_ONLY_SECTIONS` in the UI; `canUseSeries65` on the
   server). Studies is lazy-loaded (it bundles the 400-question bank).

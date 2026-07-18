@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import type { GuideSlide, GuideDraftSlide, StudyGuide } from '../../api/types';
+import type { GuideSlide, GuideDraftSlide, StudyGuide, StudyGuideDetail } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -8,10 +8,13 @@ import { useAuth } from '../../auth/AuthContext';
 import { fileToScaledDataUrl } from '../../lib/image';
 import { GuidePresentation } from './GuidePresentation';
 
-// The "Study guides" side of Study Creation: a team builds a slide-deck study
-// guide by conversing with VTS AI (which drafts the slide text) and attaching
-// its own screenshots, then presents it like a slideshow. The public demo sees
-// this read-only.
+// Study guides are split across two Studies sections:
+//   • Study Creation (`StudyGuideCreator`) — where a team *builds* a guide by
+//     conversing with VTS AI (which drafts the slide text) and attaching its own
+//     screenshots.
+//   • Study Guides (`StudyGuidesLibrary`) — where the finished guides live and
+//     are presented like a slideshow.
+// The public demo sees both read-only.
 
 const muted = '#a99ff0';
 
@@ -33,16 +36,23 @@ interface Turn {
   display: string;
 }
 
-export function StudyGuides({ theme }: { theme: Theme }) {
+// ---- The "Study Guides" section: the finished guides, presented ----
+// This is the library side — list, present, and manage guides. Building a new
+// one happens in Study Creation (StudyGuideCreator).
+export function StudyGuidesLibrary({
+  theme,
+  onNavigate,
+}: {
+  theme: Theme;
+  onNavigate?: (screen: string) => void;
+}) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
-  const accentGrad = accentGradient(theme);
 
   const [guides, setGuides] = useState<StudyGuide[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [building, setBuilding] = useState(false);
   const [presenting, setPresenting] = useState<string | null>(null);
 
   useEffect(() => {
@@ -79,32 +89,18 @@ export function StudyGuides({ theme }: { theme: Theme }) {
     return <GuidePresentation theme={theme} guideId={presenting} onExit={() => setPresenting(null)} />;
   }
 
-  if (building) {
-    return (
-      <GuideBuilder
-        theme={theme}
-        onCancel={() => setBuilding(false)}
-        onSaved={(gs, newId) => {
-          setGuides(gs);
-          setBuilding(false);
-          setPresenting(newId);
-        }}
-      />
-    );
-  }
-
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Guides</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build a slide-by-slide study guide with VTS AI, add your own screenshots, and present it like a walkthrough.
+            Present your team’s slide-by-slide study guides. Build a new one over in Study Creation.
           </p>
         </div>
-        {!readOnly && (
-          <button onClick={() => setBuilding(true)} style={primaryBtn(theme, accentGrad)}>
-            ✦ New study guide
+        {!readOnly && onNavigate && guides.length > 0 && (
+          <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
+            ✦ Build a guide
           </button>
         )}
       </div>
@@ -121,12 +117,12 @@ export function StudyGuides({ theme }: { theme: Theme }) {
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No study guides yet</div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? 'A team builds a study guide here by chatting with VTS AI to draft the slides, then adds screenshots and presents it.'
-              : 'Describe what you want to teach, go back and forth with VTS AI to shape the slides, drop in screenshots, then present it.'}
+              ? 'A team builds study guides in Study Creation — chatting with VTS AI or uploading a presentation — then presents them here.'
+              : 'Head to Study Creation to build one: chat with VTS AI to draft the slides, or upload a PowerPoint. Your guides then show up here to present.'}
           </div>
-          {!readOnly && (
-            <button onClick={() => setBuilding(true)} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
-              ✦ New study guide
+          {!readOnly && onNavigate && (
+            <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGradient(theme)), marginTop: 16 }}>
+              Go to Study Creation
             </button>
           )}
         </div>
@@ -144,6 +140,144 @@ export function StudyGuides({ theme }: { theme: Theme }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ---- The "Study Creation" side: build a new guide (from scratch or a .pptx) ----
+export function StudyGuideCreator({
+  theme,
+  onNavigate,
+}: {
+  theme: Theme;
+  onNavigate?: (screen: string) => void;
+}) {
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
+  const accentGrad = accentGradient(theme);
+
+  // null = not building; otherwise the seed the builder opens with (empty for a
+  // from-scratch guide, or the slides parsed out of an uploaded presentation).
+  const [builderInit, setBuilderInit] = useState<{ name?: string; slides?: BuildSlide[] } | null>(null);
+  const [parsing, setParsing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [savedName, setSavedName] = useState<string | null>(null);
+
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/\.pptx$/i.test(file.name)) {
+      setError(
+        /\.ppt$/i.test(file.name)
+          ? 'That’s an older .ppt file. Open it in PowerPoint or Google Slides and export it as .pptx, then upload again.'
+          : 'Upload a PowerPoint .pptx file. In Google Slides, use File ▸ Download ▸ Microsoft PowerPoint (.pptx).',
+      );
+      return;
+    }
+    setParsing(true);
+    setError(null);
+    setSavedName(null);
+    try {
+      const { parsePptx } = await import('../../lib/pptx');
+      const parsed = await parsePptx(file);
+      const slides: BuildSlide[] = parsed.map((s) => ({ id: nextSlideId(), ...s }));
+      setBuilderInit({ name: file.name.replace(/\.[^.]+$/, '').slice(0, 120), slides });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not read that presentation. Try exporting it as .pptx again.');
+    } finally {
+      setParsing(false);
+    }
+  }
+
+  if (builderInit) {
+    return (
+      <GuideBuilder
+        theme={theme}
+        initialName={builderInit.name}
+        initialSlides={builderInit.slides}
+        onCancel={() => setBuilderInit(null)}
+        onSaved={(_gs, guide) => {
+          setBuilderInit(null);
+          setSavedName(guide.name);
+        }}
+      />
+    );
+  }
+
+  return (
+    <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Guides</h2>
+          <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
+            Build a slide-by-slide study guide with VTS AI, or upload a presentation — then present it from Study Guides.
+          </p>
+        </div>
+        {!readOnly && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => { setSavedName(null); setError(null); setBuilderInit({}); }} style={primaryBtn(theme, accentGrad)}>
+              ✦ New study guide
+            </button>
+            <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', gap: 6, cursor: parsing ? 'default' : 'pointer', opacity: parsing ? 0.6 : 1 }}>
+              {parsing ? 'Reading…' : '⬆ Upload a presentation'}
+              <input
+                type="file"
+                accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                onChange={onUpload}
+                disabled={parsing}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div onClick={() => setError(null)} style={{ fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', marginBottom: 12 }}>
+          {error} — click to dismiss.
+        </div>
+      )}
+
+      {savedName && (
+        <div style={{ ...card(theme), marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ fontSize: 12.5, color: '#dfe7fa', lineHeight: 1.5 }}>
+            Saved <strong style={{ color: '#fff' }}>{savedName}</strong>. It’s ready to present in Study Guides.
+          </div>
+          {onNavigate && (
+            <button onClick={() => onNavigate('st_guides')} style={primaryBtn(theme, accentGrad)}>
+              ▶ Open Study Guides
+            </button>
+          )}
+        </div>
+      )}
+
+      <div style={{ ...card(theme), textAlign: 'center' }}>
+        <div style={{ fontSize: 28, marginBottom: 8 }}>📽️</div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>Build a study guide</div>
+        <div style={{ fontSize: 12.5, color: muted, maxWidth: 460, margin: '0 auto', lineHeight: 1.55 }}>
+          {readOnly
+            ? 'A team builds study guides here by chatting with VTS AI to draft the slides, or by uploading a PowerPoint. They add screenshots, then present it from Study Guides.'
+            : 'Describe what you want to teach and go back and forth with VTS AI to shape the slides — or upload a PowerPoint (export Google Slides as .pptx). Refine, drop in screenshots, then present it from Study Guides.'}
+        </div>
+        {!readOnly && (
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
+            <button onClick={() => { setSavedName(null); setError(null); setBuilderInit({}); }} style={primaryBtn(theme, accentGrad)}>
+              ✦ New study guide
+            </button>
+            <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', gap: 6, cursor: parsing ? 'default' : 'pointer', opacity: parsing ? 0.6 : 1 }}>
+              {parsing ? 'Reading…' : '⬆ Upload a presentation'}
+              <input
+                type="file"
+                accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                onChange={onUpload}
+                disabled={parsing}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -237,17 +371,42 @@ function GuideBuilder({
   theme,
   onCancel,
   onSaved,
+  initialName,
+  initialSlides,
 }: {
   theme: Theme;
   onCancel: () => void;
-  onSaved: (guides: StudyGuide[], newId: string) => void;
+  onSaved: (guides: StudyGuide[], guide: StudyGuideDetail) => void;
+  // When opened from an uploaded presentation, the builder starts with these
+  // slides already in place (the user then refines them / adds screenshots).
+  initialName?: string;
+  initialSlides?: BuildSlide[];
 }) {
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
 
-  const [name, setName] = useState('');
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [slides, setSlides] = useState<BuildSlide[]>([]);
+  // Snapshot the imported slides once so the ids stay stable across renders.
+  const seeded = useMemo(() => initialSlides ?? [], [initialSlides]);
+
+  const [name, setName] = useState(initialName ?? '');
+  // Seed the transcript with an assistant turn carrying the imported slides so
+  // the model sees (and preserves) them by id on the user's first refinement.
+  const [turns, setTurns] = useState<Turn[]>(() =>
+    seeded.length > 0
+      ? [
+          {
+            role: 'assistant',
+            send: JSON.stringify({
+              reply: 'Imported your presentation.',
+              slides: seeded.map((s) => ({ id: s.id, title: s.title, body: s.body })),
+            }),
+            display:
+              'I imported your presentation into the slides on the right. Tell me what to refine — or just add screenshots and save.',
+          },
+        ]
+      : [],
+  );
+  const [slides, setSlides] = useState<BuildSlide[]>(seeded);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -358,7 +517,7 @@ function GuideBuilder({
         .filter((s) => s.title || s.body || s.image)
         .map((s) => ({ title: s.title, body: s.body, image: s.image }));
       const res = await api.saveStudyGuide({ name: name.trim(), slides: payload });
-      onSaved(res.guides, res.guide.id);
+      onSaved(res.guides, res.guide);
     } catch (e) {
       setError(
         e instanceof ApiError

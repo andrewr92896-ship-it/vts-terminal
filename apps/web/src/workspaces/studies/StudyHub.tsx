@@ -101,8 +101,9 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
           Build your own study content for your team on any subject. In <strong>Study Creation</strong>,
           make a study game — have AI generate the questions from a topic you name, or upload a text file
           of your own questions or notes — and everyone can play it, level up, and compete on your team’s
-          leaderboard. In <strong>Study Guides</strong>, go back and forth with VTS AI to draft a slide
-          deck, add your own screenshots, and present it like a walkthrough.
+          leaderboard. Also build a slide-deck study guide there: go back and forth with VTS AI, or upload
+          a PowerPoint, and add your own screenshots. Your finished guides live in <strong>Study Guides</strong>,
+          ready to present like a walkthrough.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           <button onClick={() => onNavigate('st_decks')} style={primaryBtn(theme, accentGrad)}>
