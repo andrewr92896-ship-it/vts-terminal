@@ -2,7 +2,7 @@ import { useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
-import { DesignationTag } from './DesignationTag';
+import { DesignationTag, designationTint } from './DesignationTag';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
 
 // The full "trading card" for one open position — the rich card shown on the
@@ -162,9 +162,12 @@ export function TradeCard({
         padding: 0,
         overflow: 'hidden',
         borderTop: `2px solid ${sideColor}`,
-        // A left accent in the owner's designation colour (Chief Strategist =
-        // green, Chief Analyst = red) so whose position it is reads at a glance.
-        ...(t.designation ? { borderLeft: `3px solid ${t.designation.color}` } : {}),
+        // Tint the whole tile in the owner's designation colour (Chief Strategist
+        // = green, Chief Analyst = red), with a matching left accent, so whose
+        // position it is reads at a glance.
+        ...(t.designation
+          ? { borderLeft: `3px solid ${t.designation.color}`, background: designationTint(t.designation, CARD)! }
+          : {}),
       }}
     >
       {/* Header row */}
