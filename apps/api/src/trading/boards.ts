@@ -29,8 +29,10 @@ export interface BoardTile {
   // 'scroll' (the auto-scrolling ticker tape, default) or 'static' (a stationary
   // quote list with every symbol visible at once).
   watchlistMode?: 'scroll' | 'static';
-  // Positions tiles — 'list' (compact default) or 'cards' (full trading cards).
-  positionsView?: 'list' | 'cards';
+  // Positions tiles — 'list' (compact default) or 'cards' (full trading cards);
+  // the '-expand' variants grow the tile vertically to fit every trade (no inner
+  // scroll) instead of scrolling inside a fixed-height cell.
+  positionsView?: 'list' | 'cards' | 'list-expand' | 'cards-expand';
   // News tiles — which topic subfeed to show ('all' or a NEWS_FEEDS key).
   newsFeed?: string;
   // News & Calendar tiles — lowest impact shown ('all' | 'medhigh' | 'high').

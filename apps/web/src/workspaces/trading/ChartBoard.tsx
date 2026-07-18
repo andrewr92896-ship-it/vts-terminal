@@ -16,6 +16,19 @@ import { BORDER, BORDER2, FAINT, GOLD, MUTED, PANEL, ghostBtn, goldBtn, input, n
 const RGL = WidthProvider(GridLayout);
 const COLS = 12;
 const ROW_H = 30;
+const MARGIN = 10;
+
+// A positions tile set to grow to fit its trades (rather than scroll in a fixed
+// cell). Its grid height is driven by measured content, not the stored h.
+function isExpandPositions(t: BoardTile): boolean {
+  return t.kind === 'positions' && (t.positionsView === 'list-expand' || t.positionsView === 'cards-expand');
+}
+
+// Grid rows needed to fit `px` of content: a cell of h rows is
+// ROW_H*h + MARGIN*(h-1) px tall, so solve for the smallest h that fits.
+function rowsForPx(px: number): number {
+  return Math.max(1, Math.ceil((px + MARGIN) / (ROW_H + MARGIN)));
+}
 
 // The customizable, multi-chart board on the Live Wall. It's a drag-resize grid
 // (react-grid-layout) of chart and watchlist tiles that a trader arranges and
@@ -38,6 +51,10 @@ export function ChartBoard() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [namePrompt, setNamePrompt] = useState<{ mode: 'create' | 'rename'; value: string } | null>(null);
+  // Content-driven grid-row counts for positions tiles in an "expand" view, keyed
+  // by tile id. These override the tile's stored h so the cell grows to fit every
+  // trade; they are transient (never saved, never marked dirty).
+  const [autoRows, setAutoRows] = useState<Record<string, number>>({});
   const firstLoad = useRef(true);
 
   const applyBoard = useCallback(
@@ -85,32 +102,71 @@ export function ChartBoard() {
 
   const layout: Layout[] = useMemo(
     () =>
-      tiles.map((t) => ({
-        i: t.id,
-        x: t.x,
-        y: t.y,
-        w: t.w,
-        h: t.h,
-        minW: 3,
-        minH: t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'news' || t.kind === 'calendar' ? 5 : 8,
-      })),
-    [tiles],
+      tiles.map((t) => {
+        // Expand positions tiles are sized by their measured content: lock the
+        // grid height to the reported row count so the cell grows per trade and
+        // can't be hand-resized shorter (which would reintroduce a scroll).
+        const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
+        const minH = t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'news' || t.kind === 'calendar' ? 5 : 8;
+        return {
+          i: t.id,
+          x: t.x,
+          y: t.y,
+          w: t.w,
+          h: auto ?? t.h,
+          minW: 3,
+          minH: auto ?? minH,
+          ...(auto ? { maxH: auto } : {}),
+        };
+      }),
+    [tiles, autoRows],
   );
 
-  const onLayoutChange = useCallback((next: Layout[]) => {
-    setTiles((prev) =>
-      prev.map((t) => {
-        const l = next.find((n) => n.i === t.id);
-        return l ? { ...t, x: l.x, y: l.y, w: l.w, h: l.h } : t;
-      }),
-    );
-  }, []);
+  const onLayoutChange = useCallback(
+    (next: Layout[]) => {
+      // Only persist layout while editing. Outside edit mode the only layout
+      // changes come from expand tiles auto-growing (and reflowing others); those
+      // are transient and must not dirty the board or overwrite saved positions.
+      if (!editing) return;
+      setTiles((prev) =>
+        prev.map((t) => {
+          const l = next.find((n) => n.i === t.id);
+          if (!l) return t;
+          // Keep an expand tile's saved base height — its live height is content-
+          // driven, so don't bake the auto-grown value into the preset.
+          return { ...t, x: l.x, y: l.y, w: l.w, h: isExpandPositions(t) ? t.h : l.h };
+        }),
+      );
+    },
+    [editing],
+  );
 
   const patchTile = useCallback((id: string, patch: Partial<BoardTile>) => {
     setTiles((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }, []);
   const removeTile = useCallback((id: string) => {
     setTiles((prev) => prev.filter((t) => t.id !== id));
+    setAutoRows((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }, []);
+
+  // An expand positions tile reports its natural content height; convert it to a
+  // grid-row count (null clears the override when it stops expanding).
+  const measureTile = useCallback((id: string, px: number | null) => {
+    setAutoRows((prev) => {
+      if (px == null) {
+        if (!(id in prev)) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      const rows = rowsForPx(px);
+      return prev[id] === rows ? prev : { ...prev, [id]: rows };
+    });
   }, []);
   const addTile = useCallback((kind: BoardTileKind) => {
     setTiles((prev) => {
@@ -303,7 +359,13 @@ export function ChartBoard() {
               {t.kind === 'chart' ? (
                 <ChartTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : t.kind === 'positions' ? (
-                <PositionsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+                <PositionsTile
+                  tile={t}
+                  editing={editing}
+                  onChange={(p) => patchTile(t.id, p)}
+                  onRemove={() => removeTile(t.id)}
+                  onMeasure={(px) => measureTile(t.id, px)}
+                />
               ) : t.kind === 'news' ? (
                 <NewsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : t.kind === 'calendar' ? (

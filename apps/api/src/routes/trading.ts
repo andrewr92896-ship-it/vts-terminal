@@ -1071,7 +1071,7 @@ const boardTileSchema = z.object({
   studies: z.array(z.string().trim().max(64)).max(30).optional(),
   symbols: z.array(z.string().trim().max(40)).max(60).optional(),
   title: z.string().trim().max(60).optional(),
-  positionsView: z.enum(['list', 'cards']).optional(),
+  positionsView: z.enum(['list', 'cards', 'list-expand', 'cards-expand']).optional(),
   watchlistMode: z.enum(['scroll', 'static']).optional(),
   newsFeed: z.string().trim().max(24).optional(),
   minImpact: z.enum(['all', 'medhigh', 'high']).optional(),
