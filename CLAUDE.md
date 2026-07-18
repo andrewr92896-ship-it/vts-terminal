@@ -70,14 +70,25 @@ Four workspaces in the sidebar; sections a user lacks the role for are hidden.
   (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Test Mode
   (`st_test`), Progress (`st_progress`), Study Creation (`st_decks`), Study Guides
-  (`st_guides`). **Study Creation** (`StudyCreation`) is the make-things section:
-  it stacks the team study-game maker (`TeamStudyDecks`) and the study-guide
-  builder (`StudyGuideCreator` — build with VTS AI or upload a `.pptx`, parsed
-  client-side in `lib/pptx.ts`). **Study Guides** (`StudyGuidesLibrary`) is the
-  present/manage side — the finished guides only. **Series 65** is the first subject; its sections
-  (`st_game`, `st_test`, `st_progress`, and the question bank) are gated to the
-  owner's team only (`SERIES65_ONLY_SECTIONS` in the UI; `canUseSeries65` on the
-  server). Studies is lazy-loaded (it bundles the 400-question bank).
+  (`st_guides`). **Study Game** (`StudyGameHub`) is a **launcher**, not a single
+  game: it lists the games you can play — the built-in Series 65 quiz (owner's
+  team only) plus your team's own study games — and renders the chosen one
+  (`StudyGame` for Series 65, `TeamStudyGame` for a deck) with a back path to the
+  picker. Deep-links skip the picker: `requestStudyView` (Hub/Progress "Play")
+  drops into Series 65; `requestStudyDeck` (a deck's Play button in Study
+  Creation) opens that deck — both via `studiesNav.ts`. **Study Creation**
+  (`StudyCreation`) is the make-things section (create only — it does **not**
+  play games inline): it stacks the team study-game maker (`TeamStudyDecks`) and
+  the study-guide builder (`StudyGuideCreator` — build with VTS AI or upload a
+  `.pptx`, parsed client-side in `lib/pptx.ts`); creating a game sends you to the
+  Study Game launcher to play it. **Study Guides** (`StudyGuidesLibrary`) is the
+  present/manage side — the finished guides only. **Series 65** is the first
+  subject; its **Series 65-only** sections are Test Mode (`st_test`) and Progress
+  (`st_progress`) plus the question bank, gated to the owner's team only
+  (`SERIES65_ONLY_SECTIONS` in the UI; `canUseSeries65` on the server). The Study
+  Game launcher itself is open to everyone (it just shows a team's own games when
+  Series 65 isn't licensed). Studies is lazy-loaded (it bundles the 400-question
+  bank).
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion. Available to **every** signed-in user.
 - **Admin** (rose): Users, Teams, Badges, AI Instructions, Patch Notes, Site

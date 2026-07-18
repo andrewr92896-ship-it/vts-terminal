@@ -15,7 +15,7 @@ export function StudyCreation({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28, animation: 'fadeIn .25s ease' }}>
-      <TeamStudyDecks theme={theme} />
+      <TeamStudyDecks theme={theme} onNavigate={onNavigate} />
       <div style={{ maxWidth: 900, margin: '0 auto', width: '100%', borderTop: `1px solid ${theme.navBorder}`, paddingTop: 24 }}>
         <StudyGuideCreator theme={theme} onNavigate={onNavigate} />
       </div>

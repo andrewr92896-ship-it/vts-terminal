@@ -279,8 +279,12 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
   st_game: {
     title: 'Study Game',
-    intro: 'A gamified Series 65 self-quiz: answer questions, level up as you go, and track your score against the passing line.',
+    intro: 'Where you play the study games. Pick one from the launcher — the built-in Series 65 quiz (if your team has it) or any study game your team built in Study Creation — then answer questions, level up as you go, and track your score against the passing line.',
     steps: [
+      {
+        title: 'Pick a game to play',
+        body: 'The Study Game section opens on a launcher. Choose the built-in Series 65 quiz, or one of your team’s own study games (built in Study Creation). Use “← All study games” to come back and switch games. Everything below applies to the Series 65 quiz; team games play the same way over their own questions.',
+      },
       {
         title: 'Pick a category (or Mix)',
         body: 'Use the chips at the top to drill one area, or choose “Mix (weighted)” to get questions across all four areas in the same proportions as the real exam.',
