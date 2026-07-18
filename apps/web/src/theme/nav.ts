@@ -74,6 +74,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_notes', label: 'Patch Notes', icon: 'file-text' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
       { key: 'ad_early', label: 'Early Access', icon: 'sparkles' },
+      { key: 'ad_support', label: 'User Support', icon: 'life-buoy' },
       { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
       { key: 'ad_bugs', label: 'Bug Reports', icon: 'bug' },

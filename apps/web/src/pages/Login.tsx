@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
 import { EarlyAccessModal } from './EarlyAccessModal';
+import { ForgotPasswordModal } from './ForgotPasswordModal';
 
 export function Login() {
   const { login, demoLogin } = useAuth();
@@ -11,6 +12,7 @@ export function Login() {
   const [busy, setBusy] = useState(false);
   const [demoBusy, setDemoBusy] = useState(false);
   const [earlyAccessOpen, setEarlyAccessOpen] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -125,6 +127,23 @@ export function Login() {
           autoComplete="current-password"
           style={inputStyle}
         />
+        <div style={{ textAlign: 'right', marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={() => setForgotOpen(true)}
+            style={{
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              fontSize: 11.5,
+              color: '#7c9ce0',
+              letterSpacing: '0.2px',
+            }}
+          >
+            Forgot password?
+          </button>
+        </div>
 
         {error && (
           <div
@@ -249,6 +268,7 @@ export function Login() {
       </form>
 
       {earlyAccessOpen && <EarlyAccessModal onClose={() => setEarlyAccessOpen(false)} />}
+      {forgotOpen && <ForgotPasswordModal onClose={() => setForgotOpen(false)} />}
     </div>
   );
 }

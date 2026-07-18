@@ -1,6 +1,7 @@
 import type {
   AdminUser,
   EarlyAccessRequest,
+  PasswordResetRequest,
   AiUsage,
   AlertsData,
   Announcement,
@@ -190,6 +191,24 @@ export const api = {
   },
   adminDeleteEarlyAccess(id: string): Promise<{ ok: boolean }> {
     return request(`/api/admin/early-access/${id}`, { method: 'DELETE' });
+  },
+  // ---- Password reset requests ----
+  // Public: submit a forgotten-password request from the login screen. No auth.
+  requestPasswordReset(input: { email: string; note?: string }): Promise<{ ok: true }> {
+    return request('/api/password-reset', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  // Admin: review, resolve, and clear the requests under User Support.
+  adminListPasswordResets(): Promise<{ requests: PasswordResetRequest[] }> {
+    return request('/api/admin/password-resets');
+  },
+  adminResolvePasswordReset(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/admin/password-resets/${id}/resolve`, { method: 'POST' });
+  },
+  adminDeletePasswordReset(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/admin/password-resets/${id}`, { method: 'DELETE' });
   },
   adminListUsers(): Promise<{ users: AdminUser[] }> {
     return request('/api/admin/users');

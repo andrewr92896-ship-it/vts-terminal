@@ -81,7 +81,11 @@ Four workspaces in the sidebar; sections a user lacks the role for are hidden.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion. Available to **every** signed-in user.
 - **Admin** (rose): Users, Teams, Badges, AI Instructions, Patch Notes, Site
-  Wording, Early Access, View as role, Suggestions, Bug Reports. **Admins only.**
+  Wording, Early Access, User Support, View as role, Suggestions, Bug Reports.
+  **Admins only.** **User Support** (`ad_support`, `AdminSupport`) reviews
+  forgotten-password requests from the login screen — admins reset the account's
+  password under Users, email a temporary one from the domain address (there is
+  no automated mail yet), then mark the request resolved.
 
 Removed and gone (do not reintroduce or reference): the standalone To-Do
 workspace, Vitalis Wealth Management, Personal Finance, the Vitalis LLC business
@@ -180,6 +184,11 @@ gated to `team-vitalis` specifically.
 - Login `POST /api/auth/login` by email (or username fallback), generic 401,
   constant-time-ish (always runs a verify) to resist enumeration. One-click demo
   via `POST /api/auth/demo`.
+- **Forgot password:** the login screen's "Forgot password?" link posts to the
+  public `POST /api/password-reset` (email + optional note), which just records a
+  row in `password_reset_requests` and always answers 201 (no account lookup, no
+  enumeration). No email is sent automatically — admins handle these manually
+  under Admin ▸ User Support (`/api/admin/password-resets` list/resolve/delete).
 - Session cookie **`vts_session`**: random token, stored server-side in
   `sessions` (SHA-256 of the token; raw token only in the cookie), Fastify-signed
   with `SESSION_SECRET`, `httpOnly`, `sameSite: 'lax'`, `secure` per

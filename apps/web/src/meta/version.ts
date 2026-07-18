@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.5';
+export const APP_VERSION = 'Beta V 3.6';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.6',
+    date: 'July 18, 2026',
+    notes: [
+      'Added a “Forgot password?” option on the login screen — members can request a reset without needing an account.',
+      'New Admin ▸ User Support section collects those requests: review them, open a pre-filled email to send a temporary password, and mark each one resolved.',
+    ],
+  },
   {
     version: 'Beta V 3.5',
     date: 'July 18, 2026',

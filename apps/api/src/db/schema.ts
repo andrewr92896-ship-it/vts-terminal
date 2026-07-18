@@ -930,6 +930,22 @@ export const earlyAccessRequests = sqliteTable('early_access_requests', {
 });
 export type EarlyAccessRequestRow = typeof earlyAccessRequests.$inferSelect;
 
+// ---- Password reset requests ----
+// Submissions from the public "Forgot password?" form on the login screen. No
+// account is looked up and no email is sent automatically — these are requests
+// an admin reviews under Admin ▸ User Support, then resets the user's password
+// and emails a temporary one manually. `note` is an optional free-text message
+// from the person. `status` is 'pending' until an admin marks it 'resolved'.
+export const passwordResetRequests = sqliteTable('password_reset_requests', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  note: text('note'),
+  status: text('status').notNull().default('pending'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+});
+export type PasswordResetRequestRow = typeof passwordResetRequests.$inferSelect;
+
 // ---- App settings (generic key/value store) ----
 // A small key/value table for admin-editable site configuration that used to be
 // hardcoded in source: AI system-prompt overrides (keys "ai.<id>") and editable

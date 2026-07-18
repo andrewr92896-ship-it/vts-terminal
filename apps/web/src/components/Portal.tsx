@@ -41,6 +41,7 @@ import { AdminAiInstructions } from '../workspaces/admin/AdminAiInstructions';
 import { AdminPatchNotes } from '../workspaces/admin/AdminPatchNotes';
 import { AdminContent } from '../workspaces/admin/AdminContent';
 import { AdminEarlyAccess } from '../workspaces/admin/AdminEarlyAccess';
+import { AdminSupport } from '../workspaces/admin/AdminSupport';
 import { AdminViewAs } from '../workspaces/admin/AdminViewAs';
 import { AdminSuggestions } from '../workspaces/admin/AdminSuggestions';
 import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
@@ -159,6 +160,8 @@ function renderScreen(
       return <AdminContent theme={theme} />;
     case 'ad_early':
       return <AdminEarlyAccess theme={theme} />;
+    case 'ad_support':
+      return <AdminSupport theme={theme} />;
     default:
       return null;
   }

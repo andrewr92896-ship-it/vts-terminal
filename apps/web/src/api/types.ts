@@ -169,6 +169,18 @@ export interface EarlyAccessRequest {
   createdAt: number;
 }
 
+// A forgotten-password request submitted from the login screen's "Forgot
+// password?" form (mirror of the backend PasswordResetView). Reviewed under
+// Admin ▸ User Support.
+export interface PasswordResetRequest {
+  id: string;
+  email: string;
+  note: string | null;
+  status: 'pending' | 'resolved';
+  createdAt: number;
+  resolvedAt: number | null;
+}
+
 // Admin user-management view (matches the backend AdminUserView). Includes
 // the original created username, which never changes when a user renames.
 export interface AdminUser {
