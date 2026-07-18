@@ -111,7 +111,7 @@ const deckConfirmSchema = z.object({
       }),
     )
     .min(1)
-    .max(50),
+    .max(200),
 });
 
 // ---- Team study guides (slide presentations) ----

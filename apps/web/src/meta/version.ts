@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.9';
+export const APP_VERSION = 'Beta V 4.0';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.0',
+    date: 'July 18, 2026',
+    notes: [
+      'Study Creation ▸ upload a file: fixed a timeout (“Request failed (524)”) when generating questions from a larger file. The file is now read in parallel batches instead of one long request, so big question banks come through — and every question in the file is formatted, not just the first batch.',
+    ],
+  },
   {
     version: 'Beta V 3.9',
     date: 'July 18, 2026',

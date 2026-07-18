@@ -684,26 +684,99 @@ export async function generateDeckQuestions(input: {
   return parseGeneratedQuestions(raw, count, [], input.topic.trim().slice(0, 40) || 'General');
 }
 
+// Split a big blob of study text into bounded chunks so each is parsed by its
+// own (fast) model call. Breaks on blank lines first — usually the gap between
+// questions — then hard-splits any single piece that is still oversized.
+function chunkText(text: string, maxChars: number): string[] {
+  const trimmed = text.trim();
+  if (trimmed.length <= maxChars) return trimmed ? [trimmed] : [];
+  const pieces: string[] = [];
+  for (const para of trimmed.split(/\n\s*\n/)) {
+    let p = para;
+    while (p.length > maxChars) {
+      pieces.push(p.slice(0, maxChars));
+      p = p.slice(maxChars);
+    }
+    if (p.trim()) pieces.push(p);
+  }
+  const chunks: string[] = [];
+  let cur = '';
+  for (const piece of pieces) {
+    if (cur && cur.length + piece.length + 2 > maxChars) {
+      chunks.push(cur);
+      cur = piece;
+    } else {
+      cur = cur ? `${cur}\n\n${piece}` : piece;
+    }
+  }
+  if (cur.trim()) chunks.push(cur);
+  return chunks;
+}
+
+// Run an async fn over items with a cap on how many run at once (keeps us under
+// the model's concurrency/rate ceiling while still parsing chunks in parallel).
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    for (;;) {
+      const i = next++;
+      if (i >= items.length) return;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
 // Build a quiz from an uploaded text file: either parse questions already in the
 // text, or author questions from the source material / instructions it contains.
+// A big file is split into bounded chunks parsed in parallel — one giant model
+// call on the whole file runs long enough to hit the gateway's request timeout
+// (a 524), and it also lets a full question bank come through instead of being
+// capped at a single call's worth. Results are combined and de-duped by stem.
 export async function parseDeckFromText(input: {
   text: string;
   instructions?: string;
   count?: number;
 }): Promise<GeneratedQuestion[]> {
-  const count = Math.max(1, Math.min(50, Math.floor(input.count ?? 50) || 50));
-  const system = `You are an expert exam-question author. You are given a text file from a study author. It may ALREADY contain questions (with or without answers) — in that case, parse them faithfully and preserve their wording and intended answers. Or it may be source notes, an outline, or instructions — in that case, author questions from that material. Either way, do not invent facts beyond the supplied material. ${DECK_FORMAT}`;
-  const prompt = [
-    `Turn the following material into up to ${count} multiple-choice questions.`,
-    input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
-    '',
-    'MATERIAL:',
-    input.text,
-  ]
-    .filter(Boolean)
-    .join('\n');
-  const raw = await askClaude(prompt, system, deckMaxTokens(count));
-  return parseGeneratedQuestions(raw, count, [], 'General');
+  const overallCap = Math.max(1, Math.min(200, Math.floor(input.count ?? 200) || 200));
+  const system = `You are an expert exam-question author. You are given a text file (or a section of one) from a study author. It may ALREADY contain questions (with or without answers) — in that case, parse them faithfully and preserve their wording and intended answers. Or it may be source notes, an outline, or instructions — in that case, author questions from that material. Include EVERY question present in the material; do not skip any and do not add extras. Do not invent facts beyond the supplied material. ${DECK_FORMAT}`;
+  const chunks = chunkText(input.text, 6000);
+  const perChunk = await mapLimit(chunks, 6, async (chunk) => {
+    const prompt = [
+      'Turn the following material into multiple-choice questions — one per question found in it.',
+      input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
+      '',
+      'MATERIAL:',
+      chunk,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      const raw = await askClaude(prompt, system, 6000);
+      return parseGeneratedQuestions(raw, 100, [], 'General');
+    } catch {
+      // A single chunk failing (e.g. a transient rate limit) shouldn't sink the
+      // whole upload — the author reviews the result and can regenerate.
+      return [] as GeneratedQuestion[];
+    }
+  });
+
+  const out: GeneratedQuestion[] = [];
+  const seen = new Set<string>();
+  for (const q of perChunk.flat()) {
+    const key = q.stem.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+    if (out.length >= overallCap) break;
+  }
+  return out;
 }
 
 // ---- Team study-guide builder (a slide presentation, built by conversation) ----
