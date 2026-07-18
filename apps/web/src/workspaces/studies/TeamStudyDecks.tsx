@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import type { TeamDeck } from '../../api/types';
+import type { DeckQuestion, TeamDeck } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -192,6 +192,14 @@ function DeckCard({
 
 type Mode = 'ai' | 'file';
 
+function errorText(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 503) return 'AI isn’t configured yet — an API key needs to be set on the server.';
+    return e.message;
+  }
+  return 'Could not build the study game. Please try again.';
+}
+
 function DeckComposer({
   theme,
   onCreated,
@@ -206,58 +214,129 @@ function DeckComposer({
   const [topic, setTopic] = useState('');
   const [instructions, setInstructions] = useState('');
   const [count, setCount] = useState(15);
-  const [text, setText] = useState('');
+  const [fileText, setFileText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
+  // The formatted questions AI produced from the uploaded file, awaiting the
+  // author's confirmation. Null while still composing.
+  const [preview, setPreview] = useState<DeckQuestion[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function switchMode(m: Mode) {
+    setMode(m);
+    setPreview(null);
+    setError(null);
+  }
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setPreview(null);
+    setError(null);
     const reader = new FileReader();
     reader.onload = () => {
       const raw = typeof reader.result === 'string' ? reader.result : '';
-      setText(raw.slice(0, MAX_FILE_CHARS));
+      setFileText(raw.slice(0, MAX_FILE_CHARS));
       if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ''));
     };
     reader.readAsText(file);
   }
 
-  const canSubmit =
-    !busy && name.trim().length > 0 && (mode === 'ai' ? topic.trim().length > 0 : text.trim().length > 0);
-
-  async function submit() {
-    if (!canSubmit) return;
+  // ---- AI-from-a-topic: builds and saves in one step (unchanged). ----
+  const canBuildAi = !busy && name.trim().length > 0 && topic.trim().length > 0;
+  async function buildAi() {
+    if (!canBuildAi) return;
     setBusy(true);
     setError(null);
     try {
-      const res =
-        mode === 'ai'
-          ? await api.generateStudyDeck({
-              name: name.trim(),
-              topic: topic.trim(),
-              instructions: instructions.trim() || undefined,
-              count,
-            })
-          : await api.importStudyDeck({
-              name: name.trim(),
-              text,
-              instructions: instructions.trim() || undefined,
-              count,
-            });
+      const res = await api.generateStudyDeck({
+        name: name.trim(),
+        topic: topic.trim(),
+        instructions: instructions.trim() || undefined,
+        count,
+      });
       onCreated(res.decks, res.deck.id);
     } catch (e) {
-      setError(
-        e instanceof ApiError
-          ? e.status === 503
-            ? 'AI isn’t configured yet — an API key needs to be set on the server.'
-            : e.message
-          : 'Could not build the study game. Please try again.',
-      );
+      setError(errorText(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  // ---- Upload a file: AI formats the questions, the author reviews, then confirms. ----
+  const canGenerate = !busy && fileText.trim().length > 0;
+  async function generatePreview() {
+    if (!canGenerate) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.previewStudyDeck({
+        text: fileText,
+        instructions: instructions.trim() || undefined,
+      });
+      setPreview(res.questions);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canConfirm = !busy && name.trim().length > 0 && !!preview && preview.length > 0;
+  async function confirmCreate() {
+    if (!canConfirm || !preview) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.confirmStudyDeck({ name: name.trim(), questions: preview });
+      onCreated(res.decks, res.deck.id);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // The review screen after AI has formatted an uploaded file's questions.
+  if (mode === 'file' && preview) {
+    return (
+      <div style={{ ...card(theme), marginBottom: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff' }}>
+              Review the questions
+            </h3>
+            <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
+              AI formatted {preview.length} question{preview.length === 1 ? '' : 's'} from your file. Check them,
+              then create the game. The correct answer is highlighted.
+            </p>
+          </div>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Study game name — e.g. “Chart Patterns”"
+            maxLength={120}
+            disabled={busy}
+            style={field(theme)}
+          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
+            {preview.map((q) => (
+              <PreviewQuestion key={q.seq} q={q} theme={theme} muted={muted} />
+            ))}
+          </div>
+          {error && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={confirmCreate} disabled={!canConfirm} style={{ ...primaryBtn(theme, accentGrad), opacity: canConfirm ? 1 : 0.6 }}>
+              {busy ? 'Creating…' : `Create study game`}
+            </button>
+            <button onClick={() => { setPreview(null); setError(null); }} disabled={busy} style={ghostBtn(theme)}>
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -266,7 +345,7 @@ function DeckComposer({
         {(['ai', 'file'] as const).map((m) => (
           <button
             key={m}
-            onClick={() => setMode(m)}
+            onClick={() => switchMode(m)}
             style={{
               fontSize: 11.5,
               fontWeight: 600,
@@ -311,24 +390,33 @@ function DeckComposer({
               disabled={busy}
               style={{ ...field(theme), resize: 'vertical', minHeight: 52, fontFamily: 'inherit' }}
             />
+            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ fontSize: 12, color: muted, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                Number of questions
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={count}
+                  onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
+                  disabled={busy}
+                  style={{ ...field(theme), width: 72, padding: '7px 10px' }}
+                />
+              </label>
+              <button onClick={buildAi} disabled={!canBuildAi} style={{ ...primaryBtn(theme, accentGrad), opacity: canBuildAi ? 1 : 0.6 }}>
+                {busy ? 'Building…' : '✦ Build with AI'}
+              </button>
+            </div>
           </>
         ) : (
           <>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer' }}>
-                Choose a text file
+              <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                {fileName ? 'Choose a different file' : 'Choose a text file'}
                 <input type="file" accept=".txt,.md,.csv,text/*" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
               </label>
               {fileName && <span style={{ fontSize: 12, color: muted }}>{fileName}</span>}
             </div>
-            <textarea
-              value={text}
-              onChange={(e) => setText(e.target.value.slice(0, MAX_FILE_CHARS))}
-              placeholder="…or paste your questions or study notes here. AI turns them into a quiz."
-              rows={5}
-              disabled={busy}
-              style={{ ...field(theme), resize: 'vertical', minHeight: 110, fontFamily: 'inherit' }}
-            />
             <textarea
               value={instructions}
               onChange={(e) => setInstructions(e.target.value)}
@@ -338,31 +426,54 @@ function DeckComposer({
               disabled={busy}
               style={{ ...field(theme), resize: 'vertical', minHeight: 52, fontFamily: 'inherit' }}
             />
+            <button onClick={generatePreview} disabled={!canGenerate} style={{ ...primaryBtn(theme, accentGrad), alignSelf: 'flex-start', opacity: canGenerate ? 1 : 0.6 }}>
+              {busy ? 'Reading your file…' : '✦ Generate'}
+            </button>
           </>
         )}
 
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-          <label style={{ fontSize: 12, color: muted, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            {mode === 'ai' ? 'Number of questions' : 'Max questions'}
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={count}
-              onChange={(e) => setCount(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
-              disabled={busy}
-              style={{ ...field(theme), width: 72, padding: '7px 10px' }}
-            />
-          </label>
-          <button onClick={submit} disabled={!canSubmit} style={{ ...primaryBtn(theme, accentGrad), opacity: canSubmit ? 1 : 0.6 }}>
-            {busy ? 'Building…' : '✦ Build with AI'}
-          </button>
-        </div>
         <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
-          AI writes the questions and answer key — review them before your team relies on them.
+          {mode === 'ai'
+            ? 'AI writes the questions and answer key — review them before your team relies on them.'
+            : 'Upload a text file and AI formats the questions from it. You review them before the game is created.'}
         </div>
         {error && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{error}</div>}
       </div>
+    </div>
+  );
+}
+
+// One formatted question shown on the review screen, with the correct answer
+// highlighted so the author can sanity-check the answer key at a glance.
+function PreviewQuestion({ q, theme, muted }: { q: DeckQuestion; theme: Theme; muted: string }) {
+  return (
+    <div style={{ border: `1px solid ${theme.navBorder}`, borderRadius: 10, padding: '11px 13px', background: 'rgba(10,8,26,.4)' }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: theme.accent, marginBottom: 4 }}>
+        {q.seq}. {q.topic}
+      </div>
+      <div style={{ fontSize: 13, color: '#fff', fontWeight: 600, lineHeight: 1.4, marginBottom: 7 }}>{q.stem}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {q.options.map((o) => {
+          const correct = o.label === q.answer;
+          return (
+            <div
+              key={o.label}
+              style={{
+                fontSize: 12.5,
+                lineHeight: 1.4,
+                color: correct ? '#fff' : '#d7ccff',
+                fontWeight: correct ? 700 : 400,
+              }}
+            >
+              <span style={{ color: correct ? theme.accent : muted }}>{o.label}.</span> {o.text}
+              {correct && <span style={{ color: theme.accent }}> ✓</span>}
+            </div>
+          );
+        })}
+      </div>
+      {q.explanation && (
+        <div style={{ fontSize: 11.5, color: muted, marginTop: 7, lineHeight: 1.45 }}>Why: {q.explanation}</div>
+      )}
     </div>
   );
 }

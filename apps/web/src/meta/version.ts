@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.8';
+export const APP_VERSION = 'Beta V 3.9';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.9',
+    date: 'July 18, 2026',
+    notes: [
+      'Study Creation ▸ upload a file: uploading a text file now just accepts the file instead of dumping its contents into a box. Press Generate and AI reads the file and formats the questions for you, then shows the full list to review before you create the game. The “Max questions” field is gone.',
+    ],
+  },
   {
     version: 'Beta V 3.8',
     date: 'July 18, 2026',
