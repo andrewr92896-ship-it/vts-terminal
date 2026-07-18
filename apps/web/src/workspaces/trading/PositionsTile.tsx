@@ -13,18 +13,25 @@ const REFRESH_MS = 12_000;
 // positions as the Positions view. Two layouts, chosen per tile and saved with
 // the preset: a compact, scrollable list ('list', the default) that fits a
 // small grid cell, or the full Live Wall trading cards ('cards') for the whole
-// entry/fill/slippage/TP-SL/forex breakdown. Polls the Live Wall on its own
-// interval and keeps the last snapshot on a failed refresh.
+// entry/fill/slippage/TP-SL/forex breakdown. Each layout also has an "expand"
+// variant ('list-expand' / 'cards-expand') that grows the tile vertically to fit
+// every open trade instead of scrolling inside a fixed cell — the parent board
+// resizes the grid cell to the height we report via onMeasure. Polls the Live
+// Wall on its own interval and keeps the last snapshot on a failed refresh.
 export function PositionsTile({
   tile,
   editing,
   onChange,
   onRemove,
+  onMeasure,
 }: {
   tile: BoardTile;
   editing: boolean;
   onChange: (patch: Partial<BoardTile>) => void;
   onRemove: () => void;
+  // Report the tile's natural content height (px) while in an expand view so the
+  // board can size the grid cell to fit; null clears the override.
+  onMeasure?: (px: number | null) => void;
 }) {
   const { user } = useAuth();
   const { privacy } = usePrivacy();
@@ -58,12 +65,38 @@ export function PositionsTile({
   }, [load]);
 
   const view = tile.positionsView ?? 'list';
+  // Split the saved view into its two independent dimensions: the layout (list
+  // vs cards) and whether the tile grows to fit its content ("expand").
+  const layoutMode: 'list' | 'cards' = view.startsWith('cards') ? 'cards' : 'list';
+  const expand = view.endsWith('-expand');
   const showMoney = !!data?.canSeeBalances && !privacy;
   // The demo (and trading view-only roles) can browse but not close positions.
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
 
+  // In an expand view, measure the natural (unscrolled) tile height and hand it
+  // to the board so it can grow the grid cell to fit every trade. Re-measures on
+  // trade changes via the ResizeObserver; clears the override when not expanding.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!onMeasure) return;
+    if (!expand) {
+      onMeasure(null);
+      return;
+    }
+    const el = wrapRef.current;
+    if (!el) return;
+    const report = () => onMeasure(el.scrollHeight);
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [expand, onMeasure, view, data]);
+
   return (
-    <div style={tileWrap}>
+    <div
+      ref={wrapRef}
+      style={{ ...tileWrap, height: expand ? 'auto' : '100%', minHeight: expand ? '100%' : undefined }}
+    >
       <div className="tile-header" style={{ ...header, cursor: editing ? 'move' : 'default' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           {editing && <span style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>⠿</span>}
@@ -72,23 +105,35 @@ export function PositionsTile({
           {data && <span style={data.source === 'sample' ? sampleDot : liveDot}>{data.source === 'sample' ? 'sample' : 'live'}</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* List ⇄ Cards layout picker — only while editing the board, saved with
-              the preset. */}
+          {/* Layout picker — only while editing the board, saved with the preset.
+              List/Cards keep a fixed cell and scroll; the ↕ "expand" variants grow
+              the tile vertically to fit every trade. */}
           {editing && (
-            <div style={segWrap} title="How to show open positions in this tile">
+            <div style={segWrap} title="How to show open positions in this tile — the ↕ options grow the tile to fit every trade">
               <button onClick={() => onChange({ positionsView: 'list' })} style={segBtn(view === 'list')}>List</button>
               <button onClick={() => onChange({ positionsView: 'cards' })} style={segBtn(view === 'cards')}>Cards</button>
+              <button onClick={() => onChange({ positionsView: 'list-expand' })} style={segBtn(view === 'list-expand')}>List ↕</button>
+              <button onClick={() => onChange({ positionsView: 'cards-expand' })} style={segBtn(view === 'cards-expand')}>Cards ↕</button>
             </div>
           )}
           {editing && <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>}
         </div>
       </div>
 
-      <div style={{ ...body, padding: view === 'cards' ? 10 : '4px 0' }}>
+      <div
+        style={{
+          ...body,
+          padding: layoutMode === 'cards' ? 10 : '4px 0',
+          // Expand views size the cell to the content, so the body shouldn't
+          // flex-fill or scroll — it just lays out at its natural height.
+          flex: expand ? '0 0 auto' : 1,
+          overflowY: expand ? 'visible' : 'auto',
+        }}
+      >
         {!data && !error && <div style={hint}>Loading positions…</div>}
         {error && !data && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {data && data.trades.length === 0 && <div style={hint}>No open positions right now. New fills appear here automatically.</div>}
-        {data && data.trades.length > 0 && view === 'cards' && (
+        {data && data.trades.length > 0 && layoutMode === 'cards' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.trades.map((t) => (
               <TradeCard
@@ -105,7 +150,7 @@ export function PositionsTile({
             ))}
           </div>
         )}
-        {data && data.trades.length > 0 && view === 'list' &&
+        {data && data.trades.length > 0 && layoutMode === 'list' &&
           data.trades.map((t) => (
             <PositionRow key={t.id} t={t} mine={t.ownerId === user?.id} showMoney={showMoney} canSeeBalances={data.canSeeBalances} />
           ))}
@@ -203,6 +248,8 @@ const countChip: CSSProperties = {
 // List ⇄ Cards segmented toggle in the tile header.
 const segWrap: CSSProperties = {
   display: 'inline-flex',
+  flexWrap: 'wrap',
+  justifyContent: 'flex-end',
   background: 'rgba(4,12,30,.5)',
   border: `1px solid ${BORDER2}`,
   borderRadius: 6,
@@ -213,11 +260,12 @@ function segBtn(active: boolean): CSSProperties {
   return {
     fontSize: 10.5,
     fontWeight: 700,
+    whiteSpace: 'nowrap',
     color: active ? '#0c2768' : TEXT,
     background: active ? GOLD : 'transparent',
     border: 'none',
     borderRadius: 4,
-    padding: '3px 9px',
+    padding: '3px 8px',
     cursor: 'pointer',
   };
 }

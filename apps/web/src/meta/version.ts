@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.6';
+export const APP_VERSION = 'Beta V 3.7';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.7',
+    date: 'July 18, 2026',
+    notes: [
+      'Live Wall ▸ Master: the Open Positions tile now has two extra layout options — “List ↕” and “Cards ↕”. In these expanding modes the tile grows taller for each open trade instead of scrolling inside a fixed box, so every position is visible at a glance.',
+    ],
+  },
   {
     version: 'Beta V 3.6',
     date: 'July 18, 2026',

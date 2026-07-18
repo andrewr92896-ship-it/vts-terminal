@@ -758,7 +758,9 @@ export interface BoardTile {
   watchlistMode?: 'scroll' | 'static';
   // Positions tiles — how the open positions are laid out inside the tile:
   // 'list' (the compact default) or 'cards' (the full Live Wall trading cards).
-  positionsView?: 'list' | 'cards';
+  // The '-expand' variants use the same layouts but grow the tile vertically to
+  // fit every open trade (no inner scroll) instead of scrolling in a fixed cell.
+  positionsView?: 'list' | 'cards' | 'list-expand' | 'cards-expand';
   // News tiles — which topic subfeed to show ('all' or a NEWS_FEEDS key, e.g.
   // 'fed', 'eurusd', 'btc'). Undefined → all headlines.
   newsFeed?: string;
