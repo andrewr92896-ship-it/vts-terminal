@@ -335,6 +335,18 @@ export interface BrokerStatus {
 export type TradeSide = 'long' | 'short';
 export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
 
+// A trader's position designation (Chief Strategist / Chief Analyst), mirror of
+// the backend TradeDesignation. When a position's owner holds one of these
+// badges, the position is coloured with it across the desk (Live Wall, Trade
+// Log, History). `icon`/`color` come live from the badge registry.
+export interface TradeDesignation {
+  key: string;
+  label: string;
+  color: string;
+  icon: string;
+  emoji: string;
+}
+
 // Forex pip math attached to currency-pair positions (mirror of
 // apps/api/src/trading/forex.ts). Money fields are null when balances are hidden.
 export interface ForexLeg {
@@ -372,6 +384,7 @@ export interface LiveTrade {
   timeframe: string | null;
   openedAt: number | null;
   forex?: ForexMetrics | null; // present only for genuine currency pairs
+  designation?: TradeDesignation | null; // owner's Chief Strategist/Analyst badge
 }
 
 export interface BrokerLiveResult {
@@ -859,6 +872,7 @@ export interface TradeRecord {
   editable: boolean; // hand-logged trades are editable; broker-imported rows are read-only
   source: 'manual' | 'broker'; // where the row came from
   code: string | null; // desk code MMDDYY-N
+  designation: TradeDesignation | null; // owner's Chief Strategist/Analyst badge
 }
 
 export interface TradeSummary {
@@ -1056,6 +1070,7 @@ export interface HistoryRecord {
   openedAt: number | null;
   closedAt: number | null;
   code: string | null; // desk code MMDDYY-N
+  designation: TradeDesignation | null; // owner's Chief Strategist/Analyst badge
 }
 
 export interface HistoryGroup {

@@ -17,6 +17,7 @@ import {
 } from './connections.js';
 import { isDemoUser } from '../demo/identity.js';
 import { getDeskSettings } from './settings.js';
+import { designationsFor } from '../badges/designations.js';
 import { pushConfigured } from '../notifications/push.js';
 import { pushoverConfigured } from '../notifications/pushover.js';
 import { config } from '../config.js';
@@ -34,6 +35,15 @@ function withSlippage(trades: LiveTrade[]): LiveTrade[] {
 
 function newestFirst(a: LiveTrade, b: LiveTrade): number {
   return (b.openedAt ?? -Infinity) - (a.openedAt ?? -Infinity);
+}
+
+// Tag each position with its owner's designation (Chief Strategist / Chief
+// Analyst), when they hold one, so the wall can colour it. Mutates in place and
+// returns the same array for chaining.
+async function withDesignations(trades: LiveTrade[]): Promise<LiveTrade[]> {
+  const designations = await designationsFor(trades.map((t) => t.ownerId));
+  for (const t of trades) t.designation = designations.get(t.ownerId) ?? null;
+  return trades;
 }
 
 // Optionally strip open P/L (an account balance) from the wall. The trading desk
@@ -244,10 +254,12 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
       ownerId: user.id,
       owner: user.username,
     }));
-    const trades = gateBalances(
-      enrichForex(withSlippage([...sample, ...fundedLive]), 'USD'),
-      canSeeBalances,
-    ).sort(newestFirst);
+    const trades = await withDesignations(
+      gateBalances(
+        enrichForex(withSlippage([...sample, ...fundedLive]), 'USD'),
+        canSeeBalances,
+      ).sort(newestFirst),
+    );
     const brokers: BrokerLiveResult[] = BROKER_META.map((m) => ({
       connectionId: `sample-${m.key}`,
       ownerId: user.id,
@@ -290,7 +302,9 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
 
   // Fold funded/prop positions in only after reconcile, so they show on the wall
   // but never land in tradingPositions (Trade Log / History / Live Brokers).
-  const trades = gateBalances([...withSlip, ...fundedLive], canSeeBalances).sort(newestFirst);
+  const trades = await withDesignations(
+    gateBalances([...withSlip, ...fundedLive], canSeeBalances).sort(newestFirst),
+  );
   const failed = brokers.filter((b) => !b.ok);
   const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
 

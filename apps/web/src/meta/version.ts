@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.2';
+export const APP_VERSION = 'Beta V 3.3';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.3',
+    date: 'July 18, 2026',
+    notes: [
+      'New position designations: two badges — Chief Strategist (green) and Chief Analyst (red). Whoever an admin gives a badge to has their open positions colour-coded in that colour everywhere on the desk — the Live Wall cards, the Trade Log, and History all carry their icon and a matching accent.',
+      'Trade opened / closed notifications now lead with the trader’s designation (🟢 Chief Strategist / 🔴 Chief Analyst) when they hold one, so you can tell whose call it is at a glance.',
+    ],
+  },
   {
     version: 'Beta V 3.2',
     date: 'July 18, 2026',

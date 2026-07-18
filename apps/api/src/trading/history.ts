@@ -11,6 +11,7 @@ import { tradePips } from './forex.js';
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
 import { scopedTraderIds, scopedTraderIdsForUser, type Viewer } from './scope.js';
+import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 import type { LiveTrade } from './types.js';
 
 // A position opened within this window is treated as a fresh fill worth a push;
@@ -150,7 +151,12 @@ export async function reconcile(
   // calls reconcile.
   const hasEvents = opened.length > 0 || closed.length > 0 || retargeted.length > 0;
   const teamIds = hasEvents ? await scopedTraderIdsForUser(userId) : new Set<string>();
-  const who = ownerName ? `${ownerName} · ` : '';
+  // When the owner holds a position designation (Chief Strategist / Chief
+  // Analyst), lead the notification with its coloured circle + label so the
+  // "colour designation" carries into the push/Pushover text.
+  const desig = hasEvents ? (await designationsFor([userId])).get(userId) ?? null : null;
+  const tag = desig ? `${desig.emoji} ${desig.label} · ` : '';
+  const who = `${tag}${ownerName ? `${ownerName} · ` : ''}`;
   for (const t of opened) {
     const body = `${who}${t.side.toUpperCase()} ${t.units}${t.entryPrice ? ` @ ${t.entryPrice}` : ''}`;
     void sendToTradingDesk({
@@ -227,6 +233,9 @@ export interface HistoryRecord {
   openedAt: number | null;
   closedAt: number | null;
   code: string | null; // desk code MMDDYY-N, shared with the Trade Log
+  // The owner's position designation (Chief Strategist / Chief Analyst), when
+  // they hold one — colours the row. Null otherwise. Filled in by getHistory.
+  designation: TradeDesignation | null;
 }
 
 export interface HistoryGroup {
@@ -291,6 +300,7 @@ function toRecord(
     openedAt: row.openedAt ? row.openedAt.getTime() : null,
     closedAt: row.closedAt ? row.closedAt.getTime() : null,
     code: null, // filled in by getHistory from the desk-wide code index
+    designation: null, // filled in by getHistory from the owner's badges
   };
 }
 
@@ -480,9 +490,13 @@ export async function getHistory(
   const decided = wins + losses;
 
   const codes = await deskTradeCodeIndex(scopeIds);
+  // Colour each row by its owner's position designation (Chief Strategist /
+  // Chief Analyst), when they hold one.
+  const designations = await designationsFor(visible.map((r) => r.pos.userId));
   const trades = rows.map((r) => {
     const rec = toRecord(r, ownerOf.get(r.id) ?? '', viewerId, canSeeBalances);
     rec.code = codes.get(r.id) ?? null;
+    rec.designation = designations.get(r.userId) ?? null;
     return rec;
   });
 
