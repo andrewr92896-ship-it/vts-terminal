@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 3.1';
+export const APP_VERSION = 'Beta V 3.2';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 3.2',
+    date: 'July 18, 2026',
+    notes: [
+      'Reorganized Studies: you now build study guides in the Study Creation section (alongside study games), and the finished guides live in the Study Guides section, ready to present.',
+      'New: build a study guide from an existing presentation — upload a PowerPoint (.pptx) and its slides and images come in as a draft you can refine with VTS AI, add screenshots to, and save. Using Google Slides? Export it as PowerPoint (File ▸ Download ▸ Microsoft PowerPoint) and upload that.',
+    ],
+  },
   {
     version: 'Beta V 3.1',
     date: 'July 17, 2026',

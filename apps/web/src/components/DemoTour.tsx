@@ -55,14 +55,14 @@ export const DEMO_STEPS: TourStep[] = [
   {
     workspace: 'studies',
     screen: 'st_decks',
-    title: 'Study Creation — build-your-own study game',
-    body: 'Turn any topic — or a file you upload — into a study game: VTS AI writes the questions, then you play it as a leveling game with scoring and a team leaderboard. Perfect for drilling a trading playbook or any subject you like.',
+    title: 'Study Creation — build your own study content',
+    body: 'One place to make two things. Study games: turn any topic — or a file you upload — into a quiz VTS AI writes, then play it as a leveling game with a team leaderboard. Study guides: go back and forth with VTS AI to draft a slide deck, or upload a PowerPoint, then add your own screenshots.',
   },
   {
     workspace: 'studies',
     screen: 'st_guides',
     title: 'Study Guides — present what you know',
-    body: 'Build a study guide as a slide deck: go back and forth with VTS AI to draft and refine the slides, drop in your own screenshots, then present it like a guided walkthrough — the same stepped, slide-by-slide format as this tour.',
+    body: 'Every study guide your team builds in Study Creation lands here, ready to present like a guided walkthrough — the same stepped, slide-by-slide format as this tour.',
   },
   {
     workspace: 'trading',
