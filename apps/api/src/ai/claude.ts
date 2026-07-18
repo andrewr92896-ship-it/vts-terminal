@@ -779,6 +779,120 @@ export async function parseDeckFromText(input: {
   return out;
 }
 
+// ---- Team flashcard-set generation ----
+// A team builds its own flashcard set: either AI-generated from a topic, or
+// authored by Claude from an uploaded text file (a glossary, notes, or a list
+// of term/definition pairs). Both paths produce the same {term, def, topic}
+// shape. As with decks we validate STRUCTURE only (a non-empty term and
+// definition) and assign card numbers/ids server-side (see flashcardStore).
+
+export interface GeneratedFlashcard {
+  term: string;
+  def: string;
+  topic: string | null; // a short optional category label
+}
+
+function coerceFlashcard(raw: unknown): GeneratedFlashcard | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  const term = typeof o.term === 'string' ? o.term.trim() : '';
+  const def = typeof o.def === 'string' ? o.def.trim() : '';
+  if (!term || !def) return null;
+  const rawTopic = typeof o.topic === 'string' ? o.topic.trim() : '';
+  return { term: term.slice(0, 300), def: def.slice(0, 2000), topic: rawTopic ? rawTopic.slice(0, 60) : null };
+}
+
+// Parse + validate the model's {"cards":[...]} response into clean flashcards,
+// deduped by normalized term and capped at `cap`. Exported so the structural
+// contract can be unit-tested without a live model call.
+export function parseGeneratedFlashcards(raw: string, cap: number): GeneratedFlashcard[] {
+  const parsed = extractJson(raw) as { cards?: unknown } | null;
+  const list = Array.isArray(parsed?.cards) ? (parsed!.cards as unknown[]) : [];
+  const out: GeneratedFlashcard[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    const c = coerceFlashcard(item);
+    if (!c) continue;
+    const key = c.term.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+    if (out.length >= cap) break;
+  }
+  return out;
+}
+
+const FLASHCARD_FORMAT = [
+  'Respond with ONLY a JSON object of exactly this shape and nothing else:',
+  '{"cards":[{"term":"...","def":"...","topic":"..."}]}',
+  'Rules: "term" is a short word or phrase; "def" is a clear, concise definition of one to three sentences; "topic" is a short optional category label — reuse a small set of 2–5 topics across the whole set (use "" if there is no natural topic). No prose or code fences outside the JSON.',
+].join('\n');
+
+// AI-generate a fresh flashcard set from a topic the team named (plus optional
+// extra instructions). Returns validated cards; the caller stores them.
+export async function generateFlashcards(input: {
+  topic: string;
+  instructions?: string;
+  count: number;
+}): Promise<GeneratedFlashcard[]> {
+  const count = Math.max(1, Math.min(60, Math.floor(input.count) || 0));
+  const system = `You are an expert study-material author. Write clear, self-contained flashcards (a term and its definition) that teach real understanding of the subject the user names. Vary difficulty. Do not repeat terms. ${FLASHCARD_FORMAT}`;
+  const prompt = [
+    `Write ${count} flashcards about: ${input.topic}.`,
+    input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
+    `Produce exactly ${count} cards.`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const raw = await askClaude(prompt, system, Math.min(16000, 1000 + count * 160));
+  return parseGeneratedFlashcards(raw, count);
+}
+
+// Build a flashcard set from an uploaded text file: parse term/definition pairs
+// already present (a glossary, "term - definition" lines, etc.), or author cards
+// from source notes. A big file is split into bounded chunks parsed in parallel
+// (same reasoning as parseDeckFromText — avoids a single long call timing out and
+// lets a full glossary come through). Results are combined and de-duped by term.
+export async function parseFlashcardsFromText(input: {
+  text: string;
+  instructions?: string;
+  cap?: number;
+}): Promise<GeneratedFlashcard[]> {
+  const overallCap = Math.max(1, Math.min(400, Math.floor(input.cap ?? 400) || 400));
+  const system = `You are an expert study-material author. You are given a text file (or a section of one) from a study author. It may ALREADY contain term/definition pairs (a glossary, "term - definition" lines, or similar) — in that case, parse them faithfully and preserve their wording. Or it may be source notes or an outline — in that case, pull out the key terms and write a concise definition for each. Include EVERY term present in the material; do not skip any and do not invent facts beyond the supplied material. ${FLASHCARD_FORMAT}`;
+  const chunks = chunkText(input.text, 6000);
+  const perChunk = await mapLimit(chunks, 6, async (chunk) => {
+    const prompt = [
+      'Turn the following material into flashcards — one per term found in it.',
+      input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
+      '',
+      'MATERIAL:',
+      chunk,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      const raw = await askClaude(prompt, system, 6000);
+      return parseGeneratedFlashcards(raw, 200);
+    } catch {
+      // A single chunk failing shouldn't sink the whole upload — the author
+      // reviews the result and can regenerate.
+      return [] as GeneratedFlashcard[];
+    }
+  });
+
+  const out: GeneratedFlashcard[] = [];
+  const seen = new Set<string>();
+  for (const c of perChunk.flat()) {
+    const key = c.term.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(c);
+    if (out.length >= overallCap) break;
+  }
+  return out;
+}
+
 // ---- Team study-guide builder (a slide presentation, built by conversation) ----
 // A team builds a study guide — a presentation of titled slides, each with a
 // short body — through a back-and-forth chat. Claude drafts and revises the

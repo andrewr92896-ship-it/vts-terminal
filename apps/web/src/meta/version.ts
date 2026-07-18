@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.2';
+export const APP_VERSION = 'Beta V 4.3';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.3',
+    date: 'July 18, 2026',
+    notes: [
+      'Studies ▸ Study Creation: you can now build your own flashcard sets. Type the cards in, have AI generate them from a topic, or upload a text file (a glossary or “term – definition” lines) and AI formats them for you to review. Study any set with the full auto-rotate player — two-phase term/definition timing, “always show the definition”, topic filters, “I know this”, and Ask VTS AI on every card.',
+    ],
+  },
   {
     version: 'Beta V 4.2',
     date: 'July 18, 2026',

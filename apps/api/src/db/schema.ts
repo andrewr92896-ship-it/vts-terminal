@@ -885,6 +885,40 @@ export const studyDeckRuns = sqliteTable('study_deck_runs', {
 });
 export type StudyDeckRunRow = typeof studyDeckRuns.$inferSelect;
 
+// ---- Team-authored flashcard sets ----
+// A team builds its own flashcard set: term/definition cards typed in by hand,
+// AI-generated from a topic, or parsed by Claude from an uploaded text file. A
+// set is team-SHARED — any member builds it, the whole team studies it — and is
+// played with the same auto-rotate flashcard experience the portal has always
+// had. All rows are scoped by teamId.
+export const studyFlashcardSets = sqliteTable('study_flashcard_sets', {
+  id: text('id').primaryKey(),
+  teamId: text('team_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  // The member who built it; null if that account is later deleted.
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  source: text('source').notNull(), // 'manual' | 'ai_topic' | 'upload' | 'sample'
+  topics: text('topics').notNull(), // JSON string[] of this set's topic names
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyFlashcardSetRow = typeof studyFlashcardSets.$inferSelect;
+
+export const studyFlashcardCards = sqliteTable('study_flashcard_cards', {
+  id: text('id').primaryKey(),
+  setId: text('set_id')
+    .notNull()
+    .references(() => studyFlashcardSets.id, { onDelete: 'cascade' }),
+  teamId: text('team_id').notNull(), // denormalized for team-scoped guards
+  seq: integer('seq').notNull(), // stable card number within the set
+  term: text('term').notNull(),
+  def: text('def').notNull(),
+  topic: text('topic'), // optional topic label; null groups under "General"
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyFlashcardCardRow = typeof studyFlashcardCards.$inferSelect;
+
 // ---- Team-authored study guides (presentations) ----
 // A team builds a slide-deck study guide — a presentation of titled slides, each
 // with a body and an optional screenshot — through a back-and-forth conversation

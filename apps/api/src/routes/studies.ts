@@ -21,7 +21,9 @@ import {
   classifyQuestionsIntoSection,
   defineSeries65Term,
   generateDeckQuestions,
+  generateFlashcards,
   parseDeckFromText,
+  parseFlashcardsFromText,
 } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { getTeamName } from '../teams/service.js';
@@ -30,6 +32,12 @@ import { SERIES65_QUESTIONS } from '../studies/series65/bank.js';
 import { SERIES65_EXPLANATIONS } from '../studies/series65/explanations.js';
 import { SERIES65_VOCAB } from '../studies/series65/vocab.js';
 import { createDeck, deleteDeck, getDeck, listDecks } from '../studies/deckStore.js';
+import {
+  createFlashcardSet,
+  deleteFlashcardSet,
+  getFlashcardSet,
+  listFlashcardSets,
+} from '../studies/flashcardStore.js';
 import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
 import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
@@ -112,6 +120,32 @@ const deckConfirmSchema = z.object({
     )
     .min(1)
     .max(200),
+});
+
+// ---- Team flashcard sets ----
+// Building a set: AI from a topic, from an uploaded text file (previewed first),
+// or typed in by hand. The card list is re-validated on create (manual + upload
+// paths), since it comes back from the client.
+const flashcardGenerateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  topic: z.string().trim().min(1).max(200),
+  instructions: z.string().trim().max(2000).optional(),
+  count: z.number().int().min(1).max(60),
+});
+const flashcardImportPreviewSchema = z.object({
+  text: z.string().min(1).max(100_000),
+  instructions: z.string().trim().max(2000).optional(),
+});
+const flashcardCardSchema = z.object({
+  term: z.string().trim().min(1).max(300),
+  def: z.string().trim().min(1).max(2000),
+  topic: z.string().trim().max(60).nullable().optional(),
+});
+const flashcardCreateSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).optional(),
+  source: z.enum(['manual', 'upload']).optional(),
+  cards: z.array(flashcardCardSchema).min(1).max(400),
 });
 
 // ---- Team study guides (slide presentations) ----
@@ -315,6 +349,119 @@ export async function studiesRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     if (!me.teamId || !(await getDeck(id, me.teamId))) return reply.code(404).send({ error: 'Not found' });
     return { entries: await getDeckLeaderboard(id, me.id) };
+  });
+
+  // ---- Team flashcard sets ----
+  // A team builds and studies its own term/definition sets. Every set is
+  // team-scoped: a member creates it (typed in, AI-generated from a topic, or
+  // from an uploaded file) and the whole team studies it with the auto-rotate
+  // flashcard experience.
+
+  // The list of the caller's team flashcard sets.
+  app.get('/api/studies/flashcards', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.send({ sets: [] });
+    return { sets: await listFlashcardSets(teamId) };
+  });
+
+  // Create a set from cards the client supplies: typed in by hand, or the
+  // reviewed output of a file upload. No AI call — the cards are re-validated by
+  // the schema and card numbers/ids are assigned server-side.
+  app.post('/api/studies/flashcards', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
+    const parsed = flashcardCreateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one card are required' });
+    try {
+      const set = await createFlashcardSet({
+        teamId,
+        name: parsed.data.name,
+        description: parsed.data.description,
+        createdBy: request.currentUser!.id,
+        source: parsed.data.source ?? 'manual',
+        cards: parsed.data.cards.map((c) => ({ term: c.term, def: c.def, topic: c.topic ?? null })),
+      });
+      return { set, sets: await listFlashcardSets(teamId) };
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the flashcard set' });
+    }
+  });
+
+  // Create a set by generating cards from a topic with Claude.
+  app.post('/api/studies/flashcards/generate', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
+    const parsed = flashcardGenerateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name, topic, and card count are required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_flashcard_generate');
+      const cards = await generateFlashcards({
+        topic: parsed.data.topic,
+        instructions: parsed.data.instructions,
+        count: parsed.data.count,
+      });
+      if (cards.length === 0) {
+        return reply.code(422).send({ error: 'Claude could not produce cards for that topic. Try a clearer topic or add instructions.' });
+      }
+      const set = await createFlashcardSet({
+        teamId,
+        name: parsed.data.name,
+        description: parsed.data.topic,
+        createdBy: request.currentUser!.id,
+        source: 'ai_topic',
+        cards,
+      });
+      return { set, sets: await listFlashcardSets(teamId) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the flashcard set' });
+    }
+  });
+
+  // Step one of a file upload: AI reads the raw file text and formats it into
+  // cards the author can review before anything is saved. Returns the cards (with
+  // display sequence numbers) but does NOT create a set.
+  app.post('/api/studies/flashcards/import/preview', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
+    const parsed = flashcardImportPreviewSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'The file text is required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_flashcard_import');
+      const cards = await parseFlashcardsFromText({
+        text: parsed.data.text,
+        instructions: parsed.data.instructions,
+      });
+      if (cards.length === 0) {
+        return reply.code(422).send({ error: 'Claude could not build cards from that file. Make sure it contains terms or study material.' });
+      }
+      return { cards: cards.map((c, i) => ({ seq: i + 1, term: c.term, def: c.def, topic: c.topic })) };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not read that file' });
+    }
+  });
+
+  // One set with its cards (team-scoped).
+  app.get('/api/studies/flashcards/:id', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    const id = (request.params as { id: string }).id;
+    if (!teamId) return reply.code(404).send({ error: 'Not found' });
+    const set = await getFlashcardSet(id, teamId);
+    if (!set) return reply.code(404).send({ error: 'Flashcard set not found' });
+    return { set };
+  });
+
+  // Delete a set (creator or a team admin).
+  app.delete('/api/studies/flashcards/:id', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
+    const ok = await deleteFlashcardSet(id, me.teamId, me.id, isAdmin(parseRoles(me)));
+    if (!ok) return reply.code(403).send({ error: 'You can only delete flashcard sets you created.' });
+    return { sets: await listFlashcardSets(me.teamId) };
   });
 
   // ---- Team study guides (slide presentations) ----

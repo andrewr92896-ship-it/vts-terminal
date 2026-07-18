@@ -58,6 +58,10 @@ import type {
   DeckQuestion,
   TeamDeck,
   TeamDeckDetail,
+  Flashcard,
+  FlashcardInput,
+  TeamFlashcardSet,
+  TeamFlashcardSetDetail,
   StudyGuide,
   StudyGuideDetail,
   GuideSlide,
@@ -738,6 +742,44 @@ export const api = {
   },
   studyDeckLeaderboard(id: string): Promise<{ entries: LeaderboardEntry[] }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}/leaderboard`);
+  },
+  // ---- Team flashcard sets ----
+  // Team-built term/definition sets (typed in, AI-generated, or from an uploaded
+  // file), shared across the whole team and studied with auto-rotate.
+  studyFlashcardSets(): Promise<{ sets: TeamFlashcardSet[] }> {
+    return request('/api/studies/flashcards');
+  },
+  // Create a set from cards the client supplies (hand-typed, or the reviewed
+  // output of a file upload).
+  createFlashcardSet(input: {
+    name: string;
+    description?: string;
+    source?: 'manual' | 'upload';
+    cards: FlashcardInput[];
+  }): Promise<{ set: TeamFlashcardSetDetail; sets: TeamFlashcardSet[] }> {
+    return request('/api/studies/flashcards', { method: 'POST', body: JSON.stringify(input) });
+  },
+  generateFlashcardSet(input: {
+    name: string;
+    topic: string;
+    instructions?: string;
+    count: number;
+  }): Promise<{ set: TeamFlashcardSetDetail; sets: TeamFlashcardSet[] }> {
+    return request('/api/studies/flashcards/generate', { method: 'POST', body: JSON.stringify(input) });
+  },
+  // Step one of a file upload: AI formats the file text into cards the author
+  // reviews before anything is saved (no set is created yet).
+  previewFlashcardSet(input: {
+    text: string;
+    instructions?: string;
+  }): Promise<{ cards: Flashcard[] }> {
+    return request('/api/studies/flashcards/import/preview', { method: 'POST', body: JSON.stringify(input) });
+  },
+  studyFlashcardSet(id: string): Promise<{ set: TeamFlashcardSetDetail }> {
+    return request(`/api/studies/flashcards/${encodeURIComponent(id)}`);
+  },
+  deleteFlashcardSet(id: string): Promise<{ sets: TeamFlashcardSet[] }> {
+    return request(`/api/studies/flashcards/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
   // ---- Team study guides (slide presentations) ----
   // A team builds a study guide by conversing with VTS AI (which drafts the slide

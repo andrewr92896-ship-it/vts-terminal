@@ -272,6 +272,41 @@ export interface TeamDeckDetail extends TeamDeck {
   questions: DeckQuestion[];
 }
 
+// ---- Team-authored flashcard sets ----
+// A term/definition set a team built for itself (typed in, AI-generated, or from
+// an uploaded file). Shared across the whole team; studied with the auto-rotate
+// flashcard experience.
+export interface Flashcard {
+  seq: number;
+  term: string;
+  def: string;
+  topic: string | null;
+}
+
+export interface TeamFlashcardSet {
+  id: string;
+  name: string;
+  description: string | null;
+  source: string; // 'manual' | 'ai_topic' | 'upload' | 'sample'
+  topics: string[];
+  cardCount: number;
+  createdBy: string | null;
+  createdByName: string | null;
+  createdAt: number;
+}
+
+export interface TeamFlashcardSetDetail extends TeamFlashcardSet {
+  cards: Flashcard[];
+}
+
+// A card as typed/reviewed in the composer before a set is created (no seq yet
+// for hand-typed rows; the preview step assigns seq for the review list).
+export interface FlashcardInput {
+  term: string;
+  def: string;
+  topic?: string | null;
+}
+
 // ---- Team-authored study guides (slide presentations) ----
 // A study guide a team built: an ordered slideshow of slides, each with a title,
 // a body, and an optional screenshot. Built through a back-and-forth chat with
