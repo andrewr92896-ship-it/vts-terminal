@@ -19,7 +19,7 @@ interface Msg {
 // Suggested prompts tailored to the current workspace.
 const SUGGESTIONS_BY_WS: Record<string, string[]> = {
   trading: ['How do I log a trade by hand?', 'What’s a healthy daily drawdown buffer?', 'How do I read slippage in my trade log?'],
-  studies: ['Explain the brochure rule (Series 65)', 'Quiz me on fiduciary duty', 'Define a discretionary account'],
+  studies: ['Explain a concept from my study set', 'Quiz me on a topic', 'Give me a memory hook for a term'],
 };
 const DEFAULT_SUGGESTIONS = ['Summarize what this portal can do', 'What can you help me with here?'];
 

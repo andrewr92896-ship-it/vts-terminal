@@ -5,7 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { overallLevel, levelAtStep, streakMultiplier, STREAK_STEP, round1 } from './series65Game';
+import { overallLevel, levelAtStep, streakMultiplier, STREAK_STEP, round1 } from './gameEngine';
 import {
   deckGameKey,
   deckLifetimeAccuracy,
@@ -40,7 +40,7 @@ function shuffledIndices(n: number): number[] {
   return a;
 }
 
-// Play a team-built study deck. Reuses the exact Series 65 level ladder, streak
+// Play a team-built study deck. Uses the shared level ladder, streak
 // multiplier, and session/lifetime scoring (via studyEngine), just over the
 // team's own questions and categories. Progress is per-user, per-deck, synced to
 // the account; the demo plays locally without saving.

@@ -70,8 +70,8 @@ import type {
   User,
 } from './types';
 
-// A flashcard the user added to their own deck; topic matches the Series 65
-// topics so it filters alongside the built-in cards.
+// A flashcard the user added to their own personal deck (a term, a definition,
+// and an optional topic label).
 export interface CustomVocabCard {
   term: string;
   def: string;
@@ -94,15 +94,6 @@ export interface NotifPrefFlags {
   moveTp: boolean;
 }
 
-// The team-gated Series 65 bank payload (the licensed content, served only to
-// the owner's team). Shapes come from the studies meta module so the study
-// screens and this client agree on one type.
-import type { Series65Question, VocabCard } from '../workspaces/studies/series65Meta';
-export interface Series65BankResponse {
-  questions: Series65Question[];
-  explanations: Record<number, string>;
-  vocab: VocabCard[];
-}
 
 // The payload for the Market News "AI overview" — whatever the active feed is
 // currently showing, sent for Claude to summarize.
@@ -604,12 +595,6 @@ export const api = {
   removeLearnedTerm(term: string): Promise<{ terms: string[] }> {
     return request(`/api/studies/learned?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
   },
-  // The team-gated Series 65 question bank + explanations + vocabulary. Only the
-  // owner's team may load it (the server returns 403 otherwise); the licensed
-  // content never ships in the bundle.
-  series65Bank(): Promise<Series65BankResponse> {
-    return request('/api/studies/series65/bank');
-  },
   studyGame(): Promise<{ state: string | null }> {
     return request('/api/studies/game');
   },
@@ -664,7 +649,7 @@ export const api = {
   removeVocabWord(term: string): Promise<{ cards: CustomVocabCard[] }> {
     return request(`/api/studies/vocab?term=${encodeURIComponent(term)}`, { method: 'DELETE' });
   },
-  // Starred quiz questions (ids into the static Series 65 question bank).
+  // Starred quiz questions (per-user, by question id).
   studyStarred(): Promise<{ ids: number[] }> {
     return request('/api/studies/starred');
   },
@@ -692,7 +677,7 @@ export const api = {
   },
   // ---- Team study games (decks) ----
   // Team-built quizzes (AI-generated or from an uploaded file), shared across
-  // the whole team and played with the same mechanics as the Series 65 game.
+  // the whole team and played with the level-up mechanics.
   studyDecks(): Promise<{ decks: TeamDeck[] }> {
     return request('/api/studies/decks');
   },

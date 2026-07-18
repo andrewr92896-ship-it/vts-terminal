@@ -1,11 +1,11 @@
-// Shared ranking math for the Study Game leaderboards. Both the Series 65 game
+// Shared ranking math for the study-game leaderboards. Both the per-user game
 // (game.ts) and team decks (deckGame.ts) store the SAME opaque GameState blob
 // (owned by the web client), so the few headline numbers used to rank players
 // are read the same way for both. Kept in one place so the two leaderboards
 // never drift.
 
 // Level ladder shape, kept in step with the web client (studyEngine.ts /
-// series65Game.ts): 12 levels x 5 sub-levels, each sub-level costing one more
+// gameEngine.ts): 12 levels x 5 sub-levels, each sub-level costing one more
 // correct answer than the last (10, 11, 12, …). Used to derive a run's "best
 // level reached" step (0..59) when the stored state predates that field.
 const BASE_SUBLEVEL_COST = 10;
@@ -84,7 +84,7 @@ export function statsFromState(raw: string): RunStats | null {
 }
 
 // Validate that a value is a JSON string within a size ceiling. Returns the
-// canonical string to store, or null if it is unusable. Shared by the Series 65
+// canonical string to store, or null if it is unusable. Shared by the per-user
 // game and team decks.
 const MAX_STATE_BYTES = 64 * 1024;
 export function normalizeState(raw: unknown): string | null {

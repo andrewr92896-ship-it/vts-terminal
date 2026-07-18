@@ -262,78 +262,72 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
-  // ---- Studies (Series 65) ----
+  // ---- Studies ----
   st_home: {
     title: 'Study Hub',
-    intro: 'Your study home. Series 65 is the first track — the rest of the tabs (Practice Quiz, Flashcards, Progress) all work from it.',
+    intro: 'Your study home. Everything here is built by your team in Study Creation — study games, flashcard sets, and study guides — and studied from their own sections.',
     steps: [
       {
-        title: 'Open a subject',
-        body: 'The Series 65 card shows how many questions and flashcards are loaded. Use its buttons to jump straight into the quiz, flashcards, or your progress.',
+        title: 'Build, then study',
+        body: 'Start in Study Creation to make a study game, a flashcard set, or a guide. Then use the Study Game, Test Mode, and Progress sections to play, test, and track any game your team built.',
       },
       {
         title: 'Your progress is saved',
-        body: 'Quiz accuracy is stored on this device per login, so you can close the tab and pick up where you left off.',
+        body: 'Your level and accuracy for each game are saved to your account, so you can close the tab and pick up where you left off — on any device.',
       },
     ],
   },
   st_game: {
     title: 'Study Game',
-    intro: 'Where you play the study games. Pick one from the launcher — the built-in Series 65 quiz (if your team has it) or any study game your team built in Study Creation — then answer questions, level up as you go, and track your score against the passing line.',
+    intro: 'Pick one of your team’s study games to play — answer questions, level up as you go, and climb your team’s leaderboard.',
     steps: [
       {
         title: 'Pick a game to play',
-        body: 'The Study Game section opens on a launcher. Choose the built-in Series 65 quiz, or one of your team’s own study games (built in Study Creation). Use “← All study games” to come back and switch games. Everything below applies to the Series 65 quiz; team games play the same way over their own questions.',
-      },
-      {
-        title: 'Pick a category (or Mix)',
-        body: 'Use the chips at the top to drill one area, or choose “Mix (weighted)” to get questions across all four areas in the same proportions as the real exam.',
-      },
-      {
-        title: 'Build your own subsection',
-        body: 'Want to drill something narrower, like Bonds or Compliance? Click “✦ New subsection”, type a topic name, and VTS AI scans the whole question bank and gathers every question that fits into its own chip. Delete a subsection anytime with the × on its chip.',
-      },
-      {
-        title: 'Practice mode (no scoring)',
-        body: 'Flip on “Practice mode” to answer freely without touching your score, levels, or lifetime totals — ideal for grinding a specific subsection. Turn it off to have answers count again. (Starred review is always practice-only.)',
+        body: 'The Study Game section lists your team’s study games (built in Study Creation). Tap Play on one to start; use “‹ All study games” to come back and switch games.',
       },
       {
         title: 'Answer the question',
-        body: 'Answering takes two steps: click an option to highlight it, then click Confirm (or press Enter/Space) to submit. Nothing is scored until you confirm, so you can change your pick first. On the keyboard, A–D select and Enter/Space confirm. When the answer is revealed the correct choice is highlighted, with a quick definition when available.',
-      },
-      {
-        title: 'Undo a slip',
-        body: 'Misclicked or want a mulligan? The ↩ Undo button reverts your last answer — it restores your score and stats and re-presents that question. It can be used once every 10 questions, then greys out until 10 more have elapsed.',
+        body: 'Click an option to highlight it, then Confirm to submit. When the answer is revealed the correct choice is highlighted, with a short explanation when the author included one. “I Don’t Know” reveals the answer and counts as incorrect.',
       },
       {
         title: 'Watch your score',
-        body: 'Your score is your lifetime accuracy — every correct answer divided by every question attempted, to one decimal — with the change from the previous question. The bar marks the ~72% pass line and the status shows how many points you are above or below it.',
+        body: 'Your score is your lifetime accuracy on that game — every correct answer divided by every question attempted — with the change from the previous question.',
       },
       {
         title: 'Level up',
-        body: 'One level ladder spans every category: 12 themed levels (🥚 Egg → 💎 Diamond), each with five star sub-levels ★☆☆☆☆ → ★★★★★ that shade the level colour from dark to light. Every 10 correct answers is one sub-level up; clearing the fifth advances to the next level’s emoji and colour.',
+        body: 'One level ladder spans the whole game: 12 themed levels (🥚 Egg → 💎 Diamond), each with five star sub-levels that shade the level colour from dark to light. Answer correctly to climb; a run of correct answers adds a streak multiplier.',
       },
       {
-        title: 'Flashcards',
-        body: 'Flip the Quiz / Flashcards switch at the top right to study the Series 65 vocabulary deck — filter by topic, tap a card to reveal the definition, or turn on auto-rotate (term 10s / definition 20s).',
+        title: 'Leaderboard & reset',
+        body: 'Flip to the Leaderboard tab to see how your team stacks up. “Reset” banks your current run to the leaderboard as a past run, then clears your level and score to start fresh — your best level ever reached is kept.',
+      },
+    ],
+  },
+  st_test: {
+    title: 'Test Mode',
+    intro: 'Sit a graded test drawn from one of your team’s study games.',
+    steps: [
+      {
+        title: 'Pick a game and set it up',
+        body: 'Choose a game, then set how many questions to draw and the pass line (default 72%). Choose “feedback as you go” to see each answer, or leave it off for a silent exam graded at the end.',
       },
       {
-        title: 'Reset (and bank your run)',
-        body: 'Tap “I Don’t Know” to reveal the answer and move on (it counts as incorrect). “Reset progress” saves the run you just played to the leaderboard as a past run — then clears your levels and score to start fresh. The highest level you have ever reached is kept, shown as a “Best reached” badge.',
+        title: 'Your result',
+        body: 'At the end you get a score, a pass/fail against your pass line, and a per-topic breakdown so you can see which areas need more work. Take another anytime.',
       },
     ],
   },
   st_progress: {
     title: 'Progress',
-    intro: 'A snapshot of how you are doing in the Series 65 Study Game.',
+    intro: 'A snapshot of how you are doing on any of your team’s study games.',
     steps: [
       {
-        title: 'Overall score',
-        body: 'The top figure is your lifetime accuracy — correct answers divided by questions attempted — with PASSING / NOT PASSING relative to the ~72% line.',
+        title: 'Pick a game',
+        body: 'Choose a game to see your progress on it: your current level, your best level ever reached, and your lifetime accuracy.',
       },
       {
-        title: 'Level and accuracy',
-        body: 'Your overall level (one ladder across all categories, advancing every 10 correct answers) sits up top, and each exam area shows how many questions you have answered there and your accuracy — so you can see which areas need more work.',
+        title: 'Accuracy by topic',
+        body: 'Each of the game’s topics shows how many questions you have answered there and your recent accuracy — so you can see where to focus.',
       },
     ],
   },

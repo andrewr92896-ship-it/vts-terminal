@@ -364,7 +364,7 @@ function reconcile(prev: BuildSlide[], draft: GuideDraftSlide[]): BuildSlide[] {
 const SEED_PROMPTS = [
   'Build a study guide on candlestick reversal patterns.',
   'Create a guide explaining risk-to-reward and position sizing.',
-  'Make a study guide for the Series 65 economics section.',
+  'Make a study guide on the basics of options trading.',
 ];
 
 function GuideBuilder({

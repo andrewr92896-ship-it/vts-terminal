@@ -5,7 +5,7 @@ import { studyGame, studyGameRuns, users } from '../db/schema.js';
 import { accuracyOf, statsFromState, type RunStats } from './gameStats.js';
 
 // Per-user Study Game state, stored as an opaque JSON string. The shape is owned
-// by the web client (see series65Game.ts); the server only persists and returns
+// by the web client; the server only persists and returns
 // it verbatim, so progress follows the learner across devices.
 
 // The state validator and the ranking-number extraction live with the other
@@ -32,7 +32,7 @@ export async function saveGame(userId: string, state: string): Promise<void> {
 }
 
 // ---- Leaderboard ----
-// The Study Game state is owned by the web client (series65Game.ts), but the
+// The study-game state is owned by the web client, but the
 // few headline numbers needed to rank players are simple enough to read here.
 // The score is plain lifetime accuracy (correct / attempted).
 

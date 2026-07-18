@@ -6,7 +6,7 @@ import { accuracyOf, statsFromState } from './gameStats.js';
 import type { LeaderboardEntry } from './game.js';
 
 // Per-user, per-deck Study Game state for team decks — the exact same opaque
-// GameState blob the Series 65 game stores, just keyed by (userId, deckId). The
+// per-game state blob, keyed by (userId, deckId). The
 // leaderboard mirrors game.ts's, filtered to one deck; everyone who has played a
 // deck is a teammate by construction (the deck is team-scoped), so ranking by
 // deck already ranks within the team.
@@ -31,7 +31,7 @@ export async function saveDeckGame(userId: string, deckId: string, state: string
 }
 
 // Bank a deck run to its leaderboard (called when the learner resets a deck's
-// progress). No-op on an empty/unparseable run, like the Series 65 game.
+// progress). No-op on an empty/unparseable run.
 export async function archiveDeckRun(userId: string, deckId: string, raw: string): Promise<void> {
   const stats = statsFromState(raw);
   if (!stats) return;

@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.3';
+export const APP_VERSION = 'Beta V 4.4';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.4',
+    date: 'July 18, 2026',
+    notes: [
+      'Studies is now fully self-serve: every study game, flashcard set, and test is something your team builds. The Study Game, Test Mode, and Progress sections each let you pick one of your team’s games and play it, sit a graded test on it (set your own length and pass line), or see your level and accuracy on it.',
+      'Test Mode is now per-game and configurable — choose how many questions to draw and the pass line, with a per-topic breakdown of your result at the end.',
+    ],
+  },
   {
     version: 'Beta V 4.3',
     date: 'July 18, 2026',

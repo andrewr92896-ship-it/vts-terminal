@@ -102,12 +102,6 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
   return NAV.find((w) => w.key === ws);
 }
 
-// Studies sections that belong to the Series 65 track (the owner's licensed
-// content). The sidebar hides these for teams that can't use Series 65; the
-// Subjects hub, the Study Game launcher, and the team-built Study Creation
-// section stay visible to everyone (the launcher just shows a team's own games).
-export const SERIES65_ONLY_SECTIONS = new Set(['st_test', 'st_progress']);
-
 // Trading sections gated behind the admin-assigned `funded` role. The sidebar
 // hides these unless the viewer holds the role (see canAccessFunded); the demo
 // and the public never see them.

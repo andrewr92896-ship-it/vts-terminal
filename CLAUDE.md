@@ -70,25 +70,24 @@ Four workspaces in the sidebar; sections a user lacks the role for are hidden.
   (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Test Mode
   (`st_test`), Progress (`st_progress`), Study Creation (`st_decks`), Study Guides
-  (`st_guides`). **Study Game** (`StudyGameHub`) is a **launcher**, not a single
-  game: it lists the games you can play — the built-in Series 65 quiz (owner's
-  team only) plus your team's own study games — and renders the chosen one
-  (`StudyGame` for Series 65, `TeamStudyGame` for a deck) with a back path to the
-  picker. Deep-links skip the picker: `requestStudyView` (Hub/Progress "Play")
-  drops into Series 65; `requestStudyDeck` (a deck's Play button in Study
-  Creation) opens that deck — both via `studiesNav.ts`. **Study Creation**
+  (`st_guides`). **All study content is team-built** — there is no hardcoded
+  subject. **Study Game / Test Mode / Progress** are the same launcher
+  (`StudyGameHub`, parameterized by `target` = `play` | `test` | `progress`): each
+  lists your team's own study games and, when you pick one, opens the chosen
+  experience — the quiz+leaderboard player (`TeamStudyGame`), a graded test
+  (`DeckTestMode`, configurable size + pass line), or a progress summary
+  (`DeckProgress`). A deck's Play button in Study Creation deep-links into play via
+  `requestStudyDeck`/`consumeStudyDeck` (`studiesNav.ts`). **Study Creation**
   (`StudyCreation`) is the make-things section (create only — it does **not**
-  play games inline): it stacks the team study-game maker (`TeamStudyDecks`) and
-  the study-guide builder (`StudyGuideCreator` — build with VTS AI or upload a
-  `.pptx`, parsed client-side in `lib/pptx.ts`); creating a game sends you to the
-  Study Game launcher to play it. **Study Guides** (`StudyGuidesLibrary`) is the
-  present/manage side — the finished guides only. **Series 65** is the first
-  subject; its **Series 65-only** sections are Test Mode (`st_test`) and Progress
-  (`st_progress`) plus the question bank, gated to the owner's team only
-  (`SERIES65_ONLY_SECTIONS` in the UI; `canUseSeries65` on the server). The Study
-  Game launcher itself is open to everyone (it just shows a team's own games when
-  Series 65 isn't licensed). Studies is lazy-loaded (it bundles the 400-question
-  bank).
+  play inline): it stacks the study-game maker (`TeamStudyDecks`), the
+  **flashcard-set maker** (`TeamFlashcards` — type cards in, AI-generate from a
+  topic, or upload a `.txt`; studied with the auto-rotate `FlashcardSetPlayer`),
+  and the study-guide builder (`StudyGuideCreator` — build with VTS AI or upload a
+  `.pptx`, parsed client-side in `lib/pptx.ts`). **Study Guides**
+  (`StudyGuidesLibrary`) is the present/manage side — the finished guides only.
+  The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
+  by `studyEngine.ts` for per-deck state and mirrored server-side in
+  `gameStats.ts`). Studies is lazy-loaded.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion. Available to **every** signed-in user.
 - **Admin** (rose): Users, Teams, Badges, AI Instructions, Patch Notes, Site
@@ -123,8 +122,8 @@ A **trading team** is an admin-managed group; a user belongs to at most one
 History, broker capital), Studies **leaderboards**, **team chat**, and
 notification recipients — a trader only ever sees their own team's data (or just
 their own if team-less). Default team `team-vitalis` / "Vitalis Trading Team"
-(seeded on boot; team-less users are adopted into it). Series 65 content is
-gated to `team-vitalis` specifically.
+(seeded on boot; team-less users are adopted into it). Study games, flashcard
+sets, and guides are all team-scoped — a team only sees its own.
 
 ## AI / Ask Claude (`apps/api/src/ai`)
 
@@ -146,7 +145,7 @@ gated to `team-vitalis` specifically.
     (filled only for Trading/Studies; **empty in Admin/Help**, so the base
     persona must carry the whole site map) and `{name}`.
   - `ws.trading`, `ws.studies` — injected into `{workspace}`.
-  - `tutor` (Series 65), `market_overview` (Market News "Brief me", keep
+  - `tutor` (generic study tutor), `market_overview` (Market News "Brief me", keep
     `{label}`), `metrics_coach` (prop-challenge read), `support` (bug intake —
     **structured**: must return the exact JSON `{needMore, reply}` or intake
     breaks).

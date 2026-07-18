@@ -43,9 +43,9 @@ function cannedAsk(body: unknown): string {
 function cannedTutor(body: unknown): string {
   const q = clip(lastUserMessage(body), 160);
   return [
-    'This is a scripted sample reply in the demo; the live Series 65 tutor runs on Claude.',
+    'This is a scripted sample reply in the demo; the live study tutor runs on Claude.',
     q ? `On "${q}":` : '',
-    'In the real app I explain why the correct answer is right, why the tempting distractors are wrong, and give a short memory hook, all sized for an exam candidate.',
+    'In the real app I explain why the correct answer is right, why the tempting distractors are wrong, and give a short memory hook, all sized for a learner.',
   ]
     .filter(Boolean)
     .join(' ');

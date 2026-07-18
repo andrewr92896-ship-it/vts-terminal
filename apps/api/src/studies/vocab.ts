@@ -4,7 +4,7 @@ import { db } from '../db/index.js';
 import { studyVocab } from '../db/schema.js';
 
 // Per-user custom flashcard deck: words the learner added themselves, with an
-// AI-generated definition and a Series 65 topic. Mirrors the learned-terms
+// AI-generated definition and a topic label. Mirrors the learned-terms
 // service so a custom deck follows the user across devices.
 
 export interface VocabCard {

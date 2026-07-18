@@ -1,10 +1,8 @@
-// Generic game state for team-authored study decks. It reuses the exact same
-// level ladder, streak multiplier, and session/lifetime scoring as the Series 65
-// game (the pure, topic-agnostic math is imported from series65Game so there is
-// one source of truth), but its per-category bookkeeping is keyed by the deck's
-// own category names instead of the four fixed Series 65 topics. The stored blob
-// shape matches the Series 65 GameState for its headline fields, so the server
-// leaderboard reads both the same way (gameStats.ts).
+// Per-game state for team-authored study decks. It uses the shared, topic-
+// agnostic level ladder, streak multiplier, and session/lifetime scoring from
+// gameEngine, with per-category bookkeeping keyed by the deck's own category
+// names. The stored blob's headline fields match what the server leaderboard
+// reads (gameStats.ts).
 
 import {
   WINDOW,
@@ -14,7 +12,7 @@ import {
   stepForCorrect,
   type CatState,
   type SessionScore,
-} from './series65Game';
+} from './gameEngine';
 
 export interface DeckGameState {
   recent: boolean[]; // last WINDOW outcomes overall
@@ -44,19 +42,19 @@ export function emptyDeckGame(categories: string[]): DeckGameState {
   };
 }
 
-// localStorage key for a deck's per-user state (mirrors gameKey for Series 65).
+// localStorage key for a deck's per-user state.
 export function deckGameKey(userId: string | undefined, deckId: string): string {
   return `vts_deck_game_${userId ?? 'anon'}_${deckId}`;
 }
 
 // Lifetime accuracy: correct / attempted across the whole run. Mirrors
-// lifetimeAccuracy() in series65Game.
+// lifetimeAccuracy() in gameEngine.
 export function deckLifetimeAccuracy(g: DeckGameState): number | null {
   return g.totalAttempted > 0 ? round1((100 * g.totalCorrect) / g.totalAttempted) : null;
 }
 
 // Current fixed block score (up to WINDOW answers, resetting every WINDOW).
-// Mirrors sessionScore() in series65Game.
+// Mirrors the session-score math in gameEngine.
 export function deckSessionScore(g: DeckGameState): SessionScore | null {
   const total = Math.max(0, Math.floor(g.totalAttempted) || 0);
   if (total <= 0) return null;
@@ -78,7 +76,7 @@ export function deckSessionScore(g: DeckGameState): SessionScore | null {
 }
 
 // Record one answer, returning a new immutable state. Mirrors recordAnswer() in
-// series65Game (same streak-scaled level math), but keyed by a deck category.
+// gameEngine (same streak-scaled level math), but keyed by a deck category.
 export function recordDeckAnswer(g: DeckGameState, category: string, correct: boolean): DeckGameState {
   const cat = g.cats[category] ?? { answered: 0, correct: 0, recent: [] };
   const totalCorrect = g.totalCorrect + (correct ? 1 : 0);

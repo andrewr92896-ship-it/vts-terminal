@@ -25,10 +25,10 @@ const SCREENS: Record<string, ScreenInfo> = {
   td_trading: { title: 'Trading To Do', blurb: 'Trading tasks and reminders, shared with your team.', stage: 3 },
   admin: { title: 'Admin', blurb: 'User and role management, broker connection health, and audit settings.', stage: 3 },
   // Studies
-  st_home: { title: 'Study Hub', blurb: 'Pick a subject (Series 65 first). Each track has its own flashcards, quizzes, and progress.', stage: 3 },
+  st_home: { title: 'Study Hub', blurb: 'Build and study your own study games, flashcard sets, and guides.', stage: 3 },
   st_quiz: { title: 'Practice Quiz', blurb: 'One question at a time, rotating topics, with scoring.', stage: 3 },
   st_cards: { title: 'Flashcards', blurb: 'Topic-filtered flashcards with a known/review pile.', stage: 3 },
-  st_test: { title: 'Test Mode', blurb: 'A full 100-question mock exam drawn to the real Series 65 mix, each question asked once. Scores go on the leaderboard.', stage: 3 },
+  st_test: { title: 'Test Mode', blurb: 'A graded test drawn from one of your study games.', stage: 3 },
   st_progress: { title: 'Progress', blurb: 'Overall and per-topic accuracy over time.', stage: 3 },
 };
 

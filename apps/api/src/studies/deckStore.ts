@@ -5,7 +5,7 @@ import { studyDecks, studyDeckQuestions, users } from '../db/schema.js';
 
 // Team-authored study decks: create, list, read, and delete quizzes a team
 // builds for itself. Every read/write is scoped by teamId so one team can never
-// see or touch another's decks (the licensed Series 65 track is separate and
+// see or touch another's decks. Cards live in the DB, not in code.
 // lives in code, not here).
 
 export type Letter = 'A' | 'B' | 'C' | 'D';

@@ -675,9 +675,9 @@ export type StudyLearnedRow = typeof studyLearned.$inferSelect;
 
 // ---- Studies: custom flashcard terms (per user) ----
 // Words the user added to their own flashcard deck. The definition is generated
-// by the study tutor (Claude) when the word is added, and the topic places it
-// under one of the four Series 65 areas so the deck's topic filter still works.
-// Synced per user so a custom deck follows the learner across devices.
+// by VTS AI when the word is added, and the topic is a short label so the deck's
+// topic filter still works. Synced per user so a custom deck follows the learner
+// across devices.
 export const studyVocab = sqliteTable('study_vocab', {
   id: text('id').primaryKey(),
   userId: text('user_id')
@@ -692,7 +692,7 @@ export type StudyVocabRow = typeof studyVocab.$inferSelect;
 
 // ---- Studies: starred quiz questions (per user) ----
 // One row per Study Game question the learner flagged to revisit. The question
-// id refers to the static Series 65 question bank (series65Questions.ts). Synced
+// id refers to a question in the learner’s study set. Synced
 // per user so the starred set follows the learner across devices.
 export const studyStarred = sqliteTable('study_starred', {
   id: text('id').primaryKey(),
@@ -707,10 +707,10 @@ export type StudyStarredRow = typeof studyStarred.$inferSelect;
 // ---- Studies: custom quiz subsections (per user) ----
 // A learner-defined focus area within the Study Game (e.g. "Bonds",
 // "Compliance"). When the subsection is created, Claude classifies the static
-// Series 65 question bank and the matching question ids are stored here as a
+// question bank and the matching question ids are stored here as a
 // JSON array of integers, so the subsection can be drilled like any built-in
 // category and syncs across devices. `questionIds` refers to ids in the static
-// bank (web: series65Questions.ts).
+// bank.
 export const studySections = sqliteTable('study_sections', {
   id: text('id').primaryKey(),
   userId: text('user_id')
@@ -816,11 +816,11 @@ export const studyGameRuns = sqliteTable('study_game_runs', {
 export type StudyGameRunRow = typeof studyGameRuns.$inferSelect;
 
 // ---- Team-authored study games (decks) ----
-// Any team (other than the owner's, which has the licensed Series 65 track) can
+// Any team can
 // build its own study game: questions AI-generated from a topic, or parsed by
 // Claude from an uploaded text file. A deck is team-SHARED — any member creates
 // it, the whole team plays it — and gets the same level/streak/leaderboard
-// mechanics as the Series 65 game. All rows are scoped by teamId.
+// level-up mechanics. All rows are scoped by teamId.
 export const studyDecks = sqliteTable('study_decks', {
   id: text('id').primaryKey(),
   teamId: text('team_id').notNull(),
@@ -941,7 +941,7 @@ export const studyGuides = sqliteTable('study_guides', {
 export type StudyGuideRow = typeof studyGuides.$inferSelect;
 
 // ---- Studies: completed mock tests (per user) ----
-// One row per finished Series 65 mock test (a fixed 100-question exam drawn to
+// One row per finished mock test (a graded exam drawn to
 // the real exam blueprint: 25 Investments, 30 Client Management, 30 Regulations
 // & Ethics, 15 Economics). Each row records the final score and the learner's
 // attempt number (their Nth completed test), so the test leaderboard can show a
@@ -968,7 +968,7 @@ export type StudyTestRow = typeof studyTests.$inferSelect;
 // progress (the drawn question ids, answers so far, the current index, and the
 // start time), so an unfinished sitting follows the learner across devices just
 // like the Study Game state. The row is deleted when the test is submitted or
-// abandoned. The shape is owned by the web client (series65Test.ts); the server
+// abandoned. The shape is owned by the web client; the server
 // stores and returns it verbatim.
 export const studyTestProgress = sqliteTable('study_test_progress', {
   userId: text('user_id')

@@ -5,7 +5,7 @@ import { studySections } from '../db/schema.js';
 
 // Per-user custom Study Game subsections. Each is a named focus area (e.g.
 // "Bonds") backed by a set of question ids Claude selected from the static
-// Series 65 bank at creation time. Stored so a learner's subsections follow
+// question bank at creation time. Stored so a learner's subsections follow
 // them across devices; mirrors the vocab / starred services.
 
 export interface StudySection {

@@ -4,48 +4,63 @@ import type { TeamDeck } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { StudyGame } from './StudyGame';
 import { TeamStudyGame } from './TeamStudyGame';
-import { consumeStudyDeck, peekStudyView } from './studiesNav';
-import {
-  SERIES65_QUESTION_COUNT,
-  SERIES65_TOPICS,
-  SERIES65_VOCAB_COUNT,
-} from './series65Meta';
+import { DeckTestMode } from './DeckTestMode';
+import { DeckProgress } from './DeckProgress';
+import { consumeStudyDeck } from './studiesNav';
 
-// What the learner has chosen to play. `null` shows the picker; a selection
-// renders that game with a back path to the picker.
-type Selection = { kind: 'series65' } | { kind: 'deck'; id: string } | null;
+// What this section does with the game the learner picks.
+export type StudyTarget = 'play' | 'test' | 'progress';
+type Selection = { id: string; view: StudyTarget } | null;
 
-// The Study Game section: a picker of every game the learner can play — the
-// built-in Series 65 track (owner's team only) plus the team's own study games
-// built in Study Creation. Games are created in Study Creation and *played*
-// here. Deep-links (Study Hub / Progress "Play the Study Game", or a deck's
-// Play button in Study Creation) skip the picker and open their game directly.
+const COPY: Record<StudyTarget, { title: string; blurb: string; action: string; empty: string }> = {
+  play: {
+    title: 'Study Game',
+    blurb: 'Pick a game to play. Build your own in Study Creation.',
+    action: 'Play',
+    empty: 'Build your first study game in Study Creation — AI-generated from a topic, or from a file you upload — and it shows up here to play.',
+  },
+  test: {
+    title: 'Test Mode',
+    blurb: 'Pick a game to test yourself on — a graded exam drawn from its questions.',
+    action: 'Test',
+    empty: 'Build a study game in Study Creation and you can sit a graded test on it here.',
+  },
+  progress: {
+    title: 'Progress',
+    blurb: 'Pick a game to see your level, accuracy, and best run.',
+    action: 'View progress',
+    empty: 'Build and play a study game in Study Creation to start tracking your progress here.',
+  },
+};
+
+// The launcher shared by the Study Game, Test Mode, and Progress sections: a
+// picker of every study game the learner's team built in Study Creation. Picking
+// one opens the chosen experience (play / test / progress) for that game. Games
+// are created in Study Creation and consumed here. A deep-link (a deck's Play
+// button in Study Creation) skips the picker and opens its game directly.
 export function StudyGameHub({
   theme,
-  canSeries65,
+  target,
   onNavigate,
 }: {
   theme: Theme;
-  canSeries65: boolean;
+  target: StudyTarget;
   onNavigate: (screen: string) => void;
 }) {
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
   const muted = '#a99ff0';
+  const copy = COPY[target];
 
   const [decks, setDecks] = useState<TeamDeck[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  // Seed the selection from any deep-link: a requested deck opens straight away;
-  // a pending Series 65 view (quiz/test/flashcards) drops into that game, which
-  // consumes the view itself on mount.
+  // A deep-linked deck (from Study Creation's Play button) opens straight into
+  // play, regardless of which section this is.
   const [selection, setSelection] = useState<Selection>(() => {
     const deckId = consumeStudyDeck();
-    if (deckId) return { kind: 'deck', id: deckId };
-    if (canSeries65 && peekStudyView()) return { kind: 'series65' };
-    return null;
+    return deckId ? { id: deckId, view: 'play' } : null;
   });
 
   useEffect(() => {
@@ -67,52 +82,31 @@ export function StudyGameHub({
     };
   }, []);
 
-  if (selection?.kind === 'series65') {
-    return <StudyGame theme={theme} onBack={() => setSelection(null)} />;
+  if (selection) {
+    const back = () => setSelection(null);
+    if (selection.view === 'test') return <DeckTestMode theme={theme} deckId={selection.id} onBack={back} />;
+    if (selection.view === 'progress')
+      return (
+        <DeckProgress
+          theme={theme}
+          deckId={selection.id}
+          onBack={back}
+          onPlay={() => setSelection({ id: selection.id, view: 'play' })}
+        />
+      );
+    return <TeamStudyGame theme={theme} deckId={selection.id} onBack={back} />;
   }
-  if (selection?.kind === 'deck') {
-    return <TeamStudyGame theme={theme} deckId={selection.id} onBack={() => setSelection(null)} />;
-  }
-
-  const hasGames = canSeries65 || decks.length > 0;
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Study Game</h2>
-        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-          Pick a game to play. Build your own in <strong>Study Creation</strong>.
-        </p>
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{copy.title}</h2>
+        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>{copy.blurb}</p>
       </div>
 
-      {/* Series 65 — the built-in track, owner's team only. */}
-      {canSeries65 && (
-        <div style={{ ...card(theme), borderLeft: `3px solid ${theme.accent}`, marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#fff' }}>Series 65</h3>
-            <span style={badge(theme)}>Built in</span>
-          </div>
-          <p style={{ margin: '8px 0 0', fontSize: 12.5, color: '#d7ccff', lineHeight: 1.55 }}>
-            The self-quiz across the four exam areas, weighted to the real exam. Level up as you answer,
-            drill custom subsections, and track your accuracy against the pass line.
-          </p>
-          <div style={{ fontSize: 11, color: muted, marginTop: 8 }}>
-            {SERIES65_QUESTION_COUNT} questions · {SERIES65_TOPICS.length} topics · {SERIES65_VOCAB_COUNT} flashcards
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <button onClick={() => setSelection({ kind: 'series65' })} style={primaryBtn(theme, accentGrad)}>
-              Play Series 65
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Team study games — built in Study Creation, played here. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '18px 0 10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '0 0 10px' }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#fff' }}>Your team’s study games</h3>
-        <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-          ✦ Create a study game
-        </button>
+        <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>✦ Create a study game</button>
       </div>
 
       {loading ? (
@@ -124,12 +118,8 @@ export function StudyGameHub({
       ) : decks.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🎓</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No team study games yet</div>
-          <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>
-            {hasGames
-              ? 'Build one in Study Creation — AI-generated from a topic, or from a file you upload — and it shows up here to play.'
-              : 'Build your first one in Study Creation — AI-generated from a topic, or from a file you upload — and it shows up here to play.'}
-          </div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No study games yet</div>
+          <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>{copy.empty}</div>
           <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
             Open Study Creation
           </button>
@@ -142,7 +132,8 @@ export function StudyGameHub({
               deck={d}
               theme={theme}
               muted={muted}
-              onPlay={() => setSelection({ kind: 'deck', id: d.id })}
+              action={copy.action}
+              onPick={() => setSelection({ id: d.id, view: target })}
             />
           ))}
         </div>
@@ -155,12 +146,14 @@ function GameCard({
   deck,
   theme,
   muted,
-  onPlay,
+  action,
+  onPick,
 }: {
   deck: TeamDeck;
   theme: Theme;
   muted: string;
-  onPlay: () => void;
+  action: string;
+  onPick: () => void;
 }) {
   const sourceLabel = deck.source === 'ai_topic' ? 'AI-generated' : deck.source === 'upload' ? 'From a file' : 'Sample';
   return (
@@ -180,8 +173,8 @@ function GameCard({
         {deck.createdByName && ` · by ${deck.createdByName}`}
       </div>
       <div style={{ marginTop: 12 }}>
-        <button onClick={onPlay} disabled={deck.questionCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: deck.questionCount === 0 ? 0.6 : 1 }}>
-          Play
+        <button onClick={onPick} disabled={deck.questionCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: deck.questionCount === 0 ? 0.6 : 1 }}>
+          {action}
         </button>
       </div>
     </div>
