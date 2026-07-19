@@ -165,6 +165,17 @@ export async function seedBadges(): Promise<void> {
       autoRole: null as string | null,
       position: 1,
     },
+    // Auto-granted to every software_developer-role holder (founder-equivalent
+    // access), shown site-wide next to their name.
+    {
+      key: 'software-developer',
+      label: 'Software Developer',
+      icon: 'code',
+      color: '#6C9EFF',
+      description: 'Software developer — founder-level access.',
+      autoRole: 'software_developer' as string | null,
+      position: 1,
+    },
     {
       key: 'admin',
       label: 'Admin',
