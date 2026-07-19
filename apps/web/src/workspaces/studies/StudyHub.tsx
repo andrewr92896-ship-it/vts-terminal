@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { EditableText } from '../../copy/SiteCopy';
+import { EditableText, EditableRich } from '../../copy/SiteCopy';
 
 // Study Hub landing: the studies overview. Everything is team-built — study
 // games, flashcard sets, and study guides are all created in Study Creation and
@@ -73,10 +73,10 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
           </span>
         </div>
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
-          In <strong>Study Creation</strong> you can also build flashcard sets — type the cards in, generate
-          them from a topic with AI, or upload a glossary — then study them in the <strong>Flashcards</strong>
-          section with the auto-rotate player. Build slide-deck study presentations there too (go back and forth with
-          VTS AI, or upload a PowerPoint); your finished presentations live in <strong>Study Presentations</strong>, ready to present.
+          <EditableRich
+            id="studyhub.cards.blurb"
+            text="In **Study Creation** you can also build flashcard sets — type the cards in, generate them from a topic with AI, or upload a glossary — then study them in the **Flashcards** section with the auto-rotate player. Build slide-deck study presentations there too (go back and forth with VTS AI, or upload a PowerPoint); your finished presentations live in **Study Presentations**, ready to present."
+          />
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           <button onClick={() => onNavigate('st_cards')} style={primaryBtn(theme, accentGrad)}>

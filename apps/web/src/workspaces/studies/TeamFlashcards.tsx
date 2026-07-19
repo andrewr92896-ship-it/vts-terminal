@@ -5,7 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { EditableText } from '../../copy/SiteCopy';
+import { EditableText, EditableRich } from '../../copy/SiteCopy';
 import { card } from './TeamStudyDecks';
 import { FlashcardEditor } from './FlashcardEditor';
 
@@ -82,7 +82,10 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
             <EditableText id="teamflashcards.title" text="Team Flashcards" />
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build and edit your team’s own flashcard sets here — study them from the <strong>Flashcards</strong> section.
+            <EditableRich
+              id="teamflashcards.subtitle"
+              text="Build and edit your team’s own flashcard sets here — study them from the **Flashcards** section."
+            />
           </p>
         </div>
         {!readOnly && sets.length > 0 && (

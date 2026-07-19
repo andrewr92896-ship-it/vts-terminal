@@ -5,7 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { EditableText } from '../../copy/SiteCopy';
+import { EditableText, EditableRich } from '../../copy/SiteCopy';
 import { DeckEditor } from './DeckEditor';
 
 // The team study-game *maker*, shown in Study Creation. Any member builds a deck
@@ -83,7 +83,10 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
             <EditableText id="studydecks.title" text="Team Study Games" />
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build and edit your team’s own quizzes here — play them from the <strong>Study Game</strong> section.
+            <EditableRich
+              id="studydecks.subtitle"
+              text="Build and edit your team’s own quizzes here — play them from the **Study Game** section."
+            />
           </p>
         </div>
         {!readOnly && (

@@ -173,6 +173,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
+        titleId="admin.users.title" subtitleId="admin.users.subtitle"
         title="Users"
         subtitle="Create accounts and assign roles. A user can hold several roles; only admins can change them. New users set their own password on first sign-in."
       />

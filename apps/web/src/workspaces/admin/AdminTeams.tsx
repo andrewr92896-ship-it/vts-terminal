@@ -123,6 +123,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
+        titleId="admin.teams.title" subtitleId="admin.teams.subtitle"
         title="Teams"
         subtitle="Teams group traders into their own desk. The Studies leaderboard ranks a learner only against their team; the Trading workspace stays shared across every team. Expand a team to see its members and move anyone between teams."
       />

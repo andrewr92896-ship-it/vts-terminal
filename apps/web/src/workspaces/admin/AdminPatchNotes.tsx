@@ -140,6 +140,7 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
+        titleId="admin.notes.title" subtitleId="admin.notes.subtitle"
         title="Patch Notes"
         subtitle="Write release notes, review them as a draft, then release. Only released notes show up in Site Help ▸ Patch notes for members."
       />

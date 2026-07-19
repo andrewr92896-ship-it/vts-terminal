@@ -34,6 +34,8 @@ interface EditTarget {
   def: string;
   current: string;
   rect: DOMRect;
+  /** Rich blurb — the value supports `**bold**` markers; show the hint. */
+  rich?: boolean;
 }
 
 interface SiteCopyCtx {
@@ -170,6 +172,63 @@ export function EditableText({
       }}
     >
       {value}
+    </span>
+  );
+}
+
+// Render an inline-markdown string: **bold** segments become <strong>, the rest
+// is plain text. Keeps the editable value a single plain string an admin can
+// retype, while still supporting the emphasized words in coded blurbs.
+function renderInline(text: string): ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((p, i) => {
+    const m = /^\*\*([^*]+)\*\*$/.exec(p);
+    if (m) return <strong key={i}>{m[1]}</strong>;
+    return <span key={i}>{p}</span>;
+  });
+}
+
+/**
+ * Like <EditableText>, but for a coded blurb that contains emphasized words.
+ * The default (and the stored override) is a single string using `**bold**`
+ * markers; it renders with those words bolded. Use this instead of leaving a
+ * paragraph with embedded <strong> unwrapped — it makes such blurbs editable.
+ *
+ * Usage: <EditableRich id="studyhub.cards.blurb" text="In **Study Creation** …" />
+ */
+export function EditableRich({ id, text }: { id: string; text: string }) {
+  const ctx = useContext(Ctx);
+  const ref = useRef<HTMLSpanElement>(null);
+
+  if (!ctx || !text) return <>{renderInline(text)}</>;
+
+  const value = ctx.get(id, text);
+
+  if (!ctx.editing || !ctx.canEdit) return <>{renderInline(value)}</>;
+
+  return (
+    <span
+      ref={ref}
+      role="button"
+      tabIndex={0}
+      title="Edit this wording"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = ref.current?.getBoundingClientRect();
+        if (rect) ctx.begin({ key: id, def: text, current: value, rect, rich: true });
+      }}
+      style={{
+        cursor: 'pointer',
+        outline: `1px dashed ${C.gold}`,
+        outlineOffset: 2,
+        borderRadius: 3,
+        background: 'rgba(235,203,116,.14)',
+        boxDecorationBreak: 'clone',
+        WebkitBoxDecorationBreak: 'clone',
+      }}
+    >
+      {renderInline(value)}
     </span>
   );
 }
@@ -365,6 +424,12 @@ function CopyEditor({
             resize: 'vertical',
           }}
         />
+
+        {target.rich && (
+          <div style={{ marginTop: 6, fontSize: 11, color: C.faint, lineHeight: 1.4 }}>
+            Wrap a word in <span style={{ color: C.muted, fontWeight: 700 }}>**double asterisks**</span> to bold it.
+          </div>
+        )}
 
         {isOverridden && (
           <div style={{ marginTop: 8, fontSize: 11, color: C.faint, lineHeight: 1.4 }}>

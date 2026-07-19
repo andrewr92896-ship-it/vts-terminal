@@ -136,6 +136,7 @@ export function AdminBadges({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
+        titleId="admin.badges.title" subtitleId="admin.badges.subtitle"
         title="Badges"
         subtitle="Recognition icons shown next to a member's name. The Admin shield is granted automatically to admins; the Early Release star and any custom badges are assigned to members in the Users section."
       />

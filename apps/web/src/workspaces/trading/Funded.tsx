@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { EditableText } from '../../copy/SiteCopy';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { readClipboardImage } from '../../lib/clipboard';
 import { useLivePrices, type LiveMark } from './useLivePrices';
@@ -79,19 +80,19 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
   }
 
   if (loadError) return <div style={{ color: RED, fontSize: 12.5 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, fontSize: 12.5 }}>Loading accounts…</div>;
+  if (!data) return <div style={{ color: MUTED, fontSize: 12.5 }}><EditableText id="manual.loading">Loading accounts…</EditableText></div>;
 
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 10 }}>
         <div>
-          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>Accounts</div>
+          <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}><EditableText id="manual.accounts.title">Accounts</EditableText></div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4 }}>
-            Kept by hand — set the balance and place trades by typing them in or pasting a trade-history photo. “Track live trade” posts an open position to the Live Wall with OANDA-priced P/L (kept off the Trade Log and Live Brokers). Duplicates are skipped by time + profit.
+            <EditableText id="manual.accounts.desc">Kept by hand — set the balance and place trades by typing them in or pasting a trade-history photo. “Track live trade” posts an open position to the Live Wall with OANDA-priced P/L (kept off the Trade Log and Live Brokers). Duplicates are skipped by time + profit.</EditableText>
           </div>
         </div>
         {!readOnly && (
-          <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? 'Close' : '+ Add account'}</button>
+          <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? <EditableText id="manual.accounts.close">Close</EditableText> : <EditableText id="manual.accounts.add">+ Add account</EditableText>}</button>
         )}
       </div>
 
@@ -109,7 +110,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
 
       {data.accounts.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '28px 20px', color: MUTED, fontSize: 12.5 }}>
-          No accounts yet.{!readOnly && ' Use “+ Add account” to set up your first one.'}
+          <EditableText id="manual.accounts.empty">No accounts yet.</EditableText>{!readOnly && <EditableText id="manual.accounts.empty_hint" text=" Use “+ Add account” to set up your first one." />}
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 14 }}>
@@ -233,17 +234,17 @@ function AccountCard({
             <span style={platformPill}>{a.platform}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>Balance</span>
+            <span style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}><EditableText id="manual.card.balance">Balance</EditableText></span>
             {editingBalance ? (
               <span style={{ display: 'inline-flex', gap: 6 }}>
                 <input value={balanceInput} onChange={(e) => setBalanceInput(e.target.value)} type="number" step="any" autoFocus style={{ ...inputBase, width: 130 }} />
-                <button onClick={saveBalance} disabled={busy} style={miniGold}>Save</button>
-                <button onClick={() => { setEditingBalance(false); setBalanceInput(String(a.balance ?? '')); }} style={miniGhost}>Cancel</button>
+                <button onClick={saveBalance} disabled={busy} style={miniGold}><EditableText id="manual.balance.save">Save</EditableText></button>
+                <button onClick={() => { setEditingBalance(false); setBalanceInput(String(a.balance ?? '')); }} style={miniGhost}><EditableText id="manual.balance.cancel">Cancel</EditableText></button>
               </span>
             ) : (
               <>
                 <span style={{ fontSize: 24, fontWeight: 700, fontFamily: MONO, color: '#fff' }}>{dollars(a.balance)}</span>
-                {!readOnly && <button onClick={() => setEditingBalance(true)} style={miniGhost}>Edit</button>}
+                {!readOnly && <button onClick={() => setEditingBalance(true)} style={miniGhost}><EditableText id="manual.balance.edit">Edit</EditableText></button>}
               </>
             )}
           </div>
@@ -261,7 +262,7 @@ function AccountCard({
         {!readOnly && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <button onClick={() => fileRef.current?.click()} disabled={shotBusy} title="Upload a photo or screenshot of your trade history" style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1 }}>
-              {shotBusy ? 'Reading…' : 'Upload photo'}
+              {shotBusy ? <EditableText id="manual.shot.reading">Reading…</EditableText> : <EditableText id="manual.shot.upload">Upload photo</EditableText>}
             </button>
             <button
               onClick={async () => {
@@ -273,11 +274,11 @@ function AccountCard({
               title="Paste a screenshot from your clipboard"
               style={{ ...ghostBtn, opacity: shotBusy ? 0.6 : 1 }}
             >
-              Paste
+              <EditableText id="manual.shot.paste">Paste</EditableText>
             </button>
             <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { importShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
-            <button onClick={() => setTrackingLive((v) => !v)} title="Track an active/open trade live on the Live Wall" style={{ ...ghostBtn, borderColor: 'rgba(53,196,123,.5)', color: '#bff0d4' }}>{trackingLive ? 'Close' : '📈 Track live trade'}</button>
-            <button onClick={() => setAddingTrade((v) => !v)} style={ghostBtn}>{addingTrade ? 'Close' : '+ Trade'}</button>
+            <button onClick={() => setTrackingLive((v) => !v)} title="Track an active/open trade live on the Live Wall" style={{ ...ghostBtn, borderColor: 'rgba(53,196,123,.5)', color: '#bff0d4' }}>{trackingLive ? <EditableText id="manual.track.close">Close</EditableText> : <EditableText id="manual.track.open">📈 Track live trade</EditableText>}</button>
+            <button onClick={() => setAddingTrade((v) => !v)} style={ghostBtn}>{addingTrade ? <EditableText id="manual.trade.close">Close</EditableText> : <EditableText id="manual.trade.add">+ Trade</EditableText>}</button>
             <button
               onClick={async () => {
                 if (window.confirm(`Delete the “${a.label}” account and all its trades? This can't be undone.`)) {
@@ -288,7 +289,7 @@ function AccountCard({
               title="Delete account"
               style={{ ...ghostBtn, color: '#cf6a78' }}
             >
-              Delete
+              <EditableText id="manual.card.delete">Delete</EditableText>
             </button>
           </div>
         )}
@@ -299,7 +300,7 @@ function AccountCard({
       {!readOnly && trackingLive && (
         <div style={{ padding: '0 16px 12px' }}>
           <div style={panel}>
-            <div style={panelLabel}>Track an active trade on the Live Wall</div>
+            <div style={panelLabel}><EditableText id="manual.track.title">Track an active trade on the Live Wall</EditableText></div>
             <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
               Paste or upload a photo of an <b>open</b> position. VTS AI reads the fill price and lot size, and it shows on the
               Live Wall with live P/L marked against the desk’s OANDA price — while staying off the Trade Log and Live Brokers totals.
@@ -315,10 +316,10 @@ function AccountCard({
                 title="Paste an active-trade screenshot from your clipboard"
                 style={{ ...ghostBtn, opacity: posBusy ? 0.6 : 1 }}
               >
-                Paste
+                <EditableText id="manual.track.paste">Paste</EditableText>
               </button>
               <button onClick={() => posFileRef.current?.click()} disabled={posBusy} title="Upload a photo or screenshot of your active trade" style={{ ...goldBtn, opacity: posBusy ? 0.6 : 1 }}>
-                {posBusy ? 'Reading…' : 'Upload photo'}
+                {posBusy ? <EditableText id="manual.track.reading">Reading…</EditableText> : <EditableText id="manual.track.upload">Upload photo</EditableText>}
               </button>
               <input ref={posFileRef} type="file" accept="image/*" onChange={(e) => { importPosition(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
             </div>
@@ -343,19 +344,19 @@ function AccountCard({
       {/* Trades */}
       {a.trades.length === 0 ? (
         <div style={{ padding: '0 16px 16px', fontSize: 12, color: MUTED }}>
-          No trades logged yet. Post a trade-history screenshot, or add one by hand.
+          <EditableText id="manual.trades.empty">No trades logged yet. Post a trade-history screenshot, or add one by hand.</EditableText>
         </div>
       ) : (
         <div style={{ borderTop: `1px solid ${BORDER}` }}>
           {!isPhone && (
             <div style={{ ...row, color: FAINT, fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', borderBottom: `1px solid ${BORDER}` }}>
-              <span style={{ flex: '1 1 90px' }}>Instrument</span>
-              <span style={col}>Side</span>
-              <span style={col}>Entry</span>
-              <span style={col}>Exit</span>
-              <span style={col}>Size</span>
-              <span style={{ ...col, textAlign: 'right' }}>P/L</span>
-              <span style={{ ...col, textAlign: 'right' }}>Closed</span>
+              <span style={{ flex: '1 1 90px' }}><EditableText id="manual.col.instrument">Instrument</EditableText></span>
+              <span style={col}><EditableText id="manual.col.side">Side</EditableText></span>
+              <span style={col}><EditableText id="manual.col.entry">Entry</EditableText></span>
+              <span style={col}><EditableText id="manual.col.exit">Exit</EditableText></span>
+              <span style={col}><EditableText id="manual.col.size">Size</EditableText></span>
+              <span style={{ ...col, textAlign: 'right' }}><EditableText id="manual.col.pl">P/L</EditableText></span>
+              <span style={{ ...col, textAlign: 'right' }}><EditableText id="manual.col.closed">Closed</EditableText></span>
               {!readOnly && <span style={{ width: 24 }} />}
             </div>
           )}
@@ -471,7 +472,7 @@ function TradeRow({
                 title="Close this trade using its result screenshot"
                 style={closeTradeBtn}
               >
-                {closing ? 'Cancel' : 'Close trade'}
+                {closing ? <EditableText id="manual.closetrade.cancel">Cancel</EditableText> : <EditableText id="manual.closetrade.btn">Close trade</EditableText>}
               </button>
             )}
             <button onClick={() => !busy && !closeBusy && onRemove()} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
@@ -498,13 +499,13 @@ function TradeRow({
                 title="Paste a trade-result screenshot from your clipboard"
                 style={{ ...ghostBtn, opacity: closeBusy ? 0.6 : 1 }}
               >
-                Paste screenshot
+                <EditableText id="manual.close.paste">Paste screenshot</EditableText>
               </button>
               <button onClick={() => closeFileRef.current?.click()} disabled={closeBusy} title="Upload a photo or screenshot of the closed trade" style={{ ...goldBtn, opacity: closeBusy ? 0.6 : 1 }}>
-                {closeBusy ? 'Reading…' : 'Upload photo'}
+                {closeBusy ? <EditableText id="manual.close.reading">Reading…</EditableText> : <EditableText id="manual.close.upload">Upload photo</EditableText>}
               </button>
               <input ref={closeFileRef} type="file" accept="image/*" onChange={(e) => { closeFromShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
-              <button onClick={() => setClosing(false)} disabled={closeBusy} style={ghostBtn}>Cancel</button>
+              <button onClick={() => setClosing(false)} disabled={closeBusy} style={ghostBtn}><EditableText id="manual.close.cancel">Cancel</EditableText></button>
             </div>
           </div>
         </div>
@@ -550,7 +551,7 @@ function AccountForm({
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={panelLabel}>Add an account</div>
+      <div style={panelLabel}><EditableText id="manual.form.title">Add an account</EditableText></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="Broker / label (optional)" style={{ ...inputBase, flex: '0 0 170px' }} />
         <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Account name *" style={{ ...inputBase, flex: '1 1 180px' }} />
@@ -574,9 +575,9 @@ function AccountForm({
           disabled={disabled}
           style={{ ...goldBtn, opacity: disabled ? 0.6 : 1 }}
         >
-          Add account
+          <EditableText id="manual.form.submit">Add account</EditableText>
         </button>
-        <button onClick={onCancel} style={ghostBtn}>Cancel</button>
+        <button onClick={onCancel} style={ghostBtn}><EditableText id="manual.form.cancel">Cancel</EditableText></button>
       </div>
     </div>
   );
@@ -606,7 +607,7 @@ function TradeForm({
 
   return (
     <div style={panel}>
-      <div style={panelLabel}>Log a trade by hand</div>
+      <div style={panelLabel}><EditableText id="manual.tradeform.title">Log a trade by hand</EditableText></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument *" style={{ ...inputBase, flex: '1 1 150px' }} />
         <select value={side} onChange={(e) => setSide(e.target.value as TradeSide)} style={{ ...inputBase, flex: '0 0 110px' }}>
@@ -623,8 +624,8 @@ function TradeForm({
           <span style={{ color: GOLD, fontWeight: 700 }}>● Live {mark.instrument}</span>
           <span style={{ fontFamily: MONO, color: TEXT, fontWeight: 700 }}>{fmtPrice(mark.price)}</span>
           <span style={{ color: FAINT }}>from the Live Wall · @{mark.owner}</span>
-          <button type="button" onClick={() => setEntry(String(mark.price))} style={miniGhost}>Use as entry</button>
-          <button type="button" onClick={() => setExit(String(mark.price))} style={miniGhost}>Use as exit</button>
+          <button type="button" onClick={() => setEntry(String(mark.price))} style={miniGhost}><EditableText id="manual.tradeform.use_entry">Use as entry</EditableText></button>
+          <button type="button" onClick={() => setExit(String(mark.price))} style={miniGhost}><EditableText id="manual.tradeform.use_exit">Use as exit</EditableText></button>
         </div>
       )}
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
@@ -633,9 +634,9 @@ function TradeForm({
           disabled={disabled}
           style={{ ...goldBtn, opacity: disabled ? 0.6 : 1 }}
         >
-          Add trade
+          <EditableText id="manual.tradeform.submit">Add trade</EditableText>
         </button>
-        <button onClick={onCancel} style={ghostBtn}>Cancel</button>
+        <button onClick={onCancel} style={ghostBtn}><EditableText id="manual.tradeform.cancel">Cancel</EditableText></button>
       </div>
     </div>
   );
