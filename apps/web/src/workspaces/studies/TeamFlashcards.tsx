@@ -6,6 +6,7 @@ import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { card } from './TeamStudyDecks';
+import { FlashcardEditor } from './FlashcardEditor';
 
 // The Team Flashcards *maker*, shown in Study Creation. Any member builds a set
 // — typed in by hand, AI-generated from a topic, or from an uploaded file — and
@@ -24,6 +25,9 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const canManage = (s: TeamFlashcardSet) => !readOnly && (s.createdBy === user?.id || user?.roles.includes('admin') === true);
 
   useEffect(() => {
     let alive = true;
@@ -55,13 +59,27 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
     }
   }
 
+  // The editor takes over the whole maker while open.
+  if (editing) {
+    return (
+      <FlashcardEditor
+        theme={theme}
+        setId={editing}
+        onClose={(updated) => {
+          if (updated) setSets(updated);
+          setEditing(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Flashcards</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build your team’s own flashcard sets here — study them from the <strong>Flashcards</strong> section.
+            Build and edit your team’s own flashcard sets here — study them from the <strong>Flashcards</strong> section.
           </p>
         </div>
         {!readOnly && (
@@ -74,9 +92,11 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
       {composerOpen && !readOnly && (
         <SetComposer
           theme={theme}
-          onCreated={(sets) => {
+          onCreated={(sets, newId) => {
             setSets(sets);
             setComposerOpen(false);
+            // Open the new set in the editor so the author can refine it.
+            setEditing(newId);
           }}
         />
       )}
@@ -109,7 +129,8 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
               key={s.id}
               set={s}
               theme={theme}
-              canDelete={!readOnly && (s.createdBy === user?.id || user?.roles.includes('admin') === true)}
+              canManage={canManage(s)}
+              onEdit={() => setEditing(s.id)}
               onDelete={() => remove(s.id)}
             />
           ))}
@@ -122,12 +143,14 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
 function SetCard({
   set,
   theme,
-  canDelete,
+  canManage,
+  onEdit,
   onDelete,
 }: {
   set: TeamFlashcardSet;
   theme: Theme;
-  canDelete: boolean;
+  canManage: boolean;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
@@ -152,12 +175,17 @@ function SetCard({
         {set.createdByName && ` · by ${set.createdByName}`}
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {canDelete && !confirm && (
+        {canManage && !confirm && (
+          <button onClick={onEdit} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38 }}>
+            Edit
+          </button>
+        )}
+        {canManage && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
             Delete
           </button>
         )}
-        {canDelete && confirm && (
+        {canManage && confirm && (
           <>
             <button onClick={onDelete} style={{ ...ghostBtn(theme), borderColor: '#ef5468', color: '#ff9a9a' }}>
               Confirm delete

@@ -795,6 +795,13 @@ export const api = {
   studyFlashcardSet(id: string): Promise<{ set: TeamFlashcardSetDetail }> {
     return request(`/api/studies/flashcards/${encodeURIComponent(id)}`);
   },
+  // Edit a flashcard set: rename and/or replace its cards.
+  updateFlashcardSet(
+    id: string,
+    patch: { name?: string; description?: string | null; cards?: FlashcardInput[] },
+  ): Promise<{ set: TeamFlashcardSetDetail; sets: TeamFlashcardSet[] }> {
+    return request(`/api/studies/flashcards/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
   deleteFlashcardSet(id: string): Promise<{ sets: TeamFlashcardSet[] }> {
     return request(`/api/studies/flashcards/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
