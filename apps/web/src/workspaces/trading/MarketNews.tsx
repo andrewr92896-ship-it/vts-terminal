@@ -5,6 +5,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { affectedInstruments, deriveWatchlist, newsFeeds, NEWS_FEEDS, DEFAULT_WATCHLIST } from './newsRelevance';
 import { decodeEntities, fmtDayKey, fmtRelative, fmtTime } from './newsFormat';
 import { EditableText } from '../../copy/SiteCopy';
+import { ScreenTitle } from './ScreenTitle';
 import type {
   CalendarEvent,
   EventInput,
@@ -219,7 +220,7 @@ export function MarketNews() {
     <div style={{ maxWidth: 860, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="news.title">Market News</EditableText></h2>
+          <ScreenTitle id="news.title">Market News</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             <EditableText id="news.subtitle">Live headlines across the desk's markets, each read by VTS AI for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time).</EditableText>
           </div>

@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import type { BreakEvenMode, DeskSettings } from '../../api/types';
+import { EditableText } from '../../copy/SiteCopy';
 
 // The three ways the desk can measure its break-even buffer.
 const MODES: { key: BreakEvenMode; label: string }[] = [
@@ -225,7 +226,7 @@ export function DeskSettingsModal({
 
         <div style={{ padding: 18 }}>
           {!loaded && !error ? (
-            <div style={{ color: MUTED, fontSize: 13 }}>Loading settings…</div>
+            <div style={{ color: MUTED, fontSize: 13 }}><EditableText id="desksettings.loading">Loading settings…</EditableText></div>
           ) : (
             <div style={panel}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Break-even buffer</div>

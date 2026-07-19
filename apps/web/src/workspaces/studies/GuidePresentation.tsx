@@ -5,6 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { card } from './StudyGuides';
+import { EditableText } from '../../copy/SiteCopy';
 
 // Presents a saved study guide as a slideshow — one slide at a time with its
 // title, body, and screenshot — navigated with Back/Next, progress dots, and the
@@ -55,18 +56,18 @@ export function GuidePresentation({
     return (
       <div style={{ maxWidth: 640, margin: '40px auto 0', textAlign: 'center', color: '#eef3ff' }}>
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13.5 }}>{error}</div>
-        <button onClick={onExit} style={{ ...ghostBtn(theme), marginTop: 14 }}>‹ Back to study guides</button>
+        <button onClick={onExit} style={{ ...ghostBtn(theme), marginTop: 14 }}><EditableText id="guidepres.back">‹ Back to study guides</EditableText></button>
       </div>
     );
   }
   if (!guide) {
-    return <div style={{ padding: 24, color: '#a99ff0', fontSize: 13 }}>Loading study guide…</div>;
+    return <div style={{ padding: 24, color: '#a99ff0', fontSize: 13 }}><EditableText id="guidepres.loading">Loading study guide…</EditableText></div>;
   }
   if (total === 0) {
     return (
       <div style={{ maxWidth: 640, margin: '40px auto 0', textAlign: 'center', color: '#eef3ff' }}>
-        <div style={{ ...card(theme), fontSize: 13.5, color: '#d7ccff' }}>This study guide has no slides yet.</div>
-        <button onClick={onExit} style={{ ...ghostBtn(theme), marginTop: 14 }}>‹ Back to study guides</button>
+        <div style={{ ...card(theme), fontSize: 13.5, color: '#d7ccff' }}><EditableText id="guidepres.empty">This study guide has no slides yet.</EditableText></div>
+        <button onClick={onExit} style={{ ...ghostBtn(theme), marginTop: 14 }}><EditableText id="guidepres.back">‹ Back to study guides</EditableText></button>
       </div>
     );
   }
@@ -85,7 +86,7 @@ export function GuidePresentation({
             {guide.name}
           </h2>
         </div>
-        <button onClick={onExit} style={ghostBtn(theme)}>Exit ✕</button>
+        <button onClick={onExit} style={ghostBtn(theme)}><EditableText id="guidepres.exit">Exit ✕</EditableText></button>
       </div>
 
       {/* The stage */}

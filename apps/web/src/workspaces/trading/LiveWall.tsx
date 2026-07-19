@@ -8,6 +8,7 @@ import { DeskSettingsModal } from './DeskSettingsModal';
 import { configFrom } from './outcome';
 import { TradeCard, etTime } from './TradeCard';
 import { EditableText } from '../../copy/SiteCopy';
+import { ScreenTitle } from './ScreenTitle';
 import type { LiveWall as LiveWallData } from '../../api/types';
 
 // Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
@@ -82,7 +83,7 @@ export function LiveWall() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="live.title">Live Wall</EditableText></h2>
+            <ScreenTitle id="live.title">Live Wall</ScreenTitle>
             {view === 'positions' && data && (
               <span style={data.source === 'sample' ? sampledPill : livePill}>{data.source === 'sample' ? 'Sample data' : 'Live'}</span>
             )}

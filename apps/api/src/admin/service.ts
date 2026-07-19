@@ -22,6 +22,30 @@ import {
   userTeams,
   userTeamMembers,
   userTeamInvites,
+  manualPositions,
+  fundedAccounts,
+  fundedTrades,
+  tradingBoards,
+  chatMessages,
+  announcements,
+  suggestions,
+  bugReports,
+  bugReportMessages,
+  studyLearned,
+  studyVocab,
+  studyStarred,
+  studySections,
+  pushSubscriptions,
+  pushoverUsers,
+  studyGame,
+  studyGameRuns,
+  studyDeckGame,
+  studyDeckRuns,
+  studyTests,
+  studyTestProgress,
+  studyDecks,
+  studyFlashcardSets,
+  studyGuides,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -346,6 +370,50 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
       await tx.delete(supportRequestMessages).where(inArray(supportRequestMessages.requestId, supportIds));
     }
     await tx.delete(supportRequests).where(eq(supportRequests.userId, targetId));
+    // Feedback the user filed from Site Help (siblings of support requests).
+    // Bug-report intake messages reference the report, not the user, so clear
+    // them by report id first, then the reports and any suggestions.
+    const bugReportIds = (
+      await tx.select({ id: bugReports.id }).from(bugReports).where(eq(bugReports.userId, targetId))
+    ).map((r) => r.id);
+    if (bugReportIds.length) {
+      await tx.delete(bugReportMessages).where(inArray(bugReportMessages.reportId, bugReportIds));
+    }
+    await tx.delete(bugReports).where(eq(bugReports.userId, targetId));
+    await tx.delete(suggestions).where(eq(suggestions.userId, targetId));
+    await tx.delete(announcements).where(eq(announcements.userId, targetId));
+    // Manual & funded trading data (trades reference their account, but both
+    // also carry user_id, so a direct per-user delete covers all rows).
+    await tx.delete(manualPositions).where(eq(manualPositions.userId, targetId));
+    await tx.delete(fundedTrades).where(eq(fundedTrades.userId, targetId));
+    await tx.delete(fundedAccounts).where(eq(fundedAccounts.userId, targetId));
+    await tx.delete(tradingBoards).where(eq(tradingBoards.userId, targetId));
+    // Team chat authored by this user.
+    await tx.delete(chatMessages).where(eq(chatMessages.userId, targetId));
+    // Notification delivery targets (privacy: don't leave device endpoints or a
+    // Pushover user key behind after the account is gone).
+    await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, targetId));
+    await tx.delete(pushoverUsers).where(eq(pushoverUsers.userId, targetId));
+    // Per-user Studies progress (learned terms, custom vocab, starred questions,
+    // custom subsections, game/test state and banked leaderboard runs).
+    await tx.delete(studyLearned).where(eq(studyLearned.userId, targetId));
+    await tx.delete(studyVocab).where(eq(studyVocab.userId, targetId));
+    await tx.delete(studyStarred).where(eq(studyStarred.userId, targetId));
+    await tx.delete(studySections).where(eq(studySections.userId, targetId));
+    await tx.delete(studyGame).where(eq(studyGame.userId, targetId));
+    await tx.delete(studyGameRuns).where(eq(studyGameRuns.userId, targetId));
+    await tx.delete(studyDeckGame).where(eq(studyDeckGame.userId, targetId));
+    await tx.delete(studyDeckRuns).where(eq(studyDeckRuns.userId, targetId));
+    await tx.delete(studyTests).where(eq(studyTests.userId, targetId));
+    await tx.delete(studyTestProgress).where(eq(studyTestProgress.userId, targetId));
+    // Team-SHARED study content (decks, flashcard sets, guides) survives the
+    // author — just drop the authorship link, mirroring the news feed above.
+    await tx.update(studyDecks).set({ createdBy: null }).where(eq(studyDecks.createdBy, targetId));
+    await tx
+      .update(studyFlashcardSets)
+      .set({ createdBy: null })
+      .where(eq(studyFlashcardSets.createdBy, targetId));
+    await tx.update(studyGuides).set({ createdBy: null }).where(eq(studyGuides.createdBy, targetId));
     // My Portal team metadata. The team itself (trading_teams + members'
     // users.team_id) is the real trade-scoping team and is left intact — only
     // this user's My Portal metadata is cleared. For any team this user led,

@@ -13,6 +13,7 @@ import { CalendarTile } from './CalendarTile';
 import { AlertsTile } from './AlertsTile';
 import { MobileScrollLockBar } from './scrollLock';
 import { BORDER, BORDER2, FAINT, GOLD, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
+import { EditableText } from '../../copy/SiteCopy';
 
 const RGL = WidthProvider(GridLayout);
 const COLS = 12;
@@ -263,7 +264,7 @@ export function ChartBoard() {
     }
   };
 
-  if (loading) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading your charts…</div>;
+  if (loading) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="chartboard.loading">Loading your charts…</EditableText></div>;
 
   return (
     <div>
@@ -283,7 +284,7 @@ export function ChartBoard() {
           </button>
         ))}
         {isUnsaved && <span style={boardPill(true)}>{name} <span style={{ color: FAINT }}>· unsaved</span></span>}
-        {editing && <button onClick={saveAsNew} style={{ ...ghostBtn, padding: '6px 10px' }}>Save as new</button>}
+        {editing && <button onClick={saveAsNew} style={{ ...ghostBtn, padding: '6px 10px' }}><EditableText id="chartboard.save_new">Save as new</EditableText></button>}
       </div>
 
       {/* Actions bar */}
@@ -306,7 +307,7 @@ export function ChartBoard() {
               <button onClick={setDefault} style={ghostBtn} title="Show this board by default">Set default</button>
             )}
             {!isUnsaved && (
-              <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>Delete</button>
+              <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}><EditableText id="chartboard.delete">Delete</EditableText></button>
             )}
           </>
         )}
@@ -332,7 +333,7 @@ export function ChartBoard() {
             style={{ ...input, minWidth: 200 }}
           />
           <button onClick={() => void confirmName()} disabled={saving} style={goldBtn}>{namePrompt.mode === 'create' ? 'Save' : 'Rename'}</button>
-          <button onClick={() => setNamePrompt(null)} style={ghostBtn}>Cancel</button>
+          <button onClick={() => setNamePrompt(null)} style={ghostBtn}><EditableText id="chartboard.cancel">Cancel</EditableText></button>
         </div>
       )}
 

@@ -1,7 +1,9 @@
-// Single source of truth for the app version and the patch notes shown in the
-// help hub. Bump APP_VERSION and prepend a PATCH_NOTES entry on every deploy
-// (for example Alpha V 1.0 -> Alpha V 1.1). The top-bar version pill and the
-// hub's Patch Notes tab both read from here, so they never drift apart.
+// Single source of truth for the app version, and the historical archive of
+// patch notes. Bump APP_VERSION and prepend a PATCH_NOTES entry on every deploy
+// (for example Beta V 5.16 -> Beta V 5.17). APP_VERSION drives the top-bar
+// version pill. Patch notes are now DB-backed (admins draft & publish from
+// Admin ▸ Patch Notes); the help hub merges those DB notes (newest) with this
+// array as the historical record, so keep prepending here.
 
 export interface PatchNote {
   version: string;

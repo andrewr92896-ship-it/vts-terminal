@@ -14,6 +14,7 @@ import {
   input,
   symbolLabel,
 } from './tvChart';
+import { EditableText } from '../../copy/SiteCopy';
 
 const TICKER_TAPE_SRC = 'https://s3.tradingview.com/external-embedding/embed-widget-ticker-tape.js';
 const MARKET_QUOTES_SRC = 'https://s3.tradingview.com/external-embedding/embed-widget-market-quotes.js';
@@ -153,7 +154,7 @@ function WatchlistConfig({ tile, onChange, onClose }: { tile: BoardTile; onChang
 
       <label style={lbl}>Symbols</label>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 8 }}>
-        {symbols.length === 0 && <span style={{ fontSize: 11, color: FAINT }}>No symbols yet — add some below.</span>}
+        {symbols.length === 0 && <span style={{ fontSize: 11, color: FAINT }}><EditableText id="watchlist.empty">No symbols yet — add some below.</EditableText></span>}
         {symbols.map((s) => (
           <span key={s} style={symChip}>
             {symbolLabel(s)}

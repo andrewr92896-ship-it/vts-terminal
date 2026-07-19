@@ -9,6 +9,7 @@ import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type Bre
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
 import { DesignationTag, tileTint } from './DesignationTag';
 import { EditableText } from '../../copy/SiteCopy';
+import { ScreenTitle } from './ScreenTitle';
 import type {
   RemovedTrade,
   TradeInput,
@@ -385,7 +386,7 @@ export function TradeLog() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="tradelog.title">Trade Log</EditableText></h2>
+          <ScreenTitle id="tradelog.title">Trade Log</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             <EditableText id="tradelog.subtitle">Your team’s trade log — every teammate’s fills, tagged by trader, with slippage and realized P/L. Trades from a connected broker (e.g. OANDA) show up here automatically; hand-kept trades stay on the Manual Trades tab.</EditableText>
           </div>

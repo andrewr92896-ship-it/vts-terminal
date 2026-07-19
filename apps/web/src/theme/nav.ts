@@ -135,8 +135,8 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
 // and the public never see them.
 export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
 
-// The signalling accent for a workspace (falls back to gold for anything not in
-// the Meridian nav, e.g. a legacy wealth/finance route reached by deep link).
+// The signalling accent for a workspace (falls back to gold for any key not in
+// the nav — every real WorkspaceKey is present, so the fallback is a safety net).
 export function accentFor(ws: WorkspaceKey): string {
   return navFor(ws)?.accent ?? C.gold;
 }

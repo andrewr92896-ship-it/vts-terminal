@@ -42,22 +42,6 @@ export interface KrakenConfig {
   apiSecret: string; // base64-encoded private key
 }
 
-export interface TradeStationConfig {
-  refreshToken: string;
-  clientId: string;
-  clientSecret: string;
-  accountIds: string; // comma-separated
-  base: string;
-  signinBase: string;
-}
-
-export interface FtpConfig {
-  // Match-Trader gateways differ per prop firm, so the base URL is configurable.
-  baseUrl: string;
-  token: string;
-  accountId: string | null;
-}
-
 function env(name: string): string | undefined {
   const v = process.env[name];
   return v && v.trim() ? v.trim() : undefined;
@@ -82,31 +66,10 @@ export function krakenConfig(): KrakenConfig | null {
   return { apiKey, apiSecret };
 }
 
-export function tradeStationConfig(): TradeStationConfig | null {
-  const refreshToken = env('TRADESTATION_REFRESH_TOKEN');
-  const clientId = env('TRADESTATION_CLIENT_ID');
-  const clientSecret = env('TRADESTATION_CLIENT_SECRET');
-  const accountIds = env('TRADESTATION_ACCOUNT_IDS');
-  if (!refreshToken || !clientId || !clientSecret || !accountIds) return null;
-  const live = (env('TRADESTATION_ENV') ?? 'sim').toLowerCase() === 'live';
-  return {
-    refreshToken,
-    clientId,
-    clientSecret,
-    accountIds,
-    base: live ? 'https://api.tradestation.com' : 'https://sim-api.tradestation.com',
-    signinBase: 'https://signin.tradestation.com',
-  };
-}
-
-export function ftpConfig(): FtpConfig | null {
-  const baseUrl = env('FTP_API_URL');
-  const token = env('FTP_API_TOKEN');
-  if (!baseUrl || !token) return null;
-  return { baseUrl: baseUrl.replace(/\/+$/, ''), token, accountId: env('FTP_ACCOUNT_ID') ?? null };
-}
-
-// Whether a given broker has the credentials it needs to be queried.
+// Whether a given broker has the credentials it needs to be queried. Only OANDA
+// and Kraken have live connectors; FTP and TradeStation are off-book/manual
+// labels (their trades are entered by hand from screenshots), so like `manual`
+// they are never auto-queried.
 export function isBrokerConfigured(key: BrokerKey): boolean {
   switch (key) {
     case 'oanda':
@@ -114,11 +77,8 @@ export function isBrokerConfigured(key: BrokerKey): boolean {
     case 'kraken':
       return krakenConfig() !== null;
     case 'tradestation':
-      return tradeStationConfig() !== null;
     case 'ftp':
-      return ftpConfig() !== null;
     case 'manual':
-      // Manual connections have no API credentials; positions are entered by hand.
       return false;
   }
 }
