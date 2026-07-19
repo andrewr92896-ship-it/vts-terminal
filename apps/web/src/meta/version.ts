@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.5';
+export const APP_VERSION = 'Beta V 5.6';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.6',
+    date: 'July 19, 2026',
+    notes: [
+      'Site-wording editing now reaches the copy it was missing: explanatory blurbs with bolded words (Study Hub, Flashcards, Team Study Games, Team Flashcards) are editable as a single line — bold a word by wrapping it in **double asterisks** — every Admin section’s heading and description is editable, and the Manual Trades screen’s labels and blurbs are covered too.',
+    ],
+  },
   {
     version: 'Beta V 5.5',
     date: 'July 19, 2026',
