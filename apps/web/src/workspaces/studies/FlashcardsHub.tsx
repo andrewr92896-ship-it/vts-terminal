@@ -5,7 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { EditableText } from '../../copy/SiteCopy';
+import { EditableText, EditableRich } from '../../copy/SiteCopy';
 import { card } from './TeamStudyDecks';
 import { FlashcardSetPlayer } from './FlashcardSetPlayer';
 
@@ -56,7 +56,10 @@ export function FlashcardsHub({ theme, onNavigate }: { theme: Theme; onNavigate:
           <EditableText id="flashcards.title" text="Flashcards" />
         </h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-          Pick a set to study with auto-rotate, topic filters, and “Ask VTS AI”. Build your own in <strong>Study Creation</strong>.
+          <EditableRich
+            id="flashcards.subtitle"
+            text="Pick a set to study with auto-rotate, topic filters, and “Ask VTS AI”. Build your own in **Study Creation**."
+          />
         </p>
       </div>
 

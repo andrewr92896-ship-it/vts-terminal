@@ -63,6 +63,7 @@ export function AdminEarlyAccess({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
+        titleId="admin.early.title" subtitleId="admin.early.subtitle"
         title="Early Access Requests"
         subtitle="People who asked to join from the login screen. Each entry shows what they provided; reach out by email, then clear the request once handled."
       />

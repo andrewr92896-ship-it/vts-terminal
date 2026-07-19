@@ -104,6 +104,7 @@ export function AdminContent({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
+        titleId="admin.content.title" subtitleId="admin.content.subtitle"
         title="Site Wording"
         subtitle="Edit the “How to” walkthroughs members see in Site Help. Pick a screen, reword its guide, and save — or reset it back to the built-in copy."
       />

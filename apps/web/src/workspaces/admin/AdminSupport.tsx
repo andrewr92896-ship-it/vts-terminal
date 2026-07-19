@@ -50,6 +50,7 @@ export function AdminSupport({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 780, margin: '0 auto' }}>
       <SectionHeader
+        titleId="admin.support.title"
         title="Support"
         subtitle={`General support requests from the Support tab, with the assistant’s intake chat.${
           openCount ? ` ${openCount} open.` : ''

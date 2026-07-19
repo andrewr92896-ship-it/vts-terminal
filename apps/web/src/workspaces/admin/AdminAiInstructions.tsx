@@ -88,6 +88,7 @@ export function AdminAiInstructions({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
+        titleId="admin.ai.title" subtitleId="admin.ai.subtitle"
         title="AI Instructions"
         subtitle="Edit what each AI feature is told to do. Changes apply the next time the feature runs. Reset any prompt to restore the built-in wording. Keep any {tokens} and JSON-format instructions intact."
       />

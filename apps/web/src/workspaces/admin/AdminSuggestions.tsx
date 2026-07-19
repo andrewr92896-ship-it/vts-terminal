@@ -41,6 +41,7 @@ export function AdminSuggestions({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 760, margin: '0 auto' }}>
       <SectionHeader
+        titleId="admin.suggestions.title"
         title="Suggestions"
         subtitle={`Ideas members sent in from Site Help.${newCount ? ` ${newCount} new.` : ''}`}
       />

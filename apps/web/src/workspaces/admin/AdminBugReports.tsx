@@ -49,6 +49,7 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 780, margin: '0 auto' }}>
       <SectionHeader
+        titleId="admin.bugs.title"
         title="Bug Reports"
         subtitle={`Reports filed from Site Help, with the assistant’s intake chat.${openCount ? ` ${openCount} open.` : ''}`}
       />
