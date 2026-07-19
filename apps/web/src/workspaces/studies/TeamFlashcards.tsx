@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { EditableText, EditableRich } from '../../copy/SiteCopy';
 import { card } from './TeamStudyDecks';
 import { FlashcardEditor } from './FlashcardEditor';
+import { cardsToCsv, cardTemplateCsv, downloadCsv, parseCardsCsv } from './studyCsv';
 
 // The Team Flashcards *maker*, shown in Study Creation. Any member builds a set
 // — typed in by hand, AI-generated from a topic, or from an uploaded file — and
@@ -164,6 +165,7 @@ function SetCard({
   onDelete: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const sourceLabel =
     set.source === 'ai_topic'
       ? 'AI-generated'
@@ -174,6 +176,22 @@ function SetCard({
           : set.source === 'sample'
             ? 'Sample'
             : 'Typed in';
+
+  // Export the set to a CSV the team can edit in a spreadsheet and re-import.
+  // Fetches the full card list (the list only carries a count).
+  async function exportCsv() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { set: full } = await api.studyFlashcardSet(set.id);
+      downloadCsv(full.name, cardsToCsv(full.cards));
+    } catch {
+      /* best-effort */
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div style={card(theme)}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -213,13 +231,18 @@ function SetCard({
             </button>
           </>
         )}
+        {!confirm && set.cardCount > 0 && (
+          <button onClick={exportCsv} disabled={exporting} style={{ ...ghostBtn(theme), opacity: exporting ? 0.6 : 1 }}>
+            {exporting ? <EditableText id="teamflashcards.exporting" text="Exporting…" /> : <EditableText id="teamflashcards.export_csv" text="⭳ Export CSV" />}
+          </button>
+        )}
         {!confirm && <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Study it in the Flashcards section</span>}
       </div>
     </div>
   );
 }
 
-type Mode = 'manual' | 'ai' | 'file' | 'game';
+type Mode = 'manual' | 'ai' | 'file' | 'csv' | 'game';
 
 function errorText(e: unknown): string {
   if (e instanceof ApiError) {
@@ -252,10 +275,15 @@ function SetComposer({
     { term: '', def: '', topic: '' },
     { term: '', def: '', topic: '' },
   ]);
-  // Cards AI produced (from a file or a study game), awaiting confirmation.
+  // Cards awaiting confirmation — AI-produced (from a file or a study game) or
+  // parsed straight from a CSV.
   const [preview, setPreview] = useState<Flashcard[] | null>(null);
   // Which source the pending preview came from — decides the created set's source.
   const [previewSource, setPreviewSource] = useState<'upload' | 'from_game'>('upload');
+  // Whether the pending preview was parsed from a CSV (no AI), plus any skipped
+  // rows, so the review screen can say so.
+  const [previewIsCsv, setPreviewIsCsv] = useState(false);
+  const [csvSkipped, setCsvSkipped] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // The team's study games, for the "From a study game" mode.
@@ -276,6 +304,8 @@ function SetComposer({
   function switchMode(m: Mode) {
     setMode(m);
     setPreview(null);
+    setPreviewIsCsv(false);
+    setCsvSkipped([]);
     setError(null);
   }
 
@@ -292,6 +322,32 @@ function SetComposer({
       if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ''));
     };
     reader.readAsText(file);
+  }
+
+  // Import a CSV of term/definition cards directly into a reviewable preview —
+  // no AI call. Parsing and validation happen client-side.
+  function onCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === 'string' ? reader.result : '';
+      const { cards, error: parseError, skipped } = parseCardsCsv(raw.slice(0, MAX_FILE_CHARS));
+      if (parseError) {
+        setPreview(null);
+        setCsvSkipped([]);
+        setError(parseError);
+        return;
+      }
+      if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ''));
+      setPreview(cards.map((c, i) => ({ seq: i + 1, term: c.term, def: c.def, topic: c.topic ?? null })));
+      setPreviewSource('upload');
+      setPreviewIsCsv(true);
+      setCsvSkipped(skipped);
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   }
 
   // ---- Type them in: build directly from the rows, no AI. ----
@@ -401,8 +457,15 @@ function SetComposer({
               <EditableText id="teamflashcards.review_title" text="Review the cards" />
             </h3>
             <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
-              AI produced {preview.length} card{preview.length === 1 ? '' : 's'} {previewSource === 'from_game' ? 'from that study game' : 'from your file'}. Check them, then create the set.
+              {previewIsCsv ? 'Imported' : 'AI produced'} {preview.length} card{preview.length === 1 ? '' : 's'}{' '}
+              {previewIsCsv ? 'from your CSV' : previewSource === 'from_game' ? 'from that study game' : 'from your file'}. Check them, then create the set.
             </p>
+            {csvSkipped.length > 0 && (
+              <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#e0a23a', lineHeight: 1.5 }}>
+                Skipped {csvSkipped.length} row{csvSkipped.length === 1 ? '' : 's'}: {csvSkipped.slice(0, 3).join(' ')}
+                {csvSkipped.length > 3 ? ' …' : ''}
+              </p>
+            )}
           </div>
           <input
             value={name}
@@ -440,7 +503,7 @@ function SetComposer({
   return (
     <div style={{ ...card(theme), marginBottom: 14 }}>
       <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden', marginBottom: 12, flexWrap: 'wrap' }}>
-        {(['manual', 'ai', 'file', 'game'] as const).map((m) => (
+        {(['manual', 'ai', 'file', 'csv', 'game'] as const).map((m) => (
           <button
             key={m}
             onClick={() => switchMode(m)}
@@ -454,7 +517,7 @@ function SetComposer({
               color: mode === m ? theme.accentText : muted,
             }}
           >
-            {m === 'manual' ? 'Type them in' : m === 'ai' ? 'Generate with AI' : m === 'file' ? 'Upload a file' : 'From a study game'}
+            {m === 'manual' ? 'Type them in' : m === 'ai' ? 'Generate with AI' : m === 'file' ? 'Upload a file' : m === 'csv' ? 'Import CSV' : 'From a study game'}
           </button>
         ))}
       </div>
@@ -570,7 +633,7 @@ function SetComposer({
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
                 {fileName ? 'Choose a different file' : 'Choose a text file'}
-                <input type="file" accept=".txt,.md,.csv,text/*" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
+                <input type="file" accept=".txt,.md,text/*" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
               </label>
               {fileName && <span style={{ fontSize: 12, color: muted }}>{fileName}</span>}
             </div>
@@ -588,6 +651,24 @@ function SetComposer({
             </button>
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
               <EditableText id="teamflashcards.help_file" text="Upload a text file (a glossary, notes, or “term - definition” lines) and AI formats the cards. You review them before the set is created." />
+            </div>
+          </>
+        ) : mode === 'csv' ? (
+          <>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                <EditableText id="teamflashcards.csv_choose" text="Choose a CSV file" />
+                <input type="file" accept=".csv,text/csv" onChange={onCsvFile} disabled={busy} style={{ display: 'none' }} />
+              </label>
+              <button onClick={() => downloadCsv('flashcards-template', cardTemplateCsv())} style={{ ...ghostBtn(theme), minHeight: 40 }}>
+                <EditableText id="teamflashcards.csv_template" text="⭳ Download template" />
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
+              <EditableText
+                id="teamflashcards.help_csv"
+                text="Import a CSV with columns: Term, Definition, and optional Topic. Download the template to see the format. You review the cards before the set is created."
+              />
             </div>
           </>
         ) : (
