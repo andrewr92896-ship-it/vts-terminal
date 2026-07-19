@@ -17,6 +17,7 @@ import {
 } from '../studies/tests.js';
 import {
   aiConfigured,
+  auditDeckQuestions,
   categorizeQuestions,
   chatStudyGuide,
   classifyQuestionsIntoSection,
@@ -171,6 +172,22 @@ const deckCategorizeSchema = z.object({
   questions: z.array(z.object({ id: z.number().int().nonnegative().max(100000), stem: z.string().trim().min(1).max(1000) })).min(1).max(1000),
   categories: z.array(z.string().trim().min(1).max(60)).max(60).optional(),
   instructions: z.string().trim().max(2000).optional(),
+});
+// AI correct-answer audit: review each question (stem, options, marked answer,
+// explanation) for problems — above all a wrong answer key. Read-only.
+const deckAuditSchema = z.object({
+  questions: z
+    .array(
+      z.object({
+        id: z.number().int().nonnegative().max(1_000_000),
+        stem: z.string().trim().min(1).max(600),
+        options: z.array(z.object({ label: deckLetterSchema, text: z.string().trim().min(1).max(400) })).length(4),
+        answer: deckLetterSchema,
+        explanation: z.string().trim().max(400).nullable().optional(),
+      }),
+    )
+    .min(1)
+    .max(1000),
 });
 
 // ---- Team flashcard sets ----
@@ -385,6 +402,34 @@ export async function studiesRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not categorize the questions' });
+    }
+  });
+
+  // AI correct-answer audit: review a game's questions for problems (a wrong
+  // answer key above all) and flag them for the author. Read-only — it returns
+  // findings and never modifies the deck. Registered before ":id" so the literal
+  // path wins.
+  app.post('/api/studies/decks/audit', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
+    const parsed = deckAuditSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Questions are required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    try {
+      await enforceAiLimit(me.id, 'studies_deck_audit');
+      const issues = await auditDeckQuestions(
+        parsed.data.questions.map((q) => ({
+          id: q.id,
+          stem: q.stem,
+          options: q.options,
+          answer: q.answer,
+          explanation: q.explanation ?? null,
+        })),
+      );
+      return { issues };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not audit the questions' });
     }
   });
 

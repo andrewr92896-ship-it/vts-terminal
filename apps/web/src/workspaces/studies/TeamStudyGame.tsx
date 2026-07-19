@@ -100,6 +100,10 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
 
   const hydratedRef = useRef(false);
   const lastSavedRef = useRef<string | null>(null);
+  // The game state + category as they were BEFORE the current question's answer
+  // was recorded, so an answer-key correction can replay the attempt from the
+  // exact prior state (un-counting a fixed miss, or dropping a fixed hit).
+  const preAnswerRef = useRef<{ game: DeckGameState; topic: string } | null>(null);
 
   const cats = deck && deck.categories.length ? deck.categories : ['General'];
 
@@ -190,6 +194,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     setFixDeleteConfirm(false);
     setFixError(null);
     setFixNote(null);
+    preAnswerRef.current = null;
     if (!d || d.questions.length === 0) {
       setCurrent(null);
       return;
@@ -205,31 +210,41 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     setSourceGuess(null);
   }
 
+  // Record one answer against `base` and update the score-delta / level-up
+  // display to match. Shared by the first submit and by an answer-key
+  // correction (which replays from the pre-answer baseline).
+  function applyRecordedAnswer(base: DeckGameState, topic: string, correct: boolean) {
+    const prevScore = deckLifetimeAccuracy(base);
+    const prevOv = overallLevel(base.levelCorrect);
+    const next = recordDeckAnswer(base, topic, correct);
+    const newScore = deckLifetimeAccuracy(next);
+    const nextOv = overallLevel(next.levelCorrect);
+    setScoreChange(round1((newScore ?? 0) - (prevScore ?? (newScore ?? 0))));
+    setLevelEvent(
+      nextOv.step > prevOv.step
+        ? {
+            mainUp: nextOv.mainIndex > prevOv.mainIndex,
+            emoji: nextOv.main.emoji,
+            name: nextOv.main.name,
+            stars: nextOv.stars,
+            bg: nextOv.bg,
+            text: nextOv.text,
+          }
+        : null,
+    );
+    setGame(next);
+  }
+
   function submit(label: Letter | null) {
     if (!current || revealed || !game) return;
     const correct = label === current.answer;
     setSelected(label);
     setRevealed(true);
     setOutcome(correct);
-
-    const prev = game;
-    const prevScore = deckLifetimeAccuracy(prev);
-    const prevOv = overallLevel(prev.levelCorrect);
-    const next = recordDeckAnswer(prev, current.topic, correct);
-    const newScore = deckLifetimeAccuracy(next);
-    const nextOv = overallLevel(next.levelCorrect);
-    setScoreChange(round1((newScore ?? 0) - (prevScore ?? (newScore ?? 0))));
-    if (nextOv.step > prevOv.step) {
-      setLevelEvent({
-        mainUp: nextOv.mainIndex > prevOv.mainIndex,
-        emoji: nextOv.main.emoji,
-        name: nextOv.main.name,
-        stars: nextOv.stars,
-        bg: nextOv.bg,
-        text: nextOv.text,
-      });
-    }
-    setGame(next);
+    // Snapshot the state before this attempt is recorded, so a later answer-key
+    // fix can replay it exactly (recordDeckAnswer is pure).
+    preAnswerRef.current = { game, topic: current.topic };
+    applyRecordedAnswer(game, current.topic, correct);
   }
 
   // A short preamble folded into the first tutor turn, so the back-and-forth
@@ -286,10 +301,20 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       const { deck: updated } = await api.updateStudyDeck(deckId, { questions: questions.map(toQuestionInput) });
       setDeck(updated);
       // Reflect the corrected key in the open reveal: move the ✓ and re-mark
-      // this attempt against the new answer. The already-recorded score stands.
+      // this attempt against the new answer.
       setCurrent((c) => (c ? { ...c, answer: newAnswer } : c));
-      setOutcome(selected === newAnswer);
-      setFixNote(`Correct answer set to ${newAnswer} — saved for your team.`);
+      const nowCorrect = selected === newAnswer;
+      setOutcome(nowCorrect);
+      // Re-score this attempt against the corrected key: replay from the
+      // pre-answer baseline so a fixed miss is un-counted (and a fixed hit
+      // dropped) — streak, level, and lifetime accuracy all stay exact.
+      const base = preAnswerRef.current;
+      if (base) applyRecordedAnswer(base.game, base.topic, nowCorrect);
+      setFixNote(
+        nowCorrect
+          ? `Correct answer set to ${newAnswer} — your answer now counts as correct.`
+          : `Correct answer set to ${newAnswer} — saved for your team.`,
+      );
     } catch (e) {
       setFixError(fixErrorMessage(e));
     } finally {

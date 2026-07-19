@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.18';
+export const APP_VERSION = 'Beta V 5.19';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.19',
+    date: 'July 19, 2026',
+    notes: [
+      'Study Creation: new “Audit answers” button on any study game. VTS AI reviews every question one by one for problems — above all a wrong answer key, plus missing/duplicate correct options and ambiguous wording — and flags the ones to look at, with a one-tap fix to adopt the answer it thinks is right.',
+      'Study Game: correcting a question’s answer key now re-scores the attempt you just made. If your original pick becomes the right answer, the miss is un-counted — your streak, level, and lifetime accuracy update to match.',
+    ],
+  },
   {
     version: 'Beta V 5.18',
     date: 'July 19, 2026',
