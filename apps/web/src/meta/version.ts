@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.9';
+export const APP_VERSION = 'Beta V 5.10';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.10',
+    date: 'July 19, 2026',
+    notes: [
+      'The admin Users role picker now only shows the roles you’re allowed to assign: the owner sees every role, a founder sees Admin / Funded / Member, and a plain admin sees just Member. A user’s existing higher roles are preserved when you edit them.',
+    ],
+  },
   {
     version: 'Beta V 5.9',
     date: 'July 19, 2026',

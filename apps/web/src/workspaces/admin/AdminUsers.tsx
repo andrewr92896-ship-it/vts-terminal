@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS } from '../../auth/access';
+import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS, canGrantRole } from '../../auth/access';
 import type { AdminUser, RoleKey, Team } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
@@ -46,6 +46,13 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const { user: me } = useAuth();
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
+  // Only show role options the acting user is allowed to grant (mirror of the
+  // backend authority check). The owner sees all; a founder sees admin/funded/
+  // member; a plain admin sees only member. A target's existing roles that the
+  // actor can't grant are preserved on save (the edit toggle keeps them).
+  const grantableRoles = ALL_ROLES.filter((r) =>
+    me ? canGrantRole({ owner: me.access.owner, founder: me.access.founder }, r) : false,
+  );
   const badgeRegistry = useBadgeRegistry();
   // Only non-auto badges are hand-assigned; auto badges (e.g. Admin) come from roles.
   const assignableBadges = badgeRegistry.filter((b) => !b.autoRole);
@@ -222,7 +229,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
         <div style={{ marginTop: 14 }}>
           <label style={fieldLabel}><EditableText id="admin.users.f_roles">Roles</EditableText></label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
-            {ALL_ROLES.map((r) => (
+            {grantableRoles.map((r) => (
               <RoleToggle
                 key={r}
                 role={r}
@@ -370,7 +377,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
               <div style={{ marginTop: 12 }}>
                 <div style={{ ...fieldLabel, marginBottom: 8 }}>Roles</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {ALL_ROLES.map((r) => {
+                  {grantableRoles.map((r) => {
                     // An admin can't remove their own admin role (lockout guard).
                     const locked = isSelf && r === 'admin' && u.roles.includes('admin');
                     return (

@@ -91,6 +91,9 @@ export interface User {
     admin: boolean;
     // Whether the user is founder-level (founder or software_developer).
     founder: boolean;
+    // Whether this is the portal owner account (only the owner can grant the
+    // Founder / Software Developer roles).
+    owner: boolean;
   };
 }
 
