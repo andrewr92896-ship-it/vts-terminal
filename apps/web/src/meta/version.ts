@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.7';
+export const APP_VERSION = 'Beta V 4.8';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.8',
+    date: 'July 19, 2026',
+    notes: [
+      'Flashcard sets are now editable: in Study Creation, each set has an Edit button. Rename the set, edit every card’s term, definition, and topic, add or delete cards, sort by topic, and let VTS AI auto-categorize the cards (with an optional custom prompt). Creating a set now opens it in the editor so you can refine it.',
+    ],
+  },
   {
     version: 'Beta V 4.7',
     date: 'July 19, 2026',

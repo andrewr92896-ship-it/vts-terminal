@@ -34,6 +34,7 @@ import {
   deleteFlashcardSet,
   getFlashcardSet,
   listFlashcardSets,
+  updateFlashcardSet,
 } from '../studies/flashcardStore.js';
 import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
 import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
@@ -183,6 +184,14 @@ const flashcardCreateSchema = z.object({
   source: z.enum(['manual', 'upload']).optional(),
   cards: z.array(flashcardCardSchema).min(1).max(400),
 });
+// Editing a set: rename and/or replace its cards.
+const flashcardUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(500).nullable().optional(),
+    cards: z.array(flashcardCardSchema).max(400).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.description !== undefined || v.cards !== undefined, 'Nothing to update');
 
 // ---- Team study guides (slide presentations) ----
 // One turn of the guide-builder conversation: the running transcript (the
@@ -545,6 +554,22 @@ export async function studiesRoutes(app: FastifyInstance) {
     const set = await getFlashcardSet(id, teamId);
     if (!set) return reply.code(404).send({ error: 'Flashcard set not found' });
     return { set };
+  });
+
+  // Edit a set: rename and/or replace its cards (creator or a team admin).
+  app.patch('/api/studies/flashcards/:id', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
+    const parsed = flashcardUpdateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
+    const set = await updateFlashcardSet(id, me.teamId, me.id, isAdmin(parseRoles(me)), {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      cards: parsed.data.cards?.map((c) => ({ term: c.term, def: c.def, topic: c.topic ?? null })),
+    });
+    if (!set) return reply.code(403).send({ error: 'You can only edit flashcard sets you created.' });
+    return { set, sets: await listFlashcardSets(me.teamId) };
   });
 
   // Delete a set (creator or a team admin).

@@ -92,6 +92,25 @@ export async function listFlashcardSets(teamId: string): Promise<FlashcardSetSum
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+// The distinct non-empty topics across a set's cards (topics are derived from
+// the cards, not stored separately).
+function computeTopics(cards: FlashcardInput[]): string[] {
+  return [...new Set(cards.map((c) => (c.topic ?? '').trim()).filter((t) => !!t))];
+}
+
+function cardRows(setId: string, teamId: string, cards: FlashcardInput[], now: Date) {
+  return cards.map((c, i) => ({
+    id: randomUUID(),
+    setId,
+    teamId,
+    seq: i + 1,
+    term: c.term.trim().slice(0, 300),
+    def: c.def.trim().slice(0, 2000),
+    topic: c.topic?.trim().slice(0, 60) || null,
+    createdAt: now,
+  }));
+}
+
 // Create a set and its cards in one transaction. Card numbers (`seq`) and ids
 // are assigned here — never trusted from the model or client.
 export async function createFlashcardSet(input: {
@@ -104,9 +123,6 @@ export async function createFlashcardSet(input: {
 }): Promise<FlashcardSetDetail> {
   const now = new Date();
   const setId = randomUUID();
-  const topics = [
-    ...new Set(input.cards.map((c) => (c.topic ?? '').trim()).filter((t) => !!t)),
-  ];
 
   await db.transaction(async (tx) => {
     await tx.insert(studyFlashcardSets).values({
@@ -116,29 +132,50 @@ export async function createFlashcardSet(input: {
       description: input.description?.trim().slice(0, 500) || null,
       createdBy: input.createdBy,
       source: input.source,
-      topics: JSON.stringify(topics),
+      topics: JSON.stringify(computeTopics(input.cards)),
       createdAt: now,
       updatedAt: now,
     });
     if (input.cards.length) {
-      await tx.insert(studyFlashcardCards).values(
-        input.cards.map((c, i) => ({
-          id: randomUUID(),
-          setId,
-          teamId: input.teamId,
-          seq: i + 1,
-          term: c.term.trim().slice(0, 300),
-          def: c.def.trim().slice(0, 2000),
-          topic: c.topic?.trim().slice(0, 60) || null,
-          createdAt: now,
-        })),
-      );
+      await tx.insert(studyFlashcardCards).values(cardRows(setId, input.teamId, input.cards, now));
     }
   });
 
   const detail = await getFlashcardSet(setId, input.teamId);
   // Just created it in this team, so it always resolves.
   return detail!;
+}
+
+// Edit a set: rename and/or replace its cards. Allowed for the set's creator or
+// a team admin; scoped to the team. Returns the updated set, or null if it isn't
+// this team's or the caller may not edit it.
+export async function updateFlashcardSet(
+  setId: string,
+  teamId: string,
+  userId: string,
+  isAdmin: boolean,
+  patch: { name?: string; description?: string | null; cards?: FlashcardInput[] },
+): Promise<FlashcardSetDetail | null> {
+  const existing = await getFlashcardSet(setId, teamId);
+  if (!existing) return null;
+  if (!isAdmin && existing.createdBy !== userId) return null;
+
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    const set: Record<string, unknown> = { updatedAt: now };
+    if (patch.name !== undefined) set.name = patch.name.trim().slice(0, 120);
+    if (patch.description !== undefined) set.description = patch.description?.trim().slice(0, 500) || null;
+    if (patch.cards !== undefined) set.topics = JSON.stringify(computeTopics(patch.cards));
+    await tx.update(studyFlashcardSets).set(set).where(and(eq(studyFlashcardSets.id, setId), eq(studyFlashcardSets.teamId, teamId)));
+    if (patch.cards !== undefined) {
+      await tx.delete(studyFlashcardCards).where(eq(studyFlashcardCards.setId, setId));
+      if (patch.cards.length) {
+        await tx.insert(studyFlashcardCards).values(cardRows(setId, teamId, patch.cards, now));
+      }
+    }
+  });
+
+  return getFlashcardSet(setId, teamId);
 }
 
 // One set with its cards, scoped to the team (null if not this team's).
