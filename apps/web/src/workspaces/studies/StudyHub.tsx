@@ -42,7 +42,6 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
           <button onClick={() => onNavigate('st_game')} style={primaryBtn(theme, accentGrad)}>Play a study game</button>
           <button onClick={() => onNavigate('st_test')} style={ghostBtn(theme)}>Practice tests</button>
           <button onClick={() => onNavigate('st_progress')} style={ghostBtn(theme)}>View progress</button>
-          <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>Create one</button>
         </div>
       </div>
 
@@ -60,7 +59,6 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           <button onClick={() => onNavigate('st_cards')} style={primaryBtn(theme, accentGrad)}>Open Flashcards</button>
-          <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>Open Study Creation</button>
           <button onClick={() => onNavigate('st_guides')} style={ghostBtn(theme)}>Open Study Presentations</button>
         </div>
       </div>
