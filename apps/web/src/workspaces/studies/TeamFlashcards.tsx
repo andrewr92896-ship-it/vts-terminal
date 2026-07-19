@@ -5,6 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
+import { EditableText } from '../../copy/SiteCopy';
 import { card } from './TeamStudyDecks';
 import { FlashcardEditor } from './FlashcardEditor';
 
@@ -77,7 +78,9 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Flashcards</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
+            <EditableText id="teamflashcards.title" text="Team Flashcards" />
+          </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
             Build and edit your team’s own flashcard sets here — study them from the <strong>Flashcards</strong> section.
           </p>
@@ -102,23 +105,27 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
       )}
 
       {loading ? (
-        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>Loading your team’s flashcard sets…</div>
+        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
+          <EditableText id="teamflashcards.loading" text="Loading your team’s flashcard sets…" />
+        </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          Couldn’t load your team’s flashcard sets. Try again in a moment.
+          <EditableText id="teamflashcards.error" text="Couldn’t load your team’s flashcard sets. Try again in a moment." />
         </div>
       ) : sets.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🃏</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No flashcard sets yet</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+            <EditableText id="teamflashcards.empty_title" text="No flashcard sets yet" />
+          </div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? 'A team builds its own flashcard sets here — typed in, AI-generated from a topic, or from an uploaded file.'
-              : 'Build your first one: type the cards in, have AI generate them from a topic, or upload a text file of terms.'}
+              ? <EditableText id="teamflashcards.empty_ro" text="A team builds its own flashcard sets here — typed in, AI-generated from a topic, or from an uploaded file." />
+              : <EditableText id="teamflashcards.empty_rw" text="Build your first one: type the cards in, have AI generate them from a topic, or upload a text file of terms." />}
           </div>
           {!readOnly && (
             <button onClick={() => setComposerOpen(true)} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
-              ✦ New flashcard set
+              <EditableText id="teamflashcards.empty_btn" text="✦ New flashcard set" />
             </button>
           )}
         </div>
@@ -387,7 +394,9 @@ function SetComposer({
       <div style={{ ...card(theme), marginBottom: 14 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff' }}>Review the cards</h3>
+            <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff' }}>
+              <EditableText id="teamflashcards.review_title" text="Review the cards" />
+            </h3>
             <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
               AI produced {preview.length} card{preview.length === 1 ? '' : 's'} {previewSource === 'from_game' ? 'from that study game' : 'from your file'}. Check them, then create the set.
             </p>
@@ -417,7 +426,7 @@ function SetComposer({
               {busy ? 'Creating…' : 'Create flashcard set'}
             </button>
             <button onClick={() => { setPreview(null); setError(null); }} disabled={busy} style={ghostBtn(theme)}>
-              Back
+              <EditableText id="teamflashcards.review_back" text="Back" />
             </button>
           </div>
         </div>
@@ -510,7 +519,7 @@ function SetComposer({
               </button>
             </div>
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
-              Type each card’s term and definition. Topic is optional — add topics to enable the study-time topic filter.
+              <EditableText id="teamflashcards.help_manual" text="Type each card’s term and definition. Topic is optional — add topics to enable the study-time topic filter." />
             </div>
           </>
         ) : mode === 'ai' ? (
@@ -549,7 +558,9 @@ function SetComposer({
                 {busy ? 'Building…' : '✦ Build with AI'}
               </button>
             </div>
-            <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>AI writes the term/definition cards — study them right after.</div>
+            <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
+              <EditableText id="teamflashcards.help_ai" text="AI writes the term/definition cards — study them right after." />
+            </div>
           </>
         ) : mode === 'file' ? (
           <>
@@ -573,14 +584,14 @@ function SetComposer({
               {busy ? 'Reading your file…' : '✦ Generate'}
             </button>
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
-              Upload a text file (a glossary, notes, or “term - definition” lines) and AI formats the cards. You review them before the set is created.
+              <EditableText id="teamflashcards.help_file" text="Upload a text file (a glossary, notes, or “term - definition” lines) and AI formats the cards. You review them before the set is created." />
             </div>
           </>
         ) : (
           <>
             {games.length === 0 ? (
               <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
-                No study games yet. Build a study game first, then AI can pull its vocabulary into a flashcard set.
+                <EditableText id="teamflashcards.game_empty" text="No study games yet. Build a study game first, then AI can pull its vocabulary into a flashcard set." />
               </div>
             ) : (
               <>
@@ -608,7 +619,7 @@ function SetComposer({
                   {busy ? 'Reading the game…' : '✦ Pull vocabulary'}
                 </button>
                 <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
-                  AI reads the game’s questions, pulls the key vocabulary, and writes definitions. You review the cards before the set is created.
+                  <EditableText id="teamflashcards.help_game" text="AI reads the game’s questions, pulls the key vocabulary, and writes definitions. You review the cards before the set is created." />
                 </div>
               </>
             )}

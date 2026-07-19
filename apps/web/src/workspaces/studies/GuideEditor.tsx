@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import type { GuideSlide, StudyGuide } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
+import { EditableText } from '../../copy/SiteCopy';
 
 // The study-presentation editor: rename the presentation and edit its slides —
 // each slide's title and body, reorder them, or delete one. Attached
@@ -94,7 +95,9 @@ export function GuideEditor({
     return (
       <div style={wrap}>
         <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
-        <div style={{ ...card(theme), color: muted, fontSize: 13, marginTop: 12 }}>Loading the presentation…</div>
+        <div style={{ ...card(theme), color: muted, fontSize: 13, marginTop: 12 }}>
+          <EditableText id="guideeditor.loading" text="Loading the presentation…" />
+        </div>
       </div>
     );
   }
@@ -102,7 +105,9 @@ export function GuideEditor({
     return (
       <div style={wrap}>
         <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
-        <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13, marginTop: 12 }}>Couldn’t load this presentation.</div>
+        <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13, marginTop: 12 }}>
+          <EditableText id="guideeditor.load_error" text="Couldn’t load this presentation." />
+        </div>
       </div>
     );
   }
@@ -110,20 +115,22 @@ export function GuideEditor({
   return (
     <div style={wrap}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back to presentations</button>
+        <button onClick={() => onClose()} style={ghostBtn(theme)}>
+          <EditableText id="guideeditor.back" text="‹ Back to presentations" />
+        </button>
         <button onClick={save} disabled={saving} style={{ ...primaryBtn(theme, accentGrad), opacity: saving ? 0.6 : 1 }}>
-          {saving ? 'Saving…' : 'Save changes'}
+          {saving ? <EditableText id="guideeditor.saving" text="Saving…" /> : <EditableText id="guideeditor.save" text="Save changes" />}
         </button>
       </div>
 
       <div style={{ ...card(theme), marginBottom: 12 }}>
-        <label style={fieldLabel}>Presentation name</label>
+        <label style={fieldLabel}><EditableText id="guideeditor.name_label" text="Presentation name" /></label>
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} style={field(theme)} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Slides · {slides.length}</span>
-        <button onClick={addSlide} style={ghostBtn(theme)}>+ Add slide</button>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}><EditableText id="guideeditor.slides_heading" text="Slides" /> · {slides.length}</span>
+        <button onClick={addSlide} style={ghostBtn(theme)}><EditableText id="guideeditor.add_slide" text="+ Add slide" /></button>
       </div>
 
       {error && <div style={{ ...warn, marginBottom: 10 }}>{error}</div>}
@@ -149,14 +156,14 @@ export function GuideEditor({
             )}
           </div>
         ))}
-        {slides.length === 0 && <div style={{ ...card(theme), color: muted, fontSize: 13, textAlign: 'center' }}>No slides. Add one above.</div>}
+        {slides.length === 0 && <div style={{ ...card(theme), color: muted, fontSize: 13, textAlign: 'center' }}><EditableText id="guideeditor.no_slides" text="No slides. Add one above." /></div>}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <button onClick={save} disabled={saving} style={{ ...primaryBtn(theme, accentGrad), opacity: saving ? 0.6 : 1 }}>
-          {saving ? 'Saving…' : 'Save changes'}
+          {saving ? <EditableText id="guideeditor.saving" text="Saving…" /> : <EditableText id="guideeditor.save" text="Save changes" />}
         </button>
-        <button onClick={() => onClose()} style={ghostBtn(theme)}>Cancel</button>
+        <button onClick={() => onClose()} style={ghostBtn(theme)}><EditableText id="guideeditor.cancel" text="Cancel" /></button>
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
+import { EditableText } from '../../copy/SiteCopy';
 import { overallLevel, levelAtStep, streakMultiplier, STREAK_STEP, round1 } from './gameEngine';
 import { setStudyTint } from './studyTint';
 import {
@@ -229,7 +230,9 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     return (
       <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff' }}>
         <div style={{ marginBottom: 12 }}>{backBtn}</div>
-        <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>Couldn’t load this study game.</div>
+        <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
+          <EditableText id="studygameplay.load_error" text="Couldn’t load this study game." />
+        </div>
       </div>
     );
   }
@@ -237,7 +240,9 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     return (
       <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff' }}>
         <div style={{ marginBottom: 12 }}>{backBtn}</div>
-        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>Loading…</div>
+        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
+          <EditableText id="studygameplay.loading" text="Loading…" />
+        </div>
       </div>
     );
   }
@@ -331,12 +336,12 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
         {sources.length > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: sources.length > 0 && !readOnly ? 0 : 'auto' }}>
             <input type="checkbox" checked={guessMode} onChange={(e) => setGuessMode(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
-            Guess the source
+            <EditableText id="studygameplay.guess_source" text="Guess the source" />
           </label>
         )}
         {!readOnly && (
           <button onClick={() => setResetConfirm(true)} style={{ ...ghostBtn(theme), marginLeft: 'auto', minHeight: 36 }}>
-            Reset
+            <EditableText id="studygameplay.reset" text="Reset" />
           </button>
         )}
       </div>
@@ -344,11 +349,15 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       {resetConfirm && (
         <div style={{ ...card(theme), marginBottom: 14, borderColor: '#e0a23a' }}>
           <div style={{ fontSize: 13, color: '#e7e0ff', marginBottom: 10 }}>
-            Reset your progress on this study game? Your current run is saved to the leaderboard first.
+            <EditableText id="studygameplay.reset_confirm" text="Reset your progress on this study game? Your current run is saved to the leaderboard first." />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={resetProgress} style={{ ...primaryBtn(theme, accentGrad), minHeight: 38 }}>Save run &amp; reset</button>
-            <button onClick={() => setResetConfirm(false)} style={{ ...ghostBtn(theme), minHeight: 38 }}>Cancel</button>
+            <button onClick={resetProgress} style={{ ...primaryBtn(theme, accentGrad), minHeight: 38 }}>
+              <EditableText id="studygameplay.reset_save" text="Save run & reset" />
+            </button>
+            <button onClick={() => setResetConfirm(false)} style={{ ...ghostBtn(theme), minHeight: 38 }}>
+              <EditableText id="studygameplay.reset_cancel" text="Cancel" />
+            </button>
           </div>
         </div>
       )}
@@ -375,7 +384,9 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       )}
 
       {!current ? (
-        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>This study game has no questions yet.</div>
+        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
+          <EditableText id="studygameplay.no_questions" text="This study game has no questions yet." />
+        </div>
       ) : (
         <div style={card(theme)}>
           <div style={{ fontSize: 10.5, color: muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -442,16 +453,16 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                 disabled={selected == null}
                 style={{ ...primaryBtn(theme, accentGrad), flex: 1, minWidth: 160, opacity: selected == null ? 0.6 : 1 }}
               >
-                {selected == null ? 'Select an answer' : `Confirm ${selected}`}
+                {selected == null ? <EditableText id="studygameplay.select_answer" text="Select an answer" /> : `Confirm ${selected}`}
               </button>
               <button onClick={() => submit(null)} style={{ ...ghostBtn(theme), borderStyle: 'dashed' }}>
-                I Don’t Know
+                <EditableText id="studygameplay.dont_know" text="I Don’t Know" />
               </button>
             </div>
           ) : (
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: outcome ? GREEN : RED, marginBottom: 6 }}>
-                {outcome ? 'Correct' : 'Incorrect'}
+                {outcome ? <EditableText id="studygameplay.correct" text="Correct" /> : <EditableText id="studygameplay.incorrect" text="Incorrect" />}
                 {scoreChange != null && (
                   <span style={{ fontSize: 12, fontWeight: 600, marginLeft: 8, color: muted }}>
                     Lifetime{' '}
@@ -492,7 +503,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
               )}
 
               <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
-                Next question ›
+                <EditableText id="studygameplay.next_question" text="Next question ›" />
               </button>
             </div>
           )}
@@ -516,10 +527,10 @@ function DeckLeaderboard({ theme, deckId }: { theme: Theme; deckId: string }) {
     };
   }, [deckId]);
 
-  if (error) return <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>Couldn’t load the leaderboard.</div>;
-  if (!entries) return <div style={{ ...card(theme), color: muted, fontSize: 13 }}>Loading…</div>;
+  if (error) return <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}><EditableText id="studygameplay.lb_error" text="Couldn’t load the leaderboard." /></div>;
+  if (!entries) return <div style={{ ...card(theme), color: muted, fontSize: 13 }}><EditableText id="studygameplay.lb_loading" text="Loading…" /></div>;
   if (entries.length === 0)
-    return <div style={{ ...card(theme), color: muted, fontSize: 13 }}>No scores yet — be the first to play.</div>;
+    return <div style={{ ...card(theme), color: muted, fontSize: 13 }}><EditableText id="studygameplay.lb_empty" text="No scores yet — be the first to play." /></div>;
 
   return (
     <div style={card(theme)}>
