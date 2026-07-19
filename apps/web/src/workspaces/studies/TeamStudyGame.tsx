@@ -6,6 +6,7 @@ import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { overallLevel, levelAtStep, streakMultiplier, STREAK_STEP, round1 } from './gameEngine';
+import { setStudyTint } from './studyTint';
 import {
   deckGameKey,
   deckLifetimeAccuracy,
@@ -152,6 +153,16 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     if (deck && !current) advance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deck]);
+
+  // Recolour the Studies workspace to the current level while this game is open,
+  // and clear the tint when the player leaves.
+  useEffect(() => {
+    if (!game) return;
+    const lv = overallLevel(game.levelCorrect);
+    setStudyTint({ hue: lv.main.hue, sat: lv.main.sat });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game?.levelCorrect]);
+  useEffect(() => () => setStudyTint(null), []);
 
   function advance() {
     if (!deck || deck.questions.length === 0) {

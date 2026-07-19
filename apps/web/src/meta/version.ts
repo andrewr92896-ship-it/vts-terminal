@@ -9,9 +9,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.8';
+export const APP_VERSION = 'Beta V 4.9';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.9',
+    date: 'July 19, 2026',
+    notes: [
+      'The study game again recolors the whole Studies workspace to your level while you play — the background and accents shift as you climb the ladder.',
+      'Flashcards ▸ new “From a study game” option: pick one of your study games and AI pulls its key vocabulary into a flashcard set (with definitions) for you to review.',
+      'Study Presentations (formerly Study Guides) now have an Edit button — rename the presentation and edit, reorder, or delete slides. On desktop they’re listed top-to-bottom instead of side-by-side.',
+      'Renamed two sections: “Test Mode” is now “Practice Tests”, and “Study Guides” is now “Study Presentations”.',
+    ],
+  },
   {
     version: 'Beta V 4.8',
     date: 'July 19, 2026',

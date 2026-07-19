@@ -173,6 +173,12 @@ const flashcardImportPreviewSchema = z.object({
   text: z.string().min(1).max(100_000),
   instructions: z.string().trim().max(2000).optional(),
 });
+// Generate flashcards from a study game's questions: pull the key vocabulary and
+// write definitions. Returns cards to review before saving.
+const flashcardFromDeckSchema = z.object({
+  deckId: z.string().trim().min(1),
+  instructions: z.string().trim().max(2000).optional(),
+});
 const flashcardCardSchema = z.object({
   term: z.string().trim().min(1).max(300),
   def: z.string().trim().min(1).max(2000),
@@ -181,7 +187,7 @@ const flashcardCardSchema = z.object({
 const flashcardCreateSchema = z.object({
   name: z.string().trim().min(1).max(120),
   description: z.string().trim().max(500).optional(),
-  source: z.enum(['manual', 'upload']).optional(),
+  source: z.enum(['manual', 'upload', 'from_game']).optional(),
   cards: z.array(flashcardCardSchema).min(1).max(400),
 });
 // Editing a set: rename and/or replace its cards.
@@ -543,6 +549,42 @@ export async function studiesRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not read that file' });
+    }
+  });
+
+  // Generate flashcards from one of the team's study games: pull the key
+  // vocabulary from its questions and write definitions. Returns cards (with
+  // display sequence numbers) for review; no set is created yet.
+  app.post('/api/studies/flashcards/from-deck', guard, async (request, reply) => {
+    const teamId = request.currentUser!.teamId;
+    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
+    const parsed = flashcardFromDeckSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A study game is required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    const deck = await getDeck(parsed.data.deckId, teamId);
+    if (!deck) return reply.code(404).send({ error: 'Study game not found' });
+    // Compose source material from the game: each question's stem, its correct
+    // answer, and any explanation — the concepts to pull vocabulary from.
+    const text = deck.questions
+      .map((q) => {
+        const correct = q.options.find((o) => o.label === q.answer)?.text ?? '';
+        return [q.stem, correct ? `Answer: ${correct}` : '', q.explanation ?? ''].filter(Boolean).join('\n');
+      })
+      .join('\n\n');
+    if (!text.trim()) return reply.code(422).send({ error: 'That study game has no questions to build flashcards from.' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'studies_flashcard_from_deck');
+      const cards = await parseFlashcardsFromText({
+        text,
+        instructions: `Build flashcards of the key terms and concepts tested by this study game "${deck.name}". Each card is a term and a concise definition. ${parsed.data.instructions ?? ''}`.trim(),
+      });
+      if (cards.length === 0) {
+        return reply.code(422).send({ error: 'Claude could not pull vocabulary from that study game. Try adding instructions.' });
+      }
+      return { cards: cards.map((c, i) => ({ seq: i + 1, term: c.term, def: c.def, topic: c.topic })), deckName: deck.name };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build flashcards from that game' });
     }
   });
 

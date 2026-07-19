@@ -21,10 +21,10 @@ const COPY: Record<StudyTarget, { title: string; blurb: string; action: string; 
     empty: 'Build your first study game in Study Creation — AI-generated from a topic, or from a file you upload — and it shows up here to play.',
   },
   test: {
-    title: 'Test Mode',
-    blurb: 'Pick a game to test yourself on — a graded exam drawn from its questions.',
-    action: 'Test',
-    empty: 'Build a study game in Study Creation and you can sit a graded test on it here.',
+    title: 'Practice Tests',
+    blurb: 'Pick a game to test yourself on — a graded practice test drawn from its questions.',
+    action: 'Practice test',
+    empty: 'Build a study game in Study Creation and you can sit a graded practice test on it here.',
   },
   progress: {
     title: 'Progress',

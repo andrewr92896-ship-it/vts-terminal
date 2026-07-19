@@ -40,7 +40,7 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           <button onClick={() => onNavigate('st_game')} style={primaryBtn(theme, accentGrad)}>Play a study game</button>
-          <button onClick={() => onNavigate('st_test')} style={ghostBtn(theme)}>Test mode</button>
+          <button onClick={() => onNavigate('st_test')} style={ghostBtn(theme)}>Practice tests</button>
           <button onClick={() => onNavigate('st_progress')} style={ghostBtn(theme)}>View progress</button>
           <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>Create one</button>
         </div>
@@ -55,13 +55,13 @@ export function StudyHub({ theme, onNavigate }: { theme: Theme; onNavigate: (scr
         <p style={{ margin: '10px 0 0', fontSize: 13.5, lineHeight: 1.6, color: '#d7ccff' }}>
           In <strong>Study Creation</strong> you can also build flashcard sets — type the cards in, generate
           them from a topic with AI, or upload a glossary — then study them in the <strong>Flashcards</strong>
-          section with the auto-rotate player. Build slide-deck study guides there too (go back and forth with
-          VTS AI, or upload a PowerPoint); your finished guides live in <strong>Study Guides</strong>, ready to present.
+          section with the auto-rotate player. Build slide-deck study presentations there too (go back and forth with
+          VTS AI, or upload a PowerPoint); your finished presentations live in <strong>Study Presentations</strong>, ready to present.
         </p>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
           <button onClick={() => onNavigate('st_cards')} style={primaryBtn(theme, accentGrad)}>Open Flashcards</button>
           <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>Open Study Creation</button>
-          <button onClick={() => onNavigate('st_guides')} style={ghostBtn(theme)}>Open Study Guides</button>
+          <button onClick={() => onNavigate('st_guides')} style={ghostBtn(theme)}>Open Study Presentations</button>
         </div>
       </div>
     </div>

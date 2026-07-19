@@ -7,6 +7,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { fileToScaledDataUrl } from '../../lib/image';
 import { GuidePresentation } from './GuidePresentation';
+import { GuideEditor } from './GuideEditor';
 
 // Study guides are split across two Studies sections:
 //   • Study Creation (`StudyGuideCreator`) — where a team *builds* a guide by
@@ -46,7 +47,6 @@ export function StudyGuidesLibrary({
   theme: Theme;
   onNavigate?: (screen: string) => void;
 }) {
-  const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
 
@@ -54,6 +54,7 @@ export function StudyGuidesLibrary({
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [presenting, setPresenting] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -88,19 +89,31 @@ export function StudyGuidesLibrary({
   if (presenting) {
     return <GuidePresentation theme={theme} guideId={presenting} onExit={() => setPresenting(null)} />;
   }
+  if (editing) {
+    return (
+      <GuideEditor
+        theme={theme}
+        guideId={editing}
+        onClose={(updated) => {
+          if (updated) setGuides(updated);
+          setEditing(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Guides</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Presentations</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Present your team’s slide-by-slide study guides. Build a new one over in Study Creation.
+            Present your team’s slide-by-slide study presentations. Build a new one over in Study Creation.
           </p>
         </div>
         {!readOnly && onNavigate && guides.length > 0 && (
           <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-            ✦ Build a guide
+            ✦ Build a presentation
           </button>
         )}
       </div>
@@ -114,11 +127,11 @@ export function StudyGuidesLibrary({
       ) : guides.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>📽️</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No study guides yet</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No presentations yet</div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? 'A team builds study guides in Study Creation — chatting with VTS AI or uploading a presentation — then presents them here.'
-              : 'Head to Study Creation to build one: chat with VTS AI to draft the slides, or upload a PowerPoint. Your guides then show up here to present.'}
+              ? 'A team builds study presentations in Study Creation — chatting with VTS AI or uploading a presentation — then presents them here.'
+              : 'Head to Study Creation to build one: chat with VTS AI to draft the slides, or upload a PowerPoint. Your presentations then show up here to present.'}
           </div>
           {!readOnly && onNavigate && (
             <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGradient(theme)), marginTop: 16 }}>
@@ -127,14 +140,15 @@ export function StudyGuidesLibrary({
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {guides.map((g) => (
             <GuideCard
               key={g.id}
               guide={g}
               theme={theme}
-              canDelete={!readOnly && (g.createdBy === user?.id || user?.roles.includes('admin') === true)}
+              canManage={!readOnly && (g.createdBy === user?.id || user?.roles.includes('admin') === true)}
               onPresent={() => setPresenting(g.id)}
+              onEdit={() => setEditing(g.id)}
               onDelete={() => remove(g.id)}
             />
           ))}
@@ -209,15 +223,15 @@ export function StudyGuideCreator({
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Guides</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Presentations</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build a slide-by-slide study guide with VTS AI, or upload a presentation — then present it from Study Guides.
+            Build a slide-by-slide study presentation with VTS AI, or upload a presentation — then present it from Study Presentations.
           </p>
         </div>
         {!readOnly && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => { setSavedName(null); setError(null); setBuilderInit({}); }} style={primaryBtn(theme, accentGrad)}>
-              ✦ New study guide
+              ✦ New presentation
             </button>
             <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', gap: 6, cursor: parsing ? 'default' : 'pointer', opacity: parsing ? 0.6 : 1 }}>
               {parsing ? 'Reading…' : '⬆ Upload a presentation'}
@@ -285,14 +299,16 @@ export function StudyGuideCreator({
 function GuideCard({
   guide,
   theme,
-  canDelete,
+  canManage,
   onPresent,
+  onEdit,
   onDelete,
 }: {
   guide: StudyGuide;
   theme: Theme;
-  canDelete: boolean;
+  canManage: boolean;
   onPresent: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
@@ -301,7 +317,7 @@ function GuideCard({
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{guide.name}</h3>
         <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '2px 6px' }}>
-          Guide
+          Slides
         </span>
       </div>
       {guide.description && (
@@ -317,12 +333,17 @@ function GuideCard({
         <button onClick={onPresent} disabled={guide.slideCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: guide.slideCount === 0 ? 0.6 : 1 }}>
           ▶ Present
         </button>
-        {canDelete && !confirm && (
+        {canManage && !confirm && (
+          <button onClick={onEdit} style={ghostBtn(theme)}>
+            Edit
+          </button>
+        )}
+        {canManage && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
             Delete
           </button>
         )}
-        {canDelete && confirm && (
+        {canManage && confirm && (
           <>
             <button onClick={onDelete} style={{ ...ghostBtn(theme), borderColor: '#ef5468', color: '#ff9a9a' }}>
               Confirm delete
