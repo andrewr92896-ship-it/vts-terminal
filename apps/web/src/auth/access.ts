@@ -23,7 +23,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
 
 // Short descriptions shown next to each role in the admin picker.
 export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
-  founder: 'Full access, incl. the Founder Portal. Granted only by the owner.',
+  founder: 'Full access, incl. the Developer Portal. Granted only by the owner.',
   software_developer: 'Founder-equivalent access. Granted only by the owner.',
   admin: 'Manage users and teams (Admin Portal). Granted by a founder.',
   funded: 'Private — reveals the Funded (prop-challenge) section in Trading.',

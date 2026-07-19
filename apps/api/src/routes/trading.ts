@@ -26,6 +26,7 @@ import {
   importFundedTrades,
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
+import { getSessionAlertPrefs, setSessionAlertPrefs } from '../trading/sessionAlertPrefs.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
   getMarketNews,
@@ -37,7 +38,7 @@ import {
   removeEvent,
 } from '../trading/news.js';
 import { listTruthPosts } from '../trading/feeds.js';
-import { SESSION_BIASES, NEWS_IMPACTS, NEWS_BIASES, NEWS_CATEGORIES } from '../db/schema.js';
+import { NEWS_IMPACTS, NEWS_BIASES, NEWS_CATEGORIES } from '../db/schema.js';
 import {
   addConnection,
   adminUpdateConnection,
@@ -56,6 +57,7 @@ import {
 } from '../trading/manual.js';
 import {
   aiConfigured,
+  analyzeMarketHours,
   parsePositionScreenshot,
   parseAccountScreenshot,
   parseTradeHistoryScreenshot,
@@ -316,6 +318,39 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.delete('/api/trading/sessions/:id', write, async (request) => ({
     sessions: await removeSession(request.currentUser!.id, (request.params as { id: string }).id),
   }));
+
+  // Resolve an instrument's regular market hours (ET) so a session's whole-week
+  // schedule can be filled to "all open market hours". Trading write only, and
+  // metered against the per-user AI cap like any other model call.
+  app.post('/api/trading/market-hours', write, async (request, reply) => {
+    if (!aiConfigured()) {
+      return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    }
+    const parsed = marketHoursSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Enter an instrument symbol first' });
+    try {
+      await enforceAiLimit(request.currentUser!.id, 'market_hours');
+      const result = await analyzeMarketHours(parsed.data.symbol);
+      if (result.days.length === 0) {
+        return reply.code(422).send({ error: 'Could not determine market hours for that symbol' });
+      }
+      return result;
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Market-hours lookup failed' });
+    }
+  });
+
+  // ---- Strategy Session notification preferences (owner's own sessions) ----
+  app.get('/api/trading/session-alert-prefs', read, async (request) => ({
+    prefs: await getSessionAlertPrefs(request.currentUser!.id),
+  }));
+  app.put('/api/trading/session-alert-prefs', write, async (request, reply) => {
+    const parsed = sessionAlertPrefsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid notification preferences' });
+    const prefs = await setSessionAlertPrefs(request.currentUser!.id, parsed.data);
+    return { prefs };
+  });
 
   // ---- Live Wall boards (per-user customizable chart/watchlist presets) ----
   app.get('/api/trading/boards', read, async (request) => ({ boards: await listBoards(request.currentUser!.id) }));
@@ -1038,14 +1073,25 @@ const fundedTradeSchema = z.object({
 });
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
+const dayWindow = z.object({ open: hhmm, close: hhmm });
+// Per-weekday schedule: only mon–fri keys, each an optional {open,close} window.
+const daysSchema = z
+  .object({
+    mon: dayWindow.nullish(),
+    tue: dayWindow.nullish(),
+    wed: dayWindow.nullish(),
+    thu: dayWindow.nullish(),
+    fri: dayWindow.nullish(),
+  })
+  .partial();
 const sessionFields = {
   instrument: z.string().trim().max(40).nullish(),
-  openTime: hhmm.optional(),
-  closeTime: hhmm.optional(),
+  days: daysSchema.optional(),
+  marketHours: z.boolean().optional(),
   timeframe: z.string().trim().max(16).nullish(),
-  bias: z.enum(SESSION_BIASES).optional(),
-  bullPlan: z.string().trim().max(2000).nullish(),
-  bearPlan: z.string().trim().max(2000).nullish(),
+  // `neutral` is dropped from the UI — new/edited sessions may only be bull,
+  // bear, or two-way (the DB still tolerates legacy 'neutral' rows on read).
+  bias: z.enum(['bull', 'bear', 'both']).optional(),
   notes: z.string().trim().max(2000).nullish(),
   active: z.boolean().optional(),
 };
@@ -1053,6 +1099,14 @@ const addSessionSchema = z.object({ name: z.string().trim().min(1).max(80), ...s
 const editSessionSchema = z
   .object({ name: z.string().trim().min(1).max(80).optional(), ...sessionFields })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+const marketHoursSchema = z.object({ symbol: z.string().trim().min(1).max(60) });
+const sessionAlertPrefsSchema = z.object({
+  notifyOpen: z.boolean(),
+  notifyClose: z.boolean(),
+  notifyPreOpen: z.boolean(),
+  preOpenLeadMin: z.number().int().min(1).max(240),
+});
 
 // Live Wall board layouts. The layout is a bounded grid of tiles; every field
 // is length/range-capped so a saved board can never bloat the row or carry

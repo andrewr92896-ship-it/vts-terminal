@@ -3,7 +3,15 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { EditableText } from '../../copy/SiteCopy';
-import type { SessionBias, SessionInput, SessionStatus, StrategySession } from '../../api/types';
+import type {
+  DayWindow,
+  SessionBias,
+  SessionInput,
+  SessionStatus,
+  StrategySession,
+  Weekday,
+  WeekSchedule,
+} from '../../api/types';
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -20,6 +28,10 @@ const BORDER2 = '#1c3a7a';
 
 const REFRESH_MS = 60_000;
 
+const WEEKDAYS: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
+const DAY_LABEL: Record<Weekday, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri' };
+const DEFAULT_WINDOW: DayWindow = { open: '09:30', close: '11:00' };
+
 const STATUS: Record<SessionStatus, { label: string; color: string }> = {
   active: { label: 'Active now', color: GREEN },
   opening: { label: 'Opening soon', color: AMBER },
@@ -29,13 +41,36 @@ const BIAS: Record<SessionBias, { label: string; color: string }> = {
   bull: { label: 'Bull', color: GREEN },
   bear: { label: 'Bear', color: RED },
   both: { label: 'Two-way', color: GOLD },
-  neutral: { label: 'Neutral', color: MUTED },
 };
 
 function fmtMins(m: number | null): string {
   if (m == null) return '';
   if (m < 60) return `${m}m`;
   return `${Math.floor(m / 60)}h ${m % 60}m`;
+}
+
+// Render an enabled-day list as a compact label, collapsing a contiguous run
+// into a range (e.g. Mon–Fri) and otherwise listing them (Mon, Wed, Fri).
+function daysLabel(days: Weekday[]): string {
+  if (days.length === 0) return '';
+  const idx = days.map((d) => WEEKDAYS.indexOf(d)).sort((a, b) => a - b);
+  const contiguous = idx.every((v, i) => i === 0 || v === idx[i - 1] + 1);
+  if (contiguous && idx.length > 2) return `${DAY_LABEL[WEEKDAYS[idx[0]]]}–${DAY_LABEL[WEEKDAYS[idx[idx.length - 1]]]}`;
+  return idx.map((i) => DAY_LABEL[WEEKDAYS[i]]).join(', ');
+}
+
+// Summarize a week schedule: one line if every enabled day shares a window, else
+// a per-day breakdown.
+function describeSchedule(days: WeekSchedule):
+  | { uniform: true; label: string; open: string; close: string }
+  | { uniform: false; items: { day: Weekday; open: string; close: string }[] }
+  | null {
+  const enabled = WEEKDAYS.filter((d) => days[d]) as Weekday[];
+  if (enabled.length === 0) return null;
+  const first = days[enabled[0]]!;
+  const allSame = enabled.every((d) => days[d]!.open === first.open && days[d]!.close === first.close);
+  if (allSame) return { uniform: true, label: daysLabel(enabled), open: first.open, close: first.close };
+  return { uniform: false, items: enabled.map((d) => ({ day: d, open: days[d]!.open, close: days[d]!.close })) };
 }
 
 export function StrategySessions() {
@@ -72,7 +107,7 @@ export function StrategySessions() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="sessions.title">Strategy Sessions</EditableText></h2>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}><EditableText id="sessions.subtitle">Your trading windows (Eastern Time) with bull & bear playbooks per instrument.</EditableText></div>
+          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}><EditableText id="sessions.subtitle">Your trading windows (Eastern Time) per instrument — pick the days and hours, or fill them from the market's full open hours.</EditableText></div>
         </div>
         {!readOnly && <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? <EditableText id="sessions.close">Close</EditableText> : <EditableText id="sessions.new">+ New session</EditableText>}</button>}
       </div>
@@ -85,7 +120,7 @@ export function StrategySessions() {
 
       {sessions.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          <EditableText id="sessions.empty">No sessions yet. Add one (e.g. “London Open”, 03:00–05:00) with your bull and bear plans.</EditableText>
+          <EditableText id="sessions.empty">No sessions yet. Add one (e.g. “London Open”) — choose the days and hours, or let VTS AI fill the instrument's full market hours.</EditableText>
         </div>
       ) : (
         groups.map((g) => {
@@ -120,6 +155,7 @@ function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySessi
   }
   const st = STATUS[s.status];
   const b = BIAS[s.bias];
+  const sched = describeSchedule(s.days);
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden', borderTop: `2px solid ${st.color}`, opacity: s.active ? 1 : 0.6 }}>
       <div style={{ padding: '12px 15px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
@@ -131,19 +167,32 @@ function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySessi
           {st.label}{s.status !== 'active' && s.minsToOpen != null ? ` · ${fmtMins(s.minsToOpen)}` : ''}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 12, padding: '0 15px 10px', flexWrap: 'wrap', fontSize: 11.5, color: MUTED }}>
-        <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: TEXT }}>{s.openTime}–{s.closeTime} ET</span>
-        {s.timeframe && <span style={metaChip}>{s.timeframe}</span>}
-        <span style={{ ...metaChip, color: b.color, borderColor: b.color }}>{b.label}</span>
-        {!s.active && <span style={{ ...metaChip, color: FAINT }}>paused</span>}
+
+      {/* Schedule */}
+      <div style={{ padding: '0 15px 10px', display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11.5, color: MUTED }}>
+        {sched == null ? (
+          <span style={{ color: FAINT }}><EditableText id="sessions.no_days">No days set</EditableText></span>
+        ) : sched.uniform ? (
+          <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: TEXT }}>
+            {sched.label} · {sched.open}–{sched.close} ET
+          </span>
+        ) : (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {sched.items.map((it) => (
+              <span key={it.day} style={{ ...metaChip, fontFamily: "'IBM Plex Mono', monospace", color: TEXT }}>
+                {DAY_LABEL[it.day]} {it.open}–{it.close}
+              </span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {s.timeframe && <span style={metaChip}>{s.timeframe}</span>}
+          <span style={{ ...metaChip, color: b.color, borderColor: b.color }}>{b.label}</span>
+          {s.marketHours && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}><EditableText id="sessions.mh_chip">Market hours</EditableText></span>}
+          {!s.active && <span style={{ ...metaChip, color: FAINT }}>paused</span>}
+        </div>
       </div>
 
-      {(s.bullPlan || s.bearPlan) && (
-        <div style={{ display: 'flex', gap: 1, borderTop: `1px solid ${BORDER}` }}>
-          <Plan label="Bull" color={GREEN} text={s.bullPlan} />
-          <Plan label="Bear" color={RED} text={s.bearPlan} />
-        </div>
-      )}
       {s.notes && <div style={{ padding: '8px 15px', fontSize: 11, color: '#8fa3cc', borderTop: `1px solid ${BORDER}` }}>{s.notes}</div>}
 
       {!readOnly && (
@@ -157,52 +206,147 @@ function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySessi
   );
 }
 
-function Plan({ label, color, text }: { label: string; color: string; text: string | null }) {
-  return (
-    <div style={{ flex: 1, minWidth: 0, padding: '10px 14px' }}>
-      <div style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color, marginBottom: 4 }}>{label} plan</div>
-      <div style={{ fontSize: 12, color: text ? TEXT : FAINT, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{text || '—'}</div>
-    </div>
-  );
+type DaysState = Record<Weekday, DayWindow | null>;
+
+function initialDays(initial?: StrategySession): DaysState {
+  const out: DaysState = { mon: null, tue: null, wed: null, thu: null, fri: null };
+  const src = initial?.days;
+  if (src && WEEKDAYS.some((d) => src[d])) {
+    for (const d of WEEKDAYS) out[d] = src[d] ? { ...src[d]! } : null;
+    return out;
+  }
+  // New session: default the standard Mon–Fri window so the form is ready to go.
+  if (!initial) for (const d of WEEKDAYS) out[d] = { ...DEFAULT_WINDOW };
+  return out;
 }
 
 function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?: StrategySession; busy: boolean; submitLabel: string; onSubmit: (input: SessionInput) => void; onCancel: () => void }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [instrument, setInstrument] = useState(initial?.instrument ?? '');
-  const [openTime, setOpenTime] = useState(initial?.openTime ?? '09:30');
-  const [closeTime, setCloseTime] = useState(initial?.closeTime ?? '11:00');
   const [timeframe, setTimeframe] = useState(initial?.timeframe ?? '');
-  const [bias, setBias] = useState<SessionBias>(initial?.bias ?? 'neutral');
-  const [bullPlan, setBullPlan] = useState(initial?.bullPlan ?? '');
-  const [bearPlan, setBearPlan] = useState(initial?.bearPlan ?? '');
+  const [bias, setBias] = useState<SessionBias>(initial?.bias ?? 'both');
   const [notes, setNotes] = useState(initial?.notes ?? '');
+  const [days, setDays] = useState<DaysState>(() => initialDays(initial));
+  const [marketHours, setMarketHours] = useState(initial?.marketHours ?? false);
+  const [mhBusy, setMhBusy] = useState(false);
+  const [mhErr, setMhErr] = useState<string | null>(null);
+  const [mhNote, setMhNote] = useState<string | null>(null);
+
+  const enabledDays = WEEKDAYS.filter((d) => days[d]);
+
+  function toggleDay(day: Weekday) {
+    setMarketHours(false);
+    setMhNote(null);
+    setDays((prev) => {
+      if (prev[day]) return { ...prev, [day]: null };
+      // Enabling: copy the first already-enabled day's window (easy "same as
+      // Monday"), else the standard default.
+      const seed = WEEKDAYS.map((d) => prev[d]).find(Boolean) ?? DEFAULT_WINDOW;
+      return { ...prev, [day]: { ...seed } };
+    });
+  }
+
+  function setDayTime(day: Weekday, field: 'open' | 'close', value: string) {
+    setMarketHours(false);
+    setMhNote(null);
+    setDays((prev) => (prev[day] ? { ...prev, [day]: { ...prev[day]!, [field]: value } } : prev));
+  }
+
+  async function fillMarketHours() {
+    const sym = instrument.trim();
+    if (!sym) { setMhErr('Enter an instrument first (e.g. EUR/USD, SPY, BTC).'); return; }
+    setMhBusy(true);
+    setMhErr(null);
+    setMhNote(null);
+    try {
+      const res = await api.marketHours(sym);
+      const next: DaysState = { mon: null, tue: null, wed: null, thu: null, fri: null };
+      for (const d of res.days) next[d.day] = { open: d.open, close: d.close };
+      setDays(next);
+      setMarketHours(true);
+      setMhNote(res.note || 'Filled from full market hours.');
+    } catch (e) {
+      setMhErr(e instanceof ApiError ? e.message : 'Could not fetch market hours.');
+    } finally {
+      setMhBusy(false);
+    }
+  }
 
   function submit() {
-    if (!name.trim()) return;
-    onSubmit({ name: name.trim(), instrument: instrument.trim() || null, openTime, closeTime, timeframe: timeframe.trim() || null, bias, bullPlan: bullPlan.trim() || null, bearPlan: bearPlan.trim() || null, notes: notes.trim() || null });
+    if (!name.trim() || enabledDays.length === 0) return;
+    const schedule: WeekSchedule = {};
+    for (const d of enabledDays) schedule[d] = days[d]!;
+    onSubmit({
+      name: name.trim(),
+      instrument: instrument.trim() || null,
+      days: schedule,
+      marketHours,
+      timeframe: timeframe.trim() || null,
+      bias,
+      notes: notes.trim() || null,
+    });
   }
+
+  const canSubmit = !!name.trim() && enabledDays.length > 0;
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
       <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? <EditableText id="sessions.form_edit">Edit session</EditableText> : <EditableText id="sessions.form_new">New session</EditableText>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. London Open)" style={{ ...input, flex: '1 1 180px' }} />
-        <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. GBP/USD)" style={{ ...input, flex: '1 1 150px' }} />
-        <label style={timeLbl}>Open<input value={openTime} onChange={(e) => setOpenTime(e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
-        <label style={timeLbl}>Close<input value={closeTime} onChange={(e) => setCloseTime(e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+        <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. EUR/USD)" style={{ ...input, flex: '1 1 150px' }} />
         <input value={timeframe} onChange={(e) => setTimeframe(e.target.value)} placeholder="TF (M15)" style={{ ...input, flex: '0 0 100px' }} />
         <select value={bias} onChange={(e) => setBias(e.target.value as SessionBias)} style={{ ...input, flex: '0 0 130px' }}>
-          <option value="neutral">Neutral</option>
           <option value="bull">Bull</option>
           <option value="bear">Bear</option>
           <option value="both">Two-way</option>
         </select>
-        <textarea value={bullPlan} onChange={(e) => setBullPlan(e.target.value)} placeholder="Bull playbook" rows={2} style={{ ...input, flex: '1 1 47%', resize: 'vertical', fontFamily: 'inherit' }} />
-        <textarea value={bearPlan} onChange={(e) => setBearPlan(e.target.value)} placeholder="Bear playbook" rows={2} style={{ ...input, flex: '1 1 47%', resize: 'vertical', fontFamily: 'inherit' }} />
-        <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" style={{ ...input, flex: '1 1 100%' }} />
       </div>
+
+      {/* Day selector + per-day time windows */}
+      <div style={{ marginTop: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+          <span style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}><EditableText id="sessions.days_label">Trading days</EditableText></span>
+          <button type="button" onClick={() => void fillMarketHours()} disabled={mhBusy} style={{ ...ghostBtn, marginLeft: 'auto', color: GOLD, borderColor: 'rgba(235,203,116,.5)', opacity: mhBusy ? 0.6 : 1 }}>
+            {mhBusy ? <EditableText id="sessions.mh_loading">Reading market hours…</EditableText> : <EditableText id="sessions.mh_btn">All open market hours</EditableText>}
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {WEEKDAYS.map((d) => {
+            const on = !!days[d];
+            return (
+              <button key={d} type="button" onClick={() => toggleDay(d)} style={{ ...dayBtn, ...(on ? dayBtnOn : {}) }}>
+                {DAY_LABEL[d]}
+              </button>
+            );
+          })}
+        </div>
+        {mhErr && <div style={{ ...miniBanner, marginTop: 8 }}>{mhErr}</div>}
+        {mhNote && <div style={{ marginTop: 8, fontSize: 11, color: GOLD }}>{mhNote}</div>}
+
+        {enabledDays.length === 0 ? (
+          <div style={{ marginTop: 10, fontSize: 11.5, color: FAINT }}>
+            <EditableText id="sessions.pick_days">Pick one or more days to set their hours, or tap “All open market hours”.</EditableText>
+          </div>
+        ) : (
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {enabledDays.map((d) => (
+              <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span style={{ width: 36, fontSize: 12, color: TEXT, fontWeight: 600 }}>{DAY_LABEL[d]}</span>
+                <label style={timeLbl}><EditableText id="sessions.open">Open</EditableText><input value={days[d]!.open} onChange={(e) => setDayTime(d, 'open', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+                <label style={timeLbl}><EditableText id="sessions.close_time">Close</EditableText><input value={days[d]!.close} onChange={(e) => setDayTime(d, 'close', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginTop: 12 }}>
+        <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (optional)" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
+      </div>
+
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button onClick={submit} disabled={busy || !name.trim()} style={{ ...goldBtn, opacity: busy || !name.trim() ? 0.6 : 1 }}>{submitLabel}</button>
+        <button onClick={submit} disabled={busy || !canSubmit} style={{ ...goldBtn, opacity: busy || !canSubmit ? 0.6 : 1 }}>{submitLabel}</button>
         <button onClick={onCancel} style={ghostBtn}><EditableText id="sessions.cancel">Cancel</EditableText></button>
       </div>
     </div>
@@ -213,6 +357,8 @@ const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, b
 const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none' };
 const timeLbl: CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: MUTED };
+const dayBtn: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 12, fontWeight: 600, padding: '7px 14px', borderRadius: 7, cursor: 'pointer', minWidth: 52 };
+const dayBtnOn: CSSProperties = { background: 'rgba(235,203,116,.16)', border: `1px solid ${GOLD}`, color: GOLD };
 const tag: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, background: 'rgba(255,255,255,.04)', border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 7px' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 8px' };
 const pill: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', borderRadius: 5, padding: '2px 7px', fontFamily: "'IBM Plex Mono', monospace" };
@@ -220,3 +366,4 @@ const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(18
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const smallBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' };
 const banner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
+const miniBanner: CSSProperties = { fontSize: 11.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 7, padding: '7px 10px' };

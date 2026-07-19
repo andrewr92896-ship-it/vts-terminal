@@ -438,9 +438,13 @@ export const fundedTrades = sqliteTable('funded_trades', {
 export type FundedTradeRow = typeof fundedTrades.$inferSelect;
 
 // ---- Trading — Strategy Sessions ----
-// Per-user trading-session windows (e.g. London Open) with a bias and bull/bear
-// playbooks per instrument. Times are 'HH:MM' in Eastern Time; status (active /
-// opening / idle) is computed from the current ET time.
+// Per-user trading-session windows (e.g. London Open) with a directional bias
+// and a per-weekday schedule per instrument. Times are 'HH:MM' in Eastern Time;
+// status (active / opening / idle) is computed from the current ET time.
+//
+// `neutral` is retained in the enum for backward compatibility with rows created
+// before it was dropped from the UI — the app coerces it to `both` on read and
+// never offers it for new sessions (see trading/sessions.ts).
 export const SESSION_BIASES = ['bull', 'bear', 'both', 'neutral'] as const;
 export type SessionBias = (typeof SESSION_BIASES)[number];
 
@@ -451,8 +455,15 @@ export const tradingSessions = sqliteTable('trading_sessions', {
     .references(() => users.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   instrument: text('instrument'),
-  openTime: text('open_time').notNull().default('09:30'), // ET 'HH:MM'
+  openTime: text('open_time').notNull().default('09:30'), // ET 'HH:MM' — representative window (earliest enabled day)
   closeTime: text('close_time').notNull().default('11:00'),
+  // Per-weekday schedule as JSON: { "mon": {"open":"09:30","close":"11:00"}, ... }
+  // Only enabled weekdays (mon–fri) are present. Null/empty falls back to the
+  // representative open_time/close_time applied to every weekday (legacy rows).
+  days: text('days'),
+  // Whether this session's schedule was filled from the instrument's full market
+  // hours (via the AI market-hours lookup) rather than hand-set windows.
+  marketHours: integer('market_hours', { mode: 'boolean' }).notNull().default(false),
   timeframe: text('timeframe'),
   bias: text('bias', { enum: SESSION_BIASES }).notNull().default('neutral'),
   bullPlan: text('bull_plan'),
@@ -821,6 +832,26 @@ export const notificationPrefs = sqliteTable(
   (t) => ({ userTarget: unique().on(t.userId, t.targetUserId) }),
 );
 export type NotificationPrefRow = typeof notificationPrefs.$inferSelect;
+
+// One row per user holding their Strategy Session notification preferences: buzz
+// me when one of my sessions opens, when it closes, and/or a configurable number
+// of minutes before it opens. Defaults are all-off — a user opts in from the
+// Trading Alerts screen. The background session watch (trading/sessionWatch.ts)
+// reads these and fires the owner's own notifications.
+export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  notifyOpen: integer('notify_open', { mode: 'boolean' }).notNull().default(false),
+  notifyClose: integer('notify_close', { mode: 'boolean' }).notNull().default(false),
+  notifyPreOpen: integer('notify_pre_open', { mode: 'boolean' }).notNull().default(false),
+  preOpenLeadMin: integer('pre_open_lead_min').notNull().default(30),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
 
 // One row per user holding the serialized Study Game state (per-category levels,
 // scores, and answer history), so quiz progress follows the learner across

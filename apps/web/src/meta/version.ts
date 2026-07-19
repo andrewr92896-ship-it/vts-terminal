@@ -9,9 +9,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.12';
+export const APP_VERSION = 'Beta V 5.13';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.13',
+    date: 'July 19, 2026',
+    notes: [
+      'My Portal now sits at the very top of the workspaces list, and the Founder Portal is renamed the Developer Portal.',
+      'Strategy Sessions rebuilt: pick the exact days (Mon–Fri) and hours a session runs, drop a bias of Bull, Bear, or Two-way, or tap “All open market hours” to have VTS AI fill the instrument’s full market hours for you.',
+      'Trading Alerts (formerly “Alerts”) can now notify you when a strategy session opens, when it closes, and a set number of minutes before it opens.',
+    ],
+  },
   {
     version: 'Beta V 5.12',
     date: 'July 19, 2026',
