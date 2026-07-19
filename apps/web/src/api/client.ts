@@ -832,6 +832,21 @@ export const api = {
   }): Promise<{ assignments: { id: number; topic: string }[] }> {
     return request('/api/studies/decks/categorize', { method: 'POST', body: JSON.stringify(input) });
   },
+  // AI correct-answer audit — review a game's questions and return any flagged
+  // problems (a wrong answer key above all). Read-only; does not modify the game.
+  auditStudyDeck(input: {
+    questions: {
+      id: number;
+      stem: string;
+      options: { label: 'A' | 'B' | 'C' | 'D'; text: string }[];
+      answer: 'A' | 'B' | 'C' | 'D';
+      explanation?: string | null;
+    }[];
+  }): Promise<{
+    issues: { id: number; severity: 'high' | 'low'; problem: string; suggestedAnswer: 'A' | 'B' | 'C' | 'D' | null }[];
+  }> {
+    return request('/api/studies/decks/audit', { method: 'POST', body: JSON.stringify(input) });
+  },
   deleteStudyDeck(id: string): Promise<{ decks: TeamDeck[] }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },

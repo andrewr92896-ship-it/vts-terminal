@@ -26,6 +26,13 @@ interface EditQ {
   sourceName: string | null;
 }
 
+// One flagged problem from the AI correct-answer audit, keyed to a question.
+interface AuditIssue {
+  severity: 'high' | 'low';
+  problem: string;
+  suggestedAnswer: Letter | null;
+}
+
 let _uid = 1;
 function blankQuestion(topic: string): EditQ {
   return {
@@ -66,6 +73,13 @@ export function DeckEditor({
   const [catConstrain, setCatConstrain] = useState(false);
   const [catBusy, setCatBusy] = useState(false);
 
+  // AI correct-answer audit: problems keyed by question uid, plus how many the
+  // last run flagged (null = not run yet) so the summary stays stable while the
+  // per-question flags clear as they're addressed.
+  const [auditBusy, setAuditBusy] = useState(false);
+  const [auditFound, setAuditFound] = useState<number | null>(null);
+  const [auditIssues, setAuditIssues] = useState<Record<number, AuditIssue>>({});
+
   useEffect(() => {
     let alive = true;
     api
@@ -94,12 +108,24 @@ export function DeckEditor({
     };
   }, [deckId]);
 
-  const patchQ = (uid: number, patch: Partial<EditQ>) =>
+  // Once the author acts on a flagged question, clear its audit flag — the
+  // problem is presumed addressed until they re-run the audit.
+  const clearIssue = (uid: number) =>
+    setAuditIssues((prev) => {
+      if (!(uid in prev)) return prev;
+      const { [uid]: _drop, ...rest } = prev;
+      return rest;
+    });
+  const patchQ = (uid: number, patch: Partial<EditQ>) => {
     setQuestions((prev) => prev.map((q) => (q.uid === uid ? { ...q, ...patch } : q)));
-  const patchOption = (uid: number, label: Letter, text: string) =>
+    clearIssue(uid);
+  };
+  const patchOption = (uid: number, label: Letter, text: string) => {
     setQuestions((prev) =>
       prev.map((q) => (q.uid === uid ? { ...q, options: q.options.map((o) => (o.label === label ? { ...o, text } : o)) } : q)),
     );
+    clearIssue(uid);
+  };
 
   function addCategory() {
     const c = newCat.trim();
@@ -164,6 +190,41 @@ export function DeckEditor({
     }
   }
 
+  // Run the AI correct-answer audit over every question and flag the ones with
+  // problems. Read-only — it never changes the game; the author reviews the
+  // flags and fixes what they agree with, then saves.
+  async function runAudit() {
+    if (auditBusy || questions.length === 0) return;
+    const v = validate();
+    if (v) {
+      setError(v);
+      return;
+    }
+    setAuditBusy(true);
+    setError(null);
+    try {
+      const res = await api.auditStudyDeck({
+        questions: questions.map((q) => ({
+          id: q.uid,
+          stem: q.stem.trim(),
+          options: q.options.map((o) => ({ label: o.label, text: o.text.trim() })),
+          answer: q.answer,
+          explanation: q.explanation.trim() || null,
+        })),
+      });
+      const map: Record<number, AuditIssue> = {};
+      for (const it of res.issues) {
+        map[it.id] = { severity: it.severity, problem: it.problem, suggestedAnswer: it.suggestedAnswer };
+      }
+      setAuditIssues(map);
+      setAuditFound(res.issues.length);
+    } catch (e) {
+      setError(catError(e));
+    } finally {
+      setAuditBusy(false);
+    }
+  }
+
   function validate(): string | null {
     if (!name.trim()) return 'Give the game a name.';
     for (const q of questions) {
@@ -216,6 +277,8 @@ export function DeckEditor({
       return ai - bi || a.n - b.n;
     });
   }, [questions, sortByCat, allCategories]);
+
+  const issueCount = Object.keys(auditIssues).length;
 
   if (loading) {
     return (
@@ -327,9 +390,40 @@ export function DeckEditor({
             <input type="checkbox" checked={sortByCat} onChange={(e) => setSortByCat(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
             <EditableText id="deckeditor.sort_by_cat" text="Sort by category" />
           </label>
+          <button onClick={runAudit} disabled={auditBusy || questions.length === 0} style={{ ...ghostBtn(theme), opacity: auditBusy || questions.length === 0 ? 0.6 : 1 }}>
+            {auditBusy ? (
+              <EditableText id="deckeditor.auditing" text="Auditing…" />
+            ) : (
+              <EditableText id="deckeditor.audit_btn" text="✓ Audit answers" />
+            )}
+          </button>
           <button onClick={() => addQuestion()} style={ghostBtn(theme)}><EditableText id="deckeditor.add_question" text="+ Add question" /></button>
         </div>
       </div>
+
+      {/* Audit result summary. Three states: the run came back clean; some
+          flags are still open; or every flag has been addressed (re-run to
+          confirm). The per-question count is live as flags clear. */}
+      {auditFound !== null && !auditBusy && (
+        auditFound === 0 ? (
+          <div style={{ ...okBanner, marginBottom: 10 }}>
+            <EditableText id="deckeditor.audit_clear" text="Audit found no problems — every answer key checks out." />
+          </div>
+        ) : issueCount > 0 ? (
+          <div style={{ ...warn, marginBottom: 10 }}>
+            <EditableText id="deckeditor.audit_found_pre" text="Audit flagged" /> {issueCount}{' '}
+            {issueCount === 1 ? (
+              <EditableText id="deckeditor.audit_found_one" text="question to review — see the highlighted question below." />
+            ) : (
+              <EditableText id="deckeditor.audit_found_many" text="questions to review — see the highlighted questions below." />
+            )}
+          </div>
+        ) : (
+          <div style={{ ...okBanner, marginBottom: 10 }}>
+            <EditableText id="deckeditor.audit_addressed" text="All flagged questions addressed — save your changes, then re-audit to confirm." />
+          </div>
+        )
+      )}
 
       {error && <div style={{ ...warn, marginBottom: 10 }}>{error}</div>}
 
@@ -349,6 +443,7 @@ export function DeckEditor({
                 n={n}
                 theme={theme}
                 categories={allCategories}
+                issue={auditIssues[q.uid] ?? null}
                 onPatch={(p) => patchQ(q.uid, p)}
                 onOption={(l, t) => patchOption(q.uid, l, t)}
                 onRemove={() => removeQuestion(q.uid)}
@@ -378,6 +473,7 @@ function QuestionEditor({
   n,
   theme,
   categories,
+  issue,
   onPatch,
   onOption,
   onRemove,
@@ -386,13 +482,17 @@ function QuestionEditor({
   n: number;
   theme: Theme;
   categories: string[];
+  issue: AuditIssue | null;
   onPatch: (p: Partial<EditQ>) => void;
   onOption: (label: Letter, text: string) => void;
   onRemove: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
+  const flagged = !!issue;
+  const high = issue?.severity === 'high';
+  const flagColor = high ? '#ef5468' : '#e0a23a';
   return (
-    <div style={card(theme)}>
+    <div style={{ ...card(theme), ...(flagged ? { borderColor: flagColor, boxShadow: `0 0 0 1px ${flagColor}55` } : null) }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: muted }}>Q{n}{q.sourceName ? ` · from ${q.sourceName}` : ''}</span>
         {!confirm ? (
@@ -404,6 +504,40 @@ function QuestionEditor({
           </span>
         )}
       </div>
+
+      {/* Audit flag: the problem the review found, and (when the model named a
+          different answer) a one-tap fix to adopt it. */}
+      {issue && (
+        <div
+          style={{
+            border: `1px solid ${flagColor}`,
+            background: high ? 'rgba(239,84,104,.1)' : 'rgba(224,162,58,.1)',
+            borderRadius: 8,
+            padding: '9px 12px',
+            marginBottom: 10,
+            fontSize: 12.5,
+            color: '#f3e8ff',
+            lineHeight: 1.5,
+          }}
+        >
+          <div style={{ fontWeight: 700, color: flagColor, marginBottom: 2 }}>
+            {high ? (
+              <EditableText id="deckeditor.audit_flag_high" text="⚠ Possible answer-key issue" />
+            ) : (
+              <EditableText id="deckeditor.audit_flag_low" text="⚠ Possible issue" />
+            )}
+          </div>
+          <div>{issue.problem}</div>
+          {issue.suggestedAnswer && issue.suggestedAnswer !== q.answer && (
+            <button
+              onClick={() => onPatch({ answer: issue.suggestedAnswer! })}
+              style={{ ...ghostBtn(theme), minHeight: 32, padding: '6px 11px', marginTop: 9, borderColor: GREEN, color: GREEN, fontWeight: 700 }}
+            >
+              Set correct answer to {issue.suggestedAnswer}
+            </button>
+          )}
+        </div>
+      )}
 
       <textarea
         value={q.stem}
@@ -486,6 +620,7 @@ function catError(e: unknown): string {
 const wrap: CSSProperties = { maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' };
 const fieldLabel: CSSProperties = { display: 'block', fontSize: 11, color: muted, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 };
 const warn: CSSProperties = { fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px' };
+const okBanner: CSSProperties = { fontSize: 12.5, color: '#9be7c4', background: 'rgba(53,196,123,.1)', border: '1px solid rgba(53,196,123,.4)', borderRadius: 8, padding: '9px 12px' };
 
 function card(theme: Theme): CSSProperties {
   return {

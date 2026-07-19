@@ -873,6 +873,97 @@ export async function generateDeckQuestions(input: {
   return out;
 }
 
+// ---- Correct-answer audit ----
+// Review a team's study-game questions for problems — above all a wrong answer
+// key (the marked answer isn't actually the single best option), plus
+// no-correct-option, multiple-correct-options, ambiguous/unanswerable wording,
+// duplicated options, and clear factual errors. Returns ONLY the flagged
+// questions, so a clean game returns []. The model reasons per question; ids are
+// validated against the input so it can't invent references, and every field is
+// clamped. Chunked + run in parallel like the other deck AI so a large game
+// stays within each call's budget.
+
+export interface AuditQuestion {
+  id: number;
+  stem: string;
+  options: { label: QLetter; text: string }[];
+  answer: QLetter;
+  explanation?: string | null;
+}
+
+export interface QuestionAudit {
+  id: number;
+  severity: 'high' | 'low';
+  problem: string;
+  suggestedAnswer: QLetter | null;
+}
+
+const AUDIT_SYSTEM =
+  'You are a meticulous exam-question reviewer. For each multiple-choice question you are given, decide whether it has a real problem. The most important check: is the MARKED correct answer actually correct and the single best option? Also flag when no option is correct, more than one option is correct, the question is ambiguous or unanswerable as written, two options mean the same thing, or there is a clear factual error. Be strict about the answer key, but do NOT invent problems — a sound question should not be flagged.';
+
+async function auditChunk(questions: AuditQuestion[]): Promise<QuestionAudit[]> {
+  const block = questions
+    .map((q) =>
+      [
+        `#${q.id}`,
+        `Q: ${q.stem}`,
+        q.options.map((o) => `  ${o.label}) ${o.text}`).join('\n'),
+        `Marked correct answer: ${q.answer}`,
+        q.explanation ? `Author explanation: ${q.explanation}` : '',
+      ]
+        .filter(Boolean)
+        .join('\n'),
+    )
+    .join('\n\n');
+  const prompt = [
+    'Review each question below by its # id. Return ONLY the ones that have a problem.',
+    'For each flagged question give:',
+    '- "severity": "high" for a wrong / missing / ambiguous answer key, or no/multiple correct options; "low" for wording, clarity, or minor factual issues that do not change which option is correct.',
+    '- "problem": one concise sentence naming the issue.',
+    '- "suggestedAnswer": the single letter (A, B, C, or D) you believe is actually correct, or null if none is or you are unsure.',
+    'Respond with ONLY JSON of the form {"issues":[{"id":1,"severity":"high","problem":"...","suggestedAnswer":"C"}]} and nothing else. If every question is fine, return {"issues":[]}.',
+    '',
+    'QUESTIONS:',
+    block,
+  ].join('\n');
+  const raw = await askClaude(prompt, AUDIT_SYSTEM, 4000);
+  const parsed = extractJson(raw) as { issues?: unknown } | null;
+  const rows = Array.isArray(parsed?.issues) ? (parsed!.issues as unknown[]) : [];
+  const valid = new Set(questions.map((q) => q.id));
+  const out: QuestionAudit[] = [];
+  for (const r of rows) {
+    const o = (r ?? {}) as Record<string, unknown>;
+    const id = typeof o.id === 'number' ? o.id : Number(o.id);
+    if (!Number.isInteger(id) || !valid.has(id)) continue;
+    const problem = typeof o.problem === 'string' ? o.problem.trim().slice(0, 300) : '';
+    if (!problem) continue;
+    const severity = o.severity === 'low' ? 'low' : 'high';
+    const sa = typeof o.suggestedAnswer === 'string' ? o.suggestedAnswer.trim().toUpperCase() : '';
+    const suggestedAnswer = (LETTERS as readonly string[]).includes(sa) ? (sa as QLetter) : null;
+    out.push({ id, severity, problem, suggestedAnswer });
+  }
+  return out;
+}
+
+export async function auditDeckQuestions(questions: AuditQuestion[]): Promise<QuestionAudit[]> {
+  if (questions.length === 0) return [];
+  const chunks: AuditQuestion[][] = [];
+  for (let i = 0; i < questions.length; i += 20) chunks.push(questions.slice(i, i + 20));
+  const perChunk = await mapLimit(chunks, 4, async (c) => {
+    try {
+      return await auditChunk(c);
+    } catch {
+      // One chunk failing (transient rate limit/timeout) shouldn't sink the
+      // whole audit — return no findings for it rather than erroring out.
+      return [] as QuestionAudit[];
+    }
+  });
+  // Keep input order; a question only appears in one chunk, but de-dupe by id.
+  const byId = new Map<number, QuestionAudit>();
+  for (const a of perChunk.flat()) if (!byId.has(a.id)) byId.set(a.id, a);
+  return questions.map((q) => byId.get(q.id)).filter((x): x is QuestionAudit => !!x);
+}
+
 // Split a big blob of study text into bounded chunks so each is parsed by its
 // own (fast) model call. Breaks on blank lines first — usually the gap between
 // questions — then hard-splits any single piece that is still oversized.
