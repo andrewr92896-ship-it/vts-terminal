@@ -6,78 +6,75 @@ import type { WorkspaceKey } from '../theme/themes';
 // preview.
 
 export const ALL_ROLES: RoleKey[] = [
+  'founder',
+  'software_developer',
   'admin',
-  'trading',
-  'trading_viewer',
   'funded',
-  'studies',
+  'member',
 ];
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
+  founder: 'Founder',
+  software_developer: 'Software Developer',
   admin: 'Admin',
-  trading: 'Trading',
-  trading_viewer: 'Trading (View only)',
   funded: 'Funded',
-  studies: 'Studies',
+  member: 'Member',
 };
 
 // Short descriptions shown next to each role in the admin picker.
 export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
-  admin: 'Manage users and see every workspace',
-  trading: 'Trading workspace (full access)',
-  trading_viewer: 'Trading workspace (read-only)',
-  funded: 'Private — reveals the Funded (prop-challenge) section in Trading',
-  studies: 'Studies workspace',
+  founder: 'Full access, incl. the Founder Portal. Granted only by the owner.',
+  software_developer: 'Founder-equivalent access. Granted only by the owner.',
+  admin: 'Manage users and teams (Admin Portal). Granted by a founder.',
+  funded: 'Private — reveals the Funded (prop-challenge) section in Trading.',
+  member: 'Baseline access to every standard workspace.',
 };
 
-export function isAdmin(roles: RoleKey[]): boolean {
-  return roles.includes('admin');
+// Founder-level: founder or the permission-equivalent software_developer role.
+export function isFounder(roles: RoleKey[]): boolean {
+  return roles.includes('founder') || roles.includes('software_developer');
 }
 
-const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
-  trading: ['trading', 'trading_viewer'],
-  studies: ['studies'],
-  // The Admin workspace is reserved for admins; no member role grants it. The
-  // isAdmin short-circuit in canAccessWorkspace is what actually lets admins in.
-  admin: [],
-  // Site Help is open to everyone signed in (handled in canAccessWorkspace).
-  help: [],
-};
+// Admin capability. Founder-level users are a superset of admins.
+export function isAdmin(roles: RoleKey[]): boolean {
+  return roles.includes('admin') || isFounder(roles);
+}
 
 export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
-  // Site Help is available to every signed-in user, whatever their roles.
-  if (ws === 'help') return true;
-  if (isAdmin(roles)) return true;
-  return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
+  // The Founder Portal is founder-level only.
+  if (ws === 'founder') return isFounder(roles);
+  // The Admin Portal is for admins (founder-level included).
+  if (ws === 'admin') return isAdmin(roles);
+  // Every other workspace (Trading, Studies, My Portal, Site Help) is open to
+  // every signed-in user under the Member = full-access model.
+  return true;
 }
 
 // The private Funded (prop-challenge) section is revealed to holders of the
-// admin-assigned `funded` role (admins included). Mirror of the backend
+// `funded` role (admins and founder-level included). Mirror of the backend
 // canAccessFunded; the server is the enforcer, this just drives nav/screen
 // gating and the "view as" preview.
 export function canAccessFunded(roles: RoleKey[]): boolean {
   return isAdmin(roles) || roles.includes('funded');
 }
 
-// Trading is read-only when the user only has the viewer role (mirror of the
-// backend auth/rbac.ts). Used to hide compose/edit controls for viewers; the
-// server still enforces it on every write.
-export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean {
-  if (ws !== 'trading') return false;
-  if (isAdmin(roles) || roles.includes('trading')) return false;
-  return roles.includes('trading_viewer');
+// No workspace has a read-only role variant anymore (the old trading_viewer role
+// is retired). Kept as a stable export; the demo's read-only presentation is
+// driven by user.isDemo elsewhere, not by roles.
+export function isWorkspaceReadOnly(_roles: RoleKey[], _ws: WorkspaceKey): boolean {
+  return false;
 }
 
-// Ordered as the sidebar shows them. Site Help is available to everyone; the
-// Admin workspace comes last and only for admins.
+// Ordered as the sidebar shows them. Every member reaches Trading, Studies, My
+// Portal and Site Help; the Admin and Founder portals come last for those roles.
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['trading', 'studies', 'help', 'admin'];
+  const order: WorkspaceKey[] = ['trading', 'studies', 'myportal', 'help', 'admin', 'founder'];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 
 // A short human summary of a set of roles, for the user badge / footer.
 export function rolesSummary(roles: RoleKey[]): string {
-  if (isAdmin(roles)) return 'Administrator';
-  if (roles.length === 0) return 'No roles';
-  return roles.map((r) => ROLE_LABELS[r]).join(' · ');
+  if (isFounder(roles)) return 'Founder';
+  if (roles.includes('admin')) return 'Administrator';
+  return 'Member';
 }

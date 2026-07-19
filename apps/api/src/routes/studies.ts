@@ -39,6 +39,20 @@ import {
 import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
 import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
+import { getUserTeamContext } from '../userTeams/service.js';
+
+// Who may delete team Studies content (study games, flashcard sets, guides):
+//   • 'any'  — admins/founder-level, and the leader of the user's Trading Team.
+//   • 'own'  — a user in no Trading Team may delete only content they created.
+//   • 'none' — a Trading Team member who is not the leader cannot delete.
+type StudiesDeleteMode = 'any' | 'own' | 'none';
+async function studiesDeleteMode(me: { id: string; roles: string | null }): Promise<StudiesDeleteMode> {
+  if (isAdmin(parseRoles(me))) return 'any';
+  const ctx = await getUserTeamContext(me.id);
+  if (ctx) return ctx.isLeader ? 'any' : 'none';
+  return 'own';
+}
+const NOT_LEADER_MSG = 'Only your Trading Team leader can delete team study content.';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
@@ -409,12 +423,15 @@ export async function studiesRoutes(app: FastifyInstance) {
     return { deck, decks: await listDecks(me.teamId) };
   });
 
-  // Delete a deck (creator or a team admin).
+  // Delete a deck. Only the Trading Team leader (or an admin/founder) may delete
+  // team content; a team-less user may delete only games they created.
   app.delete('/api/studies/decks/:id', guard, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
-    const ok = await deleteDeck(id, me.teamId, me.id, isAdmin(parseRoles(me)));
+    const mode = await studiesDeleteMode(me);
+    if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
+    const ok = await deleteDeck(id, me.teamId, me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete study games you created.' });
     return { decks: await listDecks(me.teamId) };
   });
@@ -614,12 +631,15 @@ export async function studiesRoutes(app: FastifyInstance) {
     return { set, sets: await listFlashcardSets(me.teamId) };
   });
 
-  // Delete a set (creator or a team admin).
+  // Delete a set. Only the Trading Team leader (or an admin/founder) may delete
+  // team content; a team-less user may delete only sets they created.
   app.delete('/api/studies/flashcards/:id', guard, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
-    const ok = await deleteFlashcardSet(id, me.teamId, me.id, isAdmin(parseRoles(me)));
+    const mode = await studiesDeleteMode(me);
+    if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
+    const ok = await deleteFlashcardSet(id, me.teamId, me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete flashcard sets you created.' });
     return { sets: await listFlashcardSets(me.teamId) };
   });
@@ -702,12 +722,15 @@ export async function studiesRoutes(app: FastifyInstance) {
     return { guide, guides: await listGuides(me.teamId) };
   });
 
-  // Delete a guide (creator or a team admin).
+  // Delete a guide. Only the Trading Team leader (or an admin/founder) may delete
+  // team content; a team-less user may delete only guides they created.
   app.delete('/api/studies/guides/:id', guard, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
-    const ok = await deleteGuide(id, me.teamId, me.id, isAdmin(parseRoles(me)));
+    const mode = await studiesDeleteMode(me);
+    if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
+    const ok = await deleteGuide(id, me.teamId, me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete study guides you created.' });
     return { guides: await listGuides(me.teamId) };
   });

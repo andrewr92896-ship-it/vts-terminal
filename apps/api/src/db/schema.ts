@@ -1072,6 +1072,71 @@ export const patchNotes = sqliteTable('patch_notes', {
 });
 export type PatchNoteRow = typeof patchNotes.$inferSelect;
 
+// ---- My Portal: user-created Trading Teams ----
+// A "Trading Team" is a small, user-owned group created from the My Portal
+// workspace — distinct from the admin-managed trading_teams above. Any signed-in
+// user can create ONE (becoming its leader); a user belongs to at most one
+// (enforced by the unique userId on user_team_members). The leader assigns
+// cosmetic badges and per-member permissions, and can hand leadership to another
+// member. Capped at five members (enforced in the service).
+export const userTeams = sqliteTable('user_teams', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  // The current team leader (a users.id). Always also present as a member row.
+  leaderId: text('leader_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type UserTeamRow = typeof userTeams.$inferSelect;
+
+// One row per member of a user Trading Team. `userId` is unique across the whole
+// table, so a user can be in at most one team. `badge` is a cosmetic title label
+// (e.g. "Chief Strategist"), null for none. The boolean columns are the leader-
+// granted permissions; the leader implicitly has them all (checked via
+// userTeams.leaderId, not these flags).
+export const userTeamMembers = sqliteTable('user_team_members', {
+  id: text('id').primaryKey(),
+  teamId: text('team_id')
+    .notNull()
+    .references(() => userTeams.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  badge: text('badge'), // cosmetic title, e.g. "Chief Strategist"; null for none
+  canCreateStudyGuides: integer('can_create_study_guides', { mode: 'boolean' }).notNull().default(false),
+  canInvite: integer('can_invite', { mode: 'boolean' }).notNull().default(false),
+  canManageBadges: integer('can_manage_badges', { mode: 'boolean' }).notNull().default(false),
+  canRemoveMembers: integer('can_remove_members', { mode: 'boolean' }).notNull().default(false),
+  canEditTeam: integer('can_edit_team', { mode: 'boolean' }).notNull().default(false),
+  joinedAt: integer('joined_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type UserTeamMemberRow = typeof userTeamMembers.$inferSelect;
+
+// A pending invitation to join a user Trading Team, addressed to a resolved
+// user (looked up from the username the inviter typed). Status walks
+// pending → accepted | declined. One live invite per (team, invited user).
+export const userTeamInvites = sqliteTable(
+  'user_team_invites',
+  {
+    id: text('id').primaryKey(),
+    teamId: text('team_id')
+      .notNull()
+      .references(() => userTeams.id, { onDelete: 'cascade' }),
+    invitedUserId: text('invited_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    invitedBy: text('invited_by').references(() => users.id, { onDelete: 'set null' }),
+    status: text('status').notNull().default('pending'), // 'pending' | 'accepted' | 'declined'
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ teamInvitee: unique().on(t.teamId, t.invitedUserId) }),
+);
+export type UserTeamInviteRow = typeof userTeamInvites.$inferSelect;
+
 // ---- Badge types (recognition icons shown next to a user's name) ----
 // An admin-managed registry of the badges that can appear next to a member's
 // name (e.g. a star for early-release members, a shield for admins). Two are

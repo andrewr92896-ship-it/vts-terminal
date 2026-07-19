@@ -42,7 +42,7 @@ export async function adminRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: 'Check the user details and try again' });
     }
     try {
-      const user = await createUser(parsed.data);
+      const user = await createUser(request.currentUser!.id, parsed.data);
       return { user };
     } catch (err) {
       if (err instanceof AdminError) return reply.code(400).send({ error: err.message });

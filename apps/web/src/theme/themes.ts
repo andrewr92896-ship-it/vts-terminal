@@ -1,7 +1,7 @@
 // Per-workspace themes, brand, and tabs — values taken verbatim from the
 // prototype so the look matches exactly.
 
-export type WorkspaceKey = 'trading' | 'studies' | 'admin' | 'help';
+export type WorkspaceKey = 'trading' | 'studies' | 'myportal' | 'help' | 'admin' | 'founder';
 
 export interface Theme {
   pageBg: string;
@@ -59,6 +59,30 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#4b7fe0',
     accentText: '#06122c',
   },
+  // My Portal: an emerald accent for the user's personal workspace (Trading
+  // Team). Distinct from every other workspace signal.
+  myportal: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0b3026 0%,#06160f 60%)',
+    headerBg: 'linear-gradient(90deg,#0a2b22 0%,#0e3a2c 100%)',
+    headerBorder: '#1c5a44',
+    navBg: '#08201a',
+    navBorder: '#123b2e',
+    accent: '#34d399',
+    accent2: '#12a374',
+    accentText: '#052018',
+  },
+  // Founder Portal: a distinguished amber accent that signals the elevated,
+  // founder-only area sitting above Admin.
+  founder: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#2e2410 0%,#161206 60%)',
+    headerBg: 'linear-gradient(90deg,#2a2110 0%,#3c2f14 100%)',
+    headerBorder: '#5a4620',
+    navBg: '#201a0c',
+    navBorder: '#332813',
+    accent: '#F5A524',
+    accent2: '#c9821a',
+    accentText: '#241800',
+  },
 };
 
 export function accentGradient(t: Theme): string {
@@ -106,6 +130,20 @@ export const BRAND: Record<WorkspaceKey, BrandMeta> = {
     size: '21px',
     letterSpacing: '2px',
   },
+  myportal: {
+    name: () => 'MY PORTAL',
+    sub: 'Your Trading Team',
+    color: '#8ff0cf',
+    size: '21px',
+    letterSpacing: '2px',
+  },
+  founder: {
+    name: () => 'FOUNDER',
+    sub: 'Founder portal',
+    color: '#f7cc82',
+    size: '21px',
+    letterSpacing: '2px',
+  },
 };
 
 export interface TabDef {
@@ -135,7 +173,6 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'ad_users', label: 'Users' },
     { key: 'ad_teams', label: 'Teams' },
     { key: 'ad_early', label: 'Early Access' },
-    { key: 'ad_viewas', label: 'View as role' },
     { key: 'ad_suggestions', label: 'Suggestions' },
     { key: 'ad_bugs', label: 'Bug Reports' },
   ],
@@ -146,18 +183,28 @@ export const TABS: Record<WorkspaceKey, TabDef[]> = {
     { key: 'hp_bug', label: 'Report a bug' },
     { key: 'hp_suggest', label: 'Suggestion' },
   ],
+  myportal: [{ key: 'my_team', label: 'Trading Team' }],
+  founder: [
+    { key: 'ad_ai', label: 'AI Instructions' },
+    { key: 'ad_content', label: 'Site Wording' },
+    { key: 'ad_viewas', label: 'View as role' },
+  ],
 };
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'live',
   studies: 'st_home',
+  myportal: 'my_team',
   admin: 'ad_users',
+  founder: 'ad_ai',
   help: 'hp_howto',
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   trading: 'Trading',
   studies: 'Studies',
-  admin: 'Admin',
+  myportal: 'My Portal',
+  admin: 'Admin Portal',
+  founder: 'Founder Portal',
   help: 'Site Help',
 };

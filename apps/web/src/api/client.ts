@@ -70,6 +70,9 @@ import type {
   GuideDraftSlide,
   TradingSignals,
   User,
+  MyPortalData,
+  MyTeam,
+  TeamMemberPermissions,
 } from './types';
 
 // A flashcard the user added to their own personal deck (a term, a definition,
@@ -184,6 +187,56 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
+  // ---- My Portal: user-created Trading Teams ----
+  myPortal(): Promise<MyPortalData> {
+    return request('/api/my-portal/team');
+  },
+  myPortalConfig(): Promise<{ badgePresets: string[]; maxMembers: number }> {
+    return request('/api/my-portal/config');
+  },
+  createMyTeam(name: string): Promise<{ team: MyTeam }> {
+    return request('/api/my-portal/team', { method: 'POST', body: JSON.stringify({ name }) });
+  },
+  renameMyTeam(name: string): Promise<{ team: MyTeam }> {
+    return request('/api/my-portal/team/rename', { method: 'POST', body: JSON.stringify({ name }) });
+  },
+  inviteToMyTeam(username: string): Promise<{ team: MyTeam }> {
+    return request('/api/my-portal/team/invite', { method: 'POST', body: JSON.stringify({ username }) });
+  },
+  cancelMyTeamInvite(inviteId: string): Promise<{ team: MyTeam }> {
+    return request(`/api/my-portal/team/invites/${encodeURIComponent(inviteId)}/cancel`, { method: 'POST' });
+  },
+  respondMyTeamInvite(inviteId: string, accept: boolean): Promise<MyPortalData> {
+    return request(`/api/my-portal/invites/${encodeURIComponent(inviteId)}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ accept }),
+    });
+  },
+  leaveMyTeam(): Promise<{ ok: true }> {
+    return request('/api/my-portal/team/leave', { method: 'POST' });
+  },
+  removeMyTeamMember(userId: string): Promise<{ team: MyTeam }> {
+    return request(`/api/my-portal/team/members/${encodeURIComponent(userId)}/remove`, { method: 'POST' });
+  },
+  transferMyTeamLeadership(userId: string): Promise<{ team: MyTeam }> {
+    return request('/api/my-portal/team/transfer', { method: 'POST', body: JSON.stringify({ userId }) });
+  },
+  setMyTeamMemberBadge(userId: string, badge: string | null): Promise<{ team: MyTeam }> {
+    return request(`/api/my-portal/team/members/${encodeURIComponent(userId)}/badge`, {
+      method: 'POST',
+      body: JSON.stringify({ badge }),
+    });
+  },
+  setMyTeamMemberPermissions(
+    userId: string,
+    perms: Partial<TeamMemberPermissions>,
+  ): Promise<{ team: MyTeam }> {
+    return request(`/api/my-portal/team/members/${encodeURIComponent(userId)}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify(perms),
+    });
+  },
+
   // ---- Early access ----
   // Public: submit a request from the login screen. No auth.
   requestEarlyAccess(input: {

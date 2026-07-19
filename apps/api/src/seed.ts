@@ -4,6 +4,7 @@ import { eq } from 'drizzle-orm';
 import { db } from './db/index.js';
 import { tradingTeams, users } from './db/schema.js';
 import { hashPassword } from './auth/passwords.js';
+import { parseRoles } from './auth/rbac.js';
 import { seedConnectionsFromEnv } from './trading/connections.js';
 import { seedBadges } from './badges/service.js';
 import {
@@ -86,6 +87,18 @@ export async function seedAdmin(): Promise<void> {
 
   if (existing[0]) {
     console.log(`Admin user "${username}" already exists.`);
+    // Promote the owner to founder if they aren't already founder-level. This
+    // covers the migration from the old admin-only model: the seeded owner
+    // account becomes the portal's founder on the next boot, idempotently.
+    const roles = parseRoles(existing[0]);
+    if (!roles.includes('founder') && !roles.includes('software_developer')) {
+      const nextRoles = [...new Set([...roles.filter((r) => r !== 'admin'), 'founder'])];
+      await db
+        .update(users)
+        .set({ roles: JSON.stringify(nextRoles), updatedAt: new Date() })
+        .where(eq(users.id, existing[0].id));
+      console.log(`Promoted owner "${username}" to Founder.`);
+    }
     await trySeedConnections(existing[0].id);
     return;
   }
@@ -104,7 +117,8 @@ export async function seedAdmin(): Promise<void> {
     email,
     passwordHash: await hashPassword(password),
     role: 'Admin', // legacy column, unused; kept populated for back-compat
-    roles: JSON.stringify(['admin']),
+    // The seeded owner is the portal's founder (top of the role ladder).
+    roles: JSON.stringify(['founder']),
     viewBrokerage: true,
     active: true,
     mustChangePassword: generated,
