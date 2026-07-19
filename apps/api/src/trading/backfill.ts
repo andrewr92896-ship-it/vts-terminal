@@ -60,6 +60,14 @@ export async function backfillClosedTrades(scopeIds?: Set<string>): Promise<numb
       const rows = await fetchOandaClosedTradeRows(cfg);
       if (rows.length === 0) continue;
 
+      // Honour the connection's "count trades since" cutoff: a trade that opened
+      // before it belongs to an earlier phase the trader has excluded, so it must
+      // never be imported (otherwise deleting it just lets a later pass re-add it).
+      const cutoff = c.historyStartAt;
+      const eligible =
+        cutoff == null ? rows : rows.filter((r) => (r.openedAtMs ?? r.closeTimeMs) >= cutoff);
+      if (eligible.length === 0) continue;
+
       // Every key we already hold for this owner (any status), so we skip trades
       // reconcile captured live and never insert the same trade twice.
       const existing = await db
@@ -68,7 +76,7 @@ export async function backfillClosedTrades(scopeIds?: Set<string>): Promise<numb
         .where(eq(tradingPositions.userId, c.ownerId));
       const known = new Set(existing.map((r) => r.key));
 
-      const fresh = rows.filter((r) => !known.has(keyFor(r.tradeId)));
+      const fresh = eligible.filter((r) => !known.has(keyFor(r.tradeId)));
       if (fresh.length === 0) continue;
 
       const stamp = new Date();

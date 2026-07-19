@@ -543,6 +543,9 @@ export interface BrokerConnection {
   lastStatus: 'unknown' | 'ok' | 'error';
   lastError: string | null;
   lastCheckedAt: number | null;
+  // "Count trades since" cutoff (ms); trades before it are excluded from the
+  // Trade Log / History for this connection. Null = count everything.
+  historyStartAt: number | null;
   createdAt: number;
 }
 
@@ -551,6 +554,7 @@ export interface ConnectionInput {
   label?: string;
   active?: boolean;
   creds?: Record<string, string>;
+  historyStartAt?: number | null;
 }
 
 // A hand-entered open position on a manual broker connection (mirror of

@@ -19,6 +19,7 @@ import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
 import { scopedTraderIds, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
+import { beforeCutoff, connectionCutoffs } from './connections.js';
 import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
@@ -286,6 +287,10 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
   // public demo is sandboxed off real broker data, so it only ever sees its own
   // hand-logged showcase.
   if (!viewerIsDemo) {
+    // Per-connection "count trades since" cutoffs — a broker position that opened
+    // before its connection's cutoff is an earlier phase the trader excluded, so
+    // it's dropped from the log and its KPIs.
+    const cutoffs = await connectionCutoffs();
     const posRows = await db
       .select({ pos: tradingPositions, username: users.username, roles: users.roles })
       .from(tradingPositions)
@@ -294,6 +299,8 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
       if (!scopeIds.has(r.pos.userId)) continue; // only the viewer's team
       if (r.username === DEMO_USERNAME) continue;
       if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
+      const opened = (r.pos.openedAt ?? r.pos.firstSeenAt).getTime();
+      if (beforeCutoff(cutoffs, r.pos.connectionId, opened)) continue;
       records.push(positionToRecord(r.pos, r.username, viewerId));
     }
   }

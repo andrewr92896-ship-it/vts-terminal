@@ -37,6 +37,20 @@ function statusColor(s: BrokerConnection['lastStatus']): string {
   return s === 'ok' ? GREEN : s === 'error' ? RED : FAINT;
 }
 
+// The "count trades since" cutoff maps to UTC midnight of the chosen day, so it
+// means the same instant regardless of the viewer's timezone. Blank clears it.
+function dateToStartMs(v: string): number | null {
+  if (!v) return null;
+  const ms = Date.parse(v + 'T00:00:00.000Z');
+  return Number.isNaN(ms) ? null : ms;
+}
+function startMsToDate(ms: number | null): string {
+  return ms == null ? '' : new Date(ms).toISOString().slice(0, 10);
+}
+function fmtStartLabel(ms: number): string {
+  return new Date(ms).toLocaleDateString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }) {
   const { user } = useAuth();
   const isAdmin = !!user?.roles.includes('admin');
@@ -58,6 +72,8 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
   const [env, setEnv] = useState<'practice' | 'live'>('practice');
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
+  // "Count trades since" cutoff for the connection being edited (YYYY-MM-DD).
+  const [historyStart, setHistoryStart] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -79,6 +95,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     setEnv('practice');
     setApiKey('');
     setApiSecret('');
+    setHistoryStart('');
   }
 
   function startEdit(c: BrokerConnection) {
@@ -92,6 +109,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     setEnv(c.env === 'live' ? 'live' : 'practice');
     setApiKey('');
     setApiSecret('');
+    setHistoryStart(startMsToDate(c.historyStartAt));
   }
 
   // Assemble the credential fields the user filled in (blank → keep current on edit).
@@ -132,7 +150,12 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     let okDone = false;
     if (editingId) {
       okDone = await apply(
-        api.updateConnection(editingId, { label: label.trim(), ...(creds ? { creds } : {}) }),
+        api.updateConnection(editingId, {
+          label: label.trim(),
+          // Non-manual only: manual connections stream no closed history to gate.
+          ...(broker !== 'manual' ? { historyStartAt: dateToStartMs(historyStart) } : {}),
+          ...(creds ? { creds } : {}),
+        }),
       );
     } else {
       if (!creds) {
@@ -183,6 +206,12 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                     {c.summary ?? ''}
                     {c.lastStatus === 'error' && c.lastError ? ` · ${c.lastError}` : ''}
                   </div>
+                  {c.historyStartAt != null && (
+                    <div style={{ fontSize: 10, color: FAINT, marginTop: 2 }}>
+                      <EditableText id="broker.cutoff_since">Counting trades since</EditableText>{' '}
+                      {fmtStartLabel(c.historyStartAt)}
+                    </div>
+                  )}
                 </div>
                 {!readOnly && (
                   <>
@@ -284,6 +313,33 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
             </>
           )}
         </div>
+        {editingId && broker !== 'manual' && (
+          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>
+              <EditableText id="broker.cutoff_label">Count trades since (optional)</EditableText>
+            </label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="date"
+                value={historyStart}
+                onChange={(e) => setHistoryStart(e.target.value)}
+                style={{ ...input, flex: '0 0 170px' }}
+              />
+              {historyStart && (
+                <button type="button" onClick={() => setHistoryStart('')} style={ghostBtn}>
+                  <EditableText id="broker.cutoff_clear">Clear</EditableText>
+                </button>
+              )}
+            </div>
+            <div style={{ fontSize: 11, color: FAINT, lineHeight: 1.5 }}>
+              <EditableText id="broker.cutoff_help">
+                Only trades opened on or after this date count in the Trade Log and History. Use it to
+                skip an earlier learning phase on this account — anything before it is left out of your
+                stats and never re-imported. Leave blank to count everything.
+              </EditableText>
+            </div>
+          </div>
+        )}
         {editingId && (
           <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>
             Leave credential fields blank to keep the current keys.
@@ -401,7 +457,17 @@ function TeamConnections({ onChanged }: { onChanged?: () => void }) {
                     {c.active ? '' : ' · paused'}
                   </span>
                   <span style={{ fontSize: 10.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>@{c.owner}</span>
-                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                  <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 10, color: FAINT }} title="Only trades opened on or after this date count in the desk stats. Blank = count everything.">
+                      <EditableText id="broker.cutoff_admin">since</EditableText>
+                    </span>
+                    <input
+                      type="date"
+                      value={startMsToDate(c.historyStartAt)}
+                      onChange={(e) => !busy && apply(api.adminUpdateConnection(c.id, { historyStartAt: dateToStartMs(e.target.value) }))}
+                      title="Count trades since (blank = all)"
+                      style={{ ...input, flex: '0 0 140px', padding: '5px 8px', fontSize: 11 }}
+                    />
                     <button onClick={() => (setEditId(c.id), setLabel(c.label), setErr(null))} style={ghostBtn}>
                       Rename
                     </button>

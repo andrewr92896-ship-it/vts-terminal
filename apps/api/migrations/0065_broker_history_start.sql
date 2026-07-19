@@ -1,0 +1,1 @@
+ALTER TABLE `broker_connections` ADD `history_start_at` integer;

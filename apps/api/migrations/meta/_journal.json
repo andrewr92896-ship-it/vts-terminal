@@ -456,6 +456,13 @@
       "when": 1782339636908,
       "tag": "0064_drop_tv_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "6",
+      "when": 1782339736908,
+      "tag": "0065_broker_history_start",
+      "breakpoints": true
     }
   ]
 }

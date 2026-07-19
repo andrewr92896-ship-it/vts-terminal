@@ -13,6 +13,7 @@ import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf } from './settings.js';
 import { scopedTraderIds, scopedTraderIdsForUser, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
+import { beforeCutoff, connectionCutoffs } from './connections.js';
 import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 import type { LiveTrade } from './types.js';
 
@@ -486,13 +487,18 @@ export async function getHistory(
     .where(eq(tradingPositions.status, 'closed'))
     .orderBy(desc(tradingPositions.closedAt));
 
+  // Per-connection "count trades since" cutoffs — a closed position that opened
+  // before its connection's cutoff is an earlier phase the trader excluded, so it
+  // never counts toward History or its summary.
+  const cutoffs = await connectionCutoffs();
   const visible = joined.filter(
     (r) =>
       scopeIds.has(r.pos.userId) && // only the viewer's team
       // Drop the demo account: it's a sandbox, so its positions never surface as
       // "demo"-tagged rows in a real trader's history.
       r.username !== DEMO_USERNAME &&
-      canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'),
+      canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading') &&
+      !beforeCutoff(cutoffs, r.pos.connectionId, (r.pos.openedAt ?? r.pos.firstSeenAt).getTime()),
   );
   const rows = visible.map((r) => r.pos);
   const ownerOf = new Map(visible.map((r) => [r.pos.id, r.username]));

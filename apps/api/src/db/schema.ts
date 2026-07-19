@@ -266,6 +266,12 @@ export const brokerConnections = sqliteTable('broker_connections', {
     .default('unknown'),
   lastError: text('last_error'),
   lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }),
+  // "Count trades since": only trades that opened on/after this instant are
+  // counted in the Trade Log, History, and the closed-trade backfill for this
+  // connection. Lets a trader mark their real start on a broker account so an
+  // earlier learning/practice phase (funded, traded, withdrawn) never pollutes
+  // their stats. Null = count everything (the default, unchanged behaviour).
+  historyStartAt: integer('history_start_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

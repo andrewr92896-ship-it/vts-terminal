@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.20';
+export const APP_VERSION = 'Beta V 5.21';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.21',
+    date: 'July 19, 2026',
+    notes: [
+      'Broker connections now have a “Count trades since” date. Set it on a connection (Edit) to mark your real start on that account — an earlier learning/practice phase that you funded, traded, and withdrew no longer pollutes your Trade Log and History. Trades opened before the date are left out of every stat (win rate, profit factor, realized P/L, pips) and are never re-imported from the broker. Admins can set it per trader from Team connections. Leave it blank to count everything, exactly as before.',
+    ],
+  },
   {
     version: 'Beta V 5.20',
     date: 'July 19, 2026',

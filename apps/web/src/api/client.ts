@@ -590,7 +590,7 @@ export const api = {
   allConnections(): Promise<{ connections: OwnedBrokerConnection[] }> {
     return request('/api/trading/connections/all');
   },
-  adminUpdateConnection(id: string, patch: { label?: string; active?: boolean }): Promise<{ connections: OwnedBrokerConnection[] }> {
+  adminUpdateConnection(id: string, patch: { label?: string; active?: boolean; historyStartAt?: number | null }): Promise<{ connections: OwnedBrokerConnection[] }> {
     return request(`/api/trading/connections/${id}/admin`, { method: 'PATCH', body: JSON.stringify(patch) });
   },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
