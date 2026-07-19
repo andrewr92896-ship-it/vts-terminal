@@ -284,8 +284,10 @@ some documented vars aren't in the schema and vice-versa.
   Every hardcoded, site-coded string (screen titles, subtitles, blurbs, button
   labels, empty/loading/error states, static captions) must be wrapped in
   `<EditableText id="…">` from `apps/web/src/copy/SiteCopy.tsx`. This makes it
-  admin-editable live from the floating gold pencil beside the corner chat bubble
-  (admins only) — the edit stores an override in `app_settings` under `copy.<id>`
+  admin-editable live from the floating admin-shield button beside the corner chat
+  bubble (admins only) — click it to enter edit mode, then click any highlighted
+  string to reword it, or **Hide** it (renders as nothing for everyone until
+  reset). The edit stores an override in `app_settings` under `copy.<id>`
   (routes in `routes/content.ts`, served to everyone via `GET /api/site-content`,
   written via `PUT/DELETE /api/admin/site-content/copy/:key`). Rules:
   - Wrap it: `<EditableText id="alerts.title">Live Alerts</EditableText>`, or use
