@@ -68,20 +68,20 @@ Four workspaces in the sidebar; sections a user lacks the role for are hidden.
   History + Live Brokers; legacy keys `log`/`history`/`metrics` alias into it),
   Strategy Sessions, Manual Trades (`funded` key, `FundedScreen`), **Funded**
   (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
-- **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Test Mode
-  (`st_test`), Progress (`st_progress`), Study Creation (`st_decks`), Study Guides
-  (`st_guides`). **All study content is team-built** — there is no hardcoded
-  subject. **Study Game / Test Mode / Progress** are the same launcher
-  (`StudyGameHub`, parameterized by `target` = `play` | `test` | `progress`): each
-  lists your team's own study games and, when you pick one, opens the chosen
-  experience — the quiz+leaderboard player (`TeamStudyGame`), a graded test
-  (`DeckTestMode`, configurable size + pass line), or a progress summary
-  (`DeckProgress`). A deck's Play button in Study Creation deep-links into play via
-  `requestStudyDeck`/`consumeStudyDeck` (`studiesNav.ts`). **Study Creation**
-  (`StudyCreation`) is the make-things section (create only — it does **not**
-  play inline): it stacks the study-game maker (`TeamStudyDecks`), the
-  **flashcard-set maker** (`TeamFlashcards` — type cards in, AI-generate from a
-  topic, or upload a `.txt`; studied with the auto-rotate `FlashcardSetPlayer`),
+- **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
+  (`st_cards`), Test Mode (`st_test`), Study Guides (`st_guides`), Progress
+  (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
+  team-built** — there is no hardcoded subject. **Study Game / Test Mode /
+  Progress** are the same launcher (`StudyGameHub`, parameterized by `target` =
+  `play` | `test` | `progress`): each lists your team's own study games and, when
+  you pick one, opens the chosen experience — the quiz+leaderboard player
+  (`TeamStudyGame`), a graded test (`DeckTestMode`, configurable size + pass line),
+  or a progress summary (`DeckProgress`). **Flashcards** (`FlashcardsHub`) is the
+  matching launcher for flashcard sets — pick one and study it with the auto-rotate
+  `FlashcardSetPlayer`. **Study Creation** (`StudyCreation`) is the make/manage-only
+  section (no playing/studying inline): it stacks the study-game maker+editor
+  (`TeamStudyDecks` → `DeckEditor`, plus combine-games), the **flashcard-set maker**
+  (`TeamFlashcards` — type cards in, AI-generate from a topic, or upload a `.txt`),
   and the study-guide builder (`StudyGuideCreator` — build with VTS AI or upload a
   `.pptx`, parsed client-side in `lib/pptx.ts`). **Study Guides**
   (`StudyGuidesLibrary`) is the present/manage side — the finished guides only.

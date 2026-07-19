@@ -63,6 +63,9 @@ const StudyGameHub = lazy(() =>
 const StudyHub = lazy(() =>
   import('../workspaces/studies/StudyHub').then((m) => ({ default: m.StudyHub })),
 );
+const FlashcardsHub = lazy(() =>
+  import('../workspaces/studies/FlashcardsHub').then((m) => ({ default: m.FlashcardsHub })),
+);
 const StudyCreation = lazy(() =>
   import('../workspaces/studies/StudyCreation').then((m) => ({ default: m.StudyCreation })),
 );
@@ -120,6 +123,8 @@ function renderScreen(
     // remounts with the right target instead of React reusing the instance.
     case 'st_game':
       return <StudyGameHub key="st_game" theme={theme} target="play" onNavigate={onNavigate} />;
+    case 'st_cards':
+      return <FlashcardsHub theme={theme} onNavigate={onNavigate} />;
     case 'st_test':
       return <StudyGameHub key="st_test" theme={theme} target="test" onNavigate={onNavigate} />;
     case 'st_progress':
