@@ -125,13 +125,39 @@ roles live in `users.roles`.
 
 ## Teams (`teams/service.ts`) — scope almost everything
 
-A **trading team** is an admin-managed group; a user belongs to at most one
-(`users.team_id`). Teams scope **all trade data** (Live Wall, Trade Log,
-History, broker capital), Studies **leaderboards**, **team chat**, and
-notification recipients — a trader only ever sees their own team's data (or just
-their own if team-less). Default team `team-vitalis` / "Vitalis Trading Team"
-(seeded on boot; team-less users are adopted into it). Study games, flashcard
-sets, and guides are all team-scoped — a team only sees its own.
+A **trading team** is a group a user belongs to at most one of (`users.team_id`).
+Teams scope **all trade data** (Live Wall, Trade Log, History, broker capital),
+Studies **leaderboards**, **team chat**, and notification recipients — a trader
+only ever sees their own team's data (or just their own if team-less). Default
+team `team-vitalis` / "Vitalis Trading Team" (seeded on boot; team-less users are
+adopted into it). Study games, flashcard sets, and guides are all team-scoped —
+a team only sees its own. `scopedTraderIds` (`trading/scope.ts`) is the single
+place the boundary is defined; everything funnels through it.
+
+### One team, two surfaces (merged)
+
+`users.team_id` (+ the `trading_teams` row) is the **single source of truth** for
+team existence, name, and membership. It is managed from **two** surfaces that
+act on the same team:
+
+- **Admin ▸ Teams** (`teams/service.ts`) — admins create teams, rename them, and
+  assign/move members (`users.team_id`).
+- **My Portal ▸ Trading Team** (`userTeams/service.ts`) — the self-service surface
+  over the **same** team the user is in. Membership is read straight from
+  `users.team_id`; My-Portal-only metadata is layered on top:
+  - `user_teams` — one row per team naming its **leader** (`leaderId`).
+  - `user_team_members` — optional per-user **badge** + **permission flags**
+    (`canCreateStudyGuides / canInvite / canManageBadges / canRemoveMembers /
+    canEditTeam`); a missing row = defaults (no badge, no perms). Leader = all.
+  - `user_team_invites` — pending invites; **accepting sets the invitee's
+    `team_id`** (moves them onto the team's desk). Leaving / removal clears
+    `team_id` (→ solo). Renaming updates the shared `trading_teams` name.
+  A leader is auto-picked (founder → admin → earliest member) by `ensureTeamMeta`
+  and repaired if the stored one leaves; `backfillTeamLeaders()` runs on boot to
+  give every existing team a leader row. Demo/inactive users never appear.
+  Because membership is `team_id`, the My Portal team **is** the trade-scoping
+  team — the two are one. (Consequence: the Studies delete gate, keyed on team
+  leadership, is now live — non-leader members can't delete team study content.)
 
 ## AI / Ask Claude (`apps/api/src/ai`)
 

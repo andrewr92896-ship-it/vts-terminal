@@ -31,6 +31,7 @@ import { runMigrations } from './db/migrate.js';
 import { waitForDatabase } from './db/index.js';
 import { seedAdmin, seedDemo, backfillEmails } from './seed.js';
 import { seedDefaultTeam } from './teams/service.js';
+import { backfillTeamLeaders } from './userTeams/service.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
@@ -131,6 +132,9 @@ async function bootstrapDatabase(): Promise<void> {
   // (the admin/demo users are seeded after migrations, so they need this on a
   // fresh database).
   await seedDefaultTeam();
+  // Give every existing trading team a My Portal leader so it shows as a managed
+  // team (the My Portal Trading Team is now the same team that scopes trades).
+  await backfillTeamLeaders();
   await seedWelcome();
   // Seed the built-in recognition badges (early-release star, admin shield).
   await seedBadges();
