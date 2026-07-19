@@ -4,6 +4,7 @@ import { C, GOLD_GRADIENT, tint } from '../theme/tokens';
 import { rolesSummary } from '../auth/access';
 import { api } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
+import { useCheckForUpdates } from '../hooks/useCheckForUpdates';
 import { usePrivacy } from '../privacy/privacy';
 import { useAlertSound, ALERT_SOUNDS } from '../sound/alertSound';
 import { Clock } from './Clock';
@@ -165,6 +166,7 @@ export function TopBar(props: TopBarProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const appUpdate = useCheckForUpdates();
 
   // In-portal notifications (new team chat + admin suggestions/bugs). Unread is
   // computed from a locally stored last-seen timestamp so it survives reloads.
@@ -537,8 +539,8 @@ export function TopBar(props: TopBarProps) {
               </div>
             )}
 
-            {/* Phone notifications, Pushover, broker connections, and app
-                updates open in their own panel from here. */}
+            {/* Phone notifications, Pushover, and broker connections open in
+                their own panel from here; check-for-updates runs inline. */}
             <div style={{ borderTop: `1px solid ${C.line2}`, marginTop: 6, paddingTop: 6 }}>
               <button
                 onClick={() => {
@@ -550,6 +552,23 @@ export function TopBar(props: TopBarProps) {
                 <Icon name="bell-plus" size={15} color={C.faint} />
                 Notifications & connections
                 <span style={{ marginLeft: 'auto', fontSize: 10, color: C.faint }}>›</span>
+              </button>
+              <button
+                onClick={() => void appUpdate.run()}
+                disabled={appUpdate.state === 'checking' || appUpdate.state === 'applying'}
+                style={menuItem}
+                title="Check for a new version and update this device"
+              >
+                <Icon name="refresh-cw" size={15} color={C.faint} />
+                {appUpdate.state === 'checking'
+                  ? 'Checking…'
+                  : appUpdate.state === 'applying'
+                    ? 'Updating…'
+                    : appUpdate.state === 'uptodate'
+                      ? 'You’re on the latest ✓'
+                      : appUpdate.state === 'error'
+                        ? 'Couldn’t check — try again'
+                        : 'Check for updates'}
               </button>
             </div>
           </Dropdown>

@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.9';
+export const APP_VERSION = 'Beta V 5.0';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.0',
+    date: 'July 19, 2026',
+    notes: [
+      '“Check for updates” is now its own option in the settings cog (top bar) — one click checks for a new version and updates this device if there is one. It’s no longer buried in Notifications & connections, and the separate “Force refresh” option is gone.',
+    ],
+  },
   {
     version: 'Beta V 4.9',
     date: 'July 19, 2026',
