@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.13';
+export const APP_VERSION = 'Beta V 5.14';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.14',
+    date: 'July 19, 2026',
+    notes: [
+      'My Portal ▸ Trading Team now shows your real trading team — the same team you share trades with — instead of a separate “create a team” form. Your teammates appear automatically, and the leader can rename it, set badges, adjust each member’s permissions, invite, and hand off leadership.',
+    ],
+  },
   {
     version: 'Beta V 5.13',
     date: 'July 19, 2026',

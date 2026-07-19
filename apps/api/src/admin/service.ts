@@ -346,9 +346,13 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
       await tx.delete(supportRequestMessages).where(inArray(supportRequestMessages.requestId, supportIds));
     }
     await tx.delete(supportRequests).where(eq(supportRequests.userId, targetId));
-    // User Trading Teams (My Portal): disband any team this user leads (dropping
-    // that team's members + invites), then remove their own membership and any
-    // invites addressed to or sent by them.
+    // My Portal team metadata. The team itself (trading_teams + members'
+    // users.team_id) is the real trade-scoping team and is left intact — only
+    // this user's My Portal metadata is cleared. For any team this user led,
+    // drop that team's leader pointer + member badges/permissions + pending
+    // invites; a new leader is auto-picked from the remaining members on next
+    // access (see ensureTeamMeta). Then clear their own membership metadata and
+    // any invites addressed to or sent by them.
     const ledTeamIds = (
       await tx.select({ id: userTeams.id }).from(userTeams).where(eq(userTeams.leaderId, targetId))
     ).map((r) => r.id);
