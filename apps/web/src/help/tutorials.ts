@@ -304,8 +304,8 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
   st_test: {
-    title: 'Test Mode',
-    intro: 'Sit a graded test drawn from one of your team’s study games.',
+    title: 'Practice Tests',
+    intro: 'Sit a graded practice test drawn from one of your team’s study games.',
     steps: [
       {
         title: 'Pick a game and set it up',

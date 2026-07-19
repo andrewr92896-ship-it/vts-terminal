@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import type { Flashcard, FlashcardInput, TeamFlashcardSet } from '../../api/types';
+import type { Flashcard, FlashcardInput, TeamDeck, TeamFlashcardSet } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -155,7 +155,15 @@ function SetCard({
 }) {
   const [confirm, setConfirm] = useState(false);
   const sourceLabel =
-    set.source === 'ai_topic' ? 'AI-generated' : set.source === 'upload' ? 'From a file' : set.source === 'sample' ? 'Sample' : 'Typed in';
+    set.source === 'ai_topic'
+      ? 'AI-generated'
+      : set.source === 'upload'
+        ? 'From a file'
+        : set.source === 'from_game'
+          ? 'From a study game'
+          : set.source === 'sample'
+            ? 'Sample'
+            : 'Typed in';
   return (
     <div style={card(theme)}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -201,7 +209,7 @@ function SetCard({
   );
 }
 
-type Mode = 'manual' | 'ai' | 'file';
+type Mode = 'manual' | 'ai' | 'file' | 'game';
 
 function errorText(e: unknown): string {
   if (e instanceof ApiError) {
@@ -234,10 +242,26 @@ function SetComposer({
     { term: '', def: '', topic: '' },
     { term: '', def: '', topic: '' },
   ]);
-  // Cards AI produced from the uploaded file, awaiting confirmation.
+  // Cards AI produced (from a file or a study game), awaiting confirmation.
   const [preview, setPreview] = useState<Flashcard[] | null>(null);
+  // Which source the pending preview came from — decides the created set's source.
+  const [previewSource, setPreviewSource] = useState<'upload' | 'from_game'>('upload');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The team's study games, for the "From a study game" mode.
+  const [games, setGames] = useState<TeamDeck[]>([]);
+  const [selectedGame, setSelectedGame] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .studyDecks()
+      .then((r) => alive && setGames(r.decks))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   function switchMode(m: Mode) {
     setMode(m);
@@ -311,7 +335,26 @@ function SetComposer({
     setError(null);
     try {
       const res = await api.previewFlashcardSet({ text: fileText, instructions: instructions.trim() || undefined });
+      setPreviewSource('upload');
       setPreview(res.cards);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---- From a study game: AI pulls the vocabulary from a game's questions. ----
+  const canFromGame = !busy && selectedGame.length > 0;
+  async function generateFromGame() {
+    if (!canFromGame) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.flashcardsFromGame({ deckId: selectedGame, instructions: instructions.trim() || undefined });
+      setPreviewSource('from_game');
+      setPreview(res.cards);
+      if (!name.trim()) setName(`${res.deckName} — Flashcards`.slice(0, 120));
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -327,7 +370,7 @@ function SetComposer({
     try {
       const res = await api.createFlashcardSet({
         name: name.trim(),
-        source: 'upload',
+        source: previewSource,
         cards: preview.map((c) => ({ term: c.term, def: c.def, topic: c.topic })),
       });
       onCreated(res.sets, res.set.id);
@@ -338,15 +381,15 @@ function SetComposer({
     }
   }
 
-  // The review screen after AI formatted an uploaded file's cards.
-  if (mode === 'file' && preview) {
+  // The review screen after AI produced cards (from a file or a study game).
+  if (preview) {
     return (
       <div style={{ ...card(theme), marginBottom: 14 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff' }}>Review the cards</h3>
             <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
-              AI formatted {preview.length} card{preview.length === 1 ? '' : 's'} from your file. Check them, then create the set.
+              AI produced {preview.length} card{preview.length === 1 ? '' : 's'} {previewSource === 'from_game' ? 'from that study game' : 'from your file'}. Check them, then create the set.
             </p>
           </div>
           <input
@@ -385,7 +428,7 @@ function SetComposer({
   return (
     <div style={{ ...card(theme), marginBottom: 14 }}>
       <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden', marginBottom: 12, flexWrap: 'wrap' }}>
-        {(['manual', 'ai', 'file'] as const).map((m) => (
+        {(['manual', 'ai', 'file', 'game'] as const).map((m) => (
           <button
             key={m}
             onClick={() => switchMode(m)}
@@ -399,7 +442,7 @@ function SetComposer({
               color: mode === m ? theme.accentText : muted,
             }}
           >
-            {m === 'manual' ? 'Type them in' : m === 'ai' ? 'Generate with AI' : 'Upload a file'}
+            {m === 'manual' ? 'Type them in' : m === 'ai' ? 'Generate with AI' : m === 'file' ? 'Upload a file' : 'From a study game'}
           </button>
         ))}
       </div>
@@ -508,7 +551,7 @@ function SetComposer({
             </div>
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>AI writes the term/definition cards — study them right after.</div>
           </>
-        ) : (
+        ) : mode === 'file' ? (
           <>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
@@ -532,6 +575,43 @@ function SetComposer({
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
               Upload a text file (a glossary, notes, or “term - definition” lines) and AI formats the cards. You review them before the set is created.
             </div>
+          </>
+        ) : (
+          <>
+            {games.length === 0 ? (
+              <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
+                No study games yet. Build a study game first, then AI can pull its vocabulary into a flashcard set.
+              </div>
+            ) : (
+              <>
+                <label style={{ fontSize: 12, color: muted, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  Study game
+                  <select value={selectedGame} onChange={(e) => setSelectedGame(e.target.value)} disabled={busy} style={{ ...field(theme), cursor: 'pointer' }}>
+                    <option value="" style={{ background: '#12102a' }}>Choose a study game…</option>
+                    {games.map((g) => (
+                      <option key={g.id} value={g.id} style={{ background: '#12102a' }}>
+                        {g.name} ({g.questionCount} q{g.questionCount === 1 ? '' : 's'})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <textarea
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="Optional: how to pull the vocabulary (focus areas, style)…"
+                  maxLength={2000}
+                  rows={2}
+                  disabled={busy}
+                  style={{ ...field(theme), resize: 'vertical', minHeight: 52, fontFamily: 'inherit' }}
+                />
+                <button onClick={generateFromGame} disabled={!canFromGame} style={{ ...primaryBtn(theme, accentGrad), alignSelf: 'flex-start', opacity: canFromGame ? 1 : 0.6 }}>
+                  {busy ? 'Reading the game…' : '✦ Pull vocabulary'}
+                </button>
+                <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
+                  AI reads the game’s questions, pulls the key vocabulary, and writes definitions. You review the cards before the set is created.
+                </div>
+              </>
+            )}
           </>
         )}
 

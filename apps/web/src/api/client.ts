@@ -767,14 +767,19 @@ export const api = {
     return request('/api/studies/flashcards');
   },
   // Create a set from cards the client supplies (hand-typed, or the reviewed
-  // output of a file upload).
+  // output of a file upload / study-game extraction).
   createFlashcardSet(input: {
     name: string;
     description?: string;
-    source?: 'manual' | 'upload';
+    source?: 'manual' | 'upload' | 'from_game';
     cards: FlashcardInput[];
   }): Promise<{ set: TeamFlashcardSetDetail; sets: TeamFlashcardSet[] }> {
     return request('/api/studies/flashcards', { method: 'POST', body: JSON.stringify(input) });
+  },
+  // Generate flashcards from one of the team's study games (AI pulls the
+  // vocabulary). Returns cards to review before creating the set.
+  flashcardsFromGame(input: { deckId: string; instructions?: string }): Promise<{ cards: Flashcard[]; deckName: string }> {
+    return request('/api/studies/flashcards/from-deck', { method: 'POST', body: JSON.stringify(input) });
   },
   generateFlashcardSet(input: {
     name: string;

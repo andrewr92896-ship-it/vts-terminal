@@ -69,8 +69,8 @@ Four workspaces in the sidebar; sections a user lacks the role for are hidden.
   Strategy Sessions, Manual Trades (`funded` key, `FundedScreen`), **Funded**
   (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
-  (`st_cards`), Test Mode (`st_test`), Study Guides (`st_guides`), Progress
-  (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
+  (`st_cards`), Practice Tests (`st_test`), Study Presentations (`st_guides`),
+  Progress (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
   team-built** — there is no hardcoded subject. **Study Game / Test Mode /
   Progress** are the same launcher (`StudyGameHub`, parameterized by `target` =
   `play` | `test` | `progress`): each lists your team's own study games and, when

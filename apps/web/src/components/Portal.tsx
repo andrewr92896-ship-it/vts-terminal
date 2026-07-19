@@ -27,6 +27,7 @@ import { AccountSettings } from './AccountSettings';
 import { DeviceSettings } from './DeviceSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
 import { TeamChat } from './TeamChat';
+import { getStudyTint, onStudyTintChange, studyBgTint, studyThemeForLevel } from '../workspaces/studies/studyTint';
 import { Screen } from '../workspaces/Screens';
 import { AdminUsers } from '../workspaces/admin/AdminUsers';
 import { AdminTeams } from '../workspaces/admin/AdminTeams';
@@ -216,8 +217,13 @@ export function Portal() {
   // Mobile off-canvas nav drawer.
   const [navOpen, setNavOpen] = useState(false);
 
-  const theme = THEMES[workspace];
-  const contentTint: string | null = null;
+  // While a study game is being played, its level recolours the Studies
+  // workspace (published by the player via studyTint). Re-render on change.
+  const [, forceTint] = useState(0);
+  useEffect(() => onStudyTintChange(() => forceTint((t) => t + 1)), []);
+  const studyTint = workspace === 'studies' ? getStudyTint() : null;
+  const theme = studyTint ? studyThemeForLevel(studyTint.hue, studyTint.sat) : THEMES[workspace];
+  const contentTint: string | null = studyTint ? studyBgTint(studyTint.hue, studyTint.sat) : null;
   const accent = accentFor(workspace);
   const scrollRef = useRef<HTMLDivElement>(null);
 

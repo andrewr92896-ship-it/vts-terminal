@@ -144,7 +144,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
     <div style={{ marginBottom: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         {backBtn}
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>{deck.name} · Test</h2>
+        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>{deck.name} · Practice Test</h2>
       </div>
     </div>
   );

@@ -96,7 +96,15 @@ export function FlashcardsHub({ theme, onNavigate }: { theme: Theme; onNavigate:
 
 function SetCard({ set, theme, onStudy }: { set: TeamFlashcardSet; theme: Theme; onStudy: () => void }) {
   const sourceLabel =
-    set.source === 'ai_topic' ? 'AI-generated' : set.source === 'upload' ? 'From a file' : set.source === 'sample' ? 'Sample' : 'Typed in';
+    set.source === 'ai_topic'
+      ? 'AI-generated'
+      : set.source === 'upload'
+        ? 'From a file'
+        : set.source === 'from_game'
+          ? 'From a study game'
+          : set.source === 'sample'
+            ? 'Sample'
+            : 'Typed in';
   return (
     <div style={card(theme)}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
