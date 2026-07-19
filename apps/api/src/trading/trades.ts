@@ -46,6 +46,9 @@ export interface TradeRecord {
   units: number;
   slippage: number | null; // entryPrice - plannedEntry, computed
   realizedPl: number | null; // null only while open / unknown — shared with the desk
+  // Live (last-seen) open P/L for a currently-open broker position; null once
+  // closed or for a hand-logged trade. Lets the Trade Log show the open leg too.
+  unrealizedPl: number | null;
   strategy: string | null;
   timeframe: string | null;
   openedAt: number; // ms
@@ -75,6 +78,7 @@ export interface TradeSummary {
   breakeven: number; // closed, known-P/L trades inside the break-even band
   winRate: number; // 0..1 over decided (win/loss) trades — break-even excluded
   totalRealizedPl: number; // desk-wide realized P/L across closed trades
+  totalUnrealizedPl: number; // desk-wide open (unrealized) P/L across open positions
   avgSlippage: number | null; // over trades that have a planned entry
 }
 
@@ -154,6 +158,7 @@ function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeR
     units: row.units,
     slippage: slippageOf(row.plannedEntry, row.entryPrice),
     realizedPl: row.realizedPl,
+    unrealizedPl: null, // hand-logged trades carry no live mark
     strategy: row.strategy,
     timeframe: row.timeframe,
     openedAt: row.openedAt.getTime(),
@@ -190,8 +195,10 @@ function positionToRecord(row: TradingPositionRow, owner: string, viewerId: stri
     units: row.units,
     slippage: slippageOf(row.plannedEntry, row.entryPrice),
     // Realized P/L only once closed; an open position's P/L is unrealized and
-    // belongs on the Live Wall, so it stays null here (and out of the KPI total).
+    // stays out of the realized KPI total. The open leg is surfaced separately
+    // via unrealizedPl below so the Trade Log can show it too.
     realizedPl: row.status === 'closed' ? row.realizedPl : null,
+    unrealizedPl: row.status === 'closed' ? null : row.unrealizedPl,
     strategy: row.strategy,
     timeframe: row.timeframe,
     openedAt: opened.getTime(),
@@ -217,6 +224,7 @@ function summarizeRecords(records: TradeRecord[], config: BreakEvenConfig): Trad
   let losses = 0;
   let breakeven = 0;
   let totalPl = 0;
+  let totalUnrealizedPl = 0;
   let slipSum = 0;
   let slipCount = 0;
   for (const r of records) {
@@ -231,6 +239,7 @@ function summarizeRecords(records: TradeRecord[], config: BreakEvenConfig): Trad
         else breakeven += 1;
       }
     }
+    if (r.unrealizedPl != null) totalUnrealizedPl += r.unrealizedPl;
     if (r.slippage != null) {
       slipSum += r.slippage;
       slipCount += 1;
@@ -246,6 +255,7 @@ function summarizeRecords(records: TradeRecord[], config: BreakEvenConfig): Trad
     breakeven,
     winRate: decided > 0 ? wins / decided : 0,
     totalRealizedPl: totalPl,
+    totalUnrealizedPl: Number(totalUnrealizedPl.toFixed(2)),
     avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
   };
 }

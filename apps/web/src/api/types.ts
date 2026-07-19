@@ -856,7 +856,7 @@ export interface SessionAlertPrefs {
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----
 // A saved, customizable grid of chart/watchlist tiles the trader arranges on
 // the Live Wall ("presets").
-export type BoardTileKind = 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar' | 'alerts';
+export type BoardTileKind = 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar' | 'alerts' | 'metrics';
 
 export interface BoardTile {
   id: string;
@@ -988,6 +988,7 @@ export interface TradeRecord {
   units: number;
   slippage: number | null;
   realizedPl: number | null; // null only while open / unknown — shared with the desk
+  unrealizedPl: number | null; // live open P/L for an open broker position; null when closed/manual
   strategy: string | null;
   timeframe: string | null;
   openedAt: number;
@@ -1010,6 +1011,7 @@ export interface TradeSummary {
   breakeven: number;
   winRate: number;
   totalRealizedPl: number | null;
+  totalUnrealizedPl: number | null; // desk-wide open (unrealized) P/L across open positions
   avgSlippage: number | null;
 }
 

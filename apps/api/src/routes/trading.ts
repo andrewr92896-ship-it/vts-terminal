@@ -1125,7 +1125,7 @@ const sessionAlertPrefsSchema = z.object({
 // keys are stripped.
 const boardTileSchema = z.object({
   id: z.string().trim().min(1).max(64),
-  kind: z.enum(['chart', 'watchlist', 'positions', 'news', 'calendar', 'alerts']),
+  kind: z.enum(['chart', 'watchlist', 'positions', 'news', 'calendar', 'alerts', 'metrics']),
   x: z.number().int().min(0).max(96),
   y: z.number().int().min(0).max(4096),
   w: z.number().int().min(1).max(96),

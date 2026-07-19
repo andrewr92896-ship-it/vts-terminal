@@ -7,6 +7,7 @@ import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
+import { profitFactorStats, profitFactorText, scaledProfitFactorText } from './tradeStats';
 import { DesignationTag, tileTint } from './DesignationTag';
 import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
@@ -77,7 +78,7 @@ function slippageFavorable(t: TradeRecord): boolean | null {
 // backend's desk-wide summarize() so a per-trader view reads the same way —
 // including the desk-wide break-even band.
 function summarizeTrades(trades: TradeRecord[], config: BreakEvenConfig): TradeSummary {
-  let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, slipSum = 0, slipCount = 0;
+  let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, unrealPl = 0, slipSum = 0, slipCount = 0;
   for (const t of trades) {
     if (t.status === 'open') open += 1;
     else closed += 1;
@@ -90,6 +91,7 @@ function summarizeTrades(trades: TradeRecord[], config: BreakEvenConfig): TradeS
         else breakeven += 1;
       }
     }
+    if (t.unrealizedPl != null) unrealPl += t.unrealizedPl;
     if (t.slippage != null) {
       slipSum += t.slippage;
       slipCount += 1;
@@ -105,79 +107,9 @@ function summarizeTrades(trades: TradeRecord[], config: BreakEvenConfig): TradeS
     breakeven,
     winRate: decided > 0 ? wins / decided : 0,
     totalRealizedPl: totalPl,
+    totalUnrealizedPl: Number(unrealPl.toFixed(2)),
     avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
   };
-}
-
-// Gross profit, gross loss and profit factor for a set of trades. Uses the same
-// win/loss classification as the KPIs above (break-even trades count toward
-// neither), so the numbers line up with the Win Rate card beside them. The pip
-// figures are the forex pip equivalents of the gross money, so each card can
-// show its P/L in pips too.
-type ProfitFactor = {
-  grossProfit: number;
-  grossLoss: number;
-  profitFactor: number | null;
-  grossProfitPips: number;
-  grossLossPips: number;
-  // "Scaled" gross P/L: every trade normalized to the same lot size by taking its
-  // per-unit P/L (realized P/L ÷ size), so a 1-unit test and a 20k-unit position
-  // weigh equally. Because profit factor is a ratio, the common lot size cancels
-  // out — scaled PF is just the profit factor of per-unit P/L. Trades with no
-  // size can't be scaled and are skipped from these two sums only.
-  scaledProfit: number;
-  scaledLoss: number;
-};
-function profitFactorStats(trades: TradeRecord[], config: BreakEvenConfig): ProfitFactor {
-  let grossProfit = 0;
-  let grossLoss = 0;
-  let grossProfitPips = 0;
-  let grossLossPips = 0;
-  let scaledProfit = 0;
-  let scaledLoss = 0;
-  for (const t of trades) {
-    if (t.status !== 'closed' || t.realizedPl == null) continue;
-    const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
-    const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
-    // Per-unit P/L normalizes trade size; null when there's no size to divide by.
-    const perUnit = t.units ? t.realizedPl / Math.abs(t.units) : null;
-    if (outcome === 'win') {
-      grossProfit += Math.max(0, t.realizedPl);
-      if (pips != null) grossProfitPips += Math.max(0, pips);
-      if (perUnit != null) scaledProfit += Math.max(0, perUnit);
-    } else if (outcome === 'loss') {
-      grossLoss += Math.abs(t.realizedPl);
-      if (pips != null) grossLossPips += Math.max(0, -pips);
-      if (perUnit != null) scaledLoss += Math.max(0, -perUnit);
-    }
-  }
-  // null = undefined: no losing trades to divide by (or nothing decided at all).
-  const profitFactor = grossLoss > 0 ? grossProfit / grossLoss : null;
-  return {
-    grossProfit,
-    grossLoss,
-    profitFactor,
-    grossProfitPips: Number(grossProfitPips.toFixed(1)),
-    grossLossPips: Number(grossLossPips.toFixed(1)),
-    scaledProfit,
-    scaledLoss,
-  };
-}
-
-// Human-readable profit factor: "—" when nothing's decided, "∞" when there are
-// no losses to divide by, otherwise two decimals.
-function profitFactorText(pf: ProfitFactor): string {
-  if (pf.grossProfit === 0 && pf.grossLoss === 0) return '—';
-  if (pf.grossLoss === 0) return '∞';
-  return (pf.grossProfit / pf.grossLoss).toFixed(2);
-}
-
-// The same reading, but with every trade scaled to one common lot size — so
-// outsized positions don't dominate and each trade's quality counts equally.
-function scaledProfitFactorText(pf: ProfitFactor): string {
-  if (pf.scaledProfit === 0 && pf.scaledLoss === 0) return '—';
-  if (pf.scaledLoss === 0) return '∞';
-  return (pf.scaledProfit / pf.scaledLoss).toFixed(2);
 }
 
 // ---- CSV export ----
@@ -393,6 +325,17 @@ export function TradeLog() {
       pips: showPips ? `(${fmtPips(netClosedPips, true)})` : undefined,
     },
     {
+      // The live open P/L across currently-open positions — the leg realized P/L
+      // leaves out. Signed so a green open book reads as a gain at a glance.
+      label: 'Unrealized P/L',
+      val: !canSeeBalances
+        ? 'hidden'
+        : showMoney
+          ? `${(s.totalUnrealizedPl ?? 0) > 0 ? '+' : ''}${usd(s.totalUnrealizedPl ?? 0)}`
+          : '•••••',
+      sub: `${s.open} open`,
+    },
+    {
       label: 'Gross Profit',
       val: !canSeeBalances ? 'hidden' : showMoney ? usd(pf.grossProfit) : '•••••',
       sub: 'winning trades',
@@ -603,7 +546,11 @@ function DeckCard({
   const isBreakeven =
     t.status === 'closed' && t.realizedPl != null &&
     classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config) === 'breakeven';
-  const plUp = (t.realizedPl ?? 0) >= 0;
+  // Open trades show their live (unrealized) P/L; closed trades their realized P/L.
+  const isOpen = t.status === 'open';
+  const plVal = isOpen ? t.unrealizedPl : t.realizedPl;
+  const plLabel = isOpen ? 'Unrealized P/L' : 'Realized P/L';
+  const plUp = (plVal ?? 0) >= 0;
   const plColor = isBreakeven ? GOLD : plUp ? GREEN : RED;
   // The trade's move in pips, shown beside its realized P/L (closed forex only).
   const plPips = t.status === 'closed' ? pipsParenthetical(t.side, t.entryPrice, t.exitPrice, t.instrument, true) : '';
@@ -678,15 +625,15 @@ function DeckCard({
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>Realized P/L</span>
+          <span style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{plLabel}</span>
           {!canSeeBalances ? (
             <span style={{ fontSize: 11, color: FAINT }}>hidden</span>
-          ) : t.realizedPl == null ? (
+          ) : plVal == null ? (
             <span style={{ fontSize: 13, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>—</span>
           ) : (
             <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "'IBM Plex Mono', monospace", color: plColor }}>
-                {showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••••'}
+                {showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(plVal)}` : '•••••'}
               </span>
               {plPips && <span style={{ fontSize: 12, fontWeight: 600, fontFamily: "'IBM Plex Mono', monospace", color: MUTED }}>{plPips}</span>}
             </span>
@@ -752,8 +699,10 @@ function Tape({
         const isBreakeven =
           t.status === 'closed' && t.realizedPl != null &&
           classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config) === 'breakeven';
-        const plUp = (t.realizedPl ?? 0) >= 0;
-        const plColor = !canSeeBalances ? FAINT : t.realizedPl == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
+        // Open rows show live unrealized P/L; closed rows their realized P/L.
+        const plVal = t.status === 'open' ? t.unrealizedPl : t.realizedPl;
+        const plUp = (plVal ?? 0) >= 0;
+        const plColor = !canSeeBalances ? FAINT : plVal == null ? MUTED : isBreakeven ? GOLD : plUp ? GREEN : RED;
         const rowPips = t.status === 'closed' ? tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument) : null;
         return (
           <div key={t.id} style={{ ...tapeRow, borderBottom: `1px solid ${BORDER}`, flexWrap: isPhone ? 'wrap' : 'nowrap' }}>
@@ -775,7 +724,7 @@ function Tape({
             <span style={col}>{t.units}</span>
             <span style={{ ...plCol, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <span style={{ fontWeight: 700, color: plColor }}>
-                {!canSeeBalances ? '·' : t.realizedPl == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(t.realizedPl)}` : '•••'}
+                {!canSeeBalances ? '·' : plVal == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(plVal)}` : '•••'}
               </span>
               {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
             </span>
