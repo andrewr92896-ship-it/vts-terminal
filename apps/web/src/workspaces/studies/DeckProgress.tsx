@@ -6,6 +6,8 @@ import { useAuth } from '../../auth/AuthContext';
 import { EditableText } from '../../copy/SiteCopy';
 import { overallLevel, levelAtStep, scorePct } from './gameEngine';
 import { deckGameKey, deckLifetimeAccuracy, emptyDeckGame, parseDeckGame, type DeckGameState } from './studyEngine';
+import { StudyProgressBars } from './StudyProgress';
+import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
 
 // A read-only progress summary for one team-built study game: the learner's
 // level, lifetime accuracy, best level reached, and per-category accuracy. Reads
@@ -19,6 +21,12 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
   const [deck, setDeck] = useState<TeamDeckDetail | null>(null);
   const [game, setGame] = useState<DeckGameState | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [prefs, setPrefs] = useState<StudyPrefs>(() => loadStudyPrefs(user?.id));
+  useEffect(() => setPrefs(loadStudyPrefs(user?.id)), [user?.id]);
+  function updatePrefs(p: StudyPrefs) {
+    setPrefs(p);
+    saveStudyPrefs(user?.id, p);
+  }
 
   useEffect(() => {
     let alive = true;
@@ -130,6 +138,11 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
               </div>
               <div style={{ fontSize: 11.5, color: muted }}>{game.totalCorrect}/{game.totalAttempted} correct · best streak {game.bestStreak}</div>
             </div>
+          </div>
+
+          {/* Lifetime + session progress bars, with the learner's thresholds. */}
+          <div style={{ ...card(theme), marginBottom: 14 }}>
+            <StudyProgressBars theme={theme} game={game} prefs={prefs} onPrefsChange={updatePrefs} />
           </div>
 
           {/* Per-category accuracy (last 100 answers) */}
