@@ -6,6 +6,7 @@ import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
 import { FundedLiveTrades } from './FundedLiveTrades';
+import { EditableText } from '../../copy/SiteCopy';
 import type { ChallengeData, ChallengeInput } from '../../api/types';
 
 // The private Funded section: a prop-firm challenge dashboard (equity vs. target
@@ -104,7 +105,7 @@ export function FundedChallengeScreen() {
   }
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading challenge…</div>;
+  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="challenge.loading">Loading challenge…</EditableText></div>;
 
   const canSee = data.canSeeBalances;
   const showMoney = canSee && !privacy && !hideMoney; // challenge figures (brokerage-view gated)
@@ -117,9 +118,9 @@ export function FundedChallengeScreen() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Funded</h2>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="challenge.title">Funded</EditableText></h2>
             <span style={{ ...pill, color: st.color, border: `1px solid ${st.color}` }}>{data.label} · {st.label}</span>
-            <span style={privatePill} title="Private section — visible only to accounts an admin has granted the Funded role">Private</span>
+            <span style={privatePill} title="Private section — visible only to accounts an admin has granted the Funded role"><EditableText id="challenge.private">Private</EditableText></span>
           </div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
             Your {data.label} prop-firm challenge in one place
@@ -130,7 +131,7 @@ export function FundedChallengeScreen() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
-          {!readOnly && <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? 'Close' : 'Edit'}</button>}
+          {!readOnly && <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? <EditableText id="challenge.edit_close">Close</EditableText> : <EditableText id="challenge.edit">Edit</EditableText>}</button>}
         </div>
       </div>
 
@@ -151,9 +152,9 @@ export function FundedChallengeScreen() {
       {!readOnly && (
         <div style={{ ...panel, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 240px' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 600, color: TEXT }}>Update balance from a screenshot</div>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: TEXT }}><EditableText id="challenge.shot_title">Update balance from a screenshot</EditableText></div>
             <div style={{ fontSize: 11, color: FAINT, marginTop: 3 }}>
-              No API here — upload or paste (⌘/Ctrl+V) a screenshot of your account and VTS AI reads the balance, then sets your equity here.
+              <EditableText id="challenge.shot_blurb">No API here — upload or paste (⌘/Ctrl+V) a screenshot of your account and VTS AI reads the balance, then sets your equity here.</EditableText>
             </div>
             {shotMsg && <div style={{ fontSize: 11.5, color: GREEN, marginTop: 6 }}>{shotMsg}</div>}
           </div>
@@ -167,10 +168,10 @@ export function FundedChallengeScreen() {
               disabled={shotBusy}
               style={{ ...ghostBtn, opacity: shotBusy ? 0.6 : 1 }}
             >
-              Paste
+              <EditableText id="challenge.paste">Paste</EditableText>
             </button>
             <label style={{ ...goldBtn, opacity: shotBusy ? 0.6 : 1, cursor: shotBusy ? 'default' : 'pointer' }}>
-              {shotBusy ? 'Reading…' : 'Upload screenshot'}
+              {shotBusy ? <EditableText id="challenge.reading">Reading…</EditableText> : <EditableText id="challenge.upload">Upload screenshot</EditableText>}
               <input
                 type="file"
                 accept="image/*"
@@ -187,11 +188,11 @@ export function FundedChallengeScreen() {
       <div style={{ ...card, marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <div style={label}>Current Equity</div>
+            <div style={label}><EditableText id="challenge.current_equity">Current Equity</EditableText></div>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 30, fontWeight: 700, color: '#fff' }}>{dollars(data.equity)}</div>
           </div>
           <div style={{ textAlign: isPhone ? 'left' : 'right' }}>
-            <div style={label}>Profit</div>
+            <div style={label}><EditableText id="challenge.profit">Profit</EditableText></div>
             <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 18, fontWeight: 700, color: m.profitPct >= 0 ? GREEN : RED }}>
               {canSee ? `${m.profit != null && m.profit >= 0 ? '+' : ''}${dollars(m.profit)}` : '•••••'} · {m.profitPct >= 0 ? '+' : ''}{pct1(m.profitPct)}
             </div>
@@ -216,7 +217,7 @@ export function FundedChallengeScreen() {
 
       {!canSee && (
         <div style={{ ...panel, marginTop: 14, fontSize: 12, color: MUTED }}>
-          Dollar figures are hidden because your account doesn’t have the brokerage-view permission. Targets and drawdown buffers are still shown as percentages.
+          <EditableText id="challenge.no_balances">Dollar figures are hidden because your account doesn’t have the brokerage-view permission. Targets and drawdown buffers are still shown as percentages.</EditableText>
         </div>
       )}
     </div>
@@ -285,7 +286,7 @@ function ChallengeForm({ data, busy, onSave, onSync }: { data: ChallengeData; bu
 
   return (
     <div style={{ ...panel, marginBottom: 14 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>Challenge settings</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}><EditableText id="challenge.settings_title">Challenge settings</EditableText></div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <Field label="Label"><input value={label} onChange={(e) => setLabel(e.target.value)} style={{ ...input, flex: '1 1 160px' }} /></Field>
         <Field label="Account size $"><input value={accountSize} onChange={(e) => setAccountSize(e.target.value)} type="number" style={input} /></Field>
@@ -304,10 +305,10 @@ function ChallengeForm({ data, busy, onSave, onSync }: { data: ChallengeData; bu
         <Field label="Started"><input value={started} onChange={(e) => setStarted(e.target.value)} type="date" style={input} /></Field>
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <button onClick={save} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>Save</button>
-        <button onClick={onSync} disabled={busy} style={ghostBtn} title="Set equity to account size + realized P/L from your Trade Log">Pull equity from Trade Log</button>
+        <button onClick={save} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}><EditableText id="challenge.save">Save</EditableText></button>
+        <button onClick={onSync} disabled={busy} style={ghostBtn} title="Set equity to account size + realized P/L from your Trade Log"><EditableText id="challenge.pull_equity">Pull equity from Trade Log</EditableText></button>
       </div>
-      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>No API here — keep equity current from your prop dashboard, or pull it from the Trade Log. Day-start equity drives the daily-drawdown floor; reset it each trading day.</div>
+      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}><EditableText id="challenge.settings_hint">No API here — keep equity current from your prop dashboard, or pull it from the Trade Log. Day-start equity drives the daily-drawdown floor; reset it each trading day.</EditableText></div>
     </div>
   );
 }

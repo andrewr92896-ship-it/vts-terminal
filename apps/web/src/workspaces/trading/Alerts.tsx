@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePushNotifications } from '../../push/usePushNotifications';
+import { EditableText } from '../../copy/SiteCopy';
 import type { AlertRecord, AlertsData, TradeAnalysis } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
@@ -66,7 +67,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
   }, []);
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading alerts…</div>;
+  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="alerts.loading">Loading alerts…</EditableText></div>;
 
   const active = data.alerts.filter((a) => a.status !== 'dismissed');
 
@@ -74,22 +75,22 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
     <div style={{ maxWidth: 1100, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Alerts</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="alerts.title">Alerts</EditableText></h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            TradingView alerts arrive by webhook. Paste a chart screenshot and VTS AI analyzes the trade.
+            <EditableText id="alerts.subtitle">TradingView alerts arrive by webhook. Paste a chart screenshot and VTS AI analyzes the trade.</EditableText>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {!readOnly && <PhoneAlerts />}
           <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
-            {refreshing ? 'Refreshing…' : 'Refresh'}
+            {refreshing ? <EditableText id="alerts.refreshing">Refreshing…</EditableText> : <EditableText id="alerts.refresh">Refresh</EditableText>}
           </button>
         </div>
       </div>
 
       {!data.aiConfigured && (
         <div style={warnBanner}>
-          VTS AI isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server.
+          <EditableText id="alerts.ai_unconfigured">VTS AI isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server.</EditableText>
         </div>
       )}
 
@@ -159,11 +160,11 @@ function PhoneAlerts() {
       {on && open && (
         <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 20, width: 230, background: '#0b1a3a', border: `1px solid ${BORDER2}`, borderRadius: 10, padding: 12, boxShadow: '0 18px 40px rgba(0,0,0,.5)' }}>
           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
-            This device will buzz on new alerts and when trades open or close.
+            <EditableText id="alerts.push_blurb">This device will buzz on new alerts and when trades open or close.</EditableText>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => void sendTest()} style={{ ...ghostBtn, flex: 1 }}>Send test</button>
-            <button onClick={() => { setOpen(false); void disable(); }} style={{ ...ghostBtn, flex: 1, color: '#ff9a9a' }}>Turn off</button>
+            <button onClick={() => void sendTest()} style={{ ...ghostBtn, flex: 1 }}><EditableText id="alerts.send_test">Send test</EditableText></button>
+            <button onClick={() => { setOpen(false); void disable(); }} style={{ ...ghostBtn, flex: 1, color: '#ff9a9a' }}><EditableText id="alerts.turn_off">Turn off</EditableText></button>
           </div>
         </div>
       )}
@@ -274,7 +275,7 @@ function AlertCard({
       {analyzed && alert.analysis ? (
         <Analysis analysis={alert.analysis.parsed} raw={alert.analysis.raw} model={alert.analysis.model} hasTrade={!!alert.tradeId} onViewTrade={onViewTrade} />
       ) : readOnly ? (
-        <div style={{ padding: '0 16px 14px', fontSize: 12, color: FAINT }}>Awaiting screenshot analysis.</div>
+        <div style={{ padding: '0 16px 14px', fontSize: 12, color: FAINT }}><EditableText id="alerts.awaiting">Awaiting screenshot analysis.</EditableText></div>
       ) : (
         <div style={{ padding: '0 16px 14px' }}>
           <div
@@ -296,7 +297,7 @@ function AlertCard({
             ) : (
               <div style={{ fontSize: 12.5, color: MUTED }}>
                 <div style={{ fontSize: 22, marginBottom: 6 }}>📋</div>
-                Paste a chart screenshot here (Ctrl/Cmd-V), or click to upload.
+                <EditableText id="alerts.paste_hint">Paste a chart screenshot here (Ctrl/Cmd-V), or click to upload.</EditableText>
               </div>
             )}
           </div>
@@ -314,12 +315,12 @@ function AlertCard({
               title={!aiConfigured ? 'VTS AI API key not configured on the server' : undefined}
               style={{ ...goldBtn, opacity: busy || !image || !aiConfigured ? 0.55 : 1 }}
             >
-              {busy ? 'Analyzing…' : 'Analyze with VTS AI'}
+              {busy ? <EditableText id="alerts.analyzing">Analyzing…</EditableText> : <EditableText id="alerts.analyze">Analyze with VTS AI</EditableText>}
             </button>
             {image && (
-              <button onClick={() => setImage(null)} style={ghostBtn}>Clear image</button>
+              <button onClick={() => setImage(null)} style={ghostBtn}><EditableText id="alerts.clear_image">Clear image</EditableText></button>
             )}
-            <button onClick={dismiss} disabled={busy} style={{ ...ghostBtn, marginLeft: 'auto' }}>Dismiss</button>
+            <button onClick={dismiss} disabled={busy} style={{ ...ghostBtn, marginLeft: 'auto' }}><EditableText id="alerts.dismiss">Dismiss</EditableText></button>
           </div>
         </div>
       )}
@@ -366,7 +367,7 @@ function Analysis({
       )}
 
       {hasTrade && (
-        <button onClick={onViewTrade} style={{ ...ghostBtn, marginTop: 8 }}>View in Trade Log →</button>
+        <button onClick={onViewTrade} style={{ ...ghostBtn, marginTop: 8 }}><EditableText id="alerts.view_trade">View in Trade Log →</EditableText></button>
       )}
     </div>
   );

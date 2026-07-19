@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { EditableText } from '../../copy/SiteCopy';
 import type { SessionBias, SessionInput, SessionStatus, StrategySession } from '../../api/types';
 
 const GOLD = '#EBCB74';
@@ -62,7 +63,7 @@ export function StrategySessions() {
   }
 
   if (err && !sessions) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{err}</div>;
-  if (!sessions) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading sessions…</div>;
+  if (!sessions) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="sessions.loading">Loading sessions…</EditableText></div>;
 
   const groups: SessionStatus[] = ['active', 'opening', 'idle'];
 
@@ -70,10 +71,10 @@ export function StrategySessions() {
     <div style={{ maxWidth: 1180, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Strategy Sessions</h2>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>Your trading windows (Eastern Time) with bull & bear playbooks per instrument.</div>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="sessions.title">Strategy Sessions</EditableText></h2>
+          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}><EditableText id="sessions.subtitle">Your trading windows (Eastern Time) with bull & bear playbooks per instrument.</EditableText></div>
         </div>
-        {!readOnly && <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? 'Close' : '+ New session'}</button>}
+        {!readOnly && <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? <EditableText id="sessions.close">Close</EditableText> : <EditableText id="sessions.new">+ New session</EditableText>}</button>}
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
@@ -84,7 +85,7 @@ export function StrategySessions() {
 
       {sessions.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          No sessions yet. Add one (e.g. “London Open”, 03:00–05:00) with your bull and bear plans.
+          <EditableText id="sessions.empty">No sessions yet. Add one (e.g. “London Open”, 03:00–05:00) with your bull and bear plans.</EditableText>
         </div>
       ) : (
         groups.map((g) => {
@@ -183,7 +184,7 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? 'Edit session' : 'New session'}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? <EditableText id="sessions.form_edit">Edit session</EditableText> : <EditableText id="sessions.form_new">New session</EditableText>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. London Open)" style={{ ...input, flex: '1 1 180px' }} />
         <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. GBP/USD)" style={{ ...input, flex: '1 1 150px' }} />
@@ -202,7 +203,7 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button onClick={submit} disabled={busy || !name.trim()} style={{ ...goldBtn, opacity: busy || !name.trim() ? 0.6 : 1 }}>{submitLabel}</button>
-        <button onClick={onCancel} style={ghostBtn}>Cancel</button>
+        <button onClick={onCancel} style={ghostBtn}><EditableText id="sessions.cancel">Cancel</EditableText></button>
       </div>
     </div>
   );

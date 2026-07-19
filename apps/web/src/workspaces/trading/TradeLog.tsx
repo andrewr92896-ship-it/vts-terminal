@@ -8,6 +8,7 @@ import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
 import { DesignationTag, tileTint } from './DesignationTag';
+import { EditableText } from '../../copy/SiteCopy';
 import type {
   RemovedTrade,
   TradeInput,
@@ -320,7 +321,7 @@ export function TradeLog() {
   }
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the log…</div>;
+  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="tradelog.loading">Loading the log…</EditableText></div>;
 
   // Balances are shared across the whole trading team, so the desk summary
   // always carries a number here. (Kept as a guard for the older nullable shape;
@@ -384,10 +385,9 @@ export function TradeLog() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Trade Log</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="tradelog.title">Trade Log</EditableText></h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            Your team’s trade log — every teammate’s fills, tagged by trader, with slippage and realized P/L. Trades from a
-            connected broker (e.g. OANDA) show up here automatically; hand-kept trades stay on the Manual Trades tab.
+            <EditableText id="tradelog.subtitle">Your team’s trade log — every teammate’s fills, tagged by trader, with slippage and realized P/L. Trades from a connected broker (e.g. OANDA) show up here automatically; hand-kept trades stay on the Manual Trades tab.</EditableText>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -397,7 +397,7 @@ export function TradeLog() {
           <div style={{ display: 'flex', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
             {(['deck', 'tape'] as Layout[]).map((l) => (
               <button key={l} onClick={() => setLayout(l)} style={{ ...segBtn, ...(layout === l ? segActive : {}) }}>
-                {l === 'deck' ? 'Deck' : 'Tape'}
+                {l === 'deck' ? <EditableText id="tradelog.layout_deck">Deck</EditableText> : <EditableText id="tradelog.layout_tape">Tape</EditableText>}
               </button>
             ))}
           </div>
@@ -407,18 +407,18 @@ export function TradeLog() {
             </button>
           )}
           <button onClick={() => setExporting((v) => !v)} style={exporting ? { ...ghostBtn, borderColor: GOLD, color: GOLD } : ghostBtn}>
-            {exporting ? 'Close' : '⭳ Export'}
+            {exporting ? <EditableText id="tradelog.export_close">Close</EditableText> : <EditableText id="tradelog.export">⭳ Export</EditableText>}
           </button>
           {!readOnly && (
             <button onClick={() => setAdding((v) => !v)} style={goldBtn}>
-              {adding ? 'Close' : '+ Log a trade'}
+              {adding ? <EditableText id="tradelog.add_close">Close</EditableText> : <EditableText id="tradelog.add">+ Log a trade</EditableText>}
             </button>
           )}
         </div>
       </div>
 
       {readOnly && (
-        <div style={{ ...infoBanner, marginBottom: 14 }}>View-only access — you can browse the log but not edit it.</div>
+        <div style={{ ...infoBanner, marginBottom: 14 }}><EditableText id="tradelog.readonly">View-only access — you can browse the log but not edit it.</EditableText></div>
       )}
       {actionError && (
         <div onClick={() => setActionError(null)} style={warnBanner}>{actionError} — refreshed. Click to dismiss.</div>
@@ -809,7 +809,7 @@ function TradeForm({
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={panelLabel}>{initial ? 'Edit trade' : 'Log a trade'}</div>
+      <div style={panelLabel}>{initial ? <EditableText id="tradelog.form_edit">Edit trade</EditableText> : <EditableText id="tradelog.form_new">Log a trade</EditableText>}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. EUR/USD)" style={{ ...inputBase, flex: '1 1 150px' }} />
         <select value={side} onChange={(e) => setSide(e.target.value as TradeSide)} style={{ ...inputBase, flex: '0 0 110px' }}>
@@ -839,7 +839,7 @@ function TradeForm({
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
         <button onClick={submit} disabled={disabled} style={{ ...goldBtn, opacity: disabled ? 0.6 : 1 }}>{submitLabel}</button>
-        <button onClick={onCancel} style={ghostBtn}>Cancel</button>
+        <button onClick={onCancel} style={ghostBtn}><EditableText id="tradelog.form_cancel">Cancel</EditableText></button>
       </div>
     </div>
   );
@@ -1012,9 +1012,9 @@ function ExportPanel({
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button onClick={doExport} disabled={filtered.length === 0} style={{ ...goldBtn, opacity: filtered.length === 0 ? 0.6 : 1, cursor: filtered.length === 0 ? 'default' : 'pointer' }}>
-          ⭳ Download CSV
+          <EditableText id="tradelog.download_csv">⭳ Download CSV</EditableText>
         </button>
-        <button onClick={onClose} style={ghostBtn}>Cancel</button>
+        <button onClick={onClose} style={ghostBtn}><EditableText id="tradelog.export_cancel">Cancel</EditableText></button>
       </div>
     </div>
   );
