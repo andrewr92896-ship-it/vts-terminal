@@ -4,6 +4,7 @@ import { useNowTick } from '../../hooks/useNowTick';
 import type { BoardTile, CalendarEvent, NewsImpact } from '../../api/types';
 import { fmtDayKey, fmtTime } from './newsFormat';
 import { BORDER, BORDER2, FAINT, GOLD, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
+import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 120_000;
 const AMBER = '#e0a23a';
@@ -114,7 +115,7 @@ export function CalendarTile({
       </div>
 
       <div style={body}>
-        {!calendar && !error && <div style={hint}>Loading calendar…</div>}
+        {!calendar && !error && <div style={hint}><EditableText id="calendartile.loading">Loading calendar…</EditableText></div>}
         {error && !calendar && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {calendar && count === 0 && (
           <div style={hint}>No upcoming events{minImpact !== 'all' ? ' at this impact' : ''}. The Forex Factory feed populates within a few minutes.</div>

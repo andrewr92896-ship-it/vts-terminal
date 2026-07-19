@@ -30,7 +30,7 @@ export const C = {
   green: '#2FC77E', // long / positive / live
   red: '#F0596E', // short / negative / high impact
   amber: '#E5A43B', // warnings, privacy banner
-  info: '#6C9EFF', // LLC workspace accent
+  info: '#6C9EFF', // Site Help workspace accent
   violet: '#B69CFF', // Studies workspace accent
 
   // Font families (the sans matches the app's existing self-hosted stack).

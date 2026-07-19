@@ -1,9 +1,14 @@
 # VTS Portal — Handoff for a New Claude Code Chat
 
-Paste this whole file into a new chat to continue work. It is everything a fresh
-Claude needs to be productive immediately. (A companion file, `PROJECT_LOG.md`,
-records *everything already built* — read that for history; read this for how to
-work and what's next.)
+> ⚠️ **OUTDATED — superseded by `CLAUDE.md`.** This handoff describes an earlier
+> stage of the project (including workspaces since **removed** — Kia Sales,
+> Vitalis Wealth Management, Personal Finance, the Vitalis LLC workspace — an
+> older role model, and paths to files that no longer exist). **`CLAUDE.md` is
+> now the single source of truth** for the stack, conventions, workflow, and how
+> the portal behaves. Start there, not here.
+
+Paste this whole file into a new chat to continue work. (A companion file,
+`PROJECT_LOG.md`, records *everything already built* — read that for history.)
 
 **This chat's focus: build out the Trading tab until it is done.** See §6.
 

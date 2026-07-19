@@ -1,8 +1,16 @@
 # VTS Portal — Project Log (everything we did)
 
-A retrospective record of what was built, why, and how it works. Give this to any
-Claude chat that needs the full history. For *how to continue working* (stack,
-conventions, workflow, next task), see `HANDOFF.md`.
+> ⚠️ **OUTDATED — historical record only.** This log describes an earlier
+> architecture and several workspaces that have since been **removed** (Kia
+> Sales, Vitalis Retirement & Wealth Management, Personal Finance, the Vitalis
+> LLC workspace, the standalone To-Do workspace) and an older role model. It is
+> kept as history, not as a description of the current app. **For how the portal
+> is built and behaves today, `CLAUDE.md` is the single source of truth** —
+> trust it and the code over anything below.
+
+A retrospective record of what was built, why, and how it worked at the time.
+For *how to continue working* today (stack, conventions, workflow), see
+`CLAUDE.md`.
 
 ---
 

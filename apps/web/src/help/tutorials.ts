@@ -1,7 +1,7 @@
 // Per-page tutorials shown by the "?" help button on each section. Text-only
 // steps for now; each step has an optional `image` slot so screenshots can be
 // dropped in later (e.g. under /public/tutorials/) without changing this shape.
-// Keyed by screen key (see theme/themes.ts TABS and DEFAULT_SCREEN).
+// Keyed by screen key (see theme/nav.ts, the source of truth for sections).
 
 export interface TutorialStep {
   title: string;
@@ -347,7 +347,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Choose the right role',
-        body: 'Admin = everything (including this screen). Trader = Trading workspace + to-do. Viewer = read-only.',
+        body: 'Every signed-in user is a Member with full access to Trading, Studies, My Portal, and Site Help. Add Admin for user and team management, and Funded to reveal the private prop-challenge section in Trading. Founder / Software Developer (Developer Portal) are granted only by the owner.',
       },
       {
         title: 'Manage existing users',
@@ -355,7 +355,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Delete an account',
-        body: 'Click "Delete", then "Confirm delete", to permanently remove an account and all of its data (to-dos, clients). This cannot be undone — use Deactivate instead if you only need to suspend access. You cannot delete your own account or the last remaining admin.',
+        body: 'Click "Delete", then "Confirm delete", to permanently remove an account and all of its data (to-dos, trades, studies progress, and more). This cannot be undone — use Deactivate instead if you only need to suspend access. You cannot delete your own account or the last remaining admin.',
       },
       {
         title: 'Renamed accounts',
@@ -365,14 +365,13 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 };
 
-// Shown for screens without a specific tutorial yet (e.g. Trading/Studies
-// placeholders).
+// Shown for any screen that doesn't have its own tutorial yet.
 export const DEFAULT_TUTORIAL: Tutorial = {
   title: 'About this section',
   steps: [
     {
-      title: 'Not built yet',
-      body: 'This section is a placeholder for a later stage. The card on the page describes what it will do once its data is connected.',
+      title: 'Getting around',
+      body: 'The header on the page describes what this section does. Use the sections list to move between the areas of this workspace.',
     },
     {
       title: 'Switch workspaces',
@@ -387,16 +386,18 @@ export function tutorialFor(screen: string): Tutorial {
 
 // The curated set of screens shown in Site Help ▸ How to and offered in the
 // admin Site Wording editor. Shared so both stay in sync.
+// Labels here mirror the section labels in theme/nav.ts (the source of truth)
+// so the same section reads the same everywhere.
 export const HOWTO_TOPICS: { key: string; label: string }[] = [
   { key: 'live', label: 'Live Wall' },
-  { key: 'alerts', label: 'Alerts' },
+  { key: 'alerts', label: 'Trading Alerts' },
   { key: 'desk', label: 'Trade Desk' },
   { key: 'sessions', label: 'Strategy Sessions' },
   { key: 'funded', label: 'Manual Trades' },
   { key: 'news', label: 'Market News' },
-  { key: 'td_trading', label: 'Trading To-Do' },
+  { key: 'td_trading', label: 'To Do' },
   { key: 'st_game', label: 'Study Game' },
-  { key: 'st_home', label: 'Study Hub' },
+  { key: 'st_home', label: 'Subjects' },
 ];
 
 // Parse an admin override (stored JSON) into a Tutorial, keeping only the fields

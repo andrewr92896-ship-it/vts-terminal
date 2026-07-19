@@ -104,15 +104,6 @@ function renderScreen(
       return <Alerts onNavigate={onNavigate} />;
     case 'desk':
       return <TradingDesk />;
-    // Legacy screen keys — the Trade Log, History, and Live Brokers screens are
-    // now views inside the consolidated Trade Desk tab. Kept so deep links and
-    // in-app navigation (e.g. Alerts, the demo tour) still land on the right view.
-    case 'log':
-      return <TradingDesk initialView="log" />;
-    case 'history':
-      return <TradingDesk initialView="history" />;
-    case 'metrics':
-      return <TradingDesk initialView="brokers" />;
     case 'funded':
       return <FundedScreen />;
     case 'prop':
@@ -175,13 +166,11 @@ function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
   return allowed[0] ?? 'studies';
 }
 
-// The breadcrumb label for the current section (uses the nav config, with a
-// small fallback for legacy Trade Desk sub-views).
+// The breadcrumb label for the current section (uses the nav config).
 function sectionLabelFor(workspace: WorkspaceKey, screen: string): string {
   const nav = navFor(workspace);
   const match = nav?.sections.find((s) => s.key === screen);
   if (match) return match.label;
-  if (screen === 'log' || screen === 'history' || screen === 'metrics') return 'Trade Desk';
   return nav?.sections[0]?.label ?? '';
 }
 
@@ -384,9 +373,8 @@ export function Portal() {
   useEffect(() => {
     const nav = navFor(workspace);
     if (!nav) return;
-    const legacyTradeDesk = screen === 'log' || screen === 'history' || screen === 'metrics';
     const fundedLocked = screen === 'prop' && !canFunded;
-    if ((!nav.sections.some((s) => s.key === screen) && !legacyTradeDesk) || fundedLocked) {
+    if (!nav.sections.some((s) => s.key === screen) || fundedLocked) {
       setScreen(DEFAULT_SCREEN[workspace]);
     }
   }, [workspace, screen, canFunded]);

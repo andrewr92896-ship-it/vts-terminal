@@ -7,6 +7,7 @@ import type {
   ManualPosition,
   OwnedBrokerConnection,
 } from '../../api/types';
+import { EditableText } from '../../copy/SiteCopy';
 
 // The list + add/edit form for a user's broker connections. Shared by the Live
 // Wall "Connections" modal and the Account Settings page so both stay in sync.
@@ -156,7 +157,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
       {error && <div style={banner}>{error}</div>}
 
       {!loaded ? (
-        <div style={{ color: MUTED, fontSize: 12.5, marginBottom: 14 }}>Loading…</div>
+        <div style={{ color: MUTED, fontSize: 12.5, marginBottom: 14 }}><EditableText id="broker.loading">Loading…</EditableText></div>
       ) : conns.length === 0 ? (
         <div style={{ ...panel, marginBottom: 14, color: MUTED, fontSize: 12.5 }}>
           {readOnly ? 'No broker connections to show.' : 'No connections yet. Add one below.'}
@@ -575,9 +576,9 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
       {err && <div style={banner}>{err}</div>}
 
       {!loaded ? (
-        <div style={{ color: MUTED, fontSize: 12 }}>Loading positions…</div>
+        <div style={{ color: MUTED, fontSize: 12 }}><EditableText id="broker.positions_loading">Loading positions…</EditableText></div>
       ) : positions.length === 0 ? (
-        <div style={{ color: MUTED, fontSize: 12, marginBottom: 10 }}>No positions yet. Add one below.</div>
+        <div style={{ color: MUTED, fontSize: 12, marginBottom: 10 }}><EditableText id="broker.positions_empty">No positions yet. Add one below.</EditableText></div>
       ) : (
         <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
           {positions.map((p) => (

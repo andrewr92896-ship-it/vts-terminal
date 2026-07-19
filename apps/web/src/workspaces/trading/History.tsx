@@ -7,6 +7,7 @@ import { classifyOutcome, configFrom, configActive, type BreakEvenConfig } from 
 import { tradePips, fmtPips, netPips, hasAnyPips } from './pips';
 import { DesignationTag } from './DesignationTag';
 import { EditableText } from '../../copy/SiteCopy';
+import { ScreenTitle } from './ScreenTitle';
 import type { HistoryData, HistoryGroup, HistoryRecord, HistorySummary, TradeInput, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
@@ -263,7 +264,7 @@ export function History() {
     <div style={{ maxWidth: 1240, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="history.title">History</EditableText></h2>
+          <ScreenTitle id="history.title">History</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             <EditableText id="history.subtitle">Closed trades across your team — recorded automatically when a Live Wall position closes, tagged by trader.</EditableText>
             {!readOnly && ' Delete any of your own rows to clear out test trades.'}

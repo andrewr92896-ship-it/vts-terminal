@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePushNotifications } from '../../push/usePushNotifications';
 import { EditableText } from '../../copy/SiteCopy';
+import { ScreenTitle } from './ScreenTitle';
 import type { AlertRecord, AlertsData, SessionAlertPrefs, TradeAnalysis } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
@@ -76,7 +77,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
     <div style={{ maxWidth: 1100, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="alerts.title">Trading Alerts</EditableText></h2>
+          <ScreenTitle id="alerts.title">Trading Alerts</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             <EditableText id="alerts.subtitle">TradingView alerts arrive by webhook. Paste a chart screenshot and VTS AI analyzes the trade.</EditableText>
           </div>
