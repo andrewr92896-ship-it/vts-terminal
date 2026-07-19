@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.3';
+export const APP_VERSION = 'Beta V 5.4';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.4',
+    date: 'July 19, 2026',
+    notes: [
+      'Removed the redundant Study Creation shortcuts from the Study Hub landing — the “Create one” button under Study games and the “Open Study Creation” button under Flashcards & guides are gone, since Study Creation already has its own sidebar section.',
+    ],
+  },
   {
     version: 'Beta V 5.3',
     date: 'July 19, 2026',
