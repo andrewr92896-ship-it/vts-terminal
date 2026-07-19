@@ -747,24 +747,67 @@ const DECK_FORMAT = [
   'Rules: every question has EXACTLY four options labelled A, B, C, and D; exactly one is correct and named in "answer"; "explanation" is ONE short sentence saying why the answer is right; "topic" is a short category label — reuse a small set of 2–5 topics across the whole set. No prose or code fences outside the JSON.',
 ].join('\n');
 
+// Split a total question count into bounded batches. A single model call for a
+// large deck runs long enough to hit the hosting gateway's request timeout (a
+// 524); batching keeps every call short so they finish and run in parallel.
+function splitCount(total: number, batchSize: number): number[] {
+  const batches: number[] = [];
+  let remaining = total;
+  while (remaining > 0) {
+    const n = Math.min(batchSize, remaining);
+    batches.push(n);
+    remaining -= n;
+  }
+  return batches;
+}
+
 // AI-generate a fresh quiz from a topic the team named (plus optional extra
-// instructions). Returns validated questions; the caller stores them.
+// instructions). Returns validated questions; the caller stores them. The set
+// is generated in small parallel batches — one giant call for a large deck runs
+// long enough to hit the gateway's request timeout (a 524); short parallel calls
+// each finish quickly and the whole set still comes back. Results are combined
+// and de-duped by stem.
 export async function generateDeckQuestions(input: {
   topic: string;
   instructions?: string;
   count: number;
 }): Promise<GeneratedQuestion[]> {
   const count = Math.max(1, Math.min(50, Math.floor(input.count) || 0));
+  const fallbackTopic = input.topic.trim().slice(0, 40) || 'General';
   const system = `You are an expert exam-question author. Write clear, self-contained multiple-choice practice questions that test real understanding of the subject the user names. Vary difficulty. Do not repeat questions. ${DECK_FORMAT}`;
-  const prompt = [
-    `Write ${count} multiple-choice questions about: ${input.topic}.`,
-    input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
-    `Produce exactly ${count} questions.`,
-  ]
-    .filter(Boolean)
-    .join('\n');
-  const raw = await askClaude(prompt, system, deckMaxTokens(count));
-  return parseGeneratedQuestions(raw, count, [], input.topic.trim().slice(0, 40) || 'General');
+
+  const batches = splitCount(count, 8);
+  const perBatch = await mapLimit(batches, 4, async (batchCount, i) => {
+    const prompt = [
+      `Write ${batchCount} multiple-choice questions about: ${input.topic}.`,
+      input.instructions ? `Additional instructions from the author: ${input.instructions}` : '',
+      batches.length > 1
+        ? `This is set ${i + 1} of ${batches.length} for the same topic — cover different sub-areas and avoid questions likely to appear in the other sets.`
+        : '',
+      `Produce exactly ${batchCount} questions.`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    try {
+      const raw = await askClaude(prompt, system, deckMaxTokens(batchCount));
+      return parseGeneratedQuestions(raw, batchCount, [], fallbackTopic);
+    } catch {
+      // One batch failing (e.g. a transient rate limit or timeout) shouldn't
+      // sink the whole request — return what the other batches produced.
+      return [] as GeneratedQuestion[];
+    }
+  });
+
+  const out: GeneratedQuestion[] = [];
+  const seen = new Set<string>();
+  for (const q of perBatch.flat()) {
+    const key = q.stem.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(q);
+    if (out.length >= count) break;
+  }
+  return out;
 }
 
 // Split a big blob of study text into bounded chunks so each is parsed by its
