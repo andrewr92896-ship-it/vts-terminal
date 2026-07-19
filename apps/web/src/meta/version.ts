@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.19';
+export const APP_VERSION = 'Beta V 5.20';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.20',
+    date: 'July 19, 2026',
+    notes: [
+      'Study Creation now does CSV. Study games and flashcard sets each get an “Import CSV” option (with a downloadable template) that reads a spreadsheet directly — no AI needed — and every game and set has an “Export CSV” button. Edit your content in Excel or Google Sheets and round-trip it: export, tweak, re-import.',
+    ],
+  },
   {
     version: 'Beta V 5.19',
     date: 'July 19, 2026',

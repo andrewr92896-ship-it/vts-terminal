@@ -7,6 +7,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { EditableText, EditableRich } from '../../copy/SiteCopy';
 import { DeckEditor } from './DeckEditor';
+import { downloadCsv, parseQuestionsCsv, questionsToCsv, questionTemplateCsv } from './studyCsv';
 
 // The team study-game *maker*, shown in Study Creation. Any member builds a deck
 // (AI-generated from a topic, or from an uploaded file) and manages the team's
@@ -189,8 +190,25 @@ function DeckCard({
   onDelete: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const sourceLabel =
     deck.source === 'ai_topic' ? 'AI-generated' : deck.source === 'upload' ? 'From a file' : deck.source === 'merged' ? 'Combined' : 'Sample';
+
+  // Export the game to a CSV the team can edit in a spreadsheet and re-import.
+  // Fetches the full question set (the list only carries a count).
+  async function exportCsv() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const { deck: full } = await api.studyDeck(deck.id);
+      downloadCsv(full.name, questionsToCsv(full.questions));
+    } catch {
+      /* best-effort */
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <div style={card(theme)}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -230,7 +248,12 @@ function DeckCard({
             </button>
           </>
         )}
-        {!canManage && (
+        {!confirm && deck.questionCount > 0 && (
+          <button onClick={exportCsv} disabled={exporting} style={{ ...ghostBtn(theme), opacity: exporting ? 0.6 : 1 }}>
+            {exporting ? <EditableText id="studydecks.exporting" text="Exporting…" /> : <EditableText id="studydecks.export_csv" text="⭳ Export CSV" />}
+          </button>
+        )}
+        {!canManage && !confirm && (
           <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Play it in the Study Game section</span>
         )}
       </div>
@@ -339,7 +362,7 @@ function CombineGames({
   );
 }
 
-type Mode = 'ai' | 'file';
+type Mode = 'ai' | 'file' | 'csv';
 
 function errorText(e: unknown): string {
   if (e instanceof ApiError) {
@@ -365,15 +388,21 @@ function DeckComposer({
   const [count, setCount] = useState(15);
   const [fileText, setFileText] = useState('');
   const [fileName, setFileName] = useState<string | null>(null);
-  // The formatted questions AI produced from the uploaded file, awaiting the
-  // author's confirmation. Null while still composing.
+  // The questions awaiting the author's confirmation — produced by AI from an
+  // uploaded file, or parsed directly from a CSV. Null while still composing.
   const [preview, setPreview] = useState<DeckQuestion[] | null>(null);
+  // Whether the pending preview came from a CSV (parsed here, no AI), plus any
+  // rows the CSV parser had to skip, so the review screen can say so.
+  const [previewIsCsv, setPreviewIsCsv] = useState(false);
+  const [csvSkipped, setCsvSkipped] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   function switchMode(m: Mode) {
     setMode(m);
     setPreview(null);
+    setPreviewIsCsv(false);
+    setCsvSkipped([]);
     setError(null);
   }
 
@@ -390,6 +419,32 @@ function DeckComposer({
       if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ''));
     };
     reader.readAsText(file);
+  }
+
+  // Import a CSV directly into a reviewable preview — no AI call. Parsing and
+  // validation happen client-side; the author reviews before the game is made.
+  function onCsvFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === 'string' ? reader.result : '';
+      const { questions, error: parseError, skipped } = parseQuestionsCsv(raw.slice(0, MAX_FILE_CHARS));
+      if (parseError) {
+        setPreview(null);
+        setCsvSkipped([]);
+        setError(parseError);
+        return;
+      }
+      if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ''));
+      setPreview(questions);
+      setPreviewIsCsv(true);
+      setCsvSkipped(skipped);
+    };
+    reader.readAsText(file);
+    // Allow re-picking the same file after a fix.
+    e.target.value = '';
   }
 
   // ---- AI-from-a-topic: builds and saves in one step (unchanged). ----
@@ -447,8 +502,9 @@ function DeckComposer({
     }
   }
 
-  // The review screen after AI has formatted an uploaded file's questions.
-  if (mode === 'file' && preview) {
+  // The review screen after questions are ready — AI-formatted from a file, or
+  // parsed straight from a CSV. The author checks the answer key before saving.
+  if (preview) {
     return (
       <div style={{ ...card(theme), marginBottom: 14 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -457,9 +513,15 @@ function DeckComposer({
               <EditableText id="studydecks.review_title" text="Review the questions" />
             </h3>
             <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
-              AI formatted {preview.length} question{preview.length === 1 ? '' : 's'} from your file. Check them,
-              then create the game. The correct answer is highlighted.
+              {previewIsCsv ? 'Imported' : 'AI formatted'} {preview.length} question{preview.length === 1 ? '' : 's'}{' '}
+              {previewIsCsv ? 'from your CSV' : 'from your file'}. Check them, then create the game. The correct answer is highlighted.
             </p>
+            {csvSkipped.length > 0 && (
+              <p style={{ margin: '6px 0 0', fontSize: 11.5, color: '#e0a23a', lineHeight: 1.5 }}>
+                Skipped {csvSkipped.length} row{csvSkipped.length === 1 ? '' : 's'}: {csvSkipped.slice(0, 3).join(' ')}
+                {csvSkipped.length > 3 ? ' …' : ''}
+              </p>
+            )}
           </div>
           <input
             value={name}
@@ -490,8 +552,8 @@ function DeckComposer({
 
   return (
     <div style={{ ...card(theme), marginBottom: 14 }}>
-      <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden', marginBottom: 12 }}>
-        {(['ai', 'file'] as const).map((m) => (
+      <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden', marginBottom: 12, flexWrap: 'wrap' }}>
+        {(['ai', 'file', 'csv'] as const).map((m) => (
           <button
             key={m}
             onClick={() => switchMode(m)}
@@ -505,7 +567,7 @@ function DeckComposer({
               color: mode === m ? theme.accentText : muted,
             }}
           >
-            {m === 'ai' ? 'Generate with AI' : 'Upload a file'}
+            {m === 'ai' ? 'Generate with AI' : m === 'file' ? 'Upload a file' : 'Import CSV'}
           </button>
         ))}
       </div>
@@ -557,12 +619,12 @@ function DeckComposer({
               </button>
             </div>
           </>
-        ) : (
+        ) : mode === 'file' ? (
           <>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
                 {fileName ? 'Choose a different file' : 'Choose a text file'}
-                <input type="file" accept=".txt,.md,.csv,text/*" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
+                <input type="file" accept=".txt,.md,text/*" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
               </label>
               {fileName && <span style={{ fontSize: 12, color: muted }}>{fileName}</span>}
             </div>
@@ -579,12 +641,34 @@ function DeckComposer({
               {busy ? 'Reading your file…' : '✦ Generate'}
             </button>
           </>
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
+                <EditableText id="studydecks.csv_choose" text="Choose a CSV file" />
+                <input type="file" accept=".csv,text/csv" onChange={onCsvFile} disabled={busy} style={{ display: 'none' }} />
+              </label>
+              <button
+                onClick={() => downloadCsv('study-game-template', questionTemplateCsv())}
+                style={{ ...ghostBtn(theme), minHeight: 40 }}
+              >
+                <EditableText id="studydecks.csv_template" text="⭳ Download template" />
+              </button>
+            </div>
+          </>
         )}
 
         <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
-          {mode === 'ai'
-            ? <EditableText id="studydecks.composer_help_ai" text="AI writes the questions and answer key — review them before your team relies on them." />
-            : <EditableText id="studydecks.composer_help_file" text="Upload a text file and AI formats the questions from it. You review them before the game is created." />}
+          {mode === 'ai' ? (
+            <EditableText id="studydecks.composer_help_ai" text="AI writes the questions and answer key — review them before your team relies on them." />
+          ) : mode === 'file' ? (
+            <EditableText id="studydecks.composer_help_file" text="Upload a text file and AI formats the questions from it. You review them before the game is created." />
+          ) : (
+            <EditableText
+              id="studydecks.composer_help_csv"
+              text="Import a CSV with columns: Question, Option A, Option B, Option C, Option D, Answer, and optional Topic and Explanation. Download the template to see the format. You review the questions before the game is created."
+            />
+          )}
         </div>
         {error && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{error}</div>}
       </div>
