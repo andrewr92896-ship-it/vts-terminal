@@ -1,12 +1,9 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import type { BrokerStatus, NotificationItem, RoleKey, User } from '../api/types';
+import type { NotificationItem, RoleKey, User } from '../api/types';
 import { C, GOLD_GRADIENT, tint } from '../theme/tokens';
 import { rolesSummary } from '../auth/access';
 import { api } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
-import { useCheckForUpdates } from '../hooks/useCheckForUpdates';
-import { usePrivacy } from '../privacy/privacy';
-import { useAlertSound, ALERT_SOUNDS } from '../sound/alertSound';
 import { Clock } from './Clock';
 import { Icon } from './Icon';
 import { Avatar } from './Avatar';
@@ -19,13 +16,10 @@ interface TopBarProps {
   workspaceLabel: string;
   sectionLabel: string;
   accent: string;
-  brokers: BrokerStatus[];
-  canTrade: boolean;
   showMenuButton: boolean;
   onOpenNav: () => void;
   onOpenClaude: () => void;
   onOpenAccount: () => void;
-  onOpenDeviceSettings: () => void;
   onOpenChat: () => void;
   onLogout: () => void;
 }
@@ -49,19 +43,6 @@ const NOTIF_ICON: Record<NotificationItem['kind'], string> = {
   bug: 'bug',
   support: 'life-buoy',
 };
-
-function brokerDotColor(status: BrokerStatus['status']): string {
-  switch (status) {
-    case 'live':
-      return C.green;
-    case 'pending':
-      return C.amber;
-    case 'error':
-      return C.red;
-    default:
-      return C.faint;
-  }
-}
 
 const iconBtn = (active: boolean): CSSProperties => ({
   position: 'relative',
@@ -149,25 +130,18 @@ export function TopBar(props: TopBarProps) {
     workspaceLabel,
     sectionLabel,
     accent,
-    brokers,
-    canTrade,
     showMenuButton,
     onOpenNav,
     onOpenClaude,
     onOpenAccount,
-    onOpenDeviceSettings,
     onOpenChat,
     onLogout,
   } = props;
 
   const { isPhone } = useResponsive();
-  const { privacy, toggle: togglePrivacy } = usePrivacy();
-  const sound = useAlertSound();
 
   const [notifOpen, setNotifOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const appUpdate = useCheckForUpdates();
 
   // In-portal notifications (new team chat + admin suggestions/bugs). Unread is
   // computed from a locally stored last-seen timestamp so it survives reloads.
@@ -212,7 +186,6 @@ export function TopBar(props: TopBarProps) {
   }
 
   const userName = user.displayName.split(' ')[0] || user.username;
-  const hasBrokerStatus = canTrade && brokers.length > 0;
 
   return (
     <header
@@ -408,170 +381,6 @@ export function TopBar(props: TopBarProps) {
                 ))}
               </div>
             )}
-          </Dropdown>
-        </div>
-
-        {/* Settings: privacy, trade-alert sound, broker status */}
-        <div style={{ position: 'relative', flex: 'none' }}>
-          <button
-            onClick={() => setSettingsOpen((v) => !v)}
-            aria-label="Settings"
-            title="Settings: privacy, alerts, status"
-            style={iconBtn(settingsOpen)}
-          >
-            <Icon name="settings" size={17} />
-          </button>
-          <Dropdown open={settingsOpen} onClose={() => setSettingsOpen(false)} width={258}>
-            {hasBrokerStatus && (
-              <>
-                <div style={menuLabel}>Status</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '2px 9px 10px' }}>
-                  {brokers.map((b) => (
-                    <span
-                      key={b.key}
-                      title={`${b.name} (${b.platform}): ${
-                        b.status === 'unconfigured' ? 'Not configured yet' : b.status
-                      }`}
-                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10.5, color: C.muted, fontFamily: C.mono }}
-                    >
-                      <span
-                        style={{
-                          width: 7,
-                          height: 7,
-                          borderRadius: '50%',
-                          background: brokerDotColor(b.status),
-                          animation: b.status === 'live' ? 'livePulse 2.4s infinite' : 'none',
-                        }}
-                      />
-                      {b.short}
-                    </span>
-                  ))}
-                </div>
-              </>
-            )}
-
-            <div style={hasBrokerStatus ? { borderTop: `1px solid ${C.line2}`, paddingTop: 6 } : undefined}>
-              <button onClick={togglePrivacy} style={menuItem}>
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: '50%',
-                    background: privacy ? C.amber : C.faint,
-                    flex: 'none',
-                  }}
-                />
-                {privacy ? 'Privacy on' : 'Privacy off'}
-                <span style={{ marginLeft: 'auto', fontSize: 10, color: C.faint }}>
-                  {privacy ? 'hiding names & $' : 'visible'}
-                </span>
-              </button>
-            </div>
-
-            {canTrade && (
-              <div style={{ borderTop: `1px solid ${C.line2}`, marginTop: 6, paddingTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 9px 8px' }}>
-                  <span style={menuLabel}>Trade alert sound</span>
-                  <button
-                    onClick={() => sound.setEnabled(!sound.enabled)}
-                    style={{
-                      fontFamily: C.mono,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: sound.enabled ? C.green : C.faint,
-                      background: 'rgba(0,0,0,.18)',
-                      border: `1px solid ${sound.enabled ? tint(C.green, 0.3) : C.line2}`,
-                      padding: '5px 10px',
-                      borderRadius: 6,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {sound.enabled ? 'On' : 'Off'}
-                  </button>
-                </div>
-                {ALERT_SOUNDS.map((s) => {
-                  const on = s.key === sound.soundKey;
-                  return (
-                    <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button
-                        onClick={() => sound.setSoundKey(s.key)}
-                        style={{
-                          ...menuItem,
-                          flex: '1 1 auto',
-                          color: on ? C.gold : C.text,
-                          background: on ? tint(C.gold, 0.1) : 'transparent',
-                        }}
-                      >
-                        <span
-                          style={{
-                            width: 12,
-                            height: 12,
-                            borderRadius: '50%',
-                            flex: 'none',
-                            border: `2px solid ${on ? C.gold : C.faint}`,
-                            background: on ? C.gold : 'transparent',
-                          }}
-                        />
-                        {s.label}
-                      </button>
-                      <button
-                        onClick={() => sound.preview(s.key)}
-                        title={`Preview ${s.label}`}
-                        aria-label={`Preview ${s.label}`}
-                        style={{
-                          flex: 'none',
-                          background: 'rgba(255,255,255,.05)',
-                          border: `1px solid ${C.line2}`,
-                          color: C.text,
-                          fontSize: 11,
-                          padding: '6px 9px',
-                          borderRadius: 6,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        ▶
-                      </button>
-                    </div>
-                  );
-                })}
-                <div style={{ fontSize: 10.5, color: C.faint, padding: '8px 8px 2px', lineHeight: 1.45 }}>
-                  Plays on this device when a new TradingView alert arrives.
-                </div>
-              </div>
-            )}
-
-            {/* Phone notifications, Pushover, and broker connections open in
-                their own panel from here; check-for-updates runs inline. */}
-            <div style={{ borderTop: `1px solid ${C.line2}`, marginTop: 6, paddingTop: 6 }}>
-              <button
-                onClick={() => {
-                  setSettingsOpen(false);
-                  onOpenDeviceSettings();
-                }}
-                style={menuItem}
-              >
-                <Icon name="bell-plus" size={15} color={C.faint} />
-                Notifications & connections
-                <span style={{ marginLeft: 'auto', fontSize: 10, color: C.faint }}>›</span>
-              </button>
-              <button
-                onClick={() => void appUpdate.run()}
-                disabled={appUpdate.state === 'checking' || appUpdate.state === 'applying'}
-                style={menuItem}
-                title="Check for a new version and update this device"
-              >
-                <Icon name="refresh-cw" size={15} color={C.faint} />
-                {appUpdate.state === 'checking'
-                  ? 'Checking…'
-                  : appUpdate.state === 'applying'
-                    ? 'Updating…'
-                    : appUpdate.state === 'uptodate'
-                      ? 'You’re on the latest ✓'
-                      : appUpdate.state === 'error'
-                        ? 'Couldn’t check — try again'
-                        : 'Check for updates'}
-              </button>
-            </div>
           </Dropdown>
         </div>
 

@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
-import type { BrokerStatus, RoleKey } from '../api/types';
+import type { RoleKey } from '../api/types';
 import {
   THEMES,
   DEFAULT_SCREEN,
@@ -24,7 +24,6 @@ import { InstallPrompt } from './InstallPrompt';
 import { AskClaudePanel } from './AskClaudePanel';
 import { BadgesProvider } from './UserBadges';
 import { AccountSettings } from './AccountSettings';
-import { DeviceSettings } from './DeviceSettings';
 import { PrivacyProvider, usePrivacy } from '../privacy/privacy';
 import { TeamChat } from './TeamChat';
 import { getStudyTint, onStudyTintChange, studyBgTint, studyThemeForLevel } from '../workspaces/studies/studyTint';
@@ -76,6 +75,9 @@ const StudyGuidesLibrary = lazy(() =>
 );
 const TradingTeam = lazy(() =>
   import('../workspaces/myportal/TradingTeam').then((m) => ({ default: m.TradingTeam })),
+);
+const MyPortalSettings = lazy(() =>
+  import('../workspaces/myportal/MyPortalSettings').then((m) => ({ default: m.MyPortalSettings })),
 );
 
 // Screens that have real implementations; everything else falls back to the
@@ -203,9 +205,7 @@ export function Portal() {
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
-  const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
 
   // Sidebar collapse (desktop) — persisted per the design handoff.
   const [collapsed, setCollapsed] = useState<boolean>(() => {
@@ -318,24 +318,6 @@ export function Portal() {
   const accent = accentFor(workspace);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Broker status drives the settings-menu dots (Trading only).
-  useEffect(() => {
-    if (!allowed.includes('trading')) {
-      setBrokers([]);
-      return;
-    }
-    let alive = true;
-    api
-      .brokerStatus()
-      .then((r) => alive && setBrokers(r.brokers))
-      .catch(() => {
-        /* ignore — dots simply stay hidden */
-      });
-    return () => {
-      alive = false;
-    };
-  }, [allowed]);
-
   const resetScroll = useCallback(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
   }, []);
@@ -409,8 +391,6 @@ export function Portal() {
     }
   }, [workspace, screen, canFunded]);
 
-  const canTrade = canAccessWorkspace(effectiveRoles, 'trading');
-
   // Screens that need the live user or the acting-role controls (which the
   // stateless renderScreen doesn't have): the Site Help workspace and the Admin
   // View-as / Suggestions / Bug Reports sections. Returns null for anything else
@@ -419,6 +399,8 @@ export function Portal() {
     switch (scr) {
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
+      case 'my_settings':
+        return <MyPortalSettings theme={theme} />;
       case 'hp_howto':
         return <HelpHowTo theme={theme} />;
       case 'hp_news':
@@ -465,13 +447,10 @@ export function Portal() {
       workspaceLabel={WORKSPACE_LABELS[workspace]}
       sectionLabel={sectionLabelFor(workspace, screen)}
       accent={accent}
-      brokers={brokers}
-      canTrade={canTrade}
       showMenuButton={isPhone}
       onOpenNav={() => setNavOpen(true)}
       onOpenClaude={() => setAiOpen(true)}
       onOpenAccount={() => setAccountOpen(true)}
-      onOpenDeviceSettings={() => setDeviceSettingsOpen(true)}
       onOpenChat={() => setChatOpen(true)}
       onLogout={logout}
     />
@@ -576,7 +555,6 @@ export function Portal() {
             onClose={() => setAiOpen(false)}
           />
           <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
-          <DeviceSettings open={deviceSettingsOpen} theme={theme} onClose={() => setDeviceSettingsOpen(false)} />
 
           <TeamChat
             open={chatOpen}

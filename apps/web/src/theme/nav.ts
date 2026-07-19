@@ -34,6 +34,7 @@ export const NAV: NavWorkspace[] = [
     group: 'My Portal',
     sections: [
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
   },
   {

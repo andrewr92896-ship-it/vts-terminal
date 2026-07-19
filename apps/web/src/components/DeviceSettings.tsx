@@ -1,30 +1,24 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api, ApiError, type NotifTarget, type NotifPrefFlags } from '../api/client';
-import { useResponsive } from '../hooks/useMediaQuery';
 import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
 import { usePushNotifications } from '../push/usePushNotifications';
+import { EditableText } from '../copy/SiteCopy';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 
-interface DeviceSettingsProps {
-  open: boolean;
-  theme: Theme;
-  onClose: () => void;
-}
-
-// Device & connection settings, opened from the top-bar settings cog. Holds the
-// per-device / account-connection controls that used to live in Account
-// settings: phone notifications, Pushover, broker connections, and app updates.
-// Account settings now keeps only who-you-are (profile, picture, password).
-export function DeviceSettings({ open, theme, onClose }: DeviceSettingsProps) {
+// Notifications & connections — the per-device / account-connection controls:
+// phone notifications, Pushover, per-trader notification prefs, and broker
+// connections. Rendered inline in My Portal ▸ Settings (it used to be a modal
+// opened from the old top-bar settings cog). Account settings keeps only
+// who-you-are (profile, picture, password).
+export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
   const { user } = useAuth();
-  const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
   const isDemo = !!user?.isDemo;
 
-  if (!open || !user) return null;
+  if (!user) return null;
 
   // Only full trading users (not view-only) may add their own broker APIs. The
   // server enforces this on every connection write too.
@@ -34,92 +28,40 @@ export function DeviceSettings({ open, theme, onClose }: DeviceSettingsProps) {
   // their own device. The demo is look-only and never subscribes.
   const canUsePush = !isDemo && canAccessWorkspace(user.roles, 'trading');
 
-  return (
-    <>
-      <div
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          background: 'rgba(0,0,0,.5)',
-          zIndex: 60,
-          animation: 'fadeIn .2s ease',
-        }}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        style={{
-          position: 'fixed',
-          top: isPhone ? 0 : '50%',
-          left: '50%',
-          transform: isPhone ? 'translateX(-50%)' : 'translate(-50%,-50%)',
-          width: isPhone ? '100%' : 'min(460px, 94vw)',
-          maxHeight: isPhone ? '100%' : '90vh',
-          height: isPhone ? '100%' : undefined,
-          overflowY: 'auto',
-          background: 'linear-gradient(180deg,#0b1a3a,#081226)',
-          border: '1px solid #1d3560',
-          borderRadius: isPhone ? 0 : 14,
-          boxShadow: '0 24px 60px rgba(0,0,0,.55)',
-          zIndex: 61,
-          animation: 'popIn .25s ease',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: '18px 20px',
-            borderBottom: '1px solid #1d3560',
-            position: 'sticky',
-            top: 0,
-            background: '#0b1a3a',
-          }}
-        >
-          <strong style={{ fontSize: 15, color: '#eef3ff' }}>Notifications & connections</strong>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#7488b5',
-              fontSize: 22,
-              lineHeight: 1,
-              cursor: 'pointer',
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Phone notifications — any trading-desk user, their own device. */}
-          {canUsePush && (
-            <>
-              <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
-              <div style={{ height: 1, background: '#1d3560' }} />
-              <PushoverSection accent={accentGrad} accentText={theme.accentText} />
-              <div style={{ height: 1, background: '#1d3560' }} />
-              <PerUserNotificationsSection accent={accentGrad} accentText={theme.accentText} />
-            </>
-          )}
-
-          {/* Broker connections, for full trading users only. */}
-          {canManageBrokers && (
-            <>
-              {canUsePush && <div style={{ height: 1, background: '#1d3560' }} />}
-              <section>
-                <div style={sectionLabel}>Broker connections</div>
-                <BrokerConnectionsPanel />
-              </section>
-            </>
-          )}
-        </div>
+  if (!canUsePush && !canManageBrokers) {
+    return (
+      <div style={hintStyle}>
+        <EditableText id="my_settings.connections.none">
+          No notification or connection settings are available for your account.
+        </EditableText>
       </div>
-    </>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Phone notifications — any trading-desk user, their own device. */}
+      {canUsePush && (
+        <>
+          <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
+          <div style={{ height: 1, background: '#1d3560' }} />
+          <PushoverSection accent={accentGrad} accentText={theme.accentText} />
+          <div style={{ height: 1, background: '#1d3560' }} />
+          <PerUserNotificationsSection accent={accentGrad} accentText={theme.accentText} />
+        </>
+      )}
+
+      {/* Broker connections, for full trading users only. */}
+      {canManageBrokers && (
+        <>
+          {canUsePush && <div style={{ height: 1, background: '#1d3560' }} />}
+          <section>
+            <div style={sectionLabel}>Broker connections</div>
+            <BrokerConnectionsPanel />
+          </section>
+        </>
+      )}
+    </div>
   );
 }
 
