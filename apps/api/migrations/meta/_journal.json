@@ -442,6 +442,13 @@
       "when": 1782339436908,
       "tag": "0062_sessions_days_and_alert_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "6",
+      "when": 1782339536908,
+      "tag": "0063_session_drop_timeframe",
+      "breakpoints": true
     }
   ]
 }

@@ -1073,8 +1073,10 @@ const fundedTradeSchema = z.object({
 });
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
-const dayWindow = z.object({ open: hhmm, close: hhmm });
-// Per-weekday schedule: only mon–fri keys, each an optional {open,close} window.
+// A day window: either an explicit open/close, or `allDay` for the full 24 hours
+// (open/close may then be omitted — the server fills them).
+const dayWindow = z.object({ open: hhmm.optional(), close: hhmm.optional(), allDay: z.boolean().optional() });
+// Per-day schedule: any of the seven day keys, each an optional window.
 const daysSchema = z
   .object({
     mon: dayWindow.nullish(),
@@ -1082,13 +1084,14 @@ const daysSchema = z
     wed: dayWindow.nullish(),
     thu: dayWindow.nullish(),
     fri: dayWindow.nullish(),
+    sat: dayWindow.nullish(),
+    sun: dayWindow.nullish(),
   })
   .partial();
 const sessionFields = {
   instrument: z.string().trim().max(40).nullish(),
   days: daysSchema.optional(),
   marketHours: z.boolean().optional(),
-  timeframe: z.string().trim().max(16).nullish(),
   // `neutral` is dropped from the UI — new/edited sessions may only be bull,
   // bear, or two-way (the DB still tolerates legacy 'neutral' rows on read).
   bias: z.enum(['bull', 'bear', 'both']).optional(),

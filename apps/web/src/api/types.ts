@@ -795,10 +795,11 @@ export interface FundedCloseResult {
 // ---- Trading — Strategy Sessions (mirror of apps/api/src/trading/sessions.ts) ----
 export type SessionBias = 'bull' | 'bear' | 'both';
 export type SessionStatus = 'active' | 'opening' | 'idle';
-export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
+export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 export interface DayWindow {
   open: string; // ET 'HH:MM'
   close: string;
+  allDay?: boolean; // full 24 hours (open/close ignored)
 }
 export type WeekSchedule = Partial<Record<Weekday, DayWindow>>;
 
@@ -808,7 +809,6 @@ export interface StrategySession {
   instrument: string | null;
   days: WeekSchedule; // enabled weekdays with their windows
   marketHours: boolean; // filled from the instrument's full market hours
-  timeframe: string | null;
   bias: SessionBias;
   notes: string | null;
   active: boolean;
@@ -821,7 +821,6 @@ export interface SessionInput {
   instrument?: string | null;
   days?: WeekSchedule;
   marketHours?: boolean;
-  timeframe?: string | null;
   bias?: SessionBias;
   notes?: string | null;
   active?: boolean;
