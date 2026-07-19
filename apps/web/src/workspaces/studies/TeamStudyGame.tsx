@@ -31,6 +31,14 @@ interface LevelEvent {
   text: string;
 }
 
+// The distinct source-game names on a combined game's questions (empty for a
+// normal game). Enables the optional "guess the source" mode.
+function sourcesForDeck(deck: TeamDeckDetail): string[] {
+  const set = new Set<string>();
+  for (const q of deck.questions) if (q.sourceName) set.add(q.sourceName);
+  return [...set];
+}
+
 function shuffledIndices(n: number): number[] {
   const a = Array.from({ length: n }, (_, i) => i);
   for (let i = a.length - 1; i > 0; i--) {
@@ -63,6 +71,10 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
+  // "Guess the source" mode, available only on combined games whose questions
+  // remember which game they came from.
+  const [guessMode, setGuessMode] = useState(false);
+  const [sourceGuess, setSourceGuess] = useState<string | null>(null);
 
   const hydratedRef = useRef(false);
   const lastSavedRef = useRef<string | null>(null);
@@ -154,6 +166,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     setOutcome(null);
     setLevelEvent(null);
     setScoreChange(null);
+    setSourceGuess(null);
   }
 
   function submit(label: Letter | null) {
@@ -222,6 +235,8 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   const streakMult = streakMultiplier(game.streak);
   const lifetime = deckLifetimeAccuracy(game);
   const session = deckSessionScore(game);
+  // The distinct source games (set on a combined game), for the guess mode.
+  const sources = sourcesForDeck(deck);
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
@@ -302,6 +317,12 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
           {session && <>Session <strong style={{ color: '#fff' }}>{session.pct.toFixed(1)}%</strong> · </>}
           {game.totalCorrect}/{game.totalAttempted}
         </div>
+        {sources.length > 0 && (
+          <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: sources.length > 0 && !readOnly ? 0 : 'auto' }}>
+            <input type="checkbox" checked={guessMode} onChange={(e) => setGuessMode(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
+            Guess the source
+          </label>
+        )}
         {!readOnly && (
           <button onClick={() => setResetConfirm(true)} style={{ ...ghostBtn(theme), marginLeft: 'auto', minHeight: 36 }}>
             Reset
@@ -433,6 +454,32 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
               {current.explanation && (
                 <div style={{ fontSize: 12.5, color: '#d7ccff', lineHeight: 1.55, marginBottom: 12 }}>{current.explanation}</div>
               )}
+
+              {/* Guess the source: on a combined game with sources, either ask the
+                  learner which game this came from, or just show it. */}
+              {current.sourceName && (
+                guessMode ? (
+                  sourceGuess == null ? (
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Which game is this question from?</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {sources.map((s) => (
+                          <button key={s} onClick={() => setSourceGuess(s)} style={{ ...ghostBtn(theme), minHeight: 34, padding: '6px 11px' }}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12.5, marginBottom: 12, color: sourceGuess === current.sourceName ? GREEN : RED }}>
+                      {sourceGuess === current.sourceName ? '✓ Right' : '✗ Not quite'} — from <strong style={{ color: '#fff' }}>{current.sourceName}</strong>
+                    </div>
+                  )
+                ) : (
+                  <div style={{ fontSize: 11.5, color: muted, marginBottom: 12 }}>From <strong style={{ color: '#cdbcff' }}>{current.sourceName}</strong></div>
+                )
+              )}
+
               <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
                 Next question ›
               </button>

@@ -3,10 +3,9 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyDecks, studyDeckQuestions, users } from '../db/schema.js';
 
-// Team-authored study decks: create, list, read, and delete quizzes a team
-// builds for itself. Every read/write is scoped by teamId so one team can never
-// see or touch another's decks. Cards live in the DB, not in code.
-// lives in code, not here).
+// Team-authored study decks: create, list, read, edit, merge, and delete
+// quizzes a team builds for itself. Every read/write is scoped by teamId so one
+// team can never see or touch another's decks. Questions live in the DB.
 
 export type Letter = 'A' | 'B' | 'C' | 'D';
 
@@ -16,6 +15,7 @@ export interface DeckQuestionInput {
   options: { label: Letter; text: string }[];
   answer: Letter;
   explanation?: string | null;
+  sourceName?: string | null;
 }
 
 export interface DeckQuestion {
@@ -25,6 +25,7 @@ export interface DeckQuestion {
   options: { label: Letter; text: string }[];
   answer: Letter;
   explanation: string | null;
+  sourceName: string | null;
 }
 
 export interface DeckSummary {
@@ -113,6 +114,45 @@ export async function listDecks(teamId: string): Promise<DeckSummary[]> {
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+// The stored category list: the author's explicit categories (when given, order
+// preserved) plus any question topic not already in it, so every question's
+// topic is a valid category and empty categories the author added still persist.
+function resolveCategories(questions: DeckQuestionInput[], explicit?: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const c of explicit ?? []) {
+    const t = c.trim();
+    if (t && !seen.has(t.toLowerCase())) {
+      seen.add(t.toLowerCase());
+      out.push(t);
+    }
+  }
+  for (const q of questions) {
+    const t = (q.topic ?? '').trim();
+    if (t && !seen.has(t.toLowerCase())) {
+      seen.add(t.toLowerCase());
+      out.push(t);
+    }
+  }
+  return out;
+}
+
+function questionRows(deckId: string, teamId: string, questions: DeckQuestionInput[], now: Date) {
+  return questions.map((q, i) => ({
+    id: randomUUID(),
+    deckId,
+    teamId,
+    seq: i + 1,
+    topic: q.topic,
+    stem: q.stem,
+    options: JSON.stringify(q.options),
+    answer: q.answer,
+    explanation: q.explanation?.trim() || null,
+    sourceName: q.sourceName?.trim().slice(0, 120) || null,
+    createdAt: now,
+  }));
+}
+
 // Create a deck and its questions in one transaction. Question numbers (`seq`)
 // and ids are assigned here — never trusted from the model or client.
 export async function createDeck(input: {
@@ -122,11 +162,12 @@ export async function createDeck(input: {
   createdBy: string | null;
   source: string;
   isSample?: boolean;
+  categories?: string[];
   questions: DeckQuestionInput[];
 }): Promise<DeckDetail> {
   const now = new Date();
   const deckId = randomUUID();
-  const categories = [...new Set(input.questions.map((q) => q.topic).filter((t) => !!t))];
+  const categories = resolveCategories(input.questions, input.categories);
 
   await db.transaction(async (tx) => {
     await tx.insert(studyDecks).values({
@@ -142,26 +183,99 @@ export async function createDeck(input: {
       updatedAt: now,
     });
     if (input.questions.length) {
-      await tx.insert(studyDeckQuestions).values(
-        input.questions.map((q, i) => ({
-          id: randomUUID(),
-          deckId,
-          teamId: input.teamId,
-          seq: i + 1,
-          topic: q.topic,
-          stem: q.stem,
-          options: JSON.stringify(q.options),
-          answer: q.answer,
-          explanation: q.explanation?.trim() || null,
-          createdAt: now,
-        })),
-      );
+      await tx.insert(studyDeckQuestions).values(questionRows(deckId, input.teamId, input.questions, now));
     }
   });
 
   const detail = await getDeck(deckId, input.teamId);
   // Just created it in this team, so it always resolves.
   return detail!;
+}
+
+// Edit a deck: rename and/or replace its questions and categories. Allowed for
+// the deck's creator or a team admin; scoped to the team. When `questions` is
+// given the whole question set is replaced (re-sequenced), which also clears any
+// per-user progress rows keyed by (userId, deckId)? No — progress is keyed by the
+// deck id, which is unchanged, so a light edit keeps players' levels. Returns the
+// updated deck, or null if it isn't this team's or the caller may not edit it.
+export async function updateDeck(
+  deckId: string,
+  teamId: string,
+  userId: string,
+  isAdmin: boolean,
+  patch: { name?: string; description?: string | null; categories?: string[]; questions?: DeckQuestionInput[] },
+): Promise<DeckDetail | null> {
+  const existing = await getDeck(deckId, teamId);
+  if (!existing) return null;
+  if (!isAdmin && existing.createdBy !== userId) return null;
+
+  // The question set now in effect (the patch's, or the current one) — used so
+  // category resolution always sees every question's topic.
+  const effectiveQuestions: DeckQuestionInput[] =
+    patch.questions ??
+    existing.questions.map((q) => ({
+      topic: q.topic,
+      stem: q.stem,
+      options: q.options,
+      answer: q.answer,
+      explanation: q.explanation,
+      sourceName: q.sourceName,
+    }));
+
+  const now = new Date();
+  await db.transaction(async (tx) => {
+    const set: Record<string, unknown> = { updatedAt: now };
+    if (patch.name !== undefined) set.name = patch.name.trim().slice(0, 120);
+    if (patch.description !== undefined) set.description = patch.description?.trim().slice(0, 500) || null;
+    if (patch.questions !== undefined || patch.categories !== undefined) {
+      set.categories = JSON.stringify(resolveCategories(effectiveQuestions, patch.categories));
+    }
+    await tx.update(studyDecks).set(set).where(and(eq(studyDecks.id, deckId), eq(studyDecks.teamId, teamId)));
+    if (patch.questions !== undefined) {
+      await tx.delete(studyDeckQuestions).where(eq(studyDeckQuestions.deckId, deckId));
+      if (patch.questions.length) {
+        await tx.insert(studyDeckQuestions).values(questionRows(deckId, teamId, patch.questions, now));
+      }
+    }
+  });
+
+  return getDeck(deckId, teamId);
+}
+
+// Combine several of the team's games into one new game holding all their
+// questions. When `tagSource` is set, each question remembers the name of the
+// game it came from (for the optional "guess the source" play mode). Skips any
+// deck id that isn't this team's. Returns the new deck.
+export async function mergeDecks(input: {
+  teamId: string;
+  name: string;
+  createdBy: string | null;
+  deckIds: string[];
+  tagSource: boolean;
+}): Promise<DeckDetail> {
+  const questions: DeckQuestionInput[] = [];
+  for (const id of input.deckIds) {
+    const d = await getDeck(id, input.teamId);
+    if (!d) continue;
+    for (const q of d.questions) {
+      questions.push({
+        topic: q.topic,
+        stem: q.stem,
+        options: q.options,
+        answer: q.answer,
+        explanation: q.explanation,
+        sourceName: input.tagSource ? d.name : null,
+      });
+    }
+  }
+  return createDeck({
+    teamId: input.teamId,
+    name: input.name,
+    description: `Combined from ${input.deckIds.length} game${input.deckIds.length === 1 ? '' : 's'}`,
+    createdBy: input.createdBy,
+    source: 'merged',
+    questions,
+  });
 }
 
 // One deck with its questions, scoped to the team (null if not this team's).
@@ -194,6 +308,7 @@ export async function getDeck(deckId: string, teamId: string): Promise<DeckDetai
       options: studyDeckQuestions.options,
       answer: studyDeckQuestions.answer,
       explanation: studyDeckQuestions.explanation,
+      sourceName: studyDeckQuestions.sourceName,
     })
     .from(studyDeckQuestions)
     .where(eq(studyDeckQuestions.deckId, deckId));
@@ -206,6 +321,7 @@ export async function getDeck(deckId: string, teamId: string): Promise<DeckDetai
       options: parseOptions(q.options),
       answer: q.answer as Letter,
       explanation: q.explanation,
+      sourceName: q.sourceName,
     }))
     .sort((a, b) => a.seq - b.seq);
 

@@ -6,6 +6,7 @@ import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { requestStudyDeck } from './studiesNav';
+import { DeckEditor } from './DeckEditor';
 
 // The team study-game *maker*, shown in Study Creation. Any member builds a deck
 // (AI-generated from a topic, or from an uploaded file) and manages the team's
@@ -24,6 +25,11 @@ export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
+  const [combineOpen, setCombineOpen] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+
+  const isAdmin = user?.roles.includes('admin') === true;
+  const canManage = (d: TeamDeck) => !readOnly && (d.createdBy === user?.id || isAdmin);
 
   // Play a team game in the Study Game section: request the deck, then navigate
   // there (the launcher opens it). Falls back to a no-op if the shell didn't
@@ -63,21 +69,55 @@ export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate
     }
   }
 
+  // The editor takes over the whole section while open.
+  if (editing) {
+    return (
+      <DeckEditor
+        theme={theme}
+        deckId={editing}
+        onClose={(updated) => {
+          if (updated) setDecks(updated);
+          setEditing(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Games</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build your team’s own quizzes here — play them from the <strong>Study Game</strong> section.
+            Build and edit your team’s own quizzes here — play them from the <strong>Study Game</strong> section.
           </p>
         </div>
         {!readOnly && (
-          <button onClick={() => setComposerOpen((v) => !v)} style={primaryBtn(theme, accentGrad)}>
-            {composerOpen ? 'Close' : '✦ New study game'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {decks.length >= 2 && (
+              <button onClick={() => setCombineOpen((v) => !v)} style={ghostBtn(theme)}>
+                {combineOpen ? 'Close' : '⧉ Combine games'}
+              </button>
+            )}
+            <button onClick={() => setComposerOpen((v) => !v)} style={primaryBtn(theme, accentGrad)}>
+              {composerOpen ? 'Close' : '✦ New study game'}
+            </button>
+          </div>
         )}
       </div>
+
+      {combineOpen && !readOnly && (
+        <CombineGames
+          theme={theme}
+          decks={decks}
+          onCancel={() => setCombineOpen(false)}
+          onCombined={(updated, newId) => {
+            setDecks(updated);
+            setCombineOpen(false);
+            play(newId);
+          }}
+        />
+      )}
 
       {composerOpen && !readOnly && (
         <DeckComposer
@@ -122,8 +162,9 @@ export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate
               theme={theme}
               muted={muted}
               readOnly={readOnly}
-              canDelete={!readOnly && (d.createdBy === user?.id || user?.roles.includes('admin') === true)}
+              canManage={canManage(d)}
               onPlay={() => play(d.id)}
+              onEdit={() => setEditing(d.id)}
               onDelete={() => remove(d.id)}
             />
           ))}
@@ -138,20 +179,23 @@ function DeckCard({
   theme,
   muted,
   readOnly,
-  canDelete,
+  canManage,
   onPlay,
+  onEdit,
   onDelete,
 }: {
   deck: TeamDeck;
   theme: Theme;
   muted: string;
   readOnly: boolean;
-  canDelete: boolean;
+  canManage: boolean;
   onPlay: () => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
-  const sourceLabel = deck.source === 'ai_topic' ? 'AI-generated' : deck.source === 'upload' ? 'From a file' : 'Sample';
+  const sourceLabel =
+    deck.source === 'ai_topic' ? 'AI-generated' : deck.source === 'upload' ? 'From a file' : deck.source === 'merged' ? 'Combined' : 'Sample';
   return (
     <div style={card(theme)}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -174,12 +218,17 @@ function DeckCard({
         <button onClick={onPlay} disabled={deck.questionCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: deck.questionCount === 0 ? 0.6 : 1 }}>
           Play
         </button>
-        {canDelete && !confirm && (
+        {canManage && !confirm && (
+          <button onClick={onEdit} style={ghostBtn(theme)}>
+            Edit
+          </button>
+        )}
+        {canManage && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
             Delete
           </button>
         )}
-        {canDelete && confirm && (
+        {canManage && confirm && (
           <>
             <button onClick={onDelete} style={{ ...ghostBtn(theme), borderColor: '#ef5468', color: '#ff9a9a' }}>
               Confirm delete
@@ -190,6 +239,103 @@ function DeckCard({
           </>
         )}
         {readOnly && <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Demo · progress isn’t saved</span>}
+      </div>
+    </div>
+  );
+}
+
+// Combine several games into one new game holding all their questions.
+function CombineGames({
+  theme,
+  decks,
+  onCancel,
+  onCombined,
+}: {
+  theme: Theme;
+  decks: TeamDeck[];
+  onCancel: () => void;
+  onCombined: (decks: TeamDeck[], newId: string) => void;
+}) {
+  const accentGrad = accentGradient(theme);
+  const muted = '#a99ff0';
+  const [name, setName] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [tagSource, setTagSource] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function toggle(id: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+  const totalQs = decks.filter((d) => picked.has(d.id)).reduce((s, d) => s + d.questionCount, 0);
+  const canCombine = !busy && name.trim().length > 0 && picked.size >= 1;
+
+  async function combine() {
+    if (!canCombine) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await api.mergeStudyDecks({ name: name.trim(), deckIds: [...picked], tagSource });
+      onCombined(res.decks, res.deck.id);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ ...card(theme), marginBottom: 14 }}>
+      <h3 style={{ margin: '0 0 4px', fontSize: 15.5, fontWeight: 700, color: '#fff' }}>Combine games</h3>
+      <p style={{ margin: '0 0 12px', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
+        Pick the games to merge into one new game with all their questions — great for one massive game across everything.
+      </p>
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="New game name — e.g. “Everything Combined”"
+        maxLength={120}
+        style={field(theme)}
+      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, margin: '12px 0', maxHeight: 260, overflowY: 'auto' }}>
+        {decks.map((d) => {
+          const on = picked.has(d.id);
+          return (
+            <label
+              key={d.id}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '9px 11px',
+                borderRadius: 10,
+                cursor: 'pointer',
+                border: `1px solid ${on ? theme.accent : theme.navBorder}`,
+                background: on ? 'rgba(255,255,255,.06)' : 'rgba(255,255,255,.02)',
+              }}
+            >
+              <input type="checkbox" checked={on} onChange={() => toggle(d.id)} style={{ width: 16, height: 16, accentColor: theme.accent }} />
+              <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
+              <span style={{ fontSize: 11, color: muted }}>{d.questionCount} q{d.questionCount === 1 ? '' : 's'}</span>
+            </label>
+          );
+        })}
+      </div>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: muted, cursor: 'pointer', marginBottom: 12 }}>
+        <input type="checkbox" checked={tagSource} onChange={(e) => setTagSource(e.target.checked)} style={{ width: 16, height: 16, accentColor: theme.accent }} />
+        Remember which game each question came from (adds an optional “guess the source” mode when playing)
+      </label>
+      {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginBottom: 10 }}>{error}</div>}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={combine} disabled={!canCombine} style={{ ...primaryBtn(theme, accentGrad), opacity: canCombine ? 1 : 0.6 }}>
+          {busy ? 'Combining…' : `Combine ${picked.size} game${picked.size === 1 ? '' : 's'} · ${totalQs} q${totalQs === 1 ? '' : 's'}`}
+        </button>
+        <button onClick={onCancel} style={ghostBtn(theme)}>Cancel</button>
       </div>
     </div>
   );

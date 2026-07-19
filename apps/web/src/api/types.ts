@@ -253,6 +253,9 @@ export interface DeckQuestion {
   options: { label: 'A' | 'B' | 'C' | 'D'; text: string }[];
   answer: 'A' | 'B' | 'C' | 'D';
   explanation: string | null;
+  // The game this question originally came from, on a combined ("merged") game
+  // (null/absent otherwise). Powers the optional "guess the source" play mode.
+  sourceName?: string | null;
 }
 
 export interface TeamDeck {

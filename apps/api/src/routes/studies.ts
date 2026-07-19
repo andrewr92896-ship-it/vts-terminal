@@ -17,6 +17,7 @@ import {
 } from '../studies/tests.js';
 import {
   aiConfigured,
+  categorizeQuestions,
   chatStudyGuide,
   classifyQuestionsIntoSection,
   defineTerm,
@@ -27,7 +28,7 @@ import {
 } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { getTeamName } from '../teams/service.js';
-import { createDeck, deleteDeck, getDeck, listDecks } from '../studies/deckStore.js';
+import { createDeck, deleteDeck, getDeck, listDecks, mergeDecks, updateDeck } from '../studies/deckStore.js';
 import {
   createFlashcardSet,
   deleteFlashcardSet,
@@ -116,6 +117,45 @@ const deckConfirmSchema = z.object({
     )
     .min(1)
     .max(200),
+});
+
+// Editing a deck: rename and/or replace its questions and category list. The
+// question shape mirrors the confirm schema plus an optional source-game name
+// (carried on merged games for the "guess the source" mode).
+const deckEditQuestionSchema = z.object({
+  topic: z.string().trim().min(1).max(60),
+  stem: z.string().trim().min(1).max(600),
+  options: z
+    .array(z.object({ label: deckLetterSchema, text: z.string().trim().min(1).max(400) }))
+    .length(4)
+    .refine(
+      (opts) => ['A', 'B', 'C', 'D'].every((l) => opts.some((o) => o.label === l)),
+      'Each question needs exactly one option labelled A, B, C, and D',
+    ),
+  answer: deckLetterSchema,
+  explanation: z.string().trim().max(400).nullable().optional(),
+  sourceName: z.string().trim().max(120).nullable().optional(),
+});
+const deckUpdateSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    description: z.string().trim().max(500).nullable().optional(),
+    categories: z.array(z.string().trim().min(1).max(60)).max(60).optional(),
+    questions: z.array(deckEditQuestionSchema).max(1000).optional(),
+  })
+  .refine((v) => v.name !== undefined || v.description !== undefined || v.categories !== undefined || v.questions !== undefined, 'Nothing to update');
+// Combining games: a new game with every question from the chosen games.
+const deckMergeSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  deckIds: z.array(z.string().trim().min(1)).min(1).max(50),
+  tagSource: z.boolean().optional(),
+});
+// AI auto-categorize: assign each question a category, optionally constrained to
+// a category list and/or steered by a custom prompt.
+const deckCategorizeSchema = z.object({
+  questions: z.array(z.object({ id: z.number().int().nonnegative().max(100000), stem: z.string().trim().min(1).max(1000) })).min(1).max(1000),
+  categories: z.array(z.string().trim().min(1).max(60)).max(60).optional(),
+  instructions: z.string().trim().max(2000).optional(),
 });
 
 // ---- Team flashcard sets ----
@@ -272,6 +312,53 @@ export async function studiesRoutes(app: FastifyInstance) {
     }
   });
 
+  // Combine several of the team's games into one new game with all their
+  // questions. Registered before the ":id" routes so the literal path wins.
+  app.post('/api/studies/decks/merge', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team to combine study games.' });
+    const parsed = deckMergeSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one game are required' });
+    try {
+      const deck = await mergeDecks({
+        teamId: me.teamId,
+        name: parsed.data.name,
+        createdBy: me.id,
+        deckIds: parsed.data.deckIds,
+        tagSource: parsed.data.tagSource ?? false,
+      });
+      if (deck.questionCount === 0) {
+        await deleteDeck(deck.id, me.teamId, me.id, true);
+        return reply.code(422).send({ error: 'None of the chosen games had questions to combine.' });
+      }
+      return { deck, decks: await listDecks(me.teamId) };
+    } catch (err) {
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not combine the study games' });
+    }
+  });
+
+  // AI auto-categorize a game's questions. Returns one {id, topic} per question
+  // for the author to review before saving — it does not modify the deck.
+  app.post('/api/studies/decks/categorize', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
+    const parsed = deckCategorizeSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Questions are required' });
+    if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
+    try {
+      await enforceAiLimit(me.id, 'studies_deck_categorize');
+      const assignments = await categorizeQuestions({
+        questions: parsed.data.questions,
+        categories: parsed.data.categories,
+        instructions: parsed.data.instructions,
+      });
+      return { assignments };
+    } catch (err) {
+      if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
+      return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not categorize the questions' });
+    }
+  });
+
   // One deck with its questions (team-scoped).
   app.get('/api/studies/decks/:id', guard, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
@@ -280,6 +367,31 @@ export async function studiesRoutes(app: FastifyInstance) {
     const deck = await getDeck(id, teamId);
     if (!deck) return reply.code(404).send({ error: 'Study game not found' });
     return { deck };
+  });
+
+  // Edit a deck: rename, replace questions, and/or set its category list
+  // (creator or a team admin).
+  app.patch('/api/studies/decks/:id', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
+    const parsed = deckUpdateSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
+    const deck = await updateDeck(id, me.teamId, me.id, isAdmin(parseRoles(me)), {
+      name: parsed.data.name,
+      description: parsed.data.description,
+      categories: parsed.data.categories,
+      questions: parsed.data.questions?.map((q) => ({
+        topic: q.topic,
+        stem: q.stem,
+        options: q.options,
+        answer: q.answer,
+        explanation: q.explanation ?? null,
+        sourceName: q.sourceName ?? null,
+      })),
+    });
+    if (!deck) return reply.code(403).send({ error: 'You can only edit study games you created.' });
+    return { deck, decks: await listDecks(me.teamId) };
   });
 
   // Delete a deck (creator or a team admin).

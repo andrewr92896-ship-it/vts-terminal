@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.4';
+export const APP_VERSION = 'Beta V 4.5';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.5',
+    date: 'July 19, 2026',
+    notes: [
+      'Study Creation ▸ Edit a study game: each game now has an Edit button. Rename it, manage its categories, and edit every question — the text, the four options, the correct answer, the explanation, and its category. Sort the questions by category, and let VTS AI auto-categorize them (leave the prompt blank to let it choose the groupings, or tell it how to group).',
+      'Combine games: merge several games into one — great for one massive game with every question. Optionally have it remember which game each question came from, which unlocks a “Guess the source” toggle while you play.',
+    ],
+  },
   {
     version: 'Beta V 4.4',
     date: 'July 18, 2026',

@@ -848,6 +848,10 @@ export const studyDeckQuestions = sqliteTable('study_deck_questions', {
   options: text('options').notNull(), // JSON [{label,text} x4]
   answer: text('answer').notNull(), // 'A' | 'B' | 'C' | 'D'
   explanation: text('explanation'),
+  // The name of the game this question originally came from, when this deck is a
+  // merge of several games (null otherwise). Powers the optional "guess the
+  // source" play mode.
+  sourceName: text('source_name'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type StudyDeckQuestionRow = typeof studyDeckQuestions.$inferSelect;

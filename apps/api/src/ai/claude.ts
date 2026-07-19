@@ -555,6 +555,101 @@ export async function classifyQuestionsIntoSection(
   return out;
 }
 
+// ---- Auto-categorize a study game's questions ----
+// Given a game's questions, sort each into a category. Either constrained to a
+// category list the author supplies, or (when none is given) into a small set of
+// categories the model proposes from the questions themselves. A custom prompt
+// can steer how the model groups them. Returns one {id, topic} per input id,
+// filtered to ids that were actually supplied.
+
+// Ask the model to propose a small set of categories from a sample of stems.
+async function proposeCategories(stems: string[], instructions?: string): Promise<string[]> {
+  const sample = stems.slice(0, 120).map((s, i) => `${i + 1}. ${s.slice(0, 200)}`).join('\n');
+  const prompt = [
+    'Below is a list of quiz questions. Propose a small set of 3 to 8 concise category names that together cover them well.',
+    instructions ? `Follow this guidance on how to group them: ${instructions}` : '',
+    'Each category name should be 1–4 words. Respond with ONLY a JSON object of the form {"categories":["...","..."]} and nothing else.',
+    '',
+    'QUESTIONS:',
+    sample,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const raw = await askClaude(prompt);
+  const parsed = extractJson(raw) as { categories?: unknown } | null;
+  const list = Array.isArray(parsed?.categories) ? (parsed!.categories as unknown[]) : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const c of list) {
+    if (typeof c !== 'string') continue;
+    const t = c.trim().slice(0, 40);
+    if (t && !seen.has(t.toLowerCase())) {
+      seen.add(t.toLowerCase());
+      out.push(t);
+    }
+  }
+  return out.length ? out : ['General'];
+}
+
+// Assign one chunk of questions to the given categories.
+async function assignChunk(
+  questions: ClassifyQuestion[],
+  categories: string[],
+  instructions?: string,
+): Promise<{ id: number; topic: string }[]> {
+  const list = questions.map((q) => `${q.id}\t${q.stem.slice(0, 240)}`).join('\n');
+  const prompt = [
+    'Assign each numbered question below to exactly ONE of these categories:',
+    categories.map((c) => `- ${c}`).join('\n'),
+    instructions ? `Extra guidance: ${instructions}` : '',
+    'Each line is: id<TAB>question stem. Use the category name verbatim.',
+    'Respond with ONLY a JSON object of the form {"assignments":[{"id":1,"topic":"..."}]} and nothing else.',
+    '',
+    'QUESTIONS:',
+    list,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  const raw = await askClaude(prompt, undefined, 6000);
+  const parsed = extractJson(raw) as { assignments?: unknown } | null;
+  const rows = Array.isArray(parsed?.assignments) ? (parsed!.assignments as unknown[]) : [];
+  const valid = new Set(questions.map((q) => q.id));
+  const byLower = new Map(categories.map((c) => [c.toLowerCase(), c]));
+  const out: { id: number; topic: string }[] = [];
+  for (const r of rows) {
+    const o = (r ?? {}) as Record<string, unknown>;
+    const id = typeof o.id === 'number' ? o.id : Number(o.id);
+    if (!Number.isInteger(id) || !valid.has(id)) continue;
+    const rawTopic = typeof o.topic === 'string' ? o.topic.trim() : '';
+    const topic = byLower.get(rawTopic.toLowerCase()) ?? categories[0];
+    out.push({ id, topic });
+  }
+  return out;
+}
+
+export async function categorizeQuestions(input: {
+  questions: ClassifyQuestion[];
+  categories?: string[];
+  instructions?: string;
+}): Promise<{ id: number; topic: string }[]> {
+  const questions = input.questions;
+  if (questions.length === 0) return [];
+  const provided = (input.categories ?? []).map((c) => c.trim()).filter(Boolean);
+  const categories = provided.length ? provided : await proposeCategories(questions.map((q) => q.stem), input.instructions);
+
+  // Assign in chunks so a large game stays within one call's budget, constrained
+  // to the (shared) category list so groupings are consistent across chunks.
+  const chunks: ClassifyQuestion[][] = [];
+  for (let i = 0; i < questions.length; i += 60) chunks.push(questions.slice(i, i + 60));
+  const perChunk = await mapLimit(chunks, 6, (c) => assignChunk(c, categories, input.instructions));
+
+  // Every id gets an assignment; ids the model missed fall back to the first
+  // category so no question is left uncategorized.
+  const map = new Map<number, string>();
+  for (const a of perChunk.flat()) map.set(a.id, a.topic);
+  return questions.map((q) => ({ id: q.id, topic: map.get(q.id) ?? categories[0] }));
+}
+
 // ---- Team study-deck question generation ----
 // A team builds its own quiz: either AI-generated from a topic, or authored by
 // Claude from an uploaded text file (their own questions, or source notes). Both
