@@ -707,6 +707,38 @@ export const api = {
   studyDeck(id: string): Promise<{ deck: TeamDeckDetail }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}`);
   },
+  // Edit a study game: rename, replace its questions, and/or set its categories.
+  updateStudyDeck(
+    id: string,
+    patch: {
+      name?: string;
+      description?: string | null;
+      categories?: string[];
+      questions?: {
+        topic: string;
+        stem: string;
+        options: { label: 'A' | 'B' | 'C' | 'D'; text: string }[];
+        answer: 'A' | 'B' | 'C' | 'D';
+        explanation?: string | null;
+        sourceName?: string | null;
+      }[];
+    },
+  ): Promise<{ deck: TeamDeckDetail; decks: TeamDeck[] }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  // Combine several games into one new game with all their questions.
+  mergeStudyDecks(input: { name: string; deckIds: string[]; tagSource?: boolean }): Promise<{ deck: TeamDeckDetail; decks: TeamDeck[] }> {
+    return request('/api/studies/decks/merge', { method: 'POST', body: JSON.stringify(input) });
+  },
+  // AI auto-categorize a game's questions — returns one {id, topic} per question
+  // for the author to review before saving.
+  categorizeStudyDeck(input: {
+    questions: { id: number; stem: string }[];
+    categories?: string[];
+    instructions?: string;
+  }): Promise<{ assignments: { id: number; topic: string }[] }> {
+    return request('/api/studies/decks/categorize', { method: 'POST', body: JSON.stringify(input) });
+  },
   deleteStudyDeck(id: string): Promise<{ decks: TeamDeck[] }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}`, { method: 'DELETE' });
   },
