@@ -525,6 +525,9 @@ export interface DeskSettings {
   breakEvenPct: number;
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
+  // Ignore broker fills under this many units in the Trade Log / History (the
+  // desk's "test trade" floor). 0 = keep everything.
+  minTradeUnits: number;
   // Every instrument the desk has traded (from the Trade Log + History), so the
   // per-instrument buffer picker can offer them. Auto-derived server-side.
   instruments: string[];
@@ -1017,6 +1020,7 @@ export interface TradeLogData {
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
+  minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
 }
 
 // Raw data returned when a trade is removed, so the client can offer undo.
@@ -1240,6 +1244,7 @@ export interface HistoryData {
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
+  minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
 }
 
 // Fields accepted when creating/editing a trade.

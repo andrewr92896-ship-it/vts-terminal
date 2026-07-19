@@ -347,6 +347,10 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
   breakEvenPct: real('break_even_pct').notNull().default(0),
   breakEvenMode: text('break_even_mode').notNull().default('percent'),
   breakEvenAmount: real('break_even_amount').notNull().default(0),
+  // Ignore broker fills smaller than this many units in the Trade Log / History
+  // (stats and list) — the desk's "these are test trades" floor, so 1-unit
+  // connection tests don't skew win rate, profit factor, or pips. 0 = keep all.
+  minTradeUnits: real('min_trade_units').notNull().default(0),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;

@@ -16,7 +16,7 @@ import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEvenOverride } from './outcome.js';
 import { deskTradeCodeIndex } from './codes.js';
-import { getDeskSettings, configOf } from './settings.js';
+import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
 import { scopedTraderIds, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
 import { beforeCutoff, connectionCutoffs } from './connections.js';
@@ -88,6 +88,9 @@ export interface TradeLogData {
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
+  // The desk's "test trade" floor (units). Broker fills under it are already
+  // excluded from `trades` + `summary`; sent so the client can note it. 0 = off.
+  minTradeUnits: number;
 }
 
 export interface TradeInput {
@@ -259,6 +262,10 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
   // sandbox with no real broker, so it's skipped.
   if (!viewerIsDemo) await backfillClosedTrades(scopeIds).catch(() => {});
 
+  // Desk settings drive the break-even scoring and the "test trade" floor, both
+  // of which shape what's counted below — so load them before folding in trades.
+  const settings = await getDeskSettings();
+
   // Pull every trade alongside its owner's username and roles, then keep only
   // those on the viewer's team whose owner currently has trading access (full or
   // view-only). Joining live keeps the view correct as people's roles change.
@@ -301,6 +308,8 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
       if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
       const opened = (r.pos.openedAt ?? r.pos.firstSeenAt).getTime();
       if (beforeCutoff(cutoffs, r.pos.connectionId, opened)) continue;
+      // Drop sub-floor broker fills (1-unit connection tests) from the log + KPIs.
+      if (isSmallTrade(r.pos.units, settings.minTradeUnits)) continue;
       records.push(positionToRecord(r.pos, r.username, viewerId));
     }
   }
@@ -314,7 +323,6 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
   // Stamp each row with its desk code and score against the desk-wide break-even
   // band. The demo is sandboxed off the shared code index, so its rows keep the
   // null code set in the mappers.
-  const settings = await getDeskSettings();
   if (!viewerIsDemo) {
     const codes = await deskTradeCodeIndex(scopeIds);
     for (const r of sorted) r.code = codes.get(r.id) ?? null;
@@ -330,6 +338,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     breakEvenMode: settings.breakEvenMode,
     breakEvenAmount: settings.breakEvenAmount,
     breakEvenOverrides: settings.breakEvenOverrides,
+    minTradeUnits: settings.minTradeUnits,
   };
 }
 

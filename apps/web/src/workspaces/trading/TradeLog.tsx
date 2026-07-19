@@ -479,6 +479,14 @@ export function TradeLog() {
       <div style={{ fontSize: 11, color: FAINT, marginBottom: 8, letterSpacing: '0.3px' }}>
         {selectedTraderName ? `Individual stats — @${selectedTraderName}` : 'Whole desk — combined stats'}
       </div>
+      {data.minTradeUnits > 0 && (
+        <div
+          style={{ fontSize: 10.5, color: FAINT, marginBottom: 8 }}
+          title={`Broker fills under ${data.minTradeUnits.toLocaleString('en-US')} units are excluded`}
+        >
+          <EditableText id="tradelog.min_units_note">Small broker test trades are excluded from these stats.</EditableText>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={card}>

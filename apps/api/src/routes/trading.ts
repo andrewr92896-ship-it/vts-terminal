@@ -1022,6 +1022,9 @@ const deskSettingsSchema = z
     breakEvenPct: z.number().finite().min(0).max(100).optional(),
     breakEvenMode: z.enum(['percent', 'dollars', 'pips']).optional(),
     breakEvenAmount: z.number().finite().min(0).optional(),
+    // The desk's "test trade" floor: broker fills under this many units drop out
+    // of the Trade Log / History. 0 turns it off.
+    minTradeUnits: z.number().finite().min(0).max(1_000_000_000).optional(),
     // The full per-instrument override list; when present it replaces the stored
     // set. Capped so one request can't insert an unbounded number of rows.
     breakEvenOverrides: z.array(beOverrideSchema).max(200).optional(),

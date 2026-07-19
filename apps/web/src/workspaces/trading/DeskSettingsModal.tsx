@@ -65,6 +65,8 @@ export function DeskSettingsModal({
   const [mode, setMode] = useState<BreakEvenMode>('percent');
   const [bePct, setBePct] = useState('');
   const [beAmount, setBeAmount] = useState('');
+  // The desk's "test trade" floor in units (blank/0 = keep every trade).
+  const [minUnits, setMinUnits] = useState('');
   // Per-instrument overrides, held as edit rows (value is the string in the
   // field; which band number it maps to depends on the row's own mode).
   const [overrides, setOverrides] = useState<OverrideRow[]>([]);
@@ -88,6 +90,7 @@ export function DeskSettingsModal({
         setMode(s.breakEvenMode);
         setBePct(String(s.breakEvenPct));
         setBeAmount(String(s.breakEvenAmount));
+        setMinUnits(String(s.minTradeUnits));
         setOverrides(
           s.breakEvenOverrides.map((o) => ({
             instrument: o.instrument,
@@ -117,7 +120,10 @@ export function DeskSettingsModal({
   // A blank row (no instrument, no value) is ignored on save; any row with
   // content must be fully valid before we allow a save.
   const overridesValid = overrides.every((r) => rowBlank(r) || rowValid(r));
-  const valid = defaultValid && overridesValid;
+  // The test-trade floor: blank reads as 0 (off); otherwise a non-negative number.
+  const parsedMin = minUnits.trim() === '' ? 0 : Number(minUnits);
+  const minValid = Number.isFinite(parsedMin) && parsedMin >= 0;
+  const valid = defaultValid && overridesValid && minValid;
 
   // Instruments offered in the picker: the desk's traded instruments plus any
   // already sitting on an override row (so a saved one still shows even if it's
@@ -160,10 +166,11 @@ export function DeskSettingsModal({
             ? { instrument: r.instrument.trim(), mode: r.mode, pct: n, amount: 0 }
             : { instrument: r.instrument.trim(), mode: r.mode, pct: 0, amount: n };
         });
-      const s = await api.updateDeskSettings({ ...base, breakEvenOverrides });
+      const s = await api.updateDeskSettings({ ...base, minTradeUnits: parsedMin, breakEvenOverrides });
       setMode(s.breakEvenMode);
       setBePct(String(s.breakEvenPct));
       setBeAmount(String(s.breakEvenAmount));
+      setMinUnits(String(s.minTradeUnits));
       setOverrides(
         s.breakEvenOverrides.map((o) => ({
           instrument: o.instrument,
@@ -399,6 +406,38 @@ export function DeskSettingsModal({
                     </button>
                   )
                 )}
+              </div>
+
+              {/* Test-trade floor: broker fills under N units drop out of the
+                  Trade Log / History entirely (stats and list). */}
+              <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
+                <div style={sectionLabel}><EditableText id="desksettings.mintrade_label">Ignore test trades</EditableText></div>
+                <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
+                  Broker fills smaller than this many <b>units</b> are treated as test trades and left out of the
+                  Trade Log and History — stats <i>and</i> the list. Handy for the 1-unit orders you place to check a
+                  broker connection. Set <b>0</b> to keep every trade.
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+                  <input
+                    value={minUnits}
+                    onChange={(e) => {
+                      setMinUnits(e.target.value);
+                      setSaved(false);
+                    }}
+                    disabled={readOnly || busy}
+                    type="number"
+                    step="1"
+                    min="0"
+                    inputMode="numeric"
+                    aria-label="Minimum trade size in units"
+                    style={{ ...input, width: 130, opacity: readOnly ? 0.6 : 1 }}
+                  />
+                  <span style={{ fontSize: 15, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>units minimum</span>
+                </div>
+                <div style={{ fontSize: 11, color: FAINT, marginTop: 8 }}>
+                  e.g. <b>100</b> hides 1-unit connection tests while keeping real positions. Only broker-imported
+                  fills are affected; trades you log by hand always count.
+                </div>
               </div>
 
               {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginTop: 12 }}>{error}</div>}
