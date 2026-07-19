@@ -29,6 +29,12 @@ import { Icon } from '../components/Icon';
 // explanations, empty states). It is NOT for user/team-created data (a study
 // game's title, a trade's ticker) or live figures — those are never wrapped.
 
+// Sentinel override meaning "this coded text is hidden". Stored like any other
+// override (it survives because it isn't blank), but the components render
+// nothing for it — so an admin can remove a piece of copy entirely, not just
+// reword it. A distinctive token no one would type keeps it apart from real copy.
+const HIDDEN = '[[vts:hidden]]';
+
 interface EditTarget {
   key: string;
   def: string;
@@ -37,6 +43,10 @@ interface EditTarget {
   /** Rich blurb — the value supports `**bold**` markers; show the hint. */
   rich?: boolean;
 }
+
+// Placeholder shown to an admin (in edit mode only) where copy is hidden, so the
+// hidden text stays discoverable and can be clicked to restore.
+const hiddenPreviewStyle = { opacity: 0.5, textDecoration: 'line-through' } as const;
 
 interface SiteCopyCtx {
   /** Admin — may toggle edit mode and rewrite copy. */
@@ -146,15 +156,18 @@ export function EditableText({
   if (!ctx || !def) return <>{text ?? children}</>;
 
   const value = ctx.get(id, def);
+  const hidden = value === HIDDEN;
 
-  if (!ctx.editing || !ctx.canEdit) return <>{value}</>;
+  // Hidden copy renders as nothing for everyone; only an admin in edit mode sees
+  // a struck-through placeholder so it can be clicked and restored.
+  if (!ctx.editing || !ctx.canEdit) return hidden ? null : <>{value}</>;
 
   return (
     <span
       ref={ref}
       role="button"
       tabIndex={0}
-      title="Edit this wording"
+      title={hidden ? 'Hidden — click to restore' : 'Edit this wording'}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -171,7 +184,7 @@ export function EditableText({
         WebkitBoxDecorationBreak: 'clone',
       }}
     >
-      {value}
+      {hidden ? <span style={hiddenPreviewStyle}>{def}</span> : value}
     </span>
   );
 }
@@ -203,15 +216,16 @@ export function EditableRich({ id, text }: { id: string; text: string }) {
   if (!ctx || !text) return <>{renderInline(text)}</>;
 
   const value = ctx.get(id, text);
+  const hidden = value === HIDDEN;
 
-  if (!ctx.editing || !ctx.canEdit) return <>{renderInline(value)}</>;
+  if (!ctx.editing || !ctx.canEdit) return hidden ? null : <>{renderInline(value)}</>;
 
   return (
     <span
       ref={ref}
       role="button"
       tabIndex={0}
-      title="Edit this wording"
+      title={hidden ? 'Hidden — click to restore' : 'Edit this wording'}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -228,12 +242,12 @@ export function EditableRich({ id, text }: { id: string; text: string }) {
         WebkitBoxDecorationBreak: 'clone',
       }}
     >
-      {renderInline(value)}
+      {hidden ? <span style={hiddenPreviewStyle}>{renderInline(text)}</span> : renderInline(value)}
     </span>
   );
 }
 
-/** The floating pencil beside the corner chat bubble that turns edit mode on/off. */
+/** The floating admin shield beside the corner chat bubble that turns edit mode on/off. */
 function EditModeToggle({ editing, onToggle }: { editing: boolean; onToggle: () => void }) {
   const { isPhone } = useResponsive();
   const base = isPhone ? 14 : 22;
@@ -263,7 +277,7 @@ function EditModeToggle({ editing, onToggle }: { editing: boolean; onToggle: () 
         padding: 0,
       }}
     >
-      <Icon name={editing ? 'x-circle' : 'pencil'} size={19} />
+      <Icon name="shield" size={19} />
     </button>
   );
 }
@@ -325,7 +339,9 @@ function CopyEditor({
   onClose: () => void;
   onSaved: (value: string) => void;
 }) {
-  const [value, setValue] = useState(target.current);
+  const isHidden = target.current === HIDDEN;
+  // Start the textarea empty for hidden copy, so typing + Save restores it.
+  const [value, setValue] = useState(isHidden ? '' : target.current);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isOverridden = target.current !== target.def;
@@ -359,6 +375,20 @@ function CopyEditor({
       onSaved(target.def);
     } catch {
       setError('Could not reset. Try again.');
+      setBusy(false);
+    }
+  }
+
+  // Hide this piece of copy entirely — it renders as nothing for everyone until
+  // an admin restores it (by resetting, or saving new text).
+  async function hide() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.adminSaveCopy(target.key, HIDDEN);
+      onSaved(HIDDEN);
+    } catch {
+      setError('Could not hide. Try again.');
       setBusy(false);
     }
   }
@@ -400,9 +430,15 @@ function CopyEditor({
               padding: '2px 6px',
             }}
           >
-            {isOverridden ? 'Customized' : 'Default'}
+            {isHidden ? 'Hidden' : isOverridden ? 'Customized' : 'Default'}
           </span>
         </div>
+
+        {isHidden && (
+          <div style={{ marginBottom: 10, fontSize: 11.5, color: C.muted, lineHeight: 1.45 }}>
+            This text is hidden. Type replacement text and Save to bring it back, or Reset for the built-in copy.
+          </div>
+        )}
 
         <textarea
           autoFocus
@@ -478,6 +514,30 @@ function CopyEditor({
           >
             Reset
           </button>
+          {!isHidden && (
+            <button
+              onClick={hide}
+              disabled={busy}
+              title="Hide this text everywhere"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                border: `1px solid ${C.line2}`,
+                background: 'rgba(240,89,110,.08)',
+                color: '#ef8a99',
+                fontSize: 12.5,
+                fontWeight: 600,
+                padding: '8px 12px',
+                borderRadius: 7,
+                cursor: busy ? 'default' : 'pointer',
+                opacity: busy ? 0.55 : 1,
+              }}
+            >
+              <Icon name="eye-off" size={13} />
+              Hide
+            </button>
+          )}
           <button
             onClick={onClose}
             style={{

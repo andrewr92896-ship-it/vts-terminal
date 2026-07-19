@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.6';
+export const APP_VERSION = 'Beta V 5.7';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.7',
+    date: 'July 19, 2026',
+    notes: [
+      'Site-wording edit mode can now remove a piece of coded text, not just reword it — open any editable text and hit “Hide” to drop it site-wide (Reset or new text brings it back). The corner edit button is now the admin shield to match your badge.',
+    ],
+  },
   {
     version: 'Beta V 5.6',
     date: 'July 19, 2026',
