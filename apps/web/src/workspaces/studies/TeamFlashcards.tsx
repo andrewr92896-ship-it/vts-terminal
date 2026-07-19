@@ -1,17 +1,16 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import type { Flashcard, FlashcardInput, TeamFlashcardSet, TeamFlashcardSetDetail } from '../../api/types';
+import type { Flashcard, FlashcardInput, TeamFlashcardSet } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { card } from './TeamStudyDecks';
-import { FlashcardSetPlayer } from './FlashcardSetPlayer';
 
-// The Team Flashcards hub: a team's own term/definition sets. Any member builds
-// a set — typed in by hand, AI-generated from a topic, or from an uploaded file
-// — and the whole team studies it with the auto-rotate flashcard player. This is
-// the generic, self-serve replacement for the old built-in vocabulary deck.
+// The Team Flashcards *maker*, shown in Study Creation. Any member builds a set
+// — typed in by hand, AI-generated from a topic, or from an uploaded file — and
+// manages the team's sets here; the sets themselves are *studied* in the
+// Flashcards section (FlashcardsHub).
 const MAX_FILE_CHARS = 100_000;
 const muted = '#a99ff0';
 
@@ -24,7 +23,6 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
   const [sets, setSets] = useState<TeamFlashcardSet[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
-  const [playing, setPlaying] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
 
   useEffect(() => {
@@ -57,17 +55,13 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
     }
   }
 
-  if (playing) {
-    return <SetPlayer theme={theme} setId={playing} readOnly={readOnly} onBack={() => setPlaying(null)} />;
-  }
-
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Flashcards</h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Your team’s own flashcard sets. Study any set with auto-rotate, topic filters, and “Ask VTS AI”.
+            Build your team’s own flashcard sets here — study them from the <strong>Flashcards</strong> section.
           </p>
         </div>
         {!readOnly && (
@@ -80,10 +74,9 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
       {composerOpen && !readOnly && (
         <SetComposer
           theme={theme}
-          onCreated={(sets, newId) => {
+          onCreated={(sets) => {
             setSets(sets);
             setComposerOpen(false);
-            setPlaying(newId);
           }}
         />
       )}
@@ -116,9 +109,7 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
               key={s.id}
               set={s}
               theme={theme}
-              readOnly={readOnly}
               canDelete={!readOnly && (s.createdBy === user?.id || user?.roles.includes('admin') === true)}
-              onStudy={() => setPlaying(s.id)}
               onDelete={() => remove(s.id)}
             />
           ))}
@@ -131,16 +122,12 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
 function SetCard({
   set,
   theme,
-  readOnly,
   canDelete,
-  onStudy,
   onDelete,
 }: {
   set: TeamFlashcardSet;
   theme: Theme;
-  readOnly: boolean;
   canDelete: boolean;
-  onStudy: () => void;
   onDelete: () => void;
 }) {
   const [confirm, setConfirm] = useState(false);
@@ -164,10 +151,7 @@ function SetCard({
         {set.topics.length > 0 && ` · ${set.topics.slice(0, 3).join(' · ')}`}
         {set.createdByName && ` · by ${set.createdByName}`}
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <button onClick={onStudy} disabled={set.cardCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: set.cardCount === 0 ? 0.6 : 1 }}>
-          Study
-        </button>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {canDelete && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
             Delete
@@ -183,53 +167,8 @@ function SetCard({
             </button>
           </>
         )}
-        {readOnly && <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Demo · progress isn’t saved</span>}
+        {!confirm && <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Study it in the Flashcards section</span>}
       </div>
-    </div>
-  );
-}
-
-// Loads the full set (cards) then hands off to the auto-rotate player.
-function SetPlayer({ theme, setId, readOnly, onBack }: { theme: Theme; setId: string; readOnly: boolean; onBack: () => void }) {
-  const [set, setSet] = useState<TeamFlashcardSetDetail | null>(null);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    api
-      .studyFlashcardSet(setId)
-      .then((r) => {
-        if (alive) setSet(r.set);
-      })
-      .catch(() => {
-        if (alive) setError(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [setId]);
-
-  return (
-    <div style={{ maxWidth: 940, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-        <div style={{ minWidth: 0 }}>
-          <button onClick={onBack} style={{ ...ghostBtn(theme), marginBottom: 8 }}>‹ All sets</button>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{set?.name ?? 'Flashcards'}</h2>
-          {set && (
-            <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-              {set.cardCount} card{set.cardCount === 1 ? '' : 's'}
-              {set.topics.length > 0 && ` · ${set.topics.length} topic${set.topics.length === 1 ? '' : 's'}`}
-            </p>
-          )}
-        </div>
-      </div>
-      {error ? (
-        <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>Couldn’t load that set. Try again in a moment.</div>
-      ) : !set ? (
-        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>Loading cards…</div>
-      ) : (
-        <FlashcardSetPlayer theme={theme} setId={set.id} name={set.name} cards={set.cards} readOnly={readOnly} embedded />
-      )}
     </div>
   );
 }

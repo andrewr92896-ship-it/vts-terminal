@@ -51,6 +51,7 @@ export const NAV: NavWorkspace[] = [
     sections: [
       { key: 'st_home', label: 'Subjects', icon: 'layers' },
       { key: 'st_game', label: 'Study Game', icon: 'gamepad-2' },
+      { key: 'st_cards', label: 'Flashcards', icon: 'copy' },
       { key: 'st_test', label: 'Test Mode', icon: 'file-check-2' },
       { key: 'st_guides', label: 'Study Guides', icon: 'presentation' },
       { key: 'st_progress', label: 'Progress', icon: 'trending-up' },

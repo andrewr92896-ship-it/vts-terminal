@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.6';
+export const APP_VERSION = 'Beta V 4.7';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.7',
+    date: 'July 19, 2026',
+    notes: [
+      'New Flashcards section in the sidebar: pick one of your team’s flashcard sets and study it with the auto-rotate player. Flashcard sets are still built in Study Creation — now they’re studied here, so Study Creation stays purely for making and managing.',
+    ],
+  },
   {
     version: 'Beta V 4.6',
     date: 'July 19, 2026',
