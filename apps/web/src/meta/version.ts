@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.7';
+export const APP_VERSION = 'Beta V 5.8';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.8',
+    date: 'July 19, 2026',
+    notes: [
+      'Study games now show progress bars: a Lifetime bar (your all-time correct %, what the leaderboard ranks by) and a Session bar (your correct % over your most recent answers). Hit “Adjust” to set how many recent answers the session covers (for example your last 50) and to give each bar a passing score — set 72% and the bar turns green with a pass line once you clear it. These settings are personal to you. The bars appear both while playing a game and on its Progress screen.',
+    ],
+  },
   {
     version: 'Beta V 5.7',
     date: 'July 19, 2026',

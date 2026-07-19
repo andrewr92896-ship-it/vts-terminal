@@ -11,12 +11,13 @@ import { setStudyTint } from './studyTint';
 import {
   deckGameKey,
   deckLifetimeAccuracy,
-  deckSessionScore,
   emptyDeckGame,
   parseDeckGame,
   recordDeckAnswer,
   type DeckGameState,
 } from './studyEngine';
+import { StudyProgressBars } from './StudyProgress';
+import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
 
 const GREEN = '#35c47b';
 const RED = '#ef5468';
@@ -77,6 +78,15 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // remember which game they came from.
   const [guessMode, setGuessMode] = useState(false);
   const [sourceGuess, setSourceGuess] = useState<string | null>(null);
+
+  // Personal progress-bar preferences (session window + passing thresholds),
+  // saved per-user on this device.
+  const [prefs, setPrefs] = useState<StudyPrefs>(() => loadStudyPrefs(user?.id));
+  useEffect(() => setPrefs(loadStudyPrefs(user?.id)), [user?.id]);
+  function updatePrefs(p: StudyPrefs) {
+    setPrefs(p);
+    saveStudyPrefs(user?.id, p);
+  }
 
   const hydratedRef = useRef(false);
   const lastSavedRef = useRef<string | null>(null);
@@ -249,8 +259,6 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
 
   const ov = overallLevel(game.levelCorrect);
   const streakMult = streakMultiplier(game.streak);
-  const lifetime = deckLifetimeAccuracy(game);
-  const session = deckSessionScore(game);
   // The distinct source games (set on a combined game), for the guess mode.
   const sources = sourcesForDeck(deck);
 
@@ -328,11 +336,6 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
             <div style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>{game.streak} in a row</div>
           </div>
         </div>
-        <div style={{ fontSize: 11, color: muted }}>
-          {lifetime != null && <>Lifetime <strong style={{ color: '#fff' }}>{lifetime.toFixed(1)}%</strong> · </>}
-          {session && <>Session <strong style={{ color: '#fff' }}>{session.pct.toFixed(1)}%</strong> · </>}
-          {game.totalCorrect}/{game.totalAttempted}
-        </div>
         {sources.length > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: sources.length > 0 && !readOnly ? 0 : 'auto' }}>
             <input type="checkbox" checked={guessMode} onChange={(e) => setGuessMode(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
@@ -344,6 +347,11 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
             <EditableText id="studygameplay.reset" text="Reset" />
           </button>
         )}
+      </div>
+
+      {/* Lifetime + session progress bars, with the learner's own thresholds. */}
+      <div style={{ ...card(theme), marginBottom: 14, padding: '14px 16px' }}>
+        <StudyProgressBars theme={theme} game={game} prefs={prefs} onPrefsChange={updatePrefs} />
       </div>
 
       {resetConfirm && (

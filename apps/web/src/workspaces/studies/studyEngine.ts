@@ -75,6 +75,31 @@ export function deckSessionScore(g: DeckGameState): SessionScore | null {
   };
 }
 
+// Rolling session accuracy: the correct % over the learner's most recent
+// `windowN` answers. Unlike deckSessionScore's fixed 100-question blocks, this
+// window slides — "the last 50 answers" always means the newest 50. `windowN`
+// is clamped to the stored recent buffer (WINDOW). `pct` is null before any
+// answers land in the window.
+export interface SessionAccuracy {
+  attempted: number; // answers counted in the window (≤ windowN)
+  correct: number;
+  pct: number | null;
+  window: number; // the effective window size used
+}
+
+export function deckSessionAccuracy(g: DeckGameState, windowN: number): SessionAccuracy {
+  const w = Math.max(1, Math.min(WINDOW, Math.floor(windowN) || 1));
+  const tail = g.recent.slice(-w);
+  const attempted = tail.length;
+  const correct = tail.filter(Boolean).length;
+  return {
+    attempted,
+    correct,
+    pct: attempted > 0 ? round1((100 * correct) / attempted) : null,
+    window: w,
+  };
+}
+
 // Record one answer, returning a new immutable state. Mirrors recordAnswer() in
 // gameEngine (same streak-scaled level math), but keyed by a deck category.
 export function recordDeckAnswer(g: DeckGameState, category: string, correct: boolean): DeckGameState {
