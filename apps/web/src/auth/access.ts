@@ -72,6 +72,19 @@ export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 
+// Which roles a given actor may grant/revoke (mirror of the backend's
+// assertCanAssignRoles). The owner grants everything; a founder grants
+// admin/funded/member; a plain admin grants only member. Drives which role
+// options the admin Users picker shows to the acting user.
+export function canGrantRole(
+  actor: { owner: boolean; founder: boolean },
+  role: RoleKey,
+): boolean {
+  if (role === 'founder' || role === 'software_developer') return actor.owner;
+  if (role === 'admin' || role === 'funded') return actor.founder;
+  return true; // member
+}
+
 // A short human summary of a set of roles, for the user badge / footer.
 export function rolesSummary(roles: RoleKey[]): string {
   if (isFounder(roles)) return 'Founder';

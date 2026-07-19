@@ -3,6 +3,15 @@ import { DEMO_USERNAME } from '../demo/identity.js';
 
 export type WorkspaceKey = 'trading' | 'studies';
 
+// The portal owner's account, identified by the immutable created username
+// (matches the first-boot seed, ADMIN_USERNAME). Only the owner may grant the
+// founder / software_developer roles.
+const OWNER_USERNAME = (process.env.ADMIN_USERNAME || 'andrew').trim().toLowerCase();
+
+export function isOwnerUser(u: Pick<UserRow, 'username' | 'createdUsername'>): boolean {
+  return (u.createdUsername ?? u.username).trim().toLowerCase() === OWNER_USERNAME;
+}
+
 // Granular, assigned roles. A user can hold any combination. The model is a
 // ladder of trust:
 //   • founder            — sits above admin; the portal's owners. Founder-level
@@ -142,6 +151,9 @@ export interface PublicUser {
     admin: boolean;
     // Whether the user is founder-level (founder or software_developer).
     founder: boolean;
+    // Whether this is the portal owner account (the only account that can grant
+    // the Founder / Software Developer roles).
+    owner: boolean;
   };
 }
 
@@ -175,6 +187,7 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
       funded: !isDemo && canAccessFunded(roles),
       admin: !isDemo && isAdmin(roles),
       founder: !isDemo && isFounder(roles),
+      owner: !isDemo && isOwnerUser(u),
     },
   };
 }
