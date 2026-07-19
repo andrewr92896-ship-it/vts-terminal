@@ -62,11 +62,16 @@ Tech:
 
 ## Workspaces & sections (`theme/nav.ts`)
 
-Four workspaces in the sidebar; sections a user lacks the role for are hidden.
+Sections a user lacks the role for are hidden. **My Portal is pinned to the very
+top of the workspaces list** (see `theme/nav.ts` order).
 
-- **Trading** (gold): Live Wall, Alerts, Trade Desk (`desk` — merges Trade Log +
+- **Trading** (gold): Live Wall, Trading Alerts (`alerts`), Trade Desk (`desk` — merges Trade Log +
   History + Live Brokers; legacy keys `log`/`history`/`metrics` alias into it),
-  Strategy Sessions, Manual Trades (`funded` key, `FundedScreen`), **Funded**
+  Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
+  bias; each session picks its own Mon–Fri days + hours, or is filled to the
+  instrument's full market hours via the `/api/trading/market-hours` AI lookup.
+  Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
+  Manual Trades (`funded` key, `FundedScreen`), **Funded**
   (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
   (`st_cards`), Practice Tests (`st_test`), Study Presentations (`st_guides`),
@@ -92,6 +97,9 @@ Four workspaces in the sidebar; sections a user lacks the role for are hidden.
   Suggestion. Available to **every** signed-in user.
 - **Admin** (rose): Users, Teams, Badges, AI Instructions, Patch Notes, Site
   Wording, Early Access, View as role, Suggestions, Bug Reports. **Admins only.**
+- **Developer Portal** (`founder` key/role, amber): AI Instructions, Site Wording,
+  View as role. **Founder-level only** (`isFounder`). Displayed as "Developer
+  Portal"; the internal key and role are still `founder` (unchanged gating).
 
 Removed and gone (do not reintroduce or reference): the standalone To-Do
 workspace, Vitalis Wealth Management, Personal Finance, the Vitalis LLC business
@@ -153,6 +161,10 @@ sets, and guides are all team-scoped — a team only sees its own.
   → parse. Used for alert analysis, manual/funded position import, funded-trade
   close, and reading challenge equity off an FTP screenshot. These endpoints take
   `{ imageBase64, mediaType }` and allow a 12 MB body.
+- **Market-hours lookup** (`analyzeMarketHours`, default text model, non-editable
+  prompt in `claude.ts`): `POST /api/trading/market-hours { symbol }` returns a
+  per-weekday ET schedule so a Strategy Session can be filled to "all open market
+  hours". Metered against the AI cap (kind `market_hours`); 503 when AI is off.
 
 ## External integrations & background jobs (`apps/api/src/trading`)
 
@@ -180,6 +192,12 @@ sets, and guides are all team-scoped — a team only sees its own.
 - **Desk watch** (`trading/service.ts`, prod-only, every **10 s**,
   `DESK_WATCH_SECONDS`): reconciles broker positions so trade open/close/TP-SL
   notifications fire even with no client open. **Only runs if push is configured.**
+- **Session watch** (`trading/sessionWatch.ts`, prod-only, every **30 s**,
+  `SESSION_WATCH_SECONDS`): fires a trader's OWN Strategy Session notifications —
+  a pre-open heads-up, an open buzz, and a close buzz — on each session's per-day
+  ET schedule. Opt-in per user (`session_alert_prefs`, `trading/sessionAlertPrefs.ts`);
+  in-memory per-ET-day dedup so each event fires once. Runs only if push OR
+  Pushover is configured; demo excluded; each notice goes only to its own owner.
 - **Notifications** fire (web push + Pushover together, team-scoped, demo
   excluded, best-effort) on: a new TradingView alert, and per-trade events during
   reconcile — **opened**, **closed**, and a stop/target change split into
@@ -196,6 +214,13 @@ sets, and guides are all team-scoped — a team only sees its own.
   ownerId?, event? }` and apply the pref filter only when both `ownerId` and
   `event` are given — alerts pass neither (team-wide, not one trader's action).
   UI is the "Notify me about a trader" section in `DeviceSettings.tsx`.
+- **Session alert prefs** (`trading/sessionAlertPrefs.ts`, `session_alert_prefs`
+  table, one row per user): per-user opt-in toggles for **session open / close /
+  pre-open** plus a `preOpenLeadMin` (1–240, default 30). Routes
+  `GET|PUT /api/trading/session-alert-prefs`; UI is the collapsible "Strategy
+  session alerts" card at the top of the Trading Alerts screen (`Alerts.tsx`).
+  All default **off** (opt-in). The session watch reads these to fire a trader's
+  own session notifications.
 
 ## Auth & security specifics
 
@@ -261,7 +286,8 @@ defaults; the app runs locally with almost nothing set.
 - **Feeds:** `FINNHUB_API_KEY`, `RSS_NEWS_ENABLED`, `NEWS_AI_SUMMARY_ENABLED`,
   `FOREX_FACTORY_ENABLED`, `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`.
 - **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
-  `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`.
+  `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`, `SESSION_WATCH_SECONDS` (session-notif
+  poll cadence, default 30).
 - **First-boot admin seed** (read directly via `process.env`, not in the schema):
   `ADMIN_USERNAME` (default `andrew`), `ADMIN_DISPLAY_NAME`, `ADMIN_EMAIL`,
   `ADMIN_PASSWORD` (blank = random, printed once to logs), `APP_EMAIL_DOMAIN`.

@@ -33,6 +33,8 @@ import type {
   HistoryData,
   SessionInput,
   StrategySession,
+  MarketHoursResult,
+  SessionAlertPrefs,
   TradingBoard,
   BoardInput,
   MarketNewsData,
@@ -453,6 +455,15 @@ export const api = {
   },
   removeSession(id: string): Promise<{ sessions: StrategySession[] }> {
     return request(`/api/trading/sessions/${id}`, { method: 'DELETE' });
+  },
+  marketHours(symbol: string): Promise<MarketHoursResult> {
+    return request('/api/trading/market-hours', { method: 'POST', body: JSON.stringify({ symbol }) });
+  },
+  sessionAlertPrefs(): Promise<{ prefs: SessionAlertPrefs }> {
+    return request('/api/trading/session-alert-prefs');
+  },
+  saveSessionAlertPrefs(prefs: SessionAlertPrefs): Promise<{ prefs: SessionAlertPrefs }> {
+    return request('/api/trading/session-alert-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
   },
   tradingBoards(): Promise<{ boards: TradingBoard[] }> {
     return request('/api/trading/boards');

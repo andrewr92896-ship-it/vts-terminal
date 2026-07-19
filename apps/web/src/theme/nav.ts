@@ -23,6 +23,19 @@ export interface NavWorkspace {
 }
 
 export const NAV: NavWorkspace[] = [
+  // My Portal — the user's own personal workspace. Available to every signed-in
+  // user. Home of the user-created Trading Team. Pinned to the very top of the
+  // workspaces list.
+  {
+    key: 'myportal',
+    label: 'My Portal',
+    icon: 'briefcase',
+    accent: '#34D399',
+    group: 'My Portal',
+    sections: [
+      { key: 'my_team', label: 'Trading Team', icon: 'users' },
+    ],
+  },
   {
     key: 'trading',
     label: 'Trading',
@@ -31,7 +44,7 @@ export const NAV: NavWorkspace[] = [
     group: 'Trading',
     sections: [
       { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
-      { key: 'alerts', label: 'Alerts', icon: 'bell' },
+      { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
       { key: 'desk', label: 'Trade Desk', icon: 'candlestick-chart' },
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
@@ -58,18 +71,6 @@ export const NAV: NavWorkspace[] = [
       { key: 'st_decks', label: 'Study Creation', icon: 'library' },
     ],
   },
-  // My Portal — the user's own personal workspace. Available to every signed-in
-  // user. Home of the user-created Trading Team.
-  {
-    key: 'myportal',
-    label: 'My Portal',
-    icon: 'briefcase',
-    accent: '#34D399',
-    group: 'My Portal',
-    sections: [
-      { key: 'my_team', label: 'Trading Team', icon: 'users' },
-    ],
-  },
   // Admin-only. Shown in the sidebar only to admins (Portal filters the
   // workspaces list via workspacesForRoles); consolidates the portal's admin
   // tools into one workspace.
@@ -90,14 +91,15 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_support', label: 'Support', icon: 'life-buoy' },
     ],
   },
-  // Founder-only. Sits above Admin and holds the founder-exclusive tools moved
-  // out of the Admin Portal: AI Instructions, Site Wording, and View as role.
+  // Developer-only. Sits above Admin and holds the developer-exclusive tools
+  // moved out of the Admin Portal: AI Instructions, Site Wording, and View as
+  // role. (Internal key stays `founder` — the role/gating is unchanged.)
   {
     key: 'founder',
-    label: 'Founder Portal',
+    label: 'Developer Portal',
     icon: 'crown',
     accent: '#F5A524',
-    group: 'Founder',
+    group: 'Developer',
     sections: [
       { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },

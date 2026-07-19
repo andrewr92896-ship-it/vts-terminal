@@ -225,28 +225,29 @@ export async function seedDemoData(userId: string): Promise<void> {
       });
     }
 
-    // Two strategy sessions (ET windows).
+    // Two strategy sessions (per-weekday ET windows).
+    const weekWindow = (open: string, close: string) => ({
+      mon: { open, close },
+      tue: { open, close },
+      wed: { open, close },
+      thu: { open, close },
+      fri: { open, close },
+    });
     await addSession(userId, {
       name: 'London Open',
       instrument: 'EUR/USD',
-      openTime: '03:00',
-      closeTime: '05:00',
+      days: weekWindow('03:00', '05:00'),
       timeframe: 'M15',
       bias: 'both',
-      bullPlan: 'Buy the breakout above the Asian session high on a retest with volume.',
-      bearPlan: 'Sell rejection of the Asian high; target the session VWAP.',
       notes: 'Highest volatility window, size accordingly.',
       active: true,
     });
     await addSession(userId, {
       name: 'NY Open',
       instrument: 'US100',
-      openTime: '09:30',
-      closeTime: '11:00',
+      days: weekWindow('09:30', '11:00'),
       timeframe: 'M5',
       bias: 'bull',
-      bullPlan: 'Continuation of the premarket trend after the first 15-minute range breaks.',
-      bearPlan: 'Fade exhaustion gaps back to prior close.',
       notes: 'Avoid the first 2 minutes; let the auction settle.',
       active: true,
     });

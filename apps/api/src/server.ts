@@ -35,6 +35,7 @@ import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
 import { startDeskWatch } from './trading/service.js';
+import { startSessionWatch } from './trading/sessionWatch.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
 // so the whole portal runs as one service.
@@ -155,6 +156,9 @@ async function main() {
     // Watch broker positions server-side so trade open/close push fires even
     // when no one has the Live Wall open (production + push configured only).
     startDeskWatch();
+    // Watch Strategy Session windows so a trader's session open/close/pre-open
+    // notifications fire on their own schedule (production + push/Pushover only).
+    startSessionWatch();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

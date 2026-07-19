@@ -205,6 +205,6 @@ export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   studies: 'Studies',
   myportal: 'My Portal',
   admin: 'Admin Portal',
-  founder: 'Founder Portal',
+  founder: 'Developer Portal',
   help: 'Site Help',
 };

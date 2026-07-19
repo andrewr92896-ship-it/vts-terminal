@@ -369,6 +369,69 @@ export async function askClaude(prompt: string, system?: string, maxTokens = 400
   return textOf(message);
 }
 
+// ---- Market-hours lookup (fills a Strategy Session's weekly schedule) ----
+// Given a trading instrument's symbol, work out its regular cash/most-active
+// trading hours in Eastern Time for each weekday, so a session can be set to run
+// during the whole time the market is open. Forex and crypto trade nearly
+// around the clock (respecting the daily 5pm ET rollover / Fri close); equities
+// and index/commodity futures have defined RTH windows. Returns per-weekday
+// windows plus a short human note.
+
+export interface MarketHoursDay {
+  day: 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
+  open: string; // ET 'HH:MM'
+  close: string; // ET 'HH:MM'
+}
+export interface MarketHoursResult {
+  days: MarketHoursDay[];
+  note: string;
+  model: string;
+}
+
+const MARKET_HOURS_SYSTEM = `You are a market-hours reference. Given a trading instrument's symbol or name, return the hours it is normally open for trading, expressed in US Eastern Time (America/New_York), for each weekday Monday–Friday.
+
+Guidance by asset class:
+- US stocks / ETFs (e.g. SPY, NVDA): regular session 09:30–16:00 ET, Mon–Fri.
+- Spot forex (e.g. EUR/USD, GBP/USD): trades ~24h on weekdays around the daily 17:00 ET rollover. Represent a weekday as 00:00–23:59 ET (continuously open), except Friday which closes at 17:00 ET. (Sunday's evening open is out of scope — only return Mon–Fri.)
+- Crypto (e.g. BTC, ETH): trades 24/7; represent each weekday as 00:00–23:59 ET.
+- Index & commodity futures (e.g. Nasdaq/NQ, S&P/ES, Gold/GC): nearly 24h with a daily maintenance break; unless you are confident of the exact break, represent a weekday as 00:00–23:59 ET, with Friday closing 17:00 ET.
+Pick the interpretation that best matches the symbol. Use 24-hour HH:MM. If a day is closed, omit it.
+
+Respond with ONLY a JSON object of exactly this shape and nothing else (no prose or code fences):
+{"days":[{"day":"mon","open":"09:30","close":"16:00"}, ...],"note":"one short sentence naming the asset class and its hours"}
+Include one entry per open weekday using the lowercase 3-letter day key (mon,tue,wed,thu,fri). Keep the note under 160 characters.`;
+
+const HHMM_RE = /^\d{1,2}:\d{2}$/;
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const;
+
+// Sonnet: resolve an instrument's weekly market hours in ET. Structural
+// validation only — the model's hours are trusted, but shapes are coerced and
+// any malformed day is dropped so the caller always gets clean windows.
+export async function analyzeMarketHours(symbol: string): Promise<MarketHoursResult> {
+  const model = config.ANTHROPIC_MODEL_DEFAULT;
+  const raw = await askClaude(
+    `Instrument: ${symbol.trim().slice(0, 60)}\n\nReturn its weekly market hours in Eastern Time.`,
+    MARKET_HOURS_SYSTEM,
+    800,
+  );
+  const parsed = extractJson(raw) as { days?: unknown; note?: unknown } | null;
+  const rawDays = Array.isArray(parsed?.days) ? (parsed!.days as unknown[]) : [];
+  const seen = new Set<string>();
+  const days: MarketHoursDay[] = [];
+  for (const d of rawDays) {
+    const o = (d ?? {}) as Record<string, unknown>;
+    const day = typeof o.day === 'string' ? o.day.trim().toLowerCase() : '';
+    const open = typeof o.open === 'string' ? o.open.trim() : '';
+    const close = typeof o.close === 'string' ? o.close.trim() : '';
+    if (!(DAY_KEYS as readonly string[]).includes(day) || seen.has(day)) continue;
+    if (!HHMM_RE.test(open) || !HHMM_RE.test(close)) continue;
+    seen.add(day);
+    days.push({ day: day as MarketHoursDay['day'], open, close });
+  }
+  const note = typeof parsed?.note === 'string' ? parsed.note.trim().slice(0, 160) : '';
+  return { days, note, model };
+}
+
 // ---- Market-news read (bias + impact + trade-impact note) ----
 
 // One headline handed to the summarizer.

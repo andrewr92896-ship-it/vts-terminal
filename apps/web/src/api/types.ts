@@ -793,19 +793,23 @@ export interface FundedCloseResult {
 }
 
 // ---- Trading — Strategy Sessions (mirror of apps/api/src/trading/sessions.ts) ----
-export type SessionBias = 'bull' | 'bear' | 'both' | 'neutral';
+export type SessionBias = 'bull' | 'bear' | 'both';
 export type SessionStatus = 'active' | 'opening' | 'idle';
+export type Weekday = 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
+export interface DayWindow {
+  open: string; // ET 'HH:MM'
+  close: string;
+}
+export type WeekSchedule = Partial<Record<Weekday, DayWindow>>;
 
 export interface StrategySession {
   id: string;
   name: string;
   instrument: string | null;
-  openTime: string;
-  closeTime: string;
+  days: WeekSchedule; // enabled weekdays with their windows
+  marketHours: boolean; // filled from the instrument's full market hours
   timeframe: string | null;
   bias: SessionBias;
-  bullPlan: string | null;
-  bearPlan: string | null;
   notes: string | null;
   active: boolean;
   status: SessionStatus;
@@ -815,14 +819,32 @@ export interface StrategySession {
 export interface SessionInput {
   name?: string;
   instrument?: string | null;
-  openTime?: string;
-  closeTime?: string;
+  days?: WeekSchedule;
+  marketHours?: boolean;
   timeframe?: string | null;
   bias?: SessionBias;
-  bullPlan?: string | null;
-  bearPlan?: string | null;
   notes?: string | null;
   active?: boolean;
+}
+
+// Market-hours lookup result (per weekday ET window) for filling a session.
+export interface MarketHoursDay {
+  day: Weekday;
+  open: string;
+  close: string;
+}
+export interface MarketHoursResult {
+  days: MarketHoursDay[];
+  note: string;
+  model: string;
+}
+
+// A user's Strategy Session notification preferences (Trading Alerts screen).
+export interface SessionAlertPrefs {
+  notifyOpen: boolean;
+  notifyClose: boolean;
+  notifyPreOpen: boolean;
+  preOpenLeadMin: number;
 }
 
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----

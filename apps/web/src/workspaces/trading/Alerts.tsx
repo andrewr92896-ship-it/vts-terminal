@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type CSSProperties, type ClipboardEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type ClipboardEvent, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePushNotifications } from '../../push/usePushNotifications';
 import { EditableText } from '../../copy/SiteCopy';
-import type { AlertRecord, AlertsData, TradeAnalysis } from '../../api/types';
+import type { AlertRecord, AlertsData, SessionAlertPrefs, TradeAnalysis } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
 const GOLD = '#EBCB74';
@@ -15,6 +15,7 @@ const MUTED = '#9fb0d6';
 const FAINT = '#6f84b0';
 const CARD = 'rgba(13,31,68,.5)';
 const PANEL = 'rgba(11,26,58,.5)';
+const INPUT_BG = '#091633';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
@@ -75,7 +76,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
     <div style={{ maxWidth: 1100, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="alerts.title">Alerts</EditableText></h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="alerts.title">Trading Alerts</EditableText></h2>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             <EditableText id="alerts.subtitle">TradingView alerts arrive by webhook. Paste a chart screenshot and VTS AI analyzes the trade.</EditableText>
           </div>
@@ -93,6 +94,8 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
           <EditableText id="alerts.ai_unconfigured">VTS AI isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server.</EditableText>
         </div>
       )}
+
+      {!readOnly && <SessionAlertSettings />}
 
       {active.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
@@ -169,6 +172,124 @@ function PhoneAlerts() {
         </div>
       )}
       {error && <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 20, width: 230, fontSize: 11, color: '#ffb4ab' }}>{error}</div>}
+    </div>
+  );
+}
+
+// Strategy Session notifications: buzz me when one of my sessions opens or
+// closes, and/or a set number of minutes before it opens. Persists to the
+// server, which fires them on the session's own schedule (needs phone alerts on
+// for a device to actually buzz). Independent of the per-trade notification
+// prefs in device settings.
+function SessionAlertSettings() {
+  const [prefs, setPrefs] = useState<SessionAlertPrefs | null>(null);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api.sessionAlertPrefs()
+      .then((r) => { if (alive) setPrefs(r.prefs); })
+      .catch(() => { if (alive) setPrefs({ notifyOpen: false, notifyClose: false, notifyPreOpen: false, preOpenLeadMin: 30 }); });
+    return () => { alive = false; };
+  }, []);
+
+  async function persist(next: SessionAlertPrefs) {
+    setPrefs(next);
+    setStatus('saving');
+    try {
+      const r = await api.saveSessionAlertPrefs(next);
+      setPrefs(r.prefs);
+      setStatus('saved');
+      window.setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1800);
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  if (!prefs) return null;
+
+  const anyOn = prefs.notifyOpen || prefs.notifyClose || prefs.notifyPreOpen;
+  const lead = prefs.preOpenLeadMin;
+
+  return (
+    <div style={{ ...card, marginBottom: 14, padding: 0, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', color: TEXT, cursor: 'pointer', padding: '13px 16px', textAlign: 'left' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>🔔 <EditableText id="alerts.session_title">Strategy session alerts</EditableText></span>
+          {anyOn && <span style={{ ...badge, color: GREEN, border: `1px solid ${GREEN}` }}>ON</span>}
+        </div>
+        <span style={{ fontSize: 12, color: FAINT }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 16px 14px' }}>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+            <EditableText id="alerts.session_blurb">Get notified when your Strategy Sessions open and close, and ahead of time before they start. Turn on phone alerts above so a device actually buzzes.</EditableText>
+          </div>
+          <ToggleRow
+            label={<EditableText id="alerts.session_pre">Before a session opens</EditableText>}
+            on={prefs.notifyPreOpen}
+            onChange={(v) => persist({ ...prefs, notifyPreOpen: v })}
+          />
+          {prefs.notifyPreOpen && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '2px 0 12px', paddingLeft: 4, fontSize: 12, color: MUTED }}>
+              <EditableText id="alerts.session_lead_pre">Notify me</EditableText>
+              <input
+                type="number"
+                min={1}
+                max={240}
+                value={lead}
+                onChange={(e) => setPrefs({ ...prefs, preOpenLeadMin: Math.max(1, Math.min(240, Number(e.target.value) || 0)) })}
+                onBlur={() => persist({ ...prefs, preOpenLeadMin: Math.max(1, Math.min(240, lead || 30)) })}
+                style={{ ...numInput }}
+              />
+              <EditableText id="alerts.session_lead_post">minutes before it opens</EditableText>
+            </div>
+          )}
+          <ToggleRow
+            label={<EditableText id="alerts.session_open">When a session opens</EditableText>}
+            on={prefs.notifyOpen}
+            onChange={(v) => persist({ ...prefs, notifyOpen: v })}
+          />
+          <ToggleRow
+            label={<EditableText id="alerts.session_close">When a session closes</EditableText>}
+            on={prefs.notifyClose}
+            onChange={(v) => persist({ ...prefs, notifyClose: v })}
+          />
+          <div style={{ fontSize: 11, color: status === 'error' ? '#ffb4ab' : FAINT, marginTop: 6, minHeight: 14 }}>
+            {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Could not save — try again.' : ''}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ToggleRow({ label, on, onChange }: { label: ReactNode; on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '8px 0', borderTop: `1px solid ${BORDER}` }}>
+      <span style={{ fontSize: 13, color: TEXT }}>{label}</span>
+      <button
+        onClick={() => onChange(!on)}
+        role="switch"
+        aria-checked={on}
+        style={{
+          width: 44,
+          height: 24,
+          borderRadius: 999,
+          border: `1px solid ${on ? GREEN : BORDER2}`,
+          background: on ? 'rgba(53,196,123,.25)' : INPUT_BG,
+          position: 'relative',
+          cursor: 'pointer',
+          flex: '0 0 auto',
+          transition: 'background .15s ease, border-color .15s ease',
+        }}
+      >
+        <span style={{ position: 'absolute', top: 2, left: on ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: on ? GREEN : FAINT, transition: 'left .15s ease' }} />
+      </button>
     </div>
   );
 }
@@ -396,5 +517,6 @@ const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, b
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '9px 15px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '9px 12px', borderRadius: 7, cursor: 'pointer' };
 const badge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };
+const numInput: CSSProperties = { width: 64, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 12.5, padding: '5px 8px', outline: 'none', textAlign: 'center' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '3px 8px' };
 const warnBanner: CSSProperties = { fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', marginBottom: 14 };
