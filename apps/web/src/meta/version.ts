@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.2';
+export const APP_VERSION = 'Beta V 5.3';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.3',
+    date: 'July 19, 2026',
+    notes: [
+      'Building a study game from a topic with AI no longer fails with a “Request failed (502)” on larger question counts — the questions are now generated in small parallel batches so the request finishes well within the server’s time limit.',
+    ],
+  },
   {
     version: 'Beta V 5.2',
     date: 'July 19, 2026',
