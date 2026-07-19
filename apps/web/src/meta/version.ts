@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.1';
+export const APP_VERSION = 'Beta V 5.2';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.2',
+    date: 'July 19, 2026',
+    notes: [
+      'Team Flashcards no longer shows two “New flashcard set” buttons on the empty screen — the redundant top-right one only appears once you already have a set.',
+    ],
+  },
   {
     version: 'Beta V 5.1',
     date: 'July 19, 2026',

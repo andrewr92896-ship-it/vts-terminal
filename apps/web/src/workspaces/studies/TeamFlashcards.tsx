@@ -82,7 +82,7 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
             Build and edit your team’s own flashcard sets here — study them from the <strong>Flashcards</strong> section.
           </p>
         </div>
-        {!readOnly && (
+        {!readOnly && sets.length > 0 && (
           <button onClick={() => setComposerOpen((v) => !v)} style={primaryBtn(theme, accentGrad)}>
             {composerOpen ? 'Close' : '✦ New flashcard set'}
           </button>
