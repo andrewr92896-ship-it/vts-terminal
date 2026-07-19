@@ -25,6 +25,7 @@ import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
 import { notificationPrefsRoutes } from './routes/notificationPrefs.js';
 import { contentRoutes } from './routes/content.js';
+import { userTeamRoutes } from './routes/userTeams.js';
 import { seedBadges } from './badges/service.js';
 import { runMigrations } from './db/migrate.js';
 import { waitForDatabase } from './db/index.js';
@@ -97,6 +98,7 @@ export async function buildServer() {
   await app.register(pushoverRoutes);
   await app.register(notificationPrefsRoutes);
   await app.register(contentRoutes);
+  await app.register(userTeamRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).

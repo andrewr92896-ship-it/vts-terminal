@@ -9,6 +9,7 @@ import {
   canAccessFunded,
   canAccessWorkspace,
   isAdmin,
+  isFounder,
   isWorkspaceReadOnly,
   parseRoles,
   type WorkspaceKey,
@@ -48,6 +49,23 @@ export const requireAdmin: preHandlerHookHandler = async (
     return reply.code(401).send({ error: 'Not authenticated' });
   }
   if (!isAdmin(parseRoles(user))) {
+    return reply.code(403).send({ error: 'Forbidden' });
+  }
+};
+
+// Reject unless the logged-in user is founder-level (founder or the
+// permission-equivalent software_developer). Guards the founder-only tools:
+// the Founder Portal (AI Instructions, Site Wording, View as role) and the
+// site-wording copy overrides. Plain admins are rejected here.
+export const requireFounder: preHandlerHookHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const user = request.currentUser;
+  if (!user) {
+    return reply.code(401).send({ error: 'Not authenticated' });
+  }
+  if (!isFounder(parseRoles(user))) {
     return reply.code(403).send({ error: 'Forbidden' });
   }
 };

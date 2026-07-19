@@ -58,12 +58,24 @@ export const NAV: NavWorkspace[] = [
       { key: 'st_decks', label: 'Study Creation', icon: 'library' },
     ],
   },
+  // My Portal — the user's own personal workspace. Available to every signed-in
+  // user. Home of the user-created Trading Team.
+  {
+    key: 'myportal',
+    label: 'My Portal',
+    icon: 'briefcase',
+    accent: '#34D399',
+    group: 'My Portal',
+    sections: [
+      { key: 'my_team', label: 'Trading Team', icon: 'users' },
+    ],
+  },
   // Admin-only. Shown in the sidebar only to admins (Portal filters the
   // workspaces list via workspacesForRoles); consolidates the portal's admin
   // tools into one workspace.
   {
     key: 'admin',
-    label: 'Admin',
+    label: 'Admin Portal',
     icon: 'shield-check',
     accent: '#E0708F',
     group: 'Administration',
@@ -71,14 +83,25 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_users', label: 'Users', icon: 'users' },
       { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
       { key: 'ad_badges', label: 'Badges', icon: 'star' },
-      { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
       { key: 'ad_notes', label: 'Patch Notes', icon: 'file-text' },
-      { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
       { key: 'ad_early', label: 'Early Access', icon: 'sparkles' },
-      { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
       { key: 'ad_bugs', label: 'Bug Reports', icon: 'bug' },
       { key: 'ad_support', label: 'Support', icon: 'life-buoy' },
+    ],
+  },
+  // Founder-only. Sits above Admin and holds the founder-exclusive tools moved
+  // out of the Admin Portal: AI Instructions, Site Wording, and View as role.
+  {
+    key: 'founder',
+    label: 'Founder Portal',
+    icon: 'crown',
+    accent: '#F5A524',
+    group: 'Founder',
+    sections: [
+      { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
+      { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
+      { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
     ],
   },
   // Site Help — available to every signed-in user. Consolidates the how-to

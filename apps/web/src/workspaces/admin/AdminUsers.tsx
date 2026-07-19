@@ -61,7 +61,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [roles, setRoles] = useState<RoleKey[]>(['trading']);
+  const [roles, setRoles] = useState<RoleKey[]>(['member']);
   const [teamId, setTeamId] = useState<string>('');
   const [password, setPassword] = useState('');
   const [createBusy, setCreateBusy] = useState(false);
@@ -120,7 +120,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
       setDisplayName('');
       setUsername('');
       setEmail('');
-      setRoles(['trading']);
+      setRoles(['member']);
       setPassword('');
       await refresh();
     } catch (e) {

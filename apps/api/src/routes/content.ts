@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireAdmin } from '../auth/middleware.js';
+import { requireAuth, requireAdmin, requireFounder } from '../auth/middleware.js';
 import { PROMPT_DEFS, promptDefault } from '../ai/prompts.js';
 import { getSetting, setSetting, clearSetting, getSettingsByPrefix } from '../settings/service.js';
 import {
@@ -58,6 +58,9 @@ const COPY_KEY_RE = /^[a-z0-9_.-]{1,80}$/;
 export async function contentRoutes(app: FastifyInstance) {
   const adminGuard = { preHandler: requireAdmin };
   const authGuard = { preHandler: requireAuth };
+  // Founder-only tools: AI Instructions and the site-wording copy overrides
+  // (the <EditableText> mechanism). Moved out of Admin into the Founder Portal.
+  const founderGuard = { preHandler: requireFounder };
 
   // ---- Badges (registry read for any signed-in user; render icons next to names) ----
   app.get('/api/badges', authGuard, async () => {
@@ -84,8 +87,8 @@ export async function contentRoutes(app: FastifyInstance) {
     return { howto, copy };
   });
 
-  // ---- Admin: AI instructions (system prompts) ----
-  app.get('/api/admin/ai-prompts', adminGuard, async () => {
+  // ---- Founder: AI instructions (system prompts) ----
+  app.get('/api/admin/ai-prompts', founderGuard, async () => {
     const prompts = await Promise.all(
       PROMPT_DEFS.map(async (d) => {
         const override = await getSetting(`ai.${d.id}`);
@@ -105,7 +108,7 @@ export async function contentRoutes(app: FastifyInstance) {
     return { prompts };
   });
 
-  app.put('/api/admin/ai-prompts/:id', adminGuard, async (request, reply) => {
+  app.put('/api/admin/ai-prompts/:id', founderGuard, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     if (!PROMPT_DEFS.some((d) => d.id === id)) {
       return reply.code(404).send({ error: 'Unknown prompt' });
@@ -122,7 +125,7 @@ export async function contentRoutes(app: FastifyInstance) {
     return { value, overridden: true };
   });
 
-  app.delete('/api/admin/ai-prompts/:id', adminGuard, async (request, reply) => {
+  app.delete('/api/admin/ai-prompts/:id', founderGuard, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     if (!PROMPT_DEFS.some((d) => d.id === id)) {
       return reply.code(404).send({ error: 'Unknown prompt' });
@@ -257,7 +260,7 @@ export async function contentRoutes(app: FastifyInstance) {
   // Store a plain-text override for a coded string, keyed by its dotted id. A
   // blank value (or one equal to the client's bundled default) clears it — the
   // client only sends a save when the text actually differs from the default.
-  app.put('/api/admin/site-content/copy/:key', adminGuard, async (request, reply) => {
+  app.put('/api/admin/site-content/copy/:key', founderGuard, async (request, reply) => {
     const key = (request.params as { key: string }).key;
     if (!COPY_KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid copy key' });
     const parsed = copySchema.safeParse(request.body);
@@ -271,7 +274,7 @@ export async function contentRoutes(app: FastifyInstance) {
     return { ok: true, cleared: false };
   });
 
-  app.delete('/api/admin/site-content/copy/:key', adminGuard, async (request, reply) => {
+  app.delete('/api/admin/site-content/copy/:key', founderGuard, async (request, reply) => {
     const key = (request.params as { key: string }).key;
     if (!COPY_KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid copy key' });
     await clearSetting(`${COPY_PREFIX}${key}`);

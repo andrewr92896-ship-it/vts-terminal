@@ -9,9 +9,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.8';
+export const APP_VERSION = 'Beta V 5.9';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.9',
+    date: 'July 19, 2026',
+    notes: [
+      'New “My Portal” workspace with a Trading Team you own: create a team, invite up to five teammates by username, and lead it. The leader can hand off leadership, give members cosmetic badges (Chief Strategist, Chief Analyst, Risk Manager, Lead Trader, or a custom title), and set each member’s permissions (create study guides, invite members, manage badges, remove members, edit team info).',
+      'Roles are simplified to Founder, Admin, Member, plus Funded. Every signed-in member now sees every standard workspace. Only the owner can grant the Founder role; only a founder can grant Admin or Funded. A new Software Developer role carries founder-level access.',
+      'New founder-only “Founder Portal” holds AI Instructions, Site Wording, and View as role (moved out of Admin, now renamed “Admin Portal”). Editing site wording — including the corner edit shield — is now founder-only.',
+      'In Studies, members only see their own team’s content, and only the Trading Team leader can delete team study games, flashcard sets, and guides.',
+    ],
+  },
   {
     version: 'Beta V 5.8',
     date: 'July 19, 2026',

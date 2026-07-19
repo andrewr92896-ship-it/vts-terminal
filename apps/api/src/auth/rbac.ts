@@ -3,24 +3,34 @@ import { DEMO_USERNAME } from '../demo/identity.js';
 
 export type WorkspaceKey = 'trading' | 'studies';
 
-// Granular, admin-assigned roles. A user can hold any combination. `admin`
-// grants everything (including user management); `trading_viewer` is read-only
-// Trading access.
+// Granular, assigned roles. A user can hold any combination. The model is a
+// ladder of trust:
+//   • founder            — sits above admin; the portal's owners. Founder-level
+//                          also carries every admin capability plus the
+//                          founder-only tools (Founder Portal: AI Instructions,
+//                          Site Wording, View as role, the site-wording editor).
+//   • software_developer — permission-equivalent to founder (same access).
+//   • admin              — user/team management and the Admin Portal.
+//   • funded             — reveals the private Funded (prop-challenge) section in
+//                          Trading. Only a founder-level user can grant it.
+//   • member             — the baseline. Every signed-in user is at least a
+//                          member and sees every non-admin workspace (Trading,
+//                          Studies, My Portal, Site Help).
 export const ROLE_KEYS = [
+  'founder',
+  'software_developer',
   'admin',
-  'trading',
-  'trading_viewer',
   'funded',
-  'studies',
+  'member',
 ] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
 
 export const ROLE_LABELS: Record<RoleKey, string> = {
+  founder: 'Founder',
+  software_developer: 'Software Developer',
   admin: 'Admin',
-  trading: 'Trading',
-  trading_viewer: 'Trading (View only)',
   funded: 'Funded',
-  studies: 'Studies',
+  member: 'Member',
 };
 
 export function isRoleKey(v: unknown): v is RoleKey {
@@ -39,8 +49,17 @@ export function parseRoles(u: Pick<UserRow, 'roles'>): RoleKey[] {
   }
 }
 
+// Founder-level access: the founder role itself or the permission-equivalent
+// software_developer role. Founder-level is the gate for the Founder Portal and
+// every founder-only tool.
+export function isFounder(roles: RoleKey[]): boolean {
+  return roles.includes('founder') || roles.includes('software_developer');
+}
+
+// Admin capability. Founder-level users are a superset of admins, so they pass
+// every admin guard as well.
 export function isAdmin(roles: RoleKey[]): boolean {
-  return roles.includes('admin');
+  return roles.includes('admin') || isFounder(roles);
 }
 
 // Parse the stored JSON `badges` array (admin-assigned recognition badge keys)
@@ -58,43 +77,37 @@ export function parseBadges(u: { badges?: string | null }): string[] {
   }
 }
 
-// Which role keys grant access to a given workspace (admin grants all).
-const WORKSPACE_GRANTS: Record<WorkspaceKey, RoleKey[]> = {
-  trading: ['trading', 'trading_viewer'],
-  studies: ['studies'],
-};
-
-export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
-  if (isAdmin(roles)) return true;
-  return WORKSPACE_GRANTS[ws].some((r) => roles.includes(r));
+// Workspace access under the Member = full-access model: every signed-in user
+// (member and up) can reach Trading and Studies. The Admin Portal and Founder
+// Portal are gated separately (isAdmin / isFounder), not through this function.
+export function canAccessWorkspace(_roles: RoleKey[], _ws: WorkspaceKey): boolean {
+  return true;
 }
 
 // The private Funded section (the prop-firm challenge dashboard) is an add-on
-// inside Trading, revealed only to holders of the admin-assigned `funded` role
-// (admins included). It grants no workspace on its own — a funded user still
-// needs Trading access to reach the section, and it is never shown to the demo.
+// inside Trading, revealed only to holders of the `funded` role (admins and
+// founder-level users included). It grants no workspace on its own and is never
+// shown to the demo.
 export function canAccessFunded(roles: RoleKey[]): boolean {
   return isAdmin(roles) || roles.includes('funded');
 }
 
-// Trading is read-only when the user only has the viewer role (and is not an
-// admin or full trader). No other workspace has a read-only variant.
-export function isWorkspaceReadOnly(roles: RoleKey[], ws: WorkspaceKey): boolean {
-  if (ws !== 'trading') return false;
-  if (isAdmin(roles) || roles.includes('trading')) return false;
-  return roles.includes('trading_viewer');
+// No workspace has a read-only role variant anymore (the old trading_viewer
+// role is retired). Kept as a stable export so write guards still compile; the
+// demo's read-only presentation is handled by the demo guard, not here.
+export function isWorkspaceReadOnly(_roles: RoleKey[], _ws: WorkspaceKey): boolean {
+  return false;
 }
 
-// Ordered as the sidebar shows them.
-export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['trading', 'studies'];
-  return order.filter((ws) => canAccessWorkspace(roles, ws));
+// Ordered as the sidebar shows them. Every member reaches both workspaces.
+export function workspacesForRoles(_roles: RoleKey[]): WorkspaceKey[] {
+  return ['trading', 'studies'];
 }
 
 function accessLabel(roles: RoleKey[]): string {
-  if (isAdmin(roles)) return 'Administrator — full access';
-  if (roles.length === 0) return 'No roles assigned yet';
-  return roles.map((r) => ROLE_LABELS[r]).join(' · ');
+  if (isFounder(roles)) return 'Founder — full access';
+  if (roles.includes('admin')) return 'Administrator — full access';
+  return 'Member';
 }
 
 // The shape of the user safe to send to the browser. No password hash,
@@ -125,6 +138,10 @@ export interface PublicUser {
     // Whether the private Funded (prop-challenge) section is revealed. Never true
     // for the demo account.
     funded: boolean;
+    // Whether the user carries admin capability (admin or founder-level).
+    admin: boolean;
+    // Whether the user is founder-level (founder or software_developer).
+    founder: boolean;
   };
 }
 
@@ -156,6 +173,8 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
       // demoGuard already refuses the writes server-side regardless).
       readOnlyWorkspaces: isDemo ? workspaces : workspaces.filter((ws) => isWorkspaceReadOnly(roles, ws)),
       funded: !isDemo && canAccessFunded(roles),
+      admin: !isDemo && isAdmin(roles),
+      founder: !isDemo && isFounder(roles),
     },
   };
 }

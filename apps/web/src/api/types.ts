@@ -3,11 +3,11 @@ import type { WorkspaceKey } from '../theme/themes';
 // Granular, admin-assigned roles (mirror of backend auth/rbac.ts ROLE_KEYS).
 // A user can hold any combination.
 export type RoleKey =
+  | 'founder'
+  | 'software_developer'
   | 'admin'
-  | 'trading'
-  | 'trading_viewer'
   | 'funded'
-  | 'studies';
+  | 'member';
 
 // One row in the Study Game high-score table. Mirrors the backend's
 // LeaderboardEntry (studies/game.ts). A row is either a player's current live
@@ -87,6 +87,10 @@ export interface User {
     // Whether the private Funded (prop-challenge) section is revealed. Never true
     // for the demo account.
     funded: boolean;
+    // Whether the user carries admin capability (admin or founder-level).
+    admin: boolean;
+    // Whether the user is founder-level (founder or software_developer).
+    founder: boolean;
   };
 }
 
@@ -97,6 +101,54 @@ export interface TeamMember {
   username: string;
   roles: RoleKey[];
   active: boolean;
+}
+
+// ---- My Portal: user-created Trading Teams (mirror of userTeams/service.ts) ----
+export interface TeamMemberPermissions {
+  canCreateStudyGuides: boolean;
+  canInvite: boolean;
+  canManageBadges: boolean;
+  canRemoveMembers: boolean;
+  canEditTeam: boolean;
+}
+export interface UserTeamMember {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl: string | null;
+  isLeader: boolean;
+  badge: string | null;
+  permissions: TeamMemberPermissions;
+  joinedAt: number;
+}
+export interface UserTeamInvite {
+  id: string;
+  invitedUserId: string;
+  username: string;
+  displayName: string;
+  status: string;
+  createdAt: number;
+}
+export interface MyTeam {
+  id: string;
+  name: string;
+  leaderId: string;
+  isLeader: boolean;
+  myPermissions: TeamMemberPermissions;
+  members: UserTeamMember[];
+  invites: UserTeamInvite[];
+  createdAt: number;
+}
+export interface IncomingInvite {
+  id: string;
+  teamId: string;
+  teamName: string;
+  invitedByName: string | null;
+  createdAt: number;
+}
+export interface MyPortalData {
+  team: MyTeam | null;
+  incomingInvites: IncomingInvite[];
 }
 
 // A trading team as shown in the admin team-management panel (mirror of the

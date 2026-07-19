@@ -18,12 +18,56 @@ import {
   notificationPrefs,
   supportRequests,
   supportRequestMessages,
+  userTeams,
+  userTeamMembers,
+  userTeamInvites,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
-import { isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
+import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
+
+// The portal owner's account, identified by the immutable created username
+// (matches the first-boot seed, ADMIN_USERNAME). Only the owner may grant or
+// revoke the founder / software_developer roles.
+const OWNER_USERNAME = (process.env.ADMIN_USERNAME || 'andrew').trim().toLowerCase();
+
+function isOwnerRow(u: { username: string; createdUsername: string | null }): boolean {
+  return (u.createdUsername ?? u.username).trim().toLowerCase() === OWNER_USERNAME;
+}
+
+// Roles only the owner may grant/revoke (founder-level power).
+const OWNER_ONLY_ROLES: RoleKey[] = ['founder', 'software_developer'];
+// Roles only a founder-level user may grant/revoke.
+const FOUNDER_ONLY_ROLES: RoleKey[] = ['admin', 'funded'];
+
+// Enforce who may change which roles when an admin edits a user's role set.
+// `acting` is the user making the change; `current`/`next` are the target's
+// role sets before and after. Throws AdminError if `acting` lacks the authority
+// for any role that is being added or removed.
+function assertCanAssignRoles(
+  acting: typeof users.$inferSelect,
+  current: RoleKey[],
+  next: RoleKey[],
+): void {
+  const actingRoles = parseRoles(acting);
+  const owner = isOwnerRow(acting);
+  const founderLevel = isFounder(actingRoles);
+  const changed = (role: RoleKey) => current.includes(role) !== next.includes(role);
+
+  for (const role of OWNER_ONLY_ROLES) {
+    if (changed(role) && !owner) {
+      throw new AdminError('Only the owner can grant or remove the Founder role');
+    }
+  }
+  for (const role of FOUNDER_ONLY_ROLES) {
+    if (changed(role) && !founderLevel) {
+      const label = role === 'funded' ? 'Funded' : 'Admin';
+      throw new AdminError(`Only a founder can grant or remove the ${label} role`);
+    }
+  }
+}
 
 // A user row as shown in the admin user-management screen. Never includes the
 // password hash. `createdUsername` is the username the account was created
@@ -110,7 +154,7 @@ async function assertEmailFree(email: string, exceptId?: string): Promise<void> 
   }
 }
 
-export async function createUser(input: CreateUserInput): Promise<AdminUserView> {
+export async function createUser(actingUserId: string, input: CreateUserInput): Promise<AdminUserView> {
   const username = input.username.trim().toLowerCase();
   const displayName = input.displayName.trim();
   const email = input.email.trim().toLowerCase();
@@ -121,6 +165,12 @@ export async function createUser(input: CreateUserInput): Promise<AdminUserView>
     throw new AdminError('Temporary password must be at least 8 characters');
   }
   const roles = cleanRoles(input.roles);
+
+  // A new account starts with no roles, so any elevated role requested must be
+  // one the acting user is allowed to grant.
+  const acting = (await db.select().from(users).where(eq(users.id, actingUserId)).limit(1))[0];
+  if (!acting) throw new AdminError('Acting user not found');
+  assertCanAssignRoles(acting, [], roles);
 
   const existing = await db
     .select({ id: users.id })
@@ -187,8 +237,15 @@ export async function updateUser(
   if (isSelf && input.active === false) {
     throw new AdminError('You cannot deactivate your own account');
   }
-  if (isSelf && input.roles && !cleanRoles(input.roles).includes('admin')) {
-    throw new AdminError('You cannot remove the Admin role from your own account');
+  if (isSelf && input.roles && !isAdmin(cleanRoles(input.roles))) {
+    throw new AdminError('You cannot remove your own admin access');
+  }
+
+  // Enforce who may grant/revoke each role that is changing.
+  if (input.roles != null) {
+    const acting = (await db.select().from(users).where(eq(users.id, actingUserId)).limit(1))[0];
+    if (!acting) throw new AdminError('Acting user not found');
+    assertCanAssignRoles(acting, parseRoles(target), cleanRoles(input.roles));
   }
 
   const patch: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
@@ -244,11 +301,12 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
   )[0];
   if (!target) throw new AdminError('User not found');
 
-  // Never delete the last admin, so the portal always has an owner who can
-  // manage it. (With self-deletion blocked above this is also a backstop.)
-  if (parseRoles(target).includes('admin')) {
+  // Never delete the last admin-capable account (admin or founder-level), so the
+  // portal always has an owner who can manage it. (With self-deletion blocked
+  // above this is also a backstop.)
+  if (isAdmin(parseRoles(target))) {
     const all = await db.select({ roles: users.roles }).from(users);
-    const adminCount = all.filter((u) => parseRoles(u).includes('admin')).length;
+    const adminCount = all.filter((u) => isAdmin(parseRoles(u))).length;
     if (adminCount <= 1) {
       throw new AdminError('Cannot delete the only remaining admin account');
     }
@@ -286,6 +344,21 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
       await tx.delete(supportRequestMessages).where(inArray(supportRequestMessages.requestId, supportIds));
     }
     await tx.delete(supportRequests).where(eq(supportRequests.userId, targetId));
+    // User Trading Teams (My Portal): disband any team this user leads (dropping
+    // that team's members + invites), then remove their own membership and any
+    // invites addressed to or sent by them.
+    const ledTeamIds = (
+      await tx.select({ id: userTeams.id }).from(userTeams).where(eq(userTeams.leaderId, targetId))
+    ).map((r) => r.id);
+    if (ledTeamIds.length) {
+      await tx.delete(userTeamMembers).where(inArray(userTeamMembers.teamId, ledTeamIds));
+      await tx.delete(userTeamInvites).where(inArray(userTeamInvites.teamId, ledTeamIds));
+      await tx.delete(userTeams).where(inArray(userTeams.id, ledTeamIds));
+    }
+    await tx.delete(userTeamMembers).where(eq(userTeamMembers.userId, targetId));
+    await tx
+      .delete(userTeamInvites)
+      .where(or(eq(userTeamInvites.invitedUserId, targetId), eq(userTeamInvites.invitedBy, targetId)));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });

@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { api } from '../api/client';
-import { isAdmin } from '../auth/access';
+import { isFounder } from '../auth/access';
 import type { User } from '../api/types';
 import { C, GOLD_GRADIENT } from '../theme/tokens';
 import { useResponsive } from '../hooks/useMediaQuery';
@@ -62,7 +62,9 @@ interface SiteCopyCtx {
 const Ctx = createContext<SiteCopyCtx | null>(null);
 
 export function SiteCopyProvider({ user, children }: { user: User; children: ReactNode }) {
-  const canEdit = isAdmin(user.roles) && !user.isDemo;
+  // Site-wording editing (the floating corner shield + inline edit mode) is
+  // founder-only. Plain admins can no longer change coded copy.
+  const canEdit = isFounder(user.roles) && !user.isDemo;
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
   const [target, setTarget] = useState<EditTarget | null>(null);

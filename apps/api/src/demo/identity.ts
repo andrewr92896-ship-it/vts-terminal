@@ -16,10 +16,11 @@ export const DEMO_SEED_VERSION = 7;
 export const DEMO_TEAM_ID = 'team-demo';
 export const DEMO_TEAM_NAME = 'Demo Team';
 
-// The roles the demo account holds: every live workspace except admin (so a
-// reviewer sees the product but never the real user-management screen). It never
-// holds `funded` — the Funded section is private and must stay hidden in the demo.
-export const DEMO_ROLES = ['trading', 'studies'] as const;
+// The roles the demo account holds: a plain member, so a reviewer sees every
+// standard workspace (Trading, Studies, My Portal, Site Help) but never the
+// Admin or Founder portals. It never holds `funded` — the Funded section is
+// private and must stay hidden in the demo — nor any admin/founder role.
+export const DEMO_ROLES = ['member'] as const;
 
 export function isDemoUser(user: { username?: string } | null | undefined): boolean {
   return !!user && user.username === DEMO_USERNAME;

@@ -74,6 +74,9 @@ const StudyCreation = lazy(() =>
 const StudyGuidesLibrary = lazy(() =>
   import('../workspaces/studies/StudyGuides').then((m) => ({ default: m.StudyGuidesLibrary })),
 );
+const TradingTeam = lazy(() =>
+  import('../workspaces/myportal/TradingTeam').then((m) => ({ default: m.TradingTeam })),
+);
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder. `onNavigate` lets a screen jump to another tab.
@@ -414,6 +417,8 @@ export function Portal() {
   // so it falls through to renderScreen and then the placeholder.
   function renderExtra(scr: string): React.ReactNode {
     switch (scr) {
+      case 'my_team':
+        return <TradingTeam theme={theme} user={user!} />;
       case 'hp_howto':
         return <HelpHowTo theme={theme} />;
       case 'hp_news':
