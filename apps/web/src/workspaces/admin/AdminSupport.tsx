@@ -4,6 +4,7 @@ import type { SupportRequest } from '../../api/types';
 import { api, ApiError } from '../../api/client';
 import { panel, SectionHeader, ghostBtn, dangerBtn, msgStyle } from './adminUi';
 import { Icon } from '../../components/Icon';
+import { EditableText } from '../../copy/SiteCopy';
 
 function dayTime(ms: number): string {
   return new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -56,10 +57,10 @@ export function AdminSupport({ theme }: { theme: Theme }) {
       />
       {error && <div style={msgStyle(false)}>{error}</div>}
       {!loaded ? (
-        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}>Loading...</div>
+        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}><EditableText id="admin.support.loading">Loading...</EditableText></div>
       ) : items.length === 0 ? (
         <div style={panel(theme)}>
-          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>No support requests yet.</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}><EditableText id="admin.support.empty">No support requests yet.</EditableText></p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

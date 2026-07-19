@@ -7,6 +7,7 @@ import type { AdminUser, RoleKey, Team } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { Icon } from '../../components/Icon';
+import { EditableText } from '../../copy/SiteCopy';
 import { UserBadges, useBadgeRegistry } from '../../components/UserBadges';
 import {
   Badge,
@@ -166,7 +167,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>Loading users...</div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}><EditableText id="admin.users.loading">Loading users...</EditableText></div>;
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
 
   return (
@@ -178,7 +179,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
 
       {/* Create a user */}
       <div style={{ ...panel(theme), marginBottom: 18 }}>
-        <div style={panelLabel}>Add a user</div>
+        <div style={panelLabel}><EditableText id="admin.users.add_heading">Add a user</EditableText></div>
         <div
           style={{
             display: 'grid',
@@ -187,11 +188,11 @@ export function AdminUsers({ theme }: { theme: Theme }) {
           }}
         >
           <div>
-            <label style={fieldLabel}>Display name</label>
+            <label style={fieldLabel}><EditableText id="admin.users.f_name">Display name</EditableText></label>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Jane Smith" style={inputStyle} />
           </div>
           <div>
-            <label style={fieldLabel}>Email</label>
+            <label style={fieldLabel}><EditableText id="admin.users.f_email">Email</EditableText></label>
             <input
               type="email"
               value={email}
@@ -203,22 +204,22 @@ export function AdminUsers({ theme }: { theme: Theme }) {
             />
           </div>
           <div>
-            <label style={fieldLabel}>Username</label>
+            <label style={fieldLabel}><EditableText id="admin.users.f_username">Username</EditableText></label>
             <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="jsmith" autoCapitalize="none" autoCorrect="off" style={inputStyle} />
           </div>
           <div>
-            <label style={fieldLabel}>Temporary password</label>
+            <label style={fieldLabel}><EditableText id="admin.users.f_temp_password">Temporary password</EditableText></label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" style={{ ...inputStyle, flex: 1 }} />
               <button type="button" onClick={() => setPassword(genPassword())} style={ghostBtn} title="Generate a password">
-                Generate
+                <EditableText id="admin.users.generate">Generate</EditableText>
               </button>
             </div>
           </div>
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <label style={fieldLabel}>Roles</label>
+          <label style={fieldLabel}><EditableText id="admin.users.f_roles">Roles</EditableText></label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
             {ALL_ROLES.map((r) => (
               <RoleToggle
@@ -233,7 +234,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
         </div>
 
         <div style={{ marginTop: 14, maxWidth: isPhone ? '100%' : 320 }}>
-          <label style={fieldLabel}>Trading team</label>
+          <label style={fieldLabel}><EditableText id="admin.users.f_team">Trading team</EditableText></label>
           <TeamSelect value={teamId} onChange={setTeamId} teams={teams} />
         </div>
 
@@ -252,7 +253,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
             disabled={createBusy}
             style={{ ...primaryBtn(theme, accentGrad), opacity: createBusy ? 0.6 : 1 }}
           >
-            {createBusy ? 'Creating...' : 'Create user'}
+            {createBusy ? 'Creating...' : <EditableText id="admin.users.create_btn">Create user</EditableText>}
           </button>
         </div>
       </div>
