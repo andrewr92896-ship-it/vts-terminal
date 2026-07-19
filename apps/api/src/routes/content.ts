@@ -22,6 +22,9 @@ import {
 
 // How-to overrides are stored under the "howto." key prefix in app_settings.
 const HOWTO_PREFIX = 'howto.';
+// Site-wide editable copy overrides (any coded label/blurb/explanation the
+// <EditableText> component wraps) live under the "copy." key prefix.
+const COPY_PREFIX = 'copy.';
 
 const promptSchema = z.object({ value: z.string().max(8000) });
 const badgeCreateSchema = z.object({
@@ -48,6 +51,9 @@ const noteUpdateSchema = z.object({
 });
 const noteStatusSchema = z.object({ status: z.enum(['draft', 'published']) });
 const howtoSchema = z.object({ value: z.string().max(20000) });
+const copySchema = z.object({ value: z.string().max(4000) });
+// Copy keys are dotted identifiers coined in the web code (e.g. "studyhub.title").
+const COPY_KEY_RE = /^[a-z0-9_.-]{1,80}$/;
 
 export async function contentRoutes(app: FastifyInstance) {
   const adminGuard = { preHandler: requireAdmin };
@@ -63,13 +69,19 @@ export async function contentRoutes(app: FastifyInstance) {
     return { notes: await listPublishedNotes() };
   });
 
-  // ---- Editable site content (How-to overrides) for members ----
+  // ---- Editable site content (How-to + site-wide copy overrides) for members ----
+  // Every signed-in user reads this so any admin-customized wording renders for
+  // them; only admins can change it (the PUT/DELETE routes below are admin-only).
   app.get('/api/site-content', authGuard, async () => {
-    const raw = await getSettingsByPrefix(HOWTO_PREFIX);
+    const rawHowto = await getSettingsByPrefix(HOWTO_PREFIX);
     // Strip the prefix so the client keys by screen (e.g. "live").
     const howto: Record<string, string> = {};
-    for (const [k, v] of Object.entries(raw)) howto[k.slice(HOWTO_PREFIX.length)] = v;
-    return { howto };
+    for (const [k, v] of Object.entries(rawHowto)) howto[k.slice(HOWTO_PREFIX.length)] = v;
+    const rawCopy = await getSettingsByPrefix(COPY_PREFIX);
+    // Copy is keyed by its full dotted id minus the "copy." prefix.
+    const copy: Record<string, string> = {};
+    for (const [k, v] of Object.entries(rawCopy)) copy[k.slice(COPY_PREFIX.length)] = v;
+    return { howto, copy };
   });
 
   // ---- Admin: AI instructions (system prompts) ----
@@ -238,6 +250,31 @@ export async function contentRoutes(app: FastifyInstance) {
     const screen = (request.params as { screen: string }).screen;
     if (!/^[a-z0-9_]{1,40}$/.test(screen)) return reply.code(400).send({ error: 'Invalid screen key' });
     await clearSetting(`${HOWTO_PREFIX}${screen}`);
+    return { ok: true };
+  });
+
+  // ---- Admin: site-wide copy overrides (the <EditableText> mechanism) ----
+  // Store a plain-text override for a coded string, keyed by its dotted id. A
+  // blank value (or one equal to the client's bundled default) clears it — the
+  // client only sends a save when the text actually differs from the default.
+  app.put('/api/admin/site-content/copy/:key', adminGuard, async (request, reply) => {
+    const key = (request.params as { key: string }).key;
+    if (!COPY_KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid copy key' });
+    const parsed = copySchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid content' });
+    const fullKey = `${COPY_PREFIX}${key}`;
+    if (!parsed.data.value.trim()) {
+      await clearSetting(fullKey);
+      return { ok: true, cleared: true };
+    }
+    await setSetting(fullKey, parsed.data.value);
+    return { ok: true, cleared: false };
+  });
+
+  app.delete('/api/admin/site-content/copy/:key', adminGuard, async (request, reply) => {
+    const key = (request.params as { key: string }).key;
+    if (!COPY_KEY_RE.test(key)) return reply.code(400).send({ error: 'Invalid copy key' });
+    await clearSetting(`${COPY_PREFIX}${key}`);
     return { ok: true };
   });
 }

@@ -280,6 +280,25 @@ some documented vars aren't in the schema and vice-versa.
 - **Editable copy:** `howto.<screen>` and `ai.<id>` keys live in `app_settings`;
   prefer editing via **Admin ▸ Site Wording / AI Instructions** over hardcoding
   where a key already exists.
+- **Inline editable wording (`<EditableText>`) — REQUIRED for all new coded copy.**
+  Every hardcoded, site-coded string (screen titles, subtitles, blurbs, button
+  labels, empty/loading/error states, static captions) must be wrapped in
+  `<EditableText id="…">` from `apps/web/src/copy/SiteCopy.tsx`. This makes it
+  admin-editable live from the floating gold pencil beside the corner chat bubble
+  (admins only) — the edit stores an override in `app_settings` under `copy.<id>`
+  (routes in `routes/content.ts`, served to everyone via `GET /api/site-content`,
+  written via `PUT/DELETE /api/admin/site-content/copy/:key`). Rules:
+  - Wrap it: `<EditableText id="alerts.title">Live Alerts</EditableText>`, or use
+    the `text={expr}` form when the string is a variable. The bundled text stays
+    the default; a blank/identical override clears it.
+  - **id** is a globally-unique dotted key, `<screenslug>.<slug>` (lowercase, dots
+    / underscores), e.g. `desk.empty`, `admin.users.title`.
+  - **Never wrap** user/team-created data (deck/team/user names, tickers, message
+    bodies), live figures (prices, P&L, counts, dates/times), interpolated strings,
+    or paragraphs containing embedded markup like `<strong>`. It is only for text
+    coded into the site.
+  - When you build any new screen or component, wrap its coded copy this way by
+    default — this is a universal, site-wide expectation, not opt-in.
 - Keep the plain, terminal-style voice in UI copy and AI prompts.
 
 ## Known stale / legacy (don't trust these)

@@ -3,6 +3,7 @@ import { api } from '../../api/client';
 import type { TeamDeck } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
+import { EditableText } from '../../copy/SiteCopy';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { TeamStudyGame } from './TeamStudyGame';
 import { DeckTestMode } from './DeckTestMode';
@@ -100,28 +101,42 @@ export function StudyGameHub({
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{copy.title}</h2>
-        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>{copy.blurb}</p>
+        <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
+          <EditableText id={`studygame.${target}.title`} text={copy.title} />
+        </h2>
+        <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
+          <EditableText id={`studygame.${target}.blurb`} text={copy.blurb} />
+        </p>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '0 0 10px' }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#fff' }}>Your team’s study games</h3>
-        <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>✦ Create a study game</button>
+        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#fff' }}>
+          <EditableText id="studygame.games_heading" text="Your team’s study games" />
+        </h3>
+        <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
+          <EditableText id="studygame.create_btn" text="✦ Create a study game" />
+        </button>
       </div>
 
       {loading ? (
-        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>Loading your team’s study games…</div>
+        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
+          <EditableText id="studygame.loading" text="Loading your team’s study games…" />
+        </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          Couldn’t load your team’s study games. Try again in a moment.
+          <EditableText id="studygame.load_error" text="Couldn’t load your team’s study games. Try again in a moment." />
         </div>
       ) : decks.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🎓</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No study games yet</div>
-          <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>{copy.empty}</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+            <EditableText id="studygame.empty_title" text="No study games yet" />
+          </div>
+          <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>
+            <EditableText id={`studygame.${target}.empty`} text={copy.empty} />
+          </div>
           <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
-            Open Study Creation
+            <EditableText id="studygame.open_creation" text="Open Study Creation" />
           </button>
         </div>
       ) : (
