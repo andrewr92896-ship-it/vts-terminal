@@ -28,9 +28,17 @@ const BORDER2 = '#1c3a7a';
 
 const REFRESH_MS = 60_000;
 
-const WEEKDAYS: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
-const DAY_LABEL: Record<Weekday, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri' };
+const WEEKDAYS: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const DAY_LABEL: Record<Weekday, string> = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
 const DEFAULT_WINDOW: DayWindow = { open: '09:30', close: '11:00' };
+
+// A day's hours as a compact label: "24h" for a full day, else "HH:MM–HH:MM".
+function windowLabel(w: DayWindow): string {
+  return w.allDay ? '24h' : `${w.open}–${w.close}`;
+}
+function hoursWithEt(hours: string): string {
+  return hours === '24h' ? '24h' : `${hours} ET`;
+}
 
 const STATUS: Record<SessionStatus, { label: string; color: string }> = {
   active: { label: 'Active now', color: GREEN },
@@ -62,15 +70,15 @@ function daysLabel(days: Weekday[]): string {
 // Summarize a week schedule: one line if every enabled day shares a window, else
 // a per-day breakdown.
 function describeSchedule(days: WeekSchedule):
-  | { uniform: true; label: string; open: string; close: string }
-  | { uniform: false; items: { day: Weekday; open: string; close: string }[] }
+  | { uniform: true; label: string; hours: string }
+  | { uniform: false; items: { day: Weekday; hours: string }[] }
   | null {
   const enabled = WEEKDAYS.filter((d) => days[d]) as Weekday[];
   if (enabled.length === 0) return null;
-  const first = days[enabled[0]]!;
-  const allSame = enabled.every((d) => days[d]!.open === first.open && days[d]!.close === first.close);
-  if (allSame) return { uniform: true, label: daysLabel(enabled), open: first.open, close: first.close };
-  return { uniform: false, items: enabled.map((d) => ({ day: d, open: days[d]!.open, close: days[d]!.close })) };
+  const firstHours = windowLabel(days[enabled[0]]!);
+  const allSame = enabled.every((d) => windowLabel(days[d]!) === firstHours);
+  if (allSame) return { uniform: true, label: daysLabel(enabled), hours: firstHours };
+  return { uniform: false, items: enabled.map((d) => ({ day: d, hours: windowLabel(days[d]!) })) };
 }
 
 export function StrategySessions() {
@@ -174,19 +182,18 @@ function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySessi
           <span style={{ color: FAINT }}><EditableText id="sessions.no_days">No days set</EditableText></span>
         ) : sched.uniform ? (
           <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: TEXT }}>
-            {sched.label} · {sched.open}–{sched.close} ET
+            {sched.label} · {hoursWithEt(sched.hours)}
           </span>
         ) : (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {sched.items.map((it) => (
               <span key={it.day} style={{ ...metaChip, fontFamily: "'IBM Plex Mono', monospace", color: TEXT }}>
-                {DAY_LABEL[it.day]} {it.open}–{it.close}
+                {DAY_LABEL[it.day]} {it.hours}
               </span>
             ))}
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {s.timeframe && <span style={metaChip}>{s.timeframe}</span>}
           <span style={{ ...metaChip, color: b.color, borderColor: b.color }}>{b.label}</span>
           {s.marketHours && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}><EditableText id="sessions.mh_chip">Market hours</EditableText></span>}
           {!s.active && <span style={{ ...metaChip, color: FAINT }}>paused</span>}
@@ -208,8 +215,10 @@ function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySessi
 
 type DaysState = Record<Weekday, DayWindow | null>;
 
+const EMPTY_DAYS: DaysState = { mon: null, tue: null, wed: null, thu: null, fri: null, sat: null, sun: null };
+
 function initialDays(initial?: StrategySession): DaysState {
-  const out: DaysState = { mon: null, tue: null, wed: null, thu: null, fri: null };
+  const out: DaysState = { ...EMPTY_DAYS };
   const src = initial?.days;
   if (src && WEEKDAYS.some((d) => src[d])) {
     for (const d of WEEKDAYS) out[d] = src[d] ? { ...src[d]! } : null;
@@ -223,7 +232,6 @@ function initialDays(initial?: StrategySession): DaysState {
 function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?: StrategySession; busy: boolean; submitLabel: string; onSubmit: (input: SessionInput) => void; onCancel: () => void }) {
   const [name, setName] = useState(initial?.name ?? '');
   const [instrument, setInstrument] = useState(initial?.instrument ?? '');
-  const [timeframe, setTimeframe] = useState(initial?.timeframe ?? '');
   const [bias, setBias] = useState<SessionBias>(initial?.bias ?? 'both');
   const [notes, setNotes] = useState(initial?.notes ?? '');
   const [days, setDays] = useState<DaysState>(() => initialDays(initial));
@@ -252,6 +260,21 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
     setDays((prev) => (prev[day] ? { ...prev, [day]: { ...prev[day]!, [field]: value } } : prev));
   }
 
+  function setDayAllDay(day: Weekday, allDay: boolean) {
+    setMarketHours(false);
+    setMhNote(null);
+    setDays((prev) => (prev[day] ? { ...prev, [day]: { ...prev[day]!, allDay } } : prev));
+  }
+
+  // Enable every day at 24 hours — the "trade it 24/7" shortcut.
+  function setAll24_7() {
+    setMarketHours(false);
+    setMhNote(null);
+    const next = { ...EMPTY_DAYS };
+    for (const d of WEEKDAYS) next[d] = { open: '00:00', close: '00:00', allDay: true };
+    setDays(next);
+  }
+
   async function fillMarketHours() {
     const sym = instrument.trim();
     if (!sym) { setMhErr('Enter an instrument first (e.g. EUR/USD, SPY, BTC).'); return; }
@@ -260,7 +283,7 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
     setMhNote(null);
     try {
       const res = await api.marketHours(sym);
-      const next: DaysState = { mon: null, tue: null, wed: null, thu: null, fri: null };
+      const next: DaysState = { ...EMPTY_DAYS };
       for (const d of res.days) next[d.day] = { open: d.open, close: d.close };
       setDays(next);
       setMarketHours(true);
@@ -281,7 +304,6 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
       instrument: instrument.trim() || null,
       days: schedule,
       marketHours,
-      timeframe: timeframe.trim() || null,
       bias,
       notes: notes.trim() || null,
     });
@@ -295,7 +317,6 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. London Open)" style={{ ...input, flex: '1 1 180px' }} />
         <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. EUR/USD)" style={{ ...input, flex: '1 1 150px' }} />
-        <input value={timeframe} onChange={(e) => setTimeframe(e.target.value)} placeholder="TF (M15)" style={{ ...input, flex: '0 0 100px' }} />
         <select value={bias} onChange={(e) => setBias(e.target.value as SessionBias)} style={{ ...input, flex: '0 0 130px' }}>
           <option value="bull">Bull</option>
           <option value="bear">Bear</option>
@@ -307,9 +328,12 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
       <div style={{ marginTop: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
           <span style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}><EditableText id="sessions.days_label">Trading days</EditableText></span>
-          <button type="button" onClick={() => void fillMarketHours()} disabled={mhBusy} style={{ ...ghostBtn, marginLeft: 'auto', color: GOLD, borderColor: 'rgba(235,203,116,.5)', opacity: mhBusy ? 0.6 : 1 }}>
-            {mhBusy ? <EditableText id="sessions.mh_loading">Reading market hours…</EditableText> : <EditableText id="sessions.mh_btn">All open market hours</EditableText>}
-          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button type="button" onClick={setAll24_7} style={ghostBtn}><EditableText id="sessions.all_247">24/7</EditableText></button>
+            <button type="button" onClick={() => void fillMarketHours()} disabled={mhBusy} style={{ ...ghostBtn, color: GOLD, borderColor: 'rgba(235,203,116,.5)', opacity: mhBusy ? 0.6 : 1 }}>
+              {mhBusy ? <EditableText id="sessions.mh_loading">Reading market hours…</EditableText> : <EditableText id="sessions.mh_btn">All open market hours</EditableText>}
+            </button>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {WEEKDAYS.map((d) => {
@@ -333,8 +357,16 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
             {enabledDays.map((d) => (
               <div key={d} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span style={{ width: 36, fontSize: 12, color: TEXT, fontWeight: 600 }}>{DAY_LABEL[d]}</span>
-                <label style={timeLbl}><EditableText id="sessions.open">Open</EditableText><input value={days[d]!.open} onChange={(e) => setDayTime(d, 'open', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
-                <label style={timeLbl}><EditableText id="sessions.close_time">Close</EditableText><input value={days[d]!.close} onChange={(e) => setDayTime(d, 'close', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+                <label style={{ ...timeLbl, color: days[d]!.allDay ? GOLD : MUTED }}>
+                  <input type="checkbox" checked={!!days[d]!.allDay} onChange={(e) => setDayAllDay(d, e.target.checked)} style={{ accentColor: GOLD }} />
+                  <EditableText id="sessions.allday_24">24 hours</EditableText>
+                </label>
+                {!days[d]!.allDay && (
+                  <>
+                    <label style={timeLbl}><EditableText id="sessions.open">Open</EditableText><input value={days[d]!.open} onChange={(e) => setDayTime(d, 'open', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+                    <label style={timeLbl}><EditableText id="sessions.close_time">Close</EditableText><input value={days[d]!.close} onChange={(e) => setDayTime(d, 'close', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+                  </>
+                )}
               </div>
             ))}
           </div>

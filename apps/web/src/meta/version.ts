@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.14';
+export const APP_VERSION = 'Beta V 5.15';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.15',
+    date: 'July 19, 2026',
+    notes: [
+      'Strategy Sessions now cover the whole week and round-the-clock markets: pick any days including Saturday and Sunday, flag any day as “24 hours”, or tap “24/7” to run every day non-stop — so a 24/7 Monday-through-Friday (or full-week crypto) instrument is a single session. The “TF (M15)” timeframe box has been removed.',
+    ],
+  },
   {
     version: 'Beta V 5.14',
     date: 'July 19, 2026',

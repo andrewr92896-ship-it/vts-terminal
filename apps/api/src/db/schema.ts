@@ -464,7 +464,6 @@ export const tradingSessions = sqliteTable('trading_sessions', {
   // Whether this session's schedule was filled from the instrument's full market
   // hours (via the AI market-hours lookup) rather than hand-set windows.
   marketHours: integer('market_hours', { mode: 'boolean' }).notNull().default(false),
-  timeframe: text('timeframe'),
   bias: text('bias', { enum: SESSION_BIASES }).notNull().default('neutral'),
   bullPlan: text('bull_plan'),
   bearPlan: text('bear_plan'),

@@ -10,14 +10,20 @@ import { tradingSessions, type TradingSessionRow } from '../db/schema.js';
 export type SessionBias = 'bull' | 'bear' | 'both';
 export type SessionStatus = 'active' | 'opening' | 'idle';
 
-// The trading week, Monday–Friday. Weekends carry no window (the desk is dark),
-// so a Sat/Sun status is always idle with the next open pointing to Monday+.
-export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const;
+// The full week, Mon–Sun. Every day can carry its own window (so a 24/7 Mon–Fri
+// instrument, or a weekend crypto session, is a single session), and a window
+// may be flagged `allDay` to run the full 24 hours.
+export const WEEKDAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
+
+// Legacy rows (created before per-day JSON) predate weekend support: their single
+// open/close window applies to the Mon–Fri trading week only, never the weekend.
+const LEGACY_WEEKDAYS: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 
 export interface DayWindow {
   open: string; // ET 'HH:MM'
   close: string;
+  allDay?: boolean; // when true the day runs the full 24 hours (open/close ignored)
 }
 export type WeekSchedule = Partial<Record<Weekday, DayWindow>>;
 
@@ -27,7 +33,6 @@ export interface StrategySession {
   instrument: string | null;
   days: WeekSchedule; // enabled weekdays with their windows
   marketHours: boolean; // true when filled from the instrument's full market hours
-  timeframe: string | null;
   bias: SessionBias;
   notes: string | null;
   active: boolean;
@@ -37,16 +42,17 @@ export interface StrategySession {
 
 const OPENING_LEAD_MIN = 30;
 
-// ET weekday index: 0=Sun … 6=Sat. Shared by status + the notification watch so
-// both agree on "what day is it on the desk".
-export function etDowKey(dow: number): Weekday | null {
+// ET weekday index: 0=Sun … 6=Sat → schedule key. Shared by status + the
+// notification watch so both agree on "what day is it on the desk".
+export function etDowKey(dow: number): Weekday {
   switch (dow) {
+    case 0: return 'sun';
     case 1: return 'mon';
     case 2: return 'tue';
     case 3: return 'wed';
     case 4: return 'thu';
     case 5: return 'fri';
-    default: return null; // weekend
+    default: return 'sat'; // 6
   }
 }
 
@@ -111,8 +117,9 @@ function cleanTime(v: string | undefined, fallback: string): string {
   return parseHHMM(v) != null ? v.trim() : fallback;
 }
 
-// Coerce arbitrary input into a clean WeekSchedule: only mon–fri keys, each with
-// a valid HH:MM open and close. Days that don't parse are dropped.
+// Coerce arbitrary input into a clean WeekSchedule: any of the seven day keys,
+// each either flagged `allDay` (full 24 hours) or carrying a valid HH:MM open
+// and close. Days that don't parse (and aren't allDay) are dropped.
 export function cleanSchedule(input: unknown): WeekSchedule {
   const out: WeekSchedule = {};
   if (!input || typeof input !== 'object') return out;
@@ -123,6 +130,16 @@ export function cleanSchedule(input: unknown): WeekSchedule {
     const w = raw as Record<string, unknown>;
     const open = typeof w.open === 'string' ? w.open.trim() : '';
     const close = typeof w.close === 'string' ? w.close.trim() : '';
+    if (w.allDay === true) {
+      // Keep valid times if supplied (so representative window/legacy reads make
+      // sense), else default to a full-day span.
+      out[day] = {
+        open: parseHHMM(open) != null ? open : '00:00',
+        close: parseHHMM(close) != null ? close : '00:00',
+        allDay: true,
+      };
+      continue;
+    }
     if (parseHHMM(open) == null || parseHHMM(close) == null) continue;
     out[day] = { open, close };
   }
@@ -141,11 +158,12 @@ export function scheduleForRow(row: TradingSessionRow): WeekSchedule {
     }
   }
   if (Object.keys(parsed).length > 0) return parsed;
-  // Legacy fallback: a single window meant every trading day.
+  // Legacy fallback: a single window meant every trading day (Mon–Fri only —
+  // these rows predate weekend support).
   const open = row.openTime;
   const close = row.closeTime;
   const out: WeekSchedule = {};
-  for (const day of WEEKDAYS) out[day] = { open, close };
+  for (const day of LEGACY_WEEKDAYS) out[day] = { open, close };
   return out;
 }
 
@@ -158,7 +176,7 @@ function nextOpenMins(sched: WeekSchedule, dow: number, nowMin: number): number 
     if (!key) continue;
     const w = sched[key];
     if (!w) continue;
-    const openMin = parseHHMM(w.open);
+    const openMin = w.allDay ? 0 : parseHHMM(w.open); // an all-day window opens at midnight
     if (openMin == null) continue;
     const start = d * 1440 + openMin;
     if (start > nowMin) return start - nowMin;
@@ -173,8 +191,9 @@ export function computeStatus(
   if (!row.active) return { status: 'idle', minsToOpen: null };
   const sched = scheduleForRow(row);
   const todayKey = etDowKey(clock.dow);
-  const today = todayKey ? sched[todayKey] : undefined;
+  const today = sched[todayKey];
   if (today) {
+    if (today.allDay) return { status: 'active', minsToOpen: null }; // 24-hour day
     const open = parseHHMM(today.open);
     const close = parseHHMM(today.close);
     if (open != null && close != null) {
@@ -205,7 +224,6 @@ function toSession(row: TradingSessionRow, clock: { min: number; dow: number }):
     instrument: row.instrument,
     days: scheduleForRow(row),
     marketHours: row.marketHours,
-    timeframe: row.timeframe,
     bias: coerceBias(row.bias),
     notes: row.notes,
     active: row.active,
@@ -232,9 +250,9 @@ export interface SessionInput {
   name?: string;
   instrument?: string | null;
   // Values may be null (a day the client cleared) — cleanSchedule drops those.
-  days?: Partial<Record<Weekday, DayWindow | null>>;
+  // Loose on input (open/close optional for allDay days); cleanSchedule sanitizes.
+  days?: Partial<Record<Weekday, { open?: string; close?: string; allDay?: boolean } | null>>;
   marketHours?: boolean;
-  timeframe?: string | null;
   bias?: SessionBias;
   notes?: string | null;
   active?: boolean;
@@ -263,7 +281,6 @@ export async function addSession(userId: string, input: SessionInput): Promise<S
     closeTime: cols.closeTime,
     days: cols.days,
     marketHours: input.marketHours ?? false,
-    timeframe: clean(input.timeframe, 16),
     bias: coerceBias(input.bias),
     bullPlan: null,
     bearPlan: null,
@@ -290,7 +307,6 @@ export async function updateSession(userId: string, id: string, input: SessionIn
     patch.closeTime = cols.closeTime;
   }
   if (input.marketHours !== undefined) patch.marketHours = input.marketHours;
-  if (input.timeframe !== undefined) patch.timeframe = clean(input.timeframe, 16);
   if (input.bias !== undefined && isBias(input.bias)) patch.bias = input.bias;
   if (input.notes !== undefined) patch.notes = clean(input.notes, 2000);
   if (input.active !== undefined) patch.active = input.active;

@@ -225,7 +225,7 @@ export async function seedDemoData(userId: string): Promise<void> {
       });
     }
 
-    // Two strategy sessions (per-weekday ET windows).
+    // Strategy sessions (per-weekday ET windows).
     const weekWindow = (open: string, close: string) => ({
       mon: { open, close },
       tue: { open, close },
@@ -237,7 +237,6 @@ export async function seedDemoData(userId: string): Promise<void> {
       name: 'London Open',
       instrument: 'EUR/USD',
       days: weekWindow('03:00', '05:00'),
-      timeframe: 'M15',
       bias: 'both',
       notes: 'Highest volatility window, size accordingly.',
       active: true,
@@ -246,9 +245,25 @@ export async function seedDemoData(userId: string): Promise<void> {
       name: 'NY Open',
       instrument: 'US100',
       days: weekWindow('09:30', '11:00'),
-      timeframe: 'M5',
       bias: 'bull',
       notes: 'Avoid the first 2 minutes; let the auction settle.',
+      active: true,
+    });
+    // A 24/7 session: every day, full 24 hours (weekends included).
+    await addSession(userId, {
+      name: 'Crypto 24/7',
+      instrument: 'BTC/USD',
+      days: {
+        mon: { open: '00:00', close: '00:00', allDay: true },
+        tue: { open: '00:00', close: '00:00', allDay: true },
+        wed: { open: '00:00', close: '00:00', allDay: true },
+        thu: { open: '00:00', close: '00:00', allDay: true },
+        fri: { open: '00:00', close: '00:00', allDay: true },
+        sat: { open: '00:00', close: '00:00', allDay: true },
+        sun: { open: '00:00', close: '00:00', allDay: true },
+      },
+      bias: 'both',
+      notes: 'Round-the-clock market; no session boundary.',
       active: true,
     });
 

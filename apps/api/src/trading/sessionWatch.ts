@@ -53,13 +53,13 @@ export function dueForUser(
   dayStamp: string,
 ): PendingNotification[] {
   const todayKey = etDowKey(clock.dow);
-  if (!todayKey) return []; // weekend — no weekday window
   const out: PendingNotification[] = [];
 
   for (const row of rows) {
     if (!row.active) continue;
     const window = scheduleForRow(row)[todayKey];
-    if (!window) continue;
+    if (!window) continue; // session doesn't run today
+    if (window.allDay) continue; // a 24-hour day has no intraday open/close to alert on
     const openMin = parseHHMM(window.open);
     const closeMin = parseHHMM(window.close);
     if (openMin == null || closeMin == null) continue;
