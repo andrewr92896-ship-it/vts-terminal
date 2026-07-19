@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.10';
+export const APP_VERSION = 'Beta V 5.11';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.11',
+    date: 'July 19, 2026',
+    notes: [
+      'Founders now show a gold crown badge next to their name everywhere names appear (top bar, admin lists, team chat).',
+    ],
+  },
   {
     version: 'Beta V 5.10',
     date: 'July 19, 2026',
