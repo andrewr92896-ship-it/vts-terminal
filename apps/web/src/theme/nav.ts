@@ -78,6 +78,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
       { key: 'ad_bugs', label: 'Bug Reports', icon: 'bug' },
+      { key: 'ad_support', label: 'Support', icon: 'life-buoy' },
     ],
   },
   // Site Help — available to every signed-in user. Consolidates the how-to

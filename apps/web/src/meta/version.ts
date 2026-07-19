@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.0';
+export const APP_VERSION = 'Beta V 5.1';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.1',
+    date: 'July 19, 2026',
+    notes: [
+      'The corner chat bubble now has two tabs — Team chat (open by default) and a new Support tab. In Support, pick whether you’re reporting a bug, sending a suggestion, or need general help, and an AI assistant asks a couple of quick questions before filing it to the admins automatically: bugs go to Bug Reports, suggestions to Suggestions, and general questions to a new admin Support section.',
+      'New activity now flags the admin nav: a solid red blinking dot appears next to the Admin workspace and next to the specific section (Suggestions, Bug Reports, or Support) with something new, and clears when you open that section.',
+    ],
+  },
   {
     version: 'Beta V 5.0',
     date: 'July 19, 2026',

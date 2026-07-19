@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq, or } from 'drizzle-orm';
+import { eq, or, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   users,
@@ -16,6 +16,8 @@ import {
   tradingCalendar,
   aiUsage,
   notificationPrefs,
+  supportRequests,
+  supportRequestMessages,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -275,6 +277,15 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // survive the user — just drop the authorship link.
     await tx.update(tradingNews).set({ authorId: null }).where(eq(tradingNews.authorId, targetId));
     await tx.update(tradingCalendar).set({ authorId: null }).where(eq(tradingCalendar.authorId, targetId));
+    // General support requests and their intake messages (messages reference the
+    // request, not the user, so clear them by request id first).
+    const supportIds = (
+      await tx.select({ id: supportRequests.id }).from(supportRequests).where(eq(supportRequests.userId, targetId))
+    ).map((r) => r.id);
+    if (supportIds.length) {
+      await tx.delete(supportRequestMessages).where(inArray(supportRequestMessages.requestId, supportIds));
+    }
+    await tx.delete(supportRequests).where(eq(supportRequests.userId, targetId));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });

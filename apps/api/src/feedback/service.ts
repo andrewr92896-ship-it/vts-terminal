@@ -213,6 +213,36 @@ export async function createBugReport(
   return toBugReportView(row);
 }
 
+// File a completed bug report straight from an intake conversation (used by the
+// chat-bubble Support tab, whose AI intake runs client-side and only persists
+// once it has enough detail). The whole transcript is stored so the admin sees
+// the same clarified thread a Site Help report produces, and it lands 'submitted'.
+export async function fileBugReportFromConversation(
+  user: { id: string; displayName: string; teamId: string | null },
+  conversation: { role: 'user' | 'ai'; body: string }[],
+): Promise<void> {
+  const firstUser = conversation.find((m) => m.role === 'user')?.body?.trim() ?? '';
+  const summary = (firstUser.split('\n')[0] || 'Bug report').slice(0, 140);
+  const now = new Date();
+  const id = crypto.randomUUID();
+  await db.insert(bugReports).values({
+    id,
+    userId: user.id,
+    author: user.displayName,
+    teamId: user.teamId,
+    summary,
+    status: 'submitted',
+    createdAt: now,
+    updatedAt: now,
+  });
+  let at = now.getTime();
+  for (const m of conversation) {
+    // Preserve ordering with strictly increasing timestamps.
+    await insertMessage(id, m.role, m.body, new Date(at));
+    at += 1;
+  }
+}
+
 export class BugReportForbiddenError extends Error {}
 export class BugReportClosedError extends Error {}
 

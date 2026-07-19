@@ -9,6 +9,8 @@ import type {
   NotificationItem,
   Suggestion,
   BugReport,
+  SupportKind,
+  SupportRequest,
   BrokerConnection,
   BrokerStatus,
   ChallengeData,
@@ -548,7 +550,7 @@ export const api = {
   notifications(): Promise<{ items: NotificationItem[]; latestAt: number }> {
     return request('/api/notifications');
   },
-  hubActivity(): Promise<{ chat: number; announcements: number; suggestions: number; bugs: number }> {
+  hubActivity(): Promise<{ chat: number; announcements: number; suggestions: number; bugs: number; support: number }> {
     return request('/api/chat/activity');
   },
   tradingTruth(): Promise<{ posts: TruthPost[] }> {
@@ -585,6 +587,25 @@ export const api = {
   },
   adminDeleteBug(id: string): Promise<{ reports: BugReport[] }> {
     return request(`/api/admin/bugs/${id}`, { method: 'DELETE' });
+  },
+  // ---- Support tab (bubble) intake + admin Support section ----
+  // One turn of the AI intake. Send the whole conversation so far; when the
+  // intake is complete the server files it to the matching admin section and
+  // returns submitted=true.
+  supportMessage(
+    kind: SupportKind,
+    messages: { role: 'user' | 'ai'; body: string }[],
+  ): Promise<{ needMore: boolean; reply: string; submitted: boolean }> {
+    return request('/api/support/message', { method: 'POST', body: JSON.stringify({ kind, messages }) });
+  },
+  adminSupportRequests(): Promise<{ requests: SupportRequest[] }> {
+    return request('/api/admin/support');
+  },
+  adminSetSupportStatus(id: string, status: 'submitted' | 'resolved'): Promise<{ requests: SupportRequest[] }> {
+    return request(`/api/admin/support/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+  },
+  adminDeleteSupport(id: string): Promise<{ requests: SupportRequest[] }> {
+    return request(`/api/admin/support/${id}`, { method: 'DELETE' });
   },
   studyLearned(): Promise<{ terms: string[] }> {
     return request('/api/studies/learned');
