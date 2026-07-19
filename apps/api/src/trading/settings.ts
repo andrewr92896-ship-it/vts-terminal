@@ -45,6 +45,10 @@ export interface DeskSettings {
   breakEvenAmount: number;
   // Per-instrument buffers that override the default for a specific instrument.
   breakEvenOverrides: BreakEvenOverride[];
+  // Ignore broker fills smaller than this many units in the Trade Log / History.
+  // The desk's "test trade" floor: 1-unit connection tests stop skewing the
+  // stats (and drop out of the list). 0 = keep every trade (the default).
+  minTradeUnits: number;
 }
 
 async function getOverrides(): Promise<BreakEvenOverride[]> {
@@ -70,6 +74,7 @@ export async function getDeskSettings(): Promise<DeskSettings> {
     breakEvenPct: r?.breakEvenPct ?? 0,
     breakEvenAmount: r?.breakEvenAmount ?? 0,
     breakEvenOverrides,
+    minTradeUnits: r?.minTradeUnits ?? 0,
   };
 }
 
@@ -84,7 +89,10 @@ export async function updateDeskSettings(patch: Partial<DeskSettings>): Promise<
   // A dollar/pip band only needs to be non-negative; there's no natural ceiling.
   const rawAmt = patch.breakEvenAmount ?? current.breakEvenAmount;
   const breakEvenAmount = Number.isFinite(rawAmt) ? Math.max(0, rawAmt) : current.breakEvenAmount;
-  const values = { breakEvenMode, breakEvenPct, breakEvenAmount, updatedAt: now };
+  // The test-trade floor is a non-negative unit count; 0 turns it off.
+  const rawMin = patch.minTradeUnits ?? current.minTradeUnits;
+  const minTradeUnits = Number.isFinite(rawMin) ? Math.max(0, rawMin) : current.minTradeUnits;
+  const values = { breakEvenMode, breakEvenPct, breakEvenAmount, minTradeUnits, updatedAt: now };
   await db
     .insert(tradingDeskSettings)
     .values({ id: DESK, ...values })
@@ -152,4 +160,12 @@ export function bandOf(s: DeskSettings): BreakEvenBand {
 // that classifyOutcome consults to score each trade by its own instrument.
 export function configOf(s: DeskSettings): BreakEvenConfig {
   return buildBreakEvenConfig(bandOf(s), s.breakEvenOverrides);
+}
+
+// Whether a broker fill falls below the desk's "test trade" floor and so should
+// be left out of the Trade Log / History entirely. A zero floor keeps
+// everything; a trade with no recorded size (0 units) is never treated as
+// "small" — we can't tell, so it's kept.
+export function isSmallTrade(units: number, minTradeUnits: number): boolean {
+  return minTradeUnits > 0 && units > 0 && units < minTradeUnits;
 }

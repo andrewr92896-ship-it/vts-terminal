@@ -10,9 +10,10 @@ import type { NotifEvent } from '../notifications/prefs.js';
 import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEvenOverride } from './outcome.js';
 import { tradePips } from './forex.js';
 import { deskTradeCodeIndex } from './codes.js';
-import { getDeskSettings, configOf } from './settings.js';
+import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
 import { scopedTraderIds, scopedTraderIdsForUser, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
+import { beforeCutoff, connectionCutoffs } from './connections.js';
 import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 import type { LiveTrade } from './types.js';
 
@@ -286,6 +287,9 @@ export interface HistoryData {
   breakEvenMode: BreakEvenMode;
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
+  // The desk's "test trade" floor (units); sub-floor broker fills are already
+  // excluded from `trades` + `summary`. 0 = keep everything.
+  minTradeUnits: number;
 }
 
 function slippageOf(planned: number | null, entry: number): number | null {
@@ -461,6 +465,7 @@ export async function getHistory(
     breakEvenMode: settings.breakEvenMode,
     breakEvenAmount: settings.breakEvenAmount,
     breakEvenOverrides: settings.breakEvenOverrides,
+    minTradeUnits: settings.minTradeUnits,
   };
   if (viewerIsDemo) {
     return {
@@ -486,13 +491,20 @@ export async function getHistory(
     .where(eq(tradingPositions.status, 'closed'))
     .orderBy(desc(tradingPositions.closedAt));
 
+  // Per-connection "count trades since" cutoffs — a closed position that opened
+  // before its connection's cutoff is an earlier phase the trader excluded, so it
+  // never counts toward History or its summary.
+  const cutoffs = await connectionCutoffs();
   const visible = joined.filter(
     (r) =>
       scopeIds.has(r.pos.userId) && // only the viewer's team
       // Drop the demo account: it's a sandbox, so its positions never surface as
       // "demo"-tagged rows in a real trader's history.
       r.username !== DEMO_USERNAME &&
-      canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading'),
+      canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading') &&
+      !beforeCutoff(cutoffs, r.pos.connectionId, (r.pos.openedAt ?? r.pos.firstSeenAt).getTime()) &&
+      // Drop sub-floor broker fills (1-unit connection tests) from History too.
+      !isSmallTrade(r.pos.units, settings.minTradeUnits),
   );
   const rows = visible.map((r) => r.pos);
   const ownerOf = new Map(visible.map((r) => [r.pos.id, r.username]));

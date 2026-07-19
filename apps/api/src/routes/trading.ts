@@ -950,20 +950,25 @@ const addConnSchema = z.object({
   label: z.string().trim().min(1).max(80),
   creds: credsSchema,
 });
+// A "count trades since" cutoff, in ms. null clears it (count everything);
+// a timestamp sets the trader's real start on that broker account.
+const historyStartAt = z.number().int().nonnegative().nullable().optional();
 const editConnSchema = z
   .object({
     label: z.string().trim().min(1).max(80).optional(),
     active: z.boolean().optional(),
     creds: credsSchema.optional(),
+    historyStartAt,
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
-// Admin override edits a teammate's connection: label and active only, never
-// credentials.
+// Admin override edits a teammate's connection: label, active, and the
+// "count trades since" cutoff — never credentials.
 const adminConnSchema = z
   .object({
     label: z.string().trim().min(1).max(80).optional(),
     active: z.boolean().optional(),
+    historyStartAt,
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
@@ -1017,6 +1022,9 @@ const deskSettingsSchema = z
     breakEvenPct: z.number().finite().min(0).max(100).optional(),
     breakEvenMode: z.enum(['percent', 'dollars', 'pips']).optional(),
     breakEvenAmount: z.number().finite().min(0).optional(),
+    // The desk's "test trade" floor: broker fills under this many units drop out
+    // of the Trade Log / History. 0 turns it off.
+    minTradeUnits: z.number().finite().min(0).max(1_000_000_000).optional(),
     // The full per-instrument override list; when present it replaces the stored
     // set. Capped so one request can't insert an unbounded number of rows.
     breakEvenOverrides: z.array(beOverrideSchema).max(200).optional(),

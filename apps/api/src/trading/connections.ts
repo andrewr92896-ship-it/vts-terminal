@@ -37,6 +37,9 @@ export interface BrokerConnection {
   lastStatus: ConnStatus;
   lastError: string | null;
   lastCheckedAt: number | null;
+  // "Count trades since" cutoff (ms). Trades that opened before this are dropped
+  // from the Trade Log / History / backfill for this connection. Null = all.
+  historyStartAt: number | null;
   createdAt: number;
 }
 
@@ -52,6 +55,9 @@ export interface DecryptedConnection {
 export interface OwnedConnection extends DecryptedConnection {
   ownerId: string;
   owner: string; // owner's username, shown on each position
+  // "Count trades since" cutoff (ms) for this connection; null = count all. Read
+  // by the closed-trade backfill so pre-cutoff trades are never re-imported.
+  historyStartAt: number | null;
 }
 
 export function isBrokerKind(v: unknown): v is BrokerConnectionKind {
@@ -106,6 +112,7 @@ function toPublic(row: BrokerConnectionRow): BrokerConnection {
     lastStatus: row.lastStatus,
     lastError: row.lastError,
     lastCheckedAt: row.lastCheckedAt ? row.lastCheckedAt.getTime() : null,
+    historyStartAt: row.historyStartAt ? row.historyStartAt.getTime() : null,
     createdAt: row.createdAt.getTime(),
   };
 }
@@ -142,7 +149,7 @@ export async function listAllConnections(): Promise<OwnedBrokerConnection[]> {
 // to label and active on purpose — an admin never rotates a teammate's secrets.
 export async function adminUpdateConnection(
   id: string,
-  input: { label?: string; active?: boolean },
+  input: { label?: string; active?: boolean; historyStartAt?: number | null },
 ): Promise<void> {
   const existing = (
     await db.select({ id: brokerConnections.id }).from(brokerConnections).where(eq(brokerConnections.id, id)).limit(1)
@@ -156,6 +163,10 @@ export async function adminUpdateConnection(
     patch.label = l.slice(0, 80);
   }
   if (input.active !== undefined) patch.active = input.active;
+  // Admins can set a teammate's "count trades since" cutoff (never their secrets).
+  if (input.historyStartAt !== undefined) {
+    patch.historyStartAt = input.historyStartAt == null ? null : new Date(input.historyStartAt);
+  }
   await db.update(brokerConnections).set(patch).where(eq(brokerConnections.id, id));
 }
 
@@ -213,6 +224,7 @@ export async function getAllActiveDecrypted(scopeIds?: Set<string>): Promise<Own
         creds: JSON.parse(decryptSecret(r.conn.secretEnc)),
         ownerId: r.conn.userId,
         owner: r.username,
+        historyStartAt: r.conn.historyStartAt ? r.conn.historyStartAt.getTime() : null,
       });
     } catch {
       // Undecryptable (e.g. key rotated), skip; status stays as last recorded.
@@ -249,7 +261,7 @@ export async function addConnection(
 export async function updateConnection(
   userId: string,
   id: string,
-  input: { label?: string; active?: boolean; creds?: Record<string, unknown> },
+  input: { label?: string; active?: boolean; creds?: Record<string, unknown>; historyStartAt?: number | null },
 ): Promise<void> {
   const row = (
     await db
@@ -267,6 +279,11 @@ export async function updateConnection(
     patch.label = l.slice(0, 80);
   }
   if (input.active !== undefined) patch.active = input.active;
+  // "Count trades since": null clears it (count everything again); a ms instant
+  // sets the cutoff. Trades that opened before it drop out of the desk stats.
+  if (input.historyStartAt !== undefined) {
+    patch.historyStartAt = input.historyStartAt == null ? null : new Date(input.historyStartAt);
+  }
   if (input.creds !== undefined) {
     const creds = normalizeCreds(row.broker, input.creds);
     patch.secretEnc = encryptSecret(JSON.stringify(creds));
@@ -298,6 +315,32 @@ export async function recordConnectionStatus(id: string, ok: boolean, error: str
       updatedAt: new Date(),
     })
     .where(eq(brokerConnections.id, id));
+}
+
+// Map of connectionId → "count trades since" cutoff (ms) for every connection
+// that has one set. The Trade Log and History load this once and drop any
+// broker position whose open time predates its connection's cutoff, so a
+// trader's earlier learning/practice phase never counts toward their stats.
+export async function connectionCutoffs(): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ id: brokerConnections.id, start: brokerConnections.historyStartAt })
+    .from(brokerConnections);
+  const out = new Map<string, number>();
+  for (const r of rows) if (r.start) out.set(r.id, r.start.getTime());
+  return out;
+}
+
+// Whether a broker position falls before its connection's cutoff (and so should
+// be hidden from the desk stats). A position with no connection, or whose
+// connection has no cutoff, is always kept.
+export function beforeCutoff(
+  cutoffs: Map<string, number>,
+  connectionId: string | null,
+  openedAtMs: number,
+): boolean {
+  if (!connectionId) return false;
+  const cutoff = cutoffs.get(connectionId);
+  return cutoff != null && openedAtMs < cutoff;
 }
 
 // Has this user set up any connection at all?

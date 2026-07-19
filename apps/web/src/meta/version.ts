@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.20';
+export const APP_VERSION = 'Beta V 5.21';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.21',
+    date: 'July 19, 2026',
+    notes: [
+      'Broker connections now have a “Count trades since” date. Set it on a connection (Edit) to mark your real start on that account — an earlier learning/practice phase that you funded, traded, and withdrew no longer pollutes your Trade Log and History. Trades opened before the date are left out of every stat (win rate, profit factor, realized P/L, pips) and are never re-imported from the broker. Admins can set it per trader from Team connections. Leave it blank to count everything, exactly as before.',
+      'Trade Desk Settings: new “Ignore test trades” floor. Broker fills under the units you set (e.g. the 1-unit orders you place to check a connection) drop out of the Trade Log and History entirely — stats and list. Hand-logged trades always count. Set 0 to keep everything.',
+      'Trade Log: new “⚖ Scaled PF” toggle. Profit factor with every trade scaled to the same lot size (per-unit P/L), so a couple of outsized positions can’t prop up — or sink — the ratio. Both the raw and scaled readings show at a glance, and the scaled figure is in the CSV export.',
+    ],
+  },
   {
     version: 'Beta V 5.20',
     date: 'July 19, 2026',

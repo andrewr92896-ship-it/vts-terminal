@@ -266,6 +266,12 @@ export const brokerConnections = sqliteTable('broker_connections', {
     .default('unknown'),
   lastError: text('last_error'),
   lastCheckedAt: integer('last_checked_at', { mode: 'timestamp_ms' }),
+  // "Count trades since": only trades that opened on/after this instant are
+  // counted in the Trade Log, History, and the closed-trade backfill for this
+  // connection. Lets a trader mark their real start on a broker account so an
+  // earlier learning/practice phase (funded, traded, withdrawn) never pollutes
+  // their stats. Null = count everything (the default, unchanged behaviour).
+  historyStartAt: integer('history_start_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -341,6 +347,10 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
   breakEvenPct: real('break_even_pct').notNull().default(0),
   breakEvenMode: text('break_even_mode').notNull().default('percent'),
   breakEvenAmount: real('break_even_amount').notNull().default(0),
+  // Ignore broker fills smaller than this many units in the Trade Log / History
+  // (stats and list) — the desk's "these are test trades" floor, so 1-unit
+  // connection tests don't skew win rate, profit factor, or pips. 0 = keep all.
+  minTradeUnits: real('min_trade_units').notNull().default(0),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;

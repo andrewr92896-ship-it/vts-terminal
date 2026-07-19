@@ -120,22 +120,35 @@ type ProfitFactor = {
   profitFactor: number | null;
   grossProfitPips: number;
   grossLossPips: number;
+  // "Scaled" gross P/L: every trade normalized to the same lot size by taking its
+  // per-unit P/L (realized P/L ÷ size), so a 1-unit test and a 20k-unit position
+  // weigh equally. Because profit factor is a ratio, the common lot size cancels
+  // out — scaled PF is just the profit factor of per-unit P/L. Trades with no
+  // size can't be scaled and are skipped from these two sums only.
+  scaledProfit: number;
+  scaledLoss: number;
 };
 function profitFactorStats(trades: TradeRecord[], config: BreakEvenConfig): ProfitFactor {
   let grossProfit = 0;
   let grossLoss = 0;
   let grossProfitPips = 0;
   let grossLossPips = 0;
+  let scaledProfit = 0;
+  let scaledLoss = 0;
   for (const t of trades) {
     if (t.status !== 'closed' || t.realizedPl == null) continue;
     const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
     const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
+    // Per-unit P/L normalizes trade size; null when there's no size to divide by.
+    const perUnit = t.units ? t.realizedPl / Math.abs(t.units) : null;
     if (outcome === 'win') {
       grossProfit += Math.max(0, t.realizedPl);
       if (pips != null) grossProfitPips += Math.max(0, pips);
+      if (perUnit != null) scaledProfit += Math.max(0, perUnit);
     } else if (outcome === 'loss') {
       grossLoss += Math.abs(t.realizedPl);
       if (pips != null) grossLossPips += Math.max(0, -pips);
+      if (perUnit != null) scaledLoss += Math.max(0, -perUnit);
     }
   }
   // null = undefined: no losing trades to divide by (or nothing decided at all).
@@ -146,6 +159,8 @@ function profitFactorStats(trades: TradeRecord[], config: BreakEvenConfig): Prof
     profitFactor,
     grossProfitPips: Number(grossProfitPips.toFixed(1)),
     grossLossPips: Number(grossLossPips.toFixed(1)),
+    scaledProfit,
+    scaledLoss,
   };
 }
 
@@ -155,6 +170,14 @@ function profitFactorText(pf: ProfitFactor): string {
   if (pf.grossProfit === 0 && pf.grossLoss === 0) return '—';
   if (pf.grossLoss === 0) return '∞';
   return (pf.grossProfit / pf.grossLoss).toFixed(2);
+}
+
+// The same reading, but with every trade scaled to one common lot size — so
+// outsized positions don't dominate and each trade's quality counts equally.
+function scaledProfitFactorText(pf: ProfitFactor): string {
+  if (pf.scaledProfit === 0 && pf.scaledLoss === 0) return '—';
+  if (pf.scaledLoss === 0) return '∞';
+  return (pf.scaledProfit / pf.scaledLoss).toFixed(2);
 }
 
 // ---- CSV export ----
@@ -203,6 +226,7 @@ function buildExportCsv(opts: {
   row('Gross loss', money(-pf.grossLoss));
   row('Gross loss (pips)', -pf.grossLossPips);
   row('Profit factor', pf.grossProfit === 0 && pf.grossLoss === 0 ? '' : pf.grossLoss === 0 ? 'Infinite (no losses)' : (pf.grossProfit / pf.grossLoss).toFixed(2));
+  row('Profit factor (scaled to one lot)', pf.scaledProfit === 0 && pf.scaledLoss === 0 ? '' : pf.scaledLoss === 0 ? 'Infinite (no losses)' : (pf.scaledProfit / pf.scaledLoss).toFixed(2));
   row('Realized P/L', s.totalRealizedPl == null ? '' : money(s.totalRealizedPl));
   row('Net pips', netPips(trades));
   row('Avg slippage', s.avgSlippage == null ? '' : String(s.avgSlippage));
@@ -264,6 +288,9 @@ export function TradeLog() {
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
   const [layout, setLayout] = useState<Layout>('deck');
+  // Show the Profit Factor card scaled to one lot size (per-unit P/L) instead of
+  // raw dollars, so a few outsized trades don't dominate the ratio.
+  const [scaledPf, setScaledPf] = useState(false);
   const [adding, setAdding] = useState(false);
   const [exporting, setExporting] = useState(false);
   // Per-trader filter: '' = the whole desk; otherwise an ownerId.
@@ -377,7 +404,13 @@ export function TradeLog() {
       sub: 'losing trades',
       pips: showPips ? `(${fmtPips(-pf.grossLossPips)})` : undefined,
     },
-    { label: 'Profit Factor', val: profitFactorText(pf), sub: 'gross profit ÷ loss' },
+    {
+      label: 'Profit Factor',
+      val: scaledPf ? scaledProfitFactorText(pf) : profitFactorText(pf),
+      sub: scaledPf ? 'same lot size · gross ÷ loss' : 'gross profit ÷ loss',
+      // Show the counterpart reading beneath, so both are always one glance away.
+      pips: scaledPf ? `raw ${profitFactorText(pf)}` : `scaled ${scaledProfitFactorText(pf)}`,
+    },
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
   ];
 
@@ -402,6 +435,13 @@ export function TradeLog() {
               </button>
             ))}
           </div>
+          <button
+            onClick={() => setScaledPf((v) => !v)}
+            title="Profit factor with every trade scaled to the same lot size, so a few big positions don't dominate the ratio"
+            style={scaledPf ? { ...ghostBtn, borderColor: GOLD, color: GOLD } : ghostBtn}
+          >
+            <EditableText id="tradelog.scaled_pf">⚖ Scaled PF</EditableText>
+          </button>
           {canSeeBalances && (
             <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>
               {hideMoney ? 'Show $' : 'Hide $'}
@@ -439,6 +479,14 @@ export function TradeLog() {
       <div style={{ fontSize: 11, color: FAINT, marginBottom: 8, letterSpacing: '0.3px' }}>
         {selectedTraderName ? `Individual stats — @${selectedTraderName}` : 'Whole desk — combined stats'}
       </div>
+      {data.minTradeUnits > 0 && (
+        <div
+          style={{ fontSize: 10.5, color: FAINT, marginBottom: 8 }}
+          title={`Broker fills under ${data.minTradeUnits.toLocaleString('en-US')} units are excluded`}
+        >
+          <EditableText id="tradelog.min_units_note">Small broker test trades are excluded from these stats.</EditableText>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16 }}>
         {kpis.map((k) => (
           <div key={k.label} style={card}>

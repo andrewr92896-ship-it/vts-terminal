@@ -1,0 +1,1 @@
+ALTER TABLE `trading_desk_settings` ADD `min_trade_units` real DEFAULT 0 NOT NULL;
