@@ -17,6 +17,7 @@ import {
   removeAnnouncement,
 } from '../chat/announcements.js';
 import { latestSuggestionAt, latestBugReportAt, listSuggestions, listAllBugReports } from '../feedback/service.js';
+import { latestSupportRequestAt, listSupportRequests } from '../support/service.js';
 
 const messageSchema = z.object({ body: z.string().trim().min(1).max(1000) });
 const announcementSchema = z.object({
@@ -85,7 +86,7 @@ export async function chatRoutes(app: FastifyInstance) {
     const elig = teamChatEligibility(u);
     type Item = {
       id: string;
-      kind: 'chat' | 'suggestion' | 'bug';
+      kind: 'chat' | 'suggestion' | 'bug' | 'support';
       title: string;
       body: string;
       author: string;
@@ -103,12 +104,15 @@ export async function chatRoutes(app: FastifyInstance) {
     }
 
     if (admin) {
-      const [sugg, bugs] = await Promise.all([listSuggestions(), listAllBugReports()]);
+      const [sugg, bugs, support] = await Promise.all([listSuggestions(), listAllBugReports(), listSupportRequests()]);
       for (const s of sugg.slice(0, 15)) {
         items.push({ id: `suggestion:${s.id}`, kind: 'suggestion', title: 'New suggestion', body: s.body, author: s.author, avatar: null, createdAt: s.createdAt });
       }
       for (const b of bugs.slice(0, 15)) {
         items.push({ id: `bug:${b.id}`, kind: 'bug', title: 'Bug report', body: b.summary, author: b.author, avatar: null, createdAt: b.createdAt });
+      }
+      for (const r of support.slice(0, 15)) {
+        items.push({ id: `support:${r.id}`, kind: 'support', title: 'Support request', body: r.summary, author: r.author, avatar: null, createdAt: r.createdAt });
       }
     }
 
@@ -123,13 +127,14 @@ export async function chatRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
     const elig = teamChatEligibility(u);
-    const [chat, announcements, suggestions, bugs] = await Promise.all([
+    const [chat, announcements, suggestions, bugs, support] = await Promise.all([
       elig.eligible ? latestTeamMessageAt(u.teamId) : Promise.resolve(0),
       latestAnnouncementAt(),
       admin ? latestSuggestionAt() : Promise.resolve(0),
       admin ? latestBugReportAt() : Promise.resolve(0),
+      admin ? latestSupportRequestAt() : Promise.resolve(0),
     ]);
-    return { chat, announcements, suggestions, bugs };
+    return { chat, announcements, suggestions, bugs, support };
   });
 
   app.get('/api/announcements', auth, async (request) => {

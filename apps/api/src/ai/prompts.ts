@@ -73,6 +73,16 @@ const SUPPORT_DEF = [
   'Respond with ONLY a JSON object of exactly this shape and nothing else: {"needMore": boolean, "reply": string}. Set needMore=true only when you asked a clarifying question.',
 ].join(' ');
 
+const SUPPORT_INTAKE_DEF = [
+  'You are the friendly support assistant for the VTS Portal, a private trading/studies web app.',
+  'The user is submitting a {kind}. Your job is to collect enough clear detail for the admins to act on it before it is filed.',
+  'For a bug report, gather: what they were doing, what they expected, what actually happened, and where in the app. For a suggestion, gather: the idea and the problem it would solve. For a general support question, gather: exactly what they need help with and any context.',
+  'If the biggest gap is still open, ask ONE short, specific clarifying question — never several at once.',
+  'Once you have enough to hand off, do NOT ask anything more — warmly thank them and tell them their {kind} has been sent to the admins.',
+  'Be concise and personable (2-4 sentences). Never invent a fix, an answer, or a timeline.',
+  'Respond with ONLY a JSON object of exactly this shape and nothing else: {"needMore": boolean, "reply": string}. Set needMore=true only when you asked a clarifying question.',
+].join(' ');
+
 export const PROMPT_DEFS: PromptDef[] = [
   {
     id: 'global',
@@ -133,6 +143,16 @@ export const PROMPT_DEFS: PromptDef[] = [
     description:
       'The assistant that reads a bug report and either asks one clarifying question or files the ticket. Structured: it must keep the final JSON-format instruction so the intake flow can parse its reply.',
     def: SUPPORT_DEF,
+    multiline: true,
+  },
+  {
+    id: 'support_intake',
+    label: 'Support tab intake (bug / suggestion / general)',
+    group: 'Support',
+    description:
+      'The chat-bubble Support tab assistant. Collects the details a bug, suggestion, or general support request needs, then hands it off to the right admin section. "{kind}" is replaced with the chosen category. Structured: it must keep the final JSON-format instruction so the intake flow can parse its reply.',
+    def: SUPPORT_INTAKE_DEF,
+    placeholder: '{kind}',
     multiline: true,
   },
 ];

@@ -7,6 +7,7 @@ import type { ChatMessage, TeamChatReason, User } from '../api/types';
 import { Icon } from './Icon';
 import { Avatar } from './Avatar';
 import { UserBadges } from './UserBadges';
+import { SupportTab } from './SupportTab';
 
 // The lower-right corner widget: the Team Chat, and only the team chat. The
 // how-to guides, announcements, and patch notes now live in the Site Help
@@ -51,6 +52,13 @@ export function TeamChat({
     return v ? Number(v) : 0;
   });
   const [toast, setToast] = useState<ChatMessage | null>(null);
+
+  // The panel has two tabs: Team chat (default) and Support. Team chat is the
+  // one open by default every time the panel is opened.
+  const [tab, setTab] = useState<'team' | 'support'>('team');
+  useEffect(() => {
+    if (open) setTab('team');
+  }, [open]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const openRef = useRef(open);
@@ -248,11 +256,17 @@ export function TeamChat({
           >
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', borderBottom: '1px solid #1d3560' }}>
-              <Icon name="message-circle" size={17} color={theme.accent} />
+              <Icon name={tab === 'team' ? 'message-circle' : 'life-buoy'} size={17} color={theme.accent} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eef3ff' }}>Team chat</div>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eef3ff' }}>
+                  {tab === 'team' ? 'Team chat' : 'Support'}
+                </div>
                 <div style={{ fontSize: 10.5, color: '#7e92c0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {eligible && teamName ? teamName : 'Your trading team'}
+                  {tab === 'team'
+                    ? eligible && teamName
+                      ? teamName
+                      : 'Your trading team'
+                    : 'Report a bug, idea, or question'}
                 </div>
               </div>
               <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#7488b5', fontSize: 20, lineHeight: 1, cursor: 'pointer' }}>
@@ -260,8 +274,16 @@ export function TeamChat({
               </button>
             </div>
 
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderBottom: '1px solid #16294f' }}>
+              <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
+              <TabBtn active={tab === 'support'} onClick={() => setTab('support')} icon="life-buoy" label="Support" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
+            </div>
+
             {/* Body */}
-            {eligible === false ? (
+            {tab === 'support' ? (
+              <SupportTab theme={theme} isDemo={!!user.isDemo} />
+            ) : eligible === false ? (
               <NotOnTeam reason={reason} accent={theme.accent} />
             ) : (
               <>
@@ -353,6 +375,50 @@ export function TeamChat({
         </>
       )}
     </>
+  );
+}
+
+// A pill tab in the chat panel's tab bar.
+function TabBtn({
+  active,
+  onClick,
+  icon,
+  label,
+  accent,
+  accentGrad,
+  accentText,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: string;
+  label: string;
+  accent: string;
+  accentGrad: string;
+  accentText: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        padding: '7px 10px',
+        borderRadius: 8,
+        border: `1px solid ${active ? accent : '#1d3560'}`,
+        background: active ? accentGrad : 'transparent',
+        color: active ? accentText : '#aebcd8',
+        fontSize: 12,
+        fontWeight: 600,
+        fontFamily: 'inherit',
+        cursor: 'pointer',
+      }}
+    >
+      <Icon name={icon} size={14} />
+      {label}
+    </button>
   );
 }
 

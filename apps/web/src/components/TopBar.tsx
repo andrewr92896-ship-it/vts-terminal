@@ -47,6 +47,7 @@ const NOTIF_ICON: Record<NotificationItem['kind'], string> = {
   chat: 'message-circle',
   suggestion: 'lightbulb',
   bug: 'bug',
+  support: 'life-buoy',
 };
 
 function brokerDotColor(status: BrokerStatus['status']): string {

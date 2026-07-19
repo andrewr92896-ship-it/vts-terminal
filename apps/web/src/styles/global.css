@@ -121,6 +121,18 @@ a {
     opacity: 1;
   }
 }
+/* Solid blinking dot for new-notification markers on the Admin nav (workspace
+   row + the specific administration tab). */
+@keyframes vtsBlink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0.15;
+  }
+}
 @keyframes slideIn {
   from {
     transform: translateX(100%);

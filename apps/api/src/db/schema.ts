@@ -646,6 +646,42 @@ export const bugReportMessages = sqliteTable('bug_report_messages', {
 });
 export type BugReportMessageRow = typeof bugReportMessages.$inferSelect;
 
+// ---- General support requests (from the chat-bubble Support tab) ----
+// The Support tab runs an AI intake that first collects the details a user's
+// request needs, then routes it to the right admin section: a bug goes to Bug
+// Reports (bugReports), a suggestion goes to Suggestions (suggestions), and a
+// general support question lands here and shows in the admin Support section.
+// `status`: 'submitted' once filed, 'resolved' when an admin closes it out.
+export const SUPPORT_REQUEST_STATUSES = ['submitted', 'resolved'] as const;
+export type SupportRequestStatus = (typeof SUPPORT_REQUEST_STATUSES)[number];
+
+export const supportRequests = sqliteTable('support_requests', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  author: text('author').notNull(),
+  teamId: text('team_id'),
+  summary: text('summary').notNull(),
+  status: text('status').notNull().default('submitted'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type SupportRequestRow = typeof supportRequests.$inferSelect;
+
+// The intake conversation for a general support request: alternating user and
+// assistant ('ai') turns, oldest-first by createdAt.
+export const supportRequestMessages = sqliteTable('support_request_messages', {
+  id: text('id').primaryKey(),
+  requestId: text('request_id')
+    .notNull()
+    .references(() => supportRequests.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(), // 'user' | 'ai'
+  body: text('body').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type SupportRequestMessageRow = typeof supportRequestMessages.$inferSelect;
+
 // ---- AI usage (per-user guardrails) ----
 // One row per Claude call, used to enforce a monthly cap. `kind` records which
 // feature made the call (ask, analyze, news_brief, todo_command, ...).

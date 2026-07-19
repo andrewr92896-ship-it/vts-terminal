@@ -39,6 +39,7 @@ import { AdminEarlyAccess } from '../workspaces/admin/AdminEarlyAccess';
 import { AdminViewAs } from '../workspaces/admin/AdminViewAs';
 import { AdminSuggestions } from '../workspaces/admin/AdminSuggestions';
 import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
+import { AdminSupport } from '../workspaces/admin/AdminSupport';
 import {
   HelpHowTo,
   HelpAnnouncements,
@@ -155,6 +156,15 @@ function renderScreen(
   }
 }
 
+// Which admin section each pollable activity source maps to, for the sidebar's
+// new-activity dots. Keys are section screen keys; values index the hubActivity
+// response (see the admin dots logic in Portal).
+const SECTION_ACTIVITY: Record<string, 'suggestions' | 'bugs' | 'support'> = {
+  ad_suggestions: 'suggestions',
+  ad_bugs: 'bugs',
+  ad_support: 'support',
+};
+
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
   if (allowed.includes('trading')) return 'trading';
   return allowed[0] ?? 'studies';
@@ -224,6 +234,84 @@ export function Portal() {
   const studyTint = workspace === 'studies' ? getStudyTint() : null;
   const theme = studyTint ? studyThemeForLevel(studyTint.hue, studyTint.sat) : THEMES[workspace];
   const contentTint: string | null = studyTint ? studyBgTint(studyTint.hue, studyTint.sat) : null;
+
+  // Admin new-activity dots. We poll the per-source activity timestamps and
+  // compare each against a locally stored last-seen so a solid red blinking dot
+  // shows next to the Admin workspace and the specific administration tab
+  // (Suggestions / Bug Reports / Support) until the admin opens that section.
+  const isAdminUser = allowed.includes('admin');
+  const [adminActivity, setAdminActivity] = useState<{ suggestions: number; bugs: number; support: number } | null>(
+    null,
+  );
+  const [adminSeen, setAdminSeen] = useState<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    for (const key of Object.keys(SECTION_ACTIVITY)) {
+      try {
+        const v = localStorage.getItem(`vts-admin-seen-${key}`);
+        if (v) out[key] = Number(v);
+      } catch {
+        /* storage may be blocked */
+      }
+    }
+    return out;
+  });
+
+  const markAdminSectionSeen = useCallback((key: string) => {
+    setAdminSeen((prev) => {
+      const at = Date.now();
+      if ((prev[key] ?? 0) >= at) return prev;
+      try {
+        localStorage.setItem(`vts-admin-seen-${key}`, String(at));
+      } catch {
+        /* storage may be blocked */
+      }
+      return { ...prev, [key]: at };
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!isAdminUser) {
+      setAdminActivity(null);
+      return;
+    }
+    let alive = true;
+    const tick = () =>
+      api
+        .hubActivity()
+        .then((a) => alive && setAdminActivity({ suggestions: a.suggestions, bugs: a.bugs, support: a.support }))
+        .catch(() => {
+          /* transient — keep last values */
+        });
+    void tick();
+    const id = window.setInterval(tick, 20000);
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+    };
+  }, [isAdminUser]);
+
+  const sectionDots = useMemo(() => {
+    const dots = new Set<string>();
+    if (adminActivity) {
+      for (const [key, src] of Object.entries(SECTION_ACTIVITY)) {
+        if (adminActivity[src] > (adminSeen[key] ?? 0)) dots.add(key);
+      }
+    }
+    return dots;
+  }, [adminActivity, adminSeen]);
+
+  const workspaceDots = useMemo(() => {
+    const dots = new Set<WorkspaceKey>();
+    if (sectionDots.size > 0) dots.add('admin');
+    return dots;
+  }, [sectionDots]);
+
+  // Viewing an administration section clears its dot even as fresh activity
+  // arrives while it stays open.
+  useEffect(() => {
+    if (screen in SECTION_ACTIVITY) markAdminSectionSeen(screen);
+  }, [screen, adminActivity, markAdminSectionSeen]);
+
   const accent = accentFor(workspace);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -265,9 +353,10 @@ export function Portal() {
     (scr: string) => {
       setScreen(scr);
       setNavOpen(false);
+      if (scr in SECTION_ACTIVITY) markAdminSectionSeen(scr);
       resetScroll();
     },
-    [resetScroll],
+    [resetScroll, markAdminSectionSeen],
   );
 
   // Demo mode: a one-click, read-only showcase with a guided tour.
@@ -341,6 +430,8 @@ export function Portal() {
         return <AdminSuggestions theme={theme} />;
       case 'ad_bugs':
         return <AdminBugReports theme={theme} />;
+      case 'ad_support':
+        return <AdminSupport theme={theme} />;
       default:
         return null;
     }
@@ -353,6 +444,8 @@ export function Portal() {
       workspaces={allowed}
       canFunded={canFunded}
       collapsed={isPhone ? false : collapsed}
+      workspaceDots={workspaceDots}
+      sectionDots={sectionDots}
       onToggle={isPhone ? () => setNavOpen(false) : toggleCollapsed}
       onSelectWorkspace={selectWorkspace}
       onSelectScreen={selectScreen}

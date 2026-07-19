@@ -12,6 +12,11 @@ interface SidebarProps {
   // Whether the private Funded (prop-challenge) section is revealed.
   canFunded: boolean;
   collapsed: boolean;
+  // Nav rows that should show a blinking red "new notification" dot: workspace
+  // keys (e.g. the Admin workspace) and section keys (e.g. ad_bugs) with unseen
+  // activity. Empty/absent means no dots.
+  workspaceDots?: Set<WorkspaceKey>;
+  sectionDots?: Set<string>;
   onToggle: () => void;
   onSelectWorkspace: (ws: WorkspaceKey) => void;
   onSelectScreen: (screen: string) => void;
@@ -28,8 +33,18 @@ const navLabel: CSSProperties = {
 };
 
 export function Sidebar(props: SidebarProps) {
-  const { workspace, screen, workspaces, canFunded, collapsed, onToggle, onSelectWorkspace, onSelectScreen } =
-    props;
+  const {
+    workspace,
+    screen,
+    workspaces,
+    canFunded,
+    collapsed,
+    workspaceDots,
+    sectionDots,
+    onToggle,
+    onSelectWorkspace,
+    onSelectScreen,
+  } = props;
 
   const current = navFor(workspace);
   const accent = current?.accent ?? C.gold;
@@ -110,6 +125,7 @@ export function Sidebar(props: SidebarProps) {
             icon={w.icon}
             label={w.label}
             accent={w.accent}
+            dot={workspaceDots?.has(w.key)}
             onClick={() => onSelectWorkspace(w.key)}
           />
         ))}
@@ -133,6 +149,7 @@ export function Sidebar(props: SidebarProps) {
               label={s.label}
               count={s.count}
               accent={accent}
+              dot={sectionDots?.has(s.key)}
               onClick={() => onSelectScreen(s.key)}
             />
           ))}
@@ -209,6 +226,7 @@ function NavRow({
   count,
   accent,
   collapsed,
+  dot,
   onClick,
 }: {
   kind: 'ws' | 'sec';
@@ -218,6 +236,7 @@ function NavRow({
   count?: number;
   accent: string;
   collapsed: boolean;
+  dot?: boolean;
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -276,12 +295,16 @@ function NavRow({
             }}
           />
         )}
+        {/* When the rail is collapsed the label is hidden, so the new-activity
+            dot rides on the icon instead of sitting at the row's end. */}
+        {collapsed && dot && <BlinkDot corner />}
       </span>
       {!collapsed && (
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {label}
         </span>
       )}
+      {!collapsed && dot && <BlinkDot />}
       {!collapsed && count != null && (
         <span style={{ fontFamily: C.mono, fontSize: 11, color: C.faint }}>{count}</span>
       )}
@@ -309,5 +332,28 @@ function NavRow({
         </span>
       )}
     </button>
+  );
+}
+
+// A solid red blinking dot marking new, unseen admin activity. `corner` pins it
+// to the top-right of the icon for the collapsed rail; otherwise it sits inline
+// at the end of the row.
+function BlinkDot({ corner = false }: { corner?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        flex: 'none',
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: C.red,
+        boxShadow: `0 0 6px ${C.red}`,
+        animation: 'vtsBlink 1s steps(1, end) infinite',
+        ...(corner
+          ? { position: 'absolute', top: -4, right: -5, border: '1.5px solid ' + C.side }
+          : { marginLeft: 6 }),
+      }}
+    />
   );
 }

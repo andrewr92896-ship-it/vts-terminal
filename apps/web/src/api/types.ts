@@ -1032,7 +1032,7 @@ export interface TeamChatFeed {
 
 // One in-portal notification (shown in the top-bar bell). Chat notifications
 // carry the teammate's avatar; suggestion/bug notifications are admin-only.
-export type NotificationKind = 'chat' | 'suggestion' | 'bug';
+export type NotificationKind = 'chat' | 'suggestion' | 'bug' | 'support';
 export interface NotificationItem {
   id: string;
   kind: NotificationKind;
@@ -1071,6 +1071,22 @@ export interface BugReport {
   author: string;
   summary: string;
   status: string; // 'open' | 'submitted' | 'resolved'
+  createdAt: number;
+  updatedAt: number;
+  messages: BugMessage[];
+}
+
+// ---- Support tab (chat bubble) — bug / suggestion / general support intake ----
+export type SupportKind = 'bug' | 'suggestion' | 'support';
+
+// A general support request (kind 'support'), shown in the admin Support
+// section with its AI intake thread. Bugs and suggestions from the Support tab
+// are routed to the Bug Reports and Suggestions sections respectively.
+export interface SupportRequest {
+  id: string;
+  author: string;
+  summary: string;
+  status: string; // 'submitted' | 'resolved'
   createdAt: number;
   updatedAt: number;
   messages: BugMessage[];
