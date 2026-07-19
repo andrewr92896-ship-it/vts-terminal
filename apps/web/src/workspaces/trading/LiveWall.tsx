@@ -7,6 +7,7 @@ import { BrokerConnections } from './BrokerConnections';
 import { DeskSettingsModal } from './DeskSettingsModal';
 import { configFrom } from './outcome';
 import { TradeCard, etTime } from './TradeCard';
+import { EditableText } from '../../copy/SiteCopy';
 import type { LiveWall as LiveWallData } from '../../api/types';
 
 // Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
@@ -81,15 +82,15 @@ export function LiveWall() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Live Wall</h2>
+            <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="live.title">Live Wall</EditableText></h2>
             {view === 'positions' && data && (
               <span style={data.source === 'sample' ? sampledPill : livePill}>{data.source === 'sample' ? 'Sample data' : 'Live'}</span>
             )}
           </div>
           {/* Master (charts board) ⇄ Positions view toggle */}
           <div style={segWrap}>
-            <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>Master</button>
-            <button onClick={() => setView('positions')} style={segBtn(view === 'positions')}>Positions</button>
+            <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}><EditableText id="live.view_master">Master</EditableText></button>
+            <button onClick={() => setView('positions')} style={segBtn(view === 'positions')}><EditableText id="live.view_positions">Positions</EditableText></button>
           </div>
         </div>
         {view === 'positions' && data && (
@@ -103,11 +104,11 @@ export function LiveWall() {
               </button>
             )}
             {!readOnly && (
-              <button onClick={() => setConnOpen(true)} style={ghostBtn}>Connections</button>
+              <button onClick={() => setConnOpen(true)} style={ghostBtn}><EditableText id="live.connections">Connections</EditableText></button>
             )}
             <button onClick={() => setSettingsOpen(true)} style={ghostBtn} title="Trade desk settings">⚙ Settings</button>
             <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
-              {refreshing ? 'Refreshing…' : 'Refresh'}
+              {refreshing ? <EditableText id="live.refreshing">Refreshing…</EditableText> : <EditableText id="live.refresh">Refresh</EditableText>}
             </button>
           </div>
         )}
@@ -120,7 +121,7 @@ export function LiveWall() {
           open, so the preset you have open and any unsaved edits survive
           switching to Positions and back. */}
       <div style={{ display: view === 'charts' ? 'block' : 'none' }}>
-        <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading charts…</div>}>
+        <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="live.loading_charts">Loading charts…</EditableText></div>}>
           <ChartBoard />
         </Suspense>
       </div>
@@ -129,7 +130,7 @@ export function LiveWall() {
         (loadError ? (
           <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>
         ) : !data ? (
-          <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>Loading the wall…</div>
+          <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="live.loading">Loading the wall…</EditableText></div>
         ) : (
           <>
             {staleError && (
@@ -143,7 +144,7 @@ export function LiveWall() {
             {/* Trade cards */}
             {data.trades.length === 0 ? (
               <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-                No open positions right now. New fills appear here automatically.
+                <EditableText id="live.empty">No open positions right now. New fills appear here automatically.</EditableText>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>

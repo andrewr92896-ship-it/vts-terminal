@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import type { EarlyAccessRequest } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { Badge, SectionHeader, ghostDangerBtn, dangerSolidBtn, ghostBtn, msgStyle, panel, panelLabel } from './adminUi';
+import { EditableText } from '../../copy/SiteCopy';
 
 function fmtDate(ms: number): string {
   try {
@@ -56,7 +57,7 @@ export function AdminEarlyAccess({ theme }: { theme: Theme }) {
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>Loading requests...</div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}><EditableText id="admin.early.loading">Loading requests...</EditableText></div>;
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
 
   return (
@@ -67,7 +68,7 @@ export function AdminEarlyAccess({ theme }: { theme: Theme }) {
       />
 
       <div style={{ ...panel(theme), marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <span style={panelLabel}>Total</span>
+        <span style={panelLabel}><EditableText id="admin.early.total">Total</EditableText></span>
         <Badge color={theme.accent}>{requests.length}</Badge>
       </div>
 
@@ -79,8 +80,7 @@ export function AdminEarlyAccess({ theme }: { theme: Theme }) {
 
       {requests.length === 0 ? (
         <div style={{ ...panel(theme), color: '#8ea3cc', fontSize: 13, textAlign: 'center', padding: '30px 16px' }}>
-          No early-access requests yet. Submissions from the login screen’s “Request Early Access”
-          form will show up here.
+          <EditableText id="admin.early.empty">No early-access requests yet. Submissions from the login screen’s “Request Early Access” form will show up here.</EditableText>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

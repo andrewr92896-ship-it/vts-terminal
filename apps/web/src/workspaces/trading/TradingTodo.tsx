@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
+import { EditableText } from '../../copy/SiteCopy';
 import type { RemovedTodoItem, TodoItem, TodoSection } from '../../api/types';
 
 const GOLD = '#EBCB74';
@@ -87,14 +88,14 @@ export function TradingTodo() {
     await run(api.addTodoItem(primarySection.id, text));
   }
 
-  if (loading) return <div style={{ color: '#7e8aa6', padding: 20, fontSize: 13 }}>Loading...</div>;
+  if (loading) return <div style={{ color: '#7e8aa6', padding: 20, fontSize: 13 }}><EditableText id="todo.loading">Loading...</EditableText></div>;
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
 
   return (
     <div style={{ maxWidth: 720, color: '#dfe6f5', animation: 'fadeIn .25s ease' }}>
-      <h2 style={{ margin: '0 0 4px', fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>Trading To-Do</h2>
+      <h2 style={{ margin: '0 0 4px', fontSize: 19, fontWeight: 700, color: '#eef3ff' }}><EditableText id="todo.title">Trading To-Do</EditableText></h2>
       <p style={{ margin: '0 0 16px', fontSize: 12.5, color: '#8b97b3' }}>
-        Trading tasks and reminders, shared with your team.
+        <EditableText id="todo.subtitle">Trading tasks and reminders, shared with your team.</EditableText>
       </p>
 
       {actionError && (
@@ -116,13 +117,13 @@ export function TradingTodo() {
             style={{ flex: 1, background: '#0a1834', border: '1px solid #16294f', borderRadius: 7, padding: '10px 12px', color: '#dfe6f5', fontSize: 12.5, outline: 'none' }}
           />
           <button onClick={add} disabled={busy || !draft.trim()} style={{ border: 'none', background: `linear-gradient(180deg,${GOLD},${GOLD2})`, color: '#0c2768', fontWeight: 700, fontSize: 12.5, padding: '0 16px', borderRadius: 7, cursor: busy || !draft.trim() ? 'default' : 'pointer', opacity: busy || !draft.trim() ? 0.6 : 1 }}>
-            Add
+            <EditableText id="todo.add">Add</EditableText>
           </button>
         </div>
       )}
 
       {tradingSections.length === 0 && (
-        <div style={{ fontSize: 12.5, color: '#6b78a0', fontStyle: 'italic' }}>No trading section yet.</div>
+        <div style={{ fontSize: 12.5, color: '#6b78a0', fontStyle: 'italic' }}><EditableText id="todo.no_section">No trading section yet.</EditableText></div>
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, alignItems: 'start' }}>

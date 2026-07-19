@@ -1,5 +1,6 @@
 import type { Theme } from '../theme/themes';
 import { useResponsive } from '../hooks/useMediaQuery';
+import { EditableText } from '../copy/SiteCopy';
 
 // Stage 1 ships the full app shell with every screen reachable. Each screen
 // renders a branded placeholder describing what gets wired and when. Real
@@ -84,8 +85,9 @@ export function Screen({ screen, theme }: { screen: string; theme: Theme }) {
             fontFamily: "'IBM Plex Mono', monospace",
           }}
         >
-          Stage 1 delivers the shell, login, roles, and theming. This screen is
-          a placeholder until its data is connected.
+          <EditableText id="placeholder.footer">
+            Stage 1 delivers the shell, login, roles, and theming. This screen is a placeholder until its data is connected.
+          </EditableText>
         </p>
       </div>
     </div>

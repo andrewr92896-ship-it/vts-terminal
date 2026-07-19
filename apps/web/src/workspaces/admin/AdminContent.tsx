@@ -14,6 +14,7 @@ import {
   panel,
   primaryBtn,
 } from './adminUi';
+import { EditableText } from '../../copy/SiteCopy';
 
 // Admin panel: edit the wording of the Site Help "How to" walkthroughs. Each
 // screen's guide can be reworded (title, intro, and numbered steps) and saved,
@@ -98,7 +99,7 @@ export function AdminContent({ theme }: { theme: Theme }) {
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>Loading content...</div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}><EditableText id="admin.content.loading">Loading content...</EditableText></div>;
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#dfe7fa' }}>
@@ -142,10 +143,10 @@ export function AdminContent({ theme }: { theme: Theme }) {
           {overridden ? <Badge color={theme.accent}>Customized</Badge> : <Badge color="#7488b5">Default</Badge>}
         </div>
 
-        <label style={fieldLabel}>Title</label>
+        <label style={fieldLabel}><EditableText id="admin.content.f_title">Title</EditableText></label>
         <input value={draft.title} onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))} maxLength={120} style={inputStyle} />
 
-        <label style={{ ...fieldLabel, marginTop: 12 }}>Intro (optional)</label>
+        <label style={{ ...fieldLabel, marginTop: 12 }}><EditableText id="admin.content.f_intro">Intro (optional)</EditableText></label>
         <textarea
           value={draft.intro ?? ''}
           onChange={(e) => setDraft((d) => ({ ...d, intro: e.target.value }))}
@@ -154,7 +155,7 @@ export function AdminContent({ theme }: { theme: Theme }) {
           style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }}
         />
 
-        <div style={{ ...fieldLabel, marginTop: 14, marginBottom: 8 }}>Steps</div>
+        <div style={{ ...fieldLabel, marginTop: 14, marginBottom: 8 }}><EditableText id="admin.content.steps_heading">Steps</EditableText></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {draft.steps.map((s, i) => (
             <div key={i} style={{ border: `1px solid ${theme.navBorder}`, borderRadius: 8, padding: 10, background: 'rgba(0,0,0,.16)' }}>
@@ -173,17 +174,17 @@ export function AdminContent({ theme }: { theme: Theme }) {
               />
             </div>
           ))}
-          <button onClick={addStep} style={{ ...ghostBtn, alignSelf: 'flex-start' }}>+ Add step</button>
+          <button onClick={addStep} style={{ ...ghostBtn, alignSelf: 'flex-start' }}><EditableText id="admin.content.add_step">+ Add step</EditableText></button>
         </div>
 
         {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
 
         <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' }}>
           <button onClick={save} disabled={busy || !draft.title.trim()} style={{ ...primaryBtn(theme, accentGrad), opacity: busy || !draft.title.trim() ? 0.55 : 1 }}>
-            {busy ? 'Saving…' : 'Save wording'}
+            {busy ? 'Saving…' : <EditableText id="admin.content.save_btn">Save wording</EditableText>}
           </button>
           {overridden && (
-            <button onClick={reset} disabled={busy} style={ghostBtn}>Reset to default</button>
+            <button onClick={reset} disabled={busy} style={ghostBtn}><EditableText id="admin.content.reset_btn">Reset to default</EditableText></button>
           )}
         </div>
       </div>

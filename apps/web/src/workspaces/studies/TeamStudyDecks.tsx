@@ -5,6 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
+import { EditableText } from '../../copy/SiteCopy';
 import { DeckEditor } from './DeckEditor';
 
 // The team study-game *maker*, shown in Study Creation. Any member builds a deck
@@ -78,7 +79,9 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>Team Study Games</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
+            <EditableText id="studydecks.title" text="Team Study Games" />
+          </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
             Build and edit your team’s own quizzes here — play them from the <strong>Study Game</strong> section.
           </p>
@@ -124,23 +127,27 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
       )}
 
       {loading ? (
-        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>Loading your team’s study games…</div>
+        <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
+          <EditableText id="studydecks.loading" text="Loading your team’s study games…" />
+        </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          Couldn’t load your team’s study games. Try again in a moment.
+          <EditableText id="studydecks.error" text="Couldn’t load your team’s study games. Try again in a moment." />
         </div>
       ) : decks.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🎓</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>No study games yet</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
+            <EditableText id="studydecks.empty_title" text="No study games yet" />
+          </div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? 'A team builds its own study games here — AI-generated from a topic, or from an uploaded file.'
-              : 'Build your first one: have AI generate questions from a topic, or upload a text file of your own questions or notes.'}
+              ? <EditableText id="studydecks.empty_ro" text="A team builds its own study games here — AI-generated from a topic, or from an uploaded file." />
+              : <EditableText id="studydecks.empty_rw" text="Build your first one: have AI generate questions from a topic, or upload a text file of your own questions or notes." />}
           </div>
           {!readOnly && (
             <button onClick={() => setComposerOpen(true)} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
-              ✦ New study game
+              <EditableText id="studydecks.empty_btn" text="✦ New study game" />
             </button>
           )}
         </div>
@@ -275,9 +282,11 @@ function CombineGames({
 
   return (
     <div style={{ ...card(theme), marginBottom: 14 }}>
-      <h3 style={{ margin: '0 0 4px', fontSize: 15.5, fontWeight: 700, color: '#fff' }}>Combine games</h3>
+      <h3 style={{ margin: '0 0 4px', fontSize: 15.5, fontWeight: 700, color: '#fff' }}>
+        <EditableText id="studydecks.combine_title" text="Combine games" />
+      </h3>
       <p style={{ margin: '0 0 12px', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
-        Pick the games to merge into one new game with all their questions — great for one massive game across everything.
+        <EditableText id="studydecks.combine_blurb" text="Pick the games to merge into one new game with all their questions — great for one massive game across everything." />
       </p>
       <input
         value={name}
@@ -312,14 +321,16 @@ function CombineGames({
       </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: muted, cursor: 'pointer', marginBottom: 12 }}>
         <input type="checkbox" checked={tagSource} onChange={(e) => setTagSource(e.target.checked)} style={{ width: 16, height: 16, accentColor: theme.accent }} />
-        Remember which game each question came from (adds an optional “guess the source” mode when playing)
+        <EditableText id="studydecks.combine_remember" text="Remember which game each question came from (adds an optional “guess the source” mode when playing)" />
       </label>
       {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginBottom: 10 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button onClick={combine} disabled={!canCombine} style={{ ...primaryBtn(theme, accentGrad), opacity: canCombine ? 1 : 0.6 }}>
           {busy ? 'Combining…' : `Combine ${picked.size} game${picked.size === 1 ? '' : 's'} · ${totalQs} q${totalQs === 1 ? '' : 's'}`}
         </button>
-        <button onClick={onCancel} style={ghostBtn(theme)}>Cancel</button>
+        <button onClick={onCancel} style={ghostBtn(theme)}>
+          <EditableText id="studydecks.combine_cancel" text="Cancel" />
+        </button>
       </div>
     </div>
   );
@@ -440,7 +451,7 @@ function DeckComposer({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff' }}>
-              Review the questions
+              <EditableText id="studydecks.review_title" text="Review the questions" />
             </h3>
             <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
               AI formatted {preview.length} question{preview.length === 1 ? '' : 's'} from your file. Check them,
@@ -569,8 +580,8 @@ function DeckComposer({
 
         <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
           {mode === 'ai'
-            ? 'AI writes the questions and answer key — review them before your team relies on them.'
-            : 'Upload a text file and AI formats the questions from it. You review them before the game is created.'}
+            ? <EditableText id="studydecks.composer_help_ai" text="AI writes the questions and answer key — review them before your team relies on them." />
+            : <EditableText id="studydecks.composer_help_file" text="Upload a text file and AI formats the questions from it. You review them before the game is created." />}
         </div>
         {error && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{error}</div>}
       </div>

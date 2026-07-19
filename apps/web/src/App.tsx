@@ -4,6 +4,7 @@ import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
 import { Portal } from './components/Portal';
 import { UpdatePrompt } from './components/UpdatePrompt';
+import { SiteCopyProvider } from './copy/SiteCopy';
 
 export function App() {
   const { user, loading } = useAuth();
@@ -33,7 +34,13 @@ export function App() {
     // Accounts created or reset by an admin must set a new password first.
     content = <ChangePassword />;
   } else {
-    content = <Portal />;
+    // The SiteCopyProvider makes every <EditableText> in the portal resolve its
+    // admin override and, for admins, drives the live "edit site wording" mode.
+    content = (
+      <SiteCopyProvider user={user}>
+        <Portal />
+      </SiteCopyProvider>
+    );
   }
 
   // The "Update available" popup lives outside the auth branches so it can show

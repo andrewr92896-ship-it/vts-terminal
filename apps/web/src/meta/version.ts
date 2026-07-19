@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.4';
+export const APP_VERSION = 'Beta V 5.5';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.5',
+    date: 'July 19, 2026',
+    notes: [
+      'Admins can now rewrite site wording in place: a gold pencil sits next to the corner chat bubble (admins only) — turn it on and any editable coded text across the portal highlights, so you can click it and change the wording live. It covers titles, blurbs, buttons, and explanations coded into the site, not user-created content (a study game’s name), trade data, or live figures. Edits save instantly and everyone sees them; each can be reset to its built-in default.',
+    ],
+  },
   {
     version: 'Beta V 5.4',
     date: 'July 19, 2026',

@@ -4,6 +4,7 @@ import { LiveBrokers } from './LiveBrokers';
 import { History } from './History';
 import { DeskSettingsModal } from './DeskSettingsModal';
 import { useAuth } from '../../auth/AuthContext';
+import { EditableText } from '../../copy/SiteCopy';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log / History.
 const GOLD = '#EBCB74';
@@ -52,14 +53,14 @@ export function TradingDesk({ initialView = 'log' }: { initialView?: DeskView })
                 title={v.hint}
                 style={{ ...segBtn, ...(view === v.key ? segActive : {}) }}
               >
-                {v.label}
+                <EditableText id={`desk.view_${v.key}`} text={v.label} />
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 11.5, color: FAINT, marginTop: 8, paddingLeft: 2 }}>{active.hint}</div>
+          <div style={{ fontSize: 11.5, color: FAINT, marginTop: 8, paddingLeft: 2 }}><EditableText id={`desk.hint_${active.key}`} text={active.hint} /></div>
         </div>
         <button onClick={() => setSettingsOpen(true)} style={gearBtn} title="Trade desk settings">
-          <span aria-hidden style={{ fontSize: 14 }}>⚙</span> Settings
+          <span aria-hidden style={{ fontSize: 14 }}>⚙</span> <EditableText id="desk.settings">Settings</EditableText>
         </button>
       </div>
 
