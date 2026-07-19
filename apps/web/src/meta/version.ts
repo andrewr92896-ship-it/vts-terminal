@@ -9,9 +9,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 4.5';
+export const APP_VERSION = 'Beta V 4.6';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 4.6',
+    date: 'July 19, 2026',
+    notes: [
+      'Study Creation is now purely for making and editing — the Play button is gone from study games there (play them in the Study Game section). Creating or combining a game now opens it in the editor so you can refine it.',
+      'Sidebar order: Study Creation is now the last Studies section, with Progress right above it.',
+    ],
+  },
   {
     version: 'Beta V 4.5',
     date: 'July 19, 2026',

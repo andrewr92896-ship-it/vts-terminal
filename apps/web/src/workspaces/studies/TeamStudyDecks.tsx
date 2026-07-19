@@ -5,7 +5,6 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { requestStudyDeck } from './studiesNav';
 import { DeckEditor } from './DeckEditor';
 
 // The team study-game *maker*, shown in Study Creation. Any member builds a deck
@@ -14,7 +13,7 @@ import { DeckEditor } from './DeckEditor';
 // public demo sees this read-only.
 const MAX_FILE_CHARS = 100_000;
 
-export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate?: (screen: string) => void }) {
+export function TeamStudyDecks({ theme }: { theme: Theme }) {
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
@@ -30,14 +29,6 @@ export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate
 
   const isAdmin = user?.roles.includes('admin') === true;
   const canManage = (d: TeamDeck) => !readOnly && (d.createdBy === user?.id || isAdmin);
-
-  // Play a team game in the Study Game section: request the deck, then navigate
-  // there (the launcher opens it). Falls back to a no-op if the shell didn't
-  // pass a navigator.
-  function play(id: string) {
-    requestStudyDeck(id);
-    onNavigate?.('st_game');
-  }
 
   useEffect(() => {
     let alive = true;
@@ -114,7 +105,7 @@ export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate
           onCombined={(updated, newId) => {
             setDecks(updated);
             setCombineOpen(false);
-            play(newId);
+            setEditing(newId);
           }}
         />
       )}
@@ -125,9 +116,9 @@ export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate
           onCreated={(decks, newId) => {
             setDecks(decks);
             setComposerOpen(false);
-            // Creation lives here; playing lives in the Study Game section — send
-            // the author there and open the game they just built.
-            play(newId);
+            // Creation and editing live here; playing lives in the Study Game
+            // section. Open the new game in the editor so the author can refine it.
+            setEditing(newId);
           }}
         />
       )}
@@ -161,9 +152,7 @@ export function TeamStudyDecks({ theme, onNavigate }: { theme: Theme; onNavigate
               deck={d}
               theme={theme}
               muted={muted}
-              readOnly={readOnly}
               canManage={canManage(d)}
-              onPlay={() => play(d.id)}
               onEdit={() => setEditing(d.id)}
               onDelete={() => remove(d.id)}
             />
@@ -178,18 +167,14 @@ function DeckCard({
   deck,
   theme,
   muted,
-  readOnly,
   canManage,
-  onPlay,
   onEdit,
   onDelete,
 }: {
   deck: TeamDeck;
   theme: Theme;
   muted: string;
-  readOnly: boolean;
   canManage: boolean;
-  onPlay: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -214,12 +199,9 @@ function DeckCard({
         {deck.categories.length > 0 && ` · ${deck.categories.slice(0, 3).join(' · ')}`}
         {deck.createdByName && ` · by ${deck.createdByName}`}
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-        <button onClick={onPlay} disabled={deck.questionCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: deck.questionCount === 0 ? 0.6 : 1 }}>
-          Play
-        </button>
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {canManage && !confirm && (
-          <button onClick={onEdit} style={ghostBtn(theme)}>
+          <button onClick={onEdit} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38 }}>
             Edit
           </button>
         )}
@@ -238,7 +220,9 @@ function DeckCard({
             </button>
           </>
         )}
-        {readOnly && <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Demo · progress isn’t saved</span>}
+        {!canManage && (
+          <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Play it in the Study Game section</span>
+        )}
       </div>
     </div>
   );

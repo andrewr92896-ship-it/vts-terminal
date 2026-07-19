@@ -25,7 +25,7 @@ export function StudyCreation({
   };
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28, animation: 'fadeIn .25s ease' }}>
-      <TeamStudyDecks theme={theme} onNavigate={onNavigate} />
+      <TeamStudyDecks theme={theme} />
       <div style={divider}>
         <TeamFlashcards theme={theme} />
       </div>
