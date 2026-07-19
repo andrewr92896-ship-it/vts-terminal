@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.17';
+export const APP_VERSION = 'Beta V 5.18';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.18',
+    date: 'July 19, 2026',
+    notes: [
+      'Study Game: spot a flawed question mid-play and fix it on the spot. After answering, tap “Something wrong? Fix this question” to change the marked correct answer (if the key was wrong) or delete the question outright. Fixes save for the whole team instantly. Only the game’s creator or an admin sees these controls.',
+    ],
+  },
   {
     version: 'Beta V 5.17',
     date: 'July 19, 2026',

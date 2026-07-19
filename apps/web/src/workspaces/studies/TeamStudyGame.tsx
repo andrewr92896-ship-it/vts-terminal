@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { api } from '../../api/client';
+import { api, ApiError } from '../../api/client';
 import type { DeckQuestion, LeaderboardEntry, TeamDeckDetail } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
+import { isAdmin } from '../../auth/access';
 import { EditableText } from '../../copy/SiteCopy';
 import { overallLevel, levelAtStep, streakMultiplier, STREAK_STEP, round1 } from './gameEngine';
 import { setStudyTint } from './studyTint';
@@ -79,6 +80,14 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   // remember which game they came from.
   const [guessMode, setGuessMode] = useState(false);
   const [sourceGuess, setSourceGuess] = useState<string | null>(null);
+
+  // Inline "fix this question" editor (creator/admin only): correct a flawed
+  // answer key or drop a bad question, without leaving the game.
+  const [fixOpen, setFixOpen] = useState(false);
+  const [fixDeleteConfirm, setFixDeleteConfirm] = useState(false);
+  const [fixSaving, setFixSaving] = useState(false);
+  const [fixError, setFixError] = useState<string | null>(null);
+  const [fixNote, setFixNote] = useState<string | null>(null);
 
   // Personal progress-bar preferences (session window + passing thresholds),
   // saved per-user on this device.
@@ -176,14 +185,18 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   }, [game?.levelCorrect]);
   useEffect(() => () => setStudyTint(null), []);
 
-  function advance() {
-    if (!deck || deck.questions.length === 0) {
+  function advance(d: TeamDeckDetail | null = deck) {
+    setFixOpen(false);
+    setFixDeleteConfirm(false);
+    setFixError(null);
+    setFixNote(null);
+    if (!d || d.questions.length === 0) {
       setCurrent(null);
       return;
     }
-    if (poolRef.current.length === 0) poolRef.current = shuffledIndices(deck.questions.length);
+    if (poolRef.current.length === 0) poolRef.current = shuffledIndices(d.questions.length);
     const idx = poolRef.current.pop()!;
-    setCurrent(deck.questions[idx]);
+    setCurrent(d.questions[idx]);
     setSelected(null);
     setRevealed(false);
     setOutcome(null);
@@ -241,6 +254,76 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       .join('\n');
   }
 
+  // Map a loaded question back to the edit payload shape the API expects when
+  // replacing the deck's question set.
+  function toQuestionInput(q: DeckQuestion) {
+    return {
+      topic: q.topic,
+      stem: q.stem,
+      options: q.options,
+      answer: q.answer,
+      explanation: q.explanation,
+      sourceName: q.sourceName,
+    };
+  }
+
+  function fixErrorMessage(e: unknown): string {
+    if (e instanceof ApiError && e.status === 403) return 'Only the game’s creator or an admin can edit it.';
+    return 'Could not save the change — try again.';
+  }
+
+  // Correct a flawed answer key on the current question. Sends the whole
+  // question set with just this one's answer changed; the deck is re-scoped and
+  // re-sequenced server-side, so future rounds (and everyone's) see the fix.
+  async function changeAnswer(newAnswer: Letter) {
+    if (!deck || !current || fixSaving) return;
+    if (newAnswer === current.answer) return;
+    setFixSaving(true);
+    setFixError(null);
+    setFixNote(null);
+    try {
+      const questions = deck.questions.map((q) => (q.seq === current.seq ? { ...q, answer: newAnswer } : q));
+      const { deck: updated } = await api.updateStudyDeck(deckId, { questions: questions.map(toQuestionInput) });
+      setDeck(updated);
+      // Reflect the corrected key in the open reveal: move the ✓ and re-mark
+      // this attempt against the new answer. The already-recorded score stands.
+      setCurrent((c) => (c ? { ...c, answer: newAnswer } : c));
+      setOutcome(selected === newAnswer);
+      setFixNote(`Correct answer set to ${newAnswer} — saved for your team.`);
+    } catch (e) {
+      setFixError(fixErrorMessage(e));
+    } finally {
+      setFixSaving(false);
+    }
+  }
+
+  // Remove the current question from the deck entirely (for a flawed/duplicate
+  // question). Refuses on the last remaining question — deleting the whole game
+  // is done from Study Creation. On success, moves on to the next question.
+  async function deleteCurrentQuestion() {
+    if (!deck || !current || fixSaving) return;
+    if (deck.questions.length <= 1) {
+      setFixDeleteConfirm(false);
+      setFixError('This is the only question — delete the whole game from Study Creation instead.');
+      return;
+    }
+    setFixSaving(true);
+    setFixError(null);
+    setFixNote(null);
+    try {
+      const remaining = deck.questions.filter((q) => q.seq !== current.seq);
+      const { deck: updated } = await api.updateStudyDeck(deckId, { questions: remaining.map(toQuestionInput) });
+      setDeck(updated);
+      // The index pool referenced the old length; rebuild it for the new set.
+      poolRef.current = [];
+      advance(updated);
+    } catch (e) {
+      setFixError(fixErrorMessage(e));
+    } finally {
+      setFixSaving(false);
+    }
+  }
+
   function resetProgress() {
     if (!game) return;
     if (!readOnly && game.totalAttempted > 0) {
@@ -284,6 +367,9 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   const streakMult = streakMultiplier(game.streak);
   // The distinct source games (set on a combined game), for the guess mode.
   const sources = sourcesForDeck(deck);
+  // Who may fix a question inline — mirrors the server's deck-edit rule: the
+  // game's creator, or an admin/founder. Never the read-only demo.
+  const canEdit = !readOnly && !!user && (isAdmin(user.roles) || (deck.createdBy != null && deck.createdBy === user.id));
 
   const header = (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, gap: 10, flexWrap: 'wrap' }}>
@@ -551,7 +637,112 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                 />
               </div>
 
-              <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
+              {/* Fix this question: creator/admin-only inline correction — change
+                  the answer key if it's wrong, or delete a flawed question. */}
+              {canEdit && (
+                <div style={{ marginBottom: 16 }}>
+                  {!fixOpen ? (
+                    <button
+                      onClick={() => {
+                        setFixOpen(true);
+                        setFixError(null);
+                        setFixNote(null);
+                      }}
+                      style={{ ...ghostBtn(theme), minHeight: 34, fontSize: 12 }}
+                    >
+                      <EditableText id="studygameplay.fix_open" text="✎ Something wrong? Fix this question" />
+                    </button>
+                  ) : (
+                    <div style={{ border: `1px solid ${theme.navBorder}`, borderRadius: 10, padding: 14, background: 'rgba(255,255,255,.03)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, marginBottom: 10 }}>
+                        <EditableText id="studygameplay.fix_heading" text="Fix this question" />
+                      </div>
+
+                      {/* Change the correct answer */}
+                      <div style={{ fontSize: 12, color: muted, marginBottom: 7 }}>
+                        <EditableText id="studygameplay.fix_answer_label" text="Correct answer — tap the right one to change it:" />
+                      </div>
+                      <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 16 }}>
+                        {current.options.map((o) => {
+                          const isCur = o.label === current.answer;
+                          return (
+                            <button
+                              key={o.label}
+                              disabled={fixSaving || isCur}
+                              onClick={() => void changeAnswer(o.label)}
+                              title={o.text}
+                              style={{
+                                ...ghostBtn(theme),
+                                minHeight: 34,
+                                padding: '6px 13px',
+                                cursor: fixSaving || isCur ? 'default' : 'pointer',
+                                border: `1px solid ${isCur ? GREEN : theme.navBorder}`,
+                                background: isCur ? 'rgba(53,196,123,.14)' : 'rgba(255,255,255,.05)',
+                                color: isCur ? GREEN : '#cdbcff',
+                                fontWeight: 700,
+                              }}
+                            >
+                              {o.label}
+                              {isCur ? ' ✓' : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {/* Delete the question */}
+                      {!fixDeleteConfirm ? (
+                        <button
+                          onClick={() => setFixDeleteConfirm(true)}
+                          disabled={fixSaving}
+                          style={{ ...ghostBtn(theme), minHeight: 34, borderColor: RED, color: '#ffb4ab' }}
+                        >
+                          <EditableText id="studygameplay.fix_delete" text="Delete this question" />
+                        </button>
+                      ) : (
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 12, color: '#ffb4ab' }}>
+                            <EditableText id="studygameplay.fix_delete_confirm" text="Delete this question for the whole team?" />
+                          </span>
+                          <button
+                            onClick={() => void deleteCurrentQuestion()}
+                            disabled={fixSaving}
+                            style={{ ...primaryBtn(theme, accentGrad), minHeight: 34, padding: '7px 14px', background: RED }}
+                          >
+                            <EditableText id="studygameplay.fix_delete_yes" text="Delete" />
+                          </button>
+                          <button
+                            onClick={() => setFixDeleteConfirm(false)}
+                            disabled={fixSaving}
+                            style={{ ...ghostBtn(theme), minHeight: 34 }}
+                          >
+                            <EditableText id="studygameplay.fix_delete_no" text="Cancel" />
+                          </button>
+                        </div>
+                      )}
+
+                      {fixError && <div style={{ marginTop: 11, fontSize: 12, color: '#ffb4ab' }}>{fixError}</div>}
+                      {fixNote && <div style={{ marginTop: 11, fontSize: 12, color: GREEN }}>{fixNote}</div>}
+
+                      <div style={{ marginTop: 14 }}>
+                        <button
+                          onClick={() => {
+                            setFixOpen(false);
+                            setFixDeleteConfirm(false);
+                            setFixError(null);
+                            setFixNote(null);
+                          }}
+                          disabled={fixSaving}
+                          style={{ ...ghostBtn(theme), minHeight: 32, fontSize: 12 }}
+                        >
+                          <EditableText id="studygameplay.fix_done" text="Done" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button onClick={() => advance()} style={primaryBtn(theme, accentGrad)}>
                 <EditableText id="studygameplay.next_question" text="Next question ›" />
               </button>
             </div>
