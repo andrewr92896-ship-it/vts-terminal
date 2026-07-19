@@ -9,9 +9,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.15';
+export const APP_VERSION = 'Beta V 5.16';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.16',
+    date: 'July 19, 2026',
+    notes: [
+      'The top-bar settings cog is gone — its controls now live in My Portal ▸ Settings. Privacy mode, the trade-alert sound (Chime / Alarm / Digital alarm), broker status, Notifications & connections (phone push, Pushover, per-trader alerts, broker connections), and “Check for updates” are all in one place in your own workspace.',
+    ],
+  },
   {
     version: 'Beta V 5.15',
     date: 'July 19, 2026',
