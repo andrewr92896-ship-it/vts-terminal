@@ -72,8 +72,6 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
   const [env, setEnv] = useState<'practice' | 'live'>('practice');
   const [apiKey, setApiKey] = useState('');
   const [apiSecret, setApiSecret] = useState('');
-  // "Count trades since" cutoff for the connection being edited (YYYY-MM-DD).
-  const [historyStart, setHistoryStart] = useState('');
 
   useEffect(() => {
     let alive = true;
@@ -95,7 +93,6 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     setEnv('practice');
     setApiKey('');
     setApiSecret('');
-    setHistoryStart('');
   }
 
   function startEdit(c: BrokerConnection) {
@@ -109,7 +106,6 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     setEnv(c.env === 'live' ? 'live' : 'practice');
     setApiKey('');
     setApiSecret('');
-    setHistoryStart(startMsToDate(c.historyStartAt));
   }
 
   // Assemble the credential fields the user filled in (blank → keep current on edit).
@@ -141,6 +137,22 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     }
   }
 
+  // Set/clear a connection's "count trades since" cutoff inline. Optimistic so
+  // the date field reflects the pick instantly; reverts only if the save fails.
+  async function setCutoff(c: BrokerConnection, ms: number | null) {
+    const prev = conns;
+    setConns((cs) => cs.map((x) => (x.id === c.id ? { ...x, historyStartAt: ms } : x)));
+    setError(null);
+    try {
+      const r = await api.updateConnection(c.id, { historyStartAt: ms });
+      setConns(r.connections);
+      onChanged?.();
+    } catch (e) {
+      setConns(prev);
+      setError(e instanceof ApiError ? e.message : 'Could not update the cutoff');
+    }
+  }
+
   async function submit() {
     if (!label.trim()) {
       setError('A brokerage name is required');
@@ -150,12 +162,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
     let okDone = false;
     if (editingId) {
       okDone = await apply(
-        api.updateConnection(editingId, {
-          label: label.trim(),
-          // Non-manual only: manual connections stream no closed history to gate.
-          ...(broker !== 'manual' ? { historyStartAt: dateToStartMs(historyStart) } : {}),
-          ...(creds ? { creds } : {}),
-        }),
+        api.updateConnection(editingId, { label: label.trim(), ...(creds ? { creds } : {}) }),
       );
     } else {
       if (!creds) {
@@ -206,12 +213,6 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                     {c.summary ?? ''}
                     {c.lastStatus === 'error' && c.lastError ? ` · ${c.lastError}` : ''}
                   </div>
-                  {c.historyStartAt != null && (
-                    <div style={{ fontSize: 10, color: FAINT, marginTop: 2 }}>
-                      <EditableText id="broker.cutoff_since">Counting trades since</EditableText>{' '}
-                      {fmtStartLabel(c.historyStartAt)}
-                    </div>
-                  )}
                 </div>
                 {!readOnly && (
                   <>
@@ -237,6 +238,9 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                   </>
                 )}
               </div>
+              {c.broker !== 'manual' && (
+                <CutoffRow c={c} readOnly={readOnly} onSet={(ms) => setCutoff(c, ms)} />
+              )}
               {c.broker === 'manual' && openPosConn === c.id && (
                 <ManualPositions connectionId={c.id} onChanged={() => onChanged?.()} />
               )}
@@ -313,33 +317,6 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
             </>
           )}
         </div>
-        {editingId && broker !== 'manual' && (
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <label style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>
-              <EditableText id="broker.cutoff_label">Count trades since (optional)</EditableText>
-            </label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <input
-                type="date"
-                value={historyStart}
-                onChange={(e) => setHistoryStart(e.target.value)}
-                style={{ ...input, flex: '0 0 170px' }}
-              />
-              {historyStart && (
-                <button type="button" onClick={() => setHistoryStart('')} style={ghostBtn}>
-                  <EditableText id="broker.cutoff_clear">Clear</EditableText>
-                </button>
-              )}
-            </div>
-            <div style={{ fontSize: 11, color: FAINT, lineHeight: 1.5 }}>
-              <EditableText id="broker.cutoff_help">
-                Only trades opened on or after this date count in the Trade Log and History. Use it to
-                skip an earlier learning phase on this account — anything before it is left out of your
-                stats and never re-imported. Leave blank to count everything.
-              </EditableText>
-            </div>
-          </div>
-        )}
         {editingId && (
           <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>
             Leave credential fields blank to keep the current keys.
@@ -737,6 +714,50 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// The always-visible "count trades since" control on a non-manual connection —
+// pick the date your real trading on that account began and everything earlier
+// drops out of your Trade Log / History (and never re-imports). This is the
+// discoverable home for the cutoff; no need to open the edit form.
+function CutoffRow({
+  c,
+  readOnly,
+  onSet,
+}: {
+  c: BrokerConnection;
+  readOnly: boolean;
+  onSet: (ms: number | null) => void;
+}) {
+  return (
+    <div style={{ ...panel, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 12px' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, flex: '0 0 auto' }}>
+        <EditableText id="broker.cutoff_inline_label">Count trades since</EditableText>
+      </span>
+      {readOnly ? (
+        <span style={{ fontSize: 11.5, color: TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>
+          {c.historyStartAt != null ? fmtStartLabel(c.historyStartAt) : 'all trades'}
+        </span>
+      ) : (
+        <>
+          <input
+            type="date"
+            value={startMsToDate(c.historyStartAt)}
+            onChange={(e) => onSet(dateToStartMs(e.target.value))}
+            style={{ ...input, flex: '0 0 165px', padding: '7px 10px' }}
+          />
+          {c.historyStartAt != null && (
+            <button onClick={() => onSet(null)} style={ghostBtn}>
+              <EditableText id="broker.cutoff_inline_clear">Clear</EditableText>
+            </button>
+          )}
+        </>
+      )}
+      <span style={{ fontSize: 10.5, color: FAINT, flex: '1 1 100%', lineHeight: 1.45 }}>
+        <EditableText id="broker.cutoff_inline_help">Only trades opened on or after this date count in the Trade Log and History — earlier trades are left out and never re-imported. Blank counts everything.</EditableText>
+      </span>
     </div>
   );
 }

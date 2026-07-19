@@ -8,6 +8,7 @@ import type { BoardTile, BoardTileKind, TradingBoard } from '../../api/types';
 import { ChartTile } from './ChartTile';
 import { WatchlistTile } from './WatchlistTile';
 import { PositionsTile } from './PositionsTile';
+import { MetricsTile } from './MetricsTile';
 import { NewsTile } from './NewsTile';
 import { CalendarTile } from './CalendarTile';
 import { AlertsTile } from './AlertsTile';
@@ -109,7 +110,7 @@ export function ChartBoard() {
         // grid height to the reported row count so the cell grows per trade and
         // can't be hand-resized shorter (which would reintroduce a scroll).
         const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
-        const minH = t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'news' || t.kind === 'calendar' || t.kind === 'alerts' ? 5 : 8;
+        const minH = t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'metrics' ? 4 : t.kind === 'news' || t.kind === 'calendar' || t.kind === 'alerts' ? 5 : 8;
         return {
           i: t.id,
           x: t.x,
@@ -297,6 +298,7 @@ export function ChartBoard() {
             <button onClick={() => addTile('chart')} style={ghostBtn}>+ Chart</button>
             <button onClick={() => addTile('watchlist')} style={ghostBtn}>+ Watchlist</button>
             <button onClick={() => addTile('positions')} style={ghostBtn}>+ Positions</button>
+            <button onClick={() => addTile('metrics')} style={ghostBtn}>+ Metrics</button>
             <button onClick={() => addTile('news')} style={ghostBtn}>+ News</button>
             <button onClick={() => addTile('calendar')} style={ghostBtn}>+ Calendar</button>
             <button onClick={() => addTile('alerts')} style={ghostBtn}>+ Alerts</button>
@@ -369,6 +371,8 @@ export function ChartBoard() {
                   onRemove={() => removeTile(t.id)}
                   onMeasure={(px) => measureTile(t.id, px)}
                 />
+              ) : t.kind === 'metrics' ? (
+                <MetricsTile tile={t} editing={editing} onRemove={() => removeTile(t.id)} />
               ) : t.kind === 'news' ? (
                 <NewsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
               ) : t.kind === 'calendar' ? (

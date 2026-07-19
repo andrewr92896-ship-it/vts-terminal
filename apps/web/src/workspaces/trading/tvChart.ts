@@ -111,6 +111,9 @@ export function newTile(kind: BoardTileKind, at: { x: number; y: number }): Boar
   if (kind === 'alerts') {
     return { id, kind, x: at.x, y: at.y, w: 4, h: 14, title: 'Alerts', alertsFilter: 'active' };
   }
+  if (kind === 'metrics') {
+    return { id, kind, x: at.x, y: at.y, w: 6, h: 8, title: 'Desk Metrics' };
+  }
   return {
     id,
     kind,

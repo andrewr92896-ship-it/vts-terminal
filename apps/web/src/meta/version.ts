@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.21';
+export const APP_VERSION = 'Beta V 5.22';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.22',
+    date: 'July 19, 2026',
+    notes: [
+      'Trade Log now shows Unrealized P/L. A new card totals the live open P/L across your open positions, and every open trade shows its running P/L instead of a dash — so when your account is up on an open winner but flat on closed trades, the log reads green instead of looking like a loss. Realized P/L is still closed-only; the two sit side by side.',
+      'Live Wall: new “Metrics” tile. Add it from the board’s edit bar to pin your desk’s headline numbers — realized, unrealized, and net P/L, win rate, profit factor (raw + scaled), and trade count — right next to your charts and positions.',
+      'Broker connections: the “Count trades since” date is now front-and-center on each connection (no more digging into Edit). Pick the date your real trading began and it saves on the spot.',
+    ],
+  },
   {
     version: 'Beta V 5.21',
     date: 'July 19, 2026',
