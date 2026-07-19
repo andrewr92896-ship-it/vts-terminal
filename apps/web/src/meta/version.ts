@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.16';
+export const APP_VERSION = 'Beta V 5.17';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.17',
+    date: 'July 19, 2026',
+    notes: [
+      'Study Game: after you answer a question (right or wrong), you can now talk it through with VTS AI right there. A back-and-forth tutor chat opens under each answer, already knowing the question, the options, the correct answer, and what you picked — tap “Break this down” for a plain-language walkthrough, then ask follow-ups until it clicks.',
+    ],
+  },
   {
     version: 'Beta V 5.16',
     date: 'July 19, 2026',

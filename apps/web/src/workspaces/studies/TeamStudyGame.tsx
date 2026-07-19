@@ -18,6 +18,7 @@ import {
 } from './studyEngine';
 import { StudyProgressBars } from './StudyProgress';
 import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
+import { TutorChat } from './TutorChat';
 
 const GREEN = '#35c47b';
 const RED = '#ef5468';
@@ -216,6 +217,28 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       });
     }
     setGame(next);
+  }
+
+  // A short preamble folded into the first tutor turn, so the back-and-forth
+  // chat about a just-answered question stays on-topic: the question, its
+  // options, the correct answer, what the learner picked, and any explanation.
+  function tutorContextFor(q: DeckQuestion): string {
+    const optionsText = q.options.map((o) => `${o.label}) ${o.text}`).join('\n');
+    const chosenText = selected
+      ? `${selected}) ${q.options.find((o) => o.label === selected)?.text ?? ''}`
+      : 'no answer (I skipped it)';
+    const correctText = `${q.answer}) ${q.options.find((o) => o.label === q.answer)?.text ?? ''}`;
+    return [
+      `I'm studying the "${deck?.name ?? ''}" study game.`,
+      q.topic ? `Topic: ${q.topic}.` : '',
+      `Question: ${q.stem}`,
+      `Options:\n${optionsText}`,
+      `The correct answer is ${correctText}.`,
+      `I answered ${chosenText}, which was ${outcome ? 'correct' : 'incorrect'}.`,
+      q.explanation ? `Explanation given: ${q.explanation}` : '',
+    ]
+      .filter(Boolean)
+      .join('\n');
   }
 
   function resetProgress() {
@@ -509,6 +532,24 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                   <div style={{ fontSize: 11.5, color: muted, marginBottom: 12 }}>From <strong style={{ color: '#cdbcff' }}>{current.sourceName}</strong></div>
                 )
               )}
+
+              {/* Talk it through: a back-and-forth VTS AI tutor chat about this
+                  exact question, seeded with the full context and the learner's
+                  answer. Keyed on the question so each one starts fresh. */}
+              <div style={{ marginBottom: 16, paddingTop: 14, borderTop: `1px solid ${theme.navBorder}` }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, marginBottom: 10 }}>
+                  <EditableText id="studygameplay.tutor_heading" text="Talk it through with VTS AI" />
+                </div>
+                <TutorChat
+                  key={current.seq}
+                  theme={theme}
+                  isPhone={isPhone}
+                  context={tutorContextFor(current)}
+                  seedLabel="💡 Break this down"
+                  seedPrompt="Walk me through this question in plain, simple terms — why the correct answer is right, and why the other options are wrong. If I picked the wrong one, explain what I likely misunderstood."
+                  placeholder="Ask about this question…"
+                />
+              </div>
 
               <button onClick={advance} style={primaryBtn(theme, accentGrad)}>
                 <EditableText id="studygameplay.next_question" text="Next question ›" />
