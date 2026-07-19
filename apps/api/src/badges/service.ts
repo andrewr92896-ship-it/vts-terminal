@@ -145,6 +145,17 @@ export async function assignableBadgeKeys(): Promise<Set<string>> {
 export async function seedBadges(): Promise<void> {
   const now = new Date();
   const builtins = [
+    // Auto-granted to every founder-role holder, shown site-wide next to their
+    // name. Listed first (position 0) so it leads the badge row.
+    {
+      key: 'founder',
+      label: 'Founder',
+      icon: 'crown',
+      color: '#F5A524',
+      description: 'Portal founder.',
+      autoRole: 'founder' as string | null,
+      position: 0,
+    },
     {
       key: 'early',
       label: 'Early Release',
