@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { BoardTile } from '../../api/types';
-import { useResponsive } from '../../hooks/useMediaQuery';
 import { TvWidget } from './TvWidget';
 import { TileConfigModal } from './TileConfigModal';
-import { scrollLock, useScrollLock } from './scrollLock';
+import { ScrollLockButton } from './scrollLock';
 import {
   BORDER,
   BORDER2,
@@ -40,8 +39,6 @@ export function ChartTile({
   onRemove: () => void;
 }) {
   const [showCfg, setShowCfg] = useState(false);
-  const { isPhone } = useResponsive();
-  const scrollLocked = useScrollLock();
   // Leaving edit mode closes the settings panel so it doesn't reopen on the
   // next edit.
   useEffect(() => { if (!editing) setShowCfg(false); }, [editing]);
@@ -82,24 +79,9 @@ export function ChartTile({
           {studies.length > 0 && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}>{studies.length} ind</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          {/* Mobile scroll lock — stops the page finger-scrolling so you can
-              draw/pan inside the chart; a wide scrollbar on the right takes over
-              page scrolling while it's on. */}
-          {isPhone && (
-            <button
-              onClick={() => scrollLock.toggle()}
-              style={{
-                ...iconBtn,
-                ...(scrollLocked
-                  ? { color: '#0c2768', background: GOLD, borderColor: GOLD }
-                  : null),
-              }}
-              title={scrollLocked ? 'Scroll lock on — page won’t scroll by dragging; use the right scrollbar' : 'Lock page scroll (mobile)'}
-              aria-pressed={scrollLocked}
-            >
-              {scrollLocked ? '🔒' : '🔓'}
-            </button>
-          )}
+          {/* Scroll lock — freezes page scroll so you can draw/pan inside the
+              chart; locking from here locks every board window at once. */}
+          <ScrollLockButton />
           {editing && (
             <>
               <button onClick={() => setShowCfg((v) => !v)} style={iconBtn} title="Chart settings">⚙</button>

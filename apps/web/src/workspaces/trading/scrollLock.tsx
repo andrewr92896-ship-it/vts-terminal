@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useResponsive } from '../../hooks/useMediaQuery';
 import { BORDER2, GOLD } from './tvChart';
 
 // Mobile "scroll lock" for the Live Wall charts.
@@ -85,6 +86,46 @@ export const scrollLock = {
 export function useScrollLock(): boolean {
   return useSyncExternalStore(scrollLock.subscribe, scrollLock.get, () => false);
 }
+
+// The padlock button dropped into every Master-board tile header. Because the
+// lock is a single global store, flipping it from any one window locks — or
+// unlocks — every window at once (all the buttons read the same state, so they
+// all change together). Phone-only, matching the chart tile lock it was modeled
+// on: the page-scroll freeze only matters for finger drags on touch.
+export function ScrollLockButton({ style }: { style?: CSSProperties }) {
+  const { isPhone } = useResponsive();
+  const isLocked = useScrollLock();
+  if (!isPhone) return null;
+  return (
+    <button
+      className="no-drag"
+      onClick={() => scrollLock.toggle()}
+      aria-pressed={isLocked}
+      aria-label={isLocked ? 'Unlock page scroll (unlocks every window)' : 'Lock page scroll (locks every window)'}
+      title={
+        isLocked
+          ? 'Scroll lock on — the page won’t scroll by dragging; use the right scrollbar. Tap to unlock every window.'
+          : 'Lock page scroll (mobile) — locks every board window'
+      }
+      style={{ ...lockBtn, ...(isLocked ? lockBtnOn : null), ...style }}
+    >
+      {isLocked ? '🔒' : '🔓'}
+    </button>
+  );
+}
+
+const lockBtn: CSSProperties = {
+  fontSize: 12,
+  lineHeight: 1,
+  color: '#cfe',
+  background: 'rgba(255,255,255,.05)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 6,
+  padding: '4px 7px',
+  cursor: 'pointer',
+  flex: 'none',
+};
+const lockBtnOn: CSSProperties = { color: '#0c2768', background: GOLD, borderColor: GOLD };
 
 const THUMB_MIN = 48; // keep the thumb comfortably finger-sized
 

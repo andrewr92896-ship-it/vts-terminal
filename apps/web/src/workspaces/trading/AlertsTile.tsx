@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { api, ApiError } from '../../api/client';
 import type { AlertRecord, BoardTile } from '../../api/types';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
+import { ScrollLockButton } from './scrollLock';
 import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 30_000;
@@ -94,6 +95,7 @@ export function AlertsTile({
           {alerts && <span style={countChip}>{shown.length}</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ScrollLockButton />
           {editing ? (
             <>
               <div style={segWrap} title="Which alerts to show">

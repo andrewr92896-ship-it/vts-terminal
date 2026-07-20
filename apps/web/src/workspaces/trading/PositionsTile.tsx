@@ -6,6 +6,7 @@ import type { BoardTile, LiveTrade, LiveWall } from '../../api/types';
 import { configFrom } from './outcome';
 import { TradeCard } from './TradeCard';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
+import { ScrollLockButton } from './scrollLock';
 import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 12_000;
@@ -106,6 +107,7 @@ export function PositionsTile({
           {data && <span style={data.source === 'sample' ? sampleDot : liveDot}>{data.source === 'sample' ? 'sample' : 'live'}</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ScrollLockButton />
           {/* Layout picker — only while editing the board, saved with the preset.
               List/Cards keep a fixed cell and scroll; the ↕ "expand" variants grow
               the tile vertically to fit every trade. */}

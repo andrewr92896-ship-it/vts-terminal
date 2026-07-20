@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.29';
+export const APP_VERSION = 'Beta V 5.30';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.30',
+    date: 'July 20, 2026',
+    notes: [
+      'Live Wall ▸ Master (phone): the scroll-lock padlock is now on every board window — charts, watchlists, positions, metrics, news, calendar, and alerts — not just charts. It’s one shared lock: tapping it on any window freezes page scrolling on all of them, and unlocking from any window unlocks them all.',
+    ],
+  },
   {
     version: 'Beta V 5.29',
     date: 'July 20, 2026',
