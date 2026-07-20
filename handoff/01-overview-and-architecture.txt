@@ -1,0 +1,225 @@
+================================================================================
+VTS PORTAL — PROJECT HANDOFF
+SECTION 1 of 8: OVERVIEW & ARCHITECTURE
+================================================================================
+Current app version at time of writing: Beta V 5.32
+Purpose of this document set: a complete, current description of how the VTS
+Portal is built and how it behaves, written to be pasted into / uploaded to the
+Claude project knowledge base. This mirrors the in-repo CLAUDE.md but is
+reorganized for handoff and corrected against the live code (e.g. the DB now has
+70 SQL migrations, not the "~57" the old notes mention).
+
+--------------------------------------------------------------------------------
+1.1  WHAT THE PORTAL IS
+--------------------------------------------------------------------------------
+VTS Portal ("Vitalis Trading Systems") is a PRIVATE, dark "pro-terminal" web app
+for the owner (Andrew) and a few invited users. One login leads to a sidebar of
+workspaces, each with its own sections.
+
+- It is a PWA: installable to a phone/desktop home screen, with web push.
+- There is NO public sign-up. The login screen offers exactly two public paths:
+    * A single read-only DEMO account (one click).
+    * An "Early Access" request form (prospective users ask to be let in).
+- It is a single-tenant product: built for one owner and the handful of people
+  he invites. There is no external review step and no other stakeholders to
+  protect from a bad deploy — this shapes the deploy workflow (see Section 8).
+
+Naming note: the app is branded "Vitalis Trading Systems" / "VTS". The AI
+assistant throughout the app is branded "VTS AI".
+
+--------------------------------------------------------------------------------
+1.2  MONOREPO LAYOUT (npm workspaces)
+--------------------------------------------------------------------------------
+Root package.json declares two workspaces:
+
+  apps/api   -> "@vts/api"  (Fastify + TypeScript backend)
+  apps/web   -> "@vts/web"  (Vite + React 18 + TypeScript frontend)
+
+Node engine requirement: >= 20.
+
+Root scripts (run from the repo root):
+  npm run setup        -> npm install + api setup
+  npm run dev          -> runs api + web dev servers in parallel
+  npm run dev:api      -> api only
+  npm run dev:web      -> web only
+  npm run build        -> api (tsc) then web (vite build)
+  npm run start        -> starts the API (which also serves the built web app)
+  npm run typecheck    -> api typecheck then web typecheck
+  npm run db:migrate   -> apply SQL migrations
+  npm run db:seed      -> seed the database
+
+Single-workspace variants:
+  npm --workspace @vts/api  run typecheck | build | dev | start
+  npm --workspace @vts/web  run typecheck | build | dev
+
+In a fresh container, run `npm install` first.
+
+--------------------------------------------------------------------------------
+1.3  HOW IT RUNS — ONE PROCESS IN PRODUCTION
+--------------------------------------------------------------------------------
+- In DEVELOPMENT: web runs on Vite (default :5173) and the API runs on :4000.
+  The browser calls the API cross-origin, so CORS + credentialed cookies matter
+  (WEB_ORIGIN must allow the dev origin).
+- In PRODUCTION: the API process ALSO serves the built React app via
+  @fastify/static from apps/web/dist. One process, same origin — the API and the
+  site share a host. The server falls back to index.html for any non-/api GET so
+  client-side rendering works. (This static-serving block only activates when a
+  build exists on disk.)
+
+Backend holds ALL secrets. The browser never sees broker API keys, the Anthropic
+API key, or password hashes — everything sensitive lives server-side.
+
+--------------------------------------------------------------------------------
+1.4  BACKEND STACK (apps/api)
+--------------------------------------------------------------------------------
+- Framework: Fastify + TypeScript (ESM; imports use ".js" specifiers).
+- Cookies: @fastify/cookie, signed with SESSION_SECRET.
+- CORS: @fastify/cors, credentials enabled, origin = WEB_ORIGIN.
+- Static: @fastify/static serves the web build in production.
+- Logging: pino; in dev uses pino-pretty. IMPORTANT hardening: the request
+  logger serializer logs ONLY the path, never the query string, so a token/secret
+  accidentally placed in a URL never lands in logs.
+- trustProxy is on in production (Railway sits in front).
+
+Request lifecycle (hooks, in order):
+  1. onRequest  -> loadUser  (resolves the session cookie to the current user,
+                              decorates request.currentUser; null if anonymous)
+  2. preHandler -> demoGuard (the demo account is read-only: this refuses its
+                              writes and serves canned AI BEFORE any route runs)
+  3. the matched route handler
+
+--------------------------------------------------------------------------------
+1.5  FRONTEND STACK (apps/web)
+--------------------------------------------------------------------------------
+- Vite + React 18 + TypeScript.
+- Styling is INLINE-STYLE / theme-token based (see src/theme), NOT a CSS
+  framework (no Tailwind, no styled-components for layout). There is a small
+  amount of global CSS in src/styles/global.css (notably the iOS 16px input-zoom
+  floor — see Section 8).
+- Routing is STATE-BASED, not URL-based (no react-router). Portal.tsx holds the
+  current workspace + screen in useState. The URL never changes; there is no
+  deep-linking, refresh-persistence, or browser back/forward. (Details in
+  Section 8.)
+- PWA via vite-plugin-pwa (registerType: 'prompt'). The static shell is
+  precached; /api is denylisted from caching so live data never goes stale.
+
+--------------------------------------------------------------------------------
+1.6  DATABASE
+--------------------------------------------------------------------------------
+- Engine: SQLite via Drizzle ORM on the libsql driver (@libsql/client).
+- File location: DATABASE_URL (default `file:./data/vts.db`). Production uses a
+  Railway persistent volume.
+- Schema: apps/api/src/db/schema.ts.
+- Migrations: apps/api/migrations — currently 70 SQL migration files, applied by
+  `db:migrate` (runMigrations runs automatically on production boot).
+- Seed: `db:seed`.
+- Per-user deletes are EXPLICIT in admin/service.ts — there is NO
+  `ON DELETE CASCADE`. When you add a new per-user table, you MUST add it to that
+  explicit delete list, or deleting a user will orphan its rows.
+
+Production boot sequence (bootstrapDatabase, idempotent, runs every boot):
+  waitForDatabase -> runMigrations -> seedAdmin -> backfillEmails -> seedDemo
+  -> seedDefaultTeam -> backfillTeamLeaders -> seedWelcome -> seedBadges
+Then the server listens and starts the background jobs: startFeeds,
+startDeskWatch, startSessionWatch (all production-only; see Section 4).
+
+--------------------------------------------------------------------------------
+1.7  BACKEND MODULE MAP (apps/api/src)
+--------------------------------------------------------------------------------
+Feature modules (business logic):
+  admin/         user & team admin; the explicit per-user delete list lives here
+  ai/            Claude integration (claude.ts, prompts.ts) — server-side only
+  auth/          argon2id hashing, sessions, RBAC, middleware
+  badges/        recognition badges (seedBadges)
+  chat/          team chat + announcements (seedWelcome)
+  demo/          the read-only demo account + demoGuard
+  earlyAccess/   the public Early Access request intake
+  feedback/      bug reports + suggestions
+  notifications/ per-user notification prefs, push/pushover fan-out helpers
+  patchNotes/    DB-backed patch notes
+  security/      secretbox.ts (AES-256-GCM broker-cred encryption at rest)
+  settings/      app_settings key/value store (overrides for copy, AI prompts...)
+  studies/       study games, flashcards, guides, scoring (gameStats)
+  support/       the corner "Support" AI intake threads
+  teams/         trading teams (admin surface); scopedTraderIds boundary origin
+  todo/          to-do lists
+  trading/       brokers, trades, live wall, sessions, feeds, watchers, settings
+  userTeams/     the My-Portal self-service team surface (leaders, badges, perms)
+
+Cross-cutting files:
+  config.ts      Zod-validated environment config
+  server.ts      Fastify app assembly + route registration + boot
+  seed.ts        seedAdmin / seedDemo / backfillEmails
+  types.ts       Fastify request decoration types
+  db/            schema.ts, index.ts, migrate.ts
+
+Routes (apps/api/src/routes) — 18 modules, all registered in server.ts:
+  health, auth, admin, earlyAccess, brokers, trading, webhooks, todo, ai, chat,
+  feedback, support, studies, push, pushover, notificationPrefs, content,
+  userTeams
+  (Note: the webhooks route module carries BOTH TradingView webhook endpoints —
+  see Section 4. There is no separate tvWebhook route file anymore; both live in
+  routes/webhooks.ts.)
+
+--------------------------------------------------------------------------------
+1.8  FRONTEND MODULE MAP (apps/web/src)
+--------------------------------------------------------------------------------
+  App.tsx / main.tsx     app entry
+  api/client.ts          ONE flat typed `api` object. Every call is cookie-authed
+                         (credentials:'include'), root-relative to /api, and
+                         throws ApiError { status } on any non-2xx response.
+  auth/                  AuthContext (useAuth), access.ts (UI-side RBAC mirror)
+  components/            the shell: Portal.tsx (router/shell), Sidebar.tsx,
+                         TopBar.tsx, AskClaudePanel.tsx, TeamChat.tsx,
+                         UpdatePrompt.tsx, InstallPrompt.tsx, Icon, etc.
+  copy/SiteCopy.tsx      <EditableText> — admin-editable inline copy (see below)
+  help/                  help hub content
+  hooks/                 useResponsive, etc.
+  lib/                   client helpers (e.g. pptx.ts parses uploaded .pptx)
+  meta/version.ts        APP_VERSION + PATCH_NOTES archive (bump every deploy)
+  pages/                 login / top-level pages
+  privacy/               Privacy-mode provider (hide dollar figures)
+  push/                  usePushNotifications; web-push subscription flow
+  sound/                 trade-alert sound provider
+  styles/global.css      global CSS (iOS input-zoom floor, resets)
+  theme/                 nav.ts, navOrder.ts, tokens.ts, themes.ts (see Section 2)
+  workspaces/            trading, studies, admin, myportal, help (feature screens)
+                         + Screens.tsx (a STALE "Stage N" placeholder fallback)
+
+--------------------------------------------------------------------------------
+1.9  KEY CROSS-CUTTING CONCEPTS (previewed here, detailed later)
+--------------------------------------------------------------------------------
+- NAVIGATION IS DATA-DRIVEN: theme/nav.ts is the single source of truth for
+  workspaces, sections, order, icons, and role gates. Section `key`s ARE the
+  screen keys switched in Portal.tsx. (Section 2.)
+- SIDEBAR ORDER IS FOUNDER-OVERRIDABLE: a saved order override in app_settings
+  (`nav.order`) is applied over the code-default NAV for every user. (Section 2.)
+- TEAMS SCOPE ALMOST EVERYTHING: trade data, studies leaderboards, team chat,
+  and notification recipients are all team-scoped via one boundary function,
+  scopedTraderIds (trading/scope.ts). (Section 3.)
+- SERVER IS THE ENFORCER: auth/access.ts mirrors RBAC on the client for UI
+  gating, but the server (auth/middleware.ts) is the real access control.
+- EDITABLE COPY & PROMPTS: user-visible coded strings are wrapped in
+  <EditableText id="..."> and are live-editable by admins; AI prompts and
+  how-to copy are likewise override-able from the admin UI. (Sections 6 & 8.)
+- SECRETS AT REST: broker credentials are AES-256-GCM encrypted
+  (security/secretbox.ts); passwords are argon2id hashes. (Section 7.)
+
+--------------------------------------------------------------------------------
+1.10  DOCS/SOURCE-OF-TRUTH NOTES
+--------------------------------------------------------------------------------
+- The in-repo CLAUDE.md is the maintained source of truth for how the portal
+  works; when behavior changes, CLAUDE.md is updated in the same change.
+- README.md is STALE ("Stage 1" era, wrong workspaces/roles) — do not trust it.
+- workspaces/Screens.tsx + help/tutorials.ts are stale "Stage 1-4" placeholder
+  scaffolding; most real screens bypass them.
+- themes.ts TABS/TabDef is superseded by theme/nav.ts.
+- Some tokens.ts / nav.ts comments still reference REMOVED workspaces (Wealth
+  Management, Personal Finance, the LLC business workspace, Kia Sales, standalone
+  To-Do workspace). Those workspaces are gone — do not reintroduce or reference
+  them.
+
+================================================================================
+END OF SECTION 1 OF 8.
+Say "next" for Section 2: Navigation map — every workspace & section.
+================================================================================
