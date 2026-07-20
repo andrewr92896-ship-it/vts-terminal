@@ -391,9 +391,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
                     key={inv.id}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, fontSize: 12.5, color: '#cfe0ff' }}
                   >
-                    <span>
-                      {inv.displayName} <span style={{ color: '#7488b5' }}>@{inv.username}</span>
-                    </span>
+                    <span>{inv.displayName}</span>
                     <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={() => cancelInvite(inv.id)}>
                       Cancel
                     </button>
@@ -491,7 +489,6 @@ function MemberRow({
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13.5, color: '#eef3ff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {m.displayName}
-            <span style={{ color: '#7488b5', fontWeight: 400, fontSize: 12 }}>@{m.username}</span>
             {m.isLeader && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: accent, border: `1px solid ${accent}`, borderRadius: 4, padding: '1px 7px' }}>
                 <Icon name="crown" size={11} /> Leader

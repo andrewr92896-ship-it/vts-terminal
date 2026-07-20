@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.24';
+export const APP_VERSION = 'Beta V 5.25';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.25',
+    date: 'July 20, 2026',
+    notes: [
+      'Display names are now editable by admins: open Admin ▸ Users and tap the pencil next to anyone’s name to rename them. You could already rename yourself from Account settings.',
+      'People are now shown by their display name across the portal — the “@username” handle no longer trails the name on the Users list, team rosters, and pending invites.',
+    ],
+  },
   {
     version: 'Beta V 5.24',
     date: 'July 20, 2026',
