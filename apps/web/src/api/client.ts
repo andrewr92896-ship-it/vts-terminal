@@ -76,6 +76,7 @@ import type {
   MyPortalData,
   MyTeam,
   TeamMemberPermissions,
+  NavOrderOverride,
 } from './types';
 
 // A flashcard the user added to their own personal deck (a term, a definition,
@@ -401,6 +402,17 @@ export const api = {
   },
   adminResetCopy(key: string): Promise<{ ok: boolean }> {
     return request(`/api/admin/site-content/copy/${key}`, { method: 'DELETE' });
+  },
+  // ---- Sidebar layout (workspace + section ordering) ----
+  // Any signed-in user reads the effective order; only a founder can change it.
+  navLayout(): Promise<{ order: NavOrderOverride | null }> {
+    return request('/api/nav-layout');
+  },
+  adminSaveNavLayout(order: NavOrderOverride): Promise<{ ok: boolean; order: NavOrderOverride }> {
+    return request('/api/admin/nav-layout', { method: 'PUT', body: JSON.stringify(order) });
+  },
+  adminResetNavLayout(): Promise<{ ok: boolean; order: null }> {
+    return request('/api/admin/nav-layout', { method: 'DELETE' });
   },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');

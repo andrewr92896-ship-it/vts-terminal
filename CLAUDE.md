@@ -59,6 +59,15 @@ Tech:
   truth for workspaces, sidebar sections, order, icons, and role gates. Section
   `key`s are the screen keys switched in `Portal.tsx` (`renderScreen` /
   `renderExtra`).
+- **Sidebar order is founder-overridable:** the **Developer Portal ▸ Sidebar
+  Layout** editor (`AdminSidebarLayout`) saves a single order override to
+  `app_settings` under `nav.order` (routes: `GET /api/nav-layout` for everyone,
+  founder-only `PUT|DELETE /api/admin/nav-layout`). `theme/navOrder.ts`
+  (`applyNavOrder`) applies it over the code-default `NAV` for **every** user;
+  `Portal.tsx` loads it and passes the reordered nav to `Sidebar`. It only
+  reorders (workspaces + sections within a workspace) — never adds/removes/moves
+  a section across workspaces, so routing is untouched. Unknown/new keys keep
+  their default position (appended), so a stale override never hides new nav.
 
 ## Workspaces & sections (`theme/nav.ts`)
 
@@ -98,8 +107,9 @@ top of the workspaces list** (see `theme/nav.ts` order).
 - **Admin** (rose): Users, Teams, Badges, AI Instructions, Patch Notes, Site
   Wording, Early Access, View as role, Suggestions, Bug Reports. **Admins only.**
 - **Developer Portal** (`founder` key/role, amber): AI Instructions, Site Wording,
-  View as role. **Founder-level only** (`isFounder`). Displayed as "Developer
-  Portal"; the internal key and role are still `founder` (unchanged gating).
+  Sidebar Layout (`ad_sidebar` — reorder the whole sidebar, see below), View as
+  role. **Founder-level only** (`isFounder`). Displayed as "Developer Portal";
+  the internal key and role are still `founder` (unchanged gating).
 
 Removed and gone (do not reintroduce or reference): the standalone To-Do
 workspace, Vitalis Wealth Management, Personal Finance, the Vitalis LLC business
