@@ -15,7 +15,9 @@ import type { SupportKind } from '../api/types';
 // unchanged. Demo accounts never persist anything (they're read-only).
 
 export interface SupportMsg {
-  role: 'user' | 'ai';
+  // 'admin' appears once a real admin joins a filed bug thread (synced from the
+  // server), so the reporter sees the reply where they filed it.
+  role: 'user' | 'ai' | 'admin';
   body: string;
 }
 
@@ -27,6 +29,14 @@ export interface SupportThread {
   draft: string;
   /** True once the intake was filed to the admins. */
   submitted: boolean;
+  /**
+   * For a filed bug (kind 'bug'), the server bug-report id this thread is linked
+   * to. Present once the intake completes; used to sync admin replies in and to
+   * route follow-ups to the same ticket instead of forking a new one.
+   */
+  reportId?: string;
+  /** Last-known server status of the linked ticket ('submitted' | 'resolved'). */
+  status?: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -77,10 +87,14 @@ export function loadThreads(userId: string): SupportThread[] {
         kind: t.kind,
         messages: t.messages.filter(
           (m): m is SupportMsg =>
-            !!m && (m.role === 'user' || m.role === 'ai') && typeof m.body === 'string',
+            !!m &&
+            (m.role === 'user' || m.role === 'ai' || m.role === 'admin') &&
+            typeof m.body === 'string',
         ),
         draft: typeof t.draft === 'string' ? t.draft : '',
         submitted: t.submitted === true,
+        reportId: typeof t.reportId === 'string' ? t.reportId : undefined,
+        status: typeof t.status === 'string' ? t.status : undefined,
         createdAt: typeof t.createdAt === 'number' ? t.createdAt : Date.now(),
         updatedAt: typeof t.updatedAt === 'number' ? t.updatedAt : Date.now(),
       }))

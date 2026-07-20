@@ -148,6 +148,10 @@ export interface SupportTurnResult {
   needMore: boolean;
   reply: string;
   submitted: boolean;
+  // For a filed bug (kind 'bug'), the id of the server bug report the intake was
+  // filed to. The Support tab stores this on its local thread so it can sync in
+  // the admin's replies and route the reporter's follow-ups to the same ticket.
+  reportId?: string;
 }
 
 // One turn of the Support tab intake. The client sends the whole conversation so
@@ -171,14 +175,17 @@ export async function supportTurn(
 
   // Complete — file it, closing reply included, to the matching admin section.
   const full: SupportMessage[] = [...trimmed, { role: 'ai', body: reply }];
+  let reportId: string | undefined;
   if (kind === 'bug') {
-    await fileBugReportFromConversation(user, full);
+    // Keep the report id so the Support tab can link its thread and carry on the
+    // conversation (admin replies + follow-ups) on the same ticket.
+    reportId = await fileBugReportFromConversation(user, full);
   } else if (kind === 'suggestion') {
     await addSuggestion(user, suggestionBody(trimmed));
   } else {
     await fileSupportRequest(user, full);
   }
-  return { needMore: false, reply, submitted: true };
+  return { needMore: false, reply, submitted: true, reportId };
 }
 
 // ---- Admin views (general support requests only) ----

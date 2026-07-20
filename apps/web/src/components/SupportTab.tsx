@@ -95,6 +95,42 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
     if (el) el.scrollTo({ top: el.scrollHeight });
   }, [active?.messages, busy, activeId]);
 
+  // Keep a filed bug thread in sync with its server ticket while it's open, so
+  // the admin's replies appear here and the reporter can reply back. Runs on
+  // open and then polls lightly; best-effort (the push notification is the
+  // primary signal that a reply landed).
+  const activeReportId = active && active.kind === 'bug' ? active.reportId : undefined;
+  useEffect(() => {
+    if (isDemo || !activeReportId) return;
+    let alive = true;
+    const sync = async () => {
+      try {
+        const r = await api.myBugReports();
+        const report = r.reports.find((x) => x.id === activeReportId);
+        if (!report || !alive) return;
+        setThreads((prev) =>
+          prev.map((t) => {
+            if (t.id !== activeId) return t;
+            const msgs = report.messages.map((m) => ({ role: m.role, body: m.body }));
+            // Avoid a needless state churn when nothing actually changed.
+            if (t.messages.length === msgs.length && t.status === report.status && t.submitted) {
+              return t;
+            }
+            return { ...t, messages: msgs, submitted: true, status: report.status };
+          }),
+        );
+      } catch {
+        /* best-effort */
+      }
+    };
+    void sync();
+    const iv = setInterval(sync, 15000);
+    return () => {
+      alive = false;
+      clearInterval(iv);
+    };
+  }, [isDemo, activeReportId, activeId]);
+
   function patchThread(id: string, patch: Partial<SupportThread>, touch = true) {
     setThreads((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: touch ? Date.now() : t.updatedAt } : t)),
@@ -143,11 +179,40 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
     patchThread(id, { messages: next, draft: '' });
     setBusy(true);
     setError(null);
+
+    // A filed bug already linked to a server ticket: send the follow-up to that
+    // same ticket (a human ↔ admin conversation) instead of re-running the intake
+    // and forking a brand-new report.
+    if (active.kind === 'bug' && active.reportId) {
+      try {
+        const r = await api.replyBugReport(active.reportId, text);
+        patchThread(id, {
+          messages: r.report.messages.map((m) => ({ role: m.role, body: m.body })),
+          submitted: true,
+          status: r.report.status,
+        });
+      } catch (e) {
+        patchThread(id, { messages: prevMessages, draft: text }, false);
+        setError(e instanceof ApiError ? e.message : 'Could not send. Try again.');
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+
     try {
-      const r = await api.supportMessage(active.kind, next);
+      // The intake endpoint only speaks 'user'/'ai'; admin turns only exist on a
+      // linked ticket (handled above), so they're never in an intake payload.
+      const r = await api.supportMessage(
+        active.kind,
+        next.filter((m) => m.role !== 'admin').map((m) => ({ role: m.role as 'user' | 'ai', body: m.body })),
+      );
       patchThread(id, {
         messages: [...next, { role: 'ai', body: r.reply }],
         submitted: active.submitted || r.submitted,
+        // Link the thread to its server ticket the moment a bug is filed, so the
+        // admin's replies sync in and follow-ups reach the same report.
+        ...(r.reportId ? { reportId: r.reportId, status: 'submitted' } : {}),
       });
       if (r.submitted) setFollowUp(false);
     } catch (e) {
@@ -330,7 +395,13 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
   }
 
   const cat = categoryFor(active.kind);
-  const showComposer = !active.submitted || followUp;
+  // A filed bug linked to a server ticket becomes a two-way thread once an admin
+  // replies — keep the composer open so the reporter can carry the conversation.
+  const linkedBug = active.kind === 'bug' && !!active.reportId;
+  const adminJoined = active.messages.some((m) => m.role === 'admin');
+  const resolved = active.status === 'resolved';
+  const canConverse = linkedBug && adminJoined && !resolved;
+  const showComposer = !active.submitted || followUp || canConverse;
 
   // Intake conversation.
   return (
@@ -358,6 +429,11 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
                 <EditableText id="support.assistant.name">VTS AI</EditableText>
               </div>
             )}
+            {m.role === 'admin' && (
+              <div style={{ fontSize: 10, color: '#2FC77E', fontWeight: 600, margin: '0 2px 3px' }}>
+                <EditableText id="support.admin.name">Admin</EditableText>
+              </div>
+            )}
             <div
               style={{
                 maxWidth: '85%',
@@ -368,8 +444,16 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
                 color: m.role === 'user' ? '#06122c' : '#dfe7fa',
-                background: m.role === 'user' ? theme.accent : 'rgba(255,255,255,.05)',
-                border: m.role === 'user' ? 'none' : '1px solid #1d3560',
+                background:
+                  m.role === 'user'
+                    ? theme.accent
+                    : m.role === 'admin'
+                      ? 'rgba(47,199,126,.12)'
+                      : 'rgba(255,255,255,.05)',
+                border:
+                  m.role === 'user'
+                    ? 'none'
+                    : `1px solid ${m.role === 'admin' ? 'rgba(47,199,126,.4)' : '#1d3560'}`,
               }}
             >
               {m.body}
@@ -391,11 +475,19 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
 
       {active.submitted && (
         <div style={{ padding: '10px 12px', borderTop: '1px solid #16294f', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#7fd6a3', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, color: resolved ? '#8ea3cc' : '#7fd6a3', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icon name="check-check" size={14} />
-            <EditableText id="support.sent">Sent to the admins.</EditableText>
+            {resolved ? (
+              <EditableText id="support.resolved">Marked resolved by the admins.</EditableText>
+            ) : canConverse ? (
+              <EditableText id="support.chatting">You’re chatting with the admins.</EditableText>
+            ) : linkedBug ? (
+              <EditableText id="support.awaiting_reply">Sent to the admins — they’ll reply here.</EditableText>
+            ) : (
+              <EditableText id="support.sent">Sent to the admins.</EditableText>
+            )}
           </span>
-          {!followUp && (
+          {!linkedBug && !followUp && (
             <button
               onClick={() => setFollowUp(true)}
               style={{ border: `1px solid ${theme.accent}`, background: 'transparent', color: '#dfe7fa', fontWeight: 600, fontSize: 12, padding: '7px 12px', borderRadius: 8, cursor: 'pointer' }}

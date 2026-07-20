@@ -220,10 +220,12 @@ export async function createBugReport(
 // chat-bubble Support tab, whose AI intake runs client-side and only persists
 // once it has enough detail). The whole transcript is stored so the admin sees
 // the same clarified thread a Site Help report produces, and it lands 'submitted'.
+// Returns the new report id so the caller (the Support tab) can link its local
+// thread to the server ticket and later show admin replies + send follow-ups.
 export async function fileBugReportFromConversation(
   user: { id: string; displayName: string; teamId: string | null },
   conversation: { role: 'user' | 'ai'; body: string }[],
-): Promise<void> {
+): Promise<string> {
   const firstUser = conversation.find((m) => m.role === 'user')?.body?.trim() ?? '';
   const summary = (firstUser.split('\n')[0] || 'Bug report').slice(0, 140);
   const now = new Date();
@@ -244,6 +246,7 @@ export async function fileBugReportFromConversation(
     await insertMessage(id, m.role, m.body, new Date(at));
     at += 1;
   }
+  return id;
 }
 
 export class BugReportForbiddenError extends Error {}

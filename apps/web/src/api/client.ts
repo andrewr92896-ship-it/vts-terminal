@@ -692,7 +692,7 @@ export const api = {
   supportMessage(
     kind: SupportKind,
     messages: { role: 'user' | 'ai'; body: string }[],
-  ): Promise<{ needMore: boolean; reply: string; submitted: boolean }> {
+  ): Promise<{ needMore: boolean; reply: string; submitted: boolean; reportId?: string }> {
     return request('/api/support/message', { method: 'POST', body: JSON.stringify({ kind, messages }) });
   },
   adminSupportRequests(): Promise<{ requests: SupportRequest[] }> {
