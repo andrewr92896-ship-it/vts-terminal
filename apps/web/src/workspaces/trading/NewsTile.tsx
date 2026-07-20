@@ -25,16 +25,12 @@ const BIAS: Record<NewsBias, { label: string; color: string; arrow: string }> = 
 // The topic subfeeds a News tile can be pinned to: every headline, or one of the
 // classified subfeeds (Fed, EUR/USD, Bitcoin, …). Mirrors the Market News tabs.
 const FEED_OPTIONS: { key: string; label: string }[] = [{ key: 'all', label: 'All news' }, ...NEWS_FEEDS];
-const IMPACT_OPTIONS: { key: NonNullable<BoardTile['minImpact']>; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'medhigh', label: 'Med+' },
-  { key: 'high', label: 'High' },
-];
 
 // A live market-news headline feed for the chart board — the same classified
-// headlines as the Market News screen, filtered to a topic subfeed and impact
-// level chosen per tile and saved with the preset. Polls on its own interval and
-// keeps the last snapshot on a failed refresh.
+// headlines as the Market News screen, filtered to a topic subfeed chosen per
+// tile and saved with the preset. Every impact level shows (each headline is
+// still badged High/Med/Low). Polls on its own interval and keeps the last
+// snapshot on a failed refresh.
 export function NewsTile({
   tile,
   editing,
@@ -78,17 +74,12 @@ export function NewsTile({
   }, [load]);
 
   const feed = tile.newsFeed ?? 'all';
-  const minImpact = tile.minImpact ?? 'medhigh';
 
   const shown = useMemo(() => {
     if (!headlines) return [];
-    return headlines.filter((h) => {
-      if (feed !== 'all' && !newsFeeds(h).includes(feed)) return false;
-      if (minImpact === 'high' && h.impact !== 'high') return false;
-      if (minImpact === 'medhigh' && h.impact === 'low') return false;
-      return true;
-    });
-  }, [headlines, feed, minImpact]);
+    // Show every impact level; the per-headline High/Med/Low badge conveys impact.
+    return headlines.filter((h) => feed === 'all' || newsFeeds(h).includes(feed));
+  }, [headlines, feed]);
 
   const feedLabel = FEED_OPTIONS.find((f) => f.key === feed)?.label ?? 'All news';
 
@@ -104,7 +95,7 @@ export function NewsTile({
           <ScrollLockButton />
           {editing ? (
             <>
-              {/* Topic subfeed + impact pickers — saved with the preset. */}
+              {/* Topic subfeed picker — saved with the preset. */}
               <select
                 value={feed}
                 onChange={(e) => onChange({ newsFeed: e.target.value })}
@@ -115,11 +106,6 @@ export function NewsTile({
                   <option key={f.key} value={f.key} style={{ background: '#091633', color: TEXT }}>{f.label}</option>
                 ))}
               </select>
-              <div style={segWrap} title="Lowest impact to show">
-                {IMPACT_OPTIONS.map((o) => (
-                  <button key={o.key} onClick={() => onChange({ minImpact: o.key })} style={segBtn(minImpact === o.key)}>{o.label}</button>
-                ))}
-              </div>
               <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>
             </>
           ) : (
@@ -132,7 +118,7 @@ export function NewsTile({
         {!headlines && !error && <div style={hint}><EditableText id="newstile.loading">Loading news…</EditableText></div>}
         {error && !headlines && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {headlines && shown.length === 0 && (
-          <div style={hint}>No {feed === 'all' ? '' : `${feedLabel} `}headlines{minImpact !== 'all' ? ' at this impact' : ''} yet. New stories appear here automatically.</div>
+          <div style={hint}>No {feed === 'all' ? '' : `${feedLabel} `}headlines yet. New stories appear here automatically.</div>
         )}
         {shown.map((h) => (
           <HeadlineRow key={h.id} h={h} />
@@ -212,26 +198,6 @@ const chip: CSSProperties = {
   borderRadius: 5,
   padding: '1px 6px',
 };
-const segWrap: CSSProperties = {
-  display: 'inline-flex',
-  background: 'rgba(4,12,30,.5)',
-  border: `1px solid ${BORDER2}`,
-  borderRadius: 6,
-  padding: 2,
-  gap: 2,
-};
-function segBtn(active: boolean): CSSProperties {
-  return {
-    fontSize: 10,
-    fontWeight: 700,
-    color: active ? '#0c2768' : TEXT,
-    background: active ? GOLD : 'transparent',
-    border: 'none',
-    borderRadius: 4,
-    padding: '3px 7px',
-    cursor: 'pointer',
-  };
-}
 const miniSelect: CSSProperties = {
   fontSize: 10.5,
   fontWeight: 600,

@@ -11,14 +11,15 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.30';
+export const APP_VERSION = 'Beta V 5.31';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.30',
+    version: 'Beta V 5.31',
     date: 'July 20, 2026',
     notes: [
-      'Live Wall ▸ Master (phone): the scroll-lock padlock is now on every board window — charts, watchlists, positions, metrics, news, calendar, and alerts — not just charts. It’s one shared lock: tapping it on any window freezes page scrolling on all of them, and unlocking from any window unlocks them all.',
+      'Market News board window: dropped the All / Med+ / High impact toggle. The window now shows every headline regardless of impact — each story still carries its High / Med / Low badge so you can tell at a glance.',
+      'Live Wall ▸ Master: while editing the layout there’s now a little breathing room below the grid, so the bottom-row window’s resize handle no longer sits jammed against the footer and can be dragged down to grow.',
     ],
   },
   {
