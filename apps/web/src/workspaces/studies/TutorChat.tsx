@@ -115,7 +115,7 @@ export function TutorChat({
           onClick={() => setErr(null)}
           style={{ fontSize: 12, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '8px 11px', cursor: 'pointer' }}
         >
-          {err} — click to dismiss.
+          {err}<EditableText id="tutor.dismiss_hint" text=" — click to dismiss." />
         </div>
       )}
 

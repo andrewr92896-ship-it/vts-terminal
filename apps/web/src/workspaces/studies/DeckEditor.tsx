@@ -283,7 +283,7 @@ export function DeckEditor({
   if (loading) {
     return (
       <div style={wrap}>
-        <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
+        <button onClick={() => onClose()} style={ghostBtn(theme)}><EditableText id="deckeditor.back" text="‹ Back" /></button>
         <div style={{ ...card(theme), color: muted, fontSize: 13, marginTop: 12 }}>
           <EditableText id="deckeditor.loading" text="Loading the study game…" />
         </div>
@@ -293,7 +293,7 @@ export function DeckEditor({
   if (loadError) {
     return (
       <div style={wrap}>
-        <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
+        <button onClick={() => onClose()} style={ghostBtn(theme)}><EditableText id="deckeditor.back" text="‹ Back" /></button>
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13, marginTop: 12 }}>
           <EditableText id="deckeditor.load_error" text="Couldn’t load this study game." />
         </div>
@@ -496,11 +496,11 @@ function QuestionEditor({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: muted }}>Q{n}{q.sourceName ? ` · from ${q.sourceName}` : ''}</span>
         {!confirm ? (
-          <button onClick={() => setConfirm(true)} style={{ ...ghostBtn(theme), minHeight: 32, padding: '5px 10px', color: '#ff9a9a' }}>Delete</button>
+          <button onClick={() => setConfirm(true)} style={{ ...ghostBtn(theme), minHeight: 32, padding: '5px 10px', color: '#ff9a9a' }}><EditableText id="deckeditor.q_delete" text="Delete" /></button>
         ) : (
           <span style={{ display: 'flex', gap: 6 }}>
-            <button onClick={onRemove} style={{ ...ghostBtn(theme), minHeight: 32, padding: '5px 10px', borderColor: '#ef5468', color: '#ff9a9a' }}>Confirm</button>
-            <button onClick={() => setConfirm(false)} style={{ ...ghostBtn(theme), minHeight: 32, padding: '5px 10px' }}>Cancel</button>
+            <button onClick={onRemove} style={{ ...ghostBtn(theme), minHeight: 32, padding: '5px 10px', borderColor: '#ef5468', color: '#ff9a9a' }}><EditableText id="deckeditor.q_delete_confirm" text="Confirm" /></button>
+            <button onClick={() => setConfirm(false)} style={{ ...ghostBtn(theme), minHeight: 32, padding: '5px 10px' }}><EditableText id="deckeditor.q_delete_cancel" text="Cancel" /></button>
           </span>
         )}
       </div>
@@ -581,12 +581,12 @@ function QuestionEditor({
             </div>
           );
         })}
-        <div style={{ fontSize: 10.5, color: muted }}>Tap a letter to set the correct answer (green ✓).</div>
+        <div style={{ fontSize: 10.5, color: muted }}><EditableText id="deckeditor.answer_hint" text="Tap a letter to set the correct answer (green ✓)." /></div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <label style={{ fontSize: 12, color: muted, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-          Category
+          <EditableText id="deckeditor.category_label" text="Category" />
           <select value={q.topic} onChange={(e) => onPatch({ topic: e.target.value })} style={{ ...field(theme), padding: '7px 9px', maxWidth: 220 }}>
             {!categories.some((c) => c.toLowerCase() === q.topic.trim().toLowerCase()) && q.topic && (
               <option value={q.topic} style={{ background: '#12102a' }}>{q.topic}</option>

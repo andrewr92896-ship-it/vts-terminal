@@ -94,11 +94,11 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {decks.length >= 2 && (
               <button onClick={() => setCombineOpen((v) => !v)} style={ghostBtn(theme)}>
-                {combineOpen ? 'Close' : '⧉ Combine games'}
+                {combineOpen ? <EditableText id="studydecks.btn_close_combine" text="Close" /> : <EditableText id="studydecks.btn_combine" text="⧉ Combine games" />}
               </button>
             )}
             <button onClick={() => setComposerOpen((v) => !v)} style={primaryBtn(theme, accentGrad)}>
-              {composerOpen ? 'Close' : '✦ New study game'}
+              {composerOpen ? <EditableText id="studydecks.btn_close_new" text="Close" /> : <EditableText id="studydecks.btn_new" text="✦ New study game" />}
             </button>
           </div>
         )}
@@ -230,21 +230,21 @@ function DeckCard({
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {canManage && !confirm && (
           <button onClick={onEdit} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38 }}>
-            Edit
+            <EditableText id="studydecks.btn_edit" text="Edit" />
           </button>
         )}
         {canManage && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
-            Delete
+            <EditableText id="studydecks.btn_delete" text="Delete" />
           </button>
         )}
         {canManage && confirm && (
           <>
             <button onClick={onDelete} style={{ ...ghostBtn(theme), borderColor: '#ef5468', color: '#ff9a9a' }}>
-              Confirm delete
+              <EditableText id="studydecks.btn_confirm_delete" text="Confirm delete" />
             </button>
             <button onClick={() => setConfirm(false)} style={ghostBtn(theme)}>
-              Cancel
+              <EditableText id="studydecks.btn_cancel" text="Cancel" />
             </button>
           </>
         )}
@@ -254,7 +254,7 @@ function DeckCard({
           </button>
         )}
         {!canManage && !confirm && (
-          <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Play it in the Study Game section</span>
+          <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}><EditableText id="studydecks.play_hint" text="Play it in the Study Game section" /></span>
         )}
       </div>
     </div>
@@ -539,10 +539,10 @@ function DeckComposer({
           {error && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={confirmCreate} disabled={!canConfirm} style={{ ...primaryBtn(theme, accentGrad), opacity: canConfirm ? 1 : 0.6 }}>
-              {busy ? 'Creating…' : `Create study game`}
+              {busy ? <EditableText id="studydecks.btn_creating" text="Creating…" /> : <EditableText id="studydecks.btn_create" text="Create study game" />}
             </button>
             <button onClick={() => { setPreview(null); setError(null); }} disabled={busy} style={ghostBtn(theme)}>
-              Back
+              <EditableText id="studydecks.btn_back" text="Back" />
             </button>
           </div>
         </div>
@@ -567,7 +567,7 @@ function DeckComposer({
               color: mode === m ? theme.accentText : muted,
             }}
           >
-            {m === 'ai' ? 'Generate with AI' : m === 'file' ? 'Upload a file' : 'Import CSV'}
+            {m === 'ai' ? <EditableText id="studydecks.tab_ai" text="Generate with AI" /> : m === 'file' ? <EditableText id="studydecks.tab_file" text="Upload a file" /> : <EditableText id="studydecks.tab_csv" text="Import CSV" />}
           </button>
         ))}
       </div>
@@ -603,7 +603,7 @@ function DeckComposer({
             />
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ fontSize: 12, color: muted, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                Number of questions
+                <EditableText id="studydecks.label_num_questions" text="Number of questions" />
                 <input
                   type="number"
                   min={1}
@@ -615,7 +615,7 @@ function DeckComposer({
                 />
               </label>
               <button onClick={buildAi} disabled={!canBuildAi} style={{ ...primaryBtn(theme, accentGrad), opacity: canBuildAi ? 1 : 0.6 }}>
-                {busy ? 'Building…' : '✦ Build with AI'}
+                {busy ? <EditableText id="studydecks.btn_building" text="Building…" /> : <EditableText id="studydecks.btn_build_ai" text="✦ Build with AI" />}
               </button>
             </div>
           </>
@@ -623,7 +623,7 @@ function DeckComposer({
           <>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                {fileName ? 'Choose a different file' : 'Choose a text file'}
+                {fileName ? <EditableText id="studydecks.btn_choose_diff_file" text="Choose a different file" /> : <EditableText id="studydecks.btn_choose_file" text="Choose a text file" />}
                 <input type="file" accept=".txt,.md,text/*" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
               </label>
               {fileName && <span style={{ fontSize: 12, color: muted }}>{fileName}</span>}
@@ -638,7 +638,7 @@ function DeckComposer({
               style={{ ...field(theme), resize: 'vertical', minHeight: 52, fontFamily: 'inherit' }}
             />
             <button onClick={generatePreview} disabled={!canGenerate} style={{ ...primaryBtn(theme, accentGrad), alignSelf: 'flex-start', opacity: canGenerate ? 1 : 0.6 }}>
-              {busy ? 'Reading your file…' : '✦ Generate'}
+              {busy ? <EditableText id="studydecks.btn_reading_file" text="Reading your file…" /> : <EditableText id="studydecks.btn_generate" text="✦ Generate" />}
             </button>
           </>
         ) : (

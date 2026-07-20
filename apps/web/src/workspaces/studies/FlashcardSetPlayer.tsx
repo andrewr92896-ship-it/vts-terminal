@@ -238,11 +238,11 @@ export function FlashcardSetPlayer({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <label style={checkLabel}>
                 <input type="checkbox" checked={auto} onChange={(e) => setAuto(e.target.checked)} style={checkbox(theme)} />
-                Auto-rotate
+                <EditableText id="flashcardplayer.auto_rotate" text="Auto-rotate" />
               </label>
               <label style={checkLabel}>
                 <input type="checkbox" checked={alwaysDef} onChange={(e) => setAlwaysDef(e.target.checked)} style={checkbox(theme)} />
-                Always show the definition with the word
+                <EditableText id="flashcardplayer.always_def" text="Always show the definition with the word" />
               </label>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, color: '#8a7fc8' }}>
                 {cards.length === 0 ? '0 / 0' : `${Math.min(i, cards.length - 1) + 1} / ${cards.length}`}
@@ -268,7 +268,7 @@ export function FlashcardSetPlayer({
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontSize: 11.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent }}>
-                  {alwaysDef ? 'Card' : showDef ? 'Definition' : 'Term'}
+                  {alwaysDef ? <EditableText id="flashcardplayer.phase_card" text="Card" /> : showDef ? <EditableText id="flashcardplayer.phase_def" text="Definition" /> : <EditableText id="flashcardplayer.phase_term" text="Term" />}
                 </span>
                 <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 14, fontWeight: 600, color: '#fff' }}>
                   {secs}s
@@ -327,7 +327,7 @@ export function FlashcardSetPlayer({
                 </div>
               ) : (
                 <div style={{ fontSize: 12, color: '#8a7fc8', textAlign: 'center' }}>
-                  {auto ? 'Definition reveals automatically…' : 'Tap the card to reveal the definition'}
+                  {auto ? <EditableText id="flashcardplayer.auto_reveal_hint" text="Definition reveals automatically…" /> : <EditableText id="flashcardplayer.tap_reveal_hint" text="Tap the card to reveal the definition" />}
                 </div>
               )}
             </div>
@@ -348,12 +348,12 @@ export function FlashcardSetPlayer({
               }}
             >
               <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
-                {allCards.length === 0 ? 'This set has no cards yet' : 'All caught up'}
+                {allCards.length === 0 ? <EditableText id="flashcardplayer.empty_title" text="This set has no cards yet" /> : <EditableText id="flashcardplayer.caught_up_title" text="All caught up" />}
               </div>
               <div style={{ fontSize: 12.5, color: '#a99ff0', maxWidth: 320, lineHeight: 1.5 }}>
                 {allCards.length === 0
-                  ? 'Add cards to this set to start studying.'
-                  : 'You have marked every card here as known. Restore one from the Learned list to study it again.'}
+                  ? <EditableText id="flashcardplayer.empty_blurb" text="Add cards to this set to start studying." />
+                  : <EditableText id="flashcardplayer.caught_up_blurb" text="You have marked every card here as known. Restore one from the Learned list to study it again." />}
               </div>
             </div>
           )}
@@ -361,15 +361,15 @@ export function FlashcardSetPlayer({
           {/* Manual controls */}
           {card && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-              <button onClick={() => go(-1)} style={navBtn(theme)}>‹ Prev</button>
+              <button onClick={() => go(-1)} style={navBtn(theme)}><EditableText id="flashcardplayer.prev" text="‹ Prev" /></button>
               {!auto && !alwaysDef && (
                 <button onClick={() => setShowDef((v) => !v)} style={primaryBtn(theme, accentGrad)}>
-                  {showDef ? 'Show term' : 'Show definition'}
+                  {showDef ? <EditableText id="flashcardplayer.show_term" text="Show term" /> : <EditableText id="flashcardplayer.show_def" text="Show definition" />}
                 </button>
               )}
               {!readOnly && (
                 <button onClick={() => markKnown(card.term)} style={knownBtn} title="Hide this card; you already know it">
-                  ✓ I know this
+                  <EditableText id="flashcardplayer.know_this" text="✓ I know this" />
                 </button>
               )}
               <button onClick={() => go(1)} style={navBtn(theme)}><EditableText id="flashcardplayer.next">Next ›</EditableText></button>
@@ -410,7 +410,7 @@ export function FlashcardSetPlayer({
                         }}
                       >
                         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.term}</span>
-                        <span style={{ flex: 'none', color: theme.accent, fontSize: 12, fontWeight: 700 }}>{open ? 'Hide' : 'Reveal'}</span>
+                        <span style={{ flex: 'none', color: theme.accent, fontSize: 12, fontWeight: 700 }}>{open ? <EditableText id="flashcardplayer.hide" text="Hide" /> : <EditableText id="flashcardplayer.reveal" text="Reveal" />}</span>
                       </button>
                       {open && (
                         <div style={{ padding: '10px 14px 12px', fontSize: 13, lineHeight: 1.55, color: '#d7ccff', borderTop: `1px solid ${theme.navBorder}` }}>
@@ -444,8 +444,8 @@ export function FlashcardSetPlayer({
           {learnedList.length === 0 ? (
             <div style={{ fontSize: 11.5, color: '#8a7fc8', lineHeight: 1.5 }}>
               {readOnly
-                ? 'Cards marked as known move here and leave the deck.'
-                : 'Cards you mark with "I know this" move here and leave the deck. Tap the X to add one back.'}
+                ? <EditableText id="flashcardplayer.learned_empty_ro" text="Cards marked as known move here and leave the deck." />
+                : <EditableText id="flashcardplayer.learned_empty" text="Cards you mark with &quot;I know this&quot; move here and leave the deck. Tap the X to add one back." />}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>

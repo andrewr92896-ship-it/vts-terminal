@@ -139,7 +139,7 @@ function SetCard({ set, theme, onStudy }: { set: TeamFlashcardSet; theme: Theme;
       </div>
       <div style={{ marginTop: 12 }}>
         <button onClick={onStudy} disabled={set.cardCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: set.cardCount === 0 ? 0.6 : 1 }}>
-          Study
+          <EditableText id="flashcards.study" text="Study" />
         </button>
       </div>
     </div>

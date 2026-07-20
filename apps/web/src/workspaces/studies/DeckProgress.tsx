@@ -58,7 +58,7 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
 
   const backBtn = (
     <button onClick={onBack} style={ghostBtn(theme)}>
-      ‹ All study games
+      <EditableText id="deckprogress.back" text="‹ All study games" />
     </button>
   );
 

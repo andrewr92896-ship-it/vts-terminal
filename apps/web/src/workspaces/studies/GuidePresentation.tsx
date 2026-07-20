@@ -155,14 +155,14 @@ export function GuidePresentation({
       {/* Controls */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button onClick={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0} style={{ ...ghostBtn(theme), opacity: index === 0 ? 0.5 : 1 }}>
-          ‹ Back
+          <EditableText id="guidepres.back_short" text="‹ Back" />
         </button>
         <div style={{ flex: 1 }} />
         <button
           onClick={() => (last ? onExit() : setIndex((i) => Math.min(total - 1, i + 1)))}
           style={{ border: 'none', background: accentGrad, color: theme.accentText, fontSize: 13.5, fontWeight: 700, padding: '11px 22px', borderRadius: 8, cursor: 'pointer', minHeight: 44 }}
         >
-          {last ? 'Finish' : 'Next ›'}
+          {last ? <EditableText id="guidepres.finish" text="Finish" /> : <EditableText id="guidepres.next" text="Next ›" />}
         </button>
       </div>
     </div>

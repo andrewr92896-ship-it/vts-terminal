@@ -419,7 +419,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
 
   const backBtn = (
     <button onClick={onBack} style={ghostBtn(theme)}>
-      ‹ All study games
+      <EditableText id="studygameplay.back" text="‹ All study games" />
     </button>
   );
 
@@ -478,7 +478,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
               color: view === v ? theme.accentText : muted,
             }}
           >
-            {v === 'quiz' ? 'Quiz' : 'Leaderboard'}
+            {v === 'quiz' ? <EditableText id="studygameplay.tab_quiz" text="Quiz" /> : <EditableText id="studygameplay.tab_leaderboard" text="Leaderboard" />}
           </button>
         ))}
       </div>
@@ -618,7 +618,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
           }}
         >
           <span style={{ fontSize: 13, fontWeight: 700, color: levelEvent.mainUp ? '#e0a23a' : GREEN }}>
-            🎉 {levelEvent.mainUp ? 'LEVEL UP!' : 'SUB-LEVEL UP!'}{' '}
+            🎉 {levelEvent.mainUp ? <EditableText id="studygameplay.level_up" text="LEVEL UP!" /> : <EditableText id="studygameplay.sublevel_up" text="SUB-LEVEL UP!" />}{' '}
           </span>
           <span style={{ background: levelEvent.bg, color: levelEvent.text, borderRadius: 8, padding: '2px 8px', fontWeight: 700 }}>
             {levelEvent.emoji} {levelEvent.name}
@@ -714,7 +714,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                 ) : (
                   scoreChange != null && (
                     <span style={{ fontSize: 12, fontWeight: 600, marginLeft: 8, color: muted }}>
-                      Lifetime{' '}
+                      <EditableText id="studygameplay.lifetime_label" text="Lifetime" />{' '}
                       <span style={{ color: scoreChange >= 0 ? GREEN : RED, fontWeight: 700 }}>
                         {scoreChange >= 0 ? '+' : ''}
                         {scoreChange.toFixed(1)}%
@@ -733,7 +733,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                 guessMode ? (
                   sourceGuess == null ? (
                     <div style={{ marginBottom: 12 }}>
-                      <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}>Which game is this question from?</div>
+                      <div style={{ fontSize: 12, color: muted, marginBottom: 6 }}><EditableText id="studygameplay.guess_prompt" text="Which game is this question from?" /></div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {sources.map((s) => (
                           <button key={s} onClick={() => setSourceGuess(s)} style={{ ...ghostBtn(theme), minHeight: 34, padding: '6px 11px' }}>
@@ -744,7 +744,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                     </div>
                   ) : (
                     <div style={{ fontSize: 12.5, marginBottom: 12, color: sourceGuess === current.sourceName ? GREEN : RED }}>
-                      {sourceGuess === current.sourceName ? '✓ Right' : '✗ Not quite'} — from <strong style={{ color: '#fff' }}>{current.sourceName}</strong>
+                      {sourceGuess === current.sourceName ? <EditableText id="studygameplay.guess_right" text="✓ Right" /> : <EditableText id="studygameplay.guess_wrong" text="✗ Not quite" />} — from <strong style={{ color: '#fff' }}>{current.sourceName}</strong>
                     </div>
                   )
                 ) : (
@@ -957,7 +957,7 @@ function DeckLeaderboard({ theme, deckId }: { theme: Theme; deckId: string }) {
               </span>
               <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#fff', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {e.name}
-                {e.archived && <span style={{ color: muted, fontWeight: 400, fontSize: 11 }}> · past run</span>}
+                {e.archived && <span style={{ color: muted, fontWeight: 400, fontSize: 11 }}><EditableText id="studygameplay.past_run" text=" · past run" /></span>}
               </span>
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 13, fontWeight: 700, color: theme.accent }}>
                 {e.score != null ? `${e.score.toFixed(1)}%` : '—'}

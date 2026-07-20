@@ -94,7 +94,7 @@ export function GuideEditor({
   if (loading) {
     return (
       <div style={wrap}>
-        <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
+        <button onClick={() => onClose()} style={ghostBtn(theme)}><EditableText id="guideeditor.back" text="‹ Back" /></button>
         <div style={{ ...card(theme), color: muted, fontSize: 13, marginTop: 12 }}>
           <EditableText id="guideeditor.loading" text="Loading the presentation…" />
         </div>
@@ -104,7 +104,7 @@ export function GuideEditor({
   if (loadError) {
     return (
       <div style={wrap}>
-        <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
+        <button onClick={() => onClose()} style={ghostBtn(theme)}><EditableText id="guideeditor.back" text="‹ Back" /></button>
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13, marginTop: 12 }}>
           <EditableText id="guideeditor.load_error" text="Couldn’t load this presentation." />
         </div>
@@ -151,7 +151,7 @@ export function GuideEditor({
             {s.image && (
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <img src={s.image} alt="slide screenshot" style={{ maxWidth: 120, maxHeight: 80, borderRadius: 8, border: `1px solid ${theme.navBorder}` }} />
-                <button onClick={() => patch(s.uid, { image: null })} style={{ ...miniBtn(theme), color: '#ff9a9a' }}>Remove image</button>
+                <button onClick={() => patch(s.uid, { image: null })} style={{ ...miniBtn(theme), color: '#ff9a9a' }}><EditableText id="guideeditor.remove_image" text="Remove image" /></button>
               </div>
             )}
           </div>

@@ -91,7 +91,7 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
         </div>
         {!readOnly && sets.length > 0 && (
           <button onClick={() => setComposerOpen((v) => !v)} style={primaryBtn(theme, accentGrad)}>
-            {composerOpen ? 'Close' : '✦ New flashcard set'}
+            {composerOpen ? <EditableText id="teamflashcards.btn_close" text="Close" /> : <EditableText id="teamflashcards.btn_new" text="✦ New flashcard set" />}
           </button>
         )}
       </div>
@@ -213,21 +213,21 @@ function SetCard({
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
         {canManage && !confirm && (
           <button onClick={onEdit} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38 }}>
-            Edit
+            <EditableText id="teamflashcards.btn_edit" text="Edit" />
           </button>
         )}
         {canManage && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
-            Delete
+            <EditableText id="teamflashcards.btn_delete" text="Delete" />
           </button>
         )}
         {canManage && confirm && (
           <>
             <button onClick={onDelete} style={{ ...ghostBtn(theme), borderColor: '#ef5468', color: '#ff9a9a' }}>
-              Confirm delete
+              <EditableText id="teamflashcards.btn_confirm_delete" text="Confirm delete" />
             </button>
             <button onClick={() => setConfirm(false)} style={ghostBtn(theme)}>
-              Cancel
+              <EditableText id="teamflashcards.btn_cancel" text="Cancel" />
             </button>
           </>
         )}
@@ -236,7 +236,7 @@ function SetCard({
             {exporting ? <EditableText id="teamflashcards.exporting" text="Exporting…" /> : <EditableText id="teamflashcards.export_csv" text="⭳ Export CSV" />}
           </button>
         )}
-        {!confirm && <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Study it in the Flashcards section</span>}
+        {!confirm && <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}><EditableText id="teamflashcards.study_hint" text="Study it in the Flashcards section" /></span>}
       </div>
     </div>
   );
@@ -489,7 +489,7 @@ function SetComposer({
           {error && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={confirmCreate} disabled={!canConfirm} style={{ ...primaryBtn(theme, accentGrad), opacity: canConfirm ? 1 : 0.6 }}>
-              {busy ? 'Creating…' : 'Create flashcard set'}
+              {busy ? <EditableText id="teamflashcards.btn_creating" text="Creating…" /> : <EditableText id="teamflashcards.btn_create" text="Create flashcard set" />}
             </button>
             <button onClick={() => { setPreview(null); setError(null); }} disabled={busy} style={ghostBtn(theme)}>
               <EditableText id="teamflashcards.review_back" text="Back" />
@@ -517,7 +517,7 @@ function SetComposer({
               color: mode === m ? theme.accentText : muted,
             }}
           >
-            {m === 'manual' ? 'Type them in' : m === 'ai' ? 'Generate with AI' : m === 'file' ? 'Upload a file' : m === 'csv' ? 'Import CSV' : 'From a study game'}
+            {m === 'manual' ? <EditableText id="teamflashcards.tab_manual" text="Type them in" /> : m === 'ai' ? <EditableText id="teamflashcards.tab_ai" text="Generate with AI" /> : m === 'file' ? <EditableText id="teamflashcards.tab_file" text="Upload a file" /> : m === 'csv' ? <EditableText id="teamflashcards.tab_csv" text="Import CSV" /> : <EditableText id="teamflashcards.tab_game" text="From a study game" />}
           </button>
         ))}
       </div>
@@ -570,7 +570,7 @@ function SetComposer({
                       disabled={busy}
                       style={{ ...ghostBtn(theme), alignSelf: 'flex-start', minHeight: 34, padding: '6px 12px', color: '#ff9a9a' }}
                     >
-                      Remove card
+                      <EditableText id="teamflashcards.btn_remove_card" text="Remove card" />
                     </button>
                   )}
                 </div>
@@ -578,7 +578,7 @@ function SetComposer({
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <button onClick={() => setRows((prev) => [...prev, { term: '', def: '', topic: '' }])} disabled={busy} style={ghostBtn(theme)}>
-                + Add card
+                <EditableText id="teamflashcards.btn_add_card" text="+ Add card" />
               </button>
               <button onClick={buildManual} disabled={!canBuildManual} style={{ ...primaryBtn(theme, accentGrad), opacity: canBuildManual ? 1 : 0.6 }}>
                 {busy ? 'Creating…' : `Create set (${filledRows.length})`}
@@ -609,7 +609,7 @@ function SetComposer({
             />
             <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ fontSize: 12, color: muted, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                Number of cards
+                <EditableText id="teamflashcards.label_num_cards" text="Number of cards" />
                 <input
                   type="number"
                   min={1}
@@ -621,7 +621,7 @@ function SetComposer({
                 />
               </label>
               <button onClick={buildAi} disabled={!canBuildAi} style={{ ...primaryBtn(theme, accentGrad), opacity: canBuildAi ? 1 : 0.6 }}>
-                {busy ? 'Building…' : '✦ Build with AI'}
+                {busy ? <EditableText id="teamflashcards.btn_building" text="Building…" /> : <EditableText id="teamflashcards.btn_build_ai" text="✦ Build with AI" />}
               </button>
             </div>
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
@@ -632,7 +632,7 @@ function SetComposer({
           <>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                {fileName ? 'Choose a different file' : 'Choose a text file'}
+                {fileName ? <EditableText id="teamflashcards.btn_choose_diff_file" text="Choose a different file" /> : <EditableText id="teamflashcards.btn_choose_file" text="Choose a text file" />}
                 <input type="file" accept=".txt,.md,text/*" onChange={onFile} disabled={busy} style={{ display: 'none' }} />
               </label>
               {fileName && <span style={{ fontSize: 12, color: muted }}>{fileName}</span>}
@@ -647,7 +647,7 @@ function SetComposer({
               style={{ ...field(theme), resize: 'vertical', minHeight: 52, fontFamily: 'inherit' }}
             />
             <button onClick={generatePreview} disabled={!canGenerate} style={{ ...primaryBtn(theme, accentGrad), alignSelf: 'flex-start', opacity: canGenerate ? 1 : 0.6 }}>
-              {busy ? 'Reading your file…' : '✦ Generate'}
+              {busy ? <EditableText id="teamflashcards.btn_reading_file" text="Reading your file…" /> : <EditableText id="teamflashcards.btn_generate" text="✦ Generate" />}
             </button>
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
               <EditableText id="teamflashcards.help_file" text="Upload a text file (a glossary, notes, or “term - definition” lines) and AI formats the cards. You review them before the set is created." />
@@ -680,7 +680,7 @@ function SetComposer({
             ) : (
               <>
                 <label style={{ fontSize: 12, color: muted, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  Study game
+                  <EditableText id="teamflashcards.label_study_game" text="Study game" />
                   <select value={selectedGame} onChange={(e) => setSelectedGame(e.target.value)} disabled={busy} style={{ ...field(theme), cursor: 'pointer' }}>
                     <option value="" style={{ background: '#12102a' }}>Choose a study game…</option>
                     {games.map((g) => (
@@ -700,7 +700,7 @@ function SetComposer({
                   style={{ ...field(theme), resize: 'vertical', minHeight: 52, fontFamily: 'inherit' }}
                 />
                 <button onClick={generateFromGame} disabled={!canFromGame} style={{ ...primaryBtn(theme, accentGrad), alignSelf: 'flex-start', opacity: canFromGame ? 1 : 0.6 }}>
-                  {busy ? 'Reading the game…' : '✦ Pull vocabulary'}
+                  {busy ? <EditableText id="teamflashcards.btn_reading_game" text="Reading the game…" /> : <EditableText id="teamflashcards.btn_pull_vocab" text="✦ Pull vocabulary" />}
                 </button>
                 <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
                   <EditableText id="teamflashcards.help_game" text="AI reads the game’s questions, pulls the key vocabulary, and writes definitions. You review the cards before the set is created." />

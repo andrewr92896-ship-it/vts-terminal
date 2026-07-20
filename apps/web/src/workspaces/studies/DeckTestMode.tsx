@@ -120,7 +120,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
 
   const backBtn = (
     <button onClick={onBack} style={ghostBtn(theme)}>
-      ‹ All study games
+      <EditableText id="decktest.back" text="‹ All study games" />
     </button>
   );
 
@@ -223,7 +223,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
             {result.score}%
           </div>
           <div style={{ fontSize: 14, fontWeight: 700, color: result.passed ? GREEN : RED }}>
-            {result.passed ? 'PASS' : 'NOT PASSING'} · pass line {passLine}%
+            {result.passed ? <EditableText id="decktest.pass" text="PASS" /> : <EditableText id="decktest.not_passing" text="NOT PASSING" />} · pass line {passLine}%
           </div>
           <div style={{ fontSize: 12.5, color: muted, marginTop: 6 }}>
             {result.correct} of {result.total} correct
@@ -342,7 +342,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
                 >
                   {selected == null ? <EditableText id="decktest.select_answer" text="Select an answer" /> : <EditableText id="decktest.check_answer" text="Check answer" />}
                 </button>
-                <button onClick={() => { setRevealed(true); }} style={{ ...ghostBtn(theme), borderStyle: 'dashed' }}>Skip</button>
+                <button onClick={() => { setRevealed(true); }} style={{ ...ghostBtn(theme), borderStyle: 'dashed' }}><EditableText id="decktest.skip" text="Skip" /></button>
               </>
             ) : feedback && revealed ? (
               <div style={{ flex: 1 }}>
@@ -350,7 +350,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
                   <div style={{ fontSize: 12.5, color: '#d7ccff', lineHeight: 1.55, marginBottom: 12 }}>{q.explanation}</div>
                 )}
                 <button onClick={() => recordAndNext(chosen)} style={primaryBtn(theme, accentGrad)}>
-                  {index + 1 >= questions.length ? 'Finish test' : 'Next question ›'}
+                  {index + 1 >= questions.length ? <EditableText id="decktest.finish" text="Finish test" /> : <EditableText id="decktest.next" text="Next question ›" />}
                 </button>
               </div>
             ) : (
@@ -360,9 +360,9 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
                   disabled={selected == null}
                   style={{ ...primaryBtn(theme, accentGrad), flex: 1, minWidth: 160, opacity: selected == null ? 0.6 : 1 }}
                 >
-                  {index + 1 >= questions.length ? 'Finish test' : 'Next question ›'}
+                  {index + 1 >= questions.length ? <EditableText id="decktest.finish" text="Finish test" /> : <EditableText id="decktest.next" text="Next question ›" />}
                 </button>
-                <button onClick={() => recordAndNext(null)} style={{ ...ghostBtn(theme), borderStyle: 'dashed' }}>Skip</button>
+                <button onClick={() => recordAndNext(null)} style={{ ...ghostBtn(theme), borderStyle: 'dashed' }}><EditableText id="decktest.skip" text="Skip" /></button>
               </>
             )}
           </div>

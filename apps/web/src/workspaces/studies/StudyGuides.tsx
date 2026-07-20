@@ -243,7 +243,7 @@ export function StudyGuideCreator({
               <EditableText id="guides.creator_new_btn" text="✦ New presentation" />
             </button>
             <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', gap: 6, cursor: parsing ? 'default' : 'pointer', opacity: parsing ? 0.6 : 1 }}>
-              {parsing ? 'Reading…' : '⬆ Upload a presentation'}
+              {parsing ? <EditableText id="guides.reading" text="Reading…" /> : <EditableText id="guides.upload_btn" text="⬆ Upload a presentation" />}
               <input
                 type="file"
                 accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -258,7 +258,7 @@ export function StudyGuideCreator({
 
       {error && (
         <div onClick={() => setError(null)} style={{ fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', marginBottom: 12 }}>
-          {error} — click to dismiss.
+          {error}<EditableText id="guides.dismiss_hint" text=" — click to dismiss." />
         </div>
       )}
 
@@ -269,7 +269,7 @@ export function StudyGuideCreator({
           </div>
           {onNavigate && (
             <button onClick={() => onNavigate('st_guides')} style={primaryBtn(theme, accentGrad)}>
-              ▶ Open Study Guides
+              <EditableText id="guides.open_guides_btn" text="▶ Open Study Guides" />
             </button>
           )}
         </div>
@@ -291,7 +291,7 @@ export function StudyGuideCreator({
               <EditableText id="guides.creator_new_guide_btn" text="✦ New study guide" />
             </button>
             <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', gap: 6, cursor: parsing ? 'default' : 'pointer', opacity: parsing ? 0.6 : 1 }}>
-              {parsing ? 'Reading…' : '⬆ Upload a presentation'}
+              {parsing ? <EditableText id="guides.reading" text="Reading…" /> : <EditableText id="guides.upload_btn" text="⬆ Upload a presentation" />}
               <input
                 type="file"
                 accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
@@ -328,7 +328,7 @@ function GuideCard({
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff', lineHeight: 1.3 }}>{guide.name}</h3>
         <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, border: `1px solid ${theme.accent}`, borderRadius: 5, padding: '2px 6px' }}>
-          Slides
+          <EditableText id="guides.card_badge" text="Slides" />
         </span>
       </div>
       {guide.description && (
@@ -342,25 +342,25 @@ function GuideCard({
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
         <button onClick={onPresent} disabled={guide.slideCount === 0} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38, opacity: guide.slideCount === 0 ? 0.6 : 1 }}>
-          ▶ Present
+          <EditableText id="guides.present_btn" text="▶ Present" />
         </button>
         {canManage && !confirm && (
           <button onClick={onEdit} style={ghostBtn(theme)}>
-            Edit
+            <EditableText id="guides.edit_btn" text="Edit" />
           </button>
         )}
         {canManage && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
-            Delete
+            <EditableText id="guides.delete_btn" text="Delete" />
           </button>
         )}
         {canManage && confirm && (
           <>
             <button onClick={onDelete} style={{ ...ghostBtn(theme), borderColor: '#ef5468', color: '#ff9a9a' }}>
-              Confirm delete
+              <EditableText id="guides.confirm_delete_btn" text="Confirm delete" />
             </button>
             <button onClick={() => setConfirm(false)} style={ghostBtn(theme)}>
-              Cancel
+              <EditableText id="guides.cancel_btn" text="Cancel" />
             </button>
           </>
         )}
@@ -582,8 +582,7 @@ function GuideBuilder({
       >
         {turns.length === 0 && !busy && (
           <div style={{ fontSize: 12.5, color: muted, lineHeight: 1.6 }}>
-            Tell VTS AI what to teach and it drafts the slides. Then keep chatting to refine them — “add a slide on
-            dojis”, “make slide 2 shorter”, “reorder so the summary is last”.
+            <EditableText id="guides.builder_empty_hint" text="Tell VTS AI what to teach and it drafts the slides. Then keep chatting to refine them — “add a slide on dojis”, “make slide 2 shorter”, “reorder so the summary is last”." />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 12 }}>
               {SEED_PROMPTS.map((p) => (
                 <button key={p} onClick={() => void send(p)} style={seedBtn(theme)}>
@@ -598,7 +597,7 @@ function GuideBuilder({
             <div style={m.role === 'user' ? userBubble(theme) : assistantBubble(theme)}>
               {m.role === 'assistant' && (
                 <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, marginBottom: 4 }}>
-                  VTS AI
+                  <EditableText id="guides.assistant_label" text="VTS AI" />
                 </div>
               )}
               {m.display}
@@ -693,7 +692,7 @@ function GuideBuilder({
 
       {error && (
         <div onClick={() => setError(null)} style={{ fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer', marginBottom: 12 }}>
-          {error} — click to dismiss.
+          {error}<EditableText id="guides.dismiss_hint" text=" — click to dismiss." />
         </div>
       )}
 
@@ -772,7 +771,7 @@ function SlideEditor({
             onClick={(e) => { e.stopPropagation(); onChange({ image: null }); }}
             style={{ position: 'absolute', top: 8, right: 8, fontSize: 11, fontWeight: 700, color: '#fff', background: 'rgba(12,10,28,.8)', border: `1px solid ${theme.navBorder}`, borderRadius: 6, padding: '5px 9px', cursor: 'pointer' }}
           >
-            Remove screenshot
+            <EditableText id="guides.remove_screenshot" text="Remove screenshot" />
           </button>
         </div>
       ) : (
@@ -780,7 +779,7 @@ function SlideEditor({
           onClick={(e) => e.stopPropagation()}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, ...ghostBtn(theme), cursor: 'pointer', fontSize: 12 }}
         >
-          📎 Add screenshot
+          <EditableText id="guides.add_screenshot" text="📎 Add screenshot" />
           <input
             type="file"
             accept="image/*"
