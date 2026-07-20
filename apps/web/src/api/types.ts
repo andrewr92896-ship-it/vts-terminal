@@ -975,6 +975,7 @@ export interface TradeRecord {
   id: string;
   ownerId: string; // the user who logged the trade
   owner: string; // that user's username, shown on the trade
+  ownerName: string; // that user's display name (preferred for labels/pickers)
   isMine: boolean; // the viewing user owns this trade (may edit/remove it)
   broker: string | null;
   instrument: string;

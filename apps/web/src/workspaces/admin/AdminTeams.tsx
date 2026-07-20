@@ -219,7 +219,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
                               {m.displayName}
                               {!m.active && <span style={{ marginLeft: 6, fontSize: 10, color: '#ff8a80' }}>· inactive</span>}
                             </div>
-                            <div style={{ fontSize: 10.5, color: '#8ea3cc' }}>@{m.username} · {rolesSummary(m.roles)}</div>
+                            <div style={{ fontSize: 10.5, color: '#8ea3cc' }}>{rolesSummary(m.roles)}</div>
                           </div>
                           <select
                             value={t.id}

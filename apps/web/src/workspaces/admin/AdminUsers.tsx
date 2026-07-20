@@ -79,6 +79,10 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const [resetFor, setResetFor] = useState<string | null>(null);
   const [resetPw, setResetPw] = useState('');
 
+  // Inline display-name edit state: holds the id of the user being renamed.
+  const [editNameFor, setEditNameFor] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState('');
+
   // Two-step delete confirmation: holds the id of the user awaiting confirm.
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -158,6 +162,15 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     await patch(id, { password: resetPw });
     setResetFor(null);
     setResetPw('');
+  }
+
+  // Save an edited display name for a user, then close the inline editor.
+  async function saveName(id: string) {
+    const name = nameDraft.trim();
+    if (!name) return;
+    await patch(id, { displayName: name });
+    setEditNameFor(null);
+    setNameDraft('');
   }
 
   async function remove(id: string) {
@@ -276,7 +289,6 @@ export function AdminUsers({ theme }: { theme: Theme }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {users.map((u) => {
           const isSelf = me?.id === u.id;
-          const renamed = u.username !== u.createdUsername;
           return (
             <div key={u.id} style={{ ...panel(theme), opacity: u.active ? 1 : 0.6 }}>
               <div
@@ -289,17 +301,47 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 }}
               >
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#eef3ff', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <span>{u.displayName}</span>
-                    <UserBadges roles={u.roles} badges={u.badges} size={14} />
-                    {isSelf && <span style={{ color: theme.accent, fontWeight: 600 }}>· you</span>}
-                  </div>
-                  <div style={{ fontSize: 11.5, color: '#8ea3cc', fontFamily: "'IBM Plex Mono', monospace", marginTop: 3 }}>
-                    @{u.username}
-                    {renamed && <span style={{ color: '#6f84b2' }}> (created as @{u.createdUsername})</span>}
-                  </div>
+                  {editNameFor === u.id ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <input
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        autoFocus
+                        maxLength={120}
+                        onKeyDown={(e) => e.key === 'Enter' && nameDraft.trim() && saveName(u.id)}
+                        style={{ ...inputStyle, maxWidth: 220 }}
+                      />
+                      <button
+                        onClick={() => saveName(u.id)}
+                        disabled={busyId === u.id || !nameDraft.trim()}
+                        style={primaryBtn(theme, accentGrad)}
+                      >
+                        Save
+                      </button>
+                      <button onClick={() => setEditNameFor(null)} disabled={busyId === u.id} style={ghostBtn}>
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#eef3ff', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <span>{u.displayName}</span>
+                      <UserBadges roles={u.roles} badges={u.badges} size={14} />
+                      {isSelf && <span style={{ color: theme.accent, fontWeight: 600 }}>· you</span>}
+                      <button
+                        onClick={() => {
+                          setEditNameFor(u.id);
+                          setNameDraft(u.displayName);
+                        }}
+                        disabled={busyId === u.id}
+                        title="Edit display name"
+                        style={{ ...ghostBtn, minHeight: 0, padding: '3px 8px' }}
+                      >
+                        <Icon name="pencil" size={12} />
+                      </button>
+                    </div>
+                  )}
                   {u.email && (
-                    <div style={{ fontSize: 11.5, color: '#6f84b2', fontFamily: "'IBM Plex Mono', monospace", marginTop: 2 }}>
+                    <div style={{ fontSize: 11.5, color: '#6f84b2', fontFamily: "'IBM Plex Mono', monospace", marginTop: 3 }}>
                       {u.email}
                     </div>
                   )}
@@ -367,7 +409,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
 
               {confirmDeleteId === u.id && (
                 <div style={{ ...msgStyle(false), marginTop: 10 }}>
-                  Permanently delete <strong>{u.displayName}</strong> (@{u.username}) and all of
+                  Permanently delete <strong>{u.displayName}</strong> and all of
                   their data? This cannot be undone — use Deactivate instead to suspend access
                   without erasing anything.
                 </div>
