@@ -461,7 +461,7 @@ export async function getHistory(
   // The public demo is sandboxed off the real desk: it never sees teammates'
   // closed trades (and its own showcase has no closed positions), so its History
   // is empty rather than a window into real accounts.
-  const settings = await getDeskSettings();
+  const settings = await getDeskSettings(viewerId);
   const config = configOf(settings);
   const beFields = {
     breakEvenPct: settings.breakEvenPct,

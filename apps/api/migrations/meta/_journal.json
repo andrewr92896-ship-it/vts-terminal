@@ -477,6 +477,13 @@
       "when": 1782339936908,
       "tag": "0067_soft_delete_trades",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "6",
+      "when": 1782340036908,
+      "tag": "0068_desk_settings_per_member",
+      "breakpoints": true
     }
   ]
 }

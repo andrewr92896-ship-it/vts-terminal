@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.28';
+export const APP_VERSION = 'Beta V 5.29';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.29',
+    date: 'July 20, 2026',
+    notes: [
+      'Trade Desk settings are now per trader. Each trader’s break-even buffer, per-instrument buffers, and “ignore test trades” floor shape their own view of the desk.',
+      'The team leader and the Chief Analyst / Chief Strategist (and admins) can now change any teammate’s Trade Desk settings — open Settings and use the new “Whose settings” picker at the top to choose a member. Everyone else edits only their own.',
+    ],
+  },
   {
     version: 'Beta V 5.28',
     date: 'July 20, 2026',

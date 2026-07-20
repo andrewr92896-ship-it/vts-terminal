@@ -13,6 +13,7 @@ import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../tradin
 import { getHistory, removePosition, updateClosedPosition } from '../trading/history.js';
 import { listDeletedTrades, restoreDeleted } from '../trading/deleted.js';
 import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
+import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { scopedTraderIds } from '../trading/scope.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
@@ -179,23 +180,45 @@ export async function tradingRoutes(app: FastifyInstance) {
     return getHistory(u, SEE_BALANCES, isDemoUser(u));
   });
 
-  // ---- Desk-wide settings (shared across the trading team) ----
-  // The response carries `instruments` — every symbol the desk has traded — so
-  // the per-instrument buffer picker can offer them without the trader typing.
-  app.get('/api/trading/desk-settings', read, async (request) => {
-    const ids = await scopedTraderIds(request.currentUser!);
-    const [settings, instruments] = await Promise.all([getDeskSettings(), getDeskInstruments(ids)]);
-    return { ...settings, instruments };
+  // ---- Desk settings (per trader) ----
+  // Each trader has their own settings; a `?userId=` targets a teammate's, which
+  // only a desk lead (team leader / Chief Analyst / Chief Strategist / admin) may
+  // read or change (canEditDeskSettingsFor). The response carries `instruments`
+  // (every symbol the team has traded, for the buffer picker), the resolved
+  // `userId`, and `editableMembers` — the roster the caller may switch between.
+  app.get('/api/trading/desk-settings', read, async (request, reply) => {
+    const me = request.currentUser!;
+    const target = (request.query as { userId?: string }).userId?.trim() || me.id;
+    if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    const ids = await scopedTraderIds(me);
+    const [settings, instruments, editableMembers] = await Promise.all([
+      getDeskSettings(target),
+      getDeskInstruments(ids),
+      editableDeskMembers(me),
+    ]);
+    return { ...settings, instruments, userId: target, editableMembers };
   });
 
   app.patch('/api/trading/desk-settings', write, async (request, reply) => {
+    const me = request.currentUser!;
+    const body = (request.body ?? {}) as { userId?: unknown };
+    const target = (typeof body.userId === 'string' && body.userId.trim()) || me.id;
     const parsed = deskSettingsSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Enter a valid break-even buffer (percent 0–100, or a non-negative dollar/pip amount)' });
     }
-    const ids = await scopedTraderIds(request.currentUser!);
-    const [settings, instruments] = await Promise.all([updateDeskSettings(parsed.data), getDeskInstruments(ids)]);
-    return { ...settings, instruments };
+    if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
+      return reply.code(403).send({ error: 'You cannot change that member’s desk settings' });
+    }
+    const ids = await scopedTraderIds(me);
+    const [settings, instruments, editableMembers] = await Promise.all([
+      updateDeskSettings(target, parsed.data),
+      getDeskInstruments(ids),
+      editableDeskMembers(me),
+    ]);
+    return { ...settings, instruments, userId: target, editableMembers };
   });
 
   // ---- Account Metrics (prop-firm challenge) — private, `funded`-role only ----

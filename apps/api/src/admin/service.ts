@@ -12,6 +12,8 @@ import {
   tradingSessions,
   brokerConnections,
   tradingChallenges,
+  tradingDeskSettings,
+  tradingBeOverrides,
   tradingNews,
   tradingCalendar,
   aiUsage,
@@ -352,6 +354,10 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
     await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));
     await tx.delete(tradingChallenges).where(eq(tradingChallenges.userId, targetId));
+    // Per-trader desk settings + their per-instrument break-even buffers (the
+    // shared 'desk' default row is keyed 'desk', never a userId, so it survives).
+    await tx.delete(tradingDeskSettings).where(eq(tradingDeskSettings.id, targetId));
+    await tx.delete(tradingBeOverrides).where(eq(tradingBeOverrides.ownerId, targetId));
     // Notification prefs reference the user on both sides (recipient and the
     // watched trader), so clear rows pointing either way.
     await tx

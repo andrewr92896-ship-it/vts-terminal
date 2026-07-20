@@ -246,7 +246,8 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   // What they see is scoped to their team below.
   const canSeeBalances = true;
   const generatedAt = Date.now();
-  const { breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides } = await getDeskSettings();
+  // The break-even scoring on the wall is the viewer's own desk settings.
+  const { breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides } = await getDeskSettings(user.id);
 
   // Trade data is scoped to the viewer's team (or just the viewer, if they have
   // no team) — never the whole install. Only that team's active connections are

@@ -82,6 +82,18 @@ top of the workspaces list** (see `theme/nav.ts` order).
   Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
   Manual Trades (`funded` key, `FundedScreen`), **Funded**
   (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
+  - **Trade Desk settings are per trader** (`trading/settings.ts`,
+    `getDeskSettings(userId)` / `updateDeskSettings(userId, patch)`): the
+    break-even buffer, per-instrument buffers (`trading_be_overrides`, keyed
+    `(owner_id, instrument)`; `owner_id = userId`, or `'desk'` for the shared
+    default a trader falls back to before customizing), and the "ignore test
+    trades" floor all govern **that trader's own view** of the desk. A trader
+    edits their own; a **desk lead** — team leader, Chief Analyst / Chief
+    Strategist designation, or admin/founder — can edit any **teammate's** via
+    the `?userId=` param, gated by `trading/deskAccess.ts`
+    (`canEditDeskSettingsFor` / `editableDeskMembers`). The `DeskSettingsModal`
+    "Whose settings" picker surfaces this. `getTrades` / `getHistory` /
+    `getLiveWall` score each viewer's desk with the **viewer's own** settings.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
   (`st_cards`), Practice Tests (`st_test`), Study Presentations (`st_guides`),
   Progress (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
