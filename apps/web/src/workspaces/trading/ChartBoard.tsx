@@ -346,45 +346,51 @@ export function ChartBoard() {
           This board is empty. Turn on <b>Edit layout</b> and add a chart or watchlist.
         </div>
       ) : (
-        <RGL
-          className="layout"
-          layout={layout}
-          cols={COLS}
-          rowHeight={ROW_H}
-          margin={[10, 10]}
-          isDraggable={editing}
-          isResizable={editing}
-          draggableHandle=".tile-header"
-          draggableCancel=".no-drag"
-          onLayoutChange={onLayoutChange}
-          compactType="vertical"
-        >
-          {tiles.map((t) => (
-            <div key={t.id} style={{ overflow: 'hidden' }}>
-              {t.kind === 'chart' ? (
-                <ChartTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-              ) : t.kind === 'positions' ? (
-                <PositionsTile
-                  tile={t}
-                  editing={editing}
-                  onChange={(p) => patchTile(t.id, p)}
-                  onRemove={() => removeTile(t.id)}
-                  onMeasure={(px) => measureTile(t.id, px)}
-                />
-              ) : t.kind === 'metrics' ? (
-                <MetricsTile tile={t} editing={editing} onRemove={() => removeTile(t.id)} />
-              ) : t.kind === 'news' ? (
-                <NewsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-              ) : t.kind === 'calendar' ? (
-                <CalendarTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-              ) : t.kind === 'alerts' ? (
-                <AlertsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-              ) : (
-                <WatchlistTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-              )}
-            </div>
-          ))}
-        </RGL>
+        <>
+          <RGL
+            className="layout"
+            layout={layout}
+            cols={COLS}
+            rowHeight={ROW_H}
+            margin={[10, 10]}
+            isDraggable={editing}
+            isResizable={editing}
+            draggableHandle=".tile-header"
+            draggableCancel=".no-drag"
+            onLayoutChange={onLayoutChange}
+            compactType="vertical"
+          >
+            {tiles.map((t) => (
+              <div key={t.id} style={{ overflow: 'hidden' }}>
+                {t.kind === 'chart' ? (
+                  <ChartTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+                ) : t.kind === 'positions' ? (
+                  <PositionsTile
+                    tile={t}
+                    editing={editing}
+                    onChange={(p) => patchTile(t.id, p)}
+                    onRemove={() => removeTile(t.id)}
+                    onMeasure={(px) => measureTile(t.id, px)}
+                  />
+                ) : t.kind === 'metrics' ? (
+                  <MetricsTile tile={t} editing={editing} onRemove={() => removeTile(t.id)} />
+                ) : t.kind === 'news' ? (
+                  <NewsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+                ) : t.kind === 'calendar' ? (
+                  <CalendarTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+                ) : t.kind === 'alerts' ? (
+                  <AlertsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+                ) : (
+                  <WatchlistTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
+                )}
+              </div>
+            ))}
+          </RGL>
+          {/* While editing, keep a little breathing room below the grid so the
+              bottom-row tile's resize handle isn't jammed against the footer and
+              can be dragged down to grow the cell. */}
+          {editing && <div aria-hidden style={{ height: 140 }} />}
+        </>
       )}
     </div>
   );
