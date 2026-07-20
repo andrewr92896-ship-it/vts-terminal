@@ -79,6 +79,12 @@ const TradingTeam = lazy(() =>
 const MyPortalSettings = lazy(() =>
   import('../workspaces/myportal/MyPortalSettings').then((m) => ({ default: m.MyPortalSettings })),
 );
+const Preferences = lazy(() =>
+  import('../workspaces/myportal/Preferences').then((m) => ({ default: m.Preferences })),
+);
+const DeletedTrades = lazy(() =>
+  import('../workspaces/trading/DeletedTrades').then((m) => ({ default: m.DeletedTrades })),
+);
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder. `onNavigate` lets a screen jump to another tab.
@@ -387,8 +393,12 @@ export function Portal() {
     switch (scr) {
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
+      case 'my_prefs':
+        return <Preferences theme={theme} />;
       case 'my_settings':
         return <MyPortalSettings theme={theme} />;
+      case 'deleted':
+        return <DeletedTrades />;
       case 'hp_howto':
         return <HelpHowTo theme={theme} />;
       case 'hp_news':

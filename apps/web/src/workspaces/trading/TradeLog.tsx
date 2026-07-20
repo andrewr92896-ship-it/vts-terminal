@@ -7,7 +7,8 @@ import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
-import { profitFactorStats, profitFactorText, scaledProfitFactorText } from './tradeStats';
+import { profitFactorStats, profitFactorText, scaledProfitFactorText, summarizeTrades, unrealizedProfitFactorStats } from './tradeStats';
+import { getTradeLayout, type Layout } from './preferences';
 import { DesignationTag, tileTint } from './DesignationTag';
 import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
@@ -18,7 +19,6 @@ import type {
   TradeRecord,
   TradeSide,
   TradeStatus,
-  TradeSummary,
 } from '../../api/types';
 
 // Trading navy/gold palette — self-contained, matching the Live Wall.
@@ -72,44 +72,6 @@ function slippageFavorable(t: TradeRecord): boolean | null {
   if (t.slippage == null) return null;
   if (t.slippage === 0) return true;
   return t.side === 'long' ? t.slippage < 0 : t.slippage > 0;
-}
-
-// Recompute the KPI stats for a subset of trades (one trader's), mirroring the
-// backend's desk-wide summarize() so a per-trader view reads the same way —
-// including the desk-wide break-even band.
-function summarizeTrades(trades: TradeRecord[], config: BreakEvenConfig): TradeSummary {
-  let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, unrealPl = 0, slipSum = 0, slipCount = 0;
-  for (const t of trades) {
-    if (t.status === 'open') open += 1;
-    else closed += 1;
-    if (t.realizedPl != null) {
-      totalPl += t.realizedPl;
-      if (t.status === 'closed') {
-        const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
-        if (outcome === 'win') wins += 1;
-        else if (outcome === 'loss') losses += 1;
-        else breakeven += 1;
-      }
-    }
-    if (t.unrealizedPl != null) unrealPl += t.unrealizedPl;
-    if (t.slippage != null) {
-      slipSum += t.slippage;
-      slipCount += 1;
-    }
-  }
-  const decided = wins + losses;
-  return {
-    total: trades.length,
-    open,
-    closed,
-    wins,
-    losses,
-    breakeven,
-    winRate: decided > 0 ? wins / decided : 0,
-    totalRealizedPl: totalPl,
-    totalUnrealizedPl: Number(unrealPl.toFixed(2)),
-    avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
-  };
 }
 
 // ---- CSV export ----
@@ -202,7 +164,6 @@ function downloadCsv(filename: string, csv: string): void {
   URL.revokeObjectURL(url);
 }
 
-type Layout = 'deck' | 'tape';
 
 export function TradeLog() {
   const { user } = useAuth();
@@ -219,10 +180,9 @@ export function TradeLog() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
-  const [layout, setLayout] = useState<Layout>('deck');
-  // Show the Profit Factor card scaled to one lot size (per-unit P/L) instead of
-  // raw dollars, so a few outsized trades don't dominate the ratio.
-  const [scaledPf, setScaledPf] = useState(false);
+  // Deck vs tape is a saved preference now (My Portal ▸ Preferences), read once
+  // on mount rather than toggled from the header.
+  const [layout] = useState<Layout>(() => getTradeLayout());
   const [adding, setAdding] = useState(false);
   const [exporting, setExporting] = useState(false);
   // Per-trader filter: '' = the whole desk; otherwise an ownerId.
@@ -298,6 +258,8 @@ export function TradeLog() {
   const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
   const s = trader ? summarizeTrades(shownTrades, config) : data.summary;
   const pf = profitFactorStats(shownTrades, config);
+  // Profit factor over the open book (live P/L of currently-open positions).
+  const upf = unrealizedProfitFactorStats(shownTrades);
   // Pips are the desk's preferred unit — show them next to every $ metric, but
   // only when the desk actually trades forex (otherwise there's no pip to show).
   const showPips = hasAnyPips(shownTrades);
@@ -348,11 +310,19 @@ export function TradeLog() {
       pips: showPips ? `(${fmtPips(-pf.grossLossPips)})` : undefined,
     },
     {
+      // Raw profit factor with the size-scaled reading always shown beneath it.
       label: 'Profit Factor',
-      val: scaledPf ? scaledProfitFactorText(pf) : profitFactorText(pf),
-      sub: scaledPf ? 'same lot size · gross ÷ loss' : 'gross profit ÷ loss',
-      // Show the counterpart reading beneath, so both are always one glance away.
-      pips: scaledPf ? `raw ${profitFactorText(pf)}` : `scaled ${scaledProfitFactorText(pf)}`,
+      val: profitFactorText(pf),
+      sub: 'gross profit ÷ loss',
+      pips: `scaled ${scaledProfitFactorText(pf)}`,
+    },
+    {
+      // Same ratio over the open book — winners' open gains ÷ losers' open losses
+      // — with its own scaled (per-lot) reading beneath.
+      label: 'Unrealized PF',
+      val: profitFactorText(upf),
+      sub: 'open positions',
+      pips: `scaled ${scaledProfitFactorText(upf)}`,
     },
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
   ];
@@ -371,27 +341,13 @@ export function TradeLog() {
           {traders.length > 1 && (
             <TraderMenu traders={traders} value={trader} onChange={setTrader} userId={user?.id} />
           )}
-          <div style={{ display: 'flex', background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 8, overflow: 'hidden' }}>
-            {(['deck', 'tape'] as Layout[]).map((l) => (
-              <button key={l} onClick={() => setLayout(l)} style={{ ...segBtn, ...(layout === l ? segActive : {}) }}>
-                {l === 'deck' ? <EditableText id="tradelog.layout_deck">Deck</EditableText> : <EditableText id="tradelog.layout_tape">Tape</EditableText>}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setScaledPf((v) => !v)}
-            title="Profit factor with every trade scaled to the same lot size, so a few big positions don't dominate the ratio"
-            style={scaledPf ? { ...ghostBtn, borderColor: GOLD, color: GOLD } : ghostBtn}
-          >
-            <EditableText id="tradelog.scaled_pf">⚖ Scaled PF</EditableText>
-          </button>
           {canSeeBalances && (
             <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>
               {hideMoney ? 'Show $' : 'Hide $'}
             </button>
           )}
           <button onClick={() => setExporting((v) => !v)} style={exporting ? { ...ghostBtn, borderColor: GOLD, color: GOLD } : ghostBtn}>
-            {exporting ? <EditableText id="tradelog.export_close">Close</EditableText> : <EditableText id="tradelog.export">⭳ Export</EditableText>}
+            {exporting ? <EditableText id="tradelog.export_close">Close</EditableText> : <EditableText id="tradelog.export">Export</EditableText>}
           </button>
           {!readOnly && (
             <button onClick={() => setAdding((v) => !v)} style={goldBtn}>
@@ -1010,7 +966,7 @@ function ExportPanel({
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button onClick={doExport} disabled={filtered.length === 0} style={{ ...goldBtn, opacity: filtered.length === 0 ? 0.6 : 1, cursor: filtered.length === 0 ? 'default' : 'pointer' }}>
-          <EditableText id="tradelog.download_csv">⭳ Download CSV</EditableText>
+          <EditableText id="tradelog.download_csv">Download CSV</EditableText>
         </button>
         <button onClick={onClose} style={ghostBtn}><EditableText id="tradelog.export_cancel">Cancel</EditableText></button>
       </div>
@@ -1026,8 +982,6 @@ const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(18
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const iconBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 13, lineHeight: 1, padding: '4px 7px', borderRadius: 6, cursor: 'pointer' };
 const codeChip: CSSProperties = { fontSize: 9.5, fontWeight: 700, color: '#bcd0ff', background: 'rgba(120,150,220,.12)', border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 6px', fontFamily: "'IBM Plex Mono', monospace" };
-const segBtn: CSSProperties = { background: 'none', border: 'none', color: MUTED, fontSize: 11.5, fontWeight: 600, padding: '7px 13px', cursor: 'pointer' };
-const segActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const sideBadge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '3px 8px' };
 function ownerChip(mine: boolean): CSSProperties {

@@ -11,6 +11,7 @@ import {
 } from '../trading/trades.js';
 import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../trading/alerts.js';
 import { getHistory, removePosition, updateClosedPosition } from '../trading/history.js';
+import { listDeletedTrades, restoreDeleted } from '../trading/deleted.js';
 import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
 import { scopedTraderIds } from '../trading/scope.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
@@ -541,6 +542,20 @@ export async function tradingRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     await restoreTrade(u.id, parsed.data);
     return getTrades(u, isDemoUser(u));
+  });
+
+  // ---- Deleted Trades (soft-deleted rows, restorable) ----
+  app.get('/api/trading/deleted-trades', read, async (request) => {
+    const u = request.currentUser!;
+    return listDeletedTrades(u, isDemoUser(u));
+  });
+
+  app.post('/api/trading/deleted-trades/:id/restore', write, async (request) => {
+    const u = request.currentUser!;
+    const admin = isAdmin(parseRoles(u));
+    const id = (request.params as { id: string }).id;
+    await restoreDeleted(u.id, id, admin);
+    return listDeletedTrades(u, isDemoUser(u));
   });
 
   // ---- TradingView alerts (FTP/prop replacement) ----

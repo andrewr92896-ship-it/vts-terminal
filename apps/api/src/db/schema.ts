@@ -162,6 +162,9 @@ export const tradingTrades = sqliteTable('trading_trades', {
   notes: text('notes'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  // Soft delete: when set, the trade is hidden from the Trade Log / History but
+  // kept so it can be restored from the Deleted Trades section. Null = live.
+  deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
 });
 
 export type TradingTradeRow = typeof tradingTrades.$inferSelect;
@@ -239,6 +242,10 @@ export const tradingPositions = sqliteTable('trading_positions', {
   // The broker connection this position came from — the "source" used by the
   // close reconciler (a position only closes if its source responded).
   connectionId: text('connection_id'),
+  // Soft delete: when set, the position is hidden from the Trade Log / History
+  // but kept so it can be restored from the Deleted Trades section (and its key
+  // still dedupes the backfill, so a deleted trade never re-imports). Null = live.
+  deletedAt: integer('deleted_at', { mode: 'timestamp_ms' }),
 });
 
 export type TradingPositionRow = typeof tradingPositions.$inferSelect;

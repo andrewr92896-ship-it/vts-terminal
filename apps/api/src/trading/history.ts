@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingPositions, users, TRADE_SIDES, type TradeSide, type TradingPositionRow } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
@@ -370,14 +370,17 @@ function groupBy(
 // position will reappear on the next Live Wall reconcile (it is still live on
 // the broker); deleting a closed one is permanent.
 export async function removePosition(userId: string, id: string, admin = false): Promise<boolean> {
+  // Soft delete: mark the row deleted (recoverable from Deleted Trades) instead
+  // of dropping it. Because the row stays, its key still dedupes the backfill —
+  // so a deleted broker trade never silently re-imports.
   const where = admin
-    ? eq(tradingPositions.id, id)
-    : and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId));
+    ? and(eq(tradingPositions.id, id), isNull(tradingPositions.deletedAt))
+    : and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId), isNull(tradingPositions.deletedAt));
   const row = (
     await db.select({ id: tradingPositions.id }).from(tradingPositions).where(where).limit(1)
   )[0];
   if (!row) return false;
-  await db.delete(tradingPositions).where(where);
+  await db.update(tradingPositions).set({ deletedAt: new Date() }).where(where);
   return true;
 }
 
@@ -488,7 +491,7 @@ export async function getHistory(
     .select({ pos: tradingPositions, username: users.username, roles: users.roles })
     .from(tradingPositions)
     .innerJoin(users, eq(users.id, tradingPositions.userId))
-    .where(eq(tradingPositions.status, 'closed'))
+    .where(and(eq(tradingPositions.status, 'closed'), isNull(tradingPositions.deletedAt)))
     .orderBy(desc(tradingPositions.closedAt));
 
   // Per-connection "count trades since" cutoffs — a closed position that opened

@@ -1,6 +1,44 @@
-import type { TradeRecord } from '../../api/types';
+import type { TradeRecord, TradeSummary } from '../../api/types';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
 import { tradePips } from './pips';
+
+// Recompute the KPI summary for a subset of trades (e.g. one trader's, or a
+// board tile's), mirroring the backend's desk-wide summarize() so every view
+// reads the same way — including totals for realized and open (unrealized) P/L.
+export function summarizeTrades(trades: TradeRecord[], config: BreakEvenConfig): TradeSummary {
+  let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, unrealPl = 0, slipSum = 0, slipCount = 0;
+  for (const t of trades) {
+    if (t.status === 'open') open += 1;
+    else closed += 1;
+    if (t.realizedPl != null) {
+      totalPl += t.realizedPl;
+      if (t.status === 'closed') {
+        const outcome = classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config);
+        if (outcome === 'win') wins += 1;
+        else if (outcome === 'loss') losses += 1;
+        else breakeven += 1;
+      }
+    }
+    if (t.unrealizedPl != null) unrealPl += t.unrealizedPl;
+    if (t.slippage != null) {
+      slipSum += t.slippage;
+      slipCount += 1;
+    }
+  }
+  const decided = wins + losses;
+  return {
+    total: trades.length,
+    open,
+    closed,
+    wins,
+    losses,
+    breakeven,
+    winRate: decided > 0 ? wins / decided : 0,
+    totalRealizedPl: totalPl,
+    totalUnrealizedPl: Number(unrealPl.toFixed(2)),
+    avgSlippage: slipCount > 0 ? Number((slipSum / slipCount).toFixed(8)) : null,
+  };
+}
 
 // Profit-factor math shared by the Trade Log KPI cards and the Live Wall metrics
 // tile, so both read the same way. Kept out of TradeLog.tsx so the (lazy-loaded)
@@ -74,4 +112,35 @@ export function scaledProfitFactorText(pf: ProfitFactor): string {
   if (pf.scaledProfit === 0 && pf.scaledLoss === 0) return '—';
   if (pf.scaledLoss === 0) return '∞';
   return (pf.scaledProfit / pf.scaledLoss).toFixed(2);
+}
+
+// The "unrealized" profit factor: the same ratio, but over the live P/L of
+// currently-open positions (winners' open gains ÷ losers' open losses) rather
+// than closed trades. Returns a ProfitFactor so it reuses the text helpers
+// above — including the per-unit "scaled" version. Pip fields are unused here.
+export function unrealizedProfitFactorStats(trades: TradeRecord[]): ProfitFactor {
+  let grossProfit = 0;
+  let grossLoss = 0;
+  let scaledProfit = 0;
+  let scaledLoss = 0;
+  for (const t of trades) {
+    if (t.status !== 'open' || t.unrealizedPl == null) continue;
+    const perUnit = t.units ? t.unrealizedPl / Math.abs(t.units) : null;
+    if (t.unrealizedPl > 0) {
+      grossProfit += t.unrealizedPl;
+      if (perUnit != null) scaledProfit += Math.max(0, perUnit);
+    } else if (t.unrealizedPl < 0) {
+      grossLoss += Math.abs(t.unrealizedPl);
+      if (perUnit != null) scaledLoss += Math.max(0, -perUnit);
+    }
+  }
+  return {
+    grossProfit,
+    grossLoss,
+    profitFactor: grossLoss > 0 ? grossProfit / grossLoss : null,
+    grossProfitPips: 0,
+    grossLossPips: 0,
+    scaledProfit,
+    scaledLoss,
+  };
 }

@@ -44,6 +44,7 @@ import type {
   TradeInput,
   TradeLogData,
   RemovedTrade,
+  DeletedTradeRecord,
   LeaderboardEntry,
   Team,
   TeamRef,
@@ -604,6 +605,12 @@ export const api = {
   },
   restoreTrade(trade: RemovedTrade): Promise<TradeLogData> {
     return request('/api/trading/trades/restore', { method: 'POST', body: JSON.stringify(trade) });
+  },
+  deletedTrades(): Promise<{ trades: DeletedTradeRecord[] }> {
+    return request('/api/trading/deleted-trades');
+  },
+  restoreDeletedTrade(id: string): Promise<{ trades: DeletedTradeRecord[] }> {
+    return request(`/api/trading/deleted-trades/${id}/restore`, { method: 'POST' });
   },
   tradingAlerts(): Promise<AlertsData> {
     return request('/api/trading/alerts');

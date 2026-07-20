@@ -1002,6 +1002,26 @@ export interface TradeRecord {
   designation: TradeDesignation | null; // owner's Chief Strategist/Analyst badge
 }
 
+// A soft-deleted trade shown in the Deleted Trades section (mirror of
+// apps/api/src/trading/deleted.ts DeletedTradeRecord).
+export interface DeletedTradeRecord {
+  id: string;
+  kind: 'manual' | 'broker';
+  ownerId: string;
+  owner: string;
+  isMine: boolean;
+  broker: string | null;
+  instrument: string;
+  side: TradeSide;
+  status: TradeStatus;
+  units: number;
+  entryPrice: number;
+  exitPrice: number | null;
+  realizedPl: number | null;
+  openedAt: number | null;
+  deletedAt: number;
+}
+
 export interface TradeSummary {
   total: number;
   open: number;
