@@ -10,10 +10,12 @@ import {
   type BreakEvenOverride,
 } from './outcome.js';
 
-// Desk-wide settings live in a single row keyed 'desk'. The trading desk is a
-// shared team, so these apply to everyone's view of the desk (unlike the
-// per-user challenge or funded settings).
-const DESK = 'desk';
+// Desk settings are per trader: each row is keyed by the trader's userId and
+// governs that trader's own view of the desk (break-even scoring + test-trade
+// floor). The reserved key 'desk' holds the shared DEFAULT that a trader who has
+// never customized falls back to — so nothing changes for anyone until their own
+// settings are saved (by them, or by a leader / analyst on their behalf).
+const DEFAULT_BUCKET = 'desk';
 
 const BE_MODES: readonly BreakEvenMode[] = ['percent', 'dollars', 'pips'];
 function isMode(v: unknown): v is BreakEvenMode {
@@ -51,8 +53,11 @@ export interface DeskSettings {
   minTradeUnits: number;
 }
 
-async function getOverrides(): Promise<BreakEvenOverride[]> {
-  const rows = await db.select().from(tradingBeOverrides);
+async function getOverrides(ownerId: string): Promise<BreakEvenOverride[]> {
+  const rows = await db
+    .select()
+    .from(tradingBeOverrides)
+    .where(eq(tradingBeOverrides.ownerId, ownerId));
   return rows
     .map((r) => ({
       instrument: r.instrument,
@@ -63,12 +68,19 @@ async function getOverrides(): Promise<BreakEvenOverride[]> {
     .sort((a, b) => a.instrument.localeCompare(b.instrument));
 }
 
-export async function getDeskSettings(): Promise<DeskSettings> {
-  const [row, breakEvenOverrides] = await Promise.all([
-    db.select().from(tradingDeskSettings).where(eq(tradingDeskSettings.id, DESK)).limit(1),
-    getOverrides(),
-  ]);
-  const r = row[0];
+// A trader's effective desk settings: their own row when they've customized,
+// otherwise the shared 'desk' default. Overrides come from the same bucket, so a
+// trader on the default sees the default's per-instrument buffers and a
+// customized trader sees only their own.
+export async function getDeskSettings(userId: string): Promise<DeskSettings> {
+  const own = (
+    await db.select().from(tradingDeskSettings).where(eq(tradingDeskSettings.id, userId)).limit(1)
+  )[0];
+  const r =
+    own ??
+    (await db.select().from(tradingDeskSettings).where(eq(tradingDeskSettings.id, DEFAULT_BUCKET)).limit(1))[0];
+  const bucket = own ? userId : DEFAULT_BUCKET;
+  const breakEvenOverrides = await getOverrides(bucket);
   return {
     breakEvenMode: isMode(r?.breakEvenMode) ? r!.breakEvenMode : 'percent',
     breakEvenPct: r?.breakEvenPct ?? 0,
@@ -78,9 +90,14 @@ export async function getDeskSettings(): Promise<DeskSettings> {
   };
 }
 
-export async function updateDeskSettings(patch: Partial<DeskSettings>): Promise<DeskSettings> {
+// Write `userId`'s own desk settings. A partial patch preserves the trader's
+// current effective values (their own, or the inherited default). When the
+// override list is supplied it replaces that trader's own set — the client
+// always sends the full list, so an inherited default carries over on first save
+// rather than being dropped.
+export async function updateDeskSettings(userId: string, patch: Partial<DeskSettings>): Promise<DeskSettings> {
   const now = new Date();
-  const current = await getDeskSettings();
+  const current = await getDeskSettings(userId);
   const breakEvenMode = isMode(patch.breakEvenMode) ? patch.breakEvenMode : current.breakEvenMode;
   // Clamp to a sane band: a negative band is meaningless, and no desk wants a
   // 100%+ move to still read as break-even.
@@ -95,12 +112,12 @@ export async function updateDeskSettings(patch: Partial<DeskSettings>): Promise<
   const values = { breakEvenMode, breakEvenPct, breakEvenAmount, minTradeUnits, updatedAt: now };
   await db
     .insert(tradingDeskSettings)
-    .values({ id: DESK, ...values })
+    .values({ id: userId, ...values })
     .onConflictDoUpdate({ target: tradingDeskSettings.id, set: values });
 
-  // Overrides, when supplied, fully replace the stored set — the client sends
-  // the whole list. Canonicalize + de-dupe by instrument so one instrument keeps
-  // exactly one buffer even if the client sent it twice.
+  // Overrides, when supplied, fully replace this trader's own set — the client
+  // sends the whole list. Canonicalize + de-dupe by instrument so one instrument
+  // keeps exactly one buffer even if the client sent it twice.
   if (patch.breakEvenOverrides !== undefined) {
     const byInstrument = new Map<string, BreakEvenOverride>();
     for (const o of patch.breakEvenOverrides) {
@@ -109,8 +126,9 @@ export async function updateDeskSettings(patch: Partial<DeskSettings>): Promise<
       const band = clampBand(o.mode, o.pct, o.amount);
       byInstrument.set(instrument, { instrument, ...band });
     }
-    await db.delete(tradingBeOverrides);
+    await db.delete(tradingBeOverrides).where(eq(tradingBeOverrides.ownerId, userId));
     const rows = [...byInstrument.values()].map((o) => ({
+      ownerId: userId,
       instrument: o.instrument,
       mode: o.mode,
       pct: o.pct,
@@ -120,7 +138,7 @@ export async function updateDeskSettings(patch: Partial<DeskSettings>): Promise<
     if (rows.length > 0) await db.insert(tradingBeOverrides).values(rows);
   }
 
-  return getDeskSettings();
+  return getDeskSettings(userId);
 }
 
 // Every instrument the viewer's team has traded — distinct symbols from the

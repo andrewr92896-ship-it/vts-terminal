@@ -450,12 +450,15 @@ export const api = {
   updateHistoryTrade(id: string, patch: Partial<TradeInput>): Promise<HistoryData> {
     return request(`/api/trading/history/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
   },
-  // Desk-wide trading settings (shared across the team).
-  deskSettings(): Promise<DeskSettings> {
-    return request('/api/trading/desk-settings');
+  // Per-trader desk settings. Omit `userId` for your own; a desk lead may pass a
+  // teammate's id to read or change theirs.
+  deskSettings(userId?: string): Promise<DeskSettings> {
+    const q = userId ? `?userId=${encodeURIComponent(userId)}` : '';
+    return request(`/api/trading/desk-settings${q}`);
   },
-  updateDeskSettings(patch: Partial<DeskSettings>): Promise<DeskSettings> {
-    return request('/api/trading/desk-settings', { method: 'PATCH', body: JSON.stringify(patch) });
+  updateDeskSettings(patch: Partial<DeskSettings>, userId?: string): Promise<DeskSettings> {
+    const body = userId ? { ...patch, userId } : patch;
+    return request('/api/trading/desk-settings', { method: 'PATCH', body: JSON.stringify(body) });
   },
   tradingSessions(): Promise<{ sessions: StrategySession[] }> {
     return request('/api/trading/sessions');

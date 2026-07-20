@@ -340,10 +340,15 @@ export const tradingChallenges = sqliteTable('trading_challenges', {
 
 export type TradingChallengeRow = typeof tradingChallenges.$inferSelect;
 
-// ---- Trading — desk-wide settings (shared across the whole trading team) ----
-// A single-row table (id = 'desk') holding settings that apply to the shared
-// desk, not to one trader. The break-even buffer marks a barely-moved trade as
-// flat (neither win nor loss). `breakEvenMode` picks how the buffer is measured:
+// ---- Trading — desk settings (per trader, with a shared default) ----
+// Each trader has their own desk settings, keyed by `id = userId`, that govern
+// their own view of the desk (break-even scoring + the test-trade floor). The
+// legacy `id = 'desk'` row is kept as the DEFAULT that a trader who has never
+// customized falls back to (see trading/settings.ts). A trader's own settings
+// can be changed by that trader, and — for any teammate — by the team leader,
+// the Chief Analyst / Chief Strategist, and admins (see trading/deskAccess.ts).
+// The break-even buffer marks a barely-moved trade as flat (neither win nor
+// loss). `breakEvenMode` picks how the buffer is measured:
 //   • 'percent' — ±`breakEvenPct` of the entry→exit price move (the original)
 //   • 'dollars' — realized P/L within ±`breakEvenAmount`
 //   • 'pips'    — an entry→exit move within ±`breakEvenAmount` pips (forex)
@@ -363,17 +368,23 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;
 
 // Per-instrument break-even buffers: an override that governs a single
-// instrument (e.g. EUR/USD gets a 2-pip buffer while the desk default is 0.05%).
-// Desk-wide like the default settings — the same override applies to every
-// trader's view. `instrument` is the canonical symbol (upper-cased) and the
-// primary key, so one instrument has at most one override.
-export const tradingBeOverrides = sqliteTable('trading_be_overrides', {
-  instrument: text('instrument').primaryKey(),
-  mode: text('mode').notNull().default('percent'),
-  pct: real('pct').notNull().default(0),
-  amount: real('amount').notNull().default(0),
-  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
-});
+// instrument (e.g. EUR/USD gets a 2-pip buffer while the default is 0.05%).
+// Scoped to an owner — a trader's own userId, or the constant 'desk' for the
+// shared default set. Composite primary key (owner + instrument), so each owner
+// has at most one buffer per instrument.
+export const tradingBeOverrides = sqliteTable(
+  'trading_be_overrides',
+  {
+    // The owning trader's userId, or 'desk' for the shared default set.
+    ownerId: text('owner_id').notNull().default('desk'),
+    instrument: text('instrument').notNull(),
+    mode: text('mode').notNull().default('percent'),
+    pct: real('pct').notNull().default(0),
+    amount: real('amount').notNull().default(0),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.ownerId, t.instrument] }) }),
+);
 export type TradingBeOverrideRow = typeof tradingBeOverrides.$inferSelect;
 
 // ---- Trading — Funded platforms (manual / screenshot-tracked prop accounts) ----

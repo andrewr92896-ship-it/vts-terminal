@@ -528,18 +528,30 @@ export interface LiveWall {
   breakEvenOverrides: BreakEvenOverride[]; // per-instrument buffers
 }
 
-// Desk-wide trading settings, shared across the whole team.
+// A trader who appears in the desk-settings "whose settings" picker.
+export interface DeskMember {
+  id: string;
+  name: string;
+}
+
+// A trader's own desk settings. Each trader has their own; a desk lead (team
+// leader / Chief Analyst / Chief Strategist / admin) can also view and change a
+// teammate's (see `userId` / `editableMembers`).
 export interface DeskSettings {
   breakEvenMode: BreakEvenMode;
   breakEvenPct: number;
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   // Ignore broker fills under this many units in the Trade Log / History (the
-  // desk's "test trade" floor). 0 = keep everything.
+  // trader's "test trade" floor). 0 = keep everything.
   minTradeUnits: number;
-  // Every instrument the desk has traded (from the Trade Log + History), so the
+  // Every instrument the team has traded (from the Trade Log + History), so the
   // per-instrument buffer picker can offer them. Auto-derived server-side.
   instruments: string[];
+  // Response-only: the trader these settings belong to, and the roster the
+  // caller may switch between (their whole team if a desk lead, else just self).
+  userId?: string;
+  editableMembers?: DeskMember[];
 }
 
 // ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----

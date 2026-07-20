@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import type { BreakEvenMode, BrokerConnection, DeskSettings } from '../../api/types';
+import type { BreakEvenMode, BrokerConnection, DeskMember, DeskSettings } from '../../api/types';
 import { EditableText } from '../../copy/SiteCopy';
 
 // The "count trades since" cutoff maps to UTC midnight of the chosen day, so it
@@ -73,6 +74,12 @@ export function DeskSettingsModal({
   onSaved?: (s: DeskSettings) => void;
 }) {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  // Whose settings are being edited, and the roster the caller may switch
+  // between. A desk lead (team leader / Chief Analyst / Chief Strategist / admin)
+  // sees their whole team here; everyone else sees only themselves.
+  const [members, setMembers] = useState<DeskMember[]>([]);
+  const [targetId, setTargetId] = useState<string>('');
   const [mode, setMode] = useState<BreakEvenMode>('percent');
   const [bePct, setBePct] = useState('');
   const [beAmount, setBeAmount] = useState('');
@@ -91,6 +98,25 @@ export function DeskSettingsModal({
   // cutoff surfaced here (the discoverable home for it).
   const [conns, setConns] = useState<BrokerConnection[]>([]);
 
+  // Populate the whole form from a settings payload (used on open, on switching
+  // whose settings, and after a save).
+  function applySettings(s: DeskSettings) {
+    setMode(s.breakEvenMode);
+    setBePct(String(s.breakEvenPct));
+    setBeAmount(String(s.breakEvenAmount));
+    setMinUnits(String(s.minTradeUnits));
+    setOverrides(
+      s.breakEvenOverrides.map((o) => ({
+        instrument: o.instrument,
+        mode: o.mode,
+        value: o.mode === 'percent' ? String(o.pct) : String(o.amount),
+      })),
+    );
+    setInstruments(s.instruments);
+    if (s.editableMembers) setMembers(s.editableMembers);
+    if (s.userId) setTargetId(s.userId);
+  }
+
   useEffect(() => {
     if (!open) return;
     setLoaded(false);
@@ -101,29 +127,40 @@ export function DeskSettingsModal({
       .deskSettings()
       .then((s) => {
         if (!alive) return;
-        setMode(s.breakEvenMode);
-        setBePct(String(s.breakEvenPct));
-        setBeAmount(String(s.breakEvenAmount));
-        setMinUnits(String(s.minTradeUnits));
-        setOverrides(
-          s.breakEvenOverrides.map((o) => ({
-            instrument: o.instrument,
-            mode: o.mode,
-            value: o.mode === 'percent' ? String(o.pct) : String(o.amount),
-          })),
-        );
-        setInstruments(s.instruments);
+        applySettings(s);
         setLoaded(true);
       })
       .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Failed to load settings'));
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // The caller's own connections drive the per-account cutoff below.
+  // A desk lead switches whose settings they're editing; reloads that trader's
+  // settings into the form.
+  async function switchTarget(id: string) {
+    if (id === targetId) return;
+    setLoaded(false);
+    setError(null);
+    setSaved(false);
+    try {
+      applySettings(await api.deskSettings(id));
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Failed to load settings');
+    } finally {
+      setLoaded(true);
+    }
+  }
+
+  // Whether the form is showing the caller's own settings (vs a teammate's).
+  const editingSelf = !targetId || targetId === user?.id;
+
+  // The caller's own connections drive the per-account cutoff below. Only loaded
+  // when editing your own settings — the cutoff is a per-connection setting on
+  // your accounts, not part of a teammate's desk settings.
   useEffect(() => {
-    if (!open || readOnly) return;
+    if (!open || readOnly || !editingSelf) return;
     let alive = true;
     api
       .tradingConnections()
@@ -134,7 +171,7 @@ export function DeskSettingsModal({
     return () => {
       alive = false;
     };
-  }, [open, readOnly]);
+  }, [open, readOnly, editingSelf]);
 
   // Set/clear a connection's "count trades since" cutoff. Optimistic so the date
   // field updates instantly; reconciles from the server response.
@@ -208,19 +245,11 @@ export function DeskSettingsModal({
             ? { instrument: r.instrument.trim(), mode: r.mode, pct: n, amount: 0 }
             : { instrument: r.instrument.trim(), mode: r.mode, pct: 0, amount: n };
         });
-      const s = await api.updateDeskSettings({ ...base, minTradeUnits: parsedMin, breakEvenOverrides });
-      setMode(s.breakEvenMode);
-      setBePct(String(s.breakEvenPct));
-      setBeAmount(String(s.breakEvenAmount));
-      setMinUnits(String(s.minTradeUnits));
-      setOverrides(
-        s.breakEvenOverrides.map((o) => ({
-          instrument: o.instrument,
-          mode: o.mode,
-          value: o.mode === 'percent' ? String(o.pct) : String(o.amount),
-        })),
+      const s = await api.updateDeskSettings(
+        { ...base, minTradeUnits: parsedMin, breakEvenOverrides },
+        editingSelf ? undefined : targetId,
       );
-      setInstruments(s.instruments);
+      applySettings(s);
       setSaved(true);
       onSaved?.(s);
     } catch (e) {
@@ -274,6 +303,34 @@ export function DeskSettingsModal({
         </div>
 
         <div style={{ padding: 18 }}>
+          {/* Whose settings — a desk lead (team leader / Chief Analyst / Chief
+              Strategist / admin) can pick a teammate and edit theirs. Hidden for
+              everyone else, who only ever see their own. */}
+          {members.length > 1 && (
+            <div style={{ marginBottom: 16 }}>
+              <label htmlFor="desk-whose" style={{ ...sectionLabel, marginTop: 0, display: 'block', marginBottom: 6 }}>
+                <EditableText id="desksettings.whose">Whose settings</EditableText>
+              </label>
+              <select
+                id="desk-whose"
+                value={targetId}
+                onChange={(e) => switchTarget(e.target.value)}
+                disabled={busy}
+                style={{ ...input, fontSize: 13, width: '100%', cursor: busy ? 'default' : 'pointer' }}
+              >
+                {members.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.id === user?.id ? `${m.name} (you)` : m.name}
+                  </option>
+                ))}
+              </select>
+              {!editingSelf && (
+                <div style={{ fontSize: 11.5, color: GOLD, marginTop: 6 }}>
+                  Editing {members.find((m) => m.id === targetId)?.name ?? 'a teammate'}'s desk settings.
+                </div>
+              )}
+            </div>
+          )}
           {!loaded && !error ? (
             <div style={{ color: MUTED, fontSize: 13 }}><EditableText id="desksettings.loading">Loading settings…</EditableText></div>
           ) : (
@@ -281,8 +338,8 @@ export function DeskSettingsModal({
               <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Break-even buffer</div>
               <div style={{ fontSize: 12, color: MUTED, marginTop: 6, lineHeight: 1.55 }}>
                 A closed trade whose result stays inside this buffer — in either direction — counts as a{' '}
-                <b style={{ color: GOLD }}>break-even</b> trade instead of a win or a loss. It applies across the whole
-                desk: the Trade Log, History, and the Live Wall. The <b>default</b> below governs every instrument, and you
+                <b style={{ color: GOLD }}>break-even</b> trade instead of a win or a loss. It applies to the Trade Log,
+                History, and the Live Wall. The <b>default</b> below governs every instrument, and you
                 can override it for a <b>specific instrument</b> underneath. Set <b>0</b> to turn a buffer off.
               </div>
 
@@ -368,7 +425,7 @@ export function DeskSettingsModal({
               <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
                 <div style={sectionLabel}>Per-instrument buffers</div>
                 <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
-                  Override the default for a specific instrument, desk-wide. The instrument list is filled in
+                  Override the default for a specific instrument. The instrument list is filled in
                   automatically from what your team has traded — just pick one, no typing.
                 </div>
 
@@ -484,7 +541,7 @@ export function DeskSettingsModal({
 
               {/* Per-account "count trades since" cutoff — the discoverable home
                   for it, right where a trader looks for metric settings. */}
-              {!readOnly && conns.filter((c) => c.broker !== 'manual').length > 0 && (
+              {!readOnly && editingSelf && conns.filter((c) => c.broker !== 'manual').length > 0 && (
                 <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
                   <div style={sectionLabel}><EditableText id="desksettings.cutoff_label">Count trades since (per account)</EditableText></div>
                   <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>

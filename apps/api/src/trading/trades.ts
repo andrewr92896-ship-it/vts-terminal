@@ -277,7 +277,8 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
 
   // Desk settings drive the break-even scoring and the "test trade" floor, both
   // of which shape what's counted below — so load them before folding in trades.
-  const settings = await getDeskSettings();
+  // Each trader scores their own view of the desk, so use the viewer's settings.
+  const settings = await getDeskSettings(viewer.id);
 
   // Pull every trade alongside its owner's username and roles, then keep only
   // those on the viewer's team whose owner currently has trading access (full or
