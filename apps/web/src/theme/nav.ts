@@ -106,6 +106,7 @@ export const NAV: NavWorkspace[] = [
     sections: [
       { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
+      { key: 'ad_sidebar', label: 'Sidebar Layout', icon: 'list-tree' },
       { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
     ],
   },

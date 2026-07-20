@@ -83,6 +83,11 @@ export function AdminUsers({ theme }: { theme: Theme }) {
   const [editNameFor, setEditNameFor] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState('');
 
+  // Inline email edit state: holds the id of the user whose sign-in email is
+  // being changed.
+  const [editEmailFor, setEditEmailFor] = useState<string | null>(null);
+  const [emailDraft, setEmailDraft] = useState('');
+
   // Two-step delete confirmation: holds the id of the user awaiting confirm.
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -141,14 +146,18 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     }
   }
 
-  async function patch(id: string, body: Parameters<typeof api.adminUpdateUser>[1]) {
+  // Returns true when the update succeeded, so inline editors can stay open on
+  // failure (e.g. a duplicate/invalid email) instead of discarding the draft.
+  async function patch(id: string, body: Parameters<typeof api.adminUpdateUser>[1]): Promise<boolean> {
     setBusyId(id);
     setActionError(null);
     try {
       await api.adminUpdateUser(id, body);
       await refresh();
+      return true;
     } catch (e) {
       setActionError(e instanceof ApiError ? e.message : 'Action failed.');
+      return false;
     } finally {
       setBusyId(null);
     }
@@ -171,6 +180,24 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     await patch(id, { displayName: name });
     setEditNameFor(null);
     setNameDraft('');
+  }
+
+  // Save an edited sign-in email for a user. The server does the authoritative
+  // validation (format + uniqueness); this is a light guard so an obviously bad
+  // address never hits the API. On success the inline editor closes; on failure
+  // it stays open with the action error shown so the admin can correct it.
+  async function saveEmail(id: string) {
+    const email = emailDraft.trim();
+    if (!email) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setActionError('Enter a valid email address.');
+      return;
+    }
+    const ok = await patch(id, { email });
+    if (ok) {
+      setEditEmailFor(null);
+      setEmailDraft('');
+    }
   }
 
   async function remove(id: string) {
@@ -340,10 +367,50 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                       </button>
                     </div>
                   )}
-                  {u.email && (
-                    <div style={{ fontSize: 11.5, color: '#6f84b2', fontFamily: "'IBM Plex Mono', monospace", marginTop: 3 }}>
-                      {u.email}
+                  {editEmailFor === u.id ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginTop: 4 }}>
+                      <input
+                        type="email"
+                        value={emailDraft}
+                        onChange={(e) => setEmailDraft(e.target.value)}
+                        autoFocus
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        maxLength={255}
+                        placeholder="name@vitalistradingsystems.com"
+                        onKeyDown={(e) => e.key === 'Enter' && emailDraft.trim() && saveEmail(u.id)}
+                        style={{ ...inputStyle, maxWidth: 300, fontFamily: "'IBM Plex Mono', monospace" }}
+                      />
+                      <button
+                        onClick={() => saveEmail(u.id)}
+                        disabled={busyId === u.id || !emailDraft.trim()}
+                        style={primaryBtn(theme, accentGrad)}
+                      >
+                        Save
+                      </button>
+                      <button onClick={() => setEditEmailFor(null)} disabled={busyId === u.id} style={ghostBtn}>
+                        Cancel
+                      </button>
                     </div>
+                  ) : (
+                    u.email && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                        <span style={{ fontSize: 11.5, color: '#6f84b2', fontFamily: "'IBM Plex Mono', monospace", wordBreak: 'break-all' }}>
+                          {u.email}
+                        </span>
+                        <button
+                          onClick={() => {
+                            setEditEmailFor(u.id);
+                            setEmailDraft(u.email ?? '');
+                          }}
+                          disabled={busyId === u.id}
+                          title="Edit email"
+                          style={{ ...ghostBtn, minHeight: 0, padding: '3px 8px' }}
+                        >
+                          <Icon name="pencil" size={11} />
+                        </button>
+                      </div>
+                    )
                   )}
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 7 }}>
                     {!u.active && <Badge color="#ef5468">Inactive</Badge>}

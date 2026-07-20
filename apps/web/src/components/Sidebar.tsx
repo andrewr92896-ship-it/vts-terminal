@@ -9,6 +9,9 @@ interface SidebarProps {
   workspace: WorkspaceKey;
   screen: string;
   workspaces: WorkspaceKey[]; // the ones this user may see, in nav order
+  // The effective nav (workspace + section order), already reordered by any
+  // founder-set sidebar layout. Falls back to the code-default NAV when absent.
+  nav?: NavWorkspace[];
   // Whether the private Funded (prop-challenge) section is revealed.
   canFunded: boolean;
   collapsed: boolean;
@@ -37,6 +40,7 @@ export function Sidebar(props: SidebarProps) {
     workspace,
     screen,
     workspaces,
+    nav,
     canFunded,
     collapsed,
     workspaceDots,
@@ -46,12 +50,15 @@ export function Sidebar(props: SidebarProps) {
     onSelectScreen,
   } = props;
 
-  const current = navFor(workspace);
+  // The effective nav — the founder-reordered layout when provided, otherwise
+  // the code default. Both drive workspace order and each workspace's sections.
+  const navList = nav ?? NAV;
+  const current = navList.find((w) => w.key === workspace) ?? navFor(workspace);
   const accent = current?.accent ?? C.gold;
   // Hide the private Funded section from anyone without the `funded` role.
   const sections = (current?.sections ?? []).filter((s) => canFunded || !FUNDED_ONLY_SECTIONS.has(s.key));
-  // Show only the workspaces this user can access, in the canonical nav order.
-  const visible: NavWorkspace[] = NAV.filter((w) => workspaces.includes(w.key));
+  // Show only the workspaces this user can access, in the effective nav order.
+  const visible: NavWorkspace[] = navList.filter((w) => workspaces.includes(w.key));
 
   return (
     <aside
