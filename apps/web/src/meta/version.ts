@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.31';
+export const APP_VERSION = 'Beta V 5.32';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.32',
+    date: 'July 20, 2026',
+    notes: [
+      'Support chat (the corner bubble ▸ Support tab) now remembers your conversations. Closing the bubble no longer throws away an in-progress request — reopen it and pick up right where you left off.',
+      'Your previous support requests are listed at the top of the Support tab. Tap one to reopen the whole thread, with a Draft / In progress / Sent status on each.',
+      'Anything you typed but didn’t send is saved as a draft and restored when you reopen that request. Once a request has been sent to the admins you can still add a follow-up in the same thread.',
+    ],
+  },
   {
     version: 'Beta V 5.31',
     date: 'July 20, 2026',
