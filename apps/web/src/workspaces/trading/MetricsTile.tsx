@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import { api, ApiError } from '../../api/client';
 import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, TradeLogData } from '../../api/types';
@@ -6,6 +7,7 @@ import { configFrom } from './outcome';
 import { profitFactorStats, profitFactorText, scaledProfitFactorText, summarizeTrades, unrealizedProfitFactorStats } from './tradeStats';
 import { BORDER, BORDER2, FAINT, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
 import { EditableText } from '../../copy/SiteCopy';
+import { Icon } from '../../components/Icon';
 
 const REFRESH_MS = 20_000;
 
@@ -61,7 +63,7 @@ export function MetricsTile({
   // whole desk (server summary) or one trader (recomputed the same way).
   const config = data ? configFrom(data) : null;
   const traders = data
-    ? [...new Map(data.trades.map((t) => [t.ownerId, t.owner])).entries()]
+    ? [...new Map(data.trades.map((t) => [t.ownerId, t.ownerName || t.owner])).entries()]
         .map(([id, name]) => ({ id, name }))
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
@@ -87,17 +89,7 @@ export function MetricsTile({
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {traders.length > 1 && (
-            <select
-              value={trader}
-              onChange={(e) => setTrader(e.target.value)}
-              title="Show metrics for the whole desk or one trader"
-              style={selectStyle}
-            >
-              <option value="">Whole desk</option>
-              {traders.map((tr) => (
-                <option key={tr.id} value={tr.id}>@{tr.name}</option>
-              ))}
-            </select>
+            <TraderPicker value={trader} options={traders} onChange={setTrader} />
           )}
           {editing && <button onClick={onRemove} style={iconBtn} title="Remove tile">✕</button>}
         </div>
@@ -113,7 +105,7 @@ export function MetricsTile({
             <Stat label="Win Rate" value={s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—'} sub={`${s.wins}W · ${s.losses}L`} />
             <Stat label="Profit Factor" value={pf ? profitFactorText(pf) : '—'} sub={pf ? `scaled ${scaledProfitFactorText(pf)}` : undefined} />
             <Stat label="Unrealized PF" value={profitFactorText(upf)} sub={`scaled ${scaledProfitFactorText(upf)}`} />
-            <Stat label="Trades" value={String(s.total)} sub={`${s.open} open · ${s.closed} closed`} />
+            <Stat label="Trades" value={String(s.total)} sub={`${s.open} open · ${s.closed} closed`} wide />
           </div>
         )}
       </div>
@@ -121,13 +113,110 @@ export function MetricsTile({
   );
 }
 
-function Stat({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+function Stat({ label, value, sub, color, wide }: { label: string; value: string; sub?: string; color?: string; wide?: boolean }) {
   return (
-    <div style={{ background: 'rgba(9,20,46,1)', padding: '10px 12px' }}>
+    <div style={{ background: 'rgba(9,20,46,1)', padding: '10px 12px', ...(wide ? { gridColumn: '1 / -1' } : null) }}>
       <div style={{ fontSize: 9, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</div>
       <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: color ?? '#fff', marginTop: 4 }}>{value}</div>
       {sub && <div style={{ fontSize: 9.5, color: FAINT, marginTop: 2 }}>{sub}</div>}
     </div>
+  );
+}
+
+// A compact, on-theme trader picker for the tile header. Replaces the native
+// <select> (whose OS dropdown clashes with the dark theme) with a pill button
+// and a portal-rendered menu — the portal escapes the tile's `overflow:hidden`,
+// and it closes on outside click or scroll so it never floats detached.
+function TraderPicker({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { id: string; name: string }[];
+  onChange: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  const items = [{ id: '', name: 'Whole desk' }, ...options];
+  const current = items.find((o) => o.id === value) ?? items[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (!open && btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen((v) => !v);
+  }
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        title="Show metrics for the whole desk or one trader"
+        style={pickerBtn}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.name}</span>
+        <Icon name="chevron-down" size={12} color={FAINT} />
+      </button>
+      {open &&
+        rect &&
+        createPortal(
+          <>
+            <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
+            <div
+              style={{
+                position: 'fixed',
+                top: rect.bottom + 6,
+                right: Math.max(8, window.innerWidth - rect.right),
+                minWidth: Math.max(rect.width, 168),
+                maxWidth: 'min(80vw, 280px)',
+                maxHeight: '50vh',
+                overflowY: 'auto',
+                background: '#0C1C3C',
+                border: `1px solid ${BORDER2}`,
+                borderRadius: 10,
+                boxShadow: '0 16px 40px rgba(0,0,0,.5)',
+                padding: 6,
+                zIndex: 201,
+              }}
+            >
+              {items.map((o) => {
+                const sel = o.id === value;
+                return (
+                  <button
+                    key={o.id || 'desk'}
+                    onClick={() => {
+                      onChange(o.id);
+                      setOpen(false);
+                    }}
+                    style={menuRow(sel)}
+                  >
+                    <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                      {sel ? <Icon name="check" size={13} color={GREEN} /> : null}
+                    </span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {o.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -152,17 +241,37 @@ const header: CSSProperties = {
   flex: '0 0 auto',
 };
 const body: CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto' };
-const selectStyle: CSSProperties = {
-  background: 'rgba(4,12,30,.6)',
+const pickerBtn: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 5,
+  maxWidth: 150,
+  background: 'rgba(255,255,255,.04)',
   border: `1px solid ${BORDER2}`,
-  borderRadius: 6,
-  color: '#dfe7fa',
+  borderRadius: 999,
+  color: '#cfe0ff',
   fontSize: 11,
   fontWeight: 600,
-  padding: '4px 6px',
+  padding: '5px 10px',
+  lineHeight: 1,
   cursor: 'pointer',
-  maxWidth: 130,
 };
+const menuRow = (sel: boolean): CSSProperties => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  width: '100%',
+  background: sel ? 'rgba(255,255,255,.06)' : 'transparent',
+  border: 'none',
+  borderRadius: 7,
+  color: sel ? '#fff' : '#cfe0ff',
+  fontSize: 13,
+  fontWeight: sel ? 700 : 500,
+  fontFamily: 'inherit',
+  textAlign: 'left',
+  padding: '9px 8px',
+  cursor: 'pointer',
+});
 const hint: CSSProperties = { padding: '18px 14px', fontSize: 11.5, color: MUTED, textAlign: 'center', lineHeight: 1.5 };
 const iconBtn: CSSProperties = {
   fontSize: 12,

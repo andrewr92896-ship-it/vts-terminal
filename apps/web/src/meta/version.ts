@@ -20,6 +20,8 @@ export const PATCH_NOTES: PatchNote[] = [
     notes: [
       'Display names are now editable by admins: open Admin ▸ Users and tap the pencil next to anyone’s name to rename them. You could already rename yourself from Account settings.',
       'People are now shown by their display name across the portal — the “@username” handle no longer trails the name on the Users list, team rosters, and pending invites.',
+      'Live Wall ▸ Desk Metrics: the whole-desk / per-trader picker is now a clean, on-theme dropdown (no more clashing native menu) and lists traders by display name.',
+      'My Portal ▸ Trading Team reads cleaner on a phone — each member’s actions (Badge, Make leader, Remove) now sit on their own row instead of crowding the name.',
     ],
   },
   {

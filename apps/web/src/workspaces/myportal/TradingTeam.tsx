@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import type { MyPortalData, MyTeam, TeamMemberPermissions, UserTeamMember, User } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
+import { useResponsive } from '../../hooks/useMediaQuery';
 import { Icon } from '../../components/Icon';
 import { EditableText } from '../../copy/SiteCopy';
 import {
@@ -452,11 +453,46 @@ function MemberRow({
   theme: Theme;
   grad: string;
 }) {
+  const { isPhone } = useResponsive();
   const [editingBadge, setEditingBadge] = useState(false);
   const canEditBadge = canManageBadges && !m.isLeader;
   const showPerms = viewerIsLeader && !m.isLeader;
   const showTransfer = viewerIsLeader && !m.isLeader;
   const showRemove = canRemove && !m.isLeader && !isMe;
+  const hasActions = canEditBadge || showTransfer || showRemove;
+
+  // The member's action buttons. Rendered inline (right of the name) on wider
+  // screens, or on their own row below the name on a phone so they never crowd
+  // the name — the mobile fix that keeps this roster from looking cramped.
+  const actionButtons = (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {canEditBadge && (
+        <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={() => { onDraft(m.badge ?? ''); setEditingBadge((v) => !v); }}>
+          Badge
+        </button>
+      )}
+      {showTransfer && (
+        <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onTransfer} title="Make this member the leader">
+          Make leader
+        </button>
+      )}
+      {showRemove && !confirmRemove && (
+        <button style={{ ...ghostDangerBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onAskRemove}>
+          Remove
+        </button>
+      )}
+      {showRemove && confirmRemove && (
+        <>
+          <button style={{ ...dangerSolidBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onRemove}>
+            Confirm
+          </button>
+          <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onCancelRemove}>
+            Cancel
+          </button>
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -467,7 +503,7 @@ function MemberRow({
         borderRadius: 9,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
         <div
           style={{
             width: 34,
@@ -501,34 +537,10 @@ function MemberRow({
             )}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {canEditBadge && (
-            <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={() => { onDraft(m.badge ?? ''); setEditingBadge((v) => !v); }}>
-              Badge
-            </button>
-          )}
-          {showTransfer && (
-            <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onTransfer} title="Make this member the leader">
-              Make leader
-            </button>
-          )}
-          {showRemove && !confirmRemove && (
-            <button style={{ ...ghostDangerBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onAskRemove}>
-              Remove
-            </button>
-          )}
-          {showRemove && confirmRemove && (
-            <>
-              <button style={{ ...dangerSolidBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onRemove}>
-                Confirm
-              </button>
-              <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onCancelRemove}>
-                Cancel
-              </button>
-            </>
-          )}
-        </div>
+        {!isPhone && hasActions && actionButtons}
       </div>
+
+      {isPhone && hasActions && <div style={{ marginTop: 10 }}>{actionButtons}</div>}
 
       {/* Badge editor */}
       {canEditBadge && editingBadge && (

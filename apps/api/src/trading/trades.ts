@@ -33,6 +33,7 @@ export interface TradeRecord {
   id: string;
   ownerId: string; // the user who logged the trade
   owner: string; // that user's username, shown on the trade
+  ownerName: string; // that user's display name (preferred for labels/pickers)
   isMine: boolean; // the viewing user owns this trade (may edit/remove it)
   broker: string | null;
   instrument: string;
@@ -140,11 +141,12 @@ function slippageOf(plannedEntry: number | null, entryPrice: number): number | n
   return Number((entryPrice - plannedEntry).toFixed(8));
 }
 
-function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeRecord {
+function toRecord(row: TradingTradeRow, owner: string, ownerName: string, viewerId: string): TradeRecord {
   return {
     id: row.id,
     ownerId: row.userId,
     owner,
+    ownerName: ownerName || owner,
     isMine: row.userId === viewerId,
     broker: row.broker,
     instrument: row.instrument,
@@ -176,12 +178,13 @@ function toRecord(row: TradingTradeRow, owner: string, viewerId: string): TradeR
 // Map an auto-recorded broker position (open or closed) into a Trade Log row.
 // These come from a connected broker (e.g. OANDA), so they're read-only here:
 // edits/closures happen on the broker and flow in through the Live Wall reconcile.
-function positionToRecord(row: TradingPositionRow, owner: string, viewerId: string): TradeRecord {
+function positionToRecord(row: TradingPositionRow, owner: string, ownerName: string, viewerId: string): TradeRecord {
   const opened = row.openedAt ?? row.firstSeenAt; // openedAt can be null; fall back to first sight
   return {
     id: row.id,
     ownerId: row.userId,
     owner,
+    ownerName: ownerName || owner,
     isMine: row.userId === viewerId,
     broker: row.broker,
     instrument: row.instrument,
@@ -283,6 +286,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     .select({
       trade: tradingTrades,
       username: users.username,
+      displayName: users.displayName,
       roles: users.roles,
     })
     .from(tradingTrades)
@@ -297,7 +301,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     return viewerIsDemo ? r.username === DEMO_USERNAME : r.username !== DEMO_USERNAME;
   });
 
-  const records = visible.map((r) => toRecord(r.trade, r.username, viewerId));
+  const records = visible.map((r) => toRecord(r.trade, r.username, r.displayName, viewerId));
 
   // Fold in broker-sourced positions (open + closed) so a trader's OANDA (and
   // other connected-broker) trades show up here automatically, not just on the
@@ -310,7 +314,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     // it's dropped from the log and its KPIs.
     const cutoffs = await connectionCutoffs();
     const posRows = await db
-      .select({ pos: tradingPositions, username: users.username, roles: users.roles })
+      .select({ pos: tradingPositions, username: users.username, displayName: users.displayName, roles: users.roles })
       .from(tradingPositions)
       .innerJoin(users, eq(users.id, tradingPositions.userId))
       .where(isNull(tradingPositions.deletedAt)); // soft-deleted rows are hidden here
@@ -322,7 +326,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
       if (beforeCutoff(cutoffs, r.pos.connectionId, opened)) continue;
       // Drop sub-floor broker fills (1-unit connection tests) from the log + KPIs.
       if (isSmallTrade(r.pos.units, settings.minTradeUnits)) continue;
-      records.push(positionToRecord(r.pos, r.username, viewerId));
+      records.push(positionToRecord(r.pos, r.username, r.displayName, viewerId));
     }
   }
 
