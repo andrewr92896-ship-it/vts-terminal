@@ -282,7 +282,7 @@ export function TeamChat({
 
             {/* Body */}
             {tab === 'support' ? (
-              <SupportTab theme={theme} isDemo={!!user.isDemo} />
+              <SupportTab theme={theme} isDemo={!!user.isDemo} userId={user.id} />
             ) : eligible === false ? (
               <NotOnTeam reason={reason} accent={theme.accent} />
             ) : (
