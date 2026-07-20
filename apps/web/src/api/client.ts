@@ -676,6 +676,9 @@ export const api = {
   adminBugReports(): Promise<{ reports: BugReport[] }> {
     return request('/api/admin/bugs');
   },
+  adminReplyBug(id: string, body: string): Promise<{ reports: BugReport[] }> {
+    return request(`/api/admin/bugs/${id}/reply`, { method: 'POST', body: JSON.stringify({ body }) });
+  },
   adminSetBugStatus(id: string, status: 'open' | 'submitted' | 'resolved'): Promise<{ reports: BugReport[] }> {
     return request(`/api/admin/bugs/${id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
   },

@@ -1190,7 +1190,7 @@ export interface Suggestion {
 
 export interface BugMessage {
   id: string;
-  role: 'user' | 'ai';
+  role: 'user' | 'ai' | 'admin';
   body: string;
   createdAt: number;
 }

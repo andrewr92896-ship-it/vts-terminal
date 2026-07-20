@@ -93,7 +93,7 @@ export function AdminSupport({ theme }: { theme: Theme }) {
                       {r.messages.map((m) => (
                         <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
                           <div style={{ fontSize: 10, color: m.role === 'ai' ? theme.accent : '#7e92c0', margin: '0 0 3px', fontWeight: 600 }}>
-                            {m.role === 'ai' ? 'Assistant' : r.author}
+                            {m.role === 'ai' ? <EditableText id="feedback.assistant.name">VTS AI</EditableText> : r.author}
                           </div>
                           <div
                             style={{

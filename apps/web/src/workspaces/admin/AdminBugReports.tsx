@@ -23,6 +23,8 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
   const [loaded, setLoaded] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reply, setReply] = useState('');
+  const [replying, setReplying] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +43,27 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
       setItems((await p).reports);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Something went wrong');
+    }
+  }
+
+  function toggle(id: string) {
+    setOpenId((cur) => (cur === id ? null : id));
+    setReply('');
+    setError(null);
+  }
+
+  async function sendReply(id: string) {
+    const text = reply.trim();
+    if (!text || replying) return;
+    setReplying(true);
+    setError(null);
+    try {
+      setItems((await api.adminReplyBug(id, text)).reports);
+      setReply('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not send reply');
+    } finally {
+      setReplying(false);
     }
   }
 
@@ -68,7 +91,7 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
             return (
               <div key={r.id} style={panel(theme)}>
                 <button
-                  onClick={() => setOpenId(expanded ? null : r.id)}
+                  onClick={() => toggle(r.id)}
                   style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}
                 >
                   <Icon name="bug" size={16} color={theme.accent} />
@@ -88,9 +111,15 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
                   <>
                     <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 10, borderTop: `1px solid ${theme.navBorder}`, paddingTop: 12 }}>
                       {r.messages.map((m) => (
-                        <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-start' : 'flex-start' }}>
-                          <div style={{ fontSize: 10, color: m.role === 'ai' ? theme.accent : '#7e92c0', margin: '0 0 3px', fontWeight: 600 }}>
-                            {m.role === 'ai' ? 'Assistant' : r.author}
+                        <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'admin' ? 'flex-end' : 'flex-start' }}>
+                          <div style={{ fontSize: 10, color: m.role === 'ai' ? theme.accent : m.role === 'admin' ? '#2FC77E' : '#7e92c0', margin: '0 0 3px', fontWeight: 600 }}>
+                            {m.role === 'ai' ? (
+                              <EditableText id="feedback.assistant.name">VTS AI</EditableText>
+                            ) : m.role === 'admin' ? (
+                              <EditableText id="feedback.admin.name">Admin</EditableText>
+                            ) : (
+                              r.author
+                            )}
                           </div>
                           <div
                             style={{
@@ -100,8 +129,13 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
                               borderRadius: 10,
                               whiteSpace: 'pre-wrap',
                               color: '#dfe7fa',
-                              background: m.role === 'ai' ? 'rgba(108,158,255,.08)' : 'rgba(255,255,255,.04)',
-                              border: `1px solid ${theme.navBorder}`,
+                              background:
+                                m.role === 'ai'
+                                  ? 'rgba(108,158,255,.08)'
+                                  : m.role === 'admin'
+                                    ? 'rgba(47,199,126,.1)'
+                                    : 'rgba(255,255,255,.04)',
+                              border: `1px solid ${m.role === 'admin' ? 'rgba(47,199,126,.4)' : theme.navBorder}`,
                               maxWidth: '100%',
                             }}
                           >
@@ -110,7 +144,42 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                      <input
+                        value={reply}
+                        onChange={(e) => setReply(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            void sendReply(r.id);
+                          }
+                        }}
+                        placeholder="Reply to the reporter…"
+                        maxLength={4000}
+                        disabled={replying}
+                        style={{
+                          flex: 1,
+                          background: '#091633',
+                          border: `1px solid ${theme.navBorder}`,
+                          borderRadius: 8,
+                          color: '#eef3ff',
+                          fontSize: 12.5,
+                          padding: '9px 11px',
+                          outline: 'none',
+                          fontFamily: 'inherit',
+                        }}
+                      />
+                      <button
+                        onClick={() => void sendReply(r.id)}
+                        disabled={replying || !reply.trim()}
+                        style={{ ...ghostBtn, opacity: replying || !reply.trim() ? 0.55 : 1, whiteSpace: 'nowrap' }}
+                      >
+                        <EditableText id="admin.bugs.send_reply">Send reply</EditableText>
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                       {r.status !== 'resolved' ? (
                         <button onClick={() => void run(api.adminSetBugStatus(r.id, 'resolved'))} style={ghostBtn}>
                           Mark resolved

@@ -361,7 +361,10 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
   }
 
   if (active) {
-    const open = active.status === 'open';
+    const adminJoined = active.messages.some((m) => m.role === 'admin');
+    // The reporter can reply while the AI is still gathering detail, or any time
+    // an admin has joined the thread (until it is resolved).
+    const canReply = active.status === 'open' || (adminJoined && active.status !== 'resolved');
     return page(
       <>
         <Header
@@ -379,7 +382,15 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
           <div ref={threadRef} style={{ maxHeight: 380, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
             {active.messages.map((m) => (
               <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
-                <div style={{ fontSize: 10, color: '#7e92c0', margin: '0 2px 3px' }}>{m.role === 'ai' ? 'Support assistant' : 'You'}</div>
+                <div style={{ fontSize: 10, margin: '0 2px 3px', color: m.role === 'admin' ? '#2FC77E' : '#7e92c0', fontWeight: m.role === 'admin' ? 600 : 400 }}>
+                  {m.role === 'ai' ? (
+                    <EditableText id="feedback.assistant.name">VTS AI</EditableText>
+                  ) : m.role === 'admin' ? (
+                    <EditableText id="feedback.admin.name">Admin</EditableText>
+                  ) : (
+                    <EditableText id="help.bug.you">You</EditableText>
+                  )}
+                </div>
                 <div
                   style={{
                     maxWidth: '85%',
@@ -389,8 +400,16 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
                     borderRadius: 10,
                     whiteSpace: 'pre-wrap',
                     color: m.role === 'user' ? '#06122c' : '#dfe7fa',
-                    background: m.role === 'user' ? theme.accent : 'rgba(255,255,255,.05)',
-                    border: m.role === 'user' ? 'none' : `1px solid ${theme.navBorder}`,
+                    background:
+                      m.role === 'user'
+                        ? theme.accent
+                        : m.role === 'admin'
+                          ? 'rgba(47,199,126,.1)'
+                          : 'rgba(255,255,255,.05)',
+                    border:
+                      m.role === 'user'
+                        ? 'none'
+                        : `1px solid ${m.role === 'admin' ? 'rgba(47,199,126,.4)' : theme.navBorder}`,
                   }}
                 >
                   {m.body}
@@ -399,13 +418,13 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
             ))}
           </div>
           {error && <div style={{ ...errorBanner, margin: '0 16px' }}>{error}</div>}
-          {open ? (
+          {canReply ? (
             <div style={{ display: 'flex', gap: 8, padding: 14, borderTop: `1px solid ${theme.navBorder}` }}>
               <input
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), void sendReply())}
-                placeholder="Add more detail…"
+                placeholder={adminJoined ? 'Reply to the admin…' : 'Add more detail…'}
                 maxLength={4000}
                 style={inputStyle}
               />
