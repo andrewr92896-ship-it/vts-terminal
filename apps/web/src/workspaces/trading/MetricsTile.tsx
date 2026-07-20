@@ -3,7 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, TradeLogData } from '../../api/types';
 import { configFrom } from './outcome';
-import { profitFactorStats, profitFactorText, scaledProfitFactorText } from './tradeStats';
+import { profitFactorStats, profitFactorText, scaledProfitFactorText, summarizeTrades, unrealizedProfitFactorStats } from './tradeStats';
 import { BORDER, BORDER2, FAINT, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
 import { EditableText } from '../../copy/SiteCopy';
 
@@ -28,6 +28,8 @@ export function MetricsTile({
   const { privacy } = usePrivacy();
   const [data, setData] = useState<TradeLogData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // '' = the whole desk; otherwise one trader's ownerId.
+  const [trader, setTrader] = useState('');
   const firstLoad = useRef(true);
   const alive = useRef(true);
 
@@ -55,10 +57,20 @@ export function MetricsTile({
     };
   }, [load]);
 
-  const s = data?.summary;
+  // Distinct traders for the picker, plus the chosen scope's trades + summary —
+  // whole desk (server summary) or one trader (recomputed the same way).
+  const config = data ? configFrom(data) : null;
+  const traders = data
+    ? [...new Map(data.trades.map((t) => [t.ownerId, t.owner])).entries()]
+        .map(([id, name]) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    : [];
+  const shownTrades = data ? (trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades) : [];
+  const s = data && config ? (trader ? summarizeTrades(shownTrades, config) : data.summary) : undefined;
   const canSeeBalances = (s?.totalRealizedPl ?? null) !== null;
   const showMoney = canSeeBalances && !privacy;
-  const pf = data ? profitFactorStats(data.trades, configFrom(data)) : null;
+  const pf = config ? profitFactorStats(shownTrades, config) : null;
+  const upf = unrealizedProfitFactorStats(shownTrades);
   const realized = s?.totalRealizedPl ?? 0;
   const unreal = s?.totalUnrealizedPl ?? 0;
   const net = realized + unreal;
@@ -73,9 +85,22 @@ export function MetricsTile({
           {editing && <span style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>⠿</span>}
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{tile.title || 'Desk Metrics'}</span>
         </div>
-        {editing && (
-          <button onClick={onRemove} className="no-drag" style={iconBtn} title="Remove tile">✕</button>
-        )}
+        <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {traders.length > 1 && (
+            <select
+              value={trader}
+              onChange={(e) => setTrader(e.target.value)}
+              title="Show metrics for the whole desk or one trader"
+              style={selectStyle}
+            >
+              <option value="">Whole desk</option>
+              {traders.map((tr) => (
+                <option key={tr.id} value={tr.id}>@{tr.name}</option>
+              ))}
+            </select>
+          )}
+          {editing && <button onClick={onRemove} style={iconBtn} title="Remove tile">✕</button>}
+        </div>
       </div>
       <div style={body}>
         {!data && !error && <div style={hint}><EditableText id="metrics.loading">Loading metrics…</EditableText></div>}
@@ -87,6 +112,7 @@ export function MetricsTile({
             <Stat label="Net P/L" value={!canSeeBalances ? 'hidden' : money(net)} color={plColor(net)} sub="realized + open" />
             <Stat label="Win Rate" value={s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—'} sub={`${s.wins}W · ${s.losses}L`} />
             <Stat label="Profit Factor" value={pf ? profitFactorText(pf) : '—'} sub={pf ? `scaled ${scaledProfitFactorText(pf)}` : undefined} />
+            <Stat label="Unrealized PF" value={profitFactorText(upf)} sub={`scaled ${scaledProfitFactorText(upf)}`} />
             <Stat label="Trades" value={String(s.total)} sub={`${s.open} open · ${s.closed} closed`} />
           </div>
         )}
@@ -126,6 +152,17 @@ const header: CSSProperties = {
   flex: '0 0 auto',
 };
 const body: CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto' };
+const selectStyle: CSSProperties = {
+  background: 'rgba(4,12,30,.6)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 6,
+  color: '#dfe7fa',
+  fontSize: 11,
+  fontWeight: 600,
+  padding: '4px 6px',
+  cursor: 'pointer',
+  maxWidth: 130,
+};
 const hint: CSSProperties = { padding: '18px 14px', fontSize: 11.5, color: MUTED, textAlign: 'center', lineHeight: 1.5 };
 const iconBtn: CSSProperties = {
   fontSize: 12,

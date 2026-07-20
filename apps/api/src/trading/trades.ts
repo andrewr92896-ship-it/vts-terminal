@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingTrades,
@@ -286,7 +286,8 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
       roles: users.roles,
     })
     .from(tradingTrades)
-    .innerJoin(users, eq(users.id, tradingTrades.userId));
+    .innerJoin(users, eq(users.id, tradingTrades.userId))
+    .where(isNull(tradingTrades.deletedAt)); // soft-deleted trades live in Deleted Trades
 
   const visible = rows.filter((r) => {
     if (!scopeIds.has(r.trade.userId)) return false; // only the viewer's team
@@ -311,7 +312,8 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     const posRows = await db
       .select({ pos: tradingPositions, username: users.username, roles: users.roles })
       .from(tradingPositions)
-      .innerJoin(users, eq(users.id, tradingPositions.userId));
+      .innerJoin(users, eq(users.id, tradingPositions.userId))
+      .where(isNull(tradingPositions.deletedAt)); // soft-deleted rows are hidden here
     for (const r of posRows) {
       if (!scopeIds.has(r.pos.userId)) continue; // only the viewer's team
       if (r.username === DEMO_USERNAME) continue;
@@ -456,12 +458,14 @@ export interface RemovedTrade {
 // caller removed their *own* trade — restoring re-creates it under the caller, so
 // admin-removed teammates' trades are not offered an undo (it would re-own them).
 export async function removeTrade(userId: string, id: string, admin = false): Promise<RemovedTrade | null> {
+  // Soft delete: mark deleted (kept for the Deleted Trades section) rather than
+  // dropping the row, so a mistaken delete can always be undone.
   const where = admin
-    ? eq(tradingTrades.id, id)
-    : and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId));
+    ? and(eq(tradingTrades.id, id), isNull(tradingTrades.deletedAt))
+    : and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId), isNull(tradingTrades.deletedAt));
   const row = (await db.select().from(tradingTrades).where(where).limit(1))[0];
   if (!row) return null;
-  await db.delete(tradingTrades).where(where);
+  await db.update(tradingTrades).set({ deletedAt: new Date(), updatedAt: new Date() }).where(where);
   if (row.userId !== userId) return null; // admin removed a teammate's trade — no undo
   return {
     id: row.id,
@@ -486,29 +490,10 @@ export async function removeTrade(userId: string, id: string, admin = false): Pr
 }
 
 export async function restoreTrade(userId: string, t: RemovedTrade): Promise<void> {
+  // The row still exists (soft-deleted) — clear the delete marker to bring it
+  // back. Owner-scoped: the undo bar only ever restores the caller's own trade.
   await db
-    .insert(tradingTrades)
-    .values({
-      id: t.id,
-      userId,
-      broker: t.broker,
-      instrument: t.instrument,
-      side: isSide(t.side) ? t.side : 'long',
-      status: isStatus(t.status) ? t.status : 'closed',
-      plannedEntry: t.plannedEntry,
-      entryPrice: t.entryPrice,
-      exitPrice: t.exitPrice,
-      takeProfit: t.takeProfit,
-      stopLoss: t.stopLoss,
-      units: t.units,
-      realizedPl: t.realizedPl,
-      strategy: t.strategy,
-      timeframe: t.timeframe,
-      openedAt: new Date(t.openedAt),
-      closedAt: t.closedAt != null ? new Date(t.closedAt) : null,
-      notes: t.notes,
-      createdAt: new Date(t.createdAt),
-      updatedAt: new Date(),
-    })
-    .onConflictDoNothing();
+    .update(tradingTrades)
+    .set({ deletedAt: null, updatedAt: new Date() })
+    .where(and(eq(tradingTrades.id, t.id), eq(tradingTrades.userId, userId)));
 }

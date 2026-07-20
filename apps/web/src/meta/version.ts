@@ -11,9 +11,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.22';
+export const APP_VERSION = 'Beta V 5.23';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.23',
+    date: 'July 19, 2026',
+    notes: [
+      'New Deleted Trades section (under Trading). Removing a trade from the Trade Log or History no longer throws it away — it moves here, out of your stats, and one tap restores it. Great for clearing test trades without fear of losing a real one.',
+      'Unrealized Profit Factor: both the Trade Log and the Live Wall Metrics tile now show a profit factor for your open book (winners’ open gains ÷ losers’ open losses), each with its size-scaled reading beneath — just like the realized one.',
+      'Live Wall Metrics tile can now scope to one trader: use the picker in the tile header to switch between the whole desk and any individual.',
+      '“Count trades since” is now in Trade Desk ▸ Settings (and still on each connection), so it’s easy to find. Pick the date your real trading began per account.',
+      'Profit Factor now always shows the scaled figure beneath the raw one — the Deck/Tape and Scaled-PF toggles have left the Trade Log header. Deck vs Tape moved to My Portal ▸ Preferences (new).',
+      'Fixed a missing-glyph box on the Export button.',
+    ],
+  },
   {
     version: 'Beta V 5.22',
     date: 'July 19, 2026',

@@ -1,8 +1,19 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import type { BreakEvenMode, DeskSettings } from '../../api/types';
+import type { BreakEvenMode, BrokerConnection, DeskSettings } from '../../api/types';
 import { EditableText } from '../../copy/SiteCopy';
+
+// The "count trades since" cutoff maps to UTC midnight of the chosen day, so it
+// means the same instant regardless of timezone. Blank clears it.
+function dateToStartMs(v: string): number | null {
+  if (!v) return null;
+  const ms = Date.parse(v + 'T00:00:00.000Z');
+  return Number.isNaN(ms) ? null : ms;
+}
+function startMsToDate(ms: number | null): string {
+  return ms == null ? '' : new Date(ms).toISOString().slice(0, 10);
+}
 
 // The three ways the desk can measure its break-even buffer.
 const MODES: { key: BreakEvenMode; label: string }[] = [
@@ -76,6 +87,9 @@ export function DeskSettingsModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // The caller's own broker connections, for the per-account "count trades since"
+  // cutoff surfaced here (the discoverable home for it).
+  const [conns, setConns] = useState<BrokerConnection[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -106,6 +120,34 @@ export function DeskSettingsModal({
       alive = false;
     };
   }, [open]);
+
+  // The caller's own connections drive the per-account cutoff below.
+  useEffect(() => {
+    if (!open || readOnly) return;
+    let alive = true;
+    api
+      .tradingConnections()
+      .then((d) => alive && setConns(d.connections))
+      .catch(() => {
+        /* ignore — the cutoff section simply stays hidden */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, readOnly]);
+
+  // Set/clear a connection's "count trades since" cutoff. Optimistic so the date
+  // field updates instantly; reconciles from the server response.
+  async function setCutoff(id: string, ms: number | null) {
+    setConns((cs) => cs.map((c) => (c.id === id ? { ...c, historyStartAt: ms } : c)));
+    setError(null);
+    try {
+      const r = await api.updateConnection(id, { historyStartAt: ms });
+      setConns(r.connections);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not update the cutoff');
+    }
+  }
 
   if (!open) return null;
 
@@ -439,6 +481,38 @@ export function DeskSettingsModal({
                   fills are affected; trades you log by hand always count.
                 </div>
               </div>
+
+              {/* Per-account "count trades since" cutoff — the discoverable home
+                  for it, right where a trader looks for metric settings. */}
+              {!readOnly && conns.filter((c) => c.broker !== 'manual').length > 0 && (
+                <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
+                  <div style={sectionLabel}><EditableText id="desksettings.cutoff_label">Count trades since (per account)</EditableText></div>
+                  <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
+                    Pick the date your real trading on each broker account began. Trades opened before it are left
+                    out of your Trade Log and History — and never re-imported. Blank counts everything.
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                    {conns.filter((c) => c.broker !== 'manual').map((c) => (
+                      <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: 12.5, color: TEXT, flex: '1 1 120px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.label} <span style={{ color: FAINT, fontSize: 10.5 }}>· {c.broker}</span>
+                        </span>
+                        <input
+                          type="date"
+                          value={startMsToDate(c.historyStartAt)}
+                          onChange={(e) => setCutoff(c.id, dateToStartMs(e.target.value))}
+                          disabled={busy}
+                          aria-label={`Count trades since, ${c.label}`}
+                          style={{ ...input, fontSize: 13, width: 150 }}
+                        />
+                        {c.historyStartAt != null && (
+                          <button onClick={() => setCutoff(c.id, null)} disabled={busy} style={addBtn}>Clear</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginTop: 12 }}>{error}</div>}
 

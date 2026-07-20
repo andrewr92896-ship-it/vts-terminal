@@ -34,6 +34,7 @@ export const NAV: NavWorkspace[] = [
     group: 'My Portal',
     sections: [
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
   },
@@ -47,6 +48,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
       { key: 'desk', label: 'Trade Desk', icon: 'candlestick-chart' },
+      { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
       // Private, role-gated: only shown to holders of the `funded` role (see

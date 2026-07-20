@@ -470,6 +470,13 @@
       "when": 1782339836908,
       "tag": "0066_desk_min_trade_units",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "6",
+      "when": 1782339936908,
+      "tag": "0067_soft_delete_trades",
+      "breakpoints": true
     }
   ]
 }
