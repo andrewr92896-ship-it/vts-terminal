@@ -11,6 +11,8 @@ import {
 } from '../db/schema.js';
 import { aiConfigured, chatClaude, extractJson } from '../ai/claude.js';
 import { getPrompt } from '../ai/prompts.js';
+import { sendToUsers } from '../notifications/push.js';
+import { sendPushoverToUsers } from '../notifications/pushover.js';
 
 // Suggestions & bug reports submitted from the Site Help workspace. Both land in
 // the Admin workspace. Suggestions are a plain note; bug reports run through a
@@ -80,7 +82,7 @@ export async function latestSuggestionAt(): Promise<number> {
 
 export interface BugMessageView {
   id: string;
-  role: 'user' | 'ai';
+  role: 'user' | 'ai' | 'admin';
   body: string;
   createdAt: number;
 }
@@ -95,7 +97,8 @@ export interface BugReportView {
 }
 
 function toBugMessageView(row: BugReportMessageRow): BugMessageView {
-  return { id: row.id, role: row.role === 'ai' ? 'ai' : 'user', body: row.body, createdAt: row.createdAt.getTime() };
+  const role = row.role === 'ai' ? 'ai' : row.role === 'admin' ? 'admin' : 'user';
+  return { id: row.id, role, body: row.body, createdAt: row.createdAt.getTime() };
 }
 
 async function messagesFor(reportId: string): Promise<BugMessageView[]> {
@@ -168,7 +171,7 @@ async function triage(
   }
 }
 
-async function insertMessage(reportId: string, role: 'user' | 'ai', body: string, at: Date): Promise<void> {
+async function insertMessage(reportId: string, role: 'user' | 'ai' | 'admin', body: string, at: Date): Promise<void> {
   await db.insert(bugReportMessages).values({
     id: crypto.randomUUID(),
     reportId,
@@ -246,7 +249,10 @@ export async function fileBugReportFromConversation(
 export class BugReportForbiddenError extends Error {}
 export class BugReportClosedError extends Error {}
 
-// Append a reporter reply to an open report and run the AI intake again.
+// Append a reporter reply. While the report is still in AI intake (no admin has
+// joined) this runs the intake again to gather detail or file the ticket. Once
+// an admin has replied, the thread is a human ↔ human conversation: the reply is
+// just appended and the AI stays out of it.
 export async function replyToBugReport(
   user: { id: string },
   reportId: string,
@@ -257,12 +263,28 @@ export async function replyToBugReport(
   const report = (await db.select().from(bugReports).where(eq(bugReports.id, reportId)).limit(1))[0];
   if (!report) throw new Error('Report not found');
   if (report.userId !== user.id) throw new BugReportForbiddenError('This is not your report');
-  if (report.status !== 'open') throw new BugReportClosedError('This report has already been submitted');
+
+  const before = await messagesFor(reportId);
+  const adminJoined = before.some((m) => m.role === 'admin');
+
+  if (report.status === 'resolved') throw new BugReportClosedError('This report has been resolved');
+  // Before an admin joins, replies are only allowed while the AI is still asking
+  // for detail ('open'); a plain AI-filed ticket ('submitted') is closed.
+  if (!adminJoined && report.status !== 'open') {
+    throw new BugReportClosedError('This report has already been submitted');
+  }
 
   const now = new Date();
   await insertMessage(reportId, 'user', text, now);
 
-  // How many reporter turns have there been so far (this new one included)? Used
+  if (adminJoined) {
+    // Human conversation — no AI turn. Keep it active for the admin to see.
+    await db.update(bugReports).set({ status: 'submitted', updatedAt: now }).where(eq(bugReports.id, reportId));
+    const row = (await db.select().from(bugReports).where(eq(bugReports.id, reportId)).limit(1))[0];
+    return toBugReportView(row);
+  }
+
+  // AI intake mode: how many reporter turns so far (this new one included)? Used
   // to cap the clarification loop.
   const existing = await messagesFor(reportId);
   const userTurns = existing.filter((m) => m.role === 'user').length; // includes the one just added
@@ -275,6 +297,42 @@ export async function replyToBugReport(
 
   const row = (await db.select().from(bugReports).where(eq(bugReports.id, reportId)).limit(1))[0];
   return toBugReportView(row);
+}
+
+// An admin replies to a bug report from the admin Bug Reports section. This posts
+// a human 'admin' turn (no AI), marks the ticket active ('submitted') so it isn't
+// mistaken for done, and notifies the reporter that they have a reply. The admin
+// is authenticated at the route; replies show generically as "Admin".
+export async function adminReplyToBugReport(reportId: string, body: string): Promise<BugReportView[]> {
+  const text = body.trim();
+  if (!text) throw new Error('A reply is required');
+  const report = (await db.select().from(bugReports).where(eq(bugReports.id, reportId)).limit(1))[0];
+  if (!report) throw new Error('Report not found');
+
+  const now = new Date();
+  await insertMessage(reportId, 'admin', text, now);
+  await db.update(bugReports).set({ status: 'submitted', updatedAt: now }).where(eq(bugReports.id, reportId));
+
+  // Let the reporter know a human replied (best-effort; never blocks the reply).
+  const preview = text.length > 120 ? `${text.slice(0, 120)}…` : text;
+  try {
+    await Promise.allSettled([
+      sendToUsers([report.userId], {
+        title: 'Reply to your bug report',
+        body: preview,
+        url: '/',
+        tag: `bug-${reportId}`,
+      }),
+      sendPushoverToUsers([report.userId], {
+        title: 'Reply to your bug report',
+        message: preview,
+      }),
+    ]);
+  } catch {
+    /* notifications are best-effort */
+  }
+
+  return listAllBugReports();
 }
 
 // A reporter's own list of the bug reports they have filed (for the Site Help UI).

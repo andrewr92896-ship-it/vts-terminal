@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.32';
+export const APP_VERSION = 'Beta V 5.33';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.33',
+    date: 'July 20, 2026',
+    notes: [
+      'Admins can now reply to a bug report. Open a report in Admin ▸ Bug Reports and use the new reply box to write back to the reporter — it posts into the same thread and pings them with a notification.',
+      'Once an admin replies, the reporter can answer back in Site Help ▸ Report a bug, turning the ticket into a two-way conversation (the AI intake steps aside once a human is on the thread).',
+      'The support/bug assistant is now named VTS AI everywhere it appears.',
+    ],
+  },
   {
     version: 'Beta V 5.32',
     date: 'July 20, 2026',

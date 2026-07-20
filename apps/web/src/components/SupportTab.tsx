@@ -355,7 +355,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
             {m.role === 'ai' && (
               <div style={{ fontSize: 10, color: '#7e92c0', margin: '0 2px 3px' }}>
-                <EditableText id="support.assistant.name">Support assistant</EditableText>
+                <EditableText id="support.assistant.name">VTS AI</EditableText>
               </div>
             )}
             <div

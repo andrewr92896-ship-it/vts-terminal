@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware.js';
 import {
   addSuggestion,
+  adminReplyToBugReport,
   createBugReport,
   listAllBugReports,
   listMyBugReports,
@@ -85,6 +86,17 @@ export async function feedbackRoutes(app: FastifyInstance) {
 
   app.get('/api/admin/bugs', admin, async () => {
     return { reports: await listAllBugReports() };
+  });
+
+  app.post('/api/admin/bugs/:id/reply', admin, async (request, reply) => {
+    const parsed = bodySchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Type a reply to send it' });
+    const id = (request.params as { id: string }).id;
+    try {
+      return { reports: await adminReplyToBugReport(id, parsed.data.body) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not send reply' });
+    }
   });
 
   app.patch('/api/admin/bugs/:id', admin, async (request, reply) => {

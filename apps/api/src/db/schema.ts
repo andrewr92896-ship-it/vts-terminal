@@ -651,14 +651,15 @@ export const bugReports = sqliteTable('bug_reports', {
 });
 export type BugReportRow = typeof bugReports.$inferSelect;
 
-// The intake conversation for a bug report: alternating reporter ('user') and
-// assistant ('ai') turns, oldest-first by createdAt.
+// The intake conversation for a bug report: reporter ('user') and assistant
+// ('ai') turns during intake, plus human admin replies ('admin') once an admin
+// responds from the Bug Reports section. Oldest-first by createdAt.
 export const bugReportMessages = sqliteTable('bug_report_messages', {
   id: text('id').primaryKey(),
   reportId: text('report_id')
     .notNull()
     .references(() => bugReports.id, { onDelete: 'cascade' }),
-  role: text('role').notNull(), // 'user' | 'ai'
+  role: text('role').notNull(), // 'user' | 'ai' | 'admin'
   body: text('body').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
