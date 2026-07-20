@@ -201,6 +201,19 @@ function PushoverSection({ accent, accentText }: { accent: string; accentText: s
     cursor: 'pointer',
     minHeight: 40,
   };
+  // App Store / Google Play icons that deep-link to the Pushover app. Icons
+  // only — the click opens the store listing in a new tab.
+  const storeLink: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    lineHeight: 0,
+  };
+  const storeImg: React.CSSProperties = {
+    width: 40,
+    height: 40,
+    display: 'block',
+    borderRadius: 9,
+  };
 
   return (
     <section>
@@ -218,7 +231,7 @@ function PushoverSection({ accent, accentText }: { accent: string; accentText: s
       ) : connected ? (
         <>
           <div style={{ fontSize: 12.5, color: '#7fd6a3', marginBottom: 10, fontWeight: 600 }}>Connected ✓</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <button onClick={() => void run(api.pushoverTest(), 'Test sent — check your phone.')} disabled={busy} style={ghost}>
               Send test
             </button>
@@ -231,6 +244,26 @@ function PushoverSection({ accent, accentText }: { accent: string; accentText: s
             >
               Disconnect
             </button>
+            <a
+              href="https://apps.apple.com/us/app/pushover-notifications/id506088175"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Get Pushover on the App Store"
+              title="Get Pushover on the App Store"
+              style={storeLink}
+            >
+              <img src="/brand/app-store.png" alt="Download Pushover on the App Store" style={storeImg} />
+            </a>
+            <a
+              href="https://play.google.com/store/apps/details?id=net.superblock.pushover"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Get Pushover on Google Play"
+              title="Get Pushover on Google Play"
+              style={storeLink}
+            >
+              <img src="/brand/google-play.png" alt="Get Pushover on Google Play" style={storeImg} />
+            </a>
           </div>
         </>
       ) : (
