@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.23';
+export const APP_VERSION = 'Beta V 5.24';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.24',
+    date: 'July 20, 2026',
+    notes: [
+      'Study Game: new Practice mode toggle. Flip it on to drill questions freely — you still see whether you’re right and can talk each one through with VTS AI, but nothing counts toward your score, level, streak, or the leaderboard. A revealed answer shows “Practice — not counted” instead of a lifetime change.',
+      'Study Game now keeps your place. Switch tabs, background the app, or relaunch and you land right back on the exact question you were on — even one you’ve already answered but not yet moved past — so you can revisit the explanation or keep chatting it through instead of jumping to a fresh one. Your practice-mode choice sticks too.',
+    ],
+  },
   {
     version: 'Beta V 5.23',
     date: 'July 19, 2026',

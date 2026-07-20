@@ -19,6 +19,7 @@ import {
 } from './studyEngine';
 import { StudyProgressBars } from './StudyProgress';
 import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
+import { loadDeckSession, saveDeckSession } from './studySession';
 import { TutorChat } from './TutorChat';
 
 const GREEN = '#35c47b';
@@ -76,6 +77,17 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   const [levelEvent, setLevelEvent] = useState<LevelEvent | null>(null);
   const [scoreChange, setScoreChange] = useState<number | null>(null);
   const [resetConfirm, setResetConfirm] = useState(false);
+  // Practice mode: answers still reveal + explain, but don't touch the score,
+  // level, streak, or leaderboard. Persisted per-user, per-deck.
+  const [practice, setPractice] = useState(false);
+  // Whether the currently-revealed answer was submitted in practice mode (so its
+  // result wasn't recorded) — drives the "not counted" note, independent of the
+  // live toggle.
+  const [practiceAttempt, setPracticeAttempt] = useState(false);
+  // Set true once the saved session (practice flag + current question) has been
+  // restored, gating the persistence effect so it never clobbers what we're
+  // about to restore on first load.
+  const [viewReady, setViewReady] = useState(false);
   // "Guess the source" mode, available only on combined games whose questions
   // remember which game they came from.
   const [guessMode, setGuessMode] = useState(false);
@@ -173,11 +185,44 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game, readOnly]);
 
-  // Draw the first question once the deck is ready.
+  // Once the deck is ready, restore the saved session — the practice toggle and
+  // the exact question the learner was on (in its answered/unanswered state), so
+  // leaving the tab or relaunching lands them right back on it. Falls back to
+  // drawing a fresh question when there's nothing to restore. Runs once.
   useEffect(() => {
-    if (deck && !current) advance();
+    if (!deck || viewReady) return;
+    const sess = loadDeckSession(user?.id, deckId);
+    setPractice(sess.practice);
+    const cur = sess.current;
+    const q = cur ? deck.questions.find((x) => x.seq === cur.seq) : null;
+    if (cur && q) {
+      setCurrent(q);
+      setSelected(cur.selected);
+      setRevealed(cur.revealed);
+      setOutcome(cur.outcome);
+      setSourceGuess(cur.sourceGuess);
+      setPracticeAttempt(cur.practiceAttempt);
+      // Don't let the restored question resurface immediately in this run.
+      poolRef.current = poolRef.current.filter((i) => deck.questions[i]?.seq !== q.seq);
+    } else {
+      advance();
+    }
+    setViewReady(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [deck]);
+  }, [deck, viewReady]);
+
+  // Persist the session (practice flag + current question view) on every change,
+  // after the restore above has run so it can't overwrite what we just loaded.
+  useEffect(() => {
+    if (!deck || !viewReady) return;
+    saveDeckSession(user?.id, deckId, {
+      practice,
+      current: current
+        ? { seq: current.seq, selected, revealed, outcome, sourceGuess, practiceAttempt }
+        : null,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deck, viewReady, practice, current, selected, revealed, outcome, sourceGuess, practiceAttempt]);
 
   // Recolour the Studies workspace to the current level while this game is open,
   // and clear the tint when the player leaves.
@@ -208,6 +253,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     setLevelEvent(null);
     setScoreChange(null);
     setSourceGuess(null);
+    setPracticeAttempt(false);
   }
 
   // Record one answer against `base` and update the score-delta / level-up
@@ -241,6 +287,16 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
     setSelected(label);
     setRevealed(true);
     setOutcome(correct);
+    // Practice mode: reveal + explain, but don't record — score, level, streak,
+    // and the leaderboard stay untouched.
+    if (practice) {
+      setPracticeAttempt(true);
+      setScoreChange(null);
+      setLevelEvent(null);
+      preAnswerRef.current = null;
+      return;
+    }
+    setPracticeAttempt(false);
     // Snapshot the state before this attempt is recorded, so a later answer-key
     // fix can replay it exactly (recordDeckAnswer is pure).
     preAnswerRef.current = { game, topic: current.topic };
@@ -311,7 +367,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       const base = preAnswerRef.current;
       if (base) applyRecordedAnswer(base.game, base.topic, nowCorrect);
       setFixNote(
-        nowCorrect
+        nowCorrect && !practiceAttempt
           ? `Correct answer set to ${newAnswer} — your answer now counts as correct.`
           : `Correct answer set to ${newAnswer} — saved for your team.`,
       );
@@ -470,6 +526,29 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
             <div style={{ fontSize: 10.5, color: muted, fontFamily: "'IBM Plex Mono', monospace" }}>{game.streak} in a row</div>
           </div>
         </div>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            fontSize: 11.5,
+            fontWeight: 600,
+            cursor: 'pointer',
+            color: practice ? theme.accent : muted,
+            border: `1px solid ${practice ? theme.accent : theme.navBorder}`,
+            background: practice ? 'rgba(255,255,255,.07)' : 'transparent',
+            borderRadius: 999,
+            padding: '6px 12px',
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={practice}
+            onChange={(e) => setPractice(e.target.checked)}
+            style={{ width: 15, height: 15, accentColor: theme.accent }}
+          />
+          <EditableText id="studygameplay.practice_toggle" text="Practice mode" />
+        </label>
         {sources.length > 0 && (
           <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: muted, cursor: 'pointer', marginLeft: sources.length > 0 && !readOnly ? 0 : 'auto' }}>
             <input type="checkbox" checked={guessMode} onChange={(e) => setGuessMode(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
@@ -487,6 +566,29 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       <div style={{ ...card(theme), marginBottom: 14, padding: '14px 16px' }}>
         <StudyProgressBars theme={theme} game={game} prefs={prefs} onPrefsChange={updatePrefs} />
       </div>
+
+      {practice && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            background: 'rgba(255,255,255,.05)',
+            border: `1px dashed ${theme.accent}`,
+            borderRadius: 12,
+            padding: '9px 13px',
+            marginBottom: 14,
+            fontSize: 12,
+            color: '#e7e0ff',
+          }}
+        >
+          <span style={{ fontSize: 15 }}>🎯</span>
+          <EditableText
+            id="studygameplay.practice_banner"
+            text="Practice mode is on — answers won’t affect your score, level, streak, or the leaderboard."
+          />
+        </div>
+      )}
 
       {resetConfirm && (
         <div style={{ ...card(theme), marginBottom: 14, borderColor: '#e0a23a' }}>
@@ -605,14 +707,20 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
             <div style={{ marginTop: 16 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: outcome ? GREEN : RED, marginBottom: 6 }}>
                 {outcome ? <EditableText id="studygameplay.correct" text="Correct" /> : <EditableText id="studygameplay.incorrect" text="Incorrect" />}
-                {scoreChange != null && (
+                {practiceAttempt ? (
                   <span style={{ fontSize: 12, fontWeight: 600, marginLeft: 8, color: muted }}>
-                    Lifetime{' '}
-                    <span style={{ color: scoreChange >= 0 ? GREEN : RED, fontWeight: 700 }}>
-                      {scoreChange >= 0 ? '+' : ''}
-                      {scoreChange.toFixed(1)}%
-                    </span>
+                    <EditableText id="studygameplay.practice_not_counted" text="🎯 Practice — not counted" />
                   </span>
+                ) : (
+                  scoreChange != null && (
+                    <span style={{ fontSize: 12, fontWeight: 600, marginLeft: 8, color: muted }}>
+                      Lifetime{' '}
+                      <span style={{ color: scoreChange >= 0 ? GREEN : RED, fontWeight: 700 }}>
+                        {scoreChange >= 0 ? '+' : ''}
+                        {scoreChange.toFixed(1)}%
+                      </span>
+                    </span>
+                  )
                 )}
               </div>
               {current.explanation && (
