@@ -4,6 +4,7 @@ import { useNowTick } from '../../hooks/useNowTick';
 import type { BoardTile, CalendarEvent, NewsImpact } from '../../api/types';
 import { fmtDayKey, fmtTime } from './newsFormat';
 import { BORDER, BORDER2, FAINT, GOLD, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
+import { ScrollLockButton } from './scrollLock';
 import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 120_000;
@@ -99,6 +100,7 @@ export function CalendarTile({
           {calendar && <span style={countChip}>{count}</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ScrollLockButton />
           {editing ? (
             <>
               <div style={segWrap} title="Lowest impact to show">

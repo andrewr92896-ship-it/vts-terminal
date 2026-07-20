@@ -5,6 +5,7 @@ import type { BoardTile, NewsBias, NewsImpact, NewsItem } from '../../api/types'
 import { decodeEntities, fmtRelative } from './newsFormat';
 import { NEWS_FEEDS, newsFeeds } from './newsRelevance';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
+import { ScrollLockButton } from './scrollLock';
 import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 120_000;
@@ -100,6 +101,7 @@ export function NewsTile({
           {headlines && <span style={countChip}>{shown.length}</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ScrollLockButton />
           {editing ? (
             <>
               {/* Topic subfeed + impact pickers — saved with the preset. */}

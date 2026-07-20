@@ -6,6 +6,7 @@ import type { BoardTile, TradeLogData } from '../../api/types';
 import { configFrom } from './outcome';
 import { profitFactorStats, profitFactorText, scaledProfitFactorText, summarizeTrades, unrealizedProfitFactorStats } from './tradeStats';
 import { BORDER, BORDER2, FAINT, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
+import { ScrollLockButton } from './scrollLock';
 import { EditableText } from '../../copy/SiteCopy';
 import { Icon } from '../../components/Icon';
 
@@ -88,6 +89,7 @@ export function MetricsTile({
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{tile.title || 'Desk Metrics'}</span>
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <ScrollLockButton />
           {traders.length > 1 && (
             <TraderPicker value={trader} options={traders} onChange={setTrader} />
           )}

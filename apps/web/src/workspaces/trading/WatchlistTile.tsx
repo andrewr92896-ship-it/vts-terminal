@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import type { BoardTile } from '../../api/types';
 import { TvWidget } from './TvWidget';
 import { TileConfigModal } from './TileConfigModal';
+import { ScrollLockButton } from './scrollLock';
 import {
   BORDER,
   BORDER2,
@@ -81,21 +82,26 @@ export function WatchlistTile({
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{tile.title || 'Watchlist'}</span>
           <span style={countChip}>{symbols.length}</span>
         </div>
-        {editing && (
-          <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            {/* Scroll ⇄ Static layout picker — auto-scrolling ticker tape or a
-                stationary list with every symbol visible. Saved with the preset. */}
-            <div style={segWrap} title="How to show the watchlist in this tile">
-              <button onClick={() => onChange({ watchlistMode: 'scroll' })} style={segBtn(mode === 'scroll')} title="Auto-scrolling ticker">Scroll</button>
-              <button onClick={() => onChange({ watchlistMode: 'static' })} style={segBtn(mode === 'static')} title="Stationary — all symbols visible">Static</button>
-            </div>
-            {/* A clearly labelled button (not a bare icon) so changing what's on
-                the watchlist is easy to find — the header keeps a fixed height
-                even when the tile is a thin strip, so this stays reachable. */}
-            <button onClick={() => setShowCfg(true)} style={editSymbolsBtn} title="Edit watchlist symbols">⚙ Symbols</button>
-            <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>
-          </div>
-        )}
+        <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Scroll lock is always available (phone); the layout/symbol controls
+              only appear while editing the board. */}
+          <ScrollLockButton />
+          {editing && (
+            <>
+              {/* Scroll ⇄ Static layout picker — auto-scrolling ticker tape or a
+                  stationary list with every symbol visible. Saved with the preset. */}
+              <div style={segWrap} title="How to show the watchlist in this tile">
+                <button onClick={() => onChange({ watchlistMode: 'scroll' })} style={segBtn(mode === 'scroll')} title="Auto-scrolling ticker">Scroll</button>
+                <button onClick={() => onChange({ watchlistMode: 'static' })} style={segBtn(mode === 'static')} title="Stationary — all symbols visible">Static</button>
+              </div>
+              {/* A clearly labelled button (not a bare icon) so changing what's on
+                  the watchlist is easy to find — the header keeps a fixed height
+                  even when the tile is a thin strip, so this stays reachable. */}
+              <button onClick={() => setShowCfg(true)} style={editSymbolsBtn} title="Edit watchlist symbols">⚙ Symbols</button>
+              <button onClick={onRemove} style={{ ...iconBtn, color: '#ffb4ab' }} title="Remove tile">✕</button>
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ position: 'relative', flex: 1, minHeight: 0 }}>
