@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.34';
+export const APP_VERSION = 'Beta V 5.35';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.35',
+    date: 'July 20, 2026',
+    notes: [
+      'The corner Support bubble now shows the admins’ replies to a bug you reported, right where you filed it, and lets you reply back — a real two-way conversation. Follow-ups stay on the same ticket instead of quietly opening a duplicate.',
+      'You can now remove your own entries from a study game’s leaderboard. Your rows show a small delete control (with a confirm) — clear out old “past run” scores, or your current run, without touching anyone else’s.',
+      'More of the Studies screens’ wording is now editable live from the site-wording editor — button and tab labels, empty and loading states, and hints across study games, flashcards, practice tests, and guides.',
+    ],
+  },
   {
     version: 'Beta V 5.34',
     date: 'July 20, 2026',
