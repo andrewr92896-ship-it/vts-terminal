@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.26';
+export const APP_VERSION = 'Beta V 5.27';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.27',
+    date: 'July 20, 2026',
+    notes: [
+      'Emails are now editable by admins: open Admin ▸ Users and tap the pencil next to anyone’s email to change their sign-in address. This fixes older accounts whose email showed a doubled “…@vitalistradingsystems.com@vitalistradingsystems.com” — just edit it down to the correct address and Save.',
+    ],
+  },
   {
     version: 'Beta V 5.26',
     date: 'July 20, 2026',
