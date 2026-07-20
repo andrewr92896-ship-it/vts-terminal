@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.25';
+export const APP_VERSION = 'Beta V 5.26';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.26',
+    date: 'July 20, 2026',
+    notes: [
+      'Pushover (custom alert sound): App Store and Google Play icons now sit to the right of the Disconnect button. Tap either to jump straight to the Pushover app’s store listing to install it.',
+    ],
+  },
   {
     version: 'Beta V 5.25',
     date: 'July 20, 2026',
