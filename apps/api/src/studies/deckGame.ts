@@ -46,6 +46,44 @@ export async function archiveDeckRun(userId: string, deckId: string, raw: string
   });
 }
 
+// Delete one of the CALLER'S OWN leaderboard entries for a deck. `entryId` is the
+// composite id the leaderboard uses:
+//   • "run:<runId>"   — a banked past run; deletes that run row.
+//   • "live:<userId>" — the caller's current run; clears their live state (a
+//                       fresh run is created next time they answer a question).
+// Ownership is enforced in the WHERE clause / by comparing the id, so a user can
+// only ever remove their own posts. Unknown ids are a no-op. Returns true when a
+// row was removed.
+export async function deleteDeckLeaderboardEntry(
+  userId: string,
+  deckId: string,
+  entryId: string,
+): Promise<boolean> {
+  if (entryId.startsWith('run:')) {
+    const runId = entryId.slice('run:'.length);
+    if (!runId) return false;
+    const res = await db
+      .delete(studyDeckRuns)
+      .where(
+        and(
+          eq(studyDeckRuns.id, runId),
+          eq(studyDeckRuns.userId, userId),
+          eq(studyDeckRuns.deckId, deckId),
+        ),
+      );
+    return (res.rowsAffected ?? 0) > 0;
+  }
+  if (entryId.startsWith('live:')) {
+    // Only the owner may clear their own live run.
+    if (entryId.slice('live:'.length) !== userId) return false;
+    const res = await db
+      .delete(studyDeckGame)
+      .where(and(eq(studyDeckGame.userId, userId), eq(studyDeckGame.deckId, deckId)));
+    return (res.rowsAffected ?? 0) > 0;
+  }
+  return false;
+}
+
 // The high-score table for one deck: every player's current run plus every
 // banked past run, ranked by lifetime accuracy then correct count. The caller's
 // live row is flagged so the client can highlight it.

@@ -893,6 +893,14 @@ export const api = {
   studyDeckLeaderboard(id: string): Promise<{ entries: LeaderboardEntry[] }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}/leaderboard`);
   },
+  // Delete one of your own leaderboard entries (a past run, or your live run).
+  // entryId is the row's composite id ("run:<id>" | "live:<userId>").
+  studyDeckLeaderboardDelete(id: string, entryId: string): Promise<{ entries: LeaderboardEntry[] }> {
+    return request(`/api/studies/decks/${encodeURIComponent(id)}/leaderboard`, {
+      method: 'DELETE',
+      body: JSON.stringify({ entryId }),
+    });
+  },
   // ---- Team flashcard sets ----
   // Team-built term/definition sets (typed in, AI-generated, or from an uploaded
   // file), shared across the whole team and studied with auto-rotate.

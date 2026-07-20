@@ -887,8 +887,15 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
 }
 
 function DeckLeaderboard({ theme, deckId }: { theme: Theme; deckId: string }) {
+  const { user } = useAuth();
   const [entries, setEntries] = useState<LeaderboardEntry[] | null>(null);
   const [error, setError] = useState(false);
+  // Which of the viewer's own rows is pending a delete confirm, and which is
+  // mid-delete, plus a transient error if a delete fails.
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [delError, setDelError] = useState(false);
+
   useEffect(() => {
     let alive = true;
     api
@@ -900,6 +907,20 @@ function DeckLeaderboard({ theme, deckId }: { theme: Theme; deckId: string }) {
     };
   }, [deckId]);
 
+  async function remove(entryId: string) {
+    setBusyId(entryId);
+    setDelError(false);
+    try {
+      const r = await api.studyDeckLeaderboardDelete(deckId, entryId);
+      setEntries(r.entries);
+      setConfirmId(null);
+    } catch {
+      setDelError(true);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   if (error) return <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}><EditableText id="studygameplay.lb_error" text="Couldn’t load the leaderboard." /></div>;
   if (!entries) return <div style={{ ...card(theme), color: muted, fontSize: 13 }}><EditableText id="studygameplay.lb_loading" text="Loading…" /></div>;
   if (entries.length === 0)
@@ -907,9 +928,16 @@ function DeckLeaderboard({ theme, deckId }: { theme: Theme; deckId: string }) {
 
   return (
     <div style={card(theme)}>
+      {delError && (
+        <div style={{ color: '#ffb4ab', fontSize: 12, marginBottom: 8 }}>
+          <EditableText id="studygameplay.lb_delete_error" text="Couldn’t remove that entry. Try again." />
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {entries.map((e, i) => {
           const lvl = levelAtStep(e.bestStep);
+          const mine = !!user && e.userId === user.id;
+          const confirming = confirmId === e.id;
           return (
             <div
               key={e.id}
@@ -937,6 +965,37 @@ function DeckLeaderboard({ theme, deckId }: { theme: Theme; deckId: string }) {
               <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11, color: muted, width: 70, textAlign: 'right' }}>
                 {e.correct}/{e.attempted}
               </span>
+              {mine &&
+                (confirming ? (
+                  <span style={{ display: 'flex', gap: 4, flex: 'none' }}>
+                    <button
+                      onClick={() => void remove(e.id)}
+                      disabled={busyId === e.id}
+                      style={{ fontSize: 11, fontWeight: 700, color: '#ff9a9a', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 6, padding: '4px 8px', cursor: busyId === e.id ? 'default' : 'pointer', opacity: busyId === e.id ? 0.55 : 1 }}
+                    >
+                      <EditableText id="studygameplay.lb_delete_confirm" text="Delete" />
+                    </button>
+                    <button
+                      onClick={() => setConfirmId(null)}
+                      disabled={busyId === e.id}
+                      style={{ fontSize: 11, fontWeight: 600, color: muted, background: 'none', border: `1px solid ${theme.navBorder}`, borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}
+                    >
+                      <EditableText id="studygameplay.lb_delete_cancel" text="Cancel" />
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setConfirmId(e.id);
+                      setDelError(false);
+                    }}
+                    aria-label="Remove my entry from the leaderboard"
+                    title="Remove my entry"
+                    style={{ flex: 'none', background: 'none', border: 'none', color: muted, cursor: 'pointer', fontSize: 16, lineHeight: 1, padding: '2px 4px' }}
+                  >
+                    ×
+                  </button>
+                ))}
             </div>
           );
         })}

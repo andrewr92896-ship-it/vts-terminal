@@ -37,7 +37,13 @@ import {
   listFlashcardSets,
   updateFlashcardSet,
 } from '../studies/flashcardStore.js';
-import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
+import {
+  archiveDeckRun,
+  deleteDeckLeaderboardEntry,
+  getDeckGame,
+  getDeckLeaderboard,
+  saveDeckGame,
+} from '../studies/deckGame.js';
 import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { getUserTeamContext } from '../userTeams/service.js';
@@ -518,6 +524,19 @@ export async function studiesRoutes(app: FastifyInstance) {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId || !(await getDeck(id, me.teamId))) return reply.code(404).send({ error: 'Not found' });
+    return { entries: await getDeckLeaderboard(id, me.id) };
+  });
+
+  // Delete one of your OWN leaderboard entries for a deck — a banked past run, or
+  // your current live run. Owner-gated in the service, so a member can never
+  // remove a teammate's score. Returns the refreshed board.
+  app.delete('/api/studies/decks/:id/leaderboard', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    if (!me.teamId || !(await getDeck(id, me.teamId))) return reply.code(404).send({ error: 'Not found' });
+    const parsed = z.object({ entryId: z.string().trim().min(1).max(200) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'An entry id is required' });
+    await deleteDeckLeaderboardEntry(me.id, id, parsed.data.entryId);
     return { entries: await getDeckLeaderboard(id, me.id) };
   });
 
