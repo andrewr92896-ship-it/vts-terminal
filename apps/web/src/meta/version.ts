@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.33';
+export const APP_VERSION = 'Beta V 5.34';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.34',
+    date: 'July 20, 2026',
+    notes: [
+      'Developer Portal ▸ Sidebar Layout: reordering the sections inside a workspace is now obvious. Click any workspace row to open it and reorder its sections with their own up/down arrows — the section arrows no longer hide behind a stray chevron.',
+      'New "Expand all / Collapse all" control opens every workspace at once, so you can rearrange sub-sections across the whole sidebar without clicking each one open.',
+    ],
+  },
   {
     version: 'Beta V 5.33',
     date: 'July 20, 2026',

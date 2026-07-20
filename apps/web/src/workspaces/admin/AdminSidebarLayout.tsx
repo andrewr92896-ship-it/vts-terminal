@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { api } from '../../api/client';
 import type { NavOrderOverride } from '../../api/types';
 import type { Theme } from '../../theme/themes';
@@ -15,6 +15,10 @@ import { SectionHeader, panel, ghostBtn, primaryBtn, msgStyle } from './adminUi'
 // the whole app applies over its code-default nav (see theme/navOrder.ts). This
 // editor never adds, removes, or moves a section between workspaces; it only
 // reorders within the existing structure, so routing is untouched.
+//
+// A workspace row is an accordion: click it to open the workspace and reorder
+// the sections inside it. The up/down arrows move a row within its own tier;
+// "Expand all" opens every workspace so all sections are reorderable at once.
 
 // Copy a nav array so reorders don't mutate the shared, already-ordered input.
 function cloneNav(nav: NavWorkspace[]): NavWorkspace[] {
@@ -85,6 +89,14 @@ export function AdminSidebarLayout({
     );
   }
 
+  const allOpen = list.length > 0 && list.every((w) => expanded[w.key]);
+  function toggleAll() {
+    setExpanded(allOpen ? {} : Object.fromEntries(list.map((w) => [w.key, true])));
+  }
+  function toggleOne(key: string) {
+    setExpanded((e) => ({ ...e, [key]: !e[key] }));
+  }
+
   async function save() {
     setBusy(true);
     setMsg(null);
@@ -137,8 +149,19 @@ export function AdminSidebarLayout({
 
       <div style={{ ...msgStyle(true), marginTop: 0, marginBottom: 16, color: '#9fb4dd', background: 'rgba(11,26,58,.5)', border: `1px solid ${theme.navBorder}` }}>
         <EditableText id="admin.sidebar.note">
-          Use the arrows to move a workspace up or down, or expand one to reorder its sections. This only changes the order — nothing is added, removed, or moved between workspaces.
+          Use the arrows to move a workspace up or down. Click a workspace (or "Expand all") to open it and reorder the sections inside it with their own arrows. This only changes the order — nothing is added, removed, or moved between workspaces.
         </EditableText>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+        <button onClick={toggleAll} disabled={busy} style={{ ...linkBtn, opacity: busy ? 0.55 : 1, cursor: busy ? 'default' : 'pointer' }}>
+          <Icon name={allOpen ? 'chevrons-down-up' : 'chevrons-up-down'} size={14} />
+          {allOpen ? (
+            <EditableText id="admin.sidebar.collapseAll">Collapse all</EditableText>
+          ) : (
+            <EditableText id="admin.sidebar.expandAll">Expand all</EditableText>
+          )}
+        </button>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -146,7 +169,22 @@ export function AdminSidebarLayout({
           const open = !!expanded[w.key];
           return (
             <div key={w.key} style={panel(theme)}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* The whole header row toggles the workspace open/closed; the move
+                  arrows stopPropagation so they never toggle it by accident. */}
+              <div
+                role="button"
+                tabIndex={0}
+                aria-expanded={open}
+                aria-label={open ? `Hide ${w.label} sections` : `Reorder ${w.label} sections`}
+                onClick={() => toggleOne(w.key)}
+                onKeyDown={(e: KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    toggleOne(w.key);
+                  }
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
+              >
                 <Icon name="grip-vertical" size={16} color="#5f74a3" />
                 <Icon name={w.icon} size={17} color={w.accent} />
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -155,6 +193,12 @@ export function AdminSidebarLayout({
                   </div>
                   <div style={{ fontSize: 11, color: '#7488b5' }}>
                     {w.sections.length} section{w.sections.length === 1 ? '' : 's'}
+                    {' · '}
+                    {open ? (
+                      <EditableText id="admin.sidebar.openHint">reorder below</EditableText>
+                    ) : (
+                      <EditableText id="admin.sidebar.closedHint">click to reorder</EditableText>
+                    )}
                   </div>
                 </div>
                 <MoveButtons
@@ -164,19 +208,18 @@ export function AdminSidebarLayout({
                   downDisabled={wi === list.length - 1 || busy}
                   label={w.label}
                 />
-                <button
-                  onClick={() => setExpanded((e) => ({ ...e, [w.key]: !open }))}
-                  title={open ? 'Hide sections' : 'Show sections'}
-                  aria-label={open ? `Hide ${w.label} sections` : `Show ${w.label} sections`}
-                  aria-expanded={open}
-                  style={iconBtn}
-                >
-                  <Icon name={open ? 'chevron-up' : 'chevron-down'} size={16} />
-                </button>
+                {/* A plain rotating caret — an open/closed indicator, visually
+                    distinct from the move arrows so the two aren't confused. */}
+                <span style={{ ...caret, flex: 'none' }} aria-hidden>
+                  <Icon name={open ? 'chevron-up' : 'chevron-down'} size={18} color="#9fb4dd" />
+                </span>
               </div>
 
               {open && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${theme.navBorder}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.4px', textTransform: 'uppercase', color: '#7f93bd', marginBottom: 2 }}>
+                    <EditableText id="admin.sidebar.sectionsHeading">Reorder sections</EditableText>
+                  </div>
                   {w.sections.map((s, si) => (
                     <div
                       key={s.key}
@@ -190,6 +233,7 @@ export function AdminSidebarLayout({
                         border: '1px solid #16294b',
                       }}
                     >
+                      <Icon name="grip-vertical" size={14} color="#455a86" />
                       <Icon name={s.icon} size={15} color="#8ea3cc" />
                       <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#dfe7fa', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {s.label}
@@ -248,6 +292,27 @@ const iconBtn: CSSProperties = {
   border: '1px solid #2a4170',
 };
 
+const caret: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 24,
+  height: 34,
+};
+
+const linkBtn: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  fontSize: 12.5,
+  fontWeight: 600,
+  color: '#aebcd8',
+  background: 'transparent',
+  border: 'none',
+  padding: '4px 6px',
+  fontFamily: 'inherit',
+};
+
 function MoveButtons({
   onUp,
   onDown,
@@ -271,12 +336,18 @@ function MoveButtons({
     opacity: disabled ? 0.4 : 1,
     cursor: disabled ? 'default' : 'pointer',
   });
+  // stopPropagation: these arrows sit inside a clickable workspace header, so a
+  // click here must move the row without also toggling the accordion.
+  const guard = (fn: () => void) => (e: { stopPropagation: () => void }) => {
+    e.stopPropagation();
+    fn();
+  };
   return (
     <div style={{ display: 'flex', gap: 6, flex: 'none' }}>
-      <button onClick={onUp} disabled={upDisabled} title={`Move ${label} up`} aria-label={`Move ${label} up`} style={btn(upDisabled)}>
+      <button onClick={guard(onUp)} disabled={upDisabled} title={`Move ${label} up`} aria-label={`Move ${label} up`} style={btn(upDisabled)}>
         <Icon name="chevron-up" size={small ? 14 : 16} />
       </button>
-      <button onClick={onDown} disabled={downDisabled} title={`Move ${label} down`} aria-label={`Move ${label} down`} style={btn(downDisabled)}>
+      <button onClick={guard(onDown)} disabled={downDisabled} title={`Move ${label} down`} aria-label={`Move ${label} down`} style={btn(downDisabled)}>
         <Icon name="chevron-down" size={small ? 14 : 16} />
       </button>
     </div>
