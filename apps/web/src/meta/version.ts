@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.36';
+export const APP_VERSION = 'Beta V 5.37';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.37',
+    date: 'July 21, 2026',
+    notes: [
+      'Price alerts now cover crypto. Set an alert on BTC, ETH, SOL and other major coins (e.g. BTC/USDT crosses above 70000) right alongside forex, metals and indices.',
+      'Crypto alerts work without any broker connection — prices come from a live public feed. (Forex, metals and index alerts still need an OANDA connection to fire.)',
+    ],
+  },
   {
     version: 'Beta V 5.36',
     date: 'July 21, 2026',

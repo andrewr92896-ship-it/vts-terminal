@@ -9,6 +9,7 @@ import {
   type PriceAlertSide,
 } from '../db/schema.js';
 import { fetchOandaPrices } from './brokers/oanda.js';
+import { fetchCryptoPrices, isCryptoInstrument } from './brokers/crypto.js';
 import { resolveOandaPricingConfig } from './priceSource.js';
 
 // User-authored price alerts: "notify me when EUR/USD crosses 1.1000". Personal
@@ -48,11 +49,13 @@ export interface PriceAlertPatch {
   active?: boolean;
 }
 
-// A TradingView symbol reduced to the OANDA pricing/display instrument
-// ("EUR/USD") that fetchLivePrices expects. Strips an exchange prefix
-// ("OANDA:EURUSD" → "EURUSD"), then splits a bare 6+-char pair on a trailing
-// quote currency. Pure and exported for unit testing.
-const QUOTE_CURRENCIES = ['USD', 'EUR', 'JPY', 'GBP', 'CHF', 'CAD', 'AUD', 'NZD'];
+// A TradingView symbol reduced to the pricing/display instrument ("EUR/USD",
+// "BTC/USDT") that fetchLivePrices expects. Strips an exchange prefix
+// ("OANDA:EURUSD" → "EURUSD", "BINANCE:BTCUSDT" → "BTCUSDT"), then splits a bare
+// pair on a trailing quote currency. Stablecoin quotes (USDT/USDC) are listed
+// first so "BTCUSDT" splits before the plain "USD" rule. Pure and exported for
+// unit testing.
+const QUOTE_CURRENCIES = ['USDT', 'USDC', 'USD', 'EUR', 'JPY', 'GBP', 'CHF', 'CAD', 'AUD', 'NZD'];
 export function toPricingInstrument(symbol: string): string {
   let s = symbol.trim().toUpperCase().replace(/\s+/g, '');
   const colon = s.lastIndexOf(':');
@@ -114,11 +117,16 @@ export async function listPriceAlerts(userId: string): Promise<PriceAlert[]> {
   return rows.map(rowToPublic);
 }
 
-// Look up the live mark for an instrument, distinguishing "no OANDA source at
-// all" (return { sourced:false }) from "priced" / "source exists but symbol is
+// Look up the live mark for an instrument, distinguishing "no source at all"
+// (return { sourced:false }) from "priced" / "source exists but symbol is
 // unpriceable". Used to arm a new alert against the current price and to reject
-// symbols we can't follow.
+// symbols we can't follow. Crypto has a keyless feed, so it's always sourced;
+// forex/metals/indices need an OANDA connection.
 async function markFor(pricingInstrument: string): Promise<{ sourced: boolean; price: number | null }> {
+  if (isCryptoInstrument(pricingInstrument)) {
+    const marks = await fetchCryptoPrices([pricingInstrument]);
+    return { sourced: true, price: marks.get(pricingInstrument) ?? null };
+  }
   const cfg = await resolveOandaPricingConfig();
   if (!cfg) return { sourced: false, price: null };
   const marks = await fetchOandaPrices(cfg, [pricingInstrument]).catch(() => new Map<string, number>());
@@ -140,7 +148,7 @@ export async function createPriceAlert(userId: string, input: PriceAlertInput): 
   const { sourced, price } = await markFor(pricing);
   if (sourced && price == null) {
     throw new Error(
-      `We can't price "${symbol}" yet — price alerts currently support OANDA forex, metals and indices.`,
+      `We can't price "${symbol}" yet — price alerts support forex, metals, indices and major crypto.`,
     );
   }
   const lastSide: PriceAlertSide | null = price != null ? sideOf(price, threshold) : null;
