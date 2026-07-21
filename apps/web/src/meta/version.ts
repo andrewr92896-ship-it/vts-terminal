@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.34';
+export const APP_VERSION = 'Beta V 5.35';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.35',
+    date: 'July 21, 2026',
+    notes: [
+      'Strategy Sessions ▸ "All open market hours" now includes the Sunday-evening open. For EUR/USD (and other forex) it fills Sunday 5:00 PM–11:59 PM, Monday–Thursday full days, and Friday to 5:00 PM — matching the real trading week instead of starting at Monday 12:00 AM.',
+      'Index and commodity futures similarly get their Sunday-evening open (6:00 PM ET). Stocks stay Mon–Fri and crypto stays 24/7.',
+    ],
+  },
   {
     version: 'Beta V 5.34',
     date: 'July 20, 2026',

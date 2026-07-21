@@ -211,8 +211,10 @@ act on the same team:
   `{ imageBase64, mediaType }` and allow a 12 MB body.
 - **Market-hours lookup** (`analyzeMarketHours`, default text model, non-editable
   prompt in `claude.ts`): `POST /api/trading/market-hours { symbol }` returns a
-  per-weekday ET schedule so a Strategy Session can be filled to "all open market
-  hours". Metered against the AI cap (kind `market_hours`); 503 when AI is off.
+  per-day ET schedule (Sun–Fri — includes the Sunday-evening open for forex/
+  futures, one single window per day) so a Strategy Session can be filled to "all
+  open market hours". Metered against the AI cap (kind `market_hours`); 503 when
+  AI is off.
 
 ## External integrations & background jobs (`apps/api/src/trading`)
 
