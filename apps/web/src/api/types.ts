@@ -1132,6 +1132,42 @@ export interface AlertsData {
   aiConfigured: boolean;
 }
 
+// ---- Trading — user-authored price alerts (mirror of apps/api/src/trading/priceAlerts.ts) ----
+// A personal "notify me when X crosses a level" rule, evaluated server-side.
+export type PriceAlertCondition = 'above' | 'below';
+export type PriceAlertRepeat = 'once' | 'always';
+export type PriceAlertSide = 'above' | 'below';
+
+export interface PriceAlert {
+  id: string;
+  symbol: string; // TradingView form, e.g. "OANDA:EURUSD"
+  condition: PriceAlertCondition;
+  threshold: number;
+  repeat: PriceAlertRepeat;
+  note: string | null;
+  active: boolean;
+  lastSide: PriceAlertSide | null;
+  lastPrice: number | null;
+  lastFiredAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface PriceAlertInput {
+  symbol: string;
+  condition: PriceAlertCondition;
+  threshold: number;
+  repeat?: PriceAlertRepeat;
+  note?: string | null;
+}
+
+// The price-alerts list plus whether an OANDA price source is configured (when
+// false, alerts can be saved but won't fire until an OANDA connection exists).
+export interface PriceAlertsData {
+  alerts: PriceAlert[];
+  priceSource: boolean;
+}
+
 // ---- Chat + announcements (mirror of apps/api/src/chat) ----
 // The Team Chat message. Scoped to the sender's trading team; the avatar is the
 // sender's current profile picture (data URL) or null.

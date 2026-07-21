@@ -5,7 +5,16 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePushNotifications } from '../../push/usePushNotifications';
 import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
-import type { AlertRecord, AlertsData, SessionAlertPrefs, TradeAnalysis } from '../../api/types';
+import { SYMBOL_SUGGESTIONS, symbolLabel } from './tvChart';
+import type {
+  AlertRecord,
+  AlertsData,
+  PriceAlert,
+  PriceAlertCondition,
+  PriceAlertRepeat,
+  SessionAlertPrefs,
+  TradeAnalysis,
+} from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
 const GOLD = '#EBCB74';
@@ -97,6 +106,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
       )}
 
       {!readOnly && <SessionAlertSettings />}
+      {!readOnly && <PriceAlertSettings />}
 
       {active.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
@@ -291,6 +301,192 @@ function ToggleRow({ label, on, onChange }: { label: ReactNode; on: boolean; onC
       >
         <span style={{ position: 'absolute', top: 2, left: on ? 22 : 2, width: 18, height: 18, borderRadius: '50%', background: on ? GREEN : FAINT, transition: 'left .15s ease' }} />
       </button>
+    </div>
+  );
+}
+
+// User-authored price alerts: "buzz me when EUR/USD crosses 1.1000." Personal —
+// each rule fires only to its creator (push + Pushover) and drops a row into
+// this same feed. Evaluated server-side against live OANDA prices, so it covers
+// forex, metals and indices; turn on phone alerts above for a device to buzz.
+function PriceAlertSettings() {
+  const [alerts, setAlerts] = useState<PriceAlert[] | null>(null);
+  const [priceSource, setPriceSource] = useState(true);
+  const [open, setOpen] = useState(false);
+
+  // New-rule form.
+  const [symbol, setSymbol] = useState('OANDA:EURUSD');
+  const [condition, setCondition] = useState<PriceAlertCondition>('above');
+  const [threshold, setThreshold] = useState('');
+  const [repeat, setRepeat] = useState<PriceAlertRepeat>('once');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api.priceAlerts()
+      .then((r) => { if (alive) { setAlerts(r.alerts); setPriceSource(r.priceSource); } })
+      .catch(() => { if (alive) setAlerts([]); });
+    return () => { alive = false; };
+  }, []);
+
+  async function add() {
+    const level = Number(threshold);
+    if (!symbol.trim() || !Number.isFinite(level) || level <= 0) {
+      setError('Enter a symbol and a price above 0.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.createPriceAlert({
+        symbol: symbol.trim(),
+        condition,
+        threshold: level,
+        repeat,
+        note: note.trim() || null,
+      });
+      setAlerts(r.alerts);
+      setThreshold('');
+      setNote('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not create alert');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleActive(a: PriceAlert) {
+    try {
+      const r = await api.updatePriceAlert(a.id, { active: !a.active });
+      setAlerts(r.alerts);
+    } catch { /* leave as-is on failure */ }
+  }
+
+  async function remove(id: string) {
+    try {
+      const r = await api.deletePriceAlert(id);
+      setAlerts(r.alerts);
+    } catch { /* leave as-is on failure */ }
+  }
+
+  if (!alerts) return null;
+
+  const activeCount = alerts.filter((a) => a.active).length;
+
+  return (
+    <div style={{ ...card, marginBottom: 14, padding: 0, overflow: 'hidden' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', color: TEXT, cursor: 'pointer', padding: '13px 16px', textAlign: 'left' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>🎯 <EditableText id="alerts.price_title">Price alerts</EditableText></span>
+          {activeCount > 0 && <span style={{ ...badge, color: GOLD, border: `1px solid ${GOLD}` }}>{activeCount}</span>}
+        </div>
+        <span style={{ fontSize: 12, color: FAINT }}>{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div style={{ padding: '0 16px 14px' }}>
+          <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
+            <EditableText id="alerts.price_blurb">Get buzzed when a market crosses a price you set. Covers OANDA forex, metals and indices. Turn on phone alerts above so a device actually buzzes.</EditableText>
+          </div>
+
+          {!priceSource && (
+            <div style={{ ...warnBanner, marginBottom: 12 }}>
+              <EditableText id="alerts.price_no_source">No OANDA connection is set up, so price alerts can be saved but won’t fire yet. Add one under Trade Desk ▸ Live Brokers.</EditableText>
+            </div>
+          )}
+
+          {/* New-rule form */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginBottom: 4 }}>
+            <div style={{ flex: '1 1 150px', minWidth: 130 }}>
+              <label style={fieldLbl}><EditableText id="alerts.price_symbol">Symbol</EditableText></label>
+              <input
+                value={symbol}
+                list="price-alert-symbols"
+                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+                placeholder="OANDA:EURUSD"
+                style={{ ...fieldInput, width: '100%' }}
+              />
+              <datalist id="price-alert-symbols">
+                {SYMBOL_SUGGESTIONS.map((s) => <option key={s.symbol} value={s.symbol}>{s.label}</option>)}
+              </datalist>
+            </div>
+            <div style={{ flex: '0 0 auto' }}>
+              <label style={fieldLbl}><EditableText id="alerts.price_when">When it</EditableText></label>
+              <select value={condition} onChange={(e) => setCondition(e.target.value as PriceAlertCondition)} style={{ ...fieldInput, cursor: 'pointer' }}>
+                <option value="above">crosses above</option>
+                <option value="below">crosses below</option>
+              </select>
+            </div>
+            <div style={{ flex: '0 0 auto' }}>
+              <label style={fieldLbl}><EditableText id="alerts.price_level">Price</EditableText></label>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={threshold}
+                onChange={(e) => setThreshold(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') void add(); }}
+                placeholder="1.1000"
+                style={{ ...fieldInput, width: 100 }}
+              />
+            </div>
+            <button onClick={() => void add()} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>
+              {busy ? <EditableText id="alerts.price_adding">Adding…</EditableText> : <EditableText id="alerts.price_add">Add alert</EditableText>}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', marginBottom: 8 }}>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Note (optional)"
+              maxLength={120}
+              style={{ ...fieldInput, flex: '1 1 160px', minWidth: 140 }}
+            />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: MUTED, cursor: 'pointer' }}>
+              <input type="checkbox" checked={repeat === 'always'} onChange={(e) => setRepeat(e.target.checked ? 'always' : 'once')} />
+              <EditableText id="alerts.price_repeat">Keep alerting on every cross</EditableText>
+            </label>
+          </div>
+
+          {error && <div style={{ fontSize: 11.5, color: '#ffb4ab', marginBottom: 8 }}>{error}</div>}
+
+          {/* Existing rules */}
+          {alerts.length === 0 ? (
+            <div style={{ fontSize: 12, color: FAINT, paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
+              <EditableText id="alerts.price_empty">No price alerts yet.</EditableText>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 0 }}>
+              {alerts.map((a) => (
+                <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 0', borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: a.active ? TEXT : FAINT }}>
+                      <span style={{ fontWeight: 700 }}>{symbolLabel(a.symbol)}</span>
+                      <span style={{ color: MUTED }}> {a.condition === 'above' ? 'crosses above' : 'crosses below'} </span>
+                      <span style={{ fontWeight: 700, color: a.active ? GOLD : FAINT }}>{a.threshold}</span>
+                      {a.repeat === 'always' && <span style={{ ...badge, color: MUTED, border: `1px solid ${BORDER2}`, marginLeft: 6 }}>REPEAT</span>}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: FAINT, marginTop: 2 }}>
+                      {a.note ? `${a.note} · ` : ''}
+                      {a.lastFiredAt ? `last fired ${etTime(a.lastFiredAt)}` : a.active ? 'armed' : 'off'}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: '0 0 auto' }}>
+                    <button onClick={() => void toggleActive(a)} style={{ ...ghostBtn, padding: '6px 10px', color: a.active ? GREEN : FAINT, borderColor: a.active ? GREEN : BORDER2 }}>
+                      {a.active ? 'On' : 'Off'}
+                    </button>
+                    <button onClick={() => void remove(a.id)} title="Delete" style={{ ...ghostBtn, padding: '6px 9px', color: '#ff9a9a' }}>✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -519,5 +715,7 @@ const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(18
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '9px 12px', borderRadius: 7, cursor: 'pointer' };
 const badge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };
 const numInput: CSSProperties = { width: 64, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 12.5, padding: '5px 8px', outline: 'none', textAlign: 'center' };
+const fieldLbl: CSSProperties = { display: 'block', fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, marginBottom: 4 };
+const fieldInput: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 13, padding: '8px 10px', outline: 'none', fontFamily: 'inherit' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '3px 8px' };
 const warnBanner: CSSProperties = { fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', marginBottom: 14 };

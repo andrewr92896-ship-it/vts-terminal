@@ -861,6 +861,43 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
 });
 export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
 
+// ---- Trading — user-authored price alerts ----
+// A personal "notify me when X crosses a level" rule, created in-portal (the
+// closest thing to a TradingView alert we can offer, since the embedded chart is
+// a sandboxed iframe we can't drive). The price-alert watch evaluates each rule
+// against live OANDA prices; on a genuine CROSS through `threshold` it buzzes
+// only its owner (push + Pushover) and drops a row into that owner's alerts
+// feed. `condition` is directional (cross up = `above`, cross down = `below`),
+// so `lastSide` records which side price sat on last tick — a rule only fires on
+// a transition, never on a level that was already passed when it was created.
+export const PRICE_ALERT_CONDITIONS = ['above', 'below'] as const;
+export type PriceAlertCondition = (typeof PRICE_ALERT_CONDITIONS)[number];
+export const PRICE_ALERT_REPEATS = ['once', 'always'] as const;
+export type PriceAlertRepeat = (typeof PRICE_ALERT_REPEATS)[number];
+// The side of the threshold price is currently on. Same members as the
+// condition, but a distinct concept (observed state vs. the rule's trigger).
+export const PRICE_ALERT_SIDES = ['above', 'below'] as const;
+export type PriceAlertSide = (typeof PRICE_ALERT_SIDES)[number];
+
+export const priceAlerts = sqliteTable('price_alerts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  symbol: text('symbol').notNull(), // TradingView form, e.g. "OANDA:EURUSD"
+  condition: text('condition', { enum: PRICE_ALERT_CONDITIONS }).notNull(),
+  threshold: real('threshold').notNull(),
+  repeat: text('repeat', { enum: PRICE_ALERT_REPEATS }).notNull().default('once'),
+  note: text('note'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  lastSide: text('last_side', { enum: PRICE_ALERT_SIDES }), // null until first observed
+  lastPrice: real('last_price'),
+  lastFiredAt: integer('last_fired_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type PriceAlertRow = typeof priceAlerts.$inferSelect;
+
 // One row per user holding the serialized Study Game state (per-category levels,
 // scores, and answer history), so quiz progress follows the learner across
 // devices instead of living only in that browser's localStorage.

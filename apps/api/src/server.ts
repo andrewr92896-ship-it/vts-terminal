@@ -23,6 +23,7 @@ import { studiesRoutes } from './routes/studies.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
 import { notificationPrefsRoutes } from './routes/notificationPrefs.js';
+import { priceAlertRoutes } from './routes/priceAlerts.js';
 import { contentRoutes } from './routes/content.js';
 import { userTeamRoutes } from './routes/userTeams.js';
 import { seedBadges } from './badges/service.js';
@@ -36,6 +37,7 @@ import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
 import { startDeskWatch } from './trading/service.js';
 import { startSessionWatch } from './trading/sessionWatch.js';
+import { startPriceAlertWatch } from './trading/priceAlertWatch.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
 // so the whole portal runs as one service.
@@ -97,6 +99,7 @@ export async function buildServer() {
   await app.register(pushRoutes);
   await app.register(pushoverRoutes);
   await app.register(notificationPrefsRoutes);
+  await app.register(priceAlertRoutes);
   await app.register(contentRoutes);
   await app.register(userTeamRoutes);
 
@@ -161,6 +164,9 @@ async function main() {
     // Watch Strategy Session windows so a trader's session open/close/pre-open
     // notifications fire on their own schedule (production + push/Pushover only).
     startSessionWatch();
+    // Watch user-authored price alerts against live OANDA prices, firing each
+    // trader's own level-cross notifications (production + push/Pushover only).
+    startPriceAlertWatch();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

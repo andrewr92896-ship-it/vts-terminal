@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.35';
+export const APP_VERSION = 'Beta V 5.36';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.36',
+    date: 'July 21, 2026',
+    notes: [
+      'New: create your own price alerts inside the portal. In Trading ▸ Trading Alerts, open the "Price alerts" card to get buzzed when a market crosses a price you set (e.g. EUR/USD crosses above 1.1000) — covers OANDA forex, metals and indices.',
+      'You can also set one straight from a chart: click the 🔔 on any Live Wall chart tile to add an alert for that symbol.',
+      'Alerts are personal — each one buzzes only you (phone push + Pushover) and lands in your own Trading Alerts feed. Choose one-shot or repeat-on-every-cross. Turn on phone alerts for a device to actually buzz.',
+    ],
+  },
   {
     version: 'Beta V 5.35',
     date: 'July 21, 2026',

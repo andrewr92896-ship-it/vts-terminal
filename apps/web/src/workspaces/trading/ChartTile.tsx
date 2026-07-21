@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import type { BoardTile } from '../../api/types';
+import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
+import { EditableText } from '../../copy/SiteCopy';
+import type { BoardTile, PriceAlertCondition, PriceAlertRepeat } from '../../api/types';
 import { TvWidget } from './TvWidget';
 import { TileConfigModal } from './TileConfigModal';
 import { ScrollLockButton } from './scrollLock';
@@ -9,6 +12,7 @@ import {
   CANDLE_STYLES,
   FAINT,
   GOLD,
+  GREEN,
   INTERVALS,
   MONO,
   MUTED,
@@ -16,6 +20,7 @@ import {
   STUDIES,
   SYMBOL_SUGGESTIONS,
   TEXT,
+  goldBtn,
   input,
   symbolLabel,
 } from './tvChart';
@@ -39,6 +44,11 @@ export function ChartTile({
   onRemove: () => void;
 }) {
   const [showCfg, setShowCfg] = useState(false);
+  const [showAlert, setShowAlert] = useState(false);
+  const { user } = useAuth();
+  // A price alert can be created by anyone with trading write access (not the
+  // read-only demo or a trading_viewer). The button is hidden otherwise.
+  const canAlert = !!user && !user.isDemo && !user.access.readOnlyWorkspaces.includes('trading');
   // Leaving edit mode closes the settings panel so it doesn't reopen on the
   // next edit.
   useEffect(() => { if (!editing) setShowCfg(false); }, [editing]);
@@ -79,6 +89,11 @@ export function ChartTile({
           {studies.length > 0 && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}>{studies.length} ind</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {/* Quick price alert for this chart's symbol — the closest thing to
+              "set an alert from the widget" (the TV embed itself can't). */}
+          {canAlert && (
+            <button onClick={() => setShowAlert(true)} style={iconBtn} title="New price alert">🔔</button>
+          )}
           {/* Scroll lock — freezes page scroll so you can draw/pan inside the
               chart; locking from here locks every board window at once. */}
           <ScrollLockButton />
@@ -98,8 +113,93 @@ export function ChartTile({
             <ChartConfig tile={tile} onChange={onChange} onClose={() => setShowCfg(false)} />
           </TileConfigModal>
         )}
+        {showAlert && <QuickAlertModal symbol={symbol} onClose={() => setShowAlert(false)} />}
       </div>
     </div>
+  );
+}
+
+// A compact "set a price alert for this symbol" form, opened from a chart tile's
+// bell. Posts to the same price-alert API the Trading Alerts screen uses; the
+// alert then fires server-side and shows in that screen's feed.
+function QuickAlertModal({ symbol, onClose }: { symbol: string; onClose: () => void }) {
+  const [condition, setCondition] = useState<PriceAlertCondition>('above');
+  const [threshold, setThreshold] = useState('');
+  const [repeat, setRepeat] = useState<PriceAlertRepeat>('once');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    const level = Number(threshold);
+    if (!Number.isFinite(level) || level <= 0) {
+      setError('Enter a price above 0.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await api.createPriceAlert({ symbol, condition, threshold: level, repeat });
+      setDone(true);
+      window.setTimeout(onClose, 950);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not create alert');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <TileConfigModal onClose={onClose}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>
+          🔔 <EditableText id="chart.alert.title">New price alert</EditableText>
+        </span>
+        <button onClick={onClose} style={iconBtn} title="Close">✕</button>
+      </div>
+      <div style={{ fontSize: 13, color: TEXT, fontWeight: 700, marginBottom: 12 }}>{symbolLabel(symbol)}</div>
+
+      {done ? (
+        <div style={{ fontSize: 12.5, color: GREEN, padding: '6px 0' }}>
+          <EditableText id="chart.alert.done">Alert created ✓</EditableText>
+        </div>
+      ) : (
+        <>
+          <label style={lbl}><EditableText id="chart.alert.trigger">Trigger</EditableText></label>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+            <button onClick={() => setCondition('above')} style={pickChip(condition === 'above')}>
+              <EditableText id="chart.alert.above">Crosses above</EditableText>
+            </button>
+            <button onClick={() => setCondition('below')} style={pickChip(condition === 'below')}>
+              <EditableText id="chart.alert.below">Crosses below</EditableText>
+            </button>
+          </div>
+
+          <label style={lbl}><EditableText id="chart.alert.price">Price</EditableText></label>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={threshold}
+            onChange={(e) => setThreshold(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
+            placeholder="1.1000"
+            style={{ ...input, width: '100%', marginBottom: 12 }}
+            autoFocus
+          />
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: MUTED, marginBottom: 12, cursor: 'pointer' }}>
+            <input type="checkbox" checked={repeat === 'always'} onChange={(e) => setRepeat(e.target.checked ? 'always' : 'once')} />
+            <EditableText id="chart.alert.repeat">Keep alerting on every cross</EditableText>
+          </label>
+
+          {error && <div style={{ fontSize: 11.5, color: '#ff9a9a', marginBottom: 8 }}>{error}</div>}
+
+          <button onClick={() => void submit()} disabled={busy} style={{ ...goldBtn, width: '100%', opacity: busy ? 0.6 : 1 }}>
+            {busy ? <EditableText id="chart.alert.adding">Adding…</EditableText> : <EditableText id="chart.alert.add">Add alert</EditableText>}
+          </button>
+        </>
+      )}
+    </TileConfigModal>
   );
 }
 
