@@ -378,7 +378,7 @@ export async function askClaude(prompt: string, system?: string, maxTokens = 400
 // windows plus a short human note.
 
 export interface MarketHoursDay {
-  day: 'mon' | 'tue' | 'wed' | 'thu' | 'fri';
+  day: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
   open: string; // ET 'HH:MM'
   close: string; // ET 'HH:MM'
 }
@@ -388,21 +388,23 @@ export interface MarketHoursResult {
   model: string;
 }
 
-const MARKET_HOURS_SYSTEM = `You are a market-hours reference. Given a trading instrument's symbol or name, return the hours it is normally open for trading, expressed in US Eastern Time (America/New_York), for each weekday Monday–Friday.
+const MARKET_HOURS_SYSTEM = `You are a market-hours reference. Given a trading instrument's symbol or name, return the hours it is normally open for trading, expressed in US Eastern Time (America/New_York), for EVERY day of the week it trades — including the Sunday-evening open when the market has one. The trading week does not start at Monday 00:00 for instruments that open Sunday evening.
 
-Guidance by asset class:
-- US stocks / ETFs (e.g. SPY, NVDA): regular session 09:30–16:00 ET, Mon–Fri.
-- Spot forex (e.g. EUR/USD, GBP/USD): trades ~24h on weekdays around the daily 17:00 ET rollover. Represent a weekday as 00:00–23:59 ET (continuously open), except Friday which closes at 17:00 ET. (Sunday's evening open is out of scope — only return Mon–Fri.)
-- Crypto (e.g. BTC, ETH): trades 24/7; represent each weekday as 00:00–23:59 ET.
-- Index & commodity futures (e.g. Nasdaq/NQ, S&P/ES, Gold/GC): nearly 24h with a daily maintenance break; unless you are confident of the exact break, represent a weekday as 00:00–23:59 ET, with Friday closing 17:00 ET.
+Each day carries a SINGLE open→close window. A market's ~6-minute daily rollover/maintenance break is negligible for this purpose: treat a continuously-open weekday as 00:00–23:59 ET rather than splitting it into two windows.
+
+Guidance by asset class (return exactly these days/windows unless the symbol clearly differs):
+- US stocks / ETFs (e.g. SPY, NVDA): regular session 09:30–16:00 ET, Mon–Fri only. No weekend, no Sunday.
+- Spot forex (e.g. EUR/USD, GBP/USD): opens Sunday evening and runs continuously to Friday afternoon ET. Return sun 17:00–23:59; mon, tue, wed, thu each 00:00–23:59; fri 00:00–17:00. No Saturday.
+- Index & commodity futures (e.g. Nasdaq/NQ, S&P/ES, Gold/GC): opens Sunday evening and runs nearly 24h to Friday afternoon ET. Return sun 18:00–23:59; mon, tue, wed, thu each 00:00–23:59; fri 00:00–17:00. No Saturday.
+- Crypto (e.g. BTC, ETH): trades 24/7; return all seven days (sun,mon,tue,wed,thu,fri,sat) as 00:00–23:59 ET.
 Pick the interpretation that best matches the symbol. Use 24-hour HH:MM. If a day is closed, omit it.
 
 Respond with ONLY a JSON object of exactly this shape and nothing else (no prose or code fences):
-{"days":[{"day":"mon","open":"09:30","close":"16:00"}, ...],"note":"one short sentence naming the asset class and its hours"}
-Include one entry per open weekday using the lowercase 3-letter day key (mon,tue,wed,thu,fri). Keep the note under 160 characters.`;
+{"days":[{"day":"sun","open":"17:00","close":"23:59"}, ...],"note":"one short sentence naming the asset class and its hours"}
+Include one entry per open day using the lowercase 3-letter day key (sun,mon,tue,wed,thu,fri,sat). Keep the note under 160 characters.`;
 
 const HHMM_RE = /^\d{1,2}:\d{2}$/;
-const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const;
+const DAY_KEYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const;
 
 // Sonnet: resolve an instrument's weekly market hours in ET. Structural
 // validation only — the model's hours are trusted, but shapes are coerced and
