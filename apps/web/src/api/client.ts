@@ -3,6 +3,9 @@ import type {
   EarlyAccessRequest,
   AiUsage,
   AlertsData,
+  PriceAlert,
+  PriceAlertInput,
+  PriceAlertsData,
   Announcement,
   ChatMessage,
   TeamChatFeed,
@@ -629,6 +632,22 @@ export const api = {
   },
   tradingAlerts(): Promise<AlertsData> {
     return request('/api/trading/alerts');
+  },
+  // ---- User-authored price alerts ----
+  priceAlerts(): Promise<PriceAlertsData> {
+    return request('/api/trading/price-alerts');
+  },
+  createPriceAlert(input: PriceAlertInput): Promise<{ alert: PriceAlert; alerts: PriceAlert[] }> {
+    return request('/api/trading/price-alerts', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updatePriceAlert(
+    id: string,
+    patch: Partial<PriceAlertInput> & { active?: boolean },
+  ): Promise<{ alert: PriceAlert; alerts: PriceAlert[] }> {
+    return request(`/api/trading/price-alerts/${id}`, { method: 'PUT', body: JSON.stringify(patch) });
+  },
+  deletePriceAlert(id: string): Promise<{ alerts: PriceAlert[] }> {
+    return request(`/api/trading/price-alerts/${id}`, { method: 'DELETE' });
   },
   // ---- Team chat ----
   teamChat(): Promise<TeamChatFeed> {

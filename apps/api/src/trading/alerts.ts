@@ -177,9 +177,13 @@ export interface AlertSignal {
 }
 
 export async function getAlertSignal(): Promise<AlertSignal> {
+  // Only inbound TradingView alerts drive the desk-wide chime. User-authored
+  // price alerts (source 'price-alert') are personal — they buzz their own owner
+  // and show in that owner's feed, but must not sound every terminal on the desk.
   const rows = await db
     .select({ receivedAt: tradingAlerts.receivedAt })
     .from(tradingAlerts)
+    .where(eq(tradingAlerts.source, 'tradingview'))
     .orderBy(desc(tradingAlerts.receivedAt));
   return {
     lastAlertAt: rows[0]?.receivedAt ? rows[0].receivedAt.getTime() : null,
