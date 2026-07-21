@@ -390,12 +390,12 @@ function PriceAlertSettings() {
       {open && (
         <div style={{ padding: '0 16px 14px' }}>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
-            <EditableText id="alerts.price_blurb">Get buzzed when a market crosses a price you set. Covers OANDA forex, metals and indices. Turn on phone alerts above so a device actually buzzes.</EditableText>
+            <EditableText id="alerts.price_blurb">Get buzzed when a market crosses a price you set. Covers forex, metals, indices and crypto. Turn on phone alerts above so a device actually buzzes.</EditableText>
           </div>
 
           {!priceSource && (
             <div style={{ ...warnBanner, marginBottom: 12 }}>
-              <EditableText id="alerts.price_no_source">No OANDA connection is set up, so price alerts can be saved but won’t fire yet. Add one under Trade Desk ▸ Live Brokers.</EditableText>
+              <EditableText id="alerts.price_no_source">Crypto alerts work out of the box. Forex, metals and index alerts need an OANDA connection to fire — add one under Trade Desk ▸ Live Brokers.</EditableText>
             </div>
           )}
 
