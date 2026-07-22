@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.39';
+export const APP_VERSION = 'Beta V 5.40';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.40',
+    date: 'July 22, 2026',
+    notes: [
+      'The "Unrealized PF" card on the Trade Log and Live Wall metrics is now "Projected PF" — your profit factor if every open position closed right now at its current price. It folds each open trade\'s live P/L into your realized totals, so it always reads a real number (e.g. 0.95) instead of the old "∞" you saw when all open positions were green. (The realized Profit Factor is unchanged.)',
+    ],
+  },
   {
     version: 'Beta V 5.39',
     date: 'July 22, 2026',

@@ -98,24 +98,19 @@ export function profitFactorStats(trades: TradeRecord[], config: BreakEvenConfig
   };
 }
 
-// Human-readable profit factor: "—" when nothing's decided, otherwise two
-// decimals. When there's a profit leg but no loss leg the ratio is undefined;
-// `noLossText` controls how that reads. It defaults to "∞", the intended
-// convention for the *realized* factor (no losing closed trades = an infinite
-// lifetime record). The open-book (unrealized) factor passes "—" instead: an
-// all-green live snapshot isn't a track record, so an "infinite" reading would
-// be misleading — it'd flip to a finite number the moment a position dipped red.
-export function profitFactorText(pf: ProfitFactor, noLossText = '∞'): string {
+// Human-readable profit factor: "—" when nothing's decided, "∞" when there are
+// no losses to divide by, otherwise two decimals.
+export function profitFactorText(pf: ProfitFactor): string {
   if (pf.grossProfit === 0 && pf.grossLoss === 0) return '—';
-  if (pf.grossLoss === 0) return noLossText;
+  if (pf.grossLoss === 0) return '∞';
   return (pf.grossProfit / pf.grossLoss).toFixed(2);
 }
 
 // The same reading, but with every trade scaled to one common lot size — so
 // outsized positions don't dominate and each trade's quality counts equally.
-export function scaledProfitFactorText(pf: ProfitFactor, noLossText = '∞'): string {
+export function scaledProfitFactorText(pf: ProfitFactor): string {
   if (pf.scaledProfit === 0 && pf.scaledLoss === 0) return '—';
-  if (pf.scaledLoss === 0) return noLossText;
+  if (pf.scaledLoss === 0) return '∞';
   return (pf.scaledProfit / pf.scaledLoss).toFixed(2);
 }
 
@@ -147,5 +142,31 @@ export function unrealizedProfitFactorStats(trades: TradeRecord[]): ProfitFactor
     grossLossPips: 0,
     scaledProfit,
     scaledLoss,
+  };
+}
+
+// The "projected" profit factor: what the profit factor would be if every open
+// position closed right now at its current mark. It folds each open trade's live
+// unrealized P/L into the realized closed-trade totals — so open winners add to
+// gross profit and open losers to gross loss — then takes the ratio. Unlike the
+// open-book-only unrealized factor (undefined the moment no position is red),
+// this stays a real number as long as the closed history has any loss, so it's
+// the useful "if I flattened everything now, where would my PF land?" reading.
+// Reuses the two builders above (each already looks at only its own trade kind —
+// closed vs. open) and sums them, so it matches the realized/unrealized cards
+// exactly. Pip fields carry the closed-trade pips (open positions have none).
+export function projectedProfitFactorStats(trades: TradeRecord[], config: BreakEvenConfig): ProfitFactor {
+  const closed = profitFactorStats(trades, config);
+  const open = unrealizedProfitFactorStats(trades);
+  const grossProfit = closed.grossProfit + open.grossProfit;
+  const grossLoss = closed.grossLoss + open.grossLoss;
+  return {
+    grossProfit,
+    grossLoss,
+    profitFactor: grossLoss > 0 ? grossProfit / grossLoss : null,
+    grossProfitPips: closed.grossProfitPips,
+    grossLossPips: closed.grossLossPips,
+    scaledProfit: closed.scaledProfit + open.scaledProfit,
+    scaledLoss: closed.scaledLoss + open.scaledLoss,
   };
 }
