@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.40';
+export const APP_VERSION = 'Beta V 5.41';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.41',
+    date: 'July 22, 2026',
+    notes: [
+      'Fixed a mobile bug where rotating your phone (portrait ↔ landscape) while playing a study game — or on any screen — kicked you back out to the start. The app was rebuilding the whole screen when the layout switched between the phone and wide views; it now keeps your place, so an in-progress game, test, or half-filled form survives a rotation.',
+    ],
+  },
   {
     version: 'Beta V 5.40',
     date: 'July 22, 2026',
