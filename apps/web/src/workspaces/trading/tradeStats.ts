@@ -98,19 +98,24 @@ export function profitFactorStats(trades: TradeRecord[], config: BreakEvenConfig
   };
 }
 
-// Human-readable profit factor: "—" when nothing's decided, "∞" when there are
-// no losses to divide by, otherwise two decimals.
-export function profitFactorText(pf: ProfitFactor): string {
+// Human-readable profit factor: "—" when nothing's decided, otherwise two
+// decimals. When there's a profit leg but no loss leg the ratio is undefined;
+// `noLossText` controls how that reads. It defaults to "∞", the intended
+// convention for the *realized* factor (no losing closed trades = an infinite
+// lifetime record). The open-book (unrealized) factor passes "—" instead: an
+// all-green live snapshot isn't a track record, so an "infinite" reading would
+// be misleading — it'd flip to a finite number the moment a position dipped red.
+export function profitFactorText(pf: ProfitFactor, noLossText = '∞'): string {
   if (pf.grossProfit === 0 && pf.grossLoss === 0) return '—';
-  if (pf.grossLoss === 0) return '∞';
+  if (pf.grossLoss === 0) return noLossText;
   return (pf.grossProfit / pf.grossLoss).toFixed(2);
 }
 
 // The same reading, but with every trade scaled to one common lot size — so
 // outsized positions don't dominate and each trade's quality counts equally.
-export function scaledProfitFactorText(pf: ProfitFactor): string {
+export function scaledProfitFactorText(pf: ProfitFactor, noLossText = '∞'): string {
   if (pf.scaledProfit === 0 && pf.scaledLoss === 0) return '—';
-  if (pf.scaledLoss === 0) return '∞';
+  if (pf.scaledLoss === 0) return noLossText;
   return (pf.scaledProfit / pf.scaledLoss).toFixed(2);
 }
 
