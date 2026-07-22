@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.37';
+export const APP_VERSION = 'Beta V 5.38';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.38',
+    date: 'July 21, 2026',
+    notes: [
+      'Crypto price alerts are more reliable: if the primary price feed is briefly unavailable for a coin, they now fall back to a second public feed (Kraken) before skipping a check.',
+    ],
+  },
   {
     version: 'Beta V 5.37',
     date: 'July 21, 2026',

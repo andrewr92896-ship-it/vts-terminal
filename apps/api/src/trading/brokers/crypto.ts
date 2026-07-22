@@ -1,14 +1,21 @@
 // Keyless public crypto spot prices, for user price alerts on coins OANDA can't
-// quote. Uses Coinbase's public spot endpoint (no API key, globally reachable):
+// quote. Primary source is Coinbase's public spot endpoint (no API key, globally
+// reachable):
 //   GET https://api.coinbase.com/v2/prices/{BASE}-USD/spot -> { data: { amount } }
+// with a Kraken public-Ticker fallback when Coinbase can't price a coin:
+//   GET https://api.kraken.com/0/public/Ticker?pair={BASE}USD -> result[..].c[0]
 // Quotes are normalized to USD — USDT/USDC track USD closely enough for an alert
-// threshold, and every major coin has a Coinbase USD spot. Best-effort: a failed
-// request or an unknown coin is simply absent from the returned map.
+// threshold, and every major coin has a USD spot on one of the two. Best-effort:
+// a coin neither can price is simply absent from the returned map.
 
 const COINBASE_SPOT = 'https://api.coinbase.com/v2/prices';
+const KRAKEN_TICKER = 'https://api.kraken.com/0/public/Ticker';
 
 // A few base-asset aliases so exchange-specific tickers resolve to Coinbase's.
 const BASE_ALIASES: Record<string, string> = { XBT: 'BTC' };
+
+// Kraken uses legacy codes for a couple of assets in its `pair` param.
+const KRAKEN_BASE_ALIASES: Record<string, string> = { BTC: 'XBT', DOGE: 'XDG' };
 
 // Coins we recognize as crypto even when quoted in USD (where the quote alone
 // can't tell crypto from forex — "BTCUSD" vs "EURUSD"). Not exhaustive; USDT/
@@ -43,22 +50,47 @@ function baseOf(displayInstrument: string): string {
   return BASE_ALIASES[base] ?? base;
 }
 
-async function spot(base: string): Promise<number | null> {
+// Small fetch-with-timeout wrapper so a hung request can't stall a watch tick.
+async function getJson<T>(url: string): Promise<T | null> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 5000);
-    const res = await fetch(`${COINBASE_SPOT}/${encodeURIComponent(base)}-USD/spot`, {
-      signal: ctrl.signal,
-      headers: { Accept: 'application/json' },
-    });
+    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'application/json' } });
     clearTimeout(timer);
     if (!res.ok) return null;
-    const json = (await res.json()) as { data?: { amount?: string } };
-    const n = Number(json.data?.amount);
-    return Number.isFinite(n) ? n : null;
+    return (await res.json()) as T;
   } catch {
     return null;
   }
+}
+
+async function coinbaseSpot(base: string): Promise<number | null> {
+  const json = await getJson<{ data?: { amount?: string } }>(
+    `${COINBASE_SPOT}/${encodeURIComponent(base)}-USD/spot`,
+  );
+  const n = Number(json?.data?.amount);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function krakenSpot(base: string): Promise<number | null> {
+  const kb = KRAKEN_BASE_ALIASES[base] ?? base;
+  // One pair per request, so the sole `result` entry is this pair — no need to
+  // decode Kraken's quirky normalized keys (XXBTZUSD etc.). `c` is the last
+  // trade [price, volume]; we want the price.
+  const json = await getJson<{ error?: string[]; result?: Record<string, { c?: string[] }> }>(
+    `${KRAKEN_TICKER}?pair=${encodeURIComponent(`${kb}USD`)}`,
+  );
+  if (!json || (json.error && json.error.length > 0) || !json.result) return null;
+  const entry = Object.values(json.result)[0];
+  const n = Number(entry?.c?.[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Spot for one base (already canonicalized), trying Coinbase then Kraken.
+async function cryptoSpot(base: string): Promise<number | null> {
+  const cb = await coinbaseSpot(base);
+  if (cb != null) return cb;
+  return krakenSpot(base);
 }
 
 // Live spot for the given crypto instruments (display form, e.g. "BTC/USDT"),
@@ -79,7 +111,7 @@ export async function fetchCryptoPrices(instruments: string[]): Promise<Map<stri
 
   await Promise.all(
     [...baseToKeys.entries()].map(async ([base, keys]) => {
-      const price = await spot(base);
+      const price = await cryptoSpot(base);
       if (price != null) for (const k of keys) out.set(k, price);
     }),
   );
