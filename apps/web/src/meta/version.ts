@@ -11,14 +11,14 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.38';
+export const APP_VERSION = 'Beta V 5.39';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.38',
-    date: 'July 21, 2026',
+    version: 'Beta V 5.39',
+    date: 'July 22, 2026',
     notes: [
-      'Crypto price alerts are more reliable: if the primary price feed is briefly unavailable for a coin, they now fall back to a second public feed (Kraken) before skipping a check.',
+      'Fixed the Unrealized Profit Factor on the Trade Log and Live Wall metrics: when every open position is currently in the green there are no open losses to divide by, so it now reads "—" instead of an "∞" that made an all-green open book look like an infinite track record. It still shows a real number as soon as any open position is underwater. (The realized Profit Factor is unchanged.)',
     ],
   },
   {

@@ -106,7 +106,7 @@ export function MetricsTile({
             <Stat label="Net P/L" value={!canSeeBalances ? 'hidden' : money(net)} color={plColor(net)} sub="realized + open" />
             <Stat label="Win Rate" value={s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—'} sub={`${s.wins}W · ${s.losses}L`} />
             <Stat label="Profit Factor" value={pf ? profitFactorText(pf) : '—'} sub={pf ? `scaled ${scaledProfitFactorText(pf)}` : undefined} />
-            <Stat label="Unrealized PF" value={profitFactorText(upf)} sub={`scaled ${scaledProfitFactorText(upf)}`} />
+            <Stat label="Unrealized PF" value={profitFactorText(upf, '—')} sub={`scaled ${scaledProfitFactorText(upf, '—')}`} />
             <Stat label="Trades" value={String(s.total)} sub={`${s.open} open · ${s.closed} closed`} wide />
           </div>
         )}

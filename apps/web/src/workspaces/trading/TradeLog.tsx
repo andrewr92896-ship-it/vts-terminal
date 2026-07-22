@@ -318,11 +318,13 @@ export function TradeLog() {
     },
     {
       // Same ratio over the open book — winners' open gains ÷ losers' open losses
-      // — with its own scaled (per-lot) reading beneath.
+      // — with its own scaled (per-lot) reading beneath. An open book with no
+      // losing position yet has an undefined ratio; show "—" (not "∞"), since a
+      // live snapshot of all-green positions isn't an infinite track record.
       label: 'Unrealized PF',
-      val: profitFactorText(upf),
+      val: profitFactorText(upf, '—'),
       sub: 'open positions',
-      pips: `scaled ${scaledProfitFactorText(upf)}`,
+      pips: `scaled ${scaledProfitFactorText(upf, '—')}`,
     },
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
   ];
