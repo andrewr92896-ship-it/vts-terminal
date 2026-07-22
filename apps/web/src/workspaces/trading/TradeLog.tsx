@@ -7,7 +7,7 @@ import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
-import { profitFactorStats, profitFactorText, scaledProfitFactorText, summarizeTrades, unrealizedProfitFactorStats } from './tradeStats';
+import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { getTradeLayout, type Layout } from './preferences';
 import { DesignationTag, tileTint } from './DesignationTag';
 import { EditableText } from '../../copy/SiteCopy';
@@ -258,8 +258,9 @@ export function TradeLog() {
   const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
   const s = trader ? summarizeTrades(shownTrades, config) : data.summary;
   const pf = profitFactorStats(shownTrades, config);
-  // Profit factor over the open book (live P/L of currently-open positions).
-  const upf = unrealizedProfitFactorStats(shownTrades);
+  // "If I closed everything right now" — realized closed trades with each open
+  // position's live P/L folded in as though it were just realized.
+  const ppf = projectedProfitFactorStats(shownTrades, config);
   // Pips are the desk's preferred unit — show them next to every $ metric, but
   // only when the desk actually trades forex (otherwise there's no pip to show).
   const showPips = hasAnyPips(shownTrades);
@@ -317,14 +318,14 @@ export function TradeLog() {
       pips: `scaled ${scaledProfitFactorText(pf)}`,
     },
     {
-      // Same ratio over the open book — winners' open gains ÷ losers' open losses
-      // — with its own scaled (per-lot) reading beneath. An open book with no
-      // losing position yet has an undefined ratio; show "—" (not "∞"), since a
-      // live snapshot of all-green positions isn't an infinite track record.
-      label: 'Unrealized PF',
-      val: profitFactorText(upf, '—'),
-      sub: 'open positions',
-      pips: `scaled ${scaledProfitFactorText(upf, '—')}`,
+      // Projected profit factor: the realized PF with every open position folded
+      // in at its current mark (as if closed now). Stays a real number as long as
+      // the closed history has any loss, so it doesn't blow up to "∞" the way an
+      // open-book-only ratio does when no open position is red.
+      label: 'Projected PF',
+      val: profitFactorText(ppf),
+      sub: 'if closed now',
+      pips: `scaled ${scaledProfitFactorText(ppf)}`,
     },
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
   ];

@@ -4,7 +4,7 @@ import { api, ApiError } from '../../api/client';
 import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, TradeLogData } from '../../api/types';
 import { configFrom } from './outcome';
-import { profitFactorStats, profitFactorText, scaledProfitFactorText, summarizeTrades, unrealizedProfitFactorStats } from './tradeStats';
+import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { BORDER, BORDER2, FAINT, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
 import { EditableText } from '../../copy/SiteCopy';
@@ -73,7 +73,8 @@ export function MetricsTile({
   const canSeeBalances = (s?.totalRealizedPl ?? null) !== null;
   const showMoney = canSeeBalances && !privacy;
   const pf = config ? profitFactorStats(shownTrades, config) : null;
-  const upf = unrealizedProfitFactorStats(shownTrades);
+  // Projected PF: realized closed trades + each open position at its current mark.
+  const ppf = config ? projectedProfitFactorStats(shownTrades, config) : null;
   const realized = s?.totalRealizedPl ?? 0;
   const unreal = s?.totalUnrealizedPl ?? 0;
   const net = realized + unreal;
@@ -106,7 +107,7 @@ export function MetricsTile({
             <Stat label="Net P/L" value={!canSeeBalances ? 'hidden' : money(net)} color={plColor(net)} sub="realized + open" />
             <Stat label="Win Rate" value={s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—'} sub={`${s.wins}W · ${s.losses}L`} />
             <Stat label="Profit Factor" value={pf ? profitFactorText(pf) : '—'} sub={pf ? `scaled ${scaledProfitFactorText(pf)}` : undefined} />
-            <Stat label="Unrealized PF" value={profitFactorText(upf, '—')} sub={`scaled ${scaledProfitFactorText(upf, '—')}`} />
+            <Stat label="Projected PF" value={ppf ? profitFactorText(ppf) : '—'} sub={ppf ? `scaled ${scaledProfitFactorText(ppf)}` : undefined} />
             <Stat label="Trades" value={String(s.total)} sub={`${s.open} open · ${s.closed} closed`} wide />
           </div>
         )}
