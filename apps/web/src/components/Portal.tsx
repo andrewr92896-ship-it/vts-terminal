@@ -453,6 +453,7 @@ export function Portal() {
 
   const sidebar = (
     <Sidebar
+      key="app-sidebar"
       workspace={workspace}
       screen={screen}
       workspaces={allowed}
@@ -484,8 +485,15 @@ export function Portal() {
     />
   );
 
+  // Keyed so React preserves this subtree — and every screen's state inside it,
+  // e.g. an in-progress study game — when a phone rotation flips `isPhone` and
+  // the layout swaps between the phone (drawer) and wide (grid) branches below.
+  // `main` sits at a different child position in each branch, so without a
+  // stable key React reconciles by position, finds a different element in that
+  // slot, and remounts the whole content area — which would reset the active
+  // game back to its picker (and wipe any half-filled form) on every rotate.
   const main = (
-    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
+    <div key="app-main" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
       {isDemo && <DemoBanner accent={accent} onTour={() => setTourOpen(true)} onExit={logout} />}
       {topBar}
       <PrivacyBanner />
