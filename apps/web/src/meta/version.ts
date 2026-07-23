@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.42';
+export const APP_VERSION = 'Beta V 5.43';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.43',
+    date: 'July 23, 2026',
+    notes: [
+      'The iPhone open-positions widget now refreshes as often as iOS allows — the script asks for a ~5-minute refresh instead of the slower default. (iOS caps how often any Home Screen widget can update, so it lands around every 5–15 minutes when you’re using your phone; tap the widget to open the app for real-time.)',
+      'If you already added the widget, regenerate the script from My Portal ▸ Settings ▸ Home-screen widget and paste the new version into Scriptable to pick up the faster refresh.',
+    ],
+  },
   {
     version: 'Beta V 5.42',
     date: 'July 23, 2026',

@@ -497,6 +497,10 @@ if(!data || !data.positions){
   for(let i=0;i<list.length;i++){ renderCard(w, list[i], list.length===1); }
   if(data.positions.length>max){ const more=w.addText("+"+(data.positions.length-max)+" more"); more.font=Font.systemFont(9.5); more.textColor=C.faint; }
 }
+// Ask iOS to refresh in ~5 minutes. iOS clamps this to its own widget budget
+// (roughly 40–70 reloads/day), so it refreshes as close to every 5 min as it
+// allows — more often while you're actively using the phone, less when idle.
+w.refreshAfterDate = new Date(Date.now() + 5 * 60 * 1000);
 if(config.runsInApp){ await w.presentLarge(); }
 Script.setWidget(w);
 Script.complete();
