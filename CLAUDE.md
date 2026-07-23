@@ -16,6 +16,40 @@ sidebar of workspaces, each with its own sections. It is a PWA (installable,
 web push). There is no public sign-up; there is a single read-only **demo
 account** and a public **Early Access** request form on the login screen.
 
+## Product direction (owner goal)
+
+The portal is **currently** private/invite-only, but the **stated goal is to launch
+it publicly as an official iOS app** on the App Store, under the legal entity
+**Vitalis Trading Systems LLC**. A headline feature is a **home-screen widget
+showing open positions**. Keep this trajectory in mind for architecture decisions.
+
+Agreed **lowest-liability** shape for that public launch (research done 2026-07):
+
+- **Read-only tracker, not a trading platform.** The app *displays* positions/P&L;
+  it must **not** execute trades or move money in-app. This keeps it in Apple's
+  accepted "portfolio tracker" lane (App Review Guideline **3.2.1(viii)** reserves
+  financial *trading/investing/money-management* apps to the financial institution)
+  and keeps regulatory exposure low. Do not add in-app order execution without
+  revisiting this.
+- **Native shell = Capacitor wrap of the existing React app + a native SwiftUI
+  WidgetKit extension** (widgets are always native Swift; no web/PWA widget exists
+  on iOS). React Native/Expo is the heavier alternative.
+- **API auth for mobile/widget = a per-user, revocable bearer token** (today every
+  route is `httpOnly` cookie-only, which a widget extension can't use). Add a
+  read-only `GET /api/widget/positions`-style endpoint scoped via `scopedTraderIds`;
+  the widget stores its token in the App Group keychain.
+- **Broker credential custody is the main real liability.** Prefer **read-only /
+  OAuth-scoped** broker connections (Kraken supports query-only keys; OANDA tokens
+  can trade — treat with care). The widget token must expose **display data only**,
+  never broker keys or trade ability.
+- **Before public launch:** Organization Apple account + D-U-N-S under the LLC;
+  ToS + privacy policy; in-app account deletion (Guideline **5.1.1(v)**); AI-use
+  disclosure; "informational only, not investment advice" disclaimers on
+  advice-flavored features (Trading Alerts, session bias, AI coaching); and a
+  **securities/fintech attorney** review of those advice-flavored features
+  (potential RIA/CFTC-CTA exposure). Consider E&O/tech/cyber **insurance** to
+  transfer residual liability. (None of this is legal advice.)
+
 ## Architecture
 
 Monorepo, **npm workspaces**:
