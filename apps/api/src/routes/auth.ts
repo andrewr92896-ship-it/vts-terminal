@@ -11,6 +11,7 @@ import {
   destroySession,
 } from '../auth/sessions.js';
 import { toPublicUser, type PublicUser } from '../auth/rbac.js';
+import { LEGAL_VERSION } from '../legal/version.js';
 import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { ensureDemoAccount } from '../seed.js';
@@ -230,6 +231,26 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     await db.update(users).set(patch).where(eq(users.id, me.id));
+    const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
+    return { user: await publicUser(fresh) };
+  });
+
+  // Record that the signed-in user has reviewed and accepted the currently
+  // effective Terms of Service and Privacy Policy. Stamps the current
+  // LEGAL_VERSION and the acceptance time onto the account, which clears
+  // `mustAcceptTerms` and releases them from the acceptance gate. Idempotent:
+  // accepting again just refreshes the timestamp. (The demo never reaches this —
+  // it is exempt from the gate and the demo guard blocks the write regardless.)
+  app.post('/api/auth/accept-terms', { preHandler: requireAuth }, async (request) => {
+    const me = request.currentUser!;
+    await db
+      .update(users)
+      .set({
+        termsAcceptedVersion: LEGAL_VERSION,
+        termsAcceptedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, me.id));
     const fresh = (await db.select().from(users).where(eq(users.id, me.id)).limit(1))[0];
     return { user: await publicUser(fresh) };
   });

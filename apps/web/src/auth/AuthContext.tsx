@@ -15,6 +15,9 @@ interface AuthState {
   login: (email: string, password: string) => Promise<void>;
   demoLogin: () => Promise<void>;
   logout: () => Promise<void>;
+  // Record acceptance of the current Terms of Service / Privacy Policy, clearing
+  // the acceptance gate for this user.
+  acceptTerms: () => Promise<void>;
   // Self-service account actions; each updates the cached user on success.
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updateProfile: (patch: { username?: string; displayName?: string; email?: string; avatar?: string }) => Promise<void>;
@@ -62,6 +65,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const acceptTerms = useCallback(async () => {
+    const r = await api.acceptTerms();
+    setUser(r.user);
+  }, []);
+
   const changePassword = useCallback(
     async (currentPassword: string, newPassword: string) => {
       const r = await api.changePassword(currentPassword, newPassword);
@@ -80,7 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthCtx.Provider
-      value={{ user, loading, login, demoLogin, logout, changePassword, updateProfile }}
+      value={{ user, loading, login, demoLogin, logout, acceptTerms, changePassword, updateProfile }}
     >
       {children}
     </AuthCtx.Provider>

@@ -1,5 +1,6 @@
 import type { UserRow } from '../db/schema.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
+import { LEGAL_VERSION } from '../legal/version.js';
 
 export type WorkspaceKey = 'trading' | 'studies';
 
@@ -139,6 +140,11 @@ export interface PublicUser {
   teamName: string | null;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  // The user has not yet accepted the currently-effective Terms of Service and
+  // Privacy Policy (their stored version differs from LEGAL_VERSION). When true,
+  // the client gates them into the acceptance screen before the portal loads.
+  // Never true for the read-only demo (it operates on nothing to consent to).
+  mustAcceptTerms: boolean;
   isDemo: boolean; // the public, read-only demo account
   access: {
     label: string;
@@ -176,6 +182,9 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
     teamName: teamName ?? null,
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
+    // The demo has nothing to consent to (it can't operate on anything and the
+    // demo guard blocks the accept write anyway), so it is never gated.
+    mustAcceptTerms: !isDemo && u.termsAcceptedVersion !== LEGAL_VERSION,
     isDemo,
     access: {
       label: accessLabel(roles),
