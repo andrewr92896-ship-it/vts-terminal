@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.45';
+export const APP_VERSION = 'Beta V 5.46';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.46',
+    date: 'July 23, 2026',
+    notes: [
+      'New built-in Study Game: “Market Terminology 101” — a quick, plain-English glossary of orders, quotes, and common trading vocabulary. It’s a permanent example so new members can see how Study Games work (educational only — not financial advice).',
+      'It shows up automatically for every team (and any new team), tagged “Built-in.” You can play it like any other game, but it can’t be edited or removed.',
+    ],
+  },
   {
     version: 'Beta V 5.45',
     date: 'July 23, 2026',

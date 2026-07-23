@@ -191,8 +191,19 @@ function DeckCard({
 }) {
   const [confirm, setConfirm] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Built-in example games are code-owned: locked from editing/removal (the
+  // server enforces this too), so hide those controls and label them clearly.
+  const locked = deck.source === 'baked_in';
   const sourceLabel =
-    deck.source === 'ai_topic' ? 'AI-generated' : deck.source === 'upload' ? 'From a file' : deck.source === 'merged' ? 'Combined' : 'Sample';
+    deck.source === 'ai_topic'
+      ? 'AI-generated'
+      : deck.source === 'upload'
+        ? 'From a file'
+        : deck.source === 'merged'
+          ? 'Combined'
+          : locked
+            ? 'Built-in'
+            : 'Sample';
 
   // Export the game to a CSV the team can edit in a spreadsheet and re-import.
   // Fetches the full question set (the list only carries a count).
@@ -228,15 +239,20 @@ function DeckCard({
         {deck.createdByName && ` · by ${deck.createdByName}`}
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-        {canManage && !confirm && (
+        {canManage && !locked && !confirm && (
           <button onClick={onEdit} style={{ ...primaryBtn(theme, accentGradient(theme)), minHeight: 38 }}>
             Edit
           </button>
         )}
-        {canManage && !confirm && (
+        {canManage && !locked && !confirm && (
           <button onClick={() => setConfirm(true)} style={ghostBtn(theme)}>
             Delete
           </button>
+        )}
+        {locked && (
+          <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>
+            <EditableText id="studydecks.builtin_note" text="Built-in example — always available" />
+          </span>
         )}
         {canManage && confirm && (
           <>
@@ -253,7 +269,7 @@ function DeckCard({
             {exporting ? <EditableText id="studydecks.exporting" text="Exporting…" /> : <EditableText id="studydecks.export_csv" text="⭳ Export CSV" />}
           </button>
         )}
-        {!canManage && !confirm && (
+        {!canManage && !locked && !confirm && (
           <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>Play it in the Study Game section</span>
         )}
       </div>

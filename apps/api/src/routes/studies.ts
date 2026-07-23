@@ -30,6 +30,7 @@ import {
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { getTeamName } from '../teams/service.js';
 import { createDeck, deleteDeck, getDeck, listDecks, mergeDecks, updateDeck } from '../studies/deckStore.js';
+import { ensureBakedInGamesForTeam, isBakedInSource } from '../studies/bakedGames.js';
 import {
   createFlashcardSet,
   deleteFlashcardSet,
@@ -269,6 +270,13 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.get('/api/studies/decks', guard, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.send({ decks: [] });
+    // Make sure this team has the built-in example game(s) — covers teams created
+    // after the last boot. Best-effort: never block the list on seeding.
+    try {
+      await ensureBakedInGamesForTeam(teamId);
+    } catch {
+      /* ignore — the built-in game will fill in on a later fetch or the next boot */
+    }
     return { decks: await listDecks(teamId) };
   });
 
@@ -451,6 +459,11 @@ export async function studiesRoutes(app: FastifyInstance) {
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
     const parsed = deckUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
+    // Built-in example games are code-owned and locked — nobody edits them here.
+    const target = await getDeck(id, me.teamId);
+    if (target && isBakedInSource(target.source)) {
+      return reply.code(403).send({ error: 'This is a built-in example game and can’t be edited.' });
+    }
     const deck = await updateDeck(id, me.teamId, me.id, isAdmin(parseRoles(me)), {
       name: parsed.data.name,
       description: parsed.data.description,
@@ -474,6 +487,11 @@ export async function studiesRoutes(app: FastifyInstance) {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
+    // Built-in example games are permanent — they can't be removed by anyone.
+    const target = await getDeck(id, me.teamId);
+    if (target && isBakedInSource(target.source)) {
+      return reply.code(403).send({ error: 'This is a built-in example game and can’t be removed.' });
+    }
     const mode = await studiesDeleteMode(me);
     if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
     const ok = await deleteDeck(id, me.teamId, me.id, mode === 'any');
