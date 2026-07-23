@@ -12,7 +12,7 @@
 // drafted to reduce liability; they are not a substitute for review by a
 // licensed attorney before public launch.
 
-export const LEGAL_VERSION = '2026-07-23';
+export const LEGAL_VERSION = '2026-07-23.1';
 export const LEGAL_EFFECTIVE_DATE = 'July 23, 2026';
 
 export const COMPANY = {
@@ -21,7 +21,7 @@ export const COMPANY = {
   product: 'VTS Portal',
   state: 'Ohio',
   country: 'United States',
-  contactEmail: 'andrewr92896@gmail.com',
+  contactEmail: 'support@vitalistradingsystems.com',
 } as const;
 
 // ---- Document model -------------------------------------------------------
@@ -196,9 +196,12 @@ export const TERMS: LegalDoc = {
         {
           p:
             'Trades, results, balances, and metrics recorded in the Service are entered, imported, or ' +
-            'connected by users and can be added to, changed, corrected, or removed at any time. As a ' +
-            'result, the data is not audited, verified, or guaranteed by us and may not reflect actual ' +
-            'trading outcomes.',
+            'connected by users and can be added to, changed, corrected, or removed at any time. Being able ' +
+            'to add trades manually, edit your information, and delete trades is an intentional part of the ' +
+            'design: it lets you keep records that are accurate and meaningful for your own goals — for ' +
+            'example, removing test or erroneous entries or adding trades placed outside a connected broker. ' +
+            'As a consequence of that same flexibility, the data is not audited, verified, or guaranteed by ' +
+            'us and may not reflect actual trading outcomes.',
         },
         {
           note:
@@ -227,10 +230,10 @@ export const TERMS: LegalDoc = {
               'you will not offer, operate, join, or participate in any paid copy-trading, mirror-trading, ' +
               'managed-account, or trade-signal-for-compensation arrangement through or in connection with ' +
               'the Service.',
-            'Automatically copy, mirror, relay, or "web-hook" another person’s trades, or route another ' +
-              'user’s orders or signals into any account. If you and a teammate choose to place similar ' +
-              'trades, each of you must enter your own trades manually and independently in your own broker ' +
-              'account.',
+            'Use webhooks, bots, automation, mirroring, or order-routing to relay, copy, or execute another ' +
+              'person’s trades or signals into any account. Any trade you place must be entered by you, ' +
+              'manually and independently, in your own broker account — never automatically wired to ' +
+              'execute or copy another person’s trades.',
             'Use the Service, or any trade information, results, or metrics from it, to solicit, recruit, ' +
               'advertise to, or induce any person to copy your trades, follow your trades, or pay for access ' +
               'to your trades or "signals."',
@@ -868,9 +871,9 @@ export const RULES: RulesDoc = {
       items: [
         'Do not pay anyone to place or copy trades for you, and do not accept payment to trade for others. ' +
           'Paid copy-trading and signal services are not allowed.',
-        'Do not automatically copy or "web-hook" anyone else’s trades. If you and a teammate want to ' +
-          'place similar trades, each of you must enter your own trades manually in your own broker ' +
-          'account.',
+        'Do not use webhooks, bots, or automation to relay or copy anyone else’s trades. Any trade you ' +
+          'place must be entered by you, manually and independently, in your own broker account — never ' +
+          'wired up to execute automatically.',
         'You can share your own trade information and results with your team for troubleshooting, ' +
           'journaling, and reference — but never to get others to copy your trades or pay for them.',
         'You may only see your own team’s data. Viewing the trades, results, or information of anyone ' +
@@ -880,8 +883,12 @@ export const RULES: RulesDoc = {
     {
       heading: 'Data and metrics',
       items: [
-        'Trade data can be edited, so it is not verified and is not proof of performance. Metrics are for ' +
-          'your own and your team’s reference only — never to advertise or demonstrate a track record.',
+        'By design, you can add trades manually, edit your information, and delete trades — so you can keep ' +
+          'records that are accurate and meaningful for your own goals (for example, clearing out test or ' +
+          'mistaken entries).',
+        'Because of that same flexibility, trade data is not verified and is not proof of performance. ' +
+          'Metrics are for your own and your team’s reference only — never to advertise or demonstrate a ' +
+          'track record.',
         'Do not trust someone just because of the numbers they show; those numbers can be changed or ' +
           'mistaken, and relying on them can lead to losses.',
       ],
