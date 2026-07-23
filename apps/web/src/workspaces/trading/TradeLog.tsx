@@ -68,6 +68,28 @@ function msToDateInput(ms: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+// Format a ms epoch as an Eastern-Time date + time, e.g. "2026-07-23 09:31:05 ET".
+// Times are rendered in ET (America/New_York) — the same clock the rest of the
+// portal uses for session windows and market hours — so an exported time reads
+// the same for everyone regardless of the exporter's own timezone. DST is
+// handled by Intl. A null/undefined ms (e.g. a still-open trade's close time)
+// yields an empty cell.
+function msToEtDateTime(ms: number | null | undefined): string {
+  if (ms == null) return '';
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')} ET`;
+}
+
 function slippageFavorable(t: TradeRecord): boolean | null {
   if (t.slippage == null) return null;
   if (t.slippage === 0) return true;
@@ -126,7 +148,7 @@ function buildExportCsv(opts: {
   row('Avg slippage', s.avgSlippage == null ? '' : String(s.avgSlippage));
   row();
   row('Trades');
-  row('Code', 'Opened', 'Trader', 'Instrument', 'Side', 'Status', 'Planned Entry', 'Entry', 'Exit', 'Take Profit', 'Stop Loss', 'Size', 'Slippage', 'Realized P/L', 'Pips', 'Outcome', 'Strategy', 'Timeframe', 'Broker', 'Source', 'Notes');
+  row('Code', 'Opened', 'Open Time', 'Close Time', 'Trader', 'Instrument', 'Side', 'Status', 'Planned Entry', 'Entry', 'Exit', 'Take Profit', 'Stop Loss', 'Size', 'Slippage', 'Realized P/L', 'Pips', 'Outcome', 'Strategy', 'Timeframe', 'Broker', 'Source', 'Notes');
   for (const t of trades) {
     const outcome =
       t.status === 'closed' && t.realizedPl != null
@@ -134,7 +156,7 @@ function buildExportCsv(opts: {
         : '';
     const pips = tradePips(t.side, t.entryPrice, t.exitPrice, t.instrument);
     row(
-      t.code, msToDateInput(t.openedAt), t.owner, t.instrument, t.side, t.status,
+      t.code, msToDateInput(t.openedAt), msToEtDateTime(t.openedAt), msToEtDateTime(t.closedAt), t.owner, t.instrument, t.side, t.status,
       t.plannedEntry, t.entryPrice, t.exitPrice, t.takeProfit, t.stopLoss, t.units,
       t.slippage, t.realizedPl, pips == null ? '' : Number(pips.toFixed(1)), outcome, t.strategy, t.timeframe, t.broker, t.source, t.notes,
     );

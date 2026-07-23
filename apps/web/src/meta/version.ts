@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.46';
+export const APP_VERSION = 'Beta V 5.47';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.47',
+    date: 'July 23, 2026',
+    notes: [
+      'Trade metrics CSV export now includes the exact open and close times for each trade, in two new “Open Time” and “Close Time” columns. Times are shown in Eastern Time (the same clock the rest of the portal uses for sessions and market hours), so an export reads the same no matter where you are. Still-open trades leave the close time blank.',
+    ],
+  },
   {
     version: 'Beta V 5.46',
     date: 'July 23, 2026',
