@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.48';
+export const APP_VERSION = 'Beta V 5.49';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.49',
+    date: 'July 23, 2026',
+    notes: [
+      'Refined the Terms and Rules: automated copying — webhooks, bots, or order-routing that relay or copy someone else’s trades — is prohibited, and any trade you place must be entered by you manually in your own broker account. (Paying someone to place or copy trades, and soliciting others to copy yours, remain prohibited.)',
+      'Clarified in the Terms and Rules that being able to add trades manually, edit your information, and delete trades is by design — so you can keep records that are accurate for your own goals — and that because of that flexibility the data is not verified and is not proof of performance.',
+      'Updated the contact address in the Terms and Privacy Policy to support@vitalistradingsystems.com.',
+      'Because these documents changed, everyone is asked to review and accept them once more.',
+    ],
+  },
   {
     version: 'Beta V 5.48',
     date: 'July 23, 2026',
