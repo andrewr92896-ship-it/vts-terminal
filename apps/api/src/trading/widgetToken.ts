@@ -83,6 +83,7 @@ export interface WidgetPosition {
   side: 'long' | 'short';
   units: number;
   owner: string; // short handle
+  isSelf: boolean; // this position is on the token owner's own account
   broker: string; // broker key (oanda / kraken / manual / ftp / …)
   brokerName: string;
   plannedEntry: number | null;
@@ -137,6 +138,7 @@ export async function buildWidgetPositions(
     side: t.side,
     units: t.units,
     owner: ownerHandle(t.owner),
+    isSelf: t.ownerId === user.id,
     broker: t.broker,
     brokerName: t.brokerName,
     plannedEntry: t.plannedEntry,

@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.44';
+export const APP_VERSION = 'Beta V 5.45';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.45',
+    date: 'July 23, 2026',
+    notes: [
+      'The iPhone positions widget now adapts to its size: Large shows full position cards (a single one shows all the detail), Medium shows a clean compact list of everyone’s trades, and Small shows just your own top position in a tidy layout instead of a cramped, cut-off card.',
+      'Regenerate the script from My Portal ▸ Settings ▸ Home-screen widget and re-paste it into Scriptable to get the size-aware layouts.',
+    ],
+  },
   {
     version: 'Beta V 5.44',
     date: 'July 23, 2026',
