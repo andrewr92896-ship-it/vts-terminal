@@ -20,6 +20,7 @@ import {
   notificationPrefs,
   sessionAlertPrefs,
   priceAlerts,
+  widgetTokens,
   supportRequests,
   supportRequestMessages,
   userTeams,
@@ -354,6 +355,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
     await tx.delete(priceAlerts).where(eq(priceAlerts.userId, targetId));
+    await tx.delete(widgetTokens).where(eq(widgetTokens.userId, targetId));
     await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));
     await tx.delete(tradingChallenges).where(eq(tradingChallenges.userId, targetId));
     // Per-trader desk settings + their per-instrument break-even buffers (the

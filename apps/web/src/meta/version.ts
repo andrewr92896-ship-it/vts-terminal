@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.41';
+export const APP_VERSION = 'Beta V 5.42';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.42',
+    date: 'July 23, 2026',
+    notes: [
+      'New: put your team’s open positions on your iPhone Home Screen. In My Portal ▸ Settings, open the “Home-screen widget” card to generate a personal read-only token and copy a ready-made Scriptable script.',
+      'Add one widget per teammate — set each widget’s Parameter to a person’s handle to see just their open positions, styled like the Live Wall card. Leave it blank to show the whole team.',
+      'The widget token is read-only (it can’t place trades or expose broker keys) and can be revoked anytime from the same card.',
+    ],
+  },
   {
     version: 'Beta V 5.41',
     date: 'July 22, 2026',
