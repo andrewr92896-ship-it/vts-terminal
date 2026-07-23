@@ -423,11 +423,14 @@ function PerUserNotificationsSection({ accent, accentText }: { accent: string; a
 // Scriptable "Parameter" (a teammate handle; blank = the whole team).
 function buildScriptableScript(origin: string, token: string): string {
   return `// VTS Portal — Open Positions widget
-// One widget = one person. Long-press the widget on your Home Screen →
-// "Edit Widget" → set Parameter to a teammate's handle (e.g. dale).
-// Leave the Parameter blank to show your whole team. Use the LARGE size.
+// One widget = one person: long-press → "Edit Widget" → set Parameter to a
+// teammate's handle (e.g. dale). Leave it blank for the whole team.
+//   • Large  — up to 3 position cards (a single one shows full detail)
+//   • Medium — a compact row for everyone (or the chosen person)
+//   • Small  — just your own top position, clean (or the chosen person's)
 const BASE = "${origin}";
 const TOKEN = "${token}";
+const PARAM = (args.widgetParameter||"").trim();
 
 const C = {
   navy: new Color("#0a1a3c"), card: new Color("#112a56"), text: new Color("#eef3ff"),
@@ -440,9 +443,8 @@ function price(n){ if(n===null||n===undefined) return "—"; if(Math.abs(n)>=100
 function since(ms){ if(!ms) return ""; let m = Math.max(0, Math.round((Date.now()-ms)/60000)); if(m<60) return m+"m ago"; const h=Math.floor(m/60); m=m%60; return m? h+"h "+m+"m ago" : h+"h ago"; }
 
 async function loadData(){
-  const owner = (args.widgetParameter||"").trim();
   let url = BASE + "/api/widget/positions";
-  if(owner) url += "?owner=" + encodeURIComponent(owner);
+  if(PARAM) url += "?owner=" + encodeURIComponent(PARAM);
   const req = new Request(url);
   req.headers = { "Authorization": "Bearer " + TOKEN };
   req.timeoutInterval = 15;
@@ -482,20 +484,68 @@ function renderCard(w, p, detailed){
   foot.addSpacer(); const ago=foot.addText(since(p.openedAt)); ago.font=Font.regularMonospacedSystemFont(9); ago.textColor=C.faint;
 }
 
-const w = new ListWidget(); w.backgroundColor=C.navy; w.setPadding(11,11,11,11); w.spacing=7;
+// Compact single-line row — used by the MEDIUM widget to fit several people.
+function renderRow(w, p){
+  const long = p.side==="long"; const sideColor = long?C.green:C.red;
+  const dotColor = (p.designation && p.designation.color) ? new Color(p.designation.color) : sideColor;
+  const row = w.addStack(); row.centerAlignContent(); row.setPadding(3,0,3,0);
+  const dot = row.addStack(); dot.size = new Size(7,7); dot.cornerRadius = 4; dot.backgroundColor = dotColor;
+  row.addSpacer(7);
+  const sym = row.addText(p.instrument); sym.font=Font.boldSystemFont(12.5); sym.textColor=Color.white(); sym.lineLimit=1;
+  row.addSpacer(5);
+  const sd = row.addText(long?"LONG":"SHORT"); sd.font=Font.boldSystemFont(8.5); sd.textColor=sideColor;
+  row.addSpacer(7);
+  const ow = row.addText("@"+p.owner); ow.font=Font.systemFont(10); ow.textColor=C.muted; ow.lineLimit=1;
+  row.addSpacer();
+  const plCol = row.addStack(); plCol.layoutVertically(); plCol.spacing=1;
+  if(p.unrealizedPl===null||p.unrealizedPl===undefined){ const t=plCol.addText("—"); t.font=Font.regularMonospacedSystemFont(12); t.textColor=C.muted; t.rightAlignText(); }
+  else { const up=p.unrealizedPl>=0; const t=plCol.addText((up?"+":"")+money(p.unrealizedPl)); t.font=Font.boldSystemFont(12.5); t.textColor=up?C.green:C.red; t.rightAlignText(); }
+  if(p.forex && p.forex.pipsOpen!==null && p.forex.pipsOpen!==undefined){ const pp=plCol.addText(pips(p.forex.pipsOpen)); pp.font=Font.regularMonospacedSystemFont(8.5); pp.textColor=p.forex.pipsOpen>=0?C.green:C.red; pp.rightAlignText(); }
+}
+
+// Clean single-position layout — used by the SMALL widget (no cramped detail).
+function renderSolo(w, p){
+  const long = p.side==="long"; const sideColor = long?C.green:C.red;
+  const head = w.addStack(); head.centerAlignContent();
+  const sym = head.addText(p.instrument); sym.font=Font.boldSystemFont(16); sym.textColor=Color.white(); sym.minimumScaleFactor=0.7; sym.lineLimit=1;
+  head.addSpacer(6); pill(head, long?"LONG":"SHORT", sideColor);
+  if(p.designation && p.designation.emoji){ const d=w.addText(p.designation.emoji+" "+p.designation.label); d.font=Font.mediumSystemFont(10); d.textColor=new Color(p.designation.color||"#9fb0d6"); d.lineLimit=1; }
+  w.addSpacer(4);
+  if(p.unrealizedPl===null||p.unrealizedPl===undefined){ const t=w.addText("—"); t.font=Font.boldSystemFont(24); t.textColor=C.muted; }
+  else { const up=p.unrealizedPl>=0; const t=w.addText((up?"+":"")+money(p.unrealizedPl)); t.font=Font.boldSystemFont(24); t.textColor=up?C.green:C.red; t.minimumScaleFactor=0.5; t.lineLimit=1; }
+  if(p.forex && p.forex.pipsOpen!==null && p.forex.pipsOpen!==undefined){ const pp=w.addText(pips(p.forex.pipsOpen)); pp.font=Font.regularMonospacedSystemFont(12); pp.textColor=p.forex.pipsOpen>=0?C.green:C.red; }
+  w.addSpacer();
+  const foot = w.addText("@"+p.owner+" · "+(p.brokerName||p.broker)); foot.font=Font.systemFont(9.5); foot.textColor=C.faint; foot.lineLimit=1;
+  const ago = w.addText(since(p.openedAt)); ago.font=Font.regularMonospacedSystemFont(9); ago.textColor=C.faint;
+}
+
+const fam = config.widgetFamily || "large";
+const w = new ListWidget(); w.backgroundColor=C.navy; w.spacing=7;
+w.setPadding(fam==="small"?12:11, fam==="small"?13:11, fam==="small"?12:11, fam==="small"?13:11);
 let data = null;
 try { data = await loadData(); } catch(e) { data = null; }
 if(!data || !data.positions){
   const t=w.addText("Couldn't load positions"); t.font=Font.mediumSystemFont(13); t.textColor=C.muted;
   const h=w.addText("Check your token / connection"); h.font=Font.systemFont(10); h.textColor=C.faint;
 } else if(data.positions.length===0){
-  const who=(args.widgetParameter||"").trim();
-  const t=w.addText(who?("No open positions for @"+who):"No open positions"); t.font=Font.mediumSystemFont(13); t.textColor=C.muted;
+  const t=w.addText(PARAM?("No open positions for @"+PARAM):"No open positions"); t.font=Font.mediumSystemFont(13); t.textColor=C.muted;
+} else if(fam==="small"){
+  // Small = one clean position. With no parameter, focus on YOUR own trade;
+  // with a parameter it's already that person's, so show their top position.
+  let focus = data.positions;
+  if(!PARAM){ const mine = data.positions.filter(function(p){ return p.isSelf; }); if(mine.length) focus = mine; }
+  renderSolo(w, focus[0]);
+} else if(fam==="medium"){
+  // Medium = a compact row per position for everyone (or the chosen person).
+  w.spacing = 5;
+  const list = data.positions.slice(0, 4);
+  for(let i=0;i<list.length;i++){ renderRow(w, list[i]); }
+  if(data.positions.length>4){ const more=w.addText("+"+(data.positions.length-4)+" more"); more.font=Font.systemFont(9); more.textColor=C.faint; }
 } else {
-  const fam=(config.widgetFamily||"large"); const max = fam==="large"?3:1;
-  const list = data.positions.slice(0, max);
+  // Large / extra-large = up to 3 full cards (detailed when it's a single one).
+  const list = data.positions.slice(0, 3);
   for(let i=0;i<list.length;i++){ renderCard(w, list[i], list.length===1); }
-  if(data.positions.length>max){ const more=w.addText("+"+(data.positions.length-max)+" more"); more.font=Font.systemFont(9.5); more.textColor=C.faint; }
+  if(data.positions.length>3){ const more=w.addText("+"+(data.positions.length-3)+" more"); more.font=Font.systemFont(9.5); more.textColor=C.faint; }
 }
 // Ask iOS to refresh in ~5 minutes. iOS clamps this to its own widget budget
 // (roughly 40–70 reloads/day), so it refreshes as close to every 5 min as it
@@ -637,7 +687,7 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
         <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#9fb0d6', lineHeight: 1.7 }}>
           <li><EditableText id="widget.step1">Install the free Scriptable app from the App Store.</EditableText></li>
           <li><EditableText id="widget.step2">In Scriptable, tap ＋, paste the script above, and name it “VTS Positions”.</EditableText></li>
-          <li><EditableText id="widget.step3">Long-press your Home Screen → ＋ → Scriptable → pick the Large size → Add.</EditableText></li>
+          <li><EditableText id="widget.step3">Long-press your Home Screen → ＋ → Scriptable → pick a size (Large = full cards, Medium = compact list, Small = your top trade) → Add.</EditableText></li>
           <li><EditableText id="widget.step4">Long-press the new widget → Edit Widget → choose the “VTS Positions” script.</EditableText></li>
           <li><EditableText id="widget.step5">Set its Parameter to a teammate’s handle (below). Repeat for one widget per person.</EditableText></li>
         </ol>
