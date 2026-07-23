@@ -5,6 +5,7 @@ import { fetchKrakenPositions } from './brokers/kraken.js';
 import { getManualTrades } from './manual.js';
 import { getDeskFundedOpenPositions } from './funded.js';
 import { scopedTraderIds } from './scope.js';
+import { getDeskSnapshot } from './liveWallCache.js';
 import { sampleLiveTrades } from './sample.js';
 import { computeForex, forexPair } from './forex.js';
 import { reconcile } from './history.js';
@@ -302,28 +303,36 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
     };
   }
 
-  // Pull every active connection in parallel and merge.
-  const { brokers, raw: loaded } = await loadDesk(conns);
-
-  // Backfill missing marks on hand-entered manual positions from the rest of the
-  // desk's open trades, so their P/L and pip math render like any other.
-  const raw = fillManualMarks(loaded);
-
-  // Reconcile open positions → History before display, keyed per owner so each
-  // teammate's positions feed their own History (not the viewer's). Never let
-  // bookkeeping blank the wall.
-  const withSlip = withSlippage(raw);
-  await reconcilePerOwner(conns, brokers, withSlip);
+  // The heavy, team-shared part — pull every active connection, tag slippage,
+  // and reconcile into History — is served through a short-TTL, single-flight
+  // per-team cache. So many concurrent renders of the same team (every open
+  // Live Wall AND every home-screen widget) collapse into ONE broker fetch
+  // instead of each polling the same accounts. Keyed by team (or solo:<id> for
+  // a team-less trader), since that's exactly what scopedTraderIds/conns cover.
+  const deskKey = user.teamId ?? `solo:${user.id}`;
+  const snap = await getDeskSnapshot(deskKey, async () => {
+    const { brokers, raw: loaded } = await loadDesk(conns);
+    // Backfill missing marks on hand-entered manual positions from the rest of
+    // the desk's open trades, so their P/L and pip math render like any other.
+    const withSlip = withSlippage(fillManualMarks(loaded));
+    // Reconcile open positions → History, keyed per owner so each teammate's
+    // positions feed their own History. Now runs at most once per TTL per team
+    // (not once per viewer per poll), which also eases DB write pressure.
+    await reconcilePerOwner(conns, brokers, withSlip);
+    const failed = brokers.filter((b) => !b.ok);
+    const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
+    return { generatedAt: Date.now(), brokers: brokers, withSlip, note };
+  });
 
   // Fold funded/prop positions in only after reconcile, so they show on the wall
   // but never land in tradingPositions (Trade Log / History / Live Brokers).
+  // Designations/gate/sort stay per-viewer (cheap), so each viewer's card is
+  // unchanged; funded is per-viewer too and never pollutes the cached snapshot.
   const trades = (
-    await withDesignations(gateBalances([...withSlip, ...fundedLive], canSeeBalances))
+    await withDesignations(gateBalances([...snap.withSlip, ...fundedLive], canSeeBalances))
   ).sort(byWallOrder);
-  const failed = brokers.filter((b) => !b.ok);
-  const note = failed.length > 0 ? `Couldn't reach: ${failed.map((b) => b.name).join(', ')}.` : null;
 
-  return { source: 'live', generatedAt, canSeeBalances, brokers, trades, note, breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides };
+  return { source: 'live', generatedAt: snap.generatedAt, canSeeBalances, brokers: snap.brokers, trades, note: snap.note, breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides };
 }
 
 // Fan out to every active connection and merge their open positions, recording

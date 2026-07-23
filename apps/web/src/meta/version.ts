@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.43';
+export const APP_VERSION = 'Beta V 5.44';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.44',
+    date: 'July 23, 2026',
+    notes: [
+      'Performance: the Live Wall and the iPhone widgets now share one live snapshot per team instead of each polling the brokers separately. Several teammates and widgets open at once no longer multiply the load on OANDA/Kraken — everyone reads the same fresh feed. No visible change to your positions; it just scales cleanly as more people (and widgets) come online.',
+    ],
+  },
   {
     version: 'Beta V 5.43',
     date: 'July 23, 2026',
