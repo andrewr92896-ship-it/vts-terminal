@@ -18,8 +18,8 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 5.46',
     date: 'July 23, 2026',
     notes: [
-      'New built-in Study Game: “Market Terminology 101” — a quick, plain-English glossary of orders, quotes, and common trading vocabulary. It’s a permanent example so new members can see how Study Games work (educational only — not financial advice).',
-      'It shows up automatically for every team (and any new team), tagged “Built-in.” You can play it like any other game, but it can’t be edited or removed.',
+      'New built-in Study Games so new members can see how Studies works right away: “Market Terminology 101” (a plain-English glossary of orders, quotes, and trading vocabulary — educational only, not financial advice), “How Study Games Work” (levels, streaks, scoring, and leaderboards, taught by playing), and “VTS Portal 101” (a quick tour of the workspaces and where to find things).',
+      'These show up automatically for every team (and any new team), tagged “Built-in.” You can play them like any other game, but they can’t be edited or removed.',
     ],
   },
   {

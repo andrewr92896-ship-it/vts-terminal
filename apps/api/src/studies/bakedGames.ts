@@ -413,8 +413,519 @@ const MARKET_TERMINOLOGY_101: BakedGame = {
   ],
 };
 
-// Every built-in example game. Add new games here.
-export const BAKED_IN_GAMES: BakedGame[] = [MARKET_TERMINOLOGY_101];
+// A self-referential game that teaches the Study Game feature itself — levels,
+// streaks, scoring, leaderboards, and where to build your own. Grounded in the
+// real mechanics (gameEngine.ts) and the real Studies sections (theme/nav.ts).
+const HOW_STUDY_GAMES_WORK: BakedGame = {
+  name: 'How Study Games Work',
+  description:
+    'Learn the Study Game feature by playing it: levels, streaks, scoring, leaderboards, and how to build your own. A built-in example that teaches the mechanics as you go.',
+  categories: ['Playing', 'Leveling Up', 'Streaks & Scoring', 'Building & Studying'],
+  questions: [
+    // ---- Playing ----
+    {
+      topic: 'Playing',
+      stem: 'What is a Study Game on this portal?',
+      options: [
+        { label: 'A', text: 'A quiz your team builds and plays together' },
+        { label: 'B', text: 'A single-player arcade game' },
+        { label: 'C', text: 'A live trading simulator' },
+        { label: 'D', text: 'A pre-recorded video course' },
+      ],
+      answer: 'A',
+      explanation: 'Every study game is a quiz your team creates — there’s no hardcoded subject.',
+    },
+    {
+      topic: 'Playing',
+      stem: 'Where do a Study Game’s questions come from?',
+      options: [
+        { label: 'A', text: 'Your team makes them — typed in, AI-generated, or uploaded' },
+        { label: 'B', text: 'They are built into the app' },
+        { label: 'C', text: 'They come from the market news feed' },
+        { label: 'D', text: 'Random internet trivia' },
+      ],
+      answer: 'A',
+      explanation: 'All study content is team-built. (This built-in example is the one exception, to show you how it works.)',
+    },
+    {
+      topic: 'Playing',
+      stem: 'Who can see and play your team’s Study Games?',
+      options: [
+        { label: 'A', text: 'Your team — study content is scoped to your team' },
+        { label: 'B', text: 'Everyone on the whole platform' },
+        { label: 'C', text: 'Only admins' },
+        { label: 'D', text: 'The general public' },
+      ],
+      answer: 'A',
+      explanation: 'A team only ever sees its own games, flashcards, and guides.',
+    },
+    {
+      topic: 'Playing',
+      stem: 'Besides playing it, how else can the same study game be used?',
+      options: [
+        { label: 'A', text: 'As a graded Test Mode and as a Progress summary' },
+        { label: 'B', text: 'As a live-trading mode' },
+        { label: 'C', text: 'As a team chat room' },
+        { label: 'D', text: 'As a broker connection' },
+      ],
+      answer: 'A',
+      explanation: 'The same game can be played as a quiz, taken as a graded test, or reviewed as a progress summary.',
+    },
+    {
+      topic: 'Playing',
+      stem: 'If a question trips you up, what can you do to revisit it later?',
+      options: [
+        { label: 'A', text: 'Star it so it’s saved to come back to' },
+        { label: 'B', text: 'Screenshot it and email an admin' },
+        { label: 'C', text: 'Delete it from the game' },
+        { label: 'D', text: 'Nothing — questions can’t be flagged' },
+      ],
+      answer: 'A',
+      explanation: 'Starring a question flags it; your starred set follows you across devices.',
+    },
+
+    // ---- Leveling Up ----
+    {
+      topic: 'Leveling Up',
+      stem: 'How do you level up in a Study Game?',
+      options: [
+        { label: 'A', text: 'By answering questions correctly' },
+        { label: 'B', text: 'By spending points you buy' },
+        { label: 'C', text: 'By waiting a day between sessions' },
+        { label: 'D', text: 'By inviting new members' },
+      ],
+      answer: 'A',
+      explanation: 'Advancement is a running count of your correct answers.',
+    },
+    {
+      topic: 'Leveling Up',
+      stem: 'What is the very first level on the ladder?',
+      options: [
+        { label: 'A', text: '🥚 Egg' },
+        { label: 'B', text: '💎 Diamond' },
+        { label: 'C', text: 'Bronze Rookie' },
+        { label: 'D', text: 'Level 0' },
+      ],
+      answer: 'A',
+      explanation: 'The ladder starts at Egg and climbs through twelve themed levels.',
+    },
+    {
+      topic: 'Leveling Up',
+      stem: 'What is the highest, fully-maxed level?',
+      options: [
+        { label: 'A', text: '💎 Diamond (five stars)' },
+        { label: 'B', text: '🥚 Egg' },
+        { label: 'C', text: '⚫ Onyx' },
+        { label: 'D', text: 'Gold' },
+      ],
+      answer: 'A',
+      explanation: 'The top of the ladder is Diamond at five stars.',
+    },
+    {
+      topic: 'Leveling Up',
+      stem: 'How many stars (sub-levels) does each main level hold?',
+      options: [
+        { label: 'A', text: 'Five' },
+        { label: 'B', text: 'Three' },
+        { label: 'C', text: 'Ten' },
+        { label: 'D', text: 'One' },
+      ],
+      answer: 'A',
+      explanation: 'Each of the twelve levels has five sub-levels, shown as stars.',
+    },
+    {
+      topic: 'Leveling Up',
+      stem: 'As you climb, each new sub-level requires…',
+      options: [
+        { label: 'A', text: 'Slightly more correct answers than the one before' },
+        { label: 'B', text: 'Fewer answers each time' },
+        { label: 'C', text: 'Exactly the same number every time' },
+        { label: 'D', text: 'A payment to continue' },
+      ],
+      answer: 'A',
+      explanation: 'Each sub-level costs one more correct answer than the last, so higher levels take longer.',
+    },
+    {
+      topic: 'Leveling Up',
+      stem: 'As your level rises, the Studies section…',
+      options: [
+        { label: 'A', text: 'Recolors live to match your current level' },
+        { label: 'B', text: 'Locks you out until tomorrow' },
+        { label: 'C', text: 'Resets your team' },
+        { label: 'D', text: 'Turns the sound off' },
+      ],
+      answer: 'A',
+      explanation: 'The Studies workspace shades live to your current Study-Game level.',
+    },
+
+    // ---- Streaks & Scoring ----
+    {
+      topic: 'Streaks & Scoring',
+      stem: 'What is a “streak”?',
+      options: [
+        { label: 'A', text: 'A run of consecutive correct answers' },
+        { label: 'B', text: 'How many days in a row you log in' },
+        { label: 'C', text: 'Your total number of questions' },
+        { label: 'D', text: 'Your rank on the team' },
+      ],
+      answer: 'A',
+      explanation: 'A streak counts how many correct answers you’ve gotten in a row.',
+    },
+    {
+      topic: 'Streaks & Scoring',
+      stem: 'What happens to your streak when you get one question wrong?',
+      options: [
+        { label: 'A', text: 'It resets to zero' },
+        { label: 'B', text: 'Nothing changes' },
+        { label: 'C', text: 'It doubles' },
+        { label: 'D', text: 'It pauses for a day' },
+      ],
+      answer: 'A',
+      explanation: 'A single wrong answer resets the streak and its multiplier.',
+    },
+    {
+      topic: 'Streaks & Scoring',
+      stem: 'How many correct answers in a row bump your streak multiplier up a tier?',
+      options: [
+        { label: 'A', text: 'Five' },
+        { label: 'B', text: 'Two' },
+        { label: 'C', text: 'Twenty' },
+        { label: 'D', text: 'One hundred' },
+      ],
+      answer: 'A',
+      explanation: 'Every 5 in a row raises the multiplier — 5 → ×2, 10 → ×3, and so on.',
+    },
+    {
+      topic: 'Streaks & Scoring',
+      stem: 'What does the streak multiplier actually do?',
+      options: [
+        { label: 'A', text: 'Makes each correct answer count for more toward your level' },
+        { label: 'B', text: 'Pays out real money' },
+        { label: 'C', text: 'Unlocks other teams’ games' },
+        { label: 'D', text: 'Changes the questions' },
+      ],
+      answer: 'A',
+      explanation: 'The multiplier scales your level progress; lifetime accuracy still counts each answer once.',
+    },
+    {
+      topic: 'Streaks & Scoring',
+      stem: 'On a Study Game leaderboard, who are you ranked against?',
+      options: [
+        { label: 'A', text: 'Your own team' },
+        { label: 'B', text: 'The entire platform' },
+        { label: 'C', text: 'Random strangers' },
+        { label: 'D', text: 'Only yourself' },
+      ],
+      answer: 'A',
+      explanation: 'Leaderboards are scoped to your team.',
+    },
+
+    // ---- Building & Studying ----
+    {
+      topic: 'Building & Studying',
+      stem: 'Which section do you use to make your own study games?',
+      options: [
+        { label: 'A', text: 'Study Creation' },
+        { label: 'B', text: 'Live Wall' },
+        { label: 'C', text: 'Market News' },
+        { label: 'D', text: 'Admin Portal' },
+      ],
+      answer: 'A',
+      explanation: 'Study Creation is the make-and-manage section for games, flashcard sets, and study guides.',
+    },
+    {
+      topic: 'Building & Studying',
+      stem: 'Which is a valid way to build a study game in Study Creation?',
+      options: [
+        { label: 'A', text: 'Type questions in, generate them from a topic with AI, or upload a file' },
+        { label: 'B', text: 'Only by paying a fee' },
+        { label: 'C', text: 'Only an admin can build one' },
+        { label: 'D', text: 'They can’t be created — only played' },
+      ],
+      answer: 'A',
+      explanation: 'You can hand-type questions, AI-generate them from a topic, or upload a text file.',
+    },
+    {
+      topic: 'Building & Studying',
+      stem: 'What are Flashcards for?',
+      options: [
+        { label: 'A', text: 'Studying term/definition cards with an auto-rotating player' },
+        { label: 'B', text: 'Placing trades' },
+        { label: 'C', text: 'Sending team chat messages' },
+        { label: 'D', text: 'Scheduling trading sessions' },
+      ],
+      answer: 'A',
+      explanation: 'Flashcards flip through term/definition pairs to help you memorize.',
+    },
+    {
+      topic: 'Building & Studying',
+      stem: 'This “How Study Games Work” game is…',
+      options: [
+        { label: 'A', text: 'A permanent built-in example, so everyone can learn the feature' },
+        { label: 'B', text: 'A game you’re expected to delete' },
+        { label: 'C', text: 'A live trading alert' },
+        { label: 'D', text: 'A one-time pop-up' },
+      ],
+      answer: 'A',
+      explanation: 'It’s tagged “Built-in” and can’t be removed — it’s here to teach the feature.',
+    },
+  ],
+};
+
+// An onboarding game about the portal itself — the workspaces, the key sections,
+// and how VTS is meant to be used. Section names match theme/nav.ts exactly.
+const VTS_PORTAL_101: BakedGame = {
+  name: 'VTS Portal 101',
+  description:
+    'Get oriented: the workspaces, the sections you’ll use most, and how the portal is meant to be used. A built-in tour so new members can find their way around.',
+  categories: ['Getting Around', 'Trading Workspace', 'Studies Workspace', 'Help & Account'],
+  questions: [
+    // ---- Getting Around ----
+    {
+      topic: 'Getting Around',
+      stem: 'How is the portal organized?',
+      options: [
+        { label: 'A', text: 'Into workspaces, each with its own sections in the sidebar' },
+        { label: 'B', text: 'As one long single page' },
+        { label: 'C', text: 'As a set of email threads' },
+        { label: 'D', text: 'Only as pop-up windows' },
+      ],
+      answer: 'A',
+      explanation: 'Each workspace (Trading, Studies, Site Help, …) has its own sidebar sections.',
+    },
+    {
+      topic: 'Getting Around',
+      stem: 'Which workspace is pinned to the very top of the sidebar?',
+      options: [
+        { label: 'A', text: 'My Portal' },
+        { label: 'B', text: 'Trading' },
+        { label: 'C', text: 'Admin Portal' },
+        { label: 'D', text: 'Site Help' },
+      ],
+      answer: 'A',
+      explanation: 'My Portal — your personal workspace — sits at the top of the list.',
+    },
+    {
+      topic: 'Getting Around',
+      stem: 'Can you install VTS on your device like an app?',
+      options: [
+        { label: 'A', text: 'Yes — it’s a PWA you can install to your home screen' },
+        { label: 'B', text: 'No, it only works in a browser tab' },
+        { label: 'C', text: 'Only on Windows' },
+        { label: 'D', text: 'Only from the App Store today' },
+      ],
+      answer: 'A',
+      explanation: 'The portal is a PWA — installable, with web push notifications.',
+    },
+    {
+      topic: 'Getting Around',
+      stem: 'How does the portal send you trade and alert notifications?',
+      options: [
+        { label: 'A', text: 'Web push and Pushover' },
+        { label: 'B', text: 'Fax' },
+        { label: 'C', text: 'It never sends notifications' },
+        { label: 'D', text: 'Postal mail' },
+      ],
+      answer: 'A',
+      explanation: 'Notifications go out via web push and Pushover.',
+    },
+    {
+      topic: 'Getting Around',
+      stem: 'Need a quick answer about the portal? You can…',
+      options: [
+        { label: 'A', text: 'Ask the built-in Ask Claude assistant' },
+        { label: 'B', text: 'Call a phone hotline' },
+        { label: 'C', text: 'There is no help available' },
+        { label: 'D', text: 'Only wait for an email reply' },
+      ],
+      answer: 'A',
+      explanation: 'The Ask Claude panel answers questions about the portal.',
+    },
+
+    // ---- Trading Workspace ----
+    {
+      topic: 'Trading Workspace',
+      stem: 'Which Trading section shows live open positions?',
+      options: [
+        { label: 'A', text: 'Live Wall' },
+        { label: 'B', text: 'Market News' },
+        { label: 'C', text: 'To Do' },
+        { label: 'D', text: 'Strategy Sessions' },
+      ],
+      answer: 'A',
+      explanation: 'The Live Wall streams your team’s open positions.',
+    },
+    {
+      topic: 'Trading Workspace',
+      stem: 'Where do you review your trade log and history?',
+      options: [
+        { label: 'A', text: 'Trade Desk' },
+        { label: 'B', text: 'Flashcards' },
+        { label: 'C', text: 'Announcements' },
+        { label: 'D', text: 'Preferences' },
+      ],
+      answer: 'A',
+      explanation: 'The Trade Desk merges the trade log, history, and live brokers.',
+    },
+    {
+      topic: 'Trading Workspace',
+      stem: 'What are “Strategy Sessions”?',
+      options: [
+        { label: 'A', text: 'Named trading windows with a bias and a weekly schedule' },
+        { label: 'B', text: 'Study quizzes' },
+        { label: 'C', text: 'Team chat rooms' },
+        { label: 'D', text: 'Broker fee tiers' },
+      ],
+      answer: 'A',
+      explanation: 'Sessions define per-weekday ET windows with a Bull / Bear / Two-way bias.',
+    },
+    {
+      topic: 'Trading Workspace',
+      stem: 'Where do you read market headlines and the economic calendar?',
+      options: [
+        { label: 'A', text: 'Market News' },
+        { label: 'B', text: 'Subjects' },
+        { label: 'C', text: 'Live Wall' },
+        { label: 'D', text: 'Badges' },
+      ],
+      answer: 'A',
+      explanation: 'Market News carries the headline feed and the economic calendar.',
+    },
+    {
+      topic: 'Trading Workspace',
+      stem: 'Does VTS place or execute trades for you?',
+      options: [
+        { label: 'A', text: 'No — it displays your positions and P&L; it doesn’t place trades' },
+        { label: 'B', text: 'Yes, it’s a full brokerage' },
+        { label: 'C', text: 'Yes, but only for crypto' },
+        { label: 'D', text: 'Yes, automatically from alerts' },
+      ],
+      answer: 'A',
+      explanation: 'The portal is a read-only tracker — it shows positions and P&L, it doesn’t move money or place orders.',
+    },
+
+    // ---- Studies Workspace ----
+    {
+      topic: 'Studies Workspace',
+      stem: 'What lives in the Studies workspace?',
+      options: [
+        { label: 'A', text: 'Team-built study games, flashcards, practice tests, and guides' },
+        { label: 'B', text: 'Live trades and broker keys' },
+        { label: 'C', text: 'User management tools' },
+        { label: 'D', text: 'The economic calendar' },
+      ],
+      answer: 'A',
+      explanation: 'Studies holds your team’s games, flashcard sets, practice tests, and study presentations.',
+    },
+    {
+      topic: 'Studies Workspace',
+      stem: 'Where do you build your own study games and flashcard sets?',
+      options: [
+        { label: 'A', text: 'Study Creation' },
+        { label: 'B', text: 'Subjects' },
+        { label: 'C', text: 'Progress' },
+        { label: 'D', text: 'Practice Tests' },
+      ],
+      answer: 'A',
+      explanation: 'Study Creation is the make-and-manage section for all study content.',
+    },
+    {
+      topic: 'Studies Workspace',
+      stem: 'What does the “Practice Tests” section do?',
+      options: [
+        { label: 'A', text: 'Lets you take a graded test drawn from your team’s study games' },
+        { label: 'B', text: 'Places practice trades' },
+        { label: 'C', text: 'Opens a team chat' },
+        { label: 'D', text: 'Plays training videos' },
+      ],
+      answer: 'A',
+      explanation: 'Practice Tests turn a study game into a graded exam with a pass line.',
+    },
+    {
+      topic: 'Studies Workspace',
+      stem: 'Where do you track how your studying is going over time?',
+      options: [
+        { label: 'A', text: 'The Progress section' },
+        { label: 'B', text: 'The Live Wall' },
+        { label: 'C', text: 'To Do' },
+        { label: 'D', text: 'Badges' },
+      ],
+      answer: 'A',
+      explanation: 'Progress summarizes your study-game stats and level.',
+    },
+
+    // ---- Help & Account ----
+    {
+      topic: 'Help & Account',
+      stem: 'Where do you report a bug or send a suggestion?',
+      options: [
+        { label: 'A', text: 'Site Help' },
+        { label: 'B', text: 'Live Wall' },
+        { label: 'C', text: 'Trade Desk' },
+        { label: 'D', text: 'Strategy Sessions' },
+      ],
+      answer: 'A',
+      explanation: 'Site Help has How-to guides, Announcements, Patch notes, and the bug / suggestion forms.',
+    },
+    {
+      topic: 'Help & Account',
+      stem: 'Where do you find how-to guides and patch notes?',
+      options: [
+        { label: 'A', text: 'Site Help' },
+        { label: 'B', text: 'Market News' },
+        { label: 'C', text: 'My Portal' },
+        { label: 'D', text: 'Admin Portal' },
+      ],
+      answer: 'A',
+      explanation: 'Site Help is available to every signed-in user.',
+    },
+    {
+      topic: 'Help & Account',
+      stem: 'Where do you manage your own preferences and account settings?',
+      options: [
+        { label: 'A', text: 'My Portal' },
+        { label: 'B', text: 'Admin Portal' },
+        { label: 'C', text: 'Trade Desk' },
+        { label: 'D', text: 'Market News' },
+      ],
+      answer: 'A',
+      explanation: 'My Portal holds your Trading Team, Preferences, and Settings.',
+    },
+    {
+      topic: 'Help & Account',
+      stem: 'What is a “Trading Team”?',
+      options: [
+        { label: 'A', text: 'A group you belong to that scopes your trades, chat, and study leaderboards' },
+        { label: 'B', text: 'A paid subscription tier' },
+        { label: 'C', text: 'A type of trade order' },
+        { label: 'D', text: 'A news source' },
+      ],
+      answer: 'A',
+      explanation: 'Teams scope trade data, team chat, and Studies leaderboards to your teammates.',
+    },
+    {
+      topic: 'Help & Account',
+      stem: 'The version pill at the top of the screen shows…',
+      options: [
+        { label: 'A', text: 'The current app version' },
+        { label: 'B', text: 'Your account balance' },
+        { label: 'C', text: 'The current time' },
+        { label: 'D', text: 'Your study level' },
+      ],
+      answer: 'A',
+      explanation: 'It shows which build of the portal you’re on.',
+    },
+  ],
+};
+
+// Every built-in example game. Add new games here — a team that lacks any of
+// them gets it created on the next boot or Studies visit (create-if-missing), so
+// adding a game needs no version bump; only CHANGING a game's content does.
+export const BAKED_IN_GAMES: BakedGame[] = [
+  MARKET_TERMINOLOGY_101,
+  HOW_STUDY_GAMES_WORK,
+  VTS_PORTAL_101,
+];
 
 // Ensure a single team has each built-in game. Create-if-missing by default;
 // when `forceSync` is set, an existing copy is rewritten in place to match the
