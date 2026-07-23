@@ -107,6 +107,14 @@ export interface NotifPrefFlags {
 }
 
 
+// Status of the caller's home-screen widget token (never the token itself,
+// which is shown once at generation). `exists` drives the Regenerate/Revoke UI.
+export interface WidgetTokenStatus {
+  exists: boolean;
+  createdAt: number | null;
+  lastUsedAt: number | null;
+}
+
 // The payload for the Market News "AI overview" — whatever the active feed is
 // currently showing, sent for Claude to summarize.
 export interface FeedBriefPayload {
@@ -438,6 +446,17 @@ export const api = {
   },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');
+  },
+  // ---- Home-screen widget token (read-only bearer for the phone widget) ----
+  widgetTokenStatus(): Promise<WidgetTokenStatus> {
+    return request('/api/widget/token');
+  },
+  // Generate (or regenerate) the token — the raw value is returned exactly once.
+  generateWidgetToken(): Promise<{ token: string }> {
+    return request('/api/widget/token', { method: 'POST', body: JSON.stringify({}) });
+  },
+  revokeWidgetToken(): Promise<{ ok: boolean }> {
+    return request('/api/widget/token', { method: 'DELETE' });
   },
   tradeLog(): Promise<TradeLogData> {
     return request('/api/trading/trades');

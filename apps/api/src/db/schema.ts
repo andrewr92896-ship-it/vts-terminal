@@ -80,6 +80,24 @@ export const sessions = sqliteTable('sessions', {
 export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 
+// Per-user, revocable bearer tokens for the read-only mobile/home-screen widget
+// (`GET /api/widget/positions`). The portal's own API is otherwise httpOnly
+// cookie-only, which a native iOS widget extension / Scriptable can't present.
+// Like sessions, we store only the SHA-256 hash of the token; the raw token is
+// shown to the user exactly once when generated. A token grants read-only access
+// to the owner's own Live Wall (their team's open positions) — never broker keys
+// or any write. One active token per user (regenerating replaces it).
+export const widgetTokens = sqliteTable('widget_tokens', {
+  id: text('id').primaryKey(), // sha256(token)
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' }),
+});
+export type WidgetTokenRow = typeof widgetTokens.$inferSelect;
+
 // ---- To Do List ----
 // Section render/behavior types, mirroring the prototype:
 //   one     - one-time checkbox tasks

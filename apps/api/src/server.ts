@@ -24,6 +24,7 @@ import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
 import { notificationPrefsRoutes } from './routes/notificationPrefs.js';
 import { priceAlertRoutes } from './routes/priceAlerts.js';
+import { widgetRoutes } from './routes/widget.js';
 import { contentRoutes } from './routes/content.js';
 import { userTeamRoutes } from './routes/userTeams.js';
 import { seedBadges } from './badges/service.js';
@@ -100,6 +101,7 @@ export async function buildServer() {
   await app.register(pushoverRoutes);
   await app.register(notificationPrefsRoutes);
   await app.register(priceAlertRoutes);
+  await app.register(widgetRoutes);
   await app.register(contentRoutes);
   await app.register(userTeamRoutes);
 
