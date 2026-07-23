@@ -88,6 +88,10 @@ export interface User {
   teamName: string | null;
   viewBrokerage: boolean;
   mustChangePassword: boolean;
+  // The user has not yet accepted the current Terms of Service / Privacy Policy.
+  // When true, App gates them into the acceptance screen before the portal
+  // renders. Never true for the read-only demo.
+  mustAcceptTerms: boolean;
   isDemo: boolean; // the public, read-only demo account
   access: {
     label: string;

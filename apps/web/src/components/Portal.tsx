@@ -48,6 +48,7 @@ import {
   HelpBugReport,
   HelpSuggestion,
 } from '../workspaces/help/HelpScreens';
+import { HelpRules, HelpTerms, HelpPrivacy } from '../workspaces/help/LegalScreens';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradingDesk } from '../workspaces/trading/TradingDesk';
 import { Alerts } from '../workspaces/trading/Alerts';
@@ -429,6 +430,12 @@ export function Portal() {
         return <HelpBugReport theme={theme} user={user!} />;
       case 'hp_suggest':
         return <HelpSuggestion theme={theme} user={user!} />;
+      case 'hp_rules':
+        return <HelpRules theme={theme} />;
+      case 'hp_terms':
+        return <HelpTerms theme={theme} />;
+      case 'hp_privacy':
+        return <HelpPrivacy theme={theme} />;
       case 'ad_sidebar':
         return (
           <AdminSidebarLayout
@@ -528,7 +535,35 @@ export function Portal() {
           <span style={{ fontSize: 10.5, color: C.faint, letterSpacing: '0.3px' }}>
             © 2026 Vitalis Trading Systems LLC. All rights reserved. Confidential.
           </span>
-          <span style={{ fontSize: 10.5, color: C.faint, fontFamily: C.mono }}>{user!.access.label}</span>
+          <span style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+            {(
+              [
+                ['hp_terms', 'Terms'],
+                ['hp_privacy', 'Privacy'],
+                ['hp_rules', 'Rules'],
+              ] as const
+            ).map(([scr, label]) => (
+              <button
+                key={scr}
+                onClick={() => {
+                  goTo('help', scr);
+                  resetScroll();
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  fontSize: 10.5,
+                  color: C.faint,
+                  letterSpacing: '0.3px',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+            <span style={{ fontSize: 10.5, color: C.faint, fontFamily: C.mono }}>{user!.access.label}</span>
+          </span>
         </footer>
       </main>
     </div>

@@ -181,6 +181,11 @@ export const api = {
   logout(): Promise<{ ok: boolean }> {
     return request('/api/auth/logout', { method: 'POST' });
   },
+  // Record that the user has reviewed and accepted the current Terms of Service
+  // and Privacy Policy. Clears `mustAcceptTerms` on the returned user.
+  acceptTerms(): Promise<{ user: User }> {
+    return request('/api/auth/accept-terms', { method: 'POST', body: JSON.stringify({}) });
+  },
   demoLogin(): Promise<{ user: User }> {
     return request('/api/auth/demo', { method: 'POST', body: JSON.stringify({}) });
   },

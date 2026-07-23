@@ -125,6 +125,9 @@ export const NAV: NavWorkspace[] = [
       { key: 'hp_notes', label: 'Patch notes', icon: 'file-text' },
       { key: 'hp_bug', label: 'Report a bug', icon: 'bug' },
       { key: 'hp_suggest', label: 'Suggestion', icon: 'lightbulb' },
+      { key: 'hp_rules', label: 'Rules & Conduct', icon: 'list-checks' },
+      { key: 'hp_terms', label: 'Terms of Service', icon: 'scale' },
+      { key: 'hp_privacy', label: 'Privacy Policy', icon: 'file-lock-2' },
     ],
   },
 ];

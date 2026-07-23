@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { useAuth } from './auth/AuthContext';
 import { Login } from './pages/Login';
 import { ChangePassword } from './pages/ChangePassword';
+import { AcceptTerms } from './pages/AcceptTerms';
 import { Portal } from './components/Portal';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { SiteCopyProvider } from './copy/SiteCopy';
@@ -33,6 +34,10 @@ export function App() {
   } else if (user.mustChangePassword) {
     // Accounts created or reset by an admin must set a new password first.
     content = <ChangePassword />;
+  } else if (user.mustAcceptTerms) {
+    // Everyone must review and accept the current Terms of Service and Privacy
+    // Policy before operating the portal (re-prompted when the docs are updated).
+    content = <AcceptTerms />;
   } else {
     // The SiteCopyProvider makes every <EditableText> in the portal resolve its
     // admin override and, for admins, drives the live "edit site wording" mode.

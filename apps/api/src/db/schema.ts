@@ -60,6 +60,13 @@ export const users = sqliteTable('users', {
   mustChangePassword: integer('must_change_password', { mode: 'boolean' })
     .notNull()
     .default(false),
+  // Legal acceptance. `termsAcceptedVersion` records the version string of the
+  // Terms of Service / Privacy Policy the user last accepted (see LEGAL_VERSION
+  // in legal/version.ts). When it does not equal the current LEGAL_VERSION, the
+  // user is gated into the acceptance screen before they can operate the portal
+  // (so bumping the docs re-prompts everyone). Null = never accepted.
+  termsAcceptedVersion: text('terms_accepted_version'),
+  termsAcceptedAt: integer('terms_accepted_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

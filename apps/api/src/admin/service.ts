@@ -227,6 +227,10 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     active: true,
     // Admin sets a temporary password; force a change on first login.
     mustChangePassword: true,
+    // New account has not accepted the Terms/Privacy yet; the acceptance gate
+    // prompts them on first sign-in.
+    termsAcceptedVersion: null,
+    termsAcceptedAt: null,
     createdAt: now,
     updatedAt: now,
   };
