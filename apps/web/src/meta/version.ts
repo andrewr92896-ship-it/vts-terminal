@@ -11,17 +11,24 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.47';
+export const APP_VERSION = 'Beta V 5.48';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.47',
+    version: 'Beta V 5.48',
     date: 'July 23, 2026',
     notes: [
       'Added a Terms of Service and a Privacy Policy, plus a plain-English “Rules & Conduct” overview — all three now live in Site Help.',
       'Everyone is asked to review and accept the Terms and Privacy Policy once before continuing into the portal. You can reopen the full documents any time from Site Help.',
       'Reinforced throughout that VTS Portal is an informational and educational tool only — not financial, investment, or trading advice — and that trade figures can be edited, so they are for your own and your team’s reference and must never be used to solicit others or prove performance.',
       'The built-in AI assistants now clearly decline requests for personalized financial or investment advice and will not help work around platform rules; AI and support conversations may be reviewed by the admins.',
+    ],
+  },
+  {
+    version: 'Beta V 5.47',
+    date: 'July 23, 2026',
+    notes: [
+      'Trade metrics CSV export now includes the exact open and close times for each trade, in two new “Open Time” and “Close Time” columns. Times are shown in Eastern Time (the same clock the rest of the portal uses for sessions and market hours), so an export reads the same no matter where you are. Still-open trades leave the close time blank.',
     ],
   },
   {
