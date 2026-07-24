@@ -36,6 +36,8 @@ export const NAV: NavWorkspace[] = [
       // A combined portfolio summary: active Advanced Trading positions merged
       // with the total long-term Investments portfolio and the stats across both.
       { key: 'my_holdings', label: 'Investment Holdings', icon: 'gem' },
+      // The whole-life roll-up: everything you own minus everything you owe.
+      { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },

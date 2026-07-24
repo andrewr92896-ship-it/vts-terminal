@@ -23,13 +23,21 @@ interface SectionInfo {
 }
 
 const SECTIONS: Record<string, SectionInfo> = {
-  // My Portal — the combined view across both trading and long-term investing.
+  // My Portal — the combined views across trading, long-term investing, and your
+  // whole financial life.
   my_holdings: {
     id: 'myportal.holdings',
     icon: 'gem',
     title: 'Investment Holdings',
     blurb:
       'Your whole picture in one place — active Advanced Trading positions merged with your long-term Investments portfolio, plus the combined value, day change, and all-time performance across both.',
+  },
+  my_networth: {
+    id: 'myportal.networth',
+    icon: 'scale',
+    title: 'Net Worth',
+    blurb:
+      'Your complete financial picture in one number, tracked over time — everything you own (cash, investments, real estate, crypto, vehicles) minus everything you owe (loans, cards, mortgage). Add assets and liabilities by hand or pull them in read-only.',
   },
   // Investments workspace sections.
   inv_overview: {
