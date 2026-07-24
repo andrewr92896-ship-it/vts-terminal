@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.53';
+export const APP_VERSION = 'Beta V 5.54';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.54',
+    date: 'July 24, 2026',
+    notes: [
+      'Study games now carry a short disclaimer across the Study Game, Practice Tests, and Progress screens: the content is educational only — not financial, investment, legal, or tax advice — and any third-party method, brand, or person a game names is referenced to teach about it, not because the game is affiliated with or endorsed by them.',
+    ],
+  },
   {
     version: 'Beta V 5.53',
     date: 'July 24, 2026',
