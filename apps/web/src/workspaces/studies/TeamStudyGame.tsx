@@ -18,6 +18,7 @@ import {
   type DeckGameState,
 } from './studyEngine';
 import { StudyProgressBars } from './StudyProgress';
+import { StudyDisclaimer } from './StudyDisclaimer';
 import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
 import { loadDeckSession, saveDeckSession } from './studySession';
 import { TutorChat } from './TutorChat';
@@ -882,6 +883,8 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
           )}
         </div>
       )}
+
+      <StudyDisclaimer theme={theme} />
     </div>
   );
 }

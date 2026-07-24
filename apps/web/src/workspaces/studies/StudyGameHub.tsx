@@ -8,6 +8,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { TeamStudyGame } from './TeamStudyGame';
 import { DeckTestMode } from './DeckTestMode';
 import { DeckProgress } from './DeckProgress';
+import { StudyDisclaimer } from './StudyDisclaimer';
 import { consumeStudyDeck } from './studiesNav';
 import { loadAddedSamples, saveAddedSamples } from './sampleGames';
 
@@ -237,6 +238,8 @@ export function StudyGameHub({
           )}
         </>
       )}
+
+      {!loading && !loadError && <StudyDisclaimer theme={theme} />}
     </div>
   );
 }

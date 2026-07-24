@@ -7,6 +7,7 @@ import { EditableText } from '../../copy/SiteCopy';
 import { overallLevel, levelAtStep, scorePct } from './gameEngine';
 import { deckGameKey, deckLifetimeAccuracy, emptyDeckGame, parseDeckGame, type DeckGameState } from './studyEngine';
 import { StudyProgressBars } from './StudyProgress';
+import { StudyDisclaimer } from './StudyDisclaimer';
 import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
 
 // A read-only progress summary for one team-built study game: the learner's
@@ -176,6 +177,8 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
           </div>
         </>
       )}
+
+      <StudyDisclaimer theme={theme} />
     </div>
   );
 }
