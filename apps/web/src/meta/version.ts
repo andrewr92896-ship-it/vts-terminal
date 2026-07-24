@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.51';
+export const APP_VERSION = 'Beta V 5.52';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.52',
+    date: 'July 24, 2026',
+    notes: [
+      'Added a Net Worth section to My Portal — your whole financial picture in one number over time: everything you own (cash, investments, real estate, and more) minus everything you owe. Coming Soon.',
+    ],
+  },
   {
     version: 'Beta V 5.51',
     date: 'July 24, 2026',

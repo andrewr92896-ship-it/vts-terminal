@@ -146,9 +146,16 @@ top of the workspaces list** (see `theme/nav.ts` order).
   retirement providers (Fidelity, Vanguard 401k) don't expose per-user API keys
   the way OANDA/Kraken do. Every advice-flavored surface must carry an
   "informational only, not investment advice" disclaimer.
-- **My Portal** also gains an **Investment Holdings** section (`my_holdings`,
-  emerald) — a combined summary of active Advanced Trading positions + the total
-  long-term Investments portfolio and stats across both. Currently "Coming Soon."
+- **My Portal** also gains two personal roll-up sections (emerald), both
+  currently "Coming Soon":
+  - **Investment Holdings** (`my_holdings`) — a combined summary of active
+    Advanced Trading positions + the total long-term Investments portfolio and
+    stats across both.
+  - **Net Worth** (`my_networth`) — the whole-life picture: every asset (cash,
+    investments, real estate, crypto, vehicles) minus every liability (loans,
+    cards, mortgage), tracked over time as a single number. Lives in My Portal
+    (not Investments) as a personal cross-workspace summary, keeping the
+    Investments workspace focused as a pure investment-portfolio tracker.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
   (`st_cards`), Practice Tests (`st_test`), Study Presentations (`st_guides`),
   Progress (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
@@ -247,7 +254,11 @@ act on the same team:
   team — the two are one. (Consequence: the Studies delete gate, keyed on team
   leadership, is now live — non-leader members can't delete team study content.)
 
-## AI / Ask Claude (`apps/api/src/ai`)
+## AI / Ask VTS AI (`apps/api/src/ai`)
+
+> **User-facing name is always "VTS AI"** (see Conventions). "Claude"/model IDs
+> appear only in server config and internal code identifiers, never in UI copy.
+
 
 - **Models** (env-overridable, current defaults): text = `ANTHROPIC_MODEL_DEFAULT`
   (`claude-sonnet-4-6`); vision/screenshot analysis = `ANTHROPIC_MODEL_ANALYSIS`
@@ -263,7 +274,7 @@ act on the same team:
   admin-editable live from **Admin ▸ AI Instructions** (override in
   `app_settings` under `ai.<id>`; blank value resets to default). Edit the
   default in `prompts.ts` so a reset stays correct.
-  - `global` — Ask Claude base persona. `routes/ai.ts` substitutes `{workspace}`
+  - `global` — VTS AI base persona. `routes/ai.ts` substitutes `{workspace}`
     (filled only for Trading/Studies; **empty in Admin/Help**, so the base
     persona must carry the whole site map) and `{name}`.
   - `ws.trading`, `ws.studies` — injected into `{workspace}`.
@@ -444,6 +455,13 @@ some documented vars aren't in the schema and vice-versa.
   - When you build any new screen or component, wrap its coded copy this way by
     default — this is a universal, site-wide expectation, not opt-in.
 - Keep the plain, terminal-style voice in UI copy and AI prompts.
+- **Naming the AI — always "VTS AI":** in all user-facing copy (labels, blurbs,
+  buttons, empty/loading states, prompts the user reads), refer to the portal's
+  AI as **"VTS AI"** (with the space), never "Claude", "Anthropic", or a raw
+  model name. The visible UI already follows this ("Ask VTS AI", "Powered by VTS
+  AI"). **Exempt:** internal code identifiers (`AskClaudePanel`, `onOpenClaude`,
+  the `openClaude` prop, etc.) and the actual server-side Anthropic model IDs in
+  `config.ts`/`claude.ts` — those stay as-is; this rule is about what users see.
 
 ## Known stale / legacy (don't trust these)
 
