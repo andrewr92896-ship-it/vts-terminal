@@ -19,9 +19,34 @@ account** and a public **Early Access** request form on the login screen.
 ## Product direction (owner goal)
 
 The portal is **currently** private/invite-only, but the **stated goal is to launch
-it publicly as an official iOS app** on the App Store, under the legal entity
-**Vitalis Trading Systems LLC**. A headline feature is a **home-screen widget
-showing open positions**. Keep this trajectory in mind for architecture decisions.
+it publicly as a paid, subscription-based product** — an official iOS app on the
+App Store, under the legal entity **Vitalis Trading Systems LLC**. It will be
+**opened to the general public and monetized via a recurring subscription** (not
+invite-only forever). A headline feature is a **home-screen widget showing open
+positions**. Keep this trajectory — public users + paid subscriptions — in mind for
+architecture decisions.
+
+**Subscription/monetization implications to plan for** (not yet built):
+
+- **Apple takes its cut and mandates its rails.** A subscription unlocking digital
+  features inside an iOS app must use **Apple In-App Purchase / StoreKit
+  auto-renewable subscriptions** (Apple's 15–30% cut applies); you cannot bill a
+  card directly in-app or link out to an external checkout for the digital
+  subscription. Plan billing around StoreKit for iOS, and a separate web billing
+  path (e.g. Stripe) for the web app.
+- **Entitlements become first-class.** Move from "invite-only + roles" toward a
+  **subscription/entitlement layer** (who has paid, tier, trial state, expiry,
+  grace period) that gates feature access alongside the existing RBAC roles. The
+  read-only **demo account** and public **Early Access** form stay as the
+  top-of-funnel for the paid product.
+- **More users = more of everything already flagged:** ToS + privacy policy,
+  in-app account deletion (Guideline 5.1.1(v)), AI-use disclosure, "informational
+  only, not investment advice" disclaimers, and the securities/fintech attorney
+  review all become **launch blockers**, not nice-to-haves, once real money and
+  the general public are involved. Auto-renewable-subscription disclosure rules
+  (clear price/terms/cancellation before purchase) also apply.
+
+(None of this is legal advice.)
 
 Agreed **lowest-liability** shape for that public launch (research done 2026-07):
 
