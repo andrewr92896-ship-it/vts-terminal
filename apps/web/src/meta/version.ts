@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.50';
+export const APP_VERSION = 'Beta V 5.51';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.51',
+    date: 'July 24, 2026',
+    notes: [
+      'Renamed the Trading workspace to “Advanced Trading.”',
+      'Introduced a new Investments workspace — a read-only, long-term portfolio tracker for the layman: 401(k), IRA, ESA, and general holdings, connected read-only through a secure aggregator or entered by hand. It displays and educates only; it never places trades or moves money, and it carries no buy/sell advice.',
+      'Laid the Investments foundation with its sidebar sections — Portfolio Overview, Accounts, Holdings, Allocation, Performance, Dividends & Income, Contributions & Goals, and Projections — each marked “Coming Soon” while we build them.',
+      'Added an Investment Holdings summary to My Portal that will combine your active Advanced Trading positions with your long-term investment portfolio — Coming Soon.',
+    ],
+  },
   {
     version: 'Beta V 5.50',
     date: 'July 24, 2026',

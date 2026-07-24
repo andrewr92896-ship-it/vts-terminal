@@ -85,7 +85,7 @@ Tech:
 - Web shell: `apps/web/src/components` (`Portal.tsx` is the router/shell,
   `Sidebar.tsx`, `TopBar.tsx`, `AskClaudePanel.tsx`, `TeamChat.tsx`,
   `UpdatePrompt.tsx`, `InstallPrompt.tsx`, …).
-- Web features: `apps/web/src/workspaces/{trading,studies,admin,help}`.
+- Web features: `apps/web/src/workspaces/{trading,investments,studies,admin,help}`.
 - Web API client: `apps/web/src/api/client.ts` — one flat typed `api` object;
   every call is cookie-authed (`credentials: 'include'`), root-relative `/api`,
   throws `ApiError { status }` on non-2xx.
@@ -108,7 +108,7 @@ Tech:
 Sections a user lacks the role for are hidden. **My Portal is pinned to the very
 top of the workspaces list** (see `theme/nav.ts` order).
 
-- **Trading** (gold): Live Wall, Trading Alerts (`alerts`), Trade Desk (`desk` — merges Trade Log +
+- **Advanced Trading** (gold, internal key `trading`): Live Wall, Trading Alerts (`alerts`), Trade Desk (`desk` — merges Trade Log +
   History + Live Brokers; legacy keys `log`/`history`/`metrics` alias into it),
   Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
@@ -128,6 +128,27 @@ top of the workspaces list** (see `theme/nav.ts` order).
     (`canEditDeskSettingsFor` / `editableDeskMembers`). The `DeskSettingsModal`
     "Whose settings" picker surfaces this. `getTrades` / `getHistory` /
     `getLiveWall` score each viewer's desk with the **viewer's own** settings.
+- **Investments** (teal, key `investments`): a read-only, layman-friendly
+  **long-term portfolio tracker** — 401(k), IRA, ESA, and general holdings. This
+  is the platform's intended "bread and butter" for a future public/App Store
+  launch, and the **whole foundation is currently "Coming Soon" placeholders**
+  (`workspaces/investments/ComingSoon.tsx`, routed via `COMING_SOON_SCREENS` in
+  `Portal.tsx`). Sections: Portfolio Overview (`inv_overview`), Accounts
+  (`inv_accounts`), Holdings (`inv_holdings`), Allocation (`inv_allocation`),
+  Performance (`inv_performance`), Dividends & Income (`inv_dividends`),
+  Contributions & Goals (`inv_contributions`), Projections (`inv_projections`).
+  **Regulatory posture (decided with the owner):** strictly a *tracker that
+  displays and educates* — no in-app trade execution or money movement (stays in
+  Apple's 3.2.1(viii) portfolio-tracker lane) and **no personalized
+  buy/sell/rebalance advice** (avoids RIA/adviser exposure). Deliberately **no**
+  rebalancing or tax-advice sections. Account connection is designed around a
+  **read-only aggregator (Plaid / SnapTrade)** plus **manual entry** — most
+  retirement providers (Fidelity, Vanguard 401k) don't expose per-user API keys
+  the way OANDA/Kraken do. Every advice-flavored surface must carry an
+  "informational only, not investment advice" disclaimer.
+- **My Portal** also gains an **Investment Holdings** section (`my_holdings`,
+  emerald) — a combined summary of active Advanced Trading positions + the total
+  long-term Investments portfolio and stats across both. Currently "Coming Soon."
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
   (`st_cards`), Practice Tests (`st_test`), Study Presentations (`st_guides`),
   Progress (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is

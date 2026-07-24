@@ -58,6 +58,7 @@ import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketNews } from '../workspaces/trading/MarketNews';
+import { ComingSoon, COMING_SOON_SCREENS } from '../workspaces/investments/ComingSoon';
 
 // The Studies screens are code-split into a lazy chunk that only loads when the
 // Studies workspace is opened — keeping the initial app load lean for everyone
@@ -412,6 +413,9 @@ export function Portal() {
   // View-as / Suggestions / Bug Reports sections. Returns null for anything else
   // so it falls through to renderScreen and then the placeholder.
   function renderExtra(scr: string): React.ReactNode {
+    // The Investments workspace sections and the My Portal ▸ Investment Holdings
+    // summary are all themed "Coming Soon" placeholders for now (the foundation).
+    if (COMING_SOON_SCREENS.has(scr)) return <ComingSoon screen={scr} theme={theme} />;
     switch (scr) {
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;

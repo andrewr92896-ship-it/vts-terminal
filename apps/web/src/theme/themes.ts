@@ -2,7 +2,14 @@
 // matches exactly. (Navigation — sections, labels, order, icons, role gates —
 // lives in theme/nav.ts, the single source of truth.)
 
-export type WorkspaceKey = 'trading' | 'studies' | 'myportal' | 'help' | 'admin' | 'founder';
+export type WorkspaceKey =
+  | 'trading'
+  | 'investments'
+  | 'studies'
+  | 'myportal'
+  | 'help'
+  | 'admin'
+  | 'founder';
 
 export interface Theme {
   pageBg: string;
@@ -35,6 +42,20 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent: '#EBCB74',
     accent2: '#C9A24B',
     accentText: '#0c2768',
+  },
+  // Investments: a calm teal accent for the long-term, layman-friendly portfolio
+  // tracker (401k / IRA / ESA / general holdings). Distinct from the Advanced
+  // Trading gold and My Portal's greener emerald — teal signals steady, long-hold
+  // growth rather than active-desk urgency.
+  investments: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#052e33 0%,#04141a 60%)',
+    headerBg: 'linear-gradient(90deg,#052a30 0%,#083f46 100%)',
+    headerBorder: '#12565e',
+    navBg: '#04201f',
+    navBorder: '#0d3a3d',
+    accent: '#2DD4BF',
+    accent2: '#14B8A6',
+    accentText: '#04211e',
   },
   // The Admin workspace: a slate background with a rose accent to signal an
   // elevated, privileged area distinct from the three member workspaces.
@@ -92,6 +113,7 @@ export function accentGradient(t: Theme): string {
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'live',
+  investments: 'inv_overview',
   studies: 'st_home',
   myportal: 'my_team',
   admin: 'ad_users',
@@ -100,7 +122,8 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
-  trading: 'Trading',
+  trading: 'Advanced Trading',
+  investments: 'Investments',
   studies: 'Studies',
   myportal: 'My Portal',
   admin: 'Admin Portal',
