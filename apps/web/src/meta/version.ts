@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.49';
+export const APP_VERSION = 'Beta V 5.50';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.50',
+    date: 'July 24, 2026',
+    notes: [
+      'Added a Message Templates section to the Admin Portal — a shared library of reusable text-message and email templates admins can copy and paste wherever they need them.',
+      'Right-click any template (or use its Copy button) to copy it to your clipboard; email templates also offer a “copy subject only” option.',
+      'Software developers can add, edit, and delete templates; every admin can view and copy them.',
+    ],
+  },
   {
     version: 'Beta V 5.49',
     date: 'July 23, 2026',

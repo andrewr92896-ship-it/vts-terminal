@@ -12,6 +12,8 @@ import type {
   NotificationItem,
   Suggestion,
   BugReport,
+  MessageTemplate,
+  MessageTemplateKind,
   SupportKind,
   SupportRequest,
   BrokerConnection,
@@ -363,6 +365,30 @@ export const api = {
   },
   adminResetAiPrompt(id: string): Promise<{ value: string; overridden: boolean }> {
     return request(`/api/admin/ai-prompts/${id}`, { method: 'DELETE' });
+  },
+
+  // ---- Message templates (admin copy library) ----
+  // Every admin can read/copy; only software developers (founder-level) may
+  // create/edit/delete — the write routes are founder-gated server-side.
+  adminMessageTemplates(): Promise<{ templates: MessageTemplate[] }> {
+    return request('/api/admin/message-templates');
+  },
+  adminCreateMessageTemplate(input: {
+    kind: MessageTemplateKind;
+    title: string;
+    subject?: string | null;
+    body: string;
+  }): Promise<{ templates: MessageTemplate[] }> {
+    return request('/api/admin/message-templates', { method: 'POST', body: JSON.stringify(input) });
+  },
+  adminUpdateMessageTemplate(
+    id: string,
+    patch: { kind?: MessageTemplateKind; title?: string; subject?: string | null; body?: string },
+  ): Promise<{ templates: MessageTemplate[] }> {
+    return request(`/api/admin/message-templates/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  adminDeleteMessageTemplate(id: string): Promise<{ templates: MessageTemplate[] }> {
+    return request(`/api/admin/message-templates/${id}`, { method: 'DELETE' });
   },
 
   // ---- Patch notes ----

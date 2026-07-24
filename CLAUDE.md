@@ -150,8 +150,19 @@ top of the workspaces list** (see `theme/nav.ts` order).
   `gameStats.ts`). Studies is lazy-loaded.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion. Available to **every** signed-in user.
-- **Admin** (rose): Users, Teams, Badges, AI Instructions, Patch Notes, Site
-  Wording, Early Access, View as role, Suggestions, Bug Reports. **Admins only.**
+- **Admin** (rose): Users, Teams, Badges, Message Templates, AI Instructions,
+  Patch Notes, Site Wording, Early Access, View as role, Suggestions, Bug
+  Reports. **Admins only.** **Message Templates** (`ad_templates`,
+  `AdminMessageTemplates`) is a shared copy library of reusable text-message
+  (SMS) and email templates (`message_templates` table,
+  `messageTemplates/service.ts`, routes in `routes/messageTemplates.ts`).
+  Reading/copying is open to any admin (`GET` behind `requireAdmin`); only
+  software developers / founder-level users may create, edit, or delete
+  (`POST|PATCH|DELETE` behind `requireFounder`). A right-click context menu on
+  each template (with a visible Copy button as the touch fallback) copies it to
+  the clipboard. Templates are site-wide, not per-user — `created_by` is set
+  null on author deletion, so they are **not** in the `admin/service.ts`
+  per-user delete list.
 - **Developer Portal** (`founder` key/role, amber): AI Instructions, Site Wording,
   Sidebar Layout (`ad_sidebar` — reorder the whole sidebar, see below), View as
   role. **Founder-level only** (`isFounder`). Displayed as "Developer Portal";

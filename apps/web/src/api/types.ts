@@ -1228,6 +1228,20 @@ export interface Suggestion {
   createdAt: number;
 }
 
+// ---- Admin message templates (copy library) ----
+export type MessageTemplateKind = 'sms' | 'email';
+
+export interface MessageTemplate {
+  id: string;
+  kind: MessageTemplateKind;
+  title: string;
+  subject: string | null; // email subject line; null for a text-message template
+  body: string;
+  createdByName: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface BugMessage {
   id: string;
   role: 'user' | 'ai' | 'admin';
