@@ -33,6 +33,9 @@ export const NAV: NavWorkspace[] = [
     accent: '#34D399',
     group: 'My Portal',
     sections: [
+      // A combined portfolio summary: active Advanced Trading positions merged
+      // with the total long-term Investments portfolio and the stats across both.
+      { key: 'my_holdings', label: 'Investment Holdings', icon: 'gem' },
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
@@ -40,10 +43,10 @@ export const NAV: NavWorkspace[] = [
   },
   {
     key: 'trading',
-    label: 'Trading',
+    label: 'Advanced Trading',
     icon: 'candlestick-chart',
     accent: C.gold,
-    group: 'Trading',
+    group: 'Advanced Trading',
     sections: [
       { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
@@ -56,6 +59,29 @@ export const NAV: NavWorkspace[] = [
       { key: 'prop', label: 'Funded', icon: 'shield-check' },
       { key: 'news', label: 'Market News', icon: 'newspaper' },
       { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
+    ],
+  },
+  // Investments (teal) — a read-only, long-term portfolio tracker for the layman:
+  // 401(k), IRA, ESA, and general holdings connected via a read-only aggregator
+  // (Plaid / SnapTrade) or entered by hand. Strictly a tracker — it displays and
+  // educates, it never executes trades or moves money (Apple 3.2.1(viii)) — and
+  // carries no personalized buy/sell/rebalance advice (no RIA exposure). Every
+  // section below is a "Coming Soon" placeholder for now; this is the foundation.
+  {
+    key: 'investments',
+    label: 'Investments',
+    icon: 'landmark',
+    accent: '#2DD4BF',
+    group: 'Investments',
+    sections: [
+      { key: 'inv_overview', label: 'Portfolio Overview', icon: 'layout-dashboard' },
+      { key: 'inv_accounts', label: 'Accounts', icon: 'building-2' },
+      { key: 'inv_holdings', label: 'Holdings', icon: 'layers' },
+      { key: 'inv_allocation', label: 'Allocation', icon: 'gauge' },
+      { key: 'inv_performance', label: 'Performance', icon: 'trending-up' },
+      { key: 'inv_dividends', label: 'Dividends & Income', icon: 'banknote' },
+      { key: 'inv_contributions', label: 'Contributions & Goals', icon: 'piggy-bank' },
+      { key: 'inv_projections', label: 'Projections', icon: 'sparkles' },
     ],
   },
   {

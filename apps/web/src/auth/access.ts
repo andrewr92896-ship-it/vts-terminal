@@ -65,10 +65,20 @@ export function isWorkspaceReadOnly(_roles: RoleKey[], _ws: WorkspaceKey): boole
   return false;
 }
 
-// Ordered as the sidebar shows them. Every member reaches Trading, Studies, My
-// Portal and Site Help; the Admin and Founder portals come last for those roles.
+// Ordered as the sidebar shows them. Every member reaches Advanced Trading,
+// Investments, Studies, My Portal and Site Help; the Admin and Founder portals
+// come last for those roles. (Actual sidebar order is driven by the NAV array;
+// this list only gates which workspaces a user may see.)
 export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = ['trading', 'studies', 'myportal', 'help', 'admin', 'founder'];
+  const order: WorkspaceKey[] = [
+    'trading',
+    'investments',
+    'studies',
+    'myportal',
+    'help',
+    'admin',
+    'founder',
+  ];
   return order.filter((ws) => canAccessWorkspace(roles, ws));
 }
 
