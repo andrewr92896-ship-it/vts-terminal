@@ -5,6 +5,7 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { EditableText } from '../../copy/SiteCopy';
+import { StudyDisclaimer } from './StudyDisclaimer';
 
 // A configurable, graded test over a team-built study game's questions. This is
 // the generic mock test over any study game: pick how many
@@ -206,6 +207,8 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
             </div>
           </div>
         )}
+
+        <StudyDisclaimer theme={theme} />
       </div>
     );
   }
