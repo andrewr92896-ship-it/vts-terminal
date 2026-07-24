@@ -11,14 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.52';
+export const APP_VERSION = 'Beta V 5.53';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.52',
+    version: 'Beta V 5.53',
     date: 'July 24, 2026',
     notes: [
-      'Added a Net Worth section to My Portal — your whole financial picture in one number over time: everything you own (cash, investments, real estate, and more) minus everything you owe. Coming Soon.',
+      'Study Game now separates your games from the portal’s built-in ones: your team’s games appear in violet, the portal’s ready-made games in blue.',
+      'The built-in example games no longer crowd the list on day one — a new “Browse Study Games” button opens a gallery where you add just the ones you want to your study games (and remove them any time).',
+      'Renamed the section heading from “Your team’s study games” to “Your study games.”',
     ],
   },
   {
