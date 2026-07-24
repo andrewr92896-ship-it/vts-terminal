@@ -161,10 +161,16 @@ top of the workspaces list** (see `theme/nav.ts` order).
   Progress (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
   team-built** — there is no hardcoded subject. **Study Game / Test Mode /
   Progress** are the same launcher (`StudyGameHub`, parameterized by `target` =
-  `play` | `test` | `progress`): each lists your team's own study games and, when
+  `play` | `test` | `progress`): each lists the study games in your list and, when
   you pick one, opens the chosen experience — the quiz+leaderboard player
   (`TeamStudyGame`), a graded test (`DeckTestMode`, configurable size + pass line),
-  or a progress summary (`DeckProgress`). **Flashcards** (`FlashcardsHub`) is the
+  or a progress summary (`DeckProgress`). The list separates games by source with
+  two colors — your team's own games (violet) vs. the portal's built-in example
+  games (blue, `isSample`). Built-in games are **not** shown by default: a **Browse
+  Study Games** gallery (toggled in `StudyGameHub`) lists them, and the learner adds
+  the ones they want into their own list. That add/remove set is a personal,
+  device-local preference in localStorage (`sampleGames.ts`, keyed by user id),
+  never team data. **Flashcards** (`FlashcardsHub`) is the
   matching launcher for flashcard sets — pick one and study it with the auto-rotate
   `FlashcardSetPlayer`. **Study Creation** (`StudyCreation`) is the make/manage-only
   section (no playing/studying inline): it stacks the study-game maker+editor
