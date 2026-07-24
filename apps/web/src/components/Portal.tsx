@@ -38,6 +38,7 @@ import { AdminContent } from '../workspaces/admin/AdminContent';
 import { AdminEarlyAccess } from '../workspaces/admin/AdminEarlyAccess';
 import { AdminViewAs } from '../workspaces/admin/AdminViewAs';
 import { AdminSuggestions } from '../workspaces/admin/AdminSuggestions';
+import { AdminMessageTemplates } from '../workspaces/admin/AdminMessageTemplates';
 import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
 import { AdminSupport } from '../workspaces/admin/AdminSupport';
 import { AdminSidebarLayout } from '../workspaces/admin/AdminSidebarLayout';
@@ -447,6 +448,8 @@ export function Portal() {
         );
       case 'ad_viewas':
         return <AdminViewAs theme={theme} actingRole={actingRole} onSetActingRole={changeActingRole} />;
+      case 'ad_templates':
+        return <AdminMessageTemplates theme={theme} />;
       case 'ad_suggestions':
         return <AdminSuggestions theme={theme} />;
       case 'ad_bugs':

@@ -1264,3 +1264,29 @@ export const badgeTypes = sqliteTable('badge_types', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type BadgeTypeRow = typeof badgeTypes.$inferSelect;
+
+// ---- Message templates (admin copy library) ----
+// A shared library of reusable text-message (SMS) and email templates that
+// admins copy out of the portal (e.g. an onboarding text, a follow-up email).
+// Authoring is founder-level only (software developers), but every admin can
+// read and copy them. Templates are site-wide (not per-user): `createdBy` is set
+// to null if the author's account is later deleted, so a template survives its
+// author. `subject` is used by email templates for the subject line (null for a
+// plain text-message template). Rendered in Admin ▸ Message Templates.
+export const MESSAGE_TEMPLATE_KINDS = ['sms', 'email'] as const;
+export type MessageTemplateKind = (typeof MESSAGE_TEMPLATE_KINDS)[number];
+
+export const messageTemplates = sqliteTable('message_templates', {
+  id: text('id').primaryKey(),
+  kind: text('kind', { enum: MESSAGE_TEMPLATE_KINDS }).notNull().default('sms'),
+  title: text('title').notNull(),
+  subject: text('subject'), // email subject line; null for a text-message template
+  body: text('body').notNull(),
+  // The software developer who authored it; null once that account is deleted.
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdByName: text('created_by_name'), // denormalized author name (survives rename/delete)
+  position: integer('position').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type MessageTemplateRow = typeof messageTemplates.$inferSelect;

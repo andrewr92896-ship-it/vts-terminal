@@ -87,6 +87,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_users', label: 'Users', icon: 'users' },
       { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
       { key: 'ad_badges', label: 'Badges', icon: 'star' },
+      { key: 'ad_templates', label: 'Message Templates', icon: 'message-square' },
       { key: 'ad_notes', label: 'Patch Notes', icon: 'file-text' },
       { key: 'ad_early', label: 'Early Access', icon: 'sparkles' },
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
