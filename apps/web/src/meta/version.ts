@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.54';
+export const APP_VERSION = 'Beta V 5.55';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.55',
+    date: 'July 25, 2026',
+    notes: [
+      'New built-in Study Game: “Dave Ramsey’s Money Principles” — 50 plain-English questions on the core ideas of his approach (the Baby Steps order, the debt snowball, budgeting, investing, insurance, mortgages, and the millionaire study). It’s built to teach the concepts, not just quiz labels.',
+      'Like the other built-in games it lives in Browse Study Games — add it to your list to play, take as a practice test, or track progress. Educational only, and not affiliated with or endorsed by Dave Ramsey or Ramsey Solutions.',
+    ],
+  },
   {
     version: 'Beta V 5.54',
     date: 'July 24, 2026',
