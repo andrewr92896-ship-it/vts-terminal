@@ -918,6 +918,630 @@ const VTS_PORTAL_101: BakedGame = {
   ],
 };
 
+// An educational game on the core ideas of Dave Ramsey's personal-finance
+// philosophy — the Baby Steps order, the debt snowball, budgeting, investing,
+// insurance, and mortgages. Every question is framed as "what Ramsey says" so it
+// teaches ABOUT his approach rather than giving advice, and it carries the
+// standard not-affiliated / not-advice framing. Written in our own words (no
+// verbatim book text); trademarked program names appear only referentially.
+const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
+  name: "Dave Ramsey's Money Principles",
+  description:
+    "Learn the core ideas of Dave Ramsey's money philosophy — the Baby Steps order, the debt snowball, budgeting, investing, insurance, and mortgages — taught through plain-English questions. A built-in example game. Educational only; not financial advice, and not affiliated with or endorsed by Dave Ramsey or Ramsey Solutions.",
+  categories: ["Emergency Fund & Order", "Getting Out of Debt", "Credit & Cars", "Budgeting", "Investing & Retirement", "Insurance", "Buying a Home", "Kids & College", "Big Picture & Mindset"],
+  questions: [
+    // ---- Emergency Fund & Order ----
+    {
+      topic: "Emergency Fund & Order",
+      stem: "How much does Ramsey say to save in a starter emergency fund BEFORE you start attacking your debt?",
+      options: [
+        { label: "A", text: "$5,000" },
+        { label: "B", text: "$100" },
+        { label: "C", text: "$1,000" },
+        { label: "D", text: "One month of pay" },
+      ],
+      answer: "C",
+      explanation: "Ramsey says a small $1,000 buffer stops a minor surprise from sending you back to credit cards while you focus on debt.",
+    },
+    {
+      topic: "Emergency Fund & Order",
+      stem: "Once you're debt-free (except the house), how big does Ramsey say your fully funded emergency fund should be?",
+      options: [
+        { label: "A", text: "3–6 months of expenses" },
+        { label: "B", text: "Still $1,000" },
+        { label: "C", text: "12 months of income" },
+        { label: "D", text: "Whatever fits in checking" },
+      ],
+      answer: "A",
+      explanation: "After debt is gone, grow the fund to 3–6 months of living expenses so a job loss or big bill doesn't create new debt.",
+    },
+    {
+      topic: "Emergency Fund & Order",
+      stem: "If your household spends about $4,000 a month, roughly how much should a fully funded emergency fund hold?",
+      options: [
+        { label: "A", text: "$1,000" },
+        { label: "B", text: "$12,000–$24,000" },
+        { label: "C", text: "$4,000" },
+        { label: "D", text: "$50,000 or more" },
+      ],
+      answer: "B",
+      explanation: "3–6 months of expenses at $4,000/month is about $12,000–$24,000.",
+    },
+    {
+      topic: "Emergency Fund & Order",
+      stem: "Where does Ramsey say to keep your emergency fund so it's safe and ready?",
+      options: [
+        { label: "A", text: "Invested in stock mutual funds" },
+        { label: "B", text: "Lent to family for interest" },
+        { label: "C", text: "In cryptocurrency" },
+        { label: "D", text: "In a money-market or high-yield savings account" },
+      ],
+      answer: "D",
+      explanation: "Ramsey says it must be liquid and safe — not invested or at risk of dropping right when you need it.",
+    },
+    {
+      topic: "Emergency Fund & Order",
+      stem: "You have credit-card debt and nothing saved. What does Ramsey say to do FIRST?",
+      options: [
+        { label: "A", text: "Invest for retirement" },
+        { label: "B", text: "Save 6 months of expenses" },
+        { label: "C", text: "Save a small $1,000 buffer, then attack the debt" },
+        { label: "D", text: "Pay minimums and save aggressively at once" },
+      ],
+      answer: "C",
+      explanation: "Get the $1,000 starter fund, then throw everything at the debt — one focused goal at a time.",
+    },
+    {
+      topic: "Emergency Fund & Order",
+      stem: "According to Ramsey, should you keep investing for retirement while aggressively paying off consumer debt?",
+      options: [
+        { label: "A", text: "Yes, always invest first" },
+        { label: "B", text: "Invest exactly 15% no matter what" },
+        { label: "C", text: "Only invest in crypto" },
+        { label: "D", text: "No — pause investing and put everything toward the debt" },
+      ],
+      answer: "D",
+      explanation: "Ramsey says temporarily stop investing during debt payoff so all your money attacks the debt and you finish faster.",
+    },
+    {
+      topic: "Emergency Fund & Order",
+      stem: "Which comes first in Ramsey's plan — a full 3–6 month emergency fund, or investing 15% for retirement?",
+      options: [
+        { label: "A", text: "Invest first" },
+        { label: "B", text: "Do both at the same time" },
+        { label: "C", text: "Neither is a priority" },
+        { label: "D", text: "Build the full emergency fund first" },
+      ],
+      answer: "D",
+      explanation: "Order matters: finish the full emergency fund before you start investing 15% for retirement.",
+    },
+    {
+      topic: "Emergency Fund & Order",
+      stem: "Which sequence matches Ramsey's order of priorities?",
+      options: [
+        { label: "A", text: "Invest, then pay off debt, then save an emergency fund" },
+        { label: "B", text: "Pay off the house, then save, then invest" },
+        { label: "C", text: "$1,000 starter fund, then pay off debt, then full emergency fund, then invest 15%" },
+        { label: "D", text: "Emergency fund, then college, then debt" },
+      ],
+      answer: "C",
+      explanation: "Starter fund → attack debt → full emergency fund → invest 15%. One focused step at a time.",
+    },
+    // ---- Getting Out of Debt ----
+    {
+      topic: "Getting Out of Debt",
+      stem: "In Ramsey's debt payoff method, which debt do you throw extra money at first?",
+      options: [
+        { label: "A", text: "The one with the smallest balance" },
+        { label: "B", text: "The one with the highest interest rate" },
+        { label: "C", text: "The largest balance" },
+        { label: "D", text: "The newest debt" },
+      ],
+      answer: "A",
+      explanation: "Pay minimums on everything, then attack the smallest balance first — regardless of interest rate. That's the debt snowball.",
+    },
+    {
+      topic: "Getting Out of Debt",
+      stem: "Why does Ramsey say to pay the smallest balance first instead of the highest interest rate?",
+      options: [
+        { label: "A", text: "It saves the most interest" },
+        { label: "B", text: "Banks demand it" },
+        { label: "C", text: "It's required by law" },
+        { label: "D", text: "Quick wins build momentum and keep you motivated" },
+      ],
+      answer: "D",
+      explanation: "Ramsey treats money as mostly behavior — knocking out a whole debt early gives a win that keeps you going.",
+    },
+    {
+      topic: "Getting Out of Debt",
+      stem: "You just paid off your smallest debt. What do you do with the money that was going to it?",
+      options: [
+        { label: "A", text: "Add it to your fun budget" },
+        { label: "B", text: "Save it" },
+        { label: "C", text: "Roll it onto the next-smallest debt" },
+        { label: "D", text: "Split it evenly across all remaining debts" },
+      ],
+      answer: "C",
+      explanation: "You 'snowball' that freed-up payment onto the next debt, so each payoff makes the next one faster.",
+    },
+    {
+      topic: "Getting Out of Debt",
+      stem: "When you list your debts to pay off, which one do you leave OUT of the plan?",
+      options: [
+        { label: "A", text: "Your car loan" },
+        { label: "B", text: "Your home mortgage" },
+        { label: "C", text: "Your student loans" },
+        { label: "D", text: "Your medical bills" },
+      ],
+      answer: "B",
+      explanation: "The mortgage is tackled much later — after retirement and college saving. Every other debt goes in the snowball.",
+    },
+    {
+      topic: "Getting Out of Debt",
+      stem: "A lender offers a consolidation loan to combine all your debts. What's Ramsey's take?",
+      options: [
+        { label: "A", text: "It doesn't fix the spending habits that created the debt" },
+        { label: "B", text: "Do it right away" },
+        { label: "C", text: "It erases the debt instantly" },
+        { label: "D", text: "It's required before you start" },
+      ],
+      answer: "A",
+      explanation: "Consolidation just moves debt around; without changed behavior, the debt usually comes right back.",
+    },
+    {
+      topic: "Getting Out of Debt",
+      stem: "You get a surprise $3,000 tax refund while paying off debt. What best fits Ramsey's plan?",
+      options: [
+        { label: "A", text: "Invest it in stocks" },
+        { label: "B", text: "Throw it at your smallest remaining debt" },
+        { label: "C", text: "Save it for later" },
+        { label: "D", text: "Take a vacation" },
+      ],
+      answer: "B",
+      explanation: "Unexpected money accelerates your current goal — during payoff, that means attacking a debt.",
+    },
+    {
+      topic: "Getting Out of Debt",
+      stem: "What does Ramsey mean by 'gazelle intensity'?",
+      options: [
+        { label: "A", text: "Investing aggressively" },
+        { label: "B", text: "Paying only the minimums" },
+        { label: "C", text: "A category of mutual fund" },
+        { label: "D", text: "Attacking debt with fierce, all-out focus" },
+      ],
+      answer: "D",
+      explanation: "Like a gazelle sprinting from a predator — get out of debt fast, with total focus and sacrifice.",
+    },
+    {
+      topic: "Getting Out of Debt",
+      stem: "'Beans and rice, rice and beans' is shorthand for what?",
+      options: [
+        { label: "A", text: "A specific diet" },
+        { label: "B", text: "A grocery app" },
+        { label: "C", text: "Temporarily cutting spending to the basics to kill debt fast" },
+        { label: "D", text: "A restaurant discount" },
+      ],
+      answer: "C",
+      explanation: "It means living lean for a season — cut the extras — so you can pour money at the debt.",
+    },
+    // ---- Credit & Cars ----
+    {
+      topic: "Credit & Cars",
+      stem: "What does Ramsey recommend doing with credit cards?",
+      options: [
+        { label: "A", text: "Use them for points and pay them off monthly" },
+        { label: "B", text: "Keep one for emergencies" },
+        { label: "C", text: "Open several to build credit" },
+        { label: "D", text: "Get rid of them and pay with cash or debit" },
+      ],
+      answer: "D",
+      explanation: "He opposes all consumer debt — spend money you have, and let your emergency fund handle emergencies.",
+    },
+    {
+      topic: "Credit & Cars",
+      stem: "According to Ramsey, what does a FICO credit score actually measure?",
+      options: [
+        { label: "A", text: "How much you've borrowed and interacted with debt" },
+        { label: "B", text: "How responsible you are" },
+        { label: "C", text: "How wealthy you are" },
+        { label: "D", text: "Your net worth" },
+      ],
+      answer: "A",
+      explanation: "He argues a credit score just reflects your history with debt — not wealth — and says you don't need one.",
+    },
+    {
+      topic: "Credit & Cars",
+      stem: "What's Ramsey's advice for buying a car?",
+      options: [
+        { label: "A", text: "Lease a new one every few years" },
+        { label: "B", text: "Finance a new car over 72 months" },
+        { label: "C", text: "Use a home-equity loan" },
+        { label: "D", text: "Pay cash for a reliable used car" },
+      ],
+      answer: "D",
+      explanation: "New cars lose value fast; pay cash and buy used. He calls leasing 'fleecing.'",
+    },
+    // ---- Budgeting ----
+    {
+      topic: "Budgeting",
+      stem: "In a zero-based budget, what should your income minus all your planned spending, saving, and giving equal?",
+      options: [
+        { label: "A", text: "10% left over as a cushion" },
+        { label: "B", text: "Zero" },
+        { label: "C", text: "Your savings rate" },
+        { label: "D", text: "One month's expenses" },
+      ],
+      answer: "B",
+      explanation: "Give every single dollar a job before the month begins — income minus outgo equals zero.",
+    },
+    {
+      topic: "Budgeting",
+      stem: "When money is tight, which expenses does Ramsey say to cover FIRST (the 'Four Walls')?",
+      options: [
+        { label: "A", text: "Rent, cable, phone, internet" },
+        { label: "B", text: "Food, utilities, shelter, transportation" },
+        { label: "C", text: "Minimum debt payments" },
+        { label: "D", text: "Streaming, dining, and subscriptions" },
+      ],
+      answer: "B",
+      explanation: "Take care of survival first — food, utilities, shelter, transportation — before any other bill.",
+    },
+    {
+      topic: "Budgeting",
+      stem: "What problem does the cash 'envelope system' solve?",
+      options: [
+        { label: "A", text: "Overspending in categories like groceries and dining out" },
+        { label: "B", text: "Earning more interest" },
+        { label: "C", text: "Filing your taxes" },
+        { label: "D", text: "Building your credit score" },
+      ],
+      answer: "A",
+      explanation: "When the cash in a category's envelope is gone, you stop — it makes overspending impossible.",
+    },
+    {
+      topic: "Budgeting",
+      stem: "You know you'll need about $1,200 for car repairs and Christmas later this year. What does Ramsey suggest?",
+      options: [
+        { label: "A", text: "Save a little each month in a 'sinking fund'" },
+        { label: "B", text: "Put it on a credit card when it comes" },
+        { label: "C", text: "Take a small loan" },
+        { label: "D", text: "Ignore it until it happens" },
+      ],
+      answer: "A",
+      explanation: "A sinking fund saves gradually toward a known future cost, so it's cash-ready and never becomes debt.",
+    },
+    {
+      topic: "Budgeting",
+      stem: "In Ramsey's approach, what's the main point of budgeting every dollar before the month starts?",
+      options: [
+        { label: "A", text: "To feel restricted" },
+        { label: "B", text: "To impress your bank" },
+        { label: "C", text: "To tell your money where to go instead of wondering where it went" },
+        { label: "D", text: "To raise your credit score" },
+      ],
+      answer: "C",
+      explanation: "A written plan gives you control — you decide on purpose rather than react at the end of the month.",
+    },
+    // ---- Investing & Retirement ----
+    {
+      topic: "Investing & Retirement",
+      stem: "Once you're debt-free with a full emergency fund, what percent of income does Ramsey say to invest for retirement?",
+      options: [
+        { label: "A", text: "5%" },
+        { label: "B", text: "15%" },
+        { label: "C", text: "10%" },
+        { label: "D", text: "25%" },
+      ],
+      answer: "B",
+      explanation: "Invest 15% of gross household income for retirement at that stage — enough to build real wealth without starving the budget.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "If your employer matches your 401(k), what does Ramsey say to fund FIRST?",
+      options: [
+        { label: "A", text: "The 401(k) up to the full match" },
+        { label: "B", text: "A Roth IRA" },
+        { label: "C", text: "Individual stocks" },
+        { label: "D", text: "A regular savings account" },
+      ],
+      answer: "A",
+      explanation: "Grab the free match first — it's an instant, guaranteed return — then move on.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "After you've captured the full employer match, where does Ramsey say to put money next?",
+      options: [
+        { label: "A", text: "A Roth IRA" },
+        { label: "B", text: "A whole life policy" },
+        { label: "C", text: "Bonds" },
+        { label: "D", text: "A checking account" },
+      ],
+      answer: "A",
+      explanation: "Fund a Roth IRA next for tax-free growth, then return to the 401(k) to reach 15%.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "Why does Ramsey favor a Roth account?",
+      options: [
+        { label: "A", text: "You can withdraw anytime with no rules" },
+        { label: "B", text: "It has no contribution limit" },
+        { label: "C", text: "It guarantees a 12% return" },
+        { label: "D", text: "Qualified retirement withdrawals come out tax-free" },
+      ],
+      answer: "D",
+      explanation: "You invest after-tax dollars now so the growth and retirement withdrawals are tax-free later.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "Ramsey says to spread your stock mutual funds across which four types?",
+      options: [
+        { label: "A", text: "Growth, growth & income, aggressive growth, international" },
+        { label: "B", text: "Tech, healthcare, energy, finance" },
+        { label: "C", text: "Large, mid, small, micro" },
+        { label: "D", text: "Stocks, bonds, gold, cash" },
+      ],
+      answer: "A",
+      explanation: "He splits roughly evenly (about 25% each) across growth, growth & income, aggressive growth, and international funds.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "What kind of investments does Ramsey steer people toward for retirement?",
+      options: [
+        { label: "A", text: "Individual hot stocks" },
+        { label: "B", text: "Options and day-trading" },
+        { label: "C", text: "Long-term stock mutual funds held steadily" },
+        { label: "D", text: "Whatever is trending" },
+      ],
+      answer: "C",
+      explanation: "He favors boring, consistent investing in diversified mutual funds over picking single stocks.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "A coworker pushes a 'hot' single stock. What matches Ramsey's approach?",
+      options: [
+        { label: "A", text: "Keep investing steadily in diversified mutual funds" },
+        { label: "B", text: "Put your whole 15% into that one stock" },
+        { label: "C", text: "Borrow money to buy more of it" },
+        { label: "D", text: "Day-trade it for quick gains" },
+      ],
+      answer: "A",
+      explanation: "Ramsey favors steady, diversified mutual-fund investing over betting on any single stock.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "What long-term average annual stock-market return does Ramsey commonly cite (a figure many experts dispute)?",
+      options: [
+        { label: "A", text: "4%" },
+        { label: "B", text: "12%" },
+        { label: "C", text: "7%" },
+        { label: "D", text: "20%" },
+      ],
+      answer: "B",
+      explanation: "He cites ~12% from the S&P 500's long-run average; critics say a lower, inflation-adjusted number is more realistic.",
+    },
+    {
+      topic: "Investing & Retirement",
+      stem: "Ramsey has controversially claimed retirees can safely withdraw what percent of savings each year?",
+      options: [
+        { label: "A", text: "3%" },
+        { label: "B", text: "4%" },
+        { label: "C", text: "8%" },
+        { label: "D", text: "15%" },
+      ],
+      answer: "C",
+      explanation: "He's said 8%; most researchers consider that too high and suggest ~4% or less. Don't treat 8% as a safe rule — it's here so you know the debate.",
+    },
+    // ---- Insurance ----
+    {
+      topic: "Insurance",
+      stem: "What kind of life insurance does Ramsey recommend?",
+      options: [
+        { label: "A", text: "Whole life" },
+        { label: "B", text: "Term life" },
+        { label: "C", text: "Universal life" },
+        { label: "D", text: "Variable life" },
+      ],
+      answer: "B",
+      explanation: "Buy level term life; skip cash-value policies like whole life.",
+    },
+    {
+      topic: "Insurance",
+      stem: "How much term life coverage does Ramsey suggest carrying?",
+      options: [
+        { label: "A", text: "1–2 times your income" },
+        { label: "B", text: "10–12 times your income" },
+        { label: "C", text: "50 times your income" },
+        { label: "D", text: "A flat $100,000" },
+      ],
+      answer: "B",
+      explanation: "About 10–12x your annual income, on a 15–20 year term, so your family is protected if you're gone.",
+    },
+    {
+      topic: "Insurance",
+      stem: "Why does Ramsey tell people to avoid whole life / cash-value insurance?",
+      options: [
+        { label: "A", text: "It's illegal" },
+        { label: "B", text: "It's cheaper than term" },
+        { label: "C", text: "It has no death benefit" },
+        { label: "D", text: "It's costly and mixes insurance with a poor investment" },
+      ],
+      answer: "D",
+      explanation: "'Buy term and invest the difference' — the cash-value version is expensive and a weak investment.",
+    },
+    {
+      topic: "Insurance",
+      stem: "What's the real job of life insurance in Ramsey's plan?",
+      options: [
+        { label: "A", text: "To build cash value" },
+        { label: "B", text: "To raise your credit" },
+        { label: "C", text: "To replace your income so your family is protected" },
+        { label: "D", text: "To lower your taxes" },
+      ],
+      answer: "C",
+      explanation: "It exists to protect the people who depend on your income — that's the whole point.",
+    },
+    // ---- Buying a Home ----
+    {
+      topic: "Buying a Home",
+      stem: "What type of mortgage does Ramsey recommend?",
+      options: [
+        { label: "A", text: "A 30-year fixed" },
+        { label: "B", text: "An adjustable-rate mortgage" },
+        { label: "C", text: "A 15-year fixed-rate" },
+        { label: "D", text: "An interest-only loan" },
+      ],
+      answer: "C",
+      explanation: "Only a 15-year fixed — you pay far less interest and own the home much sooner.",
+    },
+    {
+      topic: "Buying a Home",
+      stem: "Ramsey says your monthly house payment should be no more than what share of your take-home pay?",
+      options: [
+        { label: "A", text: "50%" },
+        { label: "B", text: "40%" },
+        { label: "C", text: "25%" },
+        { label: "D", text: "10%" },
+      ],
+      answer: "C",
+      explanation: "Keep it at or below 25% of monthly take-home pay so the house doesn't squeeze the rest of your life.",
+    },
+    {
+      topic: "Buying a Home",
+      stem: "When financing a home, how much does Ramsey suggest putting down to avoid PMI?",
+      options: [
+        { label: "A", text: "Nothing" },
+        { label: "B", text: "3%" },
+        { label: "C", text: "5%" },
+        { label: "D", text: "At least 20%" },
+      ],
+      answer: "D",
+      explanation: "A 20% down payment avoids private mortgage insurance (PMI), an extra monthly cost that protects the lender, not you.",
+    },
+    {
+      topic: "Buying a Home",
+      stem: "Where does paying off the house fall in Ramsey's order of priorities?",
+      options: [
+        { label: "A", text: "Before building an emergency fund" },
+        { label: "B", text: "First, before anything else" },
+        { label: "C", text: "After you're investing for retirement and saving for kids' college" },
+        { label: "D", text: "You never pay it off" },
+      ],
+      answer: "C",
+      explanation: "The mortgage is the last debt — knocked out after you're investing 15% and saving for college.",
+    },
+    // ---- Kids & College ----
+    {
+      topic: "Kids & College",
+      stem: "What accounts does Ramsey point to for saving for a child's college?",
+      options: [
+        { label: "A", text: "A whole life policy" },
+        { label: "B", text: "An ESA (Education Savings Account) and/or a 529 plan" },
+        { label: "C", text: "A regular checking account" },
+        { label: "D", text: "A credit-card rewards account" },
+      ],
+      answer: "B",
+      explanation: "Use tax-advantaged college accounts (ESA/529) — not insurance or plain savings.",
+    },
+    {
+      topic: "Kids & College",
+      stem: "What's Ramsey's stance on student loans?",
+      options: [
+        { label: "A", text: "They're 'good debt'" },
+        { label: "B", text: "Take the maximum offered" },
+        { label: "C", text: "Only federal ones are fine" },
+        { label: "D", text: "Avoid them — cash-flow school, use scholarships and cheaper options" },
+      ],
+      answer: "D",
+      explanation: "He rejects the idea of 'good debt' — pay for school with savings, work, scholarships, and affordable choices.",
+    },
+    {
+      topic: "Kids & College",
+      stem: "Do you save for your kids' college before or after funding your own retirement?",
+      options: [
+        { label: "A", text: "After you're investing 15% for retirement" },
+        { label: "B", text: "At the same time" },
+        { label: "C", text: "Before" },
+        { label: "D", text: "You skip retirement for college" },
+      ],
+      answer: "A",
+      explanation: "Fund retirement (15%) first, then college — you can borrow for school, but you can't borrow for retirement.",
+    },
+    // ---- Big Picture & Mindset ----
+    {
+      topic: "Big Picture & Mindset",
+      stem: "What does Ramsey say is the ultimate purpose of getting your money in order?",
+      options: [
+        { label: "A", text: "To retire by 40" },
+        { label: "B", text: "To build wealth so you can live and give generously" },
+        { label: "C", text: "To buy luxury goods" },
+        { label: "D", text: "To beat the stock market" },
+      ],
+      answer: "B",
+      explanation: "The final goal is building wealth and giving — money is a tool to be generous, not the point itself.",
+    },
+    {
+      topic: "Big Picture & Mindset",
+      stem: "Ramsey famously says personal finance is mostly about what?",
+      options: [
+        { label: "A", text: "Your behavior and habits" },
+        { label: "B", text: "Complicated math" },
+        { label: "C", text: "Picking the right stocks" },
+        { label: "D", text: "How much you earn" },
+      ],
+      answer: "A",
+      explanation: "His line: money is '80% behavior, 20% head knowledge' — habits beat math.",
+    },
+    {
+      topic: "Big Picture & Mindset",
+      stem: "In Ramsey's National Study of Millionaires, how did most build their wealth?",
+      options: [
+        { label: "A", text: "Inheriting it" },
+        { label: "B", text: "Steadily investing over time (often a workplace 401(k))" },
+        { label: "C", text: "Lottery or windfalls" },
+        { label: "D", text: "One big risky bet" },
+      ],
+      answer: "B",
+      explanation: "8 in 10 invested in a 401(k) and built wealth consistently — there was no shortcut.",
+    },
+    {
+      topic: "Big Picture & Mindset",
+      stem: "What did that same study find about inheritance?",
+      options: [
+        { label: "A", text: "Most inherited their wealth" },
+        { label: "B", text: "79% received no inheritance at all" },
+        { label: "C", text: "Half inherited over $1 million" },
+        { label: "D", text: "Inheritance was the top factor" },
+      ],
+      answer: "B",
+      explanation: "79% got no inheritance — the wealth was built, not handed down.",
+    },
+    {
+      topic: "Big Picture & Mindset",
+      stem: "What kinds of jobs did most of the millionaires in the study have?",
+      options: [
+        { label: "A", text: "Celebrities and pro athletes" },
+        { label: "B", text: "Mostly doctors and lawyers" },
+        { label: "C", text: "Only CEOs and executives" },
+        { label: "D", text: "Ordinary careers like engineer, accountant, and teacher" },
+      ],
+      answer: "D",
+      explanation: "The top careers were everyday jobs — engineer, accountant, teacher — not glamorous or ultra-high-paying ones.",
+    },
+    {
+      topic: "Big Picture & Mindset",
+      stem: "According to Baby Steps Millionaires, how fast did many millionaires pay off their homes?",
+      options: [
+        { label: "A", text: "In about 10–11 years" },
+        { label: "B", text: "In about 30 years" },
+        { label: "C", text: "They never did" },
+        { label: "D", text: "In about 25 years" },
+      ],
+      answer: "A",
+      explanation: "Many paid off the mortgage in roughly a decade — far faster than the standard 30 years.",
+    },
+  ],
+};
+
 // Every built-in example game. Add new games here — a team that lacks any of
 // them gets it created on the next boot or Studies visit (create-if-missing), so
 // adding a game needs no version bump; only CHANGING a game's content does.
@@ -925,6 +1549,7 @@ export const BAKED_IN_GAMES: BakedGame[] = [
   MARKET_TERMINOLOGY_101,
   HOW_STUDY_GAMES_WORK,
   VTS_PORTAL_101,
+  DAVE_RAMSEY_MONEY_PRINCIPLES,
 ];
 
 // Ensure a single team has each built-in game. Create-if-missing by default;
