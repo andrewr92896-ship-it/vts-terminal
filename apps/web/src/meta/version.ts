@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.55';
+export const APP_VERSION = 'Beta V 5.56';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.56',
+    date: 'July 25, 2026',
+    notes: [
+      'The “Dave Ramsey’s Money Principles” study game now phrases every question as “According to Dave Ramsey, …,” so each one clearly attributes the idea to him. Your progress on the game is unchanged.',
+    ],
+  },
   {
     version: 'Beta V 5.55',
     date: 'July 25, 2026',

@@ -28,7 +28,7 @@ export const BAKED_IN_SOURCE = 'baked_in';
 // Bump whenever the CONTENT of a baked-in game below changes, so the next deploy
 // re-syncs every team's copy to match. Creating a fresh copy for a team that
 // lacks one does not need a bump.
-export const BAKED_IN_VERSION = 1;
+export const BAKED_IN_VERSION = 2;
 
 // Where the last-applied content version is remembered (app_settings key).
 const VERSION_KEY = 'seed.bakedInGames.version';
@@ -933,7 +933,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Emergency Fund & Order ----
     {
       topic: "Emergency Fund & Order",
-      stem: "How much does Ramsey say to save in a starter emergency fund BEFORE you start attacking your debt?",
+      stem: "According to Dave Ramsey, how much should you save in a starter emergency fund before you start attacking your debt?",
       options: [
         { label: "A", text: "$5,000" },
         { label: "B", text: "$100" },
@@ -945,7 +945,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Emergency Fund & Order",
-      stem: "Once you're debt-free (except the house), how big does Ramsey say your fully funded emergency fund should be?",
+      stem: "According to Dave Ramsey, once you're debt-free (except the house), how big should your fully funded emergency fund be?",
       options: [
         { label: "A", text: "3–6 months of expenses" },
         { label: "B", text: "Still $1,000" },
@@ -957,7 +957,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Emergency Fund & Order",
-      stem: "If your household spends about $4,000 a month, roughly how much should a fully funded emergency fund hold?",
+      stem: "According to Dave Ramsey, if your household spends about $4,000 a month, roughly how much should a fully funded emergency fund hold?",
       options: [
         { label: "A", text: "$1,000" },
         { label: "B", text: "$12,000–$24,000" },
@@ -969,7 +969,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Emergency Fund & Order",
-      stem: "Where does Ramsey say to keep your emergency fund so it's safe and ready?",
+      stem: "According to Dave Ramsey, where should you keep your emergency fund so it's safe and ready?",
       options: [
         { label: "A", text: "Invested in stock mutual funds" },
         { label: "B", text: "Lent to family for interest" },
@@ -981,7 +981,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Emergency Fund & Order",
-      stem: "You have credit-card debt and nothing saved. What does Ramsey say to do FIRST?",
+      stem: "According to Dave Ramsey, if you have credit-card debt and nothing saved, what should you do first?",
       options: [
         { label: "A", text: "Invest for retirement" },
         { label: "B", text: "Save 6 months of expenses" },
@@ -993,7 +993,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Emergency Fund & Order",
-      stem: "According to Ramsey, should you keep investing for retirement while aggressively paying off consumer debt?",
+      stem: "According to Dave Ramsey, should you keep investing for retirement while aggressively paying off consumer debt?",
       options: [
         { label: "A", text: "Yes, always invest first" },
         { label: "B", text: "Invest exactly 15% no matter what" },
@@ -1005,7 +1005,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Emergency Fund & Order",
-      stem: "Which comes first in Ramsey's plan — a full 3–6 month emergency fund, or investing 15% for retirement?",
+      stem: "According to Dave Ramsey, which comes first — a full 3–6 month emergency fund, or investing 15% for retirement?",
       options: [
         { label: "A", text: "Invest first" },
         { label: "B", text: "Do both at the same time" },
@@ -1017,7 +1017,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Emergency Fund & Order",
-      stem: "Which sequence matches Ramsey's order of priorities?",
+      stem: "According to Dave Ramsey, which sequence is the right order of money priorities?",
       options: [
         { label: "A", text: "Invest, then pay off debt, then save an emergency fund" },
         { label: "B", text: "Pay off the house, then save, then invest" },
@@ -1030,7 +1030,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Getting Out of Debt ----
     {
       topic: "Getting Out of Debt",
-      stem: "In Ramsey's debt payoff method, which debt do you throw extra money at first?",
+      stem: "According to Dave Ramsey, in the debt snowball, which debt do you throw extra money at first?",
       options: [
         { label: "A", text: "The one with the smallest balance" },
         { label: "B", text: "The one with the highest interest rate" },
@@ -1042,7 +1042,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Getting Out of Debt",
-      stem: "Why does Ramsey say to pay the smallest balance first instead of the highest interest rate?",
+      stem: "According to Dave Ramsey, why pay the smallest balance first instead of the highest interest rate?",
       options: [
         { label: "A", text: "It saves the most interest" },
         { label: "B", text: "Banks demand it" },
@@ -1054,7 +1054,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Getting Out of Debt",
-      stem: "You just paid off your smallest debt. What do you do with the money that was going to it?",
+      stem: "According to Dave Ramsey, after you pay off your smallest debt, what should you do with the money that was going to it?",
       options: [
         { label: "A", text: "Add it to your fun budget" },
         { label: "B", text: "Save it" },
@@ -1066,7 +1066,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Getting Out of Debt",
-      stem: "When you list your debts to pay off, which one do you leave OUT of the plan?",
+      stem: "According to Dave Ramsey, when you list your debts to pay off, which one do you leave out of the plan?",
       options: [
         { label: "A", text: "Your car loan" },
         { label: "B", text: "Your home mortgage" },
@@ -1078,7 +1078,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Getting Out of Debt",
-      stem: "A lender offers a consolidation loan to combine all your debts. What's Ramsey's take?",
+      stem: "According to Dave Ramsey, what's the problem with a debt-consolidation loan?",
       options: [
         { label: "A", text: "It doesn't fix the spending habits that created the debt" },
         { label: "B", text: "Do it right away" },
@@ -1090,7 +1090,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Getting Out of Debt",
-      stem: "You get a surprise $3,000 tax refund while paying off debt. What best fits Ramsey's plan?",
+      stem: "According to Dave Ramsey, if you get a surprise $3,000 tax refund while paying off debt, what should you do with it?",
       options: [
         { label: "A", text: "Invest it in stocks" },
         { label: "B", text: "Throw it at your smallest remaining debt" },
@@ -1102,7 +1102,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Getting Out of Debt",
-      stem: "What does Ramsey mean by 'gazelle intensity'?",
+      stem: "According to Dave Ramsey, what does 'gazelle intensity' mean?",
       options: [
         { label: "A", text: "Investing aggressively" },
         { label: "B", text: "Paying only the minimums" },
@@ -1114,7 +1114,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Getting Out of Debt",
-      stem: "'Beans and rice, rice and beans' is shorthand for what?",
+      stem: "According to Dave Ramsey, what does 'beans and rice, rice and beans' mean?",
       options: [
         { label: "A", text: "A specific diet" },
         { label: "B", text: "A grocery app" },
@@ -1127,7 +1127,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Credit & Cars ----
     {
       topic: "Credit & Cars",
-      stem: "What does Ramsey recommend doing with credit cards?",
+      stem: "According to Dave Ramsey, what should you do with credit cards?",
       options: [
         { label: "A", text: "Use them for points and pay them off monthly" },
         { label: "B", text: "Keep one for emergencies" },
@@ -1139,7 +1139,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Credit & Cars",
-      stem: "According to Ramsey, what does a FICO credit score actually measure?",
+      stem: "According to Dave Ramsey, what does a FICO credit score actually measure?",
       options: [
         { label: "A", text: "How much you've borrowed and interacted with debt" },
         { label: "B", text: "How responsible you are" },
@@ -1151,7 +1151,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Credit & Cars",
-      stem: "What's Ramsey's advice for buying a car?",
+      stem: "According to Dave Ramsey, how should you buy a car?",
       options: [
         { label: "A", text: "Lease a new one every few years" },
         { label: "B", text: "Finance a new car over 72 months" },
@@ -1164,7 +1164,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Budgeting ----
     {
       topic: "Budgeting",
-      stem: "In a zero-based budget, what should your income minus all your planned spending, saving, and giving equal?",
+      stem: "According to Dave Ramsey, in a zero-based budget, what should your income minus all your planned spending, saving, and giving equal?",
       options: [
         { label: "A", text: "10% left over as a cushion" },
         { label: "B", text: "Zero" },
@@ -1176,7 +1176,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Budgeting",
-      stem: "When money is tight, which expenses does Ramsey say to cover FIRST (the 'Four Walls')?",
+      stem: "According to Dave Ramsey, when money is tight, which expenses should you cover first (the 'Four Walls')?",
       options: [
         { label: "A", text: "Rent, cable, phone, internet" },
         { label: "B", text: "Food, utilities, shelter, transportation" },
@@ -1188,7 +1188,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Budgeting",
-      stem: "What problem does the cash 'envelope system' solve?",
+      stem: "According to Dave Ramsey, what problem does the cash 'envelope system' solve?",
       options: [
         { label: "A", text: "Overspending in categories like groceries and dining out" },
         { label: "B", text: "Earning more interest" },
@@ -1200,7 +1200,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Budgeting",
-      stem: "You know you'll need about $1,200 for car repairs and Christmas later this year. What does Ramsey suggest?",
+      stem: "According to Dave Ramsey, if you know you'll need about $1,200 for car repairs and Christmas later this year, what should you do?",
       options: [
         { label: "A", text: "Save a little each month in a 'sinking fund'" },
         { label: "B", text: "Put it on a credit card when it comes" },
@@ -1212,7 +1212,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Budgeting",
-      stem: "In Ramsey's approach, what's the main point of budgeting every dollar before the month starts?",
+      stem: "According to Dave Ramsey, what's the main point of budgeting every dollar before the month starts?",
       options: [
         { label: "A", text: "To feel restricted" },
         { label: "B", text: "To impress your bank" },
@@ -1225,7 +1225,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Investing & Retirement ----
     {
       topic: "Investing & Retirement",
-      stem: "Once you're debt-free with a full emergency fund, what percent of income does Ramsey say to invest for retirement?",
+      stem: "According to Dave Ramsey, once you're debt-free with a full emergency fund, what percent of income should you invest for retirement?",
       options: [
         { label: "A", text: "5%" },
         { label: "B", text: "15%" },
@@ -1237,7 +1237,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "If your employer matches your 401(k), what does Ramsey say to fund FIRST?",
+      stem: "According to Dave Ramsey, if your employer matches your 401(k), what should you fund first?",
       options: [
         { label: "A", text: "The 401(k) up to the full match" },
         { label: "B", text: "A Roth IRA" },
@@ -1249,7 +1249,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "After you've captured the full employer match, where does Ramsey say to put money next?",
+      stem: "According to Dave Ramsey, after you've captured the full employer match, where should you put money next?",
       options: [
         { label: "A", text: "A Roth IRA" },
         { label: "B", text: "A whole life policy" },
@@ -1261,7 +1261,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "Why does Ramsey favor a Roth account?",
+      stem: "According to Dave Ramsey, why is a Roth account worth favoring?",
       options: [
         { label: "A", text: "You can withdraw anytime with no rules" },
         { label: "B", text: "It has no contribution limit" },
@@ -1273,7 +1273,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "Ramsey says to spread your stock mutual funds across which four types?",
+      stem: "According to Dave Ramsey, across which four types should you spread your stock mutual funds?",
       options: [
         { label: "A", text: "Growth, growth & income, aggressive growth, international" },
         { label: "B", text: "Tech, healthcare, energy, finance" },
@@ -1285,7 +1285,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "What kind of investments does Ramsey steer people toward for retirement?",
+      stem: "According to Dave Ramsey, what kind of investments should you use for retirement?",
       options: [
         { label: "A", text: "Individual hot stocks" },
         { label: "B", text: "Options and day-trading" },
@@ -1297,7 +1297,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "A coworker pushes a 'hot' single stock. What matches Ramsey's approach?",
+      stem: "According to Dave Ramsey, if a coworker pushes a 'hot' single stock, what should you do?",
       options: [
         { label: "A", text: "Keep investing steadily in diversified mutual funds" },
         { label: "B", text: "Put your whole 15% into that one stock" },
@@ -1309,7 +1309,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "What long-term average annual stock-market return does Ramsey commonly cite (a figure many experts dispute)?",
+      stem: "According to Dave Ramsey, what long-term average annual return does the stock market earn (a figure many experts dispute)?",
       options: [
         { label: "A", text: "4%" },
         { label: "B", text: "12%" },
@@ -1321,7 +1321,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Investing & Retirement",
-      stem: "Ramsey has controversially claimed retirees can safely withdraw what percent of savings each year?",
+      stem: "According to Dave Ramsey, what percent of savings can retirees safely withdraw each year (a claim many experts dispute)?",
       options: [
         { label: "A", text: "3%" },
         { label: "B", text: "4%" },
@@ -1334,7 +1334,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Insurance ----
     {
       topic: "Insurance",
-      stem: "What kind of life insurance does Ramsey recommend?",
+      stem: "According to Dave Ramsey, what kind of life insurance should you buy?",
       options: [
         { label: "A", text: "Whole life" },
         { label: "B", text: "Term life" },
@@ -1346,7 +1346,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Insurance",
-      stem: "How much term life coverage does Ramsey suggest carrying?",
+      stem: "According to Dave Ramsey, how much term life coverage should you carry?",
       options: [
         { label: "A", text: "1–2 times your income" },
         { label: "B", text: "10–12 times your income" },
@@ -1358,7 +1358,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Insurance",
-      stem: "Why does Ramsey tell people to avoid whole life / cash-value insurance?",
+      stem: "According to Dave Ramsey, why should you avoid whole life / cash-value insurance?",
       options: [
         { label: "A", text: "It's illegal" },
         { label: "B", text: "It's cheaper than term" },
@@ -1370,7 +1370,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Insurance",
-      stem: "What's the real job of life insurance in Ramsey's plan?",
+      stem: "According to Dave Ramsey, what's the real job of life insurance?",
       options: [
         { label: "A", text: "To build cash value" },
         { label: "B", text: "To raise your credit" },
@@ -1383,7 +1383,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Buying a Home ----
     {
       topic: "Buying a Home",
-      stem: "What type of mortgage does Ramsey recommend?",
+      stem: "According to Dave Ramsey, what type of mortgage should you get?",
       options: [
         { label: "A", text: "A 30-year fixed" },
         { label: "B", text: "An adjustable-rate mortgage" },
@@ -1395,7 +1395,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Buying a Home",
-      stem: "Ramsey says your monthly house payment should be no more than what share of your take-home pay?",
+      stem: "According to Dave Ramsey, your monthly house payment should be no more than what share of your take-home pay?",
       options: [
         { label: "A", text: "50%" },
         { label: "B", text: "40%" },
@@ -1407,7 +1407,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Buying a Home",
-      stem: "When financing a home, how much does Ramsey suggest putting down to avoid PMI?",
+      stem: "According to Dave Ramsey, when financing a home, how much should you put down to avoid PMI?",
       options: [
         { label: "A", text: "Nothing" },
         { label: "B", text: "3%" },
@@ -1419,7 +1419,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Buying a Home",
-      stem: "Where does paying off the house fall in Ramsey's order of priorities?",
+      stem: "According to Dave Ramsey, where does paying off the house fall in the order of priorities?",
       options: [
         { label: "A", text: "Before building an emergency fund" },
         { label: "B", text: "First, before anything else" },
@@ -1432,7 +1432,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Kids & College ----
     {
       topic: "Kids & College",
-      stem: "What accounts does Ramsey point to for saving for a child's college?",
+      stem: "According to Dave Ramsey, what accounts should you use to save for a child's college?",
       options: [
         { label: "A", text: "A whole life policy" },
         { label: "B", text: "An ESA (Education Savings Account) and/or a 529 plan" },
@@ -1444,7 +1444,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Kids & College",
-      stem: "What's Ramsey's stance on student loans?",
+      stem: "According to Dave Ramsey, what's the right approach to student loans?",
       options: [
         { label: "A", text: "They're 'good debt'" },
         { label: "B", text: "Take the maximum offered" },
@@ -1456,7 +1456,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Kids & College",
-      stem: "Do you save for your kids' college before or after funding your own retirement?",
+      stem: "According to Dave Ramsey, should you save for your kids' college before or after funding your own retirement?",
       options: [
         { label: "A", text: "After you're investing 15% for retirement" },
         { label: "B", text: "At the same time" },
@@ -1469,7 +1469,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     // ---- Big Picture & Mindset ----
     {
       topic: "Big Picture & Mindset",
-      stem: "What does Ramsey say is the ultimate purpose of getting your money in order?",
+      stem: "According to Dave Ramsey, what's the ultimate purpose of getting your money in order?",
       options: [
         { label: "A", text: "To retire by 40" },
         { label: "B", text: "To build wealth so you can live and give generously" },
@@ -1481,7 +1481,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Big Picture & Mindset",
-      stem: "Ramsey famously says personal finance is mostly about what?",
+      stem: "According to Dave Ramsey, personal finance is mostly about what?",
       options: [
         { label: "A", text: "Your behavior and habits" },
         { label: "B", text: "Complicated math" },
@@ -1493,7 +1493,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Big Picture & Mindset",
-      stem: "In Ramsey's National Study of Millionaires, how did most build their wealth?",
+      stem: "According to Dave Ramsey's National Study of Millionaires, how did most millionaires build their wealth?",
       options: [
         { label: "A", text: "Inheriting it" },
         { label: "B", text: "Steadily investing over time (often a workplace 401(k))" },
@@ -1505,7 +1505,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Big Picture & Mindset",
-      stem: "What did that same study find about inheritance?",
+      stem: "According to Dave Ramsey's National Study of Millionaires, what did the study find about inheritance?",
       options: [
         { label: "A", text: "Most inherited their wealth" },
         { label: "B", text: "79% received no inheritance at all" },
@@ -1517,7 +1517,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Big Picture & Mindset",
-      stem: "What kinds of jobs did most of the millionaires in the study have?",
+      stem: "According to Dave Ramsey's National Study of Millionaires, what kinds of jobs did most millionaires have?",
       options: [
         { label: "A", text: "Celebrities and pro athletes" },
         { label: "B", text: "Mostly doctors and lawyers" },
@@ -1529,7 +1529,7 @@ const DAVE_RAMSEY_MONEY_PRINCIPLES: BakedGame = {
     },
     {
       topic: "Big Picture & Mindset",
-      stem: "According to Baby Steps Millionaires, how fast did many millionaires pay off their homes?",
+      stem: "According to Dave Ramsey's Baby Steps Millionaires, how fast did many millionaires pay off their homes?",
       options: [
         { label: "A", text: "In about 10–11 years" },
         { label: "B", text: "In about 30 years" },
