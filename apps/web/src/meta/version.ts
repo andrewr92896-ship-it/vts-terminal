@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.56';
+export const APP_VERSION = 'Beta V 5.57';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.57',
+    date: 'July 26, 2026',
+    notes: [
+      'New Employee Portal, at its own address: vitalistradingsystems.com/employee. It is a genuinely separate site rather than another workspace — its own page, its own bundle, and its own sign-in. Being signed in to the main portal does not sign you in there, and vice versa.',
+      'Inside it: an Overview of your employment record, a staff Directory, internal Announcements and Documents, and a Security section showing your active sessions and a full log of activity on your account. Portal administrators also get a People screen for granting access and keeping records up to date.',
+      'Entry requires a second factor. The first time you sign in you are walked through pairing an authenticator app and given ten single-use recovery codes. Sessions there are short — eight hours at most, and they end after thirty minutes idle.',
+      'You get in from My Portal ▸ Employee Portal, which explains what to expect and opens the site. The section only appears for accounts that a founder has granted the new Employee role AND that sign in with a @vitalistradingsystems.com email — both are required, and both are re-checked at the door. The read-only demo can never reach it.',
+    ],
+  },
   {
     version: 'Beta V 5.56',
     date: 'July 25, 2026',

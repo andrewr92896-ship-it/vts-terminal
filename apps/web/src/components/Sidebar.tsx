@@ -1,6 +1,12 @@
 import { useState, type CSSProperties } from 'react';
 import type { WorkspaceKey } from '../theme/themes';
-import { NAV, navFor, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
+import {
+  NAV,
+  navFor,
+  EMPLOYEE_ONLY_SECTIONS,
+  FUNDED_ONLY_SECTIONS,
+  type NavWorkspace,
+} from '../theme/nav';
 import { C, tint } from '../theme/tokens';
 import { APP_VERSION } from '../meta/version';
 import { Icon } from './Icon';
@@ -14,6 +20,9 @@ interface SidebarProps {
   nav?: NavWorkspace[];
   // Whether the private Funded (prop-challenge) section is revealed.
   canFunded: boolean;
+  // Whether the My Portal ▸ Employee Portal section is revealed (the `employee`
+  // role plus a company-domain sign-in email).
+  canEmployee?: boolean;
   collapsed: boolean;
   // Nav rows that should show a blinking red "new notification" dot: workspace
   // keys (e.g. the Admin workspace) and section keys (e.g. ad_bugs) with unseen
@@ -42,6 +51,7 @@ export function Sidebar(props: SidebarProps) {
     workspaces,
     nav,
     canFunded,
+    canEmployee,
     collapsed,
     workspaceDots,
     sectionDots,
@@ -55,8 +65,13 @@ export function Sidebar(props: SidebarProps) {
   const navList = nav ?? NAV;
   const current = navList.find((w) => w.key === workspace) ?? navFor(workspace);
   const accent = current?.accent ?? C.gold;
-  // Hide the private Funded section from anyone without the `funded` role.
-  const sections = (current?.sections ?? []).filter((s) => canFunded || !FUNDED_ONLY_SECTIONS.has(s.key));
+  // Hide the private Funded section from anyone without the `funded` role, and
+  // the Employee Portal section from anyone who cannot reach /employee.
+  const sections = (current?.sections ?? []).filter(
+    (s) =>
+      (canFunded || !FUNDED_ONLY_SECTIONS.has(s.key)) &&
+      (canEmployee || !EMPLOYEE_ONLY_SECTIONS.has(s.key)),
+  );
   // Show only the workspaces this user can access, in the effective nav order.
   const visible: NavWorkspace[] = navList.filter((w) => workspaces.includes(w.key));
 

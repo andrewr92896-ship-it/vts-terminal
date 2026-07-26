@@ -85,17 +85,23 @@ Monorepo, **npm workspaces**:
   origin, so the API and site share a host.
 - `apps/web` — **Vite + React 18 + TypeScript** frontend. Styling is
   inline-style / theme-token based (`src/theme`), **not** a CSS framework.
+  **Two build entries, not one:** `index.html` → the main portal, and
+  `employee.html` → the separate **Employee Portal** at `/employee` (see its own
+  section below). They share design tokens and the `Icon` component and nothing
+  else — no employee code ships in the main bundle, and vice versa.
 
 Tech:
 
 - **DB:** SQLite via **Drizzle ORM** on the **libsql** driver (`@libsql/client`);
   file at `DATABASE_URL` (default `file:./data/vts.db`; prod uses a Railway
-  volume). Schema in `apps/api/src/db/schema.ts`; ~57 SQL migrations in
+  volume). Schema in `apps/api/src/db/schema.ts`; ~73 SQL migrations in
   `apps/api/migrations` (`db:migrate`), seed with `db:seed`. Per-user deletes
   are **explicit** in `admin/service.ts` (no `ON DELETE CASCADE`) — when you add
   a per-user table, add it to that delete list too.
 - **Auth:** username/password, **argon2id** (`@node-rs/argon2`), signed
-  **httpOnly** session cookies, role-based access. See `apps/api/src/auth`.
+  **httpOnly** session cookies, role-based access. See `apps/api/src/auth`. The
+  Employee Portal has its **own, separate** session system
+  (`apps/api/src/employee`) — the two never grant each other anything.
 - **AI:** Claude via `@anthropic-ai/sdk`, server-side only (`apps/api/src/ai`).
 - **Secrets at rest:** broker credentials are AES-256-GCM encrypted
   (`security/secretbox.ts`).
@@ -103,14 +109,16 @@ Tech:
 
 ### Where things live
 
-- API modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,feedback,notifications,patchNotes,security,settings,studies,teams,todo,trading}`.
+- API modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,employee,feedback,legal,messageTemplates,notifications,patchNotes,security,settings,studies,support,teams,todo,trading,userTeams}`.
   Routes in `apps/api/src/routes/*`, registered in `server.ts` (health, auth,
   admin, earlyAccess, brokers, trading, webhooks, tvWebhook, todo, ai, chat,
   feedback, studies, push, pushover, content).
 - Web shell: `apps/web/src/components` (`Portal.tsx` is the router/shell,
   `Sidebar.tsx`, `TopBar.tsx`, `AskClaudePanel.tsx`, `TeamChat.tsx`,
   `UpdatePrompt.tsx`, `InstallPrompt.tsx`, …).
-- Web features: `apps/web/src/workspaces/{trading,investments,studies,admin,help}`.
+- Web features: `apps/web/src/workspaces/{trading,investments,studies,myportal,admin,help}`.
+- Employee Portal web app: `apps/web/src/employee/*` (its own entry, API client,
+  shell and screens) — a separate bundle, see its section below.
 - Web API client: `apps/web/src/api/client.ts` — one flat typed `api` object;
   every call is cookie-authed (`credentials: 'include'`), root-relative `/api`,
   throws `ApiError { status }` on non-2xx.
@@ -171,6 +179,13 @@ top of the workspaces list** (see `theme/nav.ts` order).
   retirement providers (Fidelity, Vanguard 401k) don't expose per-user API keys
   the way OANDA/Kraken do. Every advice-flavored surface must carry an
   "informational only, not investment advice" disclaimer.
+- **My Portal** also holds the **Employee Portal** launch section
+  (`my_employee`, `workspaces/myportal/EmployeePortalLaunch.tsx`) — a card that
+  explains the separate employee site and links to `/employee`. It is the only
+  way in from the app. Hidden unless the viewer holds the `employee` role **and**
+  signs in on a company email address (`EMPLOYEE_ONLY_SECTIONS` in `theme/nav.ts`
+  + `canAccessEmployeePortal`); never shown to the demo. See the Employee Portal
+  section below.
 - **My Portal** also gains two personal roll-up sections (emerald), both
   currently "Coming Soon":
   - **Investment Holdings** (`my_holdings`) — a combined summary of active
@@ -242,6 +257,11 @@ any combination:
   `requireWorkspaceWrite` blocks it).
 - `funded` — reveals the private **Funded** prop-challenge section inside Trading
   (still needs Trading access; `requireFunded`). Never the demo.
+- `employee` — reveals **My Portal ▸ Employee Portal** and permits the separate
+  sign-in at `/employee`. **Not** implied by admin or founder level — it must be
+  granted outright, by a founder. It unlocks nothing inside the main portal, and
+  on its own it is not enough: a **company-domain sign-in email** is required too
+  (`canAccessEmployeePortal(roles, email)`). Never the demo.
 - `studies` — Studies.
 
 Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`,
@@ -380,6 +400,113 @@ act on the same team:
   All default **off** (opt-in). The session watch reads these to fire a trader's
   own session notifications.
 
+## Employee Portal (`/employee`) — a separate, hardened surface
+
+The company's internal staff site. Unlike everything else in this repo it is
+**not a workspace**: it is a second website served from the same origin, with its
+own URL, its own bundle, its own API namespace and — the point of the whole
+design — **its own sessions**. Signing in to the main portal grants nothing at
+`/employee`, and an employee session grants nothing in the main portal. They
+share an account table and nothing else.
+
+**Where it lives**
+
+- API: `apps/api/src/employee/{totp,sessions,audit,lockout,network,guard,service}.ts`,
+  routes in `routes/employee.ts` (all under `/api/employee/*`), registered in
+  `server.ts`. Tables: `employee_profiles`, `employee_sessions`,
+  `employee_login_attempts`, `employee_audit_log`, `employee_announcements`,
+  `employee_documents` (migration `0073_employee_portal.sql`).
+- Web: `apps/web/employee.html` (a second Vite/Rollup entry) → `src/employee/*`.
+  The way in from the app is **My Portal ▸ Employee Portal** (`my_employee`),
+  which is a launch card containing a plain `<a href="/employee">` — a real page
+  navigation, because the employee portal is a different document.
+- `server.ts` serves `/employee`, `/employee/`, and `/employee/*` from the built
+  `employee.html`, read into memory and sent directly (**not** via
+  `@fastify/static`, whose `Cache-Control` would overwrite the `no-store` header
+  this page must carry).
+
+**Who gets in — two independent conditions, both required**
+
+1. the `employee` role, granted per person by a founder; and
+2. a sign-in email on `EMPLOYEE_EMAIL_DOMAIN` (default
+   `vitalistradingsystems.com`).
+
+Both are re-checked on **every** request (`loadEmployeeContext`), not just at
+sign-in, so revoking either takes effect immediately — a live session dies on the
+next request. The demo is hard-excluded regardless of roles.
+
+> **Do not make the email domain the only gate.** `seed.ts` backfills every
+> account without an email to `<username>@vitalistradingsystems.com`, so the
+> domain test alone is close to "every account". It is a *narrowing* condition
+> layered on the explicit role, never a grant.
+
+**The security layers** (in the order `guard.ts` applies them)
+
+1. **Network** — optional `EMPLOYEE_IP_ALLOWLIST` (IPv4/IPv6 addresses or CIDRs).
+   When set, the page load and every API call from outside it are refused before
+   authentication. **Fails closed**: an unparseable client address is refused. The
+   main portal is unaffected.
+2. **Origin** — `Sec-Fetch-Site` (or `Origin`) must be this site on every write.
+3. **Session** — cookie `__Host-vts_employee` in production (plain
+   `vts_employee` in dev, since `__Host-` requires Secure), `SameSite=Strict`,
+   `httpOnly`, signed, only the SHA-256 of the token stored. **8h absolute** cap
+   (`EMPLOYEE_SESSION_HOURS`) **and** a **30-minute idle timeout**
+   (`EMPLOYEE_IDLE_MINUTES`), both enforced server-side on lookup.
+4. **Identity** — the two conditions above, plus an `active` employee profile.
+5. **CSRF** — a per-session token derived as `HMAC(SESSION_SECRET, sessionId)`
+   (never stored, so a DB copy holds no usable token), echoed by the client in
+   the `x-vts-employee-csrf` header on every non-GET.
+
+**Second factor.** TOTP (RFC 6238) implemented dependency-free on `node:crypto`
+in `employee/totp.ts`. Required by default (`EMPLOYEE_REQUIRE_2FA`). A first
+sign-in without one gets a `pending_2fa` session that can reach **only** the
+enrollment endpoints. The secret is AES-256-GCM encrypted at rest
+(`security/secretbox.ts`); `totp_last_step` makes every code **strictly
+single-use** (a code cannot be replayed, not even seconds later — expect to wait
+for the next 30s window). Enrollment issues **ten single-use recovery codes**,
+shown once, stored only as SHA-256 hashes. Self-service rotation is deliberately
+not offered — a portal admin resets it (`POST /api/employee/admin/people/:id/reset-2fa`),
+which also kills that person's sessions.
+
+**Brute force.** `employee_login_attempts` tracks failures per **account** and
+per **source address**, with a progressive lockout (5 fails → 1 min, 8 → 5 min,
+10 → 15 min, 12 → 1 h) that decays after a quiet hour. Counters live in the
+database so a restart does not hand out a fresh budget. The main portal still has
+no login throttle; this surface does.
+
+**Audit.** `employee_audit_log` is append-only: every sign-in, failure, lockout,
+refusal, CSRF rejection and write. Nothing updates or deletes a row, and the log
+deliberately **survives account deletion** (`admin/service.ts` removes the
+profile, sessions and throttle counters, never the audit rows). Employees read
+their own trail in the Security screen; portal admins can read everyone's.
+
+**Response headers** (`applyEmployeeSecurityHeaders`, on the page shell and every
+`/api/employee` response): a strict CSP (`script-src 'self'`,
+`frame-ancestors 'none'`, `connect-src 'self'`, `base-uri 'none'`),
+`X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Permissions-Policy`,
+COOP/CORP/COEP, `Cache-Control: no-store`, `X-Robots-Tag: noindex`, and HSTS in
+production.
+
+**Never cached, never installable.** `/employee` is on the service worker's
+`navigateFallbackDenylist` and its assets on `globIgnores`, so the surface is
+always fetched fresh from the network. A small Vite plugin
+(`stripPwaFromEmployeeEntry`) removes the injected web-app manifest from that
+entry — it is not a PWA and must not offer an install prompt.
+
+**Screens** (`src/employee/screens/*`): Overview (your record + the session's own
+security posture), Directory, Announcements, Documents, Security (2FA, active
+sessions, activity log), and **People** — the HR screen for portal admins
+(`employee_profiles.is_admin`, or founder-level implicitly): grant/revoke access,
+edit records, reset a second factor. Granting refuses a non-company address up
+front rather than creating an account that would fail at the door.
+
+**Editable copy.** The employee bundle reads the same `copy.<id>` overrides via
+`GET /api/employee/copy` and renders them through its own `<T id="emp.…">`
+component (`src/employee/copy.tsx`). It **reads only** — the inline edit mode and
+its founder auth stay in the main portal, so this surface takes no dependency on
+main-portal auth. Employee ids are namespaced `emp.*`; the launch card in My
+Portal is ordinary main-portal copy and uses `<EditableText id="myemp.…">`.
+
 ## Auth & security specifics
 
 - Login `POST /api/auth/login` by email (or username fallback), generic 401,
@@ -392,7 +519,9 @@ act on the same team:
   deactivate revokes all of a user's sessions.
 - **No** login rate-limit, account lockout, or CSRF token — CSRF posture rests on
   `sameSite: 'lax'` + signed httpOnly cookie. AI usage cap and the broker poll
-  throttle are the only rate limits.
+  throttle are the only rate limits. (The **Employee Portal** has all of these —
+  lockout, CSRF token, idle timeout, 2FA — on its own separate session; see its
+  section above. None of it applies to the main portal's `vts_session`.)
 - **Key rotation caveat:** `SESSION_SECRET` signs cookies; `CREDENTIALS_KEY`
   (or, if unset, a key derived from `SESSION_SECRET`) encrypts broker creds.
   Rotating either **invalidates all sessions and makes stored broker creds
@@ -406,7 +535,10 @@ act on the same team:
 
 - **Routing is state-based, not URL-based** (no react-router). `Portal.tsx` holds
   `workspace`/`screen` in `useState`; the URL never changes and there is **no
-  deep-linking, refresh-persistence, or browser back/forward**. `Screen`
+  deep-linking, refresh-persistence, or browser back/forward**. The **one**
+  URL-addressable surface is `/employee`, and it is a separate page rather than a
+  route — see the Employee Portal section. Its own internal navigation is
+  state-based too. `Screen`
   (`workspaces/Screens.tsx`) is a stale "Stage N" placeholder that only renders
   as the fallback for unmapped keys.
 - **State:** auth/current-user in `auth/AuthContext.tsx` (`useAuth()`); everything
@@ -446,6 +578,11 @@ defaults; the app runs locally with almost nothing set.
 - **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
   `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`, `SESSION_WATCH_SECONDS` (session-notif
   poll cadence, default 30).
+- **Employee Portal:** `EMPLOYEE_SESSION_HOURS` (8), `EMPLOYEE_IDLE_MINUTES` (30),
+  `EMPLOYEE_REQUIRE_2FA` (`true`), `EMPLOYEE_EMAIL_DOMAIN`
+  (`vitalistradingsystems.com`), `EMPLOYEE_IP_ALLOWLIST` (unset = no network
+  fence; **fails closed** when set, so a wrong value locks you out of `/employee`
+  — the main portal is unaffected). Every default is the strict value.
 - **First-boot admin seed** (read directly via `process.env`, not in the schema):
   `ADMIN_USERNAME` (default `andrew`), `ADMIN_DISPLAY_NAME`, `ADMIN_EMAIL`,
   `ADMIN_PASSWORD` (blank = random, printed once to logs), `APP_EMAIL_DOMAIN`.
@@ -509,7 +646,9 @@ Run before merging (both must pass):
 
 - Typecheck: `npm run typecheck` (root; api + web). Single workspace:
   `npm --workspace @vts/api run typecheck` / `@vts/web`.
-- Build: `npm run build` (api `tsc` + web `vite build`).
+- Build: `npm run build` (api `tsc` + web `vite build`). The web build emits
+  **two** HTML entries — `dist/index.html` and `dist/employee.html`; if the
+  latter is missing, `/employee` serves a plain "not built" 404.
 
 Run `npm install` first in a fresh container.
 

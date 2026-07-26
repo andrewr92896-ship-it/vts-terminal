@@ -39,6 +39,11 @@ export const NAV: NavWorkspace[] = [
       // The whole-life roll-up: everything you own minus everything you owe.
       { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      // The way in to the separate Employee Portal at /employee. Role-gated and
+      // company-email-gated (see EMPLOYEE_ONLY_SECTIONS); the section itself is
+      // just a launch card — the portal is a different page with its own
+      // sign-in, not a screen rendered inside this app.
+      { key: 'my_employee', label: 'Employee Portal', icon: 'shield-check' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
@@ -169,6 +174,13 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
 // hides these unless the viewer holds the role (see canAccessFunded); the demo
 // and the public never see them.
 export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
+
+// My Portal sections gated behind employee-portal access — the `employee` role
+// *and* a company-domain sign-in email (see canAccessEmployeePortal). The
+// sidebar hides these unless the viewer holds both; the demo and the public
+// never see them. The server is the real enforcer: /employee refuses anyone who
+// does not qualify, whatever the nav shows.
+export const EMPLOYEE_ONLY_SECTIONS = new Set(['my_employee']);
 
 // The signalling accent for a workspace (falls back to gold for any key not in
 // the nav — every real WorkspaceKey is present, so the fallback is a safety net).

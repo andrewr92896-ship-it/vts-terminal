@@ -26,6 +26,9 @@ import {
   userTeams,
   userTeamMembers,
   userTeamInvites,
+  employeeProfiles,
+  employeeSessions,
+  employeeLoginAttempts,
   manualPositions,
   fundedAccounts,
   fundedTrades,
@@ -69,7 +72,14 @@ function isOwnerRow(u: { username: string; createdUsername: string | null }): bo
 // Roles only the owner may grant/revoke (founder-level power).
 const OWNER_ONLY_ROLES: RoleKey[] = ['founder', 'software_developer'];
 // Roles only a founder-level user may grant/revoke.
-const FOUNDER_ONLY_ROLES: RoleKey[] = ['admin', 'funded'];
+const FOUNDER_ONLY_ROLES: RoleKey[] = ['admin', 'funded', 'employee'];
+
+// Human labels for the founder-only roles, used in the refusal message.
+const FOUNDER_ONLY_LABELS: Partial<Record<RoleKey, string>> = {
+  admin: 'Admin',
+  funded: 'Funded',
+  employee: 'Employee',
+};
 
 // Enforce who may change which roles when an admin edits a user's role set.
 // `acting` is the user making the change; `current`/`next` are the target's
@@ -92,7 +102,7 @@ function assertCanAssignRoles(
   }
   for (const role of FOUNDER_ONLY_ROLES) {
     if (changed(role) && !founderLevel) {
-      const label = role === 'funded' ? 'Funded' : 'Admin';
+      const label = FOUNDER_ONLY_LABELS[role] ?? role;
       throw new AdminError(`Only a founder can grant or remove the ${label} role`);
     }
   }
@@ -447,6 +457,16 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx
       .delete(userTeamInvites)
       .where(or(eq(userTeamInvites.invitedUserId, targetId), eq(userTeamInvites.invitedBy, targetId)));
+    // Employee portal. The HR record, every employee session and the sign-in
+    // throttle counter go with the account. The audit trail deliberately does
+    // NOT: it is append-only evidence of what happened, so the rows survive with
+    // their `actor` name intact (the user_id column simply points at an id that
+    // no longer resolves). Announcements and documents they authored also
+    // survive — only the authorship link is dropped (`ON DELETE set null`),
+    // matching how team study content is handled above.
+    await tx.delete(employeeSessions).where(eq(employeeSessions.userId, targetId));
+    await tx.delete(employeeProfiles).where(eq(employeeProfiles.userId, targetId));
+    await tx.delete(employeeLoginAttempts).where(eq(employeeLoginAttempts.id, `user:${targetId}`));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });

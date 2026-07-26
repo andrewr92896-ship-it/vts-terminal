@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Internal only. Never indexed, never cached, never linked publicly. -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
+    <meta name="referrer" content="no-referrer" />
+    <link rel="icon" type="image/png" href="/brand/vitalis-wordmark.png" />
+    <meta name="theme-color" content="#050B18" />
+    <!--
+      Deliberately NOT a PWA surface: no manifest, no apple-mobile-web-app tags,
+      no service-worker registration. The employee portal must always be served
+      fresh from the network, never from an offline cache on someone's device.
+    -->
+    <title>Employee Portal — Vitalis Trading Systems</title>
+  </head>
+  <body>
+    <div id="employee-root"></div>
+    <script type="module" src="/src/employee/main.tsx"></script>
+  </body>
+</html>
