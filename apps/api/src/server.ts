@@ -1,7 +1,7 @@
 import './types.js';
 import path from 'node:path';
 import fs from 'node:fs';
-import Fastify from 'fastify';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
@@ -28,6 +28,8 @@ import { widgetRoutes } from './routes/widget.js';
 import { contentRoutes } from './routes/content.js';
 import { userTeamRoutes } from './routes/userTeams.js';
 import { messageTemplateRoutes } from './routes/messageTemplates.js';
+import { employeeRoutes } from './routes/employee.js';
+import { applyEmployeeSecurityHeaders, enforceIpAllowlist } from './employee/guard.js';
 import { seedBadges } from './badges/service.js';
 import { runMigrations } from './db/migrate.js';
 import { waitForDatabase } from './db/index.js';
@@ -107,11 +109,44 @@ export async function buildServer() {
   await app.register(contentRoutes);
   await app.register(userTeamRoutes);
   await app.register(messageTemplateRoutes);
+  await app.register(employeeRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).
   if (fs.existsSync(path.join(WEB_DIST, 'index.html'))) {
     await app.register(fastifyStatic, { root: WEB_DIST, wildcard: false });
+
+    // The employee portal is its own page at /employee — a separate Vite entry
+    // (employee.html), not a route inside the main single-page app. Serving it
+    // from a distinct URL is what makes the separation real: the main bundle
+    // never contains employee code, and this shell carries the hardened header
+    // set (strict CSP, no framing, no caching, no referrer) that the rest of the
+    // site does not need. The optional IP allowlist is applied here too, so a
+    // blocked network never even receives the sign-in page.
+    const employeeShellPath = path.join(WEB_DIST, 'employee.html');
+    // Read and hold the shell rather than handing it to @fastify/static: the
+    // static plugin sets its own Cache-Control, which would overwrite the
+    // no-store header this page must carry. Sending the string ourselves keeps
+    // every header under this handler's control. The file is a build artifact,
+    // so caching it in memory is safe for the life of the process.
+    let employeeShellHtml: string | null = null;
+    const serveEmployeeShell = async (request: FastifyRequest, reply: FastifyReply) => {
+      if (!(await enforceIpAllowlist(request, reply))) return reply;
+      applyEmployeeSecurityHeaders(reply, { html: true });
+      if (employeeShellHtml == null) {
+        if (!fs.existsSync(employeeShellPath)) {
+          return reply.code(404).type('text/plain').send('Employee portal is not built');
+        }
+        employeeShellHtml = fs.readFileSync(employeeShellPath, 'utf8');
+      }
+      return reply.type('text/html; charset=utf-8').send(employeeShellHtml);
+    };
+    app.get('/employee', serveEmployeeShell);
+    app.get('/employee/', serveEmployeeShell);
+    // Any deeper path resolves to the same shell, so a bookmarked or mistyped
+    // sub-path lands on the portal rather than the main app.
+    app.get('/employee/*', serveEmployeeShell);
+
     app.setNotFoundHandler((request, reply) => {
       if (request.method === 'GET' && !request.url.startsWith('/api')) {
         return reply.type('text/html').sendFile('index.html');

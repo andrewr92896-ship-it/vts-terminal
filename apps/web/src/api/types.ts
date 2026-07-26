@@ -16,6 +16,7 @@ export type RoleKey =
   | 'software_developer'
   | 'admin'
   | 'funded'
+  | 'employee'
   | 'member';
 
 // One row in the Study Game high-score table. Mirrors the backend's
@@ -100,6 +101,9 @@ export interface User {
     // Whether the private Funded (prop-challenge) section is revealed. Never true
     // for the demo account.
     funded: boolean;
+    // Whether the Employee Portal (/employee) launch row is revealed. Reaching
+    // that portal still requires a separate sign-in there. Never true for the demo.
+    employee: boolean;
     // Whether the user carries admin capability (admin or founder-level).
     admin: boolean;
     // Whether the user is founder-level (founder or software_developer).

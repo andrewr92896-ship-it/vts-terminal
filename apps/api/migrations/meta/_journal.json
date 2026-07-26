@@ -512,6 +512,13 @@
       "when": 1782340436908,
       "tag": "0072_message_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "6",
+      "when": 1782340536908,
+      "tag": "0073_employee_portal",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,10 @@
 import type { UserRow } from '../db/schema.js';
+import { config } from '../config.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { LEGAL_VERSION } from '../legal/version.js';
+
+// The company email domain that gates the Employee Portal (EMPLOYEE_EMAIL_DOMAIN).
+export const COMPANY_EMAIL_DOMAIN = config.EMPLOYEE_EMAIL_DOMAIN;
 
 export type WorkspaceKey = 'trading' | 'studies';
 
@@ -23,6 +27,12 @@ export function isOwnerUser(u: Pick<UserRow, 'username' | 'createdUsername'>): b
 //   • admin              — user/team management and the Admin Portal.
 //   • funded             — reveals the private Funded (prop-challenge) section in
 //                          Trading. Only a founder-level user can grant it.
+//   • employee           — grants access to the separate, hardened Employee
+//                          Portal at /employee. It unlocks nothing inside the
+//                          main portal; it only makes the employee sign-in at
+//                          that URL possible (a second, independent
+//                          authentication). Only a founder-level user can grant
+//                          it, and the demo can never hold it.
 //   • member             — the baseline. Every signed-in user is at least a
 //                          member and sees every non-admin workspace (Trading,
 //                          Studies, My Portal, Site Help).
@@ -31,6 +41,7 @@ export const ROLE_KEYS = [
   'software_developer',
   'admin',
   'funded',
+  'employee',
   'member',
 ] as const;
 export type RoleKey = (typeof ROLE_KEYS)[number];
@@ -40,6 +51,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   software_developer: 'Software Developer',
   admin: 'Admin',
   funded: 'Funded',
+  employee: 'Employee',
   member: 'Member',
 };
 
@@ -102,6 +114,36 @@ export function canAccessFunded(roles: RoleKey[]): boolean {
   return isAdmin(roles) || roles.includes('funded');
 }
 
+// Whether a sign-in email is on the company domain. Note that `seed.ts`
+// backfills every account without an email to <username>@<company domain>, so
+// this test on its own is close to "every account" — it is a NARROWING
+// condition, never a grant. It is paired with the explicit `employee` role
+// below, and both must hold.
+export function isCompanyEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase().endsWith(`@${COMPANY_EMAIL_DOMAIN}`);
+}
+
+// Whether the account may sign in to the Employee Portal at /employee. Two
+// independent conditions, both required:
+//
+//   1. the `employee` role, granted per person by a founder — NOT implied by
+//      admin or founder level, because the employee surface is a separate,
+//      explicitly-granted zone; and
+//   2. a sign-in email on the company domain, so an outside collaborator on a
+//      personal address can never enter it whatever roles they hold.
+//
+// Holding both grants nothing inside the main portal — it only reveals the
+// launch section in My Portal and lets the separate sign-in at /employee
+// succeed (which additionally requires an active employee profile and a second
+// factor). Never true for the demo.
+export function canAccessEmployeePortal(
+  roles: RoleKey[],
+  email: string | null | undefined,
+): boolean {
+  return roles.includes('employee') && isCompanyEmail(email);
+}
+
 // No workspace has a read-only role variant anymore (the old trading_viewer
 // role is retired). Kept as a stable export so write guards still compile; the
 // demo's read-only presentation is handled by the demo guard, not here.
@@ -153,6 +195,10 @@ export interface PublicUser {
     // Whether the private Funded (prop-challenge) section is revealed. Never true
     // for the demo account.
     funded: boolean;
+    // Whether the separate Employee Portal (/employee) launch link is revealed.
+    // Only says the link is shown — reaching the portal still requires a fresh,
+    // independent sign-in there. Never true for the demo.
+    employee: boolean;
     // Whether the user carries admin capability (admin or founder-level).
     admin: boolean;
     // Whether the user is founder-level (founder or software_developer).
@@ -194,6 +240,7 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
       // demoGuard already refuses the writes server-side regardless).
       readOnlyWorkspaces: isDemo ? workspaces : workspaces.filter((ws) => isWorkspaceReadOnly(roles, ws)),
       funded: !isDemo && canAccessFunded(roles),
+      employee: !isDemo && canAccessEmployeePortal(roles, u.email),
       admin: !isDemo && isAdmin(roles),
       founder: !isDemo && isFounder(roles),
       owner: !isDemo && isOwnerUser(u),

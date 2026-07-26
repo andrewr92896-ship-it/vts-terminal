@@ -50,6 +50,34 @@ const envSchema = z.object({
   // the trader's own per-app sound choice in the Pushover app applies.
   PUSHOVER_APP_TOKEN: z.string().optional(),
   PUSHOVER_SOUND: z.string().optional(),
+  // ---- Employee portal (/employee) ----
+  // A deliberately separate, hardened surface with its own sessions. These knobs
+  // are all "secure by default": the shipped values are the strict ones, and
+  // loosening any of them is an explicit, deliberate act.
+  //
+  // Sessions here are short-lived on purpose: an absolute cap plus an idle
+  // timeout, both far tighter than the 14-day main-portal session.
+  EMPLOYEE_SESSION_HOURS: z.coerce.number().positive().max(24).default(8),
+  EMPLOYEE_IDLE_MINUTES: z.coerce.number().int().positive().max(480).default(30),
+  // Require a TOTP second factor. On by default — an employee who has not
+  // enrolled one is walked through enrollment before they can reach anything.
+  EMPLOYEE_REQUIRE_2FA: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  // The company email domain. Reaching the employee portal requires a sign-in
+  // email on this domain — an outside collaborator with a personal address can
+  // never enter it, whatever roles they hold. Checked at sign-in AND on every
+  // request, so changing someone's address takes effect immediately.
+  EMPLOYEE_EMAIL_DOMAIN: z
+    .string()
+    .default('vitalistradingsystems.com')
+    .transform((v) => v.trim().toLowerCase().replace(/^@/, '')),
+  // Optional network fence. A comma-separated list of IPv4/IPv6 addresses or
+  // CIDR ranges; when set, every /employee page load and /api/employee call from
+  // outside the list is refused before authentication is even attempted. Unset
+  // (the default) means no network restriction.
+  EMPLOYEE_IP_ALLOWLIST: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({

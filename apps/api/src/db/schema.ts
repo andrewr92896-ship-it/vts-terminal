@@ -1290,3 +1290,143 @@ export const messageTemplates = sqliteTable('message_templates', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type MessageTemplateRow = typeof messageTemplates.$inferSelect;
+
+// ---- Employee portal (vitalistradingsystems.com/employee) ----
+//
+// The employee portal is a deliberately separate, hardened surface: its own URL,
+// its own bundle, its own API namespace and — critically — its own sessions.
+// A main-portal login grants nothing here; an employee re-authenticates at
+// /employee and that session is tracked in `employee_sessions` below, never in
+// `sessions`. Everything in this block exists to keep that boundary auditable.
+
+export const EMPLOYMENT_TYPES = ['full_time', 'part_time', 'contractor', 'intern'] as const;
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
+
+export const EMPLOYEE_STATUSES = ['active', 'suspended', 'offboarded'] as const;
+export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
+
+// One row per portal user granted employee-portal access. Presence of the row is
+// the HR record; the `employee` role on the user is the access grant. Both must
+// line up (role + an `active` profile) for a sign-in to succeed, so revoking
+// either one locks the person out immediately.
+export const employeeProfiles = sqliteTable('employee_profiles', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  employeeNo: text('employee_no'),
+  title: text('title'),
+  department: text('department'),
+  workEmail: text('work_email'),
+  workPhone: text('work_phone'),
+  location: text('location'),
+  // Another employee's users.id, or null. Shown in the directory.
+  managerId: text('manager_id').references(() => users.id, { onDelete: 'set null' }),
+  employmentType: text('employment_type', { enum: EMPLOYMENT_TYPES }).notNull().default('full_time'),
+  startedOn: text('started_on'), // ISO date (YYYY-MM-DD); no time component needed
+  status: text('status', { enum: EMPLOYEE_STATUSES }).notNull().default('active'),
+  // HR/administrator *of the employee portal* — may manage people, announcements
+  // and documents in it. Distinct from the main portal's admin role; founder-level
+  // users are treated as portal admins implicitly.
+  isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
+  // The TOTP shared secret, AES-256-GCM encrypted at rest (security/secretbox).
+  // Null until the employee enrolls a second factor.
+  totpSecret: text('totp_secret'),
+  totpEnrolledAt: integer('totp_enrolled_at', { mode: 'timestamp_ms' }),
+  // The last accepted TOTP time-step. A code is refused if its step is not
+  // strictly newer, so a code observed on the wire can never be replayed.
+  totpLastStep: integer('totp_last_step'),
+  // JSON array of SHA-256 hashes of the single-use recovery codes. The plaintext
+  // codes are shown exactly once, at generation, and never stored.
+  recoveryCodes: text('recovery_codes'),
+  lastLoginAt: integer('last_login_at', { mode: 'timestamp_ms' }),
+  lastLoginIp: text('last_login_ip'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type EmployeeProfileRow = typeof employeeProfiles.$inferSelect;
+
+// Employee-portal sessions. Same hardening as the main `sessions` table (only
+// the SHA-256 of the cookie token is stored) plus a short absolute lifetime and
+// an idle timeout enforced on lookup. `stage` is 'pending_2fa' for a session
+// that has passed the password check but still has to enroll a second factor —
+// such a session may only reach the enrollment endpoints.
+export const EMPLOYEE_SESSION_STAGES = ['pending_2fa', 'active'] as const;
+export type EmployeeSessionStage = (typeof EMPLOYEE_SESSION_STAGES)[number];
+
+export const employeeSessions = sqliteTable('employee_sessions', {
+  id: text('id').primaryKey(), // sha256(token)
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  stage: text('stage', { enum: EMPLOYEE_SESSION_STAGES }).notNull().default('active'),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type EmployeeSessionRow = typeof employeeSessions.$inferSelect;
+
+// Failed-sign-in counters for the progressive lockout. `id` is the throttle key:
+// "user:<userId>" or "ip:<address>" — both are tracked, so neither spraying one
+// account from many addresses nor many accounts from one address gets free tries.
+export const employeeLoginAttempts = sqliteTable('employee_login_attempts', {
+  id: text('id').primaryKey(),
+  fails: integer('fails').notNull().default(0),
+  firstFailAt: integer('first_fail_at', { mode: 'timestamp_ms' }).notNull(),
+  lastFailAt: integer('last_fail_at', { mode: 'timestamp_ms' }).notNull(),
+  lockedUntil: integer('locked_until', { mode: 'timestamp_ms' }),
+});
+export type EmployeeLoginAttemptRow = typeof employeeLoginAttempts.$inferSelect;
+
+// Append-only audit trail for the employee portal. Every sign-in (successful or
+// not), every lockout, every refusal and every write is recorded here. Rows are
+// never rewritten — `userId` is nullable because a failed sign-in may not resolve
+// to an account, and the attempted identifier is kept in `actor` instead.
+export const employeeAuditLog = sqliteTable('employee_audit_log', {
+  id: text('id').primaryKey(),
+  at: integer('at', { mode: 'timestamp_ms' }).notNull(),
+  userId: text('user_id'),
+  actor: text('actor'), // display name, or the identifier a failed sign-in used
+  action: text('action').notNull(), // e.g. 'login.success', 'document.deleted'
+  target: text('target'), // what was acted on (an id or a name)
+  detail: text('detail'),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  ok: integer('ok', { mode: 'boolean' }).notNull().default(true),
+});
+export type EmployeeAuditRow = typeof employeeAuditLog.$inferSelect;
+
+// Internal announcements, posted by an employee-portal admin and visible to
+// every employee. Separate from the main portal's `announcements` table so
+// internal staff communication never leaks into the member-facing site.
+export const employeeAnnouncements = sqliteTable('employee_announcements', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  pinned: integer('pinned', { mode: 'boolean' }).notNull().default(false),
+  authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+  authorName: text('author_name'), // denormalized so a post survives its author
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type EmployeeAnnouncementRow = typeof employeeAnnouncements.$inferSelect;
+
+// Internal documents: handbook sections, policies, forms and process guides.
+// Either inline text (`body`) or a pointer to an external file (`linkUrl`).
+export const EMPLOYEE_DOC_CATEGORIES = ['policy', 'handbook', 'form', 'guide', 'other'] as const;
+export type EmployeeDocCategory = (typeof EMPLOYEE_DOC_CATEGORIES)[number];
+
+export const employeeDocuments = sqliteTable('employee_documents', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  category: text('category', { enum: EMPLOYEE_DOC_CATEGORIES }).notNull().default('policy'),
+  summary: text('summary'),
+  body: text('body'),
+  linkUrl: text('link_url'),
+  authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+  authorName: text('author_name'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type EmployeeDocumentRow = typeof employeeDocuments.$inferSelect;

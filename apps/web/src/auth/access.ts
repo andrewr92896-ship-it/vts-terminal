@@ -10,6 +10,7 @@ export const ALL_ROLES: RoleKey[] = [
   'software_developer',
   'admin',
   'funded',
+  'employee',
   'member',
 ];
 
@@ -18,6 +19,7 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   software_developer: 'Software Developer',
   admin: 'Admin',
   funded: 'Funded',
+  employee: 'Employee',
   member: 'Member',
 };
 
@@ -27,6 +29,8 @@ export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
   software_developer: 'Founder-equivalent access. Granted only by the owner.',
   admin: 'Manage users and teams (Admin Portal). Granted by a founder.',
   funded: 'Private — reveals the Funded (prop-challenge) section in Trading.',
+  employee:
+    'Reveals the Employee Portal section in My Portal. Also requires a company email address, and its own sign-in plus a second factor at /employee.',
   member: 'Baseline access to every standard workspace.',
 };
 
@@ -56,6 +60,30 @@ export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean 
 // gating and the "view as" preview.
 export function canAccessFunded(roles: RoleKey[]): boolean {
   return isAdmin(roles) || roles.includes('funded');
+}
+
+// The company email domain that gates the Employee Portal. Mirrors the backend's
+// EMPLOYEE_EMAIL_DOMAIN default — the server is the enforcer and reads the real
+// (env-configurable) value, so a mismatch here only affects whether the nav
+// section is drawn, never whether /employee lets someone in.
+export const COMPANY_EMAIL_DOMAIN = 'vitalistradingsystems.com';
+
+export function isCompanyEmail(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase().endsWith(`@${COMPANY_EMAIL_DOMAIN}`);
+}
+
+// Whether to show the My Portal ▸ Employee Portal section. Two conditions, both
+// required: the `employee` role — NOT implied by admin or founder level, since
+// the employee surface is a separate, explicitly-granted zone — and a sign-in
+// email on the company domain. Mirror of the backend's canAccessEmployeePortal;
+// revealing the section grants nothing on its own, since /employee has its own
+// sign-in and re-checks both conditions there.
+export function canAccessEmployeePortal(
+  roles: RoleKey[],
+  email: string | null | undefined,
+): boolean {
+  return roles.includes('employee') && isCompanyEmail(email);
 }
 
 // No workspace has a read-only role variant anymore (the old trading_viewer role
@@ -91,7 +119,7 @@ export function canGrantRole(
   role: RoleKey,
 ): boolean {
   if (role === 'founder' || role === 'software_developer') return actor.owner;
-  if (role === 'admin' || role === 'funded') return actor.founder;
+  if (role === 'admin' || role === 'funded' || role === 'employee') return actor.founder;
   return true; // member
 }
 

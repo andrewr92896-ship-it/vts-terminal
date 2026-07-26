@@ -1,6 +1,32 @@
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+
+const root = path.dirname(fileURLToPath(import.meta.url));
+
+// vite-plugin-pwa injects the web-app manifest into every HTML entry it finds.
+// The employee portal must not be one: it is a network-only, non-installable
+// page, and an install prompt there would launch the *main* portal (the
+// manifest's start_url is "/"). Strip the injected tag from that entry only.
+// The hook uses the object form with order: 'post' so it lands in the same late
+// bucket as the PWA plugin's own injection and, being registered after it, runs
+// last — the function shorthand would be treated as a normal-order hook and run
+// before the tag exists.
+function stripPwaFromEmployeeEntry() {
+  return {
+    name: 'vts-strip-pwa-from-employee',
+    enforce: 'post' as const,
+    transformIndexHtml: {
+      order: 'post' as const,
+      handler(html: string, ctx: { filename: string }) {
+        if (!ctx.filename.endsWith('employee.html')) return html;
+        return html.replace(/\s*<link rel="manifest"[^>]*>/g, '');
+      },
+    },
+  };
+}
 
 // The frontend dev server proxies /api to the backend so the browser talks
 // to a single origin and the session cookie flows normally.
@@ -49,16 +75,36 @@ export default defineConfig({
         importScripts: ['/push-sw.js'],
         // Precache the built static shell so the app opens and routes offline.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff,woff2}'],
+        // ...but never the employee portal. That surface is deliberately
+        // network-only: nothing about it should sit in a device's offline cache,
+        // and a security-critical page must always run the code the server is
+        // currently serving.
+        globIgnores: ['**/employee.html', '**/employee-*.js', '**/employee-*.css'],
         // Single-page app: unknown routes fall back to the app shell.
         navigateFallback: '/index.html',
-        // Never serve the HTML shell for API or webhook paths. They must always
-        // hit the network so live data and the TradingView webhook stay real.
-        navigateFallbackDenylist: [/^\/api/],
+        // Never serve the HTML shell for API, webhook or employee-portal paths.
+        // The first two must hit the network so live data and the TradingView
+        // webhook stay real; /employee must hit the network so the separate,
+        // hardened page (and its headers) is what actually loads — the main
+        // app shell must never stand in for it.
+        navigateFallbackDenylist: [/^\/api/, /^\/employee/],
         // No runtimeCaching for /api on purpose: every API and live data request
         // goes to the network so nothing is ever served stale.
       },
     }),
+    stripPwaFromEmployeeEntry(),
   ],
+  build: {
+    rollupOptions: {
+      // Two independent entry points, not one app with two routes. The employee
+      // portal ships as its own HTML page and its own bundle, so none of its
+      // code is ever downloaded by (or reachable from) the main portal.
+      input: {
+        main: path.resolve(root, 'index.html'),
+        employee: path.resolve(root, 'employee.html'),
+      },
+    },
+  },
   server: {
     port: 5173,
     proxy: {
