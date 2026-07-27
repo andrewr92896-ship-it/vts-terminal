@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.61';
+export const APP_VERSION = 'Beta V 5.62';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.62',
+    date: 'July 27, 2026',
+    notes: [
+      'The Employee Portal has a task list. Everyone gets a “My tasks” card on their Overview — add something you need to remember, give it a due date, tick it off. Completed items go grey and drop below the open ones rather than disappearing.',
+      'Portal administrators can assign a task to one person or to everyone at once. Assigning to everyone gives each person their own copy, so one person ticking it off does not clear it for anybody else.',
+      'Your tasks are yours. Nobody — administrators included — can see what you have and have not ticked off.',
+    ],
+  },
   {
     version: 'Beta V 5.61',
     date: 'July 27, 2026',

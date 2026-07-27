@@ -29,6 +29,7 @@ import {
   employeeProfiles,
   employeeSessions,
   employeeLoginAttempts,
+  employeeTasks,
   manualPositions,
   fundedAccounts,
   fundedTrades,
@@ -464,6 +465,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // no longer resolves). Announcements and documents they authored also
     // survive — only the authorship link is dropped (`ON DELETE set null`),
     // matching how team study content is handled above.
+    await tx.delete(employeeTasks).where(eq(employeeTasks.userId, targetId));
     await tx.delete(employeeSessions).where(eq(employeeSessions.userId, targetId));
     await tx.delete(employeeProfiles).where(eq(employeeProfiles.userId, targetId));
     await tx.delete(employeeLoginAttempts).where(eq(employeeLoginAttempts.id, `user:${targetId}`));

@@ -4,6 +4,7 @@ import { EMP, EMPLOYMENT_LABELS, fmtDate, fmtDateTime, tint } from '../theme';
 import { T } from '../copy';
 import { Banner, Card, Detail, DetailGrid, Empty, Pill, ScreenHeader, label } from '../ui';
 import { Icon } from '../../components/Icon';
+import { MyTasks } from './MyTasks';
 
 // The landing screen: who you are on the record, what the portal is holding, and
 // the security posture of the session you are sitting in.
@@ -150,6 +151,8 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
             </Detail>
           </DetailGrid>
         </Card>
+
+        <MyTasks canAssign={me.isPortalAdmin} />
 
         <Card>
           <div

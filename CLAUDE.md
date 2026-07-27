@@ -492,9 +492,17 @@ always fetched fresh from the network. A small Vite plugin
 (`stripPwaFromEmployeeEntry`) removes the injected web-app manifest from that
 entry — it is not a PWA and must not offer an install prompt.
 
+**Tasks** (`employee_tasks`, `MyTasks.tsx` on the Overview screen). Every route
+under `/api/employee/tasks` is scoped to the caller by `userId`; an employee adds,
+completes and removes their own. A portal admin can **assign** via
+`POST /api/employee/admin/tasks` — to one person, or `everyone: true`, which
+writes **one row per active employee** rather than a shared row, so each person
+completes their own copy. There is deliberately **no** endpoint that reads another
+employee's tasks. Assignments are audited (`task.assigned`).
+
 **Screens** (`src/employee/screens/*`): Overview (your record + the session's own
-security posture), Directory, Announcements, Documents, Security (2FA, active
-sessions, activity log), and **People** — the HR screen for portal admins
+security posture + My tasks), Directory, Announcements, Documents, Security (2FA,
+active sessions, activity log), and **People** — the HR screen for portal admins
 (`employee_profiles.is_admin`, or founder-level implicitly): grant/revoke access,
 edit records, reset a second factor. Granting refuses a non-company address up
 front rather than creating an account that would fail at the door.

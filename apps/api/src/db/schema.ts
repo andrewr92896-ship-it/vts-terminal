@@ -1430,3 +1430,34 @@ export const employeeDocuments = sqliteTable('employee_documents', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type EmployeeDocumentRow = typeof employeeDocuments.$inferSelect;
+
+// Personal tasks on the employee portal — the "My tasks" card.
+//
+// A task always belongs to exactly one person: `userId` is the assignee, and
+// nobody but them (and a portal admin) ever sees it. Two ways one appears:
+//
+//   • an employee adds their own, and `assignedBy` is themselves; or
+//   • a portal admin assigns it — to one person, or to every active employee, in
+//     which case one row per person is written rather than a shared row. That
+//     matters: each person then completes their own copy independently, and
+//     removing one employee's task cannot disturb anyone else's.
+//
+// `doneAt` is a timestamp rather than a boolean so the record answers "when",
+// not just "whether".
+export const employeeTasks = sqliteTable('employee_tasks', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  detail: text('detail'),
+  dueOn: text('due_on'), // ISO date (YYYY-MM-DD); no time component needed
+  doneAt: integer('done_at', { mode: 'timestamp_ms' }),
+  // Who set it. Null once that account is deleted; the name is kept alongside so
+  // the task still says where it came from.
+  assignedBy: text('assigned_by').references(() => users.id, { onDelete: 'set null' }),
+  assignedByName: text('assigned_by_name'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type EmployeeTaskRow = typeof employeeTasks.$inferSelect;
