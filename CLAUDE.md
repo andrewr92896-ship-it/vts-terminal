@@ -500,8 +500,22 @@ writes **one row per active employee** rather than a shared row, so each person
 completes their own copy. There is deliberately **no** endpoint that reads another
 employee's tasks. Assignments are audited (`task.assigned`).
 
+**Headshots & working status.** The "Employee photos" card (`screens/Photos.tsx`)
+on Overview holds two things that belong to the person rather than to HR. A
+headshot is dropped or picked, cropped square and re-encoded to a **400px JPEG in
+the browser** (`src/employee/image.ts`) before `PUT /api/employee/photo` stores it
+in **`users.avatar`** — the same column the main portal uses, so one person has
+one face on both surfaces; the route caps the body at 400 KB and refuses anything
+that is not an image data URL. Beside it, a roster shows who has a photo
+(`DirectoryEntry.hasPhoto`) with the design's "N still need a photo" nudge.
+**Working status** (`employee_profiles.working_status`: `in_office | remote |
+away`, default `in_office`) is set only by its owner via
+`PUT /api/employee/working-status` — there is no endpoint for changing anyone
+else's — and reads back as a coloured dot in the Directory. Photo changes are
+audited (`photo.updated` / `photo.removed`).
+
 **Screens** (`src/employee/screens/*`): Overview (your record + the session's own
-security posture + My tasks), Directory, Announcements, Documents, Security (2FA,
+security posture + Employee photos + My tasks), Directory, Announcements, Documents, Security (2FA,
 active sessions, activity log), and **People** — the HR screen for portal admins
 (`employee_profiles.is_admin`, or founder-level implicitly): grant/revoke access,
 edit records, reset a second factor. Granting refuses a non-company address up

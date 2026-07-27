@@ -13,6 +13,7 @@ import {
   type EmploymentType,
   type EmployeeStatus,
   type UserRow,
+  type WorkingStatus,
 } from '../db/schema.js';
 import {
   COMPANY_EMAIL_DOMAIN,
@@ -47,6 +48,7 @@ export interface EmployeeMe {
   employmentType: EmploymentType;
   startedOn: string | null;
   status: EmployeeStatus;
+  workingStatus: WorkingStatus;
   managerName: string | null;
   isPortalAdmin: boolean;
   // Founder-level on the underlying account — gates the inline wording editor.
@@ -99,6 +101,7 @@ export async function buildMe(
     employmentType: profile.employmentType,
     startedOn: profile.startedOn,
     status: profile.status,
+    workingStatus: profile.workingStatus,
     managerName,
     isPortalAdmin,
     isDeveloper,
@@ -144,6 +147,9 @@ export interface DirectoryEntry {
   location: string | null;
   employmentType: EmploymentType;
   startedOn: string | null;
+  workingStatus: WorkingStatus;
+  /** Whether they have uploaded a headshot — drives the "still needs a photo" roster. */
+  hasPhoto: boolean;
   managerName: string | null;
   isPortalAdmin: boolean;
   isMe: boolean;
@@ -184,6 +190,8 @@ export async function getDirectory(viewerId: string): Promise<DirectoryEntry[]> 
       location: r.profile.location,
       employmentType: r.profile.employmentType,
       startedOn: r.profile.startedOn,
+      workingStatus: r.profile.workingStatus,
+      hasPhoto: !!r.user.avatar,
       managerName: r.profile.managerId ? names.get(r.profile.managerId) ?? null : null,
       isPortalAdmin: r.profile.isAdmin || isFounder(parseRoles(r.user)),
       isMe: r.user.id === viewerId,
@@ -385,6 +393,8 @@ export async function listPeople(viewerId: string): Promise<PersonView[]> {
         location: r.profile.location,
         employmentType: r.profile.employmentType,
         startedOn: r.profile.startedOn,
+        workingStatus: r.profile.workingStatus,
+        hasPhoto: !!r.user.avatar,
         managerId: r.profile.managerId,
         managerName: r.profile.managerId ? names.get(r.profile.managerId) ?? null : null,
         isPortalAdmin: r.profile.isAdmin || isFounder(roles),
@@ -670,4 +680,29 @@ export async function deleteTask(userId: string, taskId: string): Promise<boolea
     .delete(employeeTasks)
     .where(and(eq(employeeTasks.id, taskId), eq(employeeTasks.userId, userId)));
   return true;
+}
+
+
+// ---- Your own photo and working status ----
+//
+// Both are things a person sets about themselves. Neither is an HR field: a
+// portal admin can edit someone's title or department from the People screen,
+// but not their face or where they are working from today.
+
+// Store a headshot. The image arrives already center-cropped and downscaled by
+// the browser (see employee/image.ts) — the server's job is to refuse anything
+// that is not a plausible inline image, and to cap the size so one upload cannot
+// bloat the users table.
+export async function setMyPhoto(userId: string, dataUrl: string | null): Promise<void> {
+  await db
+    .update(users)
+    .set({ avatar: dataUrl, updatedAt: new Date() })
+    .where(eq(users.id, userId));
+}
+
+export async function setMyWorkingStatus(userId: string, status: WorkingStatus): Promise<void> {
+  await db
+    .update(employeeProfiles)
+    .set({ workingStatus: status, updatedAt: new Date() })
+    .where(eq(employeeProfiles.userId, userId));
 }

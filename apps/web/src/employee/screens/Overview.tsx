@@ -5,6 +5,7 @@ import { T } from '../copy';
 import { Banner, Card, Detail, DetailGrid, Empty, Pill, ScreenHeader, label } from '../ui';
 import { Icon } from '../../components/Icon';
 import { MyTasks } from './MyTasks';
+import { Photos } from './Photos';
 
 // The landing screen: who you are on the record, what the portal is holding, and
 // the security posture of the session you are sitting in.
@@ -13,12 +14,14 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
   const [data, setData] = useState<OverviewData | null>(null);
   const [error, setError] = useState('');
 
-  useEffect(() => {
+  function load() {
     employeeApi
       .overview()
       .then(setData)
       .catch((e) => setError((e as Error).message));
-  }, []);
+  }
+
+  useEffect(load, []);
 
   if (error) {
     return <Empty icon="x-circle">{error}</Empty>;
@@ -151,6 +154,15 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
             </Detail>
           </DetailGrid>
         </Card>
+
+        <Photos
+          myStatus={me.workingStatus}
+          // Optimistic locally, so the picker does not lag behind the click.
+          onStatusChanged={(workingStatus) =>
+            setData((prev) => (prev ? { ...prev, me: { ...prev.me, workingStatus } } : prev))
+          }
+          onPhotoChanged={load}
+        />
 
         <MyTasks canAssign={me.isPortalAdmin} />
 
