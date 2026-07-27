@@ -693,7 +693,10 @@ export async function deleteTask(userId: string, taskId: string): Promise<boolea
 // the browser (see employee/image.ts) — the server's job is to refuse anything
 // that is not a plausible inline image, and to cap the size so one upload cannot
 // bloat the users table.
-export async function setMyPhoto(userId: string, dataUrl: string | null): Promise<void> {
+// Used both for your own face and — via the developer route — for someone
+// else's. The write is identical; who is allowed to ask for it is the difference,
+// and that is settled by the route's guard.
+export async function setUserPhoto(userId: string, dataUrl: string | null): Promise<void> {
   await db
     .update(users)
     .set({ avatar: dataUrl, updatedAt: new Date() })

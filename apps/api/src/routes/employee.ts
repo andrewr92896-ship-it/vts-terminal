@@ -70,7 +70,7 @@ import {
   listPeople,
   resetTwoFactor,
   revokeEmployeeAccess,
-  setMyPhoto,
+  setUserPhoto,
   setMyWorkingStatus,
   setTaskDone,
   updateAnnouncement,
@@ -608,9 +608,13 @@ export async function employeeRoutes(app: FastifyInstance) {
     return { people: await getDirectory(request.employee!.user.id) };
   });
 
-  // ---- Your own photo and working status ----
-  // Both are self-service. A portal admin edits titles and departments from the
-  // People screen, but not someone else's face or where they are working today.
+  // ---- Photos and working status ----
+  // Your own photo is self-service, and so is your working status — a portal
+  // admin edits titles and departments from the People screen, but not where
+  // someone else is working today. Photos are the one exception: a developer can
+  // set anyone's, because in practice the directory only ever fills up if
+  // somebody can do it on everyone's behalf. That is a founder-level power, not
+  // an HR one, and every use of it is audited against the person it touched.
 
   app.put('/api/employee/photo', { preHandler: requireEmployee }, async (request, reply) => {
     const parsed = photoSchema.safeParse(request.body);
@@ -618,7 +622,7 @@ export async function employeeRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid image' });
     }
     const ctx = request.employee!;
-    await setMyPhoto(ctx.user.id, parsed.data.photo || null);
+    await setUserPhoto(ctx.user.id, parsed.data.photo || null);
     await audit({
       action: parsed.data.photo ? 'photo.updated' : 'photo.removed',
       userId: ctx.user.id,
@@ -627,6 +631,34 @@ export async function employeeRoutes(app: FastifyInstance) {
     });
     return { ok: true };
   });
+
+  // Set — or clear — someone else's headshot. Founder-level only.
+  app.put(
+    '/api/employee/admin/people/:id/photo',
+    { preHandler: [requireEmployee, requireEmployeeDeveloper] },
+    async (request, reply) => {
+      const parsed = photoSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid image' });
+      }
+      const ctx = request.employee!;
+      const { id } = request.params as { id: string };
+      // Only an actual active employee, not any account id that gets posted.
+      const target = (await getDirectory(ctx.user.id)).find((p) => p.userId === id);
+      if (!target) return reply.code(400).send({ error: 'That person is not an active employee' });
+
+      await setUserPhoto(id, parsed.data.photo || null);
+      await audit({
+        action: parsed.data.photo ? 'photo.updated' : 'photo.removed',
+        userId: ctx.user.id,
+        actor: ctx.user.displayName,
+        target: target.name,
+        detail: 'set by a developer',
+        ...requestMeta(request),
+      });
+      return { ok: true, people: await getDirectory(ctx.user.id) };
+    },
+  );
 
   app.put('/api/employee/working-status', { preHandler: requireEmployee }, async (request, reply) => {
     const parsed = workingStatusSchema.safeParse(request.body);

@@ -157,6 +157,7 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
 
         <Photos
           myStatus={me.workingStatus}
+          canManageAll={me.isDeveloper}
           // Optimistic locally, so the picker does not lag behind the click.
           onStatusChanged={(workingStatus) =>
             setData((prev) => (prev ? { ...prev, me: { ...prev.me, workingStatus } } : prev))

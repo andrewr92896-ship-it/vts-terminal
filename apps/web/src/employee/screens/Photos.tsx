@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { employeeApi, type DirectoryEntry, type WorkingStatus } from '../api';
 import { EMP, RADIUS, tint } from '../theme';
 import { T, useCopy } from '../copy';
@@ -30,19 +30,29 @@ const MIN_EDGE = 400;
 
 export function Photos({
   myStatus,
+  canManageAll,
   onStatusChanged,
   onPhotoChanged,
 }: {
   myStatus: WorkingStatus;
+  // Founder-level. A developer can set anyone's headshot, because otherwise the
+  // directory only fills up as fast as the least motivated person on it.
+  canManageAll: boolean;
   onStatusChanged: (s: WorkingStatus) => void;
   onPhotoChanged: () => void;
 }) {
   const [people, setPeople] = useState<DirectoryEntry[] | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Which upload is in flight: a person's id, or 'me' for the dropzone.
+  const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  // Which control the note belongs under, so confirming a roster action does not
+  // appear inside the dropzone you did not touch.
+  const [noteFor, setNoteFor] = useState<'me' | 'roster'>('me');
   const [dragging, setDragging] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const forRef = useRef<HTMLInputElement>(null);
+  const targetRef = useRef<DirectoryEntry | null>(null);
   const guidance = useCopy('emp.photos.guidance', 'Square JPG or PNG, at least 400×400');
 
   function load() {
@@ -53,29 +63,66 @@ export function Photos({
   }
   useEffect(load, []);
 
-  async function upload(file: File) {
+  // `person` is null for your own photo, which goes through the self-service
+  // route. Anyone else's goes through the developer one — a developer's own face
+  // should not be audited as an administrative act.
+  async function upload(file: File, person: DirectoryEntry | null) {
     setError('');
     setNote('');
     if (!file.type.startsWith('image/')) {
       setError('Choose an image file.');
       return;
     }
-    setBusy(true);
+    setNoteFor(person ? 'roster' : 'me');
+    setBusyId(person ? person.userId : 'me');
     try {
       const { width, height } = await readImageSize(file);
       if (width < MIN_EDGE || height < MIN_EDGE) {
         setError(`That image is ${width}×${height}. It needs to be at least ${MIN_EDGE}×${MIN_EDGE}.`);
         return;
       }
-      await employeeApi.setPhoto(await fileToSquareDataUrl(file));
-      setNote('Photo updated.');
-      load();
+      const dataUrl = await fileToSquareDataUrl(file);
+      if (person) {
+        const r = await employeeApi.setPhotoFor(person.userId, dataUrl);
+        setPeople(r.people);
+        setNote(`Photo added for ${person.name}.`);
+      } else {
+        await employeeApi.setPhoto(dataUrl);
+        setNote('Photo updated.');
+        load();
+      }
       onPhotoChanged();
     } catch (e) {
       setError((e as Error).message || 'Could not upload that image.');
     } finally {
-      setBusy(false);
+      setBusyId(null);
       if (fileRef.current) fileRef.current.value = '';
+      if (forRef.current) forRef.current.value = '';
+    }
+  }
+
+  function pickFor(person: DirectoryEntry) {
+    setError('');
+    setNote('');
+    setNoteFor('roster');
+    targetRef.current = person;
+    forRef.current?.click();
+  }
+
+  async function removeFor(person: DirectoryEntry) {
+    setError('');
+    setNote('');
+    setNoteFor('roster');
+    setBusyId(person.userId);
+    try {
+      const r = await employeeApi.setPhotoFor(person.userId, '');
+      setPeople(r.people);
+      setNote(`Removed ${person.name}'s photo.`);
+      onPhotoChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -152,7 +199,7 @@ export function Photos({
             e.preventDefault();
             setDragging(false);
             const file = e.dataTransfer.files?.[0];
-            if (file) void upload(file);
+            if (file) void upload(file, null);
           }}
           style={{
             border: `2px dashed ${dragging ? EMP.accent : '#cfd8d5'}`,
@@ -194,18 +241,22 @@ export function Photos({
             style={{ display: 'none' }}
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) void upload(file);
+              if (file) void upload(file, null);
             }}
           />
           <Button
             variant="primary"
-            disabled={busy}
+            disabled={busyId === 'me'}
             onClick={() => fileRef.current?.click()}
             style={{ background: EMP.forest, color: '#ffffff' }}
           >
-            {busy ? <T id="emp.photos.uploading">Uploading…</T> : <T id="emp.photos.choose">Choose a file</T>}
+            {busyId === 'me' ? (
+              <T id="emp.photos.uploading">Uploading…</T>
+            ) : (
+              <T id="emp.photos.choose">Choose a file</T>
+            )}
           </Button>
-          {note && <div style={{ fontSize: 12, color: EMP.green }}>{note}</div>}
+          {note && noteFor === 'me' && <div style={{ fontSize: 12, color: EMP.green }}>{note}</div>}
         </div>
 
         {/* Roster */}
@@ -213,6 +264,25 @@ export function Photos({
           <div style={{ ...label, marginBottom: 10 }}>
             <T id="emp.photos.roster">Who has one</T>
           </div>
+          {canManageAll && (
+            <div style={{ fontSize: 12, color: EMP.faint, marginTop: -5, marginBottom: 11, lineHeight: 1.5 }}>
+              <T id="emp.photos.dev_hint">
+                You can add a photo for anyone here. Each change is recorded in the activity log.
+              </T>
+            </div>
+          )}
+          {/* One shared picker for the roster; targetRef says whose it is. */}
+          <input
+            ref={forRef}
+            type="file"
+            accept="image/*"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              const person = targetRef.current;
+              if (file && person) void upload(file, person);
+            }}
+          />
           {!people ? (
             <div style={{ fontSize: 13, color: EMP.muted }}>
               <T id="emp.photos.loading">Loading…</T>
@@ -257,9 +327,44 @@ export function Photos({
                       <T id="emp.photos.needs">Needs photo</T>
                     )}
                   </div>
+                  {canManageAll && !p.isMe && (
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        gap: 8,
+                        marginTop: 5,
+                        fontSize: 11.5,
+                      }}
+                    >
+                      {busyId === p.userId ? (
+                        <span style={{ color: EMP.faint }}>
+                          <T id="emp.photos.tile_busy">Working…</T>
+                        </span>
+                      ) : (
+                        <>
+                          <TileAction onClick={() => pickFor(p)}>
+                            {p.hasPhoto ? (
+                              <T id="emp.photos.tile_replace">Replace</T>
+                            ) : (
+                              <T id="emp.photos.tile_add">Add</T>
+                            )}
+                          </TileAction>
+                          {p.hasPhoto && (
+                            <TileAction muted onClick={() => void removeFor(p)}>
+                              <T id="emp.photos.tile_remove">Remove</T>
+                            </TileAction>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
+          )}
+          {note && noteFor === 'roster' && (
+            <div style={{ fontSize: 12, color: EMP.green, marginTop: 11 }}>{note}</div>
           )}
         </div>
       </div>
@@ -303,6 +408,36 @@ export function Photos({
         </div>
       </div>
     </Card>
+  );
+}
+
+// A plain text link under a roster tile. Small on purpose: this is a developer
+// affordance on someone else's record, not a primary action.
+function TileAction({
+  onClick,
+  muted,
+  children,
+}: {
+  onClick: () => void;
+  muted?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: 'none',
+        border: 'none',
+        padding: 0,
+        cursor: 'pointer',
+        fontFamily: EMP.sans,
+        fontSize: 11.5,
+        fontWeight: 600,
+        color: muted ? EMP.faint : EMP.accent,
+      }}
+    >
+      {children}
+    </button>
   );
 }
 

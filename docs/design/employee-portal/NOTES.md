@@ -52,6 +52,13 @@ across both surfaces. Working status is per-profile
 (`employee_profiles.working_status`) and only ever self-set: there is no endpoint
 that lets one person change another's.
 
+**Done — a developer can add anyone's photo** (Beta V 5.64). Add / Replace /
+Remove under each roster tile, founder-level only. The handoff assumes everyone
+uploads their own; in practice a directory only fills up if somebody can do it on
+everyone's behalf, and that is a founder power rather than an HR one — a portal
+admin manages records, not faces. Every such change is audited against the person
+it touched, so it stays distinguishable from a self-change.
+
 **Not started — the rest of the Home screen and its data.** Still missing behind
 `/employee`: a company calendar with per-user RSVP, birthdays and milestones, and
 a Training section. Each needs its own tables and routes. Company news exists as
