@@ -4,28 +4,17 @@ import {
   type AuditEntry,
   type EmployeeMe,
   type SessionView,
+  type TrustedDeviceView,
 } from '../api';
 import { EMP, fmtDateTime, tint } from '../theme';
-import {
-  Banner,
-  Button,
-  Card,
-  Detail,
-  DetailGrid,
-  Empty,
-  ErrorNote,
-  Field,
-  Input,
-  Pill,
-  ScreenHeader,
-  label,
-} from '../ui';
+import { Button, Card, Empty, ErrorNote, Pill, ScreenHeader, label } from '../ui';
 import { Icon } from '../../components/Icon';
 
-// Your own security state: the second factor, the sessions currently holding
-// your account open, and the record of what has been done with it. Everything
-// here is scoped to the signed-in person — a portal admin gets the whole audit
-// log via the toggle, but never anyone else's sessions.
+// Your own security state: the browsers allowed to skip the emailed sign-in
+// code, the sessions currently holding your account open, and the record of what
+// has been done with it. Everything here is scoped to the signed-in person — a
+// portal admin gets the whole audit log via the toggle, but never anyone else's
+// sessions or devices.
 
 // Plain-language names for the audit actions. Anything unmapped falls back to
 // the raw key, so a new action type is never invisible.
@@ -34,13 +23,14 @@ const ACTION_LABELS: Record<string, string> = {
   'login.failed': 'Failed sign-in',
   'login.locked': 'Blocked — too many attempts',
   'login.denied': 'Sign-in refused',
-  'login.totp_failed': 'Wrong authenticator code',
   logout: 'Signed out',
   'session.revoked': 'Session revoked',
-  '2fa.enrolled': 'Authenticator enrolled',
-  '2fa.reset': 'Authenticator reset',
-  '2fa.recovery_used': 'Recovery code used',
-  '2fa.recovery_regenerated': 'Recovery codes regenerated',
+  'login.code_sent': 'Sign-in code emailed',
+  'login.code_failed': 'Wrong sign-in code',
+  'login.remembered_device': 'Signed in on a remembered device',
+  'device.remembered': 'Device remembered',
+  'device.forgotten': 'Device forgotten',
+  'device.forgotten_all': 'All devices forgotten',
   'access.denied': 'Access refused',
   'access.blocked_ip': 'Blocked network',
   'access.csrf_rejected': 'Request rejected',
@@ -70,10 +60,8 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [error, setError] = useState('');
 
-  const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [recovery, setRecovery] = useState<string[] | null>(null);
-  const [recoveryError, setRecoveryError] = useState('');
+  const [devices, setDevices] = useState<TrustedDeviceView[] | null>(null);
+  const [rememberDays, setRememberDays] = useState(30);
 
   function loadSessions() {
     employeeApi
@@ -83,6 +71,19 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
   }
 
   useEffect(loadSessions, []);
+
+  function loadDevices() {
+    employeeApi
+      .trustedDevices()
+      .then((r) => {
+        setDevices(r.devices);
+        setRememberDays(r.rememberDays);
+        onMeChanged({ ...me, trustedDeviceCount: r.devices.length });
+      })
+      .catch((e) => setError((e as Error).message));
+  }
+
+  useEffect(loadDevices, []);
 
   useEffect(() => {
     setEntries(null);
@@ -107,19 +108,17 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
     }
   }
 
-  async function regenerate() {
-    if (busy) return;
-    setBusy(true);
-    setRecoveryError('');
+  async function forget(d: TrustedDeviceView) {
+    if (
+      d.current &&
+      !window.confirm('Forget this device? Your next sign-in here will ask for an emailed code.')
+    )
+      return;
     try {
-      const r = await employeeApi.regenerateRecovery(code.trim());
-      setRecovery(r.recoveryCodes);
-      setCode('');
-      onMeChanged({ ...me, recoveryCodesLeft: r.recoveryCodes.length });
+      await employeeApi.forgetDevice(d.id);
+      loadDevices();
     } catch (e) {
-      setRecoveryError((e as Error).message);
-    } finally {
-      setBusy(false);
+      setError((e as Error).message);
     }
   }
 
@@ -140,100 +139,72 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
       )}
 
       <div style={{ display: 'grid', gap: 16 }}>
-        {/* ---- Two-factor ---- */}
+        {/* ---- Remembered devices ---- */}
         <Card>
           <div style={{ ...label, marginBottom: 12 }}>
-            {"Two-factor authentication"}
+            {"Remembered devices"}
           </div>
-          {me.twoFactorEnrolled ? (
-            <>
-              <DetailGrid>
-                <Detail term={"Status"}>
-                  <Pill tone="good">
-                    <Icon name="check" size={10} />
-                    {"Enrolled"}
-                  </Pill>
-                </Detail>
-                <Detail term={"Recovery codes left"}>
-                  {me.recoveryCodesLeft}
-                </Detail>
-              </DetailGrid>
+          <p style={{ margin: '0 0 14px', fontSize: 12.5, color: EMP.muted, lineHeight: 1.65 }}>
+            {`Signing in emails a six-digit code to your work address. A device you chose to remember skips that code for ${rememberDays} days — your password is still required every time. Forget any you no longer use.`}
+          </p>
 
-              {me.recoveryCodesLeft <= 2 && (
-                <div style={{ marginTop: 14 }}>
-                  <Banner tone="warn">
-                    {"You are nearly out of recovery codes. Generate a fresh set below."}
-                  </Banner>
-                </div>
-              )}
-
-              {recovery ? (
-                <div style={{ marginTop: 16 }}>
-                  <Banner tone="good">
-                    {"New codes generated. The old ones no longer work. These are shown once."}
-                  </Banner>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                      gap: 8,
-                      fontFamily: EMP.mono,
-                      fontSize: 13,
-                      color: EMP.text,
-                      background: EMP.bg,
-                      border: `1px solid ${EMP.line2}`,
-                      borderRadius: 10,
-                      padding: 14,
-                      margin: '12px 0',
-                    }}
-                  >
-                    {recovery.map((c) => (
-                      <span key={c}>{c}</span>
-                    ))}
+          {!devices ? (
+            <Empty icon="refresh-cw">
+              {"Loading…"}
+            </Empty>
+          ) : devices.length === 0 ? (
+            <Empty icon="shield">
+              {"No remembered devices — every sign-in asks for a code."}
+            </Empty>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {devices.map((d) => (
+                <div
+                  key={d.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    flexWrap: 'wrap',
+                    border: `1px solid ${d.current ? tint(EMP.accent, 0.35) : EMP.line}`,
+                    background: d.current ? tint(EMP.accent, 0.05) : EMP.panel2,
+                    borderRadius: 10,
+                    padding: '11px 13px',
+                  }}
+                >
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: EMP.text }}>
+                      <Icon name="shield-check" size={13} />
+                      <span style={{ fontFamily: EMP.mono }}>{d.ip || 'unknown address'}</span>
+                      {d.current && (
+                        <Pill tone="accent">
+                          {"This device"}
+                        </Pill>
+                      )}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: EMP.faint,
+                        marginTop: 5,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {d.userAgent || 'unknown browser'}
+                    </div>
+                    <div style={{ fontSize: 11, color: EMP.faint, marginTop: 3, fontFamily: EMP.mono }}>
+                      last used {fmtDateTime(d.lastUsedAt)} · forgets itself {fmtDateTime(d.expiresAt)}
+                    </div>
                   </div>
-                  <Button
-                    onClick={() => {
-                      void navigator.clipboard?.writeText(recovery.join('\n'));
-                    }}
-                  >
-                    <Icon name="copy" size={14} />
-                    {"Copy codes"}
+                  <Button variant="danger" onClick={() => forget(d)}>
+                    <Icon name="x-circle" size={13} />
+                    {"Forget"}
                   </Button>
                 </div>
-              ) : (
-                <div style={{ marginTop: 16, maxWidth: 320, display: 'grid', gap: 11 }}>
-                  <Field
-                    label={"Generate new recovery codes"}
-                    hint={
-                      "Confirm with a live authenticator code. The current codes stop working."
-                    }
-                  >
-                    <Input
-                      value={code}
-                      onChange={setCode}
-                      inputMode="numeric"
-                      maxLength={6}
-                      placeholder="000000"
-                      style={{ fontFamily: EMP.mono, letterSpacing: '3px' }}
-                    />
-                  </Field>
-                  <ErrorNote>{recoveryError}</ErrorNote>
-                  <div>
-                    <Button onClick={regenerate} disabled={busy || code.trim().length < 6}>
-                      {busy ? (
-                        "Working…"
-                      ) : (
-                        "Generate new codes"
-                      )}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <Banner tone="warn">
-              {"No authenticator is enrolled on this account. Sign out and back in to be walked through setup — or ask a portal administrator to reset it for you."}
-            </Banner>
+              ))}
+            </div>
           )}
         </Card>
 

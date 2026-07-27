@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, lt, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   employeeSessions,
@@ -75,6 +75,8 @@ export function csrfMatches(sessionId: string, presented: string | undefined): b
 
 export interface CreatedEmployeeSession {
   token: string;
+  /** The stored id (sha256 of the token) — the handle for server-side updates. */
+  sessionId: string;
   maxAgeSeconds: number;
   csrfToken: string;
 }
@@ -99,6 +101,7 @@ export async function createEmployeeSession(
   });
   return {
     token,
+    sessionId: id,
     // The cookie is capped at the absolute session lifetime; the idle timeout is
     // enforced server-side on every lookup regardless of what the browser keeps.
     maxAgeSeconds: Math.floor(ABSOLUTE_MS / 1000),
@@ -150,8 +153,76 @@ export async function touchEmployeeSession(id: string): Promise<void> {
     .where(eq(employeeSessions.id, id));
 }
 
+// Promote a verified session and clear the sign-in code with it — the code has
+// done its job and must not survive to be replayed.
 export async function promoteEmployeeSession(id: string): Promise<void> {
-  await db.update(employeeSessions).set({ stage: 'active' }).where(eq(employeeSessions.id, id));
+  await db
+    .update(employeeSessions)
+    .set({ stage: 'active', otpCodeHash: null, otpExpiresAt: null, otpAttempts: 0, otpSentAt: null })
+    .where(eq(employeeSessions.id, id));
+}
+
+// Attach a freshly sent sign-in code to a pending session. Storing it here
+// rather than on the profile keeps one code to one browser: a second sign-in
+// attempt elsewhere gets its own, and neither can consume the other's.
+export async function setSessionOtp(
+  id: string,
+  codeHash: string,
+  expiresAt: Date,
+): Promise<void> {
+  await db
+    .update(employeeSessions)
+    .set({ otpCodeHash: codeHash, otpExpiresAt: expiresAt, otpAttempts: 0, otpSentAt: new Date() })
+    .where(eq(employeeSessions.id, id));
+}
+
+// Count a wrong guess and report the new total. Incremented in SQL rather than
+// read-modify-written, so a burst of parallel guesses cannot all read the same
+// value and collectively cost a single attempt.
+export async function recordOtpAttempt(id: string): Promise<number> {
+  await db
+    .update(employeeSessions)
+    .set({ otpAttempts: sql`${employeeSessions.otpAttempts} + 1` })
+    .where(eq(employeeSessions.id, id));
+  const row = (
+    await db
+      .select({ otpAttempts: employeeSessions.otpAttempts })
+      .from(employeeSessions)
+      .where(eq(employeeSessions.id, id))
+      .limit(1)
+  )[0];
+  return row?.otpAttempts ?? 0;
+}
+
+// Burn the current code without ending the session — used when too many wrong
+// guesses have been made against it, so a fresh one has to be requested.
+export async function clearSessionOtp(id: string): Promise<void> {
+  await db
+    .update(employeeSessions)
+    .set({ otpCodeHash: null, otpExpiresAt: null, otpAttempts: 0 })
+    .where(eq(employeeSessions.id, id));
+}
+
+export async function getEmployeeSessionById(id: string): Promise<EmployeeSessionRow | undefined> {
+  return (
+    await db.select().from(employeeSessions).where(eq(employeeSessions.id, id)).limit(1)
+  )[0];
+}
+
+// When a code was last sent to this person, across *every* session they have.
+// Per-account rather than per-session on purpose: a throttle a new sign-in
+// attempt could reset is not a throttle, and both the mail-flood and the
+// guess-forever attacks work by asking for a brand-new session each round.
+export async function lastOtpSentAtForUser(userId: string): Promise<Date | null> {
+  const rows = await db
+    .select({ otpSentAt: employeeSessions.otpSentAt })
+    .from(employeeSessions)
+    .where(eq(employeeSessions.userId, userId));
+  let latest: Date | null = null;
+  for (const r of rows) {
+    if (r.otpSentAt && (!latest || r.otpSentAt.getTime() > latest.getTime())) latest = r.otpSentAt;
+  }
+  return latest;
 }
 
 export async function destroyEmployeeSession(token: string | undefined): Promise<void> {

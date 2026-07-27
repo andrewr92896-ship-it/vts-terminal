@@ -50,6 +50,19 @@ const envSchema = z.object({
   // the trader's own per-app sound choice in the Pushover app applies.
   PUSHOVER_APP_TOKEN: z.string().optional(),
   PUSHOVER_SOUND: z.string().optional(),
+  // Outbound email (SMTP) — currently only used to deliver the Employee
+  // Portal's sign-in codes. Optional: when unset, a code is printed to the
+  // server log instead of emailed (same "printed once to logs" fallback as an
+  // unset ADMIN_PASSWORD), so a misconfigured deploy cannot lock everyone out.
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  SMTP_FROM: z.string().default('"Vitalis Trading Systems" <no-reply@vitalistradingsystems.com>'),
   // ---- Employee portal (/employee) ----
   // A deliberately separate, hardened surface with its own sessions. These knobs
   // are all "secure by default": the shipped values are the strict ones, and
@@ -59,12 +72,19 @@ const envSchema = z.object({
   // timeout, both far tighter than the 14-day main-portal session.
   EMPLOYEE_SESSION_HOURS: z.coerce.number().positive().max(24).default(8),
   EMPLOYEE_IDLE_MINUTES: z.coerce.number().int().positive().max(480).default(30),
-  // Require a TOTP second factor. On by default — an employee who has not
-  // enrolled one is walked through enrollment before they can reach anything.
+  // Require an emailed sign-in code as a second factor. On by default — every
+  // sign-in (from a device not currently remembered) sends a fresh code to the
+  // employee's company sign-in email before a session goes active.
   EMPLOYEE_REQUIRE_2FA: z
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  // How long a sign-in code stays valid after it is sent.
+  EMPLOYEE_OTP_TTL_MINUTES: z.coerce.number().int().positive().max(60).default(10),
+  // "Remember this device" — how long a device that confirmed a code may skip
+  // the next one. Opt-in at sign-in time; the browser holds a separate,
+  // longer-lived trust cookie for it.
+  EMPLOYEE_REMEMBER_DEVICE_DAYS: z.coerce.number().int().positive().max(90).default(30),
   // The company email domain. Reaching the employee portal requires a sign-in
   // email on this domain — an outside collaborator with a personal address can
   // never enter it, whatever roles they hold. Checked at sign-in AND on every

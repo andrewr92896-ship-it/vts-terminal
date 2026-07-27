@@ -1336,16 +1336,6 @@ export const employeeProfiles = sqliteTable('employee_profiles', {
   // and documents in it. Distinct from the main portal's admin role; founder-level
   // users are treated as portal admins implicitly.
   isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
-  // The TOTP shared secret, AES-256-GCM encrypted at rest (security/secretbox).
-  // Null until the employee enrolls a second factor.
-  totpSecret: text('totp_secret'),
-  totpEnrolledAt: integer('totp_enrolled_at', { mode: 'timestamp_ms' }),
-  // The last accepted TOTP time-step. A code is refused if its step is not
-  // strictly newer, so a code observed on the wire can never be replayed.
-  totpLastStep: integer('totp_last_step'),
-  // JSON array of SHA-256 hashes of the single-use recovery codes. The plaintext
-  // codes are shown exactly once, at generation, and never stored.
-  recoveryCodes: text('recovery_codes'),
   lastLoginAt: integer('last_login_at', { mode: 'timestamp_ms' }),
   lastLoginIp: text('last_login_ip'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
@@ -1356,8 +1346,8 @@ export type EmployeeProfileRow = typeof employeeProfiles.$inferSelect;
 // Employee-portal sessions. Same hardening as the main `sessions` table (only
 // the SHA-256 of the cookie token is stored) plus a short absolute lifetime and
 // an idle timeout enforced on lookup. `stage` is 'pending_2fa' for a session
-// that has passed the password check but still has to enroll a second factor —
-// such a session may only reach the enrollment endpoints.
+// that has passed the password check but still owes us the emailed sign-in
+// code — such a session may only reach the verification endpoints.
 export const EMPLOYEE_SESSION_STAGES = ['pending_2fa', 'active'] as const;
 export type EmployeeSessionStage = (typeof EMPLOYEE_SESSION_STAGES)[number];
 
@@ -1369,11 +1359,47 @@ export const employeeSessions = sqliteTable('employee_sessions', {
   stage: text('stage', { enum: EMPLOYEE_SESSION_STAGES }).notNull().default('active'),
   ip: text('ip'),
   userAgent: text('user_agent'),
+  // The pending sign-in code, kept on the session rather than the profile: a
+  // code belongs to one sign-in attempt in one browser, so a second attempt
+  // elsewhere gets its own and neither can consume the other's. Only the
+  // SHA-256 is stored — the plaintext exists in the employee's inbox and
+  // nowhere else. All three are cleared the moment the session goes active.
+  otpCodeHash: text('otp_code_hash'),
+  otpExpiresAt: integer('otp_expires_at', { mode: 'timestamp_ms' }),
+  // Wrong guesses against the current code. A small ceiling here stops a
+  // six-digit code being brute-forced within its own validity window, before
+  // the account-wide lockout ladder would notice.
+  otpAttempts: integer('otp_attempts').notNull().default(0),
+  // When the current code was sent — throttles "resend" so the endpoint cannot
+  // be used to mail-bomb someone.
+  otpSentAt: integer('otp_sent_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
   expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type EmployeeSessionRow = typeof employeeSessions.$inferSelect;
+
+// A browser the employee ticked "remember this device" on. Holding a live token
+// here lets that browser skip the emailed code for EMPLOYEE_REMEMBER_DEVICE_DAYS
+// — the password is still required every time, so this shortens the second
+// factor's cadence rather than removing it.
+//
+// The token lives in its own long-lived cookie, separate from the session
+// cookie, and only its SHA-256 is stored. Every trusted device is listed on the
+// employee's Security screen and can be revoked individually; a portal admin
+// can drop all of someone's at once.
+export const employeeTrustedDevices = sqliteTable('employee_trusted_devices', {
+  id: text('id').primaryKey(), // sha256(token)
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  ip: text('ip'),
+  userAgent: text('user_agent'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  lastUsedAt: integer('last_used_at', { mode: 'timestamp_ms' }).notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type EmployeeTrustedDeviceRow = typeof employeeTrustedDevices.$inferSelect;
 
 // Failed-sign-in counters for the progressive lockout. `id` is the throttle key:
 // "user:<userId>" or "ip:<address>" — both are tracked, so neither spraying one

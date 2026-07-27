@@ -30,6 +30,7 @@ import {
   employeeSessions,
   employeeLoginAttempts,
   employeeTasks,
+  employeeTrustedDevices,
   manualPositions,
   fundedAccounts,
   fundedTrades,
@@ -467,6 +468,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // matching how team study content is handled above.
     await tx.delete(employeeTasks).where(eq(employeeTasks.userId, targetId));
     await tx.delete(employeeSessions).where(eq(employeeSessions.userId, targetId));
+    await tx.delete(employeeTrustedDevices).where(eq(employeeTrustedDevices.userId, targetId));
     await tx.delete(employeeProfiles).where(eq(employeeProfiles.userId, targetId));
     await tx.delete(employeeLoginAttempts).where(eq(employeeLoginAttempts.id, `user:${targetId}`));
     await tx.delete(sessions).where(eq(sessions.userId, targetId));

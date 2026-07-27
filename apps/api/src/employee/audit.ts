@@ -18,14 +18,16 @@ export type AuditAction =
   | 'login.failed'
   | 'login.locked'
   | 'login.denied'
-  | 'login.totp_failed'
   | 'logout'
   | 'session.revoked'
-  // second factor
-  | '2fa.enrolled'
-  | '2fa.reset'
-  | '2fa.recovery_used'
-  | '2fa.recovery_regenerated'
+  // second factor — a code emailed to the company address
+  | 'login.code_sent'
+  | 'login.code_failed'
+  | 'login.remembered_device'
+  // remembered devices
+  | 'device.remembered'
+  | 'device.forgotten'
+  | 'device.forgotten_all'
   // access control
   | 'access.denied'
   | 'access.blocked_ip'

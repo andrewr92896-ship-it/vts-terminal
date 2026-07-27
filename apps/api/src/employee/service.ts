@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
-import { and, desc, eq, inArray, ne } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   employeeAnnouncements,
   employeeDocuments,
   employeeProfiles,
   employeeTasks,
+  employeeTrustedDevices,
   users,
   type EmployeeDocCategory,
   type EmployeeTaskRow,
@@ -24,6 +25,7 @@ import {
 } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { destroyEmployeeSessionsForUser } from './sessions.js';
+import { forgetAllDevices, listTrustedDevices } from './trustedDevices.js';
 
 // Data access for the employee portal. Everything here assumes the caller has
 // already been through the guard — this module is about shaping records, not
@@ -54,20 +56,10 @@ export interface EmployeeMe {
   // Founder-level on the underlying account — gates the inline wording editor.
   // Narrower than isPortalAdmin on purpose; see EmployeeContext.
   isDeveloper: boolean;
-  twoFactorEnrolled: boolean;
-  recoveryCodesLeft: number;
+  /** Browsers currently allowed to skip the emailed sign-in code. */
+  trustedDeviceCount: number;
   lastLoginAt: number | null;
   lastLoginIp: string | null;
-}
-
-function countRecoveryCodes(raw: string | null): number {
-  if (!raw) return 0;
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
-  }
 }
 
 export async function buildMe(
@@ -105,8 +97,7 @@ export async function buildMe(
     managerName,
     isPortalAdmin,
     isDeveloper,
-    twoFactorEnrolled: !!profile.totpSecret,
-    recoveryCodesLeft: countRecoveryCodes(profile.recoveryCodes),
+    trustedDeviceCount: (await listTrustedDevices(user.id)).length,
     lastLoginAt: profile.lastLoginAt?.getTime() ?? null,
     lastLoginIp: profile.lastLoginIp,
   };
@@ -354,7 +345,8 @@ export interface PersonView extends DirectoryEntry {
   status: EmployeeStatus;
   employeeNo: string | null;
   managerId: string | null;
-  twoFactorEnrolled: boolean;
+  /** Browsers currently allowed to skip this person's emailed sign-in code. */
+  trustedDeviceCount: number;
   lastLoginAt: number | null;
   accountActive: boolean;
   hasRole: boolean;
@@ -366,6 +358,16 @@ export async function listPeople(viewerId: string): Promise<PersonView[]> {
     .select({ profile: employeeProfiles, user: users })
     .from(employeeProfiles)
     .innerJoin(users, eq(users.id, employeeProfiles.userId));
+
+  // Counted in one pass rather than per person, so the screen stays one query
+  // deep however many employees there are.
+  const trustCounts = new Map<string, number>();
+  for (const d of await db
+    .select({ userId: employeeTrustedDevices.userId })
+    .from(employeeTrustedDevices)
+    .where(gt(employeeTrustedDevices.expiresAt, new Date()))) {
+    trustCounts.set(d.userId, (trustCounts.get(d.userId) ?? 0) + 1);
+  }
 
   const names = new Map(rows.map((r) => [r.user.id, r.user.displayName]));
   const missing = rows
@@ -401,7 +403,7 @@ export async function listPeople(viewerId: string): Promise<PersonView[]> {
         isMe: r.user.id === viewerId,
         status: r.profile.status,
         employeeNo: r.profile.employeeNo,
-        twoFactorEnrolled: !!r.profile.totpSecret,
+        trustedDeviceCount: trustCounts.get(r.user.id) ?? 0,
         lastLoginAt: r.profile.lastLoginAt?.getTime() ?? null,
         accountActive: r.user.active,
         // The role is the actual access grant; a record without it cannot sign in.
@@ -481,6 +483,10 @@ export async function revokeEmployeeAccess(userId: string): Promise<void> {
     .set({ status: 'offboarded', isAdmin: false, updatedAt: new Date() })
     .where(eq(employeeProfiles.userId, userId));
   await destroyEmployeeSessionsForUser(userId);
+  // A revoked person's remembered browsers go with their sessions — otherwise
+  // re-granting access later would silently restore a skip-the-code shortcut
+  // nobody asked for.
+  await forgetAllDevices(userId);
 }
 
 export interface ProfilePatch {
@@ -530,26 +536,21 @@ export async function updateProfile(userId: string, patch: ProfilePatch): Promis
 
   await db.update(employeeProfiles).set(set).where(eq(employeeProfiles.userId, userId));
 
-  // Anything short of "active" ends the person's access right now.
+  // Anything short of "active" ends the person's access right now, remembered
+  // browsers included.
   if (patch.status !== undefined && patch.status !== 'active') {
     await destroyEmployeeSessionsForUser(userId);
+    await forgetAllDevices(userId);
   }
 }
 
-// Clear a lost second factor so the employee can enroll a fresh one. Every live
-// session for them is dropped at the same time — an enrolled device that is
-// being replaced must not keep an authenticated session alive.
-export async function resetTwoFactor(userId: string): Promise<void> {
-  await db
-    .update(employeeProfiles)
-    .set({
-      totpSecret: null,
-      totpEnrolledAt: null,
-      totpLastStep: null,
-      recoveryCodes: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(employeeProfiles.userId, userId));
+// Drop every browser this person had told the portal to remember, and cut their
+// live sessions with them. This is the "I lost that laptop" lever: after it,
+// every device has to prove a fresh emailed code again. There is no second
+// factor left to reset beyond this — the code goes to their company mailbox, so
+// regaining access is a mailbox question, not an administrator one.
+export async function forgetTrustedDevices(userId: string): Promise<void> {
+  await forgetAllDevices(userId);
   await destroyEmployeeSessionsForUser(userId);
 }
 

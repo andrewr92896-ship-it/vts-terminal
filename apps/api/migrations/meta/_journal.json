@@ -533,6 +533,13 @@
       "when": 1782340736908,
       "tag": "0075_employee_working_status",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "6",
+      "when": 1782340836908,
+      "tag": "0076_employee_email_2fa",
+      "breakpoints": true
     }
   ]
 }
