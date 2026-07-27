@@ -250,11 +250,15 @@ function PersonRow({
     }
   }
 
-  async function reset2fa() {
-    if (!window.confirm(`Reset ${person.name}'s authenticator? They will set up a new one at next sign-in.`))
+  async function forgetDevices() {
+    if (
+      !window.confirm(
+        `Forget every device ${person.name} has remembered? Their open sessions end now, and each device has to prove an emailed code again.`,
+      )
+    )
       return;
     try {
-      onChanged(await employeeApi.resetTwoFactor(person.userId));
+      onChanged(await employeeApi.forgetDevicesFor(person.userId));
     } catch (e) {
       onError((e as Error).message);
     }
@@ -291,9 +295,11 @@ function PersonRow({
                 {"No access"}
               </Pill>
             )}
-            {!person.twoFactorEnrolled && (
+            {person.trustedDeviceCount > 0 && (
               <Pill tone="warn">
-                {"No 2FA"}
+                {person.trustedDeviceCount === 1
+                  ? '1 remembered device'
+                  : `${person.trustedDeviceCount} remembered devices`}
               </Pill>
             )}
             {!person.accountActive && (
@@ -407,9 +413,9 @@ function PersonRow({
             <Button variant="primary" onClick={save} disabled={busy || Object.keys(patch).length === 0}>
               {busy ? "Saving…" : "Save changes"}
             </Button>
-            <Button onClick={reset2fa} disabled={!person.twoFactorEnrolled}>
+            <Button onClick={forgetDevices} disabled={person.trustedDeviceCount === 0}>
               <Icon name="refresh-cw" size={13} />
-              {"Reset 2FA"}
+              {"Forget devices"}
             </Button>
             {!isMe && (
               <Button variant="danger" onClick={revoke}>

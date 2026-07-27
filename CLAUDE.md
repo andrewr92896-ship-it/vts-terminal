@@ -406,11 +406,12 @@ share an account table and nothing else.
 
 **Where it lives**
 
-- API: `apps/api/src/employee/{totp,sessions,audit,lockout,network,guard,service}.ts`,
+- API: `apps/api/src/employee/{emailOtp,mailer,trustedDevices,sessions,audit,lockout,network,guard,service}.ts`,
   routes in `routes/employee.ts` (all under `/api/employee/*`), registered in
   `server.ts`. Tables: `employee_profiles`, `employee_sessions`,
   `employee_login_attempts`, `employee_audit_log`, `employee_announcements`,
-  `employee_documents` (migration `0073_employee_portal.sql`).
+  `employee_documents` (migration `0073_employee_portal.sql`),
+  `employee_trusted_devices` (migration `0076_employee_email_2fa.sql`).
 - Web: `apps/web/employee.html` (a second Vite/Rollup entry) → `src/employee/*`.
   The way in from the app is a **standalone sidebar row pinned above the
   Workspaces list** (`EmployeePortalLink` in `Sidebar.tsx`) — deliberately not a
@@ -456,16 +457,44 @@ next request. The demo is hard-excluded regardless of roles.
    (never stored, so a DB copy holds no usable token), echoed by the client in
    the `x-vts-employee-csrf` header on every non-GET.
 
-**Second factor.** TOTP (RFC 6238) implemented dependency-free on `node:crypto`
-in `employee/totp.ts`. Required by default (`EMPLOYEE_REQUIRE_2FA`). A first
-sign-in without one gets a `pending_2fa` session that can reach **only** the
-enrollment endpoints. The secret is AES-256-GCM encrypted at rest
-(`security/secretbox.ts`); `totp_last_step` makes every code **strictly
-single-use** (a code cannot be replayed, not even seconds later — expect to wait
-for the next 30s window). Enrollment issues **ten single-use recovery codes**,
-shown once, stored only as SHA-256 hashes. Self-service rotation is deliberately
-not offered — a portal admin resets it (`POST /api/employee/admin/people/:id/reset-2fa`),
-which also kills that person's sessions.
+**Second factor — a code emailed to the company address.** Required by default
+(`EMPLOYEE_REQUIRE_2FA`). There is **no authenticator app and no enrollment
+step**: a correct password issues a `pending_2fa` session that can reach **only**
+`POST /2fa/verify` and `POST /2fa/resend`, and a six-digit code goes out by email
+(`employee/emailOtp.ts`, sent via `employee/mailer.ts`).
+
+- The code is delivered to **`users.email`** — the account's own sign-in address,
+  which the guard has already required to be on the company domain. Never the
+  address typed into the form (that field also accepts a username), so a code can
+  only ever land in a company mailbox.
+- It is random (`crypto.randomInt`, no modulo bias), stored **only as a SHA-256
+  on the one session that asked for it** (so a second attempt in another browser
+  gets its own and neither consumes the other's), expires after
+  `EMPLOYEE_OTP_TTL_MINUTES`, and is **single-use** — promoting the session
+  clears it, so it cannot be replayed.
+- Wrong guesses are capped per code (**5**, then that code is burned and a fresh
+  one must be requested) *and* fed to the account/address lockout ladder below.
+  Both `/2fa/verify` and `/2fa/resend` **check** that ladder as well as feed it —
+  without the check, a valid password would allow endless guess-five-then-resend.
+- Resend is throttled (30s) so the button cannot mail-bomb anyone.
+- **SMTP is optional.** With no `SMTP_HOST` set the code is written to the server
+  log instead of emailed, and the response carries `delivered: false` so the UI
+  says so. Deliberate: a misconfigured deploy must not lock every employee out.
+
+**"Remember this device for 30 days."** Ticked on the code screen, backed by
+`employee/trustedDevices.ts` + `employee_trusted_devices`. A remembered browser
+**skips the emailed code** for `EMPLOYEE_REMEMBER_DEVICE_DAYS` — it never skips
+the password, so this changes how often the second factor is asked for, not
+whether the surface has one. The trust lives in its **own** cookie
+(`__Host-vts_employee_device` in production, `SameSite=Strict`, httpOnly, signed,
+SHA-256 stored) separate from the session cookie, because the two have opposite
+lifetimes: the session is deliberately short (8h / 30m idle), this deliberately
+long. **No guard consults it** — authority still comes from the session cookie
+alone; holding it only affects what `/login` asks for next. Each employee sees
+and revokes their own on the Security screen; a portal admin drops all of
+someone's at once (`POST /api/employee/admin/people/:id/forget-devices`, which
+also kills their sessions), and revoking access or suspending a record clears
+them too.
 
 **Brute force.** `employee_login_attempts` tracks failures per **account** and
 per **source address**, with a progressive lockout (5 fails → 1 min, 8 → 5 min,
@@ -522,11 +551,12 @@ else's — and reads back as a coloured dot in the Directory. Photo changes are
 audited (`photo.updated` / `photo.removed`).
 
 **Screens** (`src/employee/screens/*`): Overview (your record + the session's own
-security posture + Employee photos + My tasks), Directory, Announcements, Documents, Security (2FA,
-active sessions, activity log), and **People** — the HR screen for portal admins
-(`employee_profiles.is_admin`, or founder-level implicitly): grant/revoke access,
-edit records, reset a second factor. Granting refuses a non-company address up
-front rather than creating an account that would fail at the door.
+security posture + Employee photos + My tasks), Directory, Announcements,
+Documents, Security (remembered devices, active sessions, activity log), and
+**People** — the HR screen for portal admins (`employee_profiles.is_admin`, or
+founder-level implicitly): grant/revoke access, edit records, forget someone's
+remembered devices. Granting refuses a non-company address up front rather than
+creating an account that would fail at the door.
 
 **Its own design language.** The employee portal does **not** use the main
 portal's theme. `src/employee/theme.ts` stands alone — a warm-sand page
@@ -557,7 +587,7 @@ hardcoded" below.)
 - **No** login rate-limit, account lockout, or CSRF token — CSRF posture rests on
   `sameSite: 'lax'` + signed httpOnly cookie. AI usage cap and the broker poll
   throttle are the only rate limits. (The **Employee Portal** has all of these —
-  lockout, CSRF token, idle timeout, 2FA — on its own separate session; see its
+  lockout, CSRF token, idle timeout, emailed-code 2FA — on its own separate session; see its
   section above. None of it applies to the main portal's `vts_session`.)
 - **Key rotation caveat:** `SESSION_SECRET` signs cookies; `CREDENTIALS_KEY`
   (or, if unset, a key derived from `SESSION_SECRET`) encrypts broker creds.
@@ -615,8 +645,13 @@ defaults; the app runs locally with almost nothing set.
 - **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
   `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`, `SESSION_WATCH_SECONDS` (session-notif
   poll cadence, default 30).
+- **Email (SMTP):** `SMTP_HOST` (unset = email off), `SMTP_PORT` (587),
+  `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` (`false`), `SMTP_FROM`. Currently used
+  only for the Employee Portal's sign-in codes; with `SMTP_HOST` unset the code
+  is logged instead of sent, so a misconfigured deploy cannot lock everyone out.
 - **Employee Portal:** `EMPLOYEE_SESSION_HOURS` (8), `EMPLOYEE_IDLE_MINUTES` (30),
-  `EMPLOYEE_REQUIRE_2FA` (`true`), `EMPLOYEE_EMAIL_DOMAIN`
+  `EMPLOYEE_REQUIRE_2FA` (`true`), `EMPLOYEE_OTP_TTL_MINUTES` (10),
+  `EMPLOYEE_REMEMBER_DEVICE_DAYS` (30), `EMPLOYEE_EMAIL_DOMAIN`
   (`vitalistradingsystems.com`), `EMPLOYEE_IP_ALLOWLIST` (unset = no network
   fence; **fails closed** when set, so a wrong value locks you out of `/employee`
   — the main portal is unaffected). Every default is the strict value.

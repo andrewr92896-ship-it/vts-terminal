@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.66';
+export const APP_VERSION = 'Beta V 5.67';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.67',
+    date: 'July 27, 2026',
+    notes: [
+      'The Employee Portal now signs you in with a six-digit code emailed to your work address instead of an authenticator app. There is nothing to set up: enter your password and the code arrives in your inbox.',
+      'New "Remember this device for 30 days" option on the code screen. A remembered browser skips the emailed code next time — your password is still required every time.',
+      'The Security screen lists every device you have remembered and lets you forget any of them; a portal administrator can forget all of someone\'s at once.',
+      'Authenticator apps and printed recovery codes are gone, along with the setup walkthrough.',
+    ],
+  },
   {
     version: 'Beta V 5.66',
     date: 'July 27, 2026',

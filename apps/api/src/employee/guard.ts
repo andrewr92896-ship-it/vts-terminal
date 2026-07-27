@@ -11,6 +11,7 @@ import {
   resolveEmployeeSession,
   touchEmployeeSession,
 } from './sessions.js';
+import { EMPLOYEE_DEVICE_COOKIE } from './trustedDevices.js';
 import { ipAllowed } from './network.js';
 import { audit } from './audit.js';
 
@@ -101,6 +102,18 @@ function cookieToken(request: FastifyRequest): string | undefined {
 }
 
 export { cookieToken as employeeCookieToken };
+
+// The long-lived "remember this device" token, read the same signed way. It is
+// deliberately not consulted by any guard below: holding it lets a browser skip
+// the emailed code at sign-in, and nothing else. Authority still comes from the
+// session cookie alone.
+export function employeeDeviceCookieToken(request: FastifyRequest): string | undefined {
+  const raw = request.cookies[EMPLOYEE_DEVICE_COOKIE];
+  if (!raw) return undefined;
+  const unsigned = request.unsignCookie(raw);
+  if (!unsigned.valid || !unsigned.value) return undefined;
+  return unsigned.value;
+}
 
 // Layer 1 — the optional network fence. Used by the API guard and by the
 // /employee page route in server.ts, so a blocked address never even receives

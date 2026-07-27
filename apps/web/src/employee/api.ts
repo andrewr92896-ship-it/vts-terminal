@@ -16,7 +16,7 @@ export function setCsrfToken(token: string | null): void {
 
 export class EmployeeApiError extends Error {
   status: number;
-  /** Set to 'totp' when the server wants an authenticator code next. */
+  /** Set to 'code' when the server is still waiting on the emailed sign-in code. */
   need?: string;
   retryAfter?: number;
 
@@ -89,8 +89,8 @@ export interface EmployeeMe {
   isPortalAdmin: boolean;
   /** Founder-level — gates the inline wording editor. Narrower than isPortalAdmin. */
   isDeveloper: boolean;
-  twoFactorEnrolled: boolean;
-  recoveryCodesLeft: number;
+  /** Browsers currently allowed to skip the emailed sign-in code. */
+  trustedDeviceCount: number;
   lastLoginAt: number | null;
   lastLoginIp: string | null;
 }
@@ -118,7 +118,8 @@ export interface PersonView extends DirectoryEntry {
   status: EmployeeStatus;
   employeeNo: string | null;
   managerId: string | null;
-  twoFactorEnrolled: boolean;
+  /** Browsers currently allowed to skip this person's emailed sign-in code. */
+  trustedDeviceCount: number;
   lastLoginAt: number | null;
   accountActive: boolean;
   hasRole: boolean;
@@ -193,17 +194,35 @@ export interface AuditEntry {
   ok: boolean;
 }
 
+export interface TrustedDeviceView {
+  id: string;
+  current: boolean;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: number;
+  lastUsedAt: number;
+  expiresAt: number;
+}
+
 export interface SessionState {
   authenticated: boolean;
   stage?: 'pending_2fa' | 'active';
   requires2fa: boolean;
   csrfToken?: string;
+  /** Masked destination of the outstanding sign-in code, mid-flow. */
+  sentTo?: string | null;
+  rememberDays?: number;
   me?: EmployeeMe | null;
 }
 
 export interface LoginResult {
-  status: 'ok' | 'enroll_required';
+  status: 'ok' | 'code_sent';
   csrfToken: string;
+  /** Masked mailbox the code went to — shown so the employee knows where to look. */
+  sentTo?: string | null;
+  /** False when the server could not actually send the mail. */
+  delivered?: boolean;
+  rememberDays?: number;
   me?: EmployeeMe;
 }
 
@@ -236,16 +255,15 @@ export interface PeopleData {
 export const employeeApi = {
   // ---- session ----
   session: () => request<SessionState>('GET', '/session'),
-  login: (email: string, password: string, code?: string) =>
-    request<LoginResult>('POST', '/login', { email, password, ...(code ? { code } : {}) }),
+  login: (email: string, password: string) =>
+    request<LoginResult>('POST', '/login', { email, password }),
   logout: () => request<{ ok: true }>('POST', '/logout'),
 
-  // ---- two-factor ----
-  beginEnroll: () => request<{ secret: string; otpauthUrl: string }>('POST', '/2fa/begin'),
-  completeEnroll: (code: string) =>
-    request<{ recoveryCodes: string[]; me: EmployeeMe }>('POST', '/2fa/complete', { code }),
-  regenerateRecovery: (code: string) =>
-    request<{ recoveryCodes: string[] }>('POST', '/2fa/recovery', { code }),
+  // ---- the emailed sign-in code ----
+  verifyCode: (code: string, remember: boolean) =>
+    request<{ me: EmployeeMe }>('POST', '/2fa/verify', { code, remember }),
+  resendCode: () =>
+    request<{ sentTo: string | null; delivered: boolean }>('POST', '/2fa/resend'),
 
   // ---- content ----
   overview: () => request<OverviewData>('GET', '/overview'),
@@ -301,13 +319,18 @@ export const employeeApi = {
   audit: (scope: 'mine' | 'all' = 'mine') =>
     request<{ scope: string; entries: AuditEntry[] }>('GET', `/audit?scope=${scope}`),
 
+  // ---- remembered devices ----
+  trustedDevices: () =>
+    request<{ rememberDays: number; devices: TrustedDeviceView[] }>('GET', '/trusted-devices'),
+  forgetDevice: (id: string) => request<{ ok: true }>('DELETE', `/trusted-devices/${id}`),
+
   // ---- people (portal admins) ----
   people: () => request<PeopleData>('GET', '/admin/people'),
   grantAccess: (userId: string, details: ProfilePatch) =>
     request<PeopleData>('POST', '/admin/people', { userId, ...details }),
   updatePerson: (userId: string, patch: ProfilePatch) =>
     request<PeopleData>('PATCH', `/admin/people/${userId}`, patch),
-  resetTwoFactor: (userId: string) =>
-    request<PeopleData>('POST', `/admin/people/${userId}/reset-2fa`),
+  forgetDevicesFor: (userId: string) =>
+    request<PeopleData>('POST', `/admin/people/${userId}/forget-devices`),
   revokeAccess: (userId: string) => request<PeopleData>('DELETE', `/admin/people/${userId}`),
 };

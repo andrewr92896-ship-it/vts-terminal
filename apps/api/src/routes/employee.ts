@@ -9,29 +9,32 @@ import {
   WORKING_STATUSES,
   employeeProfiles,
   users,
-  type EmployeeProfileRow,
   type UserRow,
 } from '../db/schema.js';
 import { config } from '../config.js';
 import { verifyPassword } from '../auth/passwords.js';
 import { canAccessEmployeePortal, isFounder, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME, isDemoUser } from '../demo/identity.js';
-import { encryptSecret, decryptSecret } from '../security/secretbox.js';
 import {
   EMPLOYEE_COOKIE,
+  clearSessionOtp,
   createEmployeeSession,
   destroyEmployeeSession,
   destroyEmployeeSessionById,
   destroyEmployeeSessionsForUser,
   employeeCookieOptions,
   employeeCsrfToken,
+  getEmployeeSessionById,
   listEmployeeSessions,
   promoteEmployeeSession,
   purgeExpiredEmployeeSessions,
+  recordOtpAttempt,
+  setSessionOtp,
 } from '../employee/sessions.js';
 import {
   applyEmployeeSecurityHeaders,
   employeeCookieToken,
+  employeeDeviceCookieToken as deviceCookieToken,
   enforceIpAllowlist,
   loadEmployeeContext,
   requireEmployee,
@@ -43,12 +46,24 @@ import {
 import { audit, readAudit } from '../employee/audit.js';
 import { checkLock, clearFailures, ipKey, recordFailure, userKey } from '../employee/lockout.js';
 import {
-  generateRecoveryCodes,
-  generateTotpSecret,
-  hashRecoveryCode,
-  otpauthUrl,
-  verifyTotp,
-} from '../employee/totp.js';
+  MAX_OTP_ATTEMPTS,
+  OTP_RESEND_COOLDOWN_MS,
+  generateOtpCode,
+  hashOtpCode,
+  otpMatches,
+  otpTtlMs,
+  sendOtpEmail,
+} from '../employee/emailOtp.js';
+import {
+  EMPLOYEE_DEVICE_COOKIE,
+  deviceCookieOptions,
+  deviceTrusted,
+  forgetDevice,
+  listTrustedDevices,
+  purgeExpiredTrustedDevices,
+  rememberDevice,
+  trustedDeviceId,
+} from '../employee/trustedDevices.js';
 import {
   EmployeeError,
   buildMe,
@@ -67,7 +82,7 @@ import {
   listCandidates,
   listDocuments,
   listPeople,
-  resetTwoFactor,
+  forgetTrustedDevices,
   revokeEmployeeAccess,
   setUserPhoto,
   setMyWorkingStatus,
@@ -92,11 +107,13 @@ const GENERIC_LOGIN_ERROR = 'Those credentials are not valid for the employee po
 const loginSchema = z.object({
   email: z.string().trim().min(1).max(255),
   password: z.string().min(1).max(256),
-  // A TOTP code, or one of the single-use recovery codes.
-  code: z.string().trim().max(32).optional(),
 });
 
-const codeSchema = z.object({ code: z.string().trim().min(1).max(32) });
+// The emailed sign-in code, plus the employee's choice about this browser.
+const verifySchema = z.object({
+  code: z.string().trim().min(1).max(16),
+  remember: z.boolean().optional(),
+});
 
 const taskSchema = z.object({
   title: z.string().trim().min(1).max(200),
@@ -176,62 +193,37 @@ const profilePatchSchema = z.object({
 
 const grantSchema = profilePatchSchema.extend({ userId: z.string().trim().min(1).max(64) });
 
-// "Enrolled" means the employee finished the flow, not merely that a candidate
-// secret exists — `2fa/begin` writes the secret, `2fa/complete` stamps the date.
-function isEnrolled(profile: EmployeeProfileRow): boolean {
-  return !!profile.totpSecret && !!profile.totpEnrolledAt;
+// Where the code goes: the account's own sign-in address, which the guard has
+// already required to be on the company domain. Never an address supplied in
+// the request — the sign-in form also accepts a username, and a code must land
+// in a company mailbox regardless of what was typed to reach it.
+function otpAddress(user: UserRow): string | null {
+  return user.email;
 }
 
-function readRecoveryHashes(raw: string | null): string[] {
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((h): h is string => typeof h === 'string') : [];
-  } catch {
-    return [];
-  }
+// A hint at the destination, not the destination: enough for the employee to
+// know which mailbox to open, not enough to hand an attacker an address they
+// did not already have. "andrew@vitalis…" becomes "an•••@vitalistradingsystems.com".
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '•••';
+  const head = local.slice(0, 2);
+  return `${head}${'•'.repeat(Math.max(3, local.length - head.length))}@${domain}`;
 }
 
-// Try the submitted code as a TOTP first, then as a single-use recovery code.
-// A consumed recovery code is removed from the stored set immediately.
-async function verifySecondFactor(
-  profile: EmployeeProfileRow,
-  code: string,
-): Promise<{ ok: boolean; usedRecovery: boolean }> {
-  if (!profile.totpSecret) return { ok: false, usedRecovery: false };
-
-  let secret: string;
-  try {
-    secret = decryptSecret(profile.totpSecret);
-  } catch {
-    // Unreadable secret (e.g. CREDENTIALS_KEY was rotated). Fail closed — an
-    // admin reset is the recovery path.
-    return { ok: false, usedRecovery: false };
-  }
-
-  const step = verifyTotp(secret, code, { minStep: profile.totpLastStep });
-  if (step != null) {
-    await db
-      .update(employeeProfiles)
-      .set({ totpLastStep: step, updatedAt: new Date() })
-      .where(eq(employeeProfiles.userId, profile.userId));
-    return { ok: true, usedRecovery: false };
-  }
-
-  const hashes = readRecoveryHashes(profile.recoveryCodes);
-  if (hashes.length) {
-    const presented = hashRecoveryCode(code);
-    const idx = hashes.indexOf(presented);
-    if (idx >= 0) {
-      hashes.splice(idx, 1);
-      await db
-        .update(employeeProfiles)
-        .set({ recoveryCodes: JSON.stringify(hashes), updatedAt: new Date() })
-        .where(eq(employeeProfiles.userId, profile.userId));
-      return { ok: true, usedRecovery: true };
-    }
-  }
-  return { ok: false, usedRecovery: false };
+// Mint a code, store its hash against this one session, and mail it. The
+// plaintext never leaves this function except into the message body.
+async function issueOtp(
+  sessionId: string,
+  user: UserRow,
+  ip: string,
+): Promise<{ delivered: boolean; sentTo: string | null }> {
+  const address = otpAddress(user);
+  if (!address) return { delivered: false, sentTo: null };
+  const code = generateOtpCode();
+  await setSessionOtp(sessionId, hashOtpCode(code), new Date(Date.now() + otpTtlMs()));
+  const delivered = await sendOtpEmail(address, code, { name: user.displayName, ip });
+  return { delivered, sentTo: maskEmail(address) };
 }
 
 // Look the account up the same way the main portal does (email, then username),
@@ -279,6 +271,10 @@ export async function employeeRoutes(app: FastifyInstance) {
       stage,
       requires2fa: config.EMPLOYEE_REQUIRE_2FA,
       csrfToken: employeeCsrfToken(ctx.sessionId),
+      // A reload part-way through the code step lands back on the code screen,
+      // still knowing which mailbox it went to.
+      sentTo: stage === 'pending_2fa' ? maskEmail(ctx.user.email ?? '') : null,
+      rememberDays: config.EMPLOYEE_REMEMBER_DEVICE_DAYS,
       me: stage === 'active' ? await buildMe(ctx.user, ctx.profile, ctx.isPortalAdmin, ctx.isDeveloper) : null,
     };
   });
@@ -290,7 +286,7 @@ export async function employeeRoutes(app: FastifyInstance) {
 
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: GENERIC_LOGIN_ERROR });
-    const { email, password, code } = parsed.data;
+    const { email, password } = parsed.data;
 
     // The address key is checked before anything else, so a locked-out source
     // spends a request and learns nothing.
@@ -363,58 +359,51 @@ export async function employeeRoutes(app: FastifyInstance) {
     }
 
     // ---- Second factor ----
-    if (isEnrolled(profile)) {
-      if (!code) {
-        // The password was right; ask for the code without burning an attempt.
-        // `need` tells the client to reveal the code field.
-        return reply.code(401).send({ error: 'Enter your authenticator code', need: 'totp' });
-      }
-      const { ok, usedRecovery } = await verifySecondFactor(profile, code);
-      if (!ok) {
-        const lock = await recordFailure(keys);
-        await audit({
-          action: 'login.totp_failed',
-          userId: user.id,
-          actor: user.displayName,
-          ...meta,
-          ok: false,
-        });
-        return reply.code(401).send({
-          error: 'That code is not valid',
-          need: 'totp',
-          ...(lock.locked ? { retryAfter: lock.retryAfterSeconds } : {}),
-        });
-      }
-      if (usedRecovery) {
-        await audit({
-          action: '2fa.recovery_used',
-          userId: user.id,
-          actor: user.displayName,
-          detail: 'signed in with a single-use recovery code',
-          ...meta,
-        });
-      }
-    } else if (config.EMPLOYEE_REQUIRE_2FA) {
-      // Password accepted, but this account still owes us a second factor. The
-      // session it gets can only reach the enrollment endpoints.
+    // The password is right. Unless this browser is one the employee has told
+    // us to remember, they now owe us a code sent to their company mailbox.
+    const remembered =
+      config.EMPLOYEE_REQUIRE_2FA &&
+      (await deviceTrusted(user.id, deviceCookieToken(request)));
+
+    if (config.EMPLOYEE_REQUIRE_2FA && !remembered) {
+      // The password is spent, so clear the failure counters: what follows is a
+      // separate, separately-capped challenge, and an honest person who fumbles
+      // a code should not be paying off a password lockout as well.
       await clearFailures(keys);
       const created = await createEmployeeSession(user.id, 'pending_2fa', {
         ip: meta.ip,
         userAgent: meta.userAgent,
       });
       reply.setCookie(EMPLOYEE_COOKIE, created.token, employeeCookieOptions(created.maxAgeSeconds));
+      const { delivered, sentTo } = await issueOtp(created.sessionId, user, meta.ip);
       await audit({
-        action: 'login.success',
+        action: 'login.code_sent',
         userId: user.id,
         actor: user.displayName,
-        detail: 'pending two-factor enrollment',
+        detail: delivered ? 'sign-in code emailed' : 'sign-in code could not be emailed',
         ...meta,
+        ok: delivered,
       });
-      return { status: 'enroll_required', csrfToken: created.csrfToken };
+      return {
+        status: 'code_sent',
+        csrfToken: created.csrfToken,
+        sentTo,
+        delivered,
+        rememberDays: config.EMPLOYEE_REMEMBER_DEVICE_DAYS,
+      };
     }
 
     // ---- Signed in ----
     await clearFailures(keys);
+    if (remembered) {
+      await audit({
+        action: 'login.remembered_device',
+        userId: user.id,
+        actor: user.displayName,
+        detail: 'signed in on a remembered device — no code required',
+        ...meta,
+      });
+    }
     void purgeExpiredEmployeeSessions();
     const created = await createEmployeeSession(user.id, 'active', {
       ip: meta.ip,
@@ -453,112 +442,145 @@ export async function employeeRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // ---- Two-factor enrollment ----
-  // Reachable by a pending session (first sign-in) and by an active session that
-  // has somehow not enrolled (only possible when EMPLOYEE_REQUIRE_2FA is off).
+  // ---- The emailed sign-in code ----
+  // Reachable only by a session that has passed the password check and is
+  // waiting on its code. Both endpoints run behind requirePendingEmployee, so
+  // the network fence, the origin check and the CSRF token all still apply.
 
-  app.post('/api/employee/2fa/begin', { preHandler: requirePendingEmployee }, async (request, reply) => {
+  app.post('/api/employee/2fa/verify', { preHandler: requirePendingEmployee }, async (request, reply) => {
     const ctx = request.employee!;
-    if (isEnrolled(ctx.profile)) {
-      // Rotating an existing authenticator is an admin reset, not a self-serve
-      // overwrite — otherwise an abandoned rotation silently breaks the account.
-      return reply.code(400).send({ error: 'A second factor is already enrolled' });
-    }
-    const secret = generateTotpSecret();
-    await db
-      .update(employeeProfiles)
-      .set({ totpSecret: encryptSecret(secret), totpEnrolledAt: null, updatedAt: new Date() })
-      .where(eq(employeeProfiles.userId, ctx.user.id));
-    return {
-      secret,
-      otpauthUrl: otpauthUrl(secret, ctx.user.email || ctx.user.username),
-    };
-  });
-
-  app.post('/api/employee/2fa/complete', { preHandler: requirePendingEmployee }, async (request, reply) => {
-    const ctx = request.employee!;
-    const parsed = codeSchema.safeParse(request.body);
+    const meta = requestMeta(request);
+    const parsed = verifySchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Enter the 6-digit code' });
-    if (isEnrolled(ctx.profile)) {
-      return reply.code(400).send({ error: 'A second factor is already enrolled' });
-    }
-    if (!ctx.profile.totpSecret) {
-      return reply.code(400).send({ error: 'Start the setup again' });
-    }
 
-    let secret: string;
-    try {
-      secret = decryptSecret(ctx.profile.totpSecret);
-    } catch {
-      return reply.code(400).send({ error: 'Start the setup again' });
-    }
-    const step = verifyTotp(secret, parsed.data.code);
-    if (step == null) {
+    // The ladder is checked here, not just fed: without this, someone holding a
+    // valid password could guess five codes, ask for a fresh one and guess five
+    // more, forever. Failures below count against the same keys the password
+    // step uses, so the lockout covers the whole sign-in, not half of it.
+    const lock = await checkLock([ipKey(meta.ip), userKey(ctx.user.id)]);
+    if (lock.locked) {
       await audit({
-        action: 'login.totp_failed',
+        action: 'login.locked',
         userId: ctx.user.id,
         actor: ctx.user.displayName,
-        detail: 'enrollment',
-        ...requestMeta(request),
+        ...meta,
         ok: false,
       });
-      return reply.code(400).send({ error: 'That code is not valid' });
+      return reply
+        .code(429)
+        .header('Retry-After', String(lock.retryAfterSeconds))
+        .send({ error: 'Too many attempts. Try again later.', retryAfter: lock.retryAfterSeconds });
     }
 
-    // Shown once, here, and never again — only the hashes are kept.
-    const recoveryCodes = generateRecoveryCodes();
+    const session = await getEmployeeSessionById(ctx.sessionId);
+    if (!session || session.stage !== 'pending_2fa') {
+      return reply.code(400).send({ error: 'Start signing in again' });
+    }
+    if (!session.otpCodeHash || !session.otpExpiresAt) {
+      return reply.code(400).send({ error: 'Request a new code', need: 'code' });
+    }
+    if (session.otpExpiresAt.getTime() < Date.now()) {
+      await clearSessionOtp(ctx.sessionId);
+      return reply.code(400).send({ error: 'That code has expired. Request a new one.', need: 'code' });
+    }
+
+    if (!otpMatches(session.otpCodeHash, parsed.data.code)) {
+      const attempts = session.otpAttempts + 1;
+      // Both counters move: the per-code ceiling burns this code quickly, and
+      // the account/address ladder is what stops someone simply asking for code
+      // after code and guessing at each one.
+      const lock = await recordFailure([ipKey(meta.ip), userKey(ctx.user.id)]);
+      const spent = attempts >= MAX_OTP_ATTEMPTS;
+      if (spent) await clearSessionOtp(ctx.sessionId);
+      else await recordOtpAttempt(ctx.sessionId, attempts);
+      await audit({
+        action: 'login.code_failed',
+        userId: ctx.user.id,
+        actor: ctx.user.displayName,
+        detail: spent ? 'code discarded after too many wrong guesses' : undefined,
+        ...meta,
+        ok: false,
+      });
+      return reply.code(400).send({
+        error: spent ? 'Too many wrong guesses. Request a new code.' : 'That code is not valid',
+        need: 'code',
+        ...(spent ? { expired: true } : {}),
+        ...(lock.locked ? { retryAfter: lock.retryAfterSeconds } : {}),
+      });
+    }
+
+    // ---- Accepted ----
+    await clearFailures([ipKey(meta.ip), userKey(ctx.user.id)]);
+    // Promoting clears the stored code with it, so it cannot be presented twice.
+    await promoteEmployeeSession(ctx.sessionId);
+
+    if (parsed.data.remember) {
+      void purgeExpiredTrustedDevices();
+      const device = await rememberDevice(ctx.user.id, { ip: meta.ip, userAgent: meta.userAgent });
+      reply.setCookie(
+        EMPLOYEE_DEVICE_COOKIE,
+        device.token,
+        deviceCookieOptions(device.maxAgeSeconds),
+      );
+      await audit({
+        action: 'device.remembered',
+        userId: ctx.user.id,
+        actor: ctx.user.displayName,
+        detail: `this browser may skip the code for ${config.EMPLOYEE_REMEMBER_DEVICE_DAYS} days`,
+        ...meta,
+      });
+    }
+
     await db
       .update(employeeProfiles)
-      .set({
-        totpEnrolledAt: new Date(),
-        totpLastStep: step,
-        recoveryCodes: JSON.stringify(recoveryCodes.map(hashRecoveryCode)),
-        lastLoginAt: new Date(),
-        lastLoginIp: requestMeta(request).ip,
-        updatedAt: new Date(),
-      })
+      .set({ lastLoginAt: new Date(), lastLoginIp: meta.ip, updatedAt: new Date() })
       .where(eq(employeeProfiles.userId, ctx.user.id));
-    await promoteEmployeeSession(ctx.sessionId);
-    await audit({
-      action: '2fa.enrolled',
-      userId: ctx.user.id,
-      actor: ctx.user.displayName,
-      ...requestMeta(request),
-    });
+    await audit({ action: 'login.success', userId: ctx.user.id, actor: ctx.user.displayName, ...meta });
 
     const fresh = (
       await db.select().from(employeeProfiles).where(eq(employeeProfiles.userId, ctx.user.id)).limit(1)
     )[0];
-    return {
-      recoveryCodes,
-      me: await buildMe(ctx.user, fresh, ctx.isPortalAdmin, ctx.isDeveloper),
-    };
+    return { me: await buildMe(ctx.user, fresh, ctx.isPortalAdmin, ctx.isDeveloper) };
   });
 
-  // Issue a fresh set of recovery codes. Requires a live authenticator code, so
-  // a borrowed session cannot mint itself a permanent way back in.
-  app.post('/api/employee/2fa/recovery', { preHandler: requireEmployee }, async (request, reply) => {
+  // Send a fresh code, replacing whatever is outstanding. Throttled so the
+  // button cannot be turned into a way to flood somebody's inbox.
+  app.post('/api/employee/2fa/resend', { preHandler: requirePendingEmployee }, async (request, reply) => {
     const ctx = request.employee!;
-    const parsed = codeSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Enter your authenticator code' });
-    if (!isEnrolled(ctx.profile)) {
-      return reply.code(400).send({ error: 'No second factor is enrolled' });
+    const meta = requestMeta(request);
+    // Locked out means locked out: a fresh code must not be obtainable while the
+    // ladder is holding this account or address shut.
+    const lock = await checkLock([ipKey(meta.ip), userKey(ctx.user.id)]);
+    if (lock.locked) {
+      return reply
+        .code(429)
+        .header('Retry-After', String(lock.retryAfterSeconds))
+        .send({ error: 'Too many attempts. Try again later.', retryAfter: lock.retryAfterSeconds });
     }
-    const { ok } = await verifySecondFactor(ctx.profile, parsed.data.code);
-    if (!ok) return reply.code(400).send({ error: 'That code is not valid' });
 
-    const recoveryCodes = generateRecoveryCodes();
-    await db
-      .update(employeeProfiles)
-      .set({ recoveryCodes: JSON.stringify(recoveryCodes.map(hashRecoveryCode)), updatedAt: new Date() })
-      .where(eq(employeeProfiles.userId, ctx.user.id));
+    const session = await getEmployeeSessionById(ctx.sessionId);
+    if (!session || session.stage !== 'pending_2fa') {
+      return reply.code(400).send({ error: 'Start signing in again' });
+    }
+    const since = session.otpSentAt ? Date.now() - session.otpSentAt.getTime() : Infinity;
+    if (since < OTP_RESEND_COOLDOWN_MS) {
+      const wait = Math.ceil((OTP_RESEND_COOLDOWN_MS - since) / 1000);
+      return reply
+        .code(429)
+        .header('Retry-After', String(wait))
+        .send({ error: `Wait ${wait}s before asking for another code`, retryAfter: wait });
+    }
+
+    const { delivered, sentTo } = await issueOtp(ctx.sessionId, ctx.user, meta.ip);
     await audit({
-      action: '2fa.recovery_regenerated',
+      action: 'login.code_sent',
       userId: ctx.user.id,
       actor: ctx.user.displayName,
-      ...requestMeta(request),
+      detail: delivered ? 'resent' : 'resend could not be emailed',
+      ...meta,
+      ok: delivered,
     });
-    return { recoveryCodes };
+    return { sentTo, delivered };
   });
 
   // ---- Everything below requires a fully authenticated employee ----
@@ -893,6 +915,47 @@ export async function employeeRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // ---- Remembered devices ----
+  // The browsers this employee has allowed to skip the emailed code. Listed and
+  // revoked only by their owner — there is no endpoint that reads anyone else's,
+  // the same way there is none for anyone else's sessions.
+
+  app.get('/api/employee/trusted-devices', { preHandler: requireEmployee }, async (request) => {
+    const ctx = request.employee!;
+    const thisDevice = trustedDeviceId(deviceCookieToken(request));
+    const rows = await listTrustedDevices(ctx.user.id);
+    return {
+      rememberDays: config.EMPLOYEE_REMEMBER_DEVICE_DAYS,
+      devices: rows.map((d) => ({
+        id: d.id,
+        current: d.id === thisDevice,
+        ip: d.ip,
+        userAgent: d.userAgent,
+        createdAt: d.createdAt.getTime(),
+        lastUsedAt: d.lastUsedAt.getTime(),
+        expiresAt: d.expiresAt.getTime(),
+      })),
+    };
+  });
+
+  app.delete('/api/employee/trusted-devices/:id', { preHandler: requireEmployee }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const ctx = request.employee!;
+    await forgetDevice(id, ctx.user.id);
+    // Forgetting the browser you are on should also drop its cookie, so the
+    // next sign-in here really does ask for a code.
+    if (id === trustedDeviceId(deviceCookieToken(request))) {
+      reply.clearCookie(EMPLOYEE_DEVICE_COOKIE, deviceCookieOptions());
+    }
+    await audit({
+      action: 'device.forgotten',
+      userId: ctx.user.id,
+      actor: ctx.user.displayName,
+      ...requestMeta(request),
+    });
+    return { ok: true };
+  });
+
   // Your own trail by default; portal admins may ask for the whole log.
   app.get('/api/employee/audit', { preHandler: requireEmployee }, async (request) => {
     const ctx = request.employee!;
@@ -968,15 +1031,18 @@ export async function employeeRoutes(app: FastifyInstance) {
     },
   );
 
+  // Drop every browser this person had remembered, and end their live sessions
+  // with it. The "they left a laptop somewhere" lever: afterwards each of their
+  // devices must prove a fresh emailed code again.
   app.post(
-    '/api/employee/admin/people/:userId/reset-2fa',
+    '/api/employee/admin/people/:userId/forget-devices',
     { preHandler: [requireEmployee, requireEmployeeAdmin] },
     async (request) => {
       const { userId } = request.params as { userId: string };
       const ctx = request.employee!;
-      await resetTwoFactor(userId);
+      await forgetTrustedDevices(userId);
       await audit({
-        action: '2fa.reset',
+        action: 'device.forgotten_all',
         userId: ctx.user.id,
         actor: ctx.user.displayName,
         target: userId,

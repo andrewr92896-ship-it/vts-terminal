@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { employeeApi, type OverviewData } from '../api';
 import { EMP, EMPLOYMENT_LABELS, fmtDate, fmtDateTime, tint } from '../theme';
-import { Banner, Card, Detail, DetailGrid, Empty, Pill, ScreenHeader, label } from '../ui';
+import { Card, Detail, DetailGrid, Empty, Pill, ScreenHeader, label } from '../ui';
 import { Icon } from '../../components/Icon';
 import { MyTasks } from './MyTasks';
 import { Photos } from './Photos';
@@ -45,14 +45,6 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
         }
       />
 
-      {!me.twoFactorEnrolled && (
-        <div style={{ marginBottom: 18 }}>
-          <Banner tone="warn">
-            {"This account has no authenticator enrolled. Set one up from the Security section."}
-          </Banner>
-        </div>
-      )}
-
       <div style={{ display: 'grid', gap: 16 }}>
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 18 }}>
@@ -71,12 +63,9 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
                   {"Portal admin"}
                 </Pill>
               )}
-              <Pill tone={me.twoFactorEnrolled ? 'good' : 'warn'}>
-                {me.twoFactorEnrolled ? (
-                  "2FA on"
-                ) : (
-                  "2FA off"
-                )}
+              <Pill tone="good">
+                <Icon name="mail" size={10} />
+                {"Email 2FA"}
               </Pill>
             </div>
           </div>
@@ -138,11 +127,12 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
               {security.idleMinutes} min idle
             </Detail>
             <Detail term={"Second factor"}>
-              {security.requires2fa ? (
-                "Required"
-              ) : (
-                "Optional"
-              )}
+              {security.requires2fa ? "Emailed code" : "Optional"}
+            </Detail>
+            <Detail term={"Remembered devices"}>
+              {me.trustedDeviceCount === 0
+                ? 'None — a code every time'
+                : `${me.trustedDeviceCount} skipping the code`}
             </Detail>
             <Detail term={"Signed in from"}>
               {me.lastLoginIp || '—'}

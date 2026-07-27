@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { employeeApi, setCsrfToken, type EmployeeMe } from './api';
 import { EMP, RADIUS, tint } from './theme';
-import { EmployeeEnroll, EmployeeLogin } from './Login';
+import { EmployeeLogin, EmployeeVerify } from './Login';
 import { Overview } from './screens/Overview';
 import { Directory } from './screens/Directory';
 import { Announcements } from './screens/Announcements';
@@ -37,7 +37,7 @@ const NAV: NavItem[] = [
   { key: 'people', label: 'People', icon: 'user-plus', adminOnly: true },
 ];
 
-type Phase = 'loading' | 'signed_out' | 'enrolling' | 'ready';
+type Phase = 'loading' | 'signed_out' | 'verifying' | 'ready';
 
 export function EmployeeApp() {
   const [phase, setPhase] = useState<Phase>('loading');
@@ -47,6 +47,10 @@ export function EmployeeApp() {
   // this small should never make someone hover six unlabelled glyphs to find
   // out what is in it.
   const [navOpen, setNavOpen] = useState(true);
+  // Where the outstanding sign-in code went, and whether it actually sent.
+  const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [codeDelivered, setCodeDelivered] = useState(true);
+  const [rememberDays, setRememberDays] = useState(30);
 
   // Bootstrap: ask the server whether this browser already holds an employee
   // session. The answer is authoritative — nothing about the signed-in state is
@@ -61,8 +65,13 @@ export function EmployeeApp() {
         return;
       }
       setCsrfToken(s.csrfToken ?? null);
+      if (s.rememberDays) setRememberDays(s.rememberDays);
       if (s.stage === 'pending_2fa') {
-        setPhase('enrolling');
+        // A reload mid-code lands back on the code screen rather than starting
+        // the whole sign-in again — the pending session is still good.
+        setCodeSentTo(s.sentTo ?? null);
+        setCodeDelivered(true);
+        setPhase('verifying');
         return;
       }
       setMe(s.me ?? null);
@@ -134,17 +143,32 @@ export function EmployeeApp() {
           setMe(user);
           setPhase('ready');
         }}
-        onEnrollNeeded={() => setPhase('enrolling')}
+        onCodeSent={(sentTo, delivered) => {
+          setCodeSentTo(sentTo);
+          setCodeDelivered(delivered);
+          setPhase('verifying');
+        }}
       />
     );
   }
 
-  if (phase === 'enrolling') {
+  if (phase === 'verifying') {
     return (
-      <EmployeeEnroll
-        onEnrolled={(user) => {
+      <EmployeeVerify
+        sentTo={codeSentTo}
+        delivered={codeDelivered}
+        rememberDays={rememberDays}
+        onVerified={(user) => {
           setMe(user);
           setPhase('ready');
+        }}
+        onStartOver={() => {
+          // Drop the pending session outright, so an abandoned attempt does not
+          // sit there holding a live code.
+          void employeeApi.logout().catch(() => {});
+          setCsrfToken(null);
+          setCodeSentTo(null);
+          setPhase('signed_out');
         }}
       />
     );
