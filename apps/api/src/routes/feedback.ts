@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireAdmin } from '../auth/middleware.js';
+import { requireAuth, requireAdmin, requireFounder } from '../auth/middleware.js';
 import {
   addSuggestion,
   adminReplyToBugReport,
@@ -22,6 +22,11 @@ const bodySchema = z.object({ body: z.string().trim().min(1).max(4000) });
 export async function feedbackRoutes(app: FastifyInstance) {
   const auth = { preHandler: requireAuth };
   const admin = { preHandler: requireAdmin };
+  // Suggestion triage lives in the Developer Portal, not the Admin Portal, so
+  // its management routes are founder-level. Anyone signed in can still *send*
+  // a suggestion (the POST below is plain auth) — only reading and acting on
+  // the queue is restricted.
+  const founder = { preHandler: requireFounder };
 
   // ---- Suggestions ----
   app.post('/api/feedback/suggestions', auth, async (request, reply) => {
@@ -36,18 +41,18 @@ export async function feedbackRoutes(app: FastifyInstance) {
     }
   });
 
-  app.get('/api/admin/suggestions', admin, async () => {
+  app.get('/api/admin/suggestions', founder, async () => {
     return { suggestions: await listSuggestions() };
   });
 
-  app.patch('/api/admin/suggestions/:id', admin, async (request, reply) => {
+  app.patch('/api/admin/suggestions/:id', founder, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const parsed = z.object({ status: z.enum(['new', 'reviewed']) }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid status' });
     return { suggestions: await setSuggestionStatus(id, parsed.data.status) };
   });
 
-  app.delete('/api/admin/suggestions/:id', admin, async (request) => {
+  app.delete('/api/admin/suggestions/:id', founder, async (request) => {
     const id = (request.params as { id: string }).id;
     return { suggestions: await removeSuggestion(id) };
   });

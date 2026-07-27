@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.57';
+export const APP_VERSION = 'Beta V 5.58';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.58',
+    date: 'July 26, 2026',
+    notes: [
+      'The Employee Portal now has its own row at the very top of the sidebar, above Workspaces, and opens in a new tab — so the main portal stays exactly where you left it. It replaces the section that briefly sat under My Portal.',
+      'Suggestions moved from the Admin Portal to the Developer Portal. Anyone can still send one from Site Help ▸ Suggestion; reading and acting on the queue is now developer-level.',
+    ],
+  },
   {
     version: 'Beta V 5.57',
     date: 'July 26, 2026',
