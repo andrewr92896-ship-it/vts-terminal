@@ -32,10 +32,17 @@ the `ui.tsx` primitives, the whole portal moved at once. The editing chrome now
 uses the design's terracotta and forest as originally specified — the reason it
 did not before (it would have clashed with the navy) no longer applies.
 
-**Not started — the new Home screen and its data.** The design's home screen
-assumes several domains that do not exist behind `/employee` yet: a company
-calendar with per-user RSVP, personal tasks, employee headshot upload with a
-"still needs a photo" roster, working status (in office / away / remote),
+**Done — tasks** (Beta V 5.62). `employee_tasks` plus the "My tasks" card, built
+to the design's spec. Every route is scoped to the caller: a portal admin can
+*assign* work — to one person or to everyone, writing one row each so completion
+is independent — but there is deliberately no endpoint that reads what anyone
+else has ticked off. That would be a different, more loaded feature and nothing
+in the design asks for it. The card lives on Overview for now; it moves to the
+Home screen when that is built.
+
+**Not started — the rest of the Home screen and its data.** Still missing behind
+`/employee`: a company calendar with per-user RSVP, employee headshot upload with
+a "still needs a photo" roster, working status (in office / away / remote),
 birthdays and milestones, and a Training section. Each needs its own tables and
 routes. Company news exists as `employee_announcements` but has no lead image.
 

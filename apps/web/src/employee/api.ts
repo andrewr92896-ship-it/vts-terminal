@@ -148,6 +148,24 @@ export interface DocumentView {
   updatedAt: number;
 }
 
+export interface TaskView {
+  id: string;
+  title: string;
+  detail: string | null;
+  dueOn: string | null;
+  doneAt: number | null;
+  assignedByName: string | null;
+  /** Someone else set this, rather than the employee adding it themselves. */
+  assigned: boolean;
+  createdAt: number;
+}
+
+export interface TaskInput {
+  title: string;
+  detail?: string | null;
+  dueOn?: string | null;
+}
+
 export interface SessionView {
   id: string;
   current: boolean;
@@ -234,6 +252,15 @@ export const employeeApi = {
     request<{ ok: true; cleared: boolean }>('PUT', `/copy/${encodeURIComponent(key)}`, { value }),
   resetCopy: (key: string) =>
     request<{ ok: true }>('DELETE', `/copy/${encodeURIComponent(key)}`),
+
+  // ---- tasks ----
+  tasks: () => request<{ tasks: TaskView[] }>('GET', '/tasks'),
+  addTask: (input: TaskInput) => request<{ tasks: TaskView[] }>('POST', '/tasks', input),
+  setTaskDone: (id: string, done: boolean) =>
+    request<{ tasks: TaskView[] }>('PATCH', `/tasks/${id}`, { done }),
+  deleteTask: (id: string) => request<{ tasks: TaskView[] }>('DELETE', `/tasks/${id}`),
+  assignTask: (input: TaskInput & { userId?: string; everyone?: boolean }) =>
+    request<{ assigned: number; tasks: TaskView[] }>('POST', '/admin/tasks', input),
 
   announcements: () => request<{ announcements: AnnouncementView[] }>('GET', '/announcements'),
   createAnnouncement: (input: { title: string; body: string; pinned?: boolean }) =>

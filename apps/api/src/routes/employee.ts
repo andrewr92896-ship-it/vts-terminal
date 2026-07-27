@@ -56,8 +56,12 @@ import {
   createDocument,
   deleteAnnouncement,
   deleteDocument,
+  assignTaskToAll,
+  createTask,
+  deleteTask,
   ensureProfile,
   getDirectory,
+  listMyTasks,
   grantEmployeeAccess,
   listAnnouncements,
   listCandidates,
@@ -65,6 +69,7 @@ import {
   listPeople,
   resetTwoFactor,
   revokeEmployeeAccess,
+  setTaskDone,
   updateAnnouncement,
   updateDocument,
   updateProfile,
@@ -109,6 +114,22 @@ function isEmployeeCopyKey(key: string): boolean {
 const HIDDEN_COPY = '[[vts:hidden]]';
 
 const copyValueSchema = z.object({ value: z.string().max(4000) });
+
+const taskSchema = z.object({
+  title: z.string().trim().min(1).max(200),
+  detail: z.string().trim().max(2000).nullable().optional(),
+  dueOn: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD')
+    .nullable()
+    .optional(),
+});
+// A portal admin may assign to one person, or to everyone at once.
+const assignTaskSchema = taskSchema.extend({
+  userId: z.string().trim().min(1).max(64).optional(),
+  everyone: z.boolean().optional(),
+});
 
 const announcementSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -569,6 +590,89 @@ export async function employeeRoutes(app: FastifyInstance) {
   app.get('/api/employee/directory', { preHandler: requireEmployee }, async (request) => {
     return { people: await getDirectory(request.employee!.user.id) };
   });
+
+  // ---- Tasks ----
+  // Every route here is scoped to the caller. There is deliberately no endpoint
+  // that reads another employee's tasks: a portal admin can *assign* work, but
+  // seeing what someone has and has not ticked off is a different thing, and
+  // nothing in the design asks for it.
+
+  app.get('/api/employee/tasks', { preHandler: requireEmployee }, async (request) => {
+    return { tasks: await listMyTasks(request.employee!.user.id) };
+  });
+
+  // Add a task for yourself.
+  app.post('/api/employee/tasks', { preHandler: requireEmployee }, async (request, reply) => {
+    const parsed = taskSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'A title is required' });
+    }
+    const ctx = request.employee!;
+    await createTask(ctx.user.id, parsed.data, ctx.user);
+    return { tasks: await listMyTasks(ctx.user.id) };
+  });
+
+  // Tick one off, or put it back.
+  app.patch('/api/employee/tasks/:id', { preHandler: requireEmployee }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = z.object({ done: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid request' });
+    const ctx = request.employee!;
+    const ok = await setTaskDone(ctx.user.id, id, parsed.data.done);
+    if (!ok) return reply.code(404).send({ error: 'Task not found' });
+    return { tasks: await listMyTasks(ctx.user.id) };
+  });
+
+  app.delete('/api/employee/tasks/:id', { preHandler: requireEmployee }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const ctx = request.employee!;
+    const ok = await deleteTask(ctx.user.id, id);
+    if (!ok) return reply.code(404).send({ error: 'Task not found' });
+    return { tasks: await listMyTasks(ctx.user.id) };
+  });
+
+  // Assign work — to one employee, or to everyone active.
+  app.post(
+    '/api/employee/admin/tasks',
+    { preHandler: [requireEmployee, requireEmployeeAdmin] },
+    async (request, reply) => {
+      const parsed = assignTaskSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'A title is required' });
+      }
+      const ctx = request.employee!;
+      const { userId, everyone, ...task } = parsed.data;
+
+      if (everyone) {
+        const count = await assignTaskToAll(task, ctx.user);
+        await audit({
+          action: 'task.assigned',
+          userId: ctx.user.id,
+          actor: ctx.user.displayName,
+          target: 'everyone',
+          detail: `${task.title} (${count} people)`,
+          ...requestMeta(request),
+        });
+        return { assigned: count, tasks: await listMyTasks(ctx.user.id) };
+      }
+
+      if (!userId) return reply.code(400).send({ error: 'Pick someone to assign this to' });
+      // Only to an actual active employee — not to any account id that is posted.
+      const target = (await getDirectory(ctx.user.id)).find((p) => p.userId === userId);
+      if (!target) return reply.code(400).send({ error: 'That person is not an active employee' });
+
+      await createTask(userId, task, ctx.user);
+      await audit({
+        action: 'task.assigned',
+        userId: ctx.user.id,
+        actor: ctx.user.displayName,
+        target: target.name,
+        detail: task.title,
+        ...requestMeta(request),
+      });
+      return { assigned: 1, tasks: await listMyTasks(ctx.user.id) };
+    },
+  );
 
   // ---- Editable wording ----
   //

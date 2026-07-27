@@ -5,8 +5,10 @@ import {
   employeeAnnouncements,
   employeeDocuments,
   employeeProfiles,
+  employeeTasks,
   users,
   type EmployeeDocCategory,
+  type EmployeeTaskRow,
   type EmployeeProfileRow,
   type EmploymentType,
   type EmployeeStatus,
@@ -539,4 +541,133 @@ export async function resetTwoFactor(userId: string): Promise<void> {
     })
     .where(eq(employeeProfiles.userId, userId));
   await destroyEmployeeSessionsForUser(userId);
+}
+
+// ---- Tasks ----
+//
+// The "My tasks" card. Every read and write below is scoped to one person by
+// `userId`; there is no query here that returns another employee's tasks, which
+// is what keeps the surface honest even before the route guards run.
+
+export interface TaskView {
+  id: string;
+  title: string;
+  detail: string | null;
+  dueOn: string | null;
+  doneAt: number | null;
+  assignedByName: string | null;
+  /** True when someone else set this, so the UI can say where it came from. */
+  assigned: boolean;
+  createdAt: number;
+}
+
+function toTaskView(r: EmployeeTaskRow, viewerId: string): TaskView {
+  return {
+    id: r.id,
+    title: r.title,
+    detail: r.detail,
+    dueOn: r.dueOn,
+    doneAt: r.doneAt?.getTime() ?? null,
+    assignedByName: r.assignedByName,
+    assigned: !!r.assignedBy && r.assignedBy !== viewerId,
+    createdAt: r.createdAt.getTime(),
+  };
+}
+
+// Open tasks first, then by due date (undated last), then oldest first. Done
+// tasks sink to the bottom, most recently completed first, so ticking one off
+// moves it out of the way without it vanishing.
+function sortTasks(a: TaskView, b: TaskView): number {
+  if (!a.doneAt !== !b.doneAt) return a.doneAt ? 1 : -1;
+  if (a.doneAt && b.doneAt) return b.doneAt - a.doneAt;
+  if (a.dueOn !== b.dueOn) {
+    if (!a.dueOn) return 1;
+    if (!b.dueOn) return -1;
+    return a.dueOn.localeCompare(b.dueOn);
+  }
+  return a.createdAt - b.createdAt;
+}
+
+export async function listMyTasks(userId: string): Promise<TaskView[]> {
+  const rows = await db.select().from(employeeTasks).where(eq(employeeTasks.userId, userId));
+  return rows.map((r) => toTaskView(r, userId)).sort(sortTasks);
+}
+
+export interface TaskInput {
+  title: string;
+  detail?: string | null;
+  dueOn?: string | null;
+}
+
+// Add a task for one person. `assignedBy` is the actor — the same as `userId`
+// when someone is adding their own.
+export async function createTask(
+  userId: string,
+  input: TaskInput,
+  actor: UserRow,
+): Promise<void> {
+  const now = new Date();
+  await db.insert(employeeTasks).values({
+    id: crypto.randomUUID(),
+    userId,
+    title: input.title.trim(),
+    detail: input.detail?.trim() || null,
+    dueOn: input.dueOn?.trim() || null,
+    doneAt: null,
+    assignedBy: actor.id,
+    assignedByName: actor.displayName,
+    createdAt: now,
+    updatedAt: now,
+  });
+}
+
+// Assign the same task to every active employee — one row each, so completion
+// is per person. Returns how many were written.
+export async function assignTaskToAll(input: TaskInput, actor: UserRow): Promise<number> {
+  const rows = await db
+    .select({ userId: employeeProfiles.userId, username: users.username })
+    .from(employeeProfiles)
+    .innerJoin(users, eq(users.id, employeeProfiles.userId))
+    .where(and(eq(employeeProfiles.status, 'active'), eq(users.active, true)));
+  const targets = rows.filter((r) => r.username !== DEMO_USERNAME);
+  for (const t of targets) await createTask(t.userId, input, actor);
+  return targets.length;
+}
+
+// Tick a task off, or un-tick it. Scoped to the owner — passing someone else's
+// task id simply matches nothing.
+export async function setTaskDone(
+  userId: string,
+  taskId: string,
+  done: boolean,
+): Promise<boolean> {
+  const existing = (
+    await db
+      .select()
+      .from(employeeTasks)
+      .where(and(eq(employeeTasks.id, taskId), eq(employeeTasks.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!existing) return false;
+  await db
+    .update(employeeTasks)
+    .set({ doneAt: done ? new Date() : null, updatedAt: new Date() })
+    .where(and(eq(employeeTasks.id, taskId), eq(employeeTasks.userId, userId)));
+  return true;
+}
+
+// Remove one of your own tasks. Same scoping as above.
+export async function deleteTask(userId: string, taskId: string): Promise<boolean> {
+  const existing = (
+    await db
+      .select({ id: employeeTasks.id })
+      .from(employeeTasks)
+      .where(and(eq(employeeTasks.id, taskId), eq(employeeTasks.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!existing) return false;
+  await db
+    .delete(employeeTasks)
+    .where(and(eq(employeeTasks.id, taskId), eq(employeeTasks.userId, userId)));
+  return true;
 }
