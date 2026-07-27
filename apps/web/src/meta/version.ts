@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.64';
+export const APP_VERSION = 'Beta V 5.65';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.65',
+    date: 'July 27, 2026',
+    notes: [
+      'The Employee Portal sign-in page drops the line under its heading about being a separate area with its own session. The heading and the form carry the point on their own.',
+    ],
+  },
   {
     version: 'Beta V 5.64',
     date: 'July 27, 2026',

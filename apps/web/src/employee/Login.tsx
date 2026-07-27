@@ -378,14 +378,6 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
           >
             {title ? title : <T id="emp.login.title">Employee Portal</T>}
           </h1>
-          {!title && (
-            <p style={{ margin: '8px 0 0', fontSize: 12.5, color: EMP.muted, lineHeight: 1.6 }}>
-              <T id="emp.login.subtitle">
-                A separate, secured area with its own sign-in. Your main portal session does not carry
-                over.
-              </T>
-            </p>
-          )}
         </div>
 
         <div
