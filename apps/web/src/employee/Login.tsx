@@ -365,7 +365,15 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
           >
             <T id="emp.login.eyebrow">Vitalis Trading Systems</T>
           </div>
-          <h1 style={{ margin: 0, fontSize: 21, fontWeight: 650, color: EMP.text }}>
+          <h1
+            style={{
+              margin: 0,
+              fontFamily: EMP.serif,
+              fontSize: 24,
+              fontWeight: 700,
+              color: EMP.text,
+            }}
+          >
             {title ? title : <T id="emp.login.title">Employee Portal</T>}
           </h1>
           {!title && (

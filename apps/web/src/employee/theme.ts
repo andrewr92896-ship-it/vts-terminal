@@ -11,6 +11,11 @@ export const EMP = {
   accent: '#38BDF8',
   accent2: '#0EA5E9',
   accentText: '#04202E',
+  // The design system's type stack, self-hosted in employee/fonts.css. Source
+  // Sans carries the UI; Source Serif is for headings only — screen titles and
+  // the portal's own name — never body copy or controls.
+  sans: "'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif",
+  serif: "'Source Serif 4', Georgia, 'Times New Roman', serif",
 } as const;
 
 export const EMP_GRADIENT = 'linear-gradient(180deg, #38BDF8, #0EA5E9)';

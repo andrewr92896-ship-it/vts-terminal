@@ -213,8 +213,9 @@ export function EmployeeApp() {
             </span>
             <span
               style={{
-                fontSize: 13.5,
-                fontWeight: 650,
+                fontFamily: EMP.serif,
+                fontSize: 17,
+                fontWeight: 600,
                 letterSpacing: '0.2px',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
