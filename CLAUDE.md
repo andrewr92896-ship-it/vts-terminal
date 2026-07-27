@@ -499,12 +499,36 @@ sessions, activity log), and **People** — the HR screen for portal admins
 edit records, reset a second factor. Granting refuses a non-company address up
 front rather than creating an account that would fail at the door.
 
-**Editable copy.** The employee bundle reads the same `copy.<id>` overrides via
-`GET /api/employee/copy` and renders them through its own `<T id="emp.…">`
-component (`src/employee/copy.tsx`). It **reads only** — the inline edit mode and
-its founder auth stay in the main portal, so this surface takes no dependency on
-main-portal auth. Employee ids are namespaced `emp.*`; the launch card in My
-Portal is ordinary main-portal copy and uses `<EditableText id="myemp.…">`.
+**Editable copy — with its own inline editor.** The employee bundle stores
+wording in the same `copy.<id>` settings table the main portal uses, but has its
+own end-to-end editor rather than depending on main-portal auth
+(`src/employee/copy.tsx`):
+
+- Wrap every developer-authored string in `<T id="emp.…">text</T>` (or
+  `useCopy(id, def)` for placeholders/titles that need a plain string). Ids are
+  `emp.<screen>.<slug>`. **This is required for all new employee-portal copy**,
+  the same standing expectation `<EditableText>` carries in the main portal.
+- **Never wrap** database content (names, document titles, announcement bodies),
+  live figures (counts, dates, times), or interpolated strings — a rewrite must
+  not be able to contradict the data underneath it.
+- A **founder-level** viewer gets a floating pencil (lower right). It toggles
+  edit mode: every wrapped string is outlined, clicking one opens an anchored
+  popover (a bottom sheet under 640px) with Save / Reset / Hide. Blank or
+  default-equal saves clear the override; **Hide** stores the shared
+  `[[vts:hidden]]` sentinel and the string renders as nothing for everyone,
+  while staying struck-through-but-visible to a developer in edit mode.
+- Routes: `GET /api/employee/copy` (any employee — everyone must see current
+  wording), `PUT|DELETE /api/employee/copy/:key` behind
+  `requireEmployeeDeveloper`. Writes are **confined to the `emp.` namespace**, so
+  a developer signed in here can never reach across and rewrite the main portal's
+  copy. Every change is audited (`copy.updated` / `copy.hidden` / `copy.reset`,
+  with the key and new wording).
+- `isDeveloper` on the session `me` is founder-level only — deliberately narrower
+  than `isPortalAdmin`, which is the HR flag. The editor's own chrome (Save,
+  Reset, Hide, the banner) is **not** itself editable; hiding the Save button
+  would break the editor.
+- The launch row in the main portal's sidebar is ordinary main-portal copy and
+  uses `<EditableText id="myemp.…">`.
 
 ## Auth & security specifics
 

@@ -37,6 +37,10 @@ export type AuditAction =
   | 'document.created'
   | 'document.updated'
   | 'document.deleted'
+  // wording
+  | 'copy.updated'
+  | 'copy.reset'
+  | 'copy.hidden'
   // people
   | 'people.granted'
   | 'people.updated'

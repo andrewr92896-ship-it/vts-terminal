@@ -33,6 +33,12 @@ export interface EmployeeContext {
   sessionId: string;
   /** Employee-portal administrator (HR flag, or a founder-level portal user). */
   isPortalAdmin: boolean;
+  /**
+   * Founder-level on the underlying portal account. Deliberately narrower than
+   * `isPortalAdmin`: HR administrators run the people/announcement/document
+   * surfaces, but only a developer may rewrite the site's own wording.
+   */
+  isDeveloper: boolean;
 }
 
 declare module 'fastify' {
@@ -177,12 +183,14 @@ export async function loadEmployeeContext(
   )[0];
   if (!profile || profile.status !== 'active') return null;
 
+  const developer = isFounder(roles);
   return {
     ctx: {
       user,
       profile,
       sessionId: session.id,
-      isPortalAdmin: profile.isAdmin || isFounder(roles),
+      isPortalAdmin: profile.isAdmin || developer,
+      isDeveloper: developer,
     },
     stage: session.stage,
   };
@@ -246,6 +254,19 @@ export const requireEmployeeAdmin: preHandlerHookHandler = async (request, reply
     return deny(request, reply, 401, 'Not signed in to the employee portal', 'access.denied');
   }
   if (!ctx.isPortalAdmin) {
+    return deny(request, reply, 403, 'Forbidden', 'access.denied', ctx.user.id);
+  }
+};
+
+// Rewriting the portal's own wording. Founder-level only — an HR administrator
+// manages people and content, not the words the software itself is built from.
+// Runs after requireEmployee.
+export const requireEmployeeDeveloper: preHandlerHookHandler = async (request, reply) => {
+  const ctx = request.employee;
+  if (!ctx) {
+    return deny(request, reply, 401, 'Not signed in to the employee portal', 'access.denied');
+  }
+  if (!ctx.isDeveloper) {
     return deny(request, reply, 403, 'Forbidden', 'access.denied', ctx.user.id);
   }
 };

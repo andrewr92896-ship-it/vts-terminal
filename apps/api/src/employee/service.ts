@@ -47,6 +47,9 @@ export interface EmployeeMe {
   status: EmployeeStatus;
   managerName: string | null;
   isPortalAdmin: boolean;
+  // Founder-level on the underlying account — gates the inline wording editor.
+  // Narrower than isPortalAdmin on purpose; see EmployeeContext.
+  isDeveloper: boolean;
   twoFactorEnrolled: boolean;
   recoveryCodesLeft: number;
   lastLoginAt: number | null;
@@ -67,6 +70,7 @@ export async function buildMe(
   user: UserRow,
   profile: EmployeeProfileRow,
   isPortalAdmin: boolean,
+  isDeveloper = false,
 ): Promise<EmployeeMe> {
   let managerName: string | null = null;
   if (profile.managerId) {
@@ -95,6 +99,7 @@ export async function buildMe(
     status: profile.status,
     managerName,
     isPortalAdmin,
+    isDeveloper,
     twoFactorEnrolled: !!profile.totpSecret,
     recoveryCodesLeft: countRecoveryCodes(profile.recoveryCodes),
     lastLoginAt: profile.lastLoginAt?.getTime() ?? null,

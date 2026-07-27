@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.58';
+export const APP_VERSION = 'Beta V 5.59';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.59',
+    date: 'July 27, 2026',
+    notes: [
+      'Developers can now reword the Employee Portal in place. A pencil button sits in the lower-right corner of the employee site; turning it on highlights every piece of wording the software itself is built from, and clicking one opens a small editor to rewrite it, reset it to the built-in text, or hide it entirely. Changes are live for everyone straight away — no deploy.',
+      'Only developers see the pencil. HR administrators of the employee portal do not; managing people and documents is a different job from changing the words the site is written in. Every change is written to the employee activity log with the key, the new wording, and who made it.',
+      'The editor only ever touches wording that is coded into the site. Names, document titles, announcement text, counts, dates and times are deliberately not editable — they come from the data, and a rewrite must never be able to contradict them.',
+    ],
+  },
   {
     version: 'Beta V 5.58',
     date: 'July 26, 2026',
