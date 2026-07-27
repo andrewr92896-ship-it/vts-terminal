@@ -1,24 +1,84 @@
-import { C } from '../theme/tokens';
+// The Employee Portal's design tokens.
+//
+// This file deliberately does NOT extend the main portal's `C` tokens. The two
+// surfaces are different products with different jobs: the trading portal is a
+// dark pro-terminal you stare at all day, the employee portal is a calm internal
+// site you drop into for five minutes. Sharing a palette would have forced one
+// to compromise for the other, and every token below would have needed an
+// override anyway.
+//
+// Values come from the design system (docs/design/employee-portal/README.md):
+// a warm sand page, white cards, a deep forest masthead, terracotta for action.
 
-// The employee portal reuses the portal's surface palette (same navy, same
-// hairlines, same type) so it reads as the same company's software — but its
-// accent is deliberately its own. Gold means Advanced Trading, rose means Admin,
-// violet means Studies; sky means "you are in the secure employee zone, on a
-// separate session". The colour is the standing reminder of which door you came
-// through.
 export const EMP = {
-  ...C,
-  accent: '#38BDF8',
-  accent2: '#0EA5E9',
-  accentText: '#04202E',
-  // The design system's type stack, self-hosted in employee/fonts.css. Source
-  // Sans carries the UI; Source Serif is for headings only — screen titles and
-  // the portal's own name — never body copy or controls.
+  // ---- Surfaces ----
+  bg: '#f5f2ec', // the page itself — warm sand
+  panel: '#ffffff', // cards
+  panel2: '#faf8f4', // nested fills, table header rows, hover states
+  side: '#0f3d3a', // the masthead and any deliberately dark chrome
+
+  // ---- Hairlines ----
+  line: '#e3ddd3', // card borders
+  lineSoft: '#ece7de', // dividers inside a card
+  line2: '#ded7cb', // field and control borders
+
+  // ---- Text on light ----
+  text: '#23302f',
+  muted: '#6e7a78',
+  faint: '#9aa3a0',
+
+  // ---- Text on the forest masthead ----
+  onDark: '#f0ece2',
+  onDarkMuted: '#a9bbb7',
+
+  // ---- Brand ----
+  // Terracotta is the action colour: primary buttons, active nav, links, badges.
+  accent: '#c25a38',
+  accent2: '#a94a2c', // hover
+  accentText: '#ffffff', // text on a terracotta fill
+  forest: '#0f3d3a',
+  forestHover: '#0b2e2c',
+  apricot: '#e8a87c', // accent used *on* forest, where terracotta would muddy
+
+  // ---- Semantic ----
+  // Green reads "good" (in office, done, attending). The warn/bad pair stays in
+  // the palette's warm family rather than importing a generic alert red, which
+  // would fight the terracotta everywhere it appeared.
+  green: '#2f7d5b',
+  greenBg: '#eef4f1',
+  greenBorder: '#bcd6c9',
+  amber: '#a8631f',
+  red: '#b3402a',
+  redBg: '#fbeee8',
+  redBorder: '#f0d5c8',
+
+  // ---- Type ----
+  // Source Sans carries the UI; Source Serif is for headings only — screen
+  // titles and the portal's own name — never body copy or controls. Mono is kept
+  // for the few places that genuinely need it: addresses, timestamps, copy ids.
   sans: "'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif",
   serif: "'Source Serif 4', Georgia, 'Times New Roman', serif",
+  mono: "'IBM Plex Mono', monospace",
 } as const;
 
-export const EMP_GRADIENT = 'linear-gradient(180deg, #38BDF8, #0EA5E9)';
+// Shadows appear only on floating chrome, never on cards — the design uses
+// hairline borders for elevation on the page itself. All three are tinted with
+// the forest rather than neutral black, so they sit warm against the sand.
+export const SHADOW = {
+  fab: '0 8px 24px rgba(13,45,42,.26)',
+  banner: '0 10px 30px rgba(13,45,42,.28)',
+  popover: '0 18px 44px rgba(13,45,42,.22)',
+} as const;
+
+// Corner radii, from the design's scale.
+export const RADIUS = {
+  tag: 3,
+  chip: 4,
+  control: 5,
+  card: 6,
+  popover: 12,
+  pill: 999,
+} as const;
 
 export function tint(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);

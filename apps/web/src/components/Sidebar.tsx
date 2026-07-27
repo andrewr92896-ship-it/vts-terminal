@@ -225,7 +225,10 @@ export function Sidebar(props: SidebarProps) {
 // is. rel="noopener noreferrer" matters here beyond the usual hygiene: it denies
 // the new tab a window.opener handle back into the signed-in portal, and stops
 // the employee site's URL leaking as a referrer.
-const EMPLOYEE_ACCENT = '#38BDF8';
+//
+// The accent is the employee site's own terracotta, so the row previews where it
+// leads rather than borrowing one of this portal's workspace colours.
+const EMPLOYEE_ACCENT = '#C25A38';
 
 function EmployeePortalLink({ collapsed }: { collapsed: boolean }) {
   const [hover, setHover] = useState(false);

@@ -499,6 +499,15 @@ sessions, activity log), and **People** — the HR screen for portal admins
 edit records, reset a second factor. Granting refuses a non-company address up
 front rather than creating an account that would fail at the door.
 
+**Its own design language.** The employee portal does **not** use the main
+portal's theme. `src/employee/theme.ts` stands alone — a warm-sand page
+(`#f5f2ec`), white cards, a forest masthead (`#0f3d3a`), terracotta for action
+(`#c25a38`), Source Sans for UI and Source Serif for headings (self-hosted in
+`employee/fonts.css`, since the CSP blocks font CDNs). It also exports `SHADOW`
+and `RADIUS`. Every employee screen composes from those tokens and the `ui.tsx`
+primitives, so restyling happens in those two files rather than screen by screen.
+Full spec and implementation status in `docs/design/employee-portal/`.
+
 **Editable copy — with its own inline editor.** The employee bundle stores
 wording in the same `copy.<id>` settings table the main portal uses, but has its
 own end-to-end editor rather than depending on main-portal auth

@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.60';
+export const APP_VERSION = 'Beta V 5.61';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.61',
+    date: 'July 27, 2026',
+    notes: [
+      'The Employee Portal has its new look. It is now a light, calm site — warm sand background, white cards, a deep green header and terracotta buttons — rather than the dark terminal styling it borrowed from the trading portal. The two are different tools for different jobs, and they no longer have to share a palette.',
+      'The Employee Portal row in the main sidebar picks up the same terracotta, so the link previews where it leads.',
+    ],
+  },
   {
     version: 'Beta V 5.60',
     date: 'July 27, 2026',

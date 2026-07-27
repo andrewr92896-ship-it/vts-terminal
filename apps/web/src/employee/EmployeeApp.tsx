@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { employeeApi, setCsrfToken, type EmployeeMe } from './api';
-import { EMP, tint } from './theme';
+import { EMP, RADIUS, tint } from './theme';
 import { EmployeeCopyProvider, T } from './copy';
 import { EmployeeEnroll, EmployeeLogin } from './Login';
 import { Overview } from './screens/Overview';
@@ -117,8 +117,8 @@ export function EmployeeApp() {
           alignItems: 'center',
           justifyContent: 'center',
           background: EMP.bg,
-          color: EMP.faint,
-          fontFamily: EMP.mono,
+          color: EMP.muted,
+          fontFamily: EMP.sans,
           fontSize: 12.5,
           letterSpacing: '0.5px',
         }}
@@ -180,9 +180,9 @@ export function EmployeeApp() {
             display: 'flex',
             alignItems: 'center',
             gap: 12,
-            padding: '12px 18px',
-            borderBottom: `1px solid ${EMP.line}`,
-            background: EMP.side,
+            padding: '14px 22px',
+            background: EMP.forest,
+            color: EMP.onDark,
             position: 'sticky',
             top: 0,
             zIndex: 20,
@@ -197,10 +197,10 @@ export function EmployeeApp() {
               justifyContent: 'center',
               width: 32,
               height: 32,
-              borderRadius: 8,
-              border: `1px solid ${EMP.line2}`,
-              background: 'rgba(255,255,255,.03)',
-              color: EMP.faint,
+              borderRadius: RADIUS.control,
+              border: '1px solid rgba(255,255,255,.22)',
+              background: 'rgba(255,255,255,.1)',
+              color: EMP.onDark,
               cursor: 'pointer',
             }}
           >
@@ -208,7 +208,7 @@ export function EmployeeApp() {
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-            <span style={{ color: EMP.accent, display: 'flex' }}>
+            <span style={{ color: EMP.apricot, display: 'flex' }}>
               <Icon name="shield-check" size={17} />
             </span>
             <span
@@ -229,8 +229,9 @@ export function EmployeeApp() {
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
             <span
               style={{
-                fontSize: 12,
-                color: EMP.muted,
+                fontSize: 13.5,
+                fontWeight: 700,
+                color: '#ffffff',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -248,9 +249,9 @@ export function EmployeeApp() {
                 justifyContent: 'center',
                 width: 32,
                 height: 32,
-                borderRadius: 8,
-                border: `1px solid ${EMP.line2}`,
-                color: EMP.faint,
+                borderRadius: RADIUS.control,
+                border: '1px solid rgba(255,255,255,.22)',
+                color: EMP.onDark,
                 textDecoration: 'none',
               }}
             >
@@ -263,13 +264,14 @@ export function EmployeeApp() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                padding: '7px 11px',
-                borderRadius: 8,
-                border: `1px solid ${EMP.line2}`,
-                background: 'rgba(255,255,255,.03)',
-                color: EMP.muted,
+                padding: '7px 12px',
+                borderRadius: RADIUS.control,
+                border: '1px solid rgba(255,255,255,.22)',
+                background: 'rgba(255,255,255,.1)',
+                color: EMP.onDark,
                 cursor: 'pointer',
-                fontSize: 12,
+                fontSize: 12.5,
+                fontWeight: 600,
                 fontFamily: EMP.sans,
               }}
             >
@@ -286,7 +288,7 @@ export function EmployeeApp() {
               width: navOpen ? 216 : 60,
               flex: 'none',
               borderRight: `1px solid ${EMP.line}`,
-              background: EMP.side,
+              background: EMP.panel,
               padding: navOpen ? '16px 12px' : '16px 8px',
               display: 'flex',
               flexDirection: 'column',
@@ -307,10 +309,10 @@ export function EmployeeApp() {
                     gap: 10,
                     padding: navOpen ? '9px 11px' : '9px 0',
                     justifyContent: navOpen ? 'flex-start' : 'center',
-                    borderRadius: 9,
+                    borderRadius: RADIUS.control,
                     border: '1px solid transparent',
-                    borderColor: active ? tint(EMP.accent, 0.3) : 'transparent',
-                    background: active ? tint(EMP.accent, 0.1) : 'transparent',
+                    borderColor: active ? tint(EMP.accent, 0.28) : 'transparent',
+                    background: active ? tint(EMP.accent, 0.09) : 'transparent',
                     color: active ? EMP.accent : EMP.muted,
                     cursor: 'pointer',
                     fontSize: 12.5,
@@ -334,17 +336,17 @@ export function EmployeeApp() {
               style={{
                 marginTop: 'auto',
                 paddingTop: 12,
-                borderTop: `1px solid ${EMP.line}`,
+                borderTop: `1px solid ${EMP.lineSoft}`,
                 textAlign: navOpen ? 'left' : 'center',
               }}
             >
-              <span style={{ fontFamily: EMP.mono, fontSize: 9, color: EMP.faint, letterSpacing: '0.5px' }}>
+              <span style={{ fontFamily: EMP.sans, fontSize: 10, fontWeight: 700, color: EMP.faint, letterSpacing: '0.8px' }}>
                 {navOpen ? <T id="emp.shell.zone">SECURE ZONE</T> : '●'}
               </span>
             </div>
           </nav>
 
-          <main style={{ flex: 1, minWidth: 0, padding: '24px 22px 60px', overflowX: 'hidden' }}>
+          <main style={{ flex: 1, minWidth: 0, padding: '24px 28px 44px', overflowX: 'hidden' }}>
             <div style={{ maxWidth: 1080, margin: '0 auto' }}>
               {screen === 'overview' && <Overview onNavigate={(s) => setScreen(s as Screen)} />}
               {screen === 'directory' && <Directory />}

@@ -1,6 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { EmployeeApiError, employeeApi, setCsrfToken, type EmployeeMe } from './api';
-import { EMP, tint } from './theme';
+import { EMP, RADIUS, SHADOW } from './theme';
 import { T } from './copy';
 import { Button, ErrorNote, Field, Input } from './ui';
 import { Icon } from '../components/Icon';
@@ -204,9 +204,9 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
             fontFamily: EMP.mono,
             fontSize: 13,
             color: EMP.text,
-            background: EMP.bg,
+            background: EMP.panel2,
             border: `1px solid ${EMP.line2}`,
-            borderRadius: 10,
+            borderRadius: RADIUS.control,
             padding: 14,
             marginBottom: 14,
           }}
@@ -249,10 +249,10 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
                 fontFamily: EMP.mono,
                 fontSize: 14,
                 letterSpacing: '2px',
-                color: EMP.accent,
-                background: EMP.bg,
+                color: EMP.forest,
+                background: EMP.panel2,
                 border: `1px solid ${EMP.line2}`,
-                borderRadius: 9,
+                borderRadius: RADIUS.control,
                 padding: '11px 12px',
                 wordBreak: 'break-all',
               }}
@@ -327,7 +327,7 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
     <div
       style={{
         minHeight: '100vh',
-        background: `radial-gradient(1100px 560px at 70% -10%, #08283a 0%, ${EMP.bg} 58%)`,
+        background: EMP.bg,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -339,28 +339,30 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
         <div style={{ textAlign: 'center', marginBottom: 22 }}>
           <div
             style={{
-              width: 46,
-              height: 46,
-              borderRadius: 12,
-              margin: '0 auto 14px',
+              width: 48,
+              height: 48,
+              borderRadius: RADIUS.card,
+              margin: '0 auto 16px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              background: tint(EMP.accent, 0.12),
-              border: `1px solid ${tint(EMP.accent, 0.35)}`,
-              color: EMP.accent,
+              // Forest, not terracotta: this badge is the page's one dark
+              // anchor, the same role the masthead plays once you are inside.
+              background: EMP.forest,
+              color: EMP.apricot,
             }}
           >
             <Icon name="shield-check" size={22} />
           </div>
           <div
             style={{
-              fontFamily: EMP.mono,
-              fontSize: 10.5,
-              letterSpacing: '2px',
+              fontFamily: EMP.sans,
+              fontSize: 11,
+              fontWeight: 700,
+              letterSpacing: '1.4px',
               textTransform: 'uppercase',
               color: EMP.accent,
-              marginBottom: 7,
+              marginBottom: 8,
             }}
           >
             <T id="emp.login.eyebrow">Vitalis Trading Systems</T>
@@ -390,8 +392,9 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
           style={{
             background: EMP.panel,
             border: `1px solid ${EMP.line}`,
-            borderRadius: 14,
-            padding: 22,
+            borderRadius: RADIUS.card,
+            padding: 24,
+            boxShadow: SHADOW.popover,
           }}
         >
           {children}
