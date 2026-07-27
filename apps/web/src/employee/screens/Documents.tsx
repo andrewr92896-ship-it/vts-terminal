@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { employeeApi, type DocCategory, type DocumentView } from '../api';
-import { DOC_CATEGORY_LABELS, EMP, fmtDateTime } from '../theme';
+import { DOC_CATEGORY_LABELS, EMP, fmtDateTime, tint } from '../theme';
 import { T, useCopy } from '../copy';
 import {
   Button,
@@ -272,7 +272,7 @@ function FilterChip({
         fontFamily: EMP.sans,
         cursor: 'pointer',
         border: `1px solid ${active ? EMP.accent : EMP.line2}`,
-        background: active ? 'rgba(56,189,248,.12)' : 'transparent',
+        background: active ? tint(EMP.accent, 0.1) : EMP.panel,
         color: active ? EMP.accent : EMP.muted,
       }}
     >

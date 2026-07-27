@@ -24,14 +24,13 @@ self-hosted via `@fontsource` in `src/employee/fonts.css` and exposed as
 `EMP.sans` / `EMP.serif`. They are imported only from the employee entry, so the
 main portal's bundle is unaffected. Serif is for headings only.
 
-**Not started — the palette.** The design moves the portal from the current
-dark navy to a light warm-sand page (`#f5f2ec`) with a forest masthead
-(`#0f3d3a`) and terracotta accent (`#c25a38`). That is a full inversion: every
-surface, border and text token flips. `src/employee/theme.ts` currently spreads
-the main portal's `C` tokens, so the change is mostly confined to that file plus
-`ui.tsx` — but it also needs the eight hardcoded dark-assuming values in the
-employee screens revisited (white-alpha button fills, the sign-in radial
-gradient, popover shadows).
+**Done — the palette** (Beta V 5.61). Warm-sand page, white cards, forest
+masthead, terracotta action colour. `src/employee/theme.ts` no longer extends the
+main portal's `C` tokens; it stands alone and also exports `SHADOW` and `RADIUS`
+from the design's scales. Because every screen composes from those tokens plus
+the `ui.tsx` primitives, the whole portal moved at once. The editing chrome now
+uses the design's terracotta and forest as originally specified — the reason it
+did not before (it would have clashed with the navy) no longer applies.
 
 **Not started — the new Home screen and its data.** The design's home screen
 assumes several domains that do not exist behind `/employee` yet: a company

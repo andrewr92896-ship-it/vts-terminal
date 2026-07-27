@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
-import { EMP, EMP_GRADIENT, tint } from './theme';
+import { EMP, RADIUS, tint } from './theme';
 import { Icon } from '../components/Icon';
 
 // The small set of shared presentational pieces the employee screens are built
@@ -28,7 +28,7 @@ export function Card({
       style={{
         background: EMP.panel,
         border: `1px solid ${EMP.line}`,
-        borderRadius: 12,
+        borderRadius: RADIUS.card,
         padding: pad,
         ...style,
       }}
@@ -63,7 +63,7 @@ export function ScreenHeader({
         style={{
           width: 38,
           height: 38,
-          borderRadius: 10,
+          borderRadius: RADIUS.card,
           flex: 'none',
           display: 'flex',
           alignItems: 'center',
@@ -122,21 +122,22 @@ export function Button({
     justifyContent: 'center',
     gap: 7,
     padding: '9px 15px',
-    borderRadius: 9,
+    borderRadius: RADIUS.control,
     fontSize: 12.5,
     fontWeight: 600,
     fontFamily: EMP.sans,
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.5 : 1,
     border: `1px solid ${EMP.line2}`,
-    background: 'rgba(255,255,255,.03)',
+    background: EMP.panel,
     color: EMP.text,
     transition: 'background .15s ease, border-color .15s ease',
   };
   const variants: Record<string, CSSProperties> = {
-    primary: { background: EMP_GRADIENT, color: EMP.accentText, border: 'none' },
+    // The design's CTAs are flat fills — no gradients anywhere in this system.
+    primary: { background: EMP.accent, color: EMP.accentText, border: 'none', fontWeight: 700 },
     ghost: {},
-    danger: { color: EMP.red, borderColor: tint(EMP.red, 0.35), background: tint(EMP.red, 0.08) },
+    danger: { color: EMP.red, borderColor: EMP.redBorder, background: EMP.redBg },
   };
   return (
     <button
@@ -154,9 +155,9 @@ export function Button({
 const controlBase: CSSProperties = {
   width: '100%',
   boxSizing: 'border-box',
-  background: EMP.bg,
+  background: EMP.panel2,
   border: `1px solid ${EMP.line2}`,
-  borderRadius: 9,
+  borderRadius: RADIUS.control,
   padding: '10px 12px',
   color: EMP.text,
   fontSize: 13,
@@ -273,14 +274,15 @@ export function Pill({
         display: 'inline-flex',
         alignItems: 'center',
         gap: 5,
-        fontFamily: EMP.mono,
-        fontSize: 10,
-        letterSpacing: '0.6px',
+        fontFamily: EMP.sans,
+        fontSize: 10.5,
+        fontWeight: 700,
+        letterSpacing: '0.5px',
         textTransform: 'uppercase',
         color: c,
-        border: `1px solid ${tint(c, 0.35)}`,
-        background: tint(c, 0.08),
-        borderRadius: 999,
+        border: `1px solid ${tint(c, 0.3)}`,
+        background: tint(c, 0.09),
+        borderRadius: RADIUS.tag,
         padding: '3px 8px',
         whiteSpace: 'nowrap',
       }}
@@ -310,9 +312,9 @@ export function Banner({
         display: 'flex',
         gap: 10,
         alignItems: 'flex-start',
-        border: `1px solid ${tint(c, 0.35)}`,
+        border: `1px solid ${tint(c, 0.3)}`,
         background: tint(c, 0.07),
-        borderRadius: 10,
+        borderRadius: RADIUS.card,
         padding: '11px 13px',
         color: EMP.text,
         fontSize: 12.5,
@@ -355,9 +357,9 @@ export function ErrorNote({ children }: { children: ReactNode }) {
         color: EMP.red,
         fontSize: 12.5,
         lineHeight: 1.55,
-        border: `1px solid ${tint(EMP.red, 0.3)}`,
-        background: tint(EMP.red, 0.07),
-        borderRadius: 9,
+        border: `1px solid ${EMP.redBorder}`,
+        background: EMP.redBg,
+        borderRadius: RADIUS.control,
         padding: '9px 12px',
       }}
     >

@@ -10,7 +10,7 @@ import {
   type ReactNode,
 } from 'react';
 import { employeeApi } from './api';
-import { EMP, tint } from './theme';
+import { EMP, RADIUS, SHADOW, tint } from './theme';
 import { Icon } from '../components/Icon';
 
 // Editable wording for the employee portal.
@@ -143,8 +143,8 @@ const highlight: CSSProperties = {
   cursor: 'pointer',
   outline: `1px dashed ${EMP.accent}`,
   outlineOffset: 2,
-  borderRadius: 4,
-  background: tint(EMP.accent, 0.12),
+  borderRadius: RADIUS.chip,
+  background: tint(EMP.accent, 0.09),
   // Keeps the highlight intact when the string wraps across lines.
   boxDecorationBreak: 'clone',
   WebkitBoxDecorationBreak: 'clone',
@@ -236,11 +236,11 @@ function EditModeToggle({ editing, onToggle }: { editing: boolean; onToggle: () 
         width: 52,
         height: 52,
         borderRadius: '50%',
-        border: editing ? `1px solid ${EMP.accent2}` : `1.5px solid ${EMP.accent}`,
+        border: editing ? `1px solid ${EMP.accent2}` : `1.5px solid ${EMP.forest}`,
         background: editing ? EMP.accent : EMP.panel,
-        color: editing ? EMP.accentText : EMP.accent,
+        color: editing ? EMP.accentText : EMP.forest,
         cursor: 'pointer',
-        boxShadow: '0 8px 24px rgba(0,0,0,.4)',
+        boxShadow: SHADOW.fab,
         zIndex: 55,
         display: 'flex',
         alignItems: 'center',
@@ -268,11 +268,11 @@ function EditModeBanner({ onDone }: { onDone: () => void }) {
         alignItems: 'center',
         gap: 12,
         maxWidth: 'calc(100vw - 24px)',
-        background: EMP.side,
-        border: `1px solid ${tint(EMP.accent, 0.4)}`,
-        borderRadius: 999,
+        background: EMP.forest,
+        border: 'none',
+        borderRadius: RADIUS.pill,
         padding: '9px 12px 9px 18px',
-        boxShadow: '0 10px 30px rgba(0,0,0,.45)',
+        boxShadow: SHADOW.banner,
       }}
     >
       <span
@@ -280,11 +280,11 @@ function EditModeBanner({ onDone }: { onDone: () => void }) {
           width: 8,
           height: 8,
           borderRadius: '50%',
-          background: EMP.accent,
+          background: EMP.apricot,
           flex: 'none',
         }}
       />
-      <span style={{ fontSize: 13, color: EMP.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+      <span style={{ fontSize: 13, color: EMP.onDark, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         Editing wording — click any highlighted text to change it
       </span>
       <button
@@ -296,7 +296,7 @@ function EditModeBanner({ onDone }: { onDone: () => void }) {
           fontSize: 12.5,
           fontWeight: 700,
           padding: '6px 14px',
-          borderRadius: 999,
+          borderRadius: RADIUS.pill,
           cursor: 'pointer',
           flex: 'none',
           fontFamily: EMP.sans,
@@ -391,9 +391,9 @@ function CopyEditor({
           ...box,
           maxWidth: 'calc(100vw - 28px)',
           background: EMP.panel,
-          border: `1px solid ${EMP.line2}`,
-          borderRadius: 12,
-          boxShadow: '0 18px 44px rgba(0,0,0,.5)',
+          border: `1px solid ${EMP.line}`,
+          borderRadius: RADIUS.popover,
+          boxShadow: SHADOW.popover,
           zIndex: 70,
           padding: 14,
           fontFamily: EMP.sans,
@@ -435,8 +435,8 @@ function CopyEditor({
             fontSize: 11,
             color: EMP.muted,
             background: EMP.bg,
-            border: `1px solid ${EMP.line}`,
-            borderRadius: 4,
+            border: `1px solid ${EMP.line2}`,
+            borderRadius: RADIUS.chip,
             padding: '4px 7px',
             marginBottom: 10,
             wordBreak: 'break-all',
@@ -454,9 +454,9 @@ function CopyEditor({
           style={{
             width: '100%',
             boxSizing: 'border-box',
-            background: EMP.bg,
+            background: EMP.panel2,
             border: `1px solid ${EMP.line2}`,
-            borderRadius: 6,
+            borderRadius: RADIUS.card,
             padding: '9px 10px',
             color: EMP.text,
             fontSize: 13.5,
@@ -503,17 +503,17 @@ function btn(kind: 'primary' | 'ghost' | 'hide' | 'restore', busy: boolean): CSS
     opacity: busy ? 0.6 : 1,
     fontFamily: EMP.sans,
     border: `1px solid ${EMP.line2}`,
-    background: 'transparent',
-    color: EMP.muted,
+    background: EMP.panel,
+    color: EMP.text,
   };
   if (kind === 'primary') {
-    return { ...base, background: EMP.accent, color: EMP.accentText, border: 'none' };
+    return { ...base, background: EMP.forest, color: '#ffffff', border: 'none' };
   }
   if (kind === 'hide') {
-    return { ...base, color: EMP.red, borderColor: tint(EMP.red, 0.35), background: tint(EMP.red, 0.08) };
+    return { ...base, color: EMP.accent, borderColor: EMP.redBorder, background: EMP.panel };
   }
   if (kind === 'restore') {
-    return { ...base, color: EMP.green, borderColor: tint(EMP.green, 0.35), background: tint(EMP.green, 0.08) };
+    return { ...base, color: EMP.green, borderColor: EMP.greenBorder, background: EMP.greenBg };
   }
   return base;
 }
