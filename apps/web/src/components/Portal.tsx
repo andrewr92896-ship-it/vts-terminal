@@ -64,7 +64,6 @@ import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketNews } from '../workspaces/trading/MarketNews';
 import { ComingSoon, COMING_SOON_SCREENS } from '../workspaces/investments/ComingSoon';
-import { EmployeePortalLaunch } from '../workspaces/myportal/EmployeePortalLaunch';
 
 // The Studies screens are code-split into a lazy chunk that only loads when the
 // Studies workspace is opened — keeping the initial app load lean for everyone
@@ -327,9 +326,16 @@ export function Portal() {
     return dots;
   }, [adminActivity, adminSeen]);
 
+  // Light up whichever workspace actually contains the section with unseen
+  // activity — derived from the nav rather than hardcoded, so moving a section
+  // between workspaces (e.g. Suggestions to the Developer Portal) keeps its dot
+  // pointing at the right row.
   const workspaceDots = useMemo(() => {
     const dots = new Set<WorkspaceKey>();
-    if (sectionDots.size > 0) dots.add('admin');
+    for (const key of sectionDots) {
+      const owner = NAV.find((w) => w.sections.some((sec) => sec.key === key));
+      if (owner) dots.add(owner.key);
+    }
     return dots;
   }, [sectionDots]);
 
@@ -403,10 +409,10 @@ export function Portal() {
   // rest of the nav; never revealed to the demo.
   const canFunded = !user!.isDemo && canAccessFunded(effectiveRoles);
 
-  // The My Portal ▸ Employee Portal section. Needs the `employee` role AND a
-  // company-domain sign-in email; follows the same "view as role" preview and is
-  // never shown to the demo. The section only links to /employee — that page has
-  // its own sign-in, so revealing it grants nothing on its own.
+  // The Employee Portal row above the workspaces list. Needs the `employee` role
+  // AND a company-domain sign-in email; follows the same "view as role" preview
+  // and is never shown to the demo. The row only opens /employee in a new tab —
+  // that site has its own sign-in, so revealing it grants nothing on its own.
   const canEmployee = !user!.isDemo && canAccessEmployeePortal(effectiveRoles, user!.email);
 
   // Keep the selected screen valid for the current workspace. Also bounce a
@@ -415,11 +421,10 @@ export function Portal() {
     const nav = navFor(workspace);
     if (!nav) return;
     const fundedLocked = screen === 'prop' && !canFunded;
-    const employeeLocked = screen === 'my_employee' && !canEmployee;
-    if (!nav.sections.some((s) => s.key === screen) || fundedLocked || employeeLocked) {
+    if (!nav.sections.some((s) => s.key === screen) || fundedLocked) {
       setScreen(DEFAULT_SCREEN[workspace]);
     }
-  }, [workspace, screen, canFunded, canEmployee]);
+  }, [workspace, screen, canFunded]);
 
   // Screens that need the live user or the acting-role controls (which the
   // stateless renderScreen doesn't have): the Site Help workspace and the Admin
@@ -432,17 +437,6 @@ export function Portal() {
     switch (scr) {
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
-      case 'my_employee':
-        // Gated the same way the sidebar section is; refuse it defensively for
-        // anyone who reaches the key by other means (stale state, a nav
-        // override). /employee enforces the real check regardless.
-        return canEmployee ? (
-          <EmployeePortalLaunch />
-        ) : (
-          <div style={{ maxWidth: 620, margin: '40px auto 0', textAlign: 'center', color: C.muted, fontSize: 13.5 }}>
-            This section isn’t enabled for your account.
-          </div>
-        );
       case 'my_prefs':
         return <Preferences theme={theme} />;
       case 'my_settings':

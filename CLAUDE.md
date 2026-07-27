@@ -179,13 +179,6 @@ top of the workspaces list** (see `theme/nav.ts` order).
   retirement providers (Fidelity, Vanguard 401k) don't expose per-user API keys
   the way OANDA/Kraken do. Every advice-flavored surface must carry an
   "informational only, not investment advice" disclaimer.
-- **My Portal** also holds the **Employee Portal** launch section
-  (`my_employee`, `workspaces/myportal/EmployeePortalLaunch.tsx`) — a card that
-  explains the separate employee site and links to `/employee`. It is the only
-  way in from the app. Hidden unless the viewer holds the `employee` role **and**
-  signs in on a company email address (`EMPLOYEE_ONLY_SECTIONS` in `theme/nav.ts`
-  + `canAccessEmployeePortal`); never shown to the demo. See the Employee Portal
-  section below.
 - **My Portal** also gains two personal roll-up sections (emerald), both
   currently "Coming Soon":
   - **Investment Holdings** (`my_holdings`) — a combined summary of active
@@ -224,9 +217,8 @@ top of the workspaces list** (see `theme/nav.ts` order).
   `gameStats.ts`). Studies is lazy-loaded.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion. Available to **every** signed-in user.
-- **Admin** (rose): Users, Teams, Badges, Message Templates, AI Instructions,
-  Patch Notes, Site Wording, Early Access, View as role, Suggestions, Bug
-  Reports. **Admins only.** **Message Templates** (`ad_templates`,
+- **Admin** (rose): Users, Teams, Badges, Message Templates, Patch Notes, Early
+  Access, Bug Reports, Support. **Admins only.** **Message Templates** (`ad_templates`,
   `AdminMessageTemplates`) is a shared copy library of reusable text-message
   (SMS) and email templates (`message_templates` table,
   `messageTemplates/service.ts`, routes in `routes/messageTemplates.ts`).
@@ -238,8 +230,11 @@ top of the workspaces list** (see `theme/nav.ts` order).
   null on author deletion, so they are **not** in the `admin/service.ts`
   per-user delete list.
 - **Developer Portal** (`founder` key/role, amber): AI Instructions, Site Wording,
-  Sidebar Layout (`ad_sidebar` — reorder the whole sidebar, see below), View as
-  role. **Founder-level only** (`isFounder`). Displayed as "Developer Portal";
+  Sidebar Layout (`ad_sidebar` — reorder the whole sidebar, see below),
+  **Suggestions** (`ad_suggestions` — moved out of the Admin Portal; the
+  `/api/admin/suggestions` read/patch/delete routes are `requireFounder` to
+  match, while *sending* a suggestion from Site Help stays open to everyone),
+  View as role. **Founder-level only** (`isFounder`). Displayed as "Developer Portal";
   the internal key and role are still `founder` (unchanged gating).
 
 Removed and gone (do not reintroduce or reference): the standalone To-Do
@@ -417,9 +412,13 @@ share an account table and nothing else.
   `employee_login_attempts`, `employee_audit_log`, `employee_announcements`,
   `employee_documents` (migration `0073_employee_portal.sql`).
 - Web: `apps/web/employee.html` (a second Vite/Rollup entry) → `src/employee/*`.
-  The way in from the app is **My Portal ▸ Employee Portal** (`my_employee`),
-  which is a launch card containing a plain `<a href="/employee">` — a real page
-  navigation, because the employee portal is a different document.
+  The way in from the app is a **standalone sidebar row pinned above the
+  Workspaces list** (`EmployeePortalLink` in `Sidebar.tsx`) — deliberately not a
+  workspace and not a section, because it is a different website. It is a plain
+  `<a href="/employee" target="_blank" rel="noopener noreferrer">`: a real page
+  load in a **new tab**, so the portal stays where it was, the new tab gets no
+  `window.opener` handle back into the signed-in portal, and no referrer leaks.
+  Shown only when `canAccessEmployeePortal(roles, email)` holds; never to the demo.
 - `server.ts` serves `/employee`, `/employee/`, and `/employee/*` from the built
   `employee.html`, read into memory and sent directly (**not** via
   `@fastify/static`, whose `Cache-Control` would overwrite the `no-store` header

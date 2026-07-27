@@ -1,12 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { WorkspaceKey } from '../theme/themes';
-import {
-  NAV,
-  navFor,
-  EMPLOYEE_ONLY_SECTIONS,
-  FUNDED_ONLY_SECTIONS,
-  type NavWorkspace,
-} from '../theme/nav';
+import { NAV, navFor, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
 import { APP_VERSION } from '../meta/version';
 import { Icon } from './Icon';
@@ -20,8 +14,8 @@ interface SidebarProps {
   nav?: NavWorkspace[];
   // Whether the private Funded (prop-challenge) section is revealed.
   canFunded: boolean;
-  // Whether the My Portal ▸ Employee Portal section is revealed (the `employee`
-  // role plus a company-domain sign-in email).
+  // Whether the Employee Portal row is revealed (the `employee` role plus a
+  // company-domain sign-in email). It sits above the workspaces list.
   canEmployee?: boolean;
   collapsed: boolean;
   // Nav rows that should show a blinking red "new notification" dot: workspace
@@ -65,13 +59,8 @@ export function Sidebar(props: SidebarProps) {
   const navList = nav ?? NAV;
   const current = navList.find((w) => w.key === workspace) ?? navFor(workspace);
   const accent = current?.accent ?? C.gold;
-  // Hide the private Funded section from anyone without the `funded` role, and
-  // the Employee Portal section from anyone who cannot reach /employee.
-  const sections = (current?.sections ?? []).filter(
-    (s) =>
-      (canFunded || !FUNDED_ONLY_SECTIONS.has(s.key)) &&
-      (canEmployee || !EMPLOYEE_ONLY_SECTIONS.has(s.key)),
-  );
+  // Hide the private Funded section from anyone without the `funded` role.
+  const sections = (current?.sections ?? []).filter((s) => canFunded || !FUNDED_ONLY_SECTIONS.has(s.key));
   // Show only the workspaces this user can access, in the effective nav order.
   const visible: NavWorkspace[] = navList.filter((w) => workspaces.includes(w.key));
 
@@ -130,6 +119,11 @@ export function Sidebar(props: SidebarProps) {
           <Icon name="panel-left-open" size={16} />
         </button>
       )}
+
+      {/* Employee Portal — pinned above the workspaces list because it is not
+          one. It leaves this app entirely for /employee, a separate site with
+          its own sign-in, and opens in a new tab so the portal stays put. */}
+      {canEmployee && <EmployeePortalLink collapsed={collapsed} />}
 
       {/* Workspaces */}
       <nav>
@@ -223,6 +217,54 @@ export function Sidebar(props: SidebarProps) {
         </div>
       )}
     </aside>
+  );
+}
+
+// The Employee Portal row. A plain anchor with target="_blank", so the browser
+// opens the separate employee site in a new tab and this portal stays where it
+// is. rel="noopener noreferrer" matters here beyond the usual hygiene: it denies
+// the new tab a window.opener handle back into the signed-in portal, and stops
+// the employee site's URL leaking as a referrer.
+const EMPLOYEE_ACCENT = '#38BDF8';
+
+function EmployeePortalLink({ collapsed }: { collapsed: boolean }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div>
+      <a
+        href="/employee"
+        target="_blank"
+        rel="noopener noreferrer"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        title="Employee Portal — opens the separate, secured employee site in a new tab"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 11,
+          padding: collapsed ? '10px 0' : '10px 11px',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          borderRadius: 9,
+          fontSize: 13.5,
+          fontWeight: 600,
+          textDecoration: 'none',
+          color: hover ? C.text : C.muted,
+          background: hover ? tint(EMPLOYEE_ACCENT, 0.12) : tint(EMPLOYEE_ACCENT, 0.05),
+          border: `1px solid ${tint(EMPLOYEE_ACCENT, hover ? 0.42 : 0.22)}`,
+          transition: 'background-color .15s ease, color .15s ease, border-color .15s ease',
+        }}
+      >
+        <Icon name="shield-check" size={16} color={EMPLOYEE_ACCENT} />
+        {!collapsed && (
+          <>
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              Employee Portal
+            </span>
+            <Icon name="external-link" size={13} color={C.faint} />
+          </>
+        )}
+      </a>
+    </div>
   );
 }
 

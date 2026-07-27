@@ -39,11 +39,6 @@ export const NAV: NavWorkspace[] = [
       // The whole-life roll-up: everything you own minus everything you owe.
       { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
-      // The way in to the separate Employee Portal at /employee. Role-gated and
-      // company-email-gated (see EMPLOYEE_ONLY_SECTIONS); the section itself is
-      // just a launch card — the portal is a different page with its own
-      // sign-in, not a screen rendered inside this app.
-      { key: 'my_employee', label: 'Employee Portal', icon: 'shield-check' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
@@ -123,7 +118,6 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_templates', label: 'Message Templates', icon: 'message-square' },
       { key: 'ad_notes', label: 'Patch Notes', icon: 'file-text' },
       { key: 'ad_early', label: 'Early Access', icon: 'sparkles' },
-      { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
       { key: 'ad_bugs', label: 'Bug Reports', icon: 'bug' },
       { key: 'ad_support', label: 'Support', icon: 'life-buoy' },
     ],
@@ -141,6 +135,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
       { key: 'ad_sidebar', label: 'Sidebar Layout', icon: 'list-tree' },
+      { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
       { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
     ],
   },
@@ -175,12 +170,10 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
 // and the public never see them.
 export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
 
-// My Portal sections gated behind employee-portal access — the `employee` role
-// *and* a company-domain sign-in email (see canAccessEmployeePortal). The
-// sidebar hides these unless the viewer holds both; the demo and the public
-// never see them. The server is the real enforcer: /employee refuses anyone who
-// does not qualify, whatever the nav shows.
-export const EMPLOYEE_ONLY_SECTIONS = new Set(['my_employee']);
+// The Employee Portal is deliberately NOT in this nav config. It is not a
+// workspace and not a section — it is a separate website, so the sidebar renders
+// it as a standalone row above the workspaces list that opens /employee in a new
+// tab (see Sidebar.tsx). Nothing here routes to it.
 
 // The signalling accent for a workspace (falls back to gold for any key not in
 // the nav — every real WorkspaceKey is present, so the fallback is a safety net).
