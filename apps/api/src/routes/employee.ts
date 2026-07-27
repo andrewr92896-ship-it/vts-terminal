@@ -25,6 +25,7 @@ import {
   employeeCookieOptions,
   employeeCsrfToken,
   getEmployeeSessionById,
+  lastOtpSentAtForUser,
   listEmployeeSessions,
   promoteEmployeeSession,
   purgeExpiredEmployeeSessions,
@@ -211,6 +212,17 @@ function maskEmail(email: string): string {
   return `${head}${'•'.repeat(Math.max(3, local.length - head.length))}@${domain}`;
 }
 
+// Seconds this account must still wait before another code may be sent, or 0.
+// Keyed on the person, not the session, so asking for a fresh session does not
+// buy a fresh allowance — that loophole is what makes a per-session throttle
+// useless against both mail-flooding and code-guessing.
+async function codeSendCooldown(userId: string): Promise<number> {
+  const last = await lastOtpSentAtForUser(userId);
+  if (!last) return 0;
+  const since = Date.now() - last.getTime();
+  return since >= OTP_RESEND_COOLDOWN_MS ? 0 : Math.ceil((OTP_RESEND_COOLDOWN_MS - since) / 1000);
+}
+
 // Mint a code, store its hash against this one session, and mail it. The
 // plaintext never leaves this function except into the message body.
 async function issueOtp(
@@ -366,10 +378,23 @@ export async function employeeRoutes(app: FastifyInstance) {
       (await deviceTrusted(user.id, deviceCookieToken(request)));
 
     if (config.EMPLOYEE_REQUIRE_2FA && !remembered) {
-      // The password is spent, so clear the failure counters: what follows is a
-      // separate, separately-capped challenge, and an honest person who fumbles
-      // a code should not be paying off a password lockout as well.
-      await clearFailures(keys);
+      // Deliberately NOT clearing the failure counters here. The counters are
+      // what bounds guessing at the code, and this request — a correct password
+      // — is one an attacker who has the password can make at will. Clearing
+      // here would let them loop "log in, guess four, log in again" forever
+      // without ever reaching a rung of the ladder. Only a *completed* sign-in
+      // clears them (see /2fa/verify), which is the one thing an attacker who
+      // cannot read the mailbox never gets to do.
+      //
+      // Issuing a code is also rate-limited per account, not per session, for
+      // the same reason: a fresh session must not buy a fresh mailbox flood.
+      const wait = await codeSendCooldown(user.id);
+      if (wait > 0) {
+        return reply
+          .code(429)
+          .header('Retry-After', String(wait))
+          .send({ error: `Wait ${wait}s before asking for another code`, retryAfter: wait });
+      }
       const created = await createEmployeeSession(user.id, 'pending_2fa', {
         ip: meta.ip,
         userAgent: meta.userAgent,
@@ -485,14 +510,14 @@ export async function employeeRoutes(app: FastifyInstance) {
     }
 
     if (!otpMatches(session.otpCodeHash, parsed.data.code)) {
-      const attempts = session.otpAttempts + 1;
       // Both counters move: the per-code ceiling burns this code quickly, and
-      // the account/address ladder is what stops someone simply asking for code
-      // after code and guessing at each one.
+      // the account/address ladder — which nothing on the sign-in path clears
+      // any more until a code actually succeeds — is what stops someone asking
+      // for code after code and guessing at each one.
       const lock = await recordFailure([ipKey(meta.ip), userKey(ctx.user.id)]);
+      const attempts = await recordOtpAttempt(ctx.sessionId);
       const spent = attempts >= MAX_OTP_ATTEMPTS;
       if (spent) await clearSessionOtp(ctx.sessionId);
-      else await recordOtpAttempt(ctx.sessionId, attempts);
       await audit({
         action: 'login.code_failed',
         userId: ctx.user.id,
@@ -562,9 +587,10 @@ export async function employeeRoutes(app: FastifyInstance) {
     if (!session || session.stage !== 'pending_2fa') {
       return reply.code(400).send({ error: 'Start signing in again' });
     }
-    const since = session.otpSentAt ? Date.now() - session.otpSentAt.getTime() : Infinity;
-    if (since < OTP_RESEND_COOLDOWN_MS) {
-      const wait = Math.ceil((OTP_RESEND_COOLDOWN_MS - since) / 1000);
+    // The same per-account cooldown /login uses, so the two routes cannot be
+    // alternated to halve the gap between messages.
+    const wait = await codeSendCooldown(ctx.user.id);
+    if (wait > 0) {
       return reply
         .code(429)
         .header('Retry-After', String(wait))

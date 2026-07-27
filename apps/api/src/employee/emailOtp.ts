@@ -76,7 +76,11 @@ export async function sendOtpEmail(
 
   return sendMail({
     to,
-    subject: `${code} is your Employee Portal sign-in code`,
+    // The code stays out of the subject. Subjects show up in lock-screen and
+    // desktop notification previews, and are retained in more places than
+    // bodies are (relay logs, DLP/MDM indexes) — which would undo the property
+    // that the plaintext lives in the employee's inbox and nowhere else.
+    subject: 'Your Employee Portal sign-in code',
     text,
   });
 }

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, lt, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   employeeSessions,
@@ -176,8 +176,22 @@ export async function setSessionOtp(
     .where(eq(employeeSessions.id, id));
 }
 
-export async function recordOtpAttempt(id: string, attempts: number): Promise<void> {
-  await db.update(employeeSessions).set({ otpAttempts: attempts }).where(eq(employeeSessions.id, id));
+// Count a wrong guess and report the new total. Incremented in SQL rather than
+// read-modify-written, so a burst of parallel guesses cannot all read the same
+// value and collectively cost a single attempt.
+export async function recordOtpAttempt(id: string): Promise<number> {
+  await db
+    .update(employeeSessions)
+    .set({ otpAttempts: sql`${employeeSessions.otpAttempts} + 1` })
+    .where(eq(employeeSessions.id, id));
+  const row = (
+    await db
+      .select({ otpAttempts: employeeSessions.otpAttempts })
+      .from(employeeSessions)
+      .where(eq(employeeSessions.id, id))
+      .limit(1)
+  )[0];
+  return row?.otpAttempts ?? 0;
 }
 
 // Burn the current code without ending the session — used when too many wrong
@@ -193,6 +207,22 @@ export async function getEmployeeSessionById(id: string): Promise<EmployeeSessio
   return (
     await db.select().from(employeeSessions).where(eq(employeeSessions.id, id)).limit(1)
   )[0];
+}
+
+// When a code was last sent to this person, across *every* session they have.
+// Per-account rather than per-session on purpose: a throttle a new sign-in
+// attempt could reset is not a throttle, and both the mail-flood and the
+// guess-forever attacks work by asking for a brand-new session each round.
+export async function lastOtpSentAtForUser(userId: string): Promise<Date | null> {
+  const rows = await db
+    .select({ otpSentAt: employeeSessions.otpSentAt })
+    .from(employeeSessions)
+    .where(eq(employeeSessions.userId, userId));
+  let latest: Date | null = null;
+  for (const r of rows) {
+    if (r.otpSentAt && (!latest || r.otpSentAt.getTime() > latest.getTime())) latest = r.otpSentAt;
+  }
+  return latest;
 }
 
 export async function destroyEmployeeSession(token: string | undefined): Promise<void> {

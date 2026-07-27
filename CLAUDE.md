@@ -474,9 +474,22 @@ step**: a correct password issues a `pending_2fa` session that can reach **only*
   clears it, so it cannot be replayed.
 - Wrong guesses are capped per code (**5**, then that code is burned and a fresh
   one must be requested) *and* fed to the account/address lockout ladder below.
-  Both `/2fa/verify` and `/2fa/resend` **check** that ladder as well as feed it —
-  without the check, a valid password would allow endless guess-five-then-resend.
-- Resend is throttled (30s) so the button cannot mail-bomb anyone.
+  `/2fa/verify` and `/2fa/resend` **check** that ladder as well as feed it.
+- **Nothing on the sign-in path clears the ladder until a code actually
+  succeeds.** This matters more than it looks: a correct password is a request
+  an attacker who has the password can make at will, so if `/login` cleared the
+  counters (it used to) they could loop "log in, guess four, log in again"
+  forever without ever reaching a rung. Only `/2fa/verify` succeeding clears
+  them — the one thing someone who cannot read the mailbox never gets to do.
+- **Issuing a code is throttled per account, not per session** (30s,
+  `codeSendCooldown` over `lastOtpSentAtForUser`), and `/login` and `/2fa/resend`
+  share the one cooldown. A per-session throttle would be no throttle at all:
+  both the mail-flood and the guess-forever attacks work by asking for a brand
+  new session each round.
+- The per-code attempt counter is incremented **in SQL**, so a burst of parallel
+  guesses cannot all read the same value and collectively cost one attempt.
+- The code is **not** in the email subject line — subjects surface in
+  lock-screen previews and are retained in more places than bodies.
 - **SMTP is optional.** With no `SMTP_HOST` set the code is written to the server
   log instead of emailed, and the response carries `delivered: false` so the UI
   says so. Deliberate: a misconfigured deploy must not lock every employee out.

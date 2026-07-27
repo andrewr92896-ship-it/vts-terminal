@@ -84,12 +84,16 @@ export function EmployeeVerify({
   sentTo,
   delivered,
   rememberDays,
+  initialCooldown = 30,
   onVerified,
   onStartOver,
 }: {
   sentTo: string | null;
   delivered: boolean;
   rememberDays: number;
+  /** Seconds before "send a new code" goes live. 0 when resuming a reload,
+   *  where the server may well accept one immediately. */
+  initialCooldown?: number;
   onVerified: (me: EmployeeMe) => void;
   onStartOver: () => void;
 }) {
@@ -98,9 +102,10 @@ export function EmployeeVerify({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
-  // Matches the server's resend cooldown, so the button is only live when a
-  // resend would actually be accepted.
-  const [cooldown, setCooldown] = useState(30);
+  // Mirrors the server's resend cooldown so the button is only live when a
+  // resend would actually be accepted. The server is the authority — a 429
+  // carries the real wait and resets this.
+  const [cooldown, setCooldown] = useState(initialCooldown);
 
   useEffect(() => {
     if (cooldown <= 0) return;

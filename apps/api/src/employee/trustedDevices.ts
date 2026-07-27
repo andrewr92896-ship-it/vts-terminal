@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { employeeTrustedDevices, type EmployeeTrustedDeviceRow } from '../db/schema.js';
 import { config } from '../config.js';
@@ -92,11 +92,16 @@ export async function deviceTrusted(
   return true;
 }
 
+// Only devices that can still actually skip a code. Expired rows are cleaned up
+// lazily, so filtering here keeps the Security screen (and the count on it) from
+// claiming trust that `deviceTrusted` would refuse.
 export async function listTrustedDevices(userId: string): Promise<EmployeeTrustedDeviceRow[]> {
   const rows = await db
     .select()
     .from(employeeTrustedDevices)
-    .where(eq(employeeTrustedDevices.userId, userId));
+    .where(
+      and(eq(employeeTrustedDevices.userId, userId), gt(employeeTrustedDevices.expiresAt, new Date())),
+    );
   return rows.sort((a, b) => b.lastUsedAt.getTime() - a.lastUsedAt.getTime());
 }
 

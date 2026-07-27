@@ -50,6 +50,8 @@ export function EmployeeApp() {
   // Where the outstanding sign-in code went, and whether it actually sent.
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   const [codeDelivered, setCodeDelivered] = useState(true);
+  // 30 straight after a send; 0 when a reload resumed a flow already in progress.
+  const [codeCooldown, setCodeCooldown] = useState(30);
   const [rememberDays, setRememberDays] = useState(30);
 
   // Bootstrap: ask the server whether this browser already holds an employee
@@ -71,6 +73,7 @@ export function EmployeeApp() {
         // the whole sign-in again — the pending session is still good.
         setCodeSentTo(s.sentTo ?? null);
         setCodeDelivered(true);
+        setCodeCooldown(0);
         setPhase('verifying');
         return;
       }
@@ -146,6 +149,7 @@ export function EmployeeApp() {
         onCodeSent={(sentTo, delivered) => {
           setCodeSentTo(sentTo);
           setCodeDelivered(delivered);
+          setCodeCooldown(30);
           setPhase('verifying');
         }}
       />
@@ -158,6 +162,7 @@ export function EmployeeApp() {
         sentTo={codeSentTo}
         delivered={codeDelivered}
         rememberDays={rememberDays}
+        initialCooldown={codeCooldown}
         onVerified={(user) => {
           setMe(user);
           setPhase('ready');
