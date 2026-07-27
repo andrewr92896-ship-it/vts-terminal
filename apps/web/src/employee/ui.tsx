@@ -76,7 +76,16 @@ export function ScreenHeader({
         <Icon name={icon} size={19} />
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <h1 style={{ margin: 0, fontSize: 19, fontWeight: 650, color: EMP.text, letterSpacing: '0.2px' }}>
+        <h1
+          style={{
+            margin: 0,
+            fontFamily: EMP.serif,
+            fontSize: 21,
+            fontWeight: 700,
+            color: EMP.text,
+            letterSpacing: '0.1px',
+          }}
+        >
           {title}
         </h1>
         {subtitle && (

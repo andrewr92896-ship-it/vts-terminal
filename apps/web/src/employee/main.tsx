@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '../styles/global.css';
+import './fonts.css';
 import { EmployeeApp } from './EmployeeApp';
 
 // The employee portal's entry point — a second, independent Vite entry

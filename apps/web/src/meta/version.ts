@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.59';
+export const APP_VERSION = 'Beta V 5.60';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.60',
+    date: 'July 27, 2026',
+    notes: [
+      'The Employee Portal now uses its own typefaces — Source Sans for the interface and Source Serif for headings — the first piece of its new design landing. The fonts are served from the portal itself, not a font network, so nothing about the page reaches outside the company.',
+    ],
+  },
   {
     version: 'Beta V 5.59',
     date: 'July 27, 2026',
