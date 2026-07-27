@@ -5,7 +5,6 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { EditableText, EditableRich } from '../../copy/SiteCopy';
 import { DeckEditor } from './DeckEditor';
 import { downloadCsv, parseQuestionsCsv, questionsToCsv, questionTemplateCsv } from './studyCsv';
 
@@ -81,13 +80,10 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-            <EditableText id="studydecks.title" text="Team Study Games" />
+            {"Team Study Games"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            <EditableRich
-              id="studydecks.subtitle"
-              text="Build and edit your team’s own quizzes here — play them from the **Study Game** section."
-            />
+            Build and edit your team’s own quizzes here — play them from the <strong>Study Game</strong> section.
           </p>
         </div>
         {!readOnly && (
@@ -132,26 +128,26 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          <EditableText id="studydecks.loading" text="Loading your team’s study games…" />
+          {"Loading your team’s study games…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          <EditableText id="studydecks.error" text="Couldn’t load your team’s study games. Try again in a moment." />
+          {"Couldn’t load your team’s study games. Try again in a moment."}
         </div>
       ) : decks.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🎓</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-            <EditableText id="studydecks.empty_title" text="No study games yet" />
+            {"No study games yet"}
           </div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? <EditableText id="studydecks.empty_ro" text="A team builds its own study games here — AI-generated from a topic, or from an uploaded file." />
-              : <EditableText id="studydecks.empty_rw" text="Build your first one: have AI generate questions from a topic, or upload a text file of your own questions or notes." />}
+              ? "A team builds its own study games here — AI-generated from a topic, or from an uploaded file."
+              : "Build your first one: have AI generate questions from a topic, or upload a text file of your own questions or notes."}
           </div>
           {!readOnly && (
             <button onClick={() => setComposerOpen(true)} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
-              <EditableText id="studydecks.empty_btn" text="✦ New study game" />
+              {"✦ New study game"}
             </button>
           )}
         </div>
@@ -251,7 +247,7 @@ function DeckCard({
         )}
         {locked && (
           <span style={{ fontSize: 11, color: muted, alignSelf: 'center' }}>
-            <EditableText id="studydecks.builtin_note" text="Built-in example — always available" />
+            {"Built-in example — always available"}
           </span>
         )}
         {canManage && confirm && (
@@ -266,7 +262,7 @@ function DeckCard({
         )}
         {!confirm && deck.questionCount > 0 && (
           <button onClick={exportCsv} disabled={exporting} style={{ ...ghostBtn(theme), opacity: exporting ? 0.6 : 1 }}>
-            {exporting ? <EditableText id="studydecks.exporting" text="Exporting…" /> : <EditableText id="studydecks.export_csv" text="⭳ Export CSV" />}
+            {exporting ? "Exporting…" : "⭳ Export CSV"}
           </button>
         )}
         {!canManage && !locked && !confirm && (
@@ -325,10 +321,10 @@ function CombineGames({
   return (
     <div style={{ ...card(theme), marginBottom: 14 }}>
       <h3 style={{ margin: '0 0 4px', fontSize: 15.5, fontWeight: 700, color: '#fff' }}>
-        <EditableText id="studydecks.combine_title" text="Combine games" />
+        {"Combine games"}
       </h3>
       <p style={{ margin: '0 0 12px', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
-        <EditableText id="studydecks.combine_blurb" text="Pick the games to merge into one new game with all their questions — great for one massive game across everything." />
+        {"Pick the games to merge into one new game with all their questions — great for one massive game across everything."}
       </p>
       <input
         value={name}
@@ -363,7 +359,7 @@ function CombineGames({
       </div>
       <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 12.5, color: muted, cursor: 'pointer', marginBottom: 12 }}>
         <input type="checkbox" checked={tagSource} onChange={(e) => setTagSource(e.target.checked)} style={{ width: 16, height: 16, accentColor: theme.accent }} />
-        <EditableText id="studydecks.combine_remember" text="Remember which game each question came from (adds an optional “guess the source” mode when playing)" />
+        {"Remember which game each question came from (adds an optional “guess the source” mode when playing)"}
       </label>
       {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginBottom: 10 }}>{error}</div>}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -371,7 +367,7 @@ function CombineGames({
           {busy ? 'Combining…' : `Combine ${picked.size} game${picked.size === 1 ? '' : 's'} · ${totalQs} q${totalQs === 1 ? '' : 's'}`}
         </button>
         <button onClick={onCancel} style={ghostBtn(theme)}>
-          <EditableText id="studydecks.combine_cancel" text="Cancel" />
+          {"Cancel"}
         </button>
       </div>
     </div>
@@ -526,7 +522,7 @@ function DeckComposer({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div>
             <h3 style={{ margin: 0, fontSize: 15.5, fontWeight: 700, color: '#fff' }}>
-              <EditableText id="studydecks.review_title" text="Review the questions" />
+              {"Review the questions"}
             </h3>
             <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted, lineHeight: 1.5 }}>
               {previewIsCsv ? 'Imported' : 'AI formatted'} {preview.length} question{preview.length === 1 ? '' : 's'}{' '}
@@ -661,14 +657,14 @@ function DeckComposer({
           <>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', cursor: 'pointer', opacity: busy ? 0.6 : 1 }}>
-                <EditableText id="studydecks.csv_choose" text="Choose a CSV file" />
+                {"Choose a CSV file"}
                 <input type="file" accept=".csv,text/csv" onChange={onCsvFile} disabled={busy} style={{ display: 'none' }} />
               </label>
               <button
                 onClick={() => downloadCsv('study-game-template', questionTemplateCsv())}
                 style={{ ...ghostBtn(theme), minHeight: 40 }}
               >
-                <EditableText id="studydecks.csv_template" text="⭳ Download template" />
+                {"⭳ Download template"}
               </button>
             </div>
           </>
@@ -676,14 +672,11 @@ function DeckComposer({
 
         <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
           {mode === 'ai' ? (
-            <EditableText id="studydecks.composer_help_ai" text="AI writes the questions and answer key — review them before your team relies on them." />
+            "AI writes the questions and answer key — review them before your team relies on them."
           ) : mode === 'file' ? (
-            <EditableText id="studydecks.composer_help_file" text="Upload a text file and AI formats the questions from it. You review them before the game is created." />
+            "Upload a text file and AI formats the questions from it. You review them before the game is created."
           ) : (
-            <EditableText
-              id="studydecks.composer_help_csv"
-              text="Import a CSV with columns: Question, Option A, Option B, Option C, Option D, Answer, and optional Topic and Explanation. Download the template to see the format. You review the questions before the game is created."
-            />
+            "Import a CSV with columns: Question, Option A, Option B, Option C, Option D, Answer, and optional Topic and Explanation. Download the template to see the format. You review the questions before the game is created."
           )}
         </div>
         {error && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{error}</div>}

@@ -17,7 +17,6 @@ import {
   Badge,
 } from './adminUi';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 
 // Admin ▸ Message Templates — a shared library of reusable text-message and
 // email templates admins copy out of the portal. Every admin can read and copy;
@@ -36,9 +35,6 @@ type Draft = {
 
 const emptyDraft: Draft = { id: null, kind: 'sms', title: '', subject: '', body: '' };
 
-function kindLabelId(kind: MessageTemplateKind): string {
-  return kind === 'email' ? 'admin.templates.kind.email' : 'admin.templates.kind.sms';
-}
 function kindLabel(kind: MessageTemplateKind): string {
   return kind === 'email' ? 'Email' : 'Text message';
 }
@@ -165,9 +161,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 820, margin: '0 auto' }}>
       <SectionHeader
-        titleId="admin.templates.title"
         title="Message Templates"
-        subtitleId="admin.templates.subtitle"
         subtitle="Reusable text-message and email templates. Right-click a template (or use its Copy button) to copy it, then paste it wherever you need it."
       />
 
@@ -182,16 +176,14 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
             }}
             style={primaryBtn(theme, accentGrad)}
           >
-            <EditableText id="admin.templates.new">+ New template</EditableText>
+            {"+ New template"}
           </button>
         </div>
       ) : (
         <div style={{ ...panel(theme), marginBottom: 14, display: 'flex', alignItems: 'center', gap: 9 }}>
           <Icon name="code" size={15} color="#8ea3cc" />
           <span style={{ fontSize: 12, color: '#9fb0d6' }}>
-            <EditableText id="admin.templates.readonly_note">
-              Only software developers can add or change templates. You can copy any template below.
-            </EditableText>
+            {"Only software developers can add or change templates. You can copy any template below."}
           </span>
         </div>
       )}
@@ -201,9 +193,9 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
         <div style={{ ...panel(theme), marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#eef3ff', marginBottom: 12 }}>
             {draft.id ? (
-              <EditableText id="admin.templates.edit_heading">Edit template</EditableText>
+              "Edit template"
             ) : (
-              <EditableText id="admin.templates.new_heading">New template</EditableText>
+              "New template"
             )}
           </div>
 
@@ -221,14 +213,14 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
                     background: on ? 'rgba(255,255,255,.06)' : 'rgba(0,0,0,.18)',
                   }}
                 >
-                  <EditableText id={kindLabelId(k)} text={kindLabel(k)} />
+                  {kindLabel(k)}
                 </button>
               );
             })}
           </div>
 
           <label style={fieldLabel}>
-            <EditableText id="admin.templates.field.title">Title</EditableText>
+            {"Title"}
           </label>
           <input
             value={draft.title}
@@ -240,7 +232,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
           {draft.kind === 'email' && (
             <>
               <label style={fieldLabel}>
-                <EditableText id="admin.templates.field.subject">Subject line</EditableText>
+                {"Subject line"}
               </label>
               <input
                 value={draft.subject}
@@ -252,7 +244,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
           )}
 
           <label style={fieldLabel}>
-            <EditableText id="admin.templates.field.body">Template text</EditableText>
+            {"Template text"}
           </label>
           <textarea
             value={draft.body}
@@ -265,13 +257,13 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => void save()} disabled={saving} style={{ ...primaryBtn(theme, accentGrad), opacity: saving ? 0.6 : 1 }}>
               {draft.id ? (
-                <EditableText id="admin.templates.save">Save changes</EditableText>
+                "Save changes"
               ) : (
-                <EditableText id="admin.templates.create">Create template</EditableText>
+                "Create template"
               )}
             </button>
             <button onClick={() => setDraft(null)} disabled={saving} style={ghostBtn}>
-              <EditableText id="admin.templates.cancel">Cancel</EditableText>
+              {"Cancel"}
             </button>
           </div>
         </div>
@@ -280,12 +272,12 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
       {/* List */}
       {!loaded ? (
         <div style={{ color: '#9fb0d6', fontSize: 12.5 }}>
-          <EditableText id="admin.templates.loading">Loading…</EditableText>
+          {"Loading…"}
         </div>
       ) : items.length === 0 ? (
         <div style={panel(theme)}>
           <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>
-            <EditableText id="admin.templates.empty">No templates yet.</EditableText>
+            {"No templates yet."}
           </p>
         </div>
       ) : (
@@ -300,18 +292,15 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
                 <Icon name={t.kind === 'email' ? 'file-text' : 'message-square'} size={15} color={theme.accent} />
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#eef3ff' }}>{t.title}</span>
                 <Badge color={t.kind === 'email' ? '#6C9EFF' : '#34D399'}>
-                  <EditableText
-                    id={t.kind === 'email' ? 'admin.templates.badge.email' : 'admin.templates.badge.sms'}
-                    text={kindLabel(t.kind).toUpperCase()}
-                  />
+                  {kindLabel(t.kind).toUpperCase()}
                 </Badge>
                 <span style={{ marginLeft: 'auto', fontSize: 10, color: '#7488b5' }}>
                   {copiedId === t.id ? (
                     <span style={{ color: '#7fe0c0', fontWeight: 600 }}>
-                      <EditableText id="admin.templates.copied">Copied ✓</EditableText>
+                      {"Copied ✓"}
                     </span>
                   ) : (
-                    <EditableText id="admin.templates.rightclick_hint" text="Right-click to copy" />
+                    "Right-click to copy"
                   )}
                 </span>
               </div>
@@ -319,7 +308,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
               {t.kind === 'email' && t.subject && (
                 <div style={{ fontSize: 11.5, color: '#9fb0d6', marginBottom: 6 }}>
                   <span style={{ color: '#7488b5' }}>
-                    <EditableText id="admin.templates.subject_prefix" text="Subject: " />
+                    {"Subject: "}
                   </span>
                   {t.subject}
                 </div>
@@ -341,16 +330,16 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
 
               <div style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 <button onClick={() => void copy(t.id, fullText(t))} style={ghostBtn}>
-                  <EditableText id="admin.templates.copy_btn">Copy</EditableText>
+                  {"Copy"}
                 </button>
                 {canAuthor &&
                   (confirmDelete === t.id ? (
                     <>
                       <button onClick={() => void remove(t.id)} style={dangerSolidBtn}>
-                        <EditableText id="admin.templates.confirm_delete">Confirm delete</EditableText>
+                        {"Confirm delete"}
                       </button>
                       <button onClick={() => setConfirmDelete(null)} style={ghostBtn}>
-                        <EditableText id="admin.templates.cancel">Cancel</EditableText>
+                        {"Cancel"}
                       </button>
                     </>
                   ) : (
@@ -362,10 +351,10 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
                         }}
                         style={ghostBtn}
                       >
-                        <EditableText id="admin.templates.edit_btn">Edit</EditableText>
+                        {"Edit"}
                       </button>
                       <button onClick={() => setConfirmDelete(t.id)} style={ghostDangerBtn}>
-                        <EditableText id="admin.templates.delete_btn">Delete</EditableText>
+                        {"Delete"}
                       </button>
                     </>
                   ))}
@@ -402,9 +391,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
               setMenu(null);
             }}
           >
-            <EditableText id="admin.templates.menu_copy">
-              {menuTemplate.kind === 'email' ? 'Copy email' : 'Copy message'}
-            </EditableText>
+            {menuTemplate.kind === 'email' ? 'Copy email' : 'Copy message'}
           </MenuItem>
           {menuTemplate.kind === 'email' && menuTemplate.subject && (
             <MenuItem
@@ -414,7 +401,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
                 setMenu(null);
               }}
             >
-              <EditableText id="admin.templates.menu_copy_subject" text="Copy subject only" />
+              {"Copy subject only"}
             </MenuItem>
           )}
           {canAuthor && (
@@ -434,7 +421,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
                   setMenu(null);
                 }}
               >
-                <EditableText id="admin.templates.menu_edit" text="Edit" />
+                {"Edit"}
               </MenuItem>
               <MenuItem
                 icon="trash-2"
@@ -444,7 +431,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
                   setMenu(null);
                 }}
               >
-                <EditableText id="admin.templates.menu_delete" text="Delete" />
+                {"Delete"}
               </MenuItem>
             </>
           )}

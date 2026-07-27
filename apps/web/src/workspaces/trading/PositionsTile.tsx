@@ -7,7 +7,6 @@ import { configFrom } from './outcome';
 import { TradeCard } from './TradeCard';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
-import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 12_000;
 
@@ -133,9 +132,9 @@ export function PositionsTile({
           overflowY: expand ? 'visible' : 'auto',
         }}
       >
-        {!data && !error && <div style={hint}><EditableText id="positions.loading">Loading positions…</EditableText></div>}
+        {!data && !error && <div style={hint}>{"Loading positions…"}</div>}
         {error && !data && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
-        {data && data.trades.length === 0 && <div style={hint}><EditableText id="positions.empty">No open positions right now. New fills appear here automatically.</EditableText></div>}
+        {data && data.trades.length === 0 && <div style={hint}>{"No open positions right now. New fills appear here automatically."}</div>}
         {data && data.trades.length > 0 && layoutMode === 'cards' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.trades.map((t) => (

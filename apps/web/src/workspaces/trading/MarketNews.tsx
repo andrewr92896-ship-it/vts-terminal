@@ -4,7 +4,6 @@ import { useNowTick } from '../../hooks/useNowTick';
 import { useAuth } from '../../auth/AuthContext';
 import { affectedInstruments, deriveWatchlist, newsFeeds, NEWS_FEEDS, DEFAULT_WATCHLIST } from './newsRelevance';
 import { decodeEntities, fmtDayKey, fmtRelative, fmtTime } from './newsFormat';
-import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
 import type {
   CalendarEvent,
@@ -172,7 +171,7 @@ export function MarketNews() {
   }, [data]);
 
   if (err && !data) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{err}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="news.loading">Loading market news…</EditableText></div>;
+  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading market news…"}</div>;
 
   const headlines = data.headlines;
 
@@ -220,20 +219,20 @@ export function MarketNews() {
     <div style={{ maxWidth: 860, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <ScreenTitle id="news.title">Market News</ScreenTitle>
+          <ScreenTitle>Market News</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            <EditableText id="news.subtitle">Live headlines across the desk's markets, each read by VTS AI for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time).</EditableText>
+            {"Live headlines across the desk's markets, each read by VTS AI for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time)."}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => void getBrief()} disabled={briefBusy} style={{ ...ghostBtn, opacity: briefBusy ? 0.6 : 1 }}>
-            {briefBusy ? <EditableText id="news.reading">Reading…</EditableText> : <EditableText id="news.ai_overview">✨ AI overview</EditableText>}
+            {briefBusy ? "Reading…" : "✨ AI overview"}
           </button>
           <button onClick={() => { setFeed('all'); setSourceFilter('all'); }} style={feed !== 'calendar' ? goldBtn : ghostBtn}>
-            <EditableText id="news.live">Live market news</EditableText>
+            {"Live market news"}
           </button>
           <button onClick={() => setFeed('calendar')} style={feed === 'calendar' ? goldBtn : ghostBtn}>
-            <EditableText id="news.calendar">Calendar</EditableText>
+            {"Calendar"}
           </button>
         </div>
       </div>
@@ -273,7 +272,7 @@ export function MarketNews() {
       {feed === 'trump' && (
         truth.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-            <EditableText id="news.empty_trump">No Truth Social posts yet — the feed mirrors @realDonaldTrump's posts as they land.</EditableText>
+            {"No Truth Social posts yet — the feed mirrors @realDonaldTrump's posts as they land."}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -299,7 +298,7 @@ export function MarketNews() {
       {feed === 'calendar' && (
         data.calendar.length === 0 ? (
           <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-            <EditableText id="news.empty_calendar">No events yet — the Forex Factory feed populates within a few minutes.</EditableText>
+            {"No events yet — the Forex Factory feed populates within a few minutes."}
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -349,7 +348,7 @@ export function MarketNews() {
           {feed === 'eurusd' && <div style={feedSectionLabel}>EUR/USD headlines</div>}
           {headlines.length === 0 ? (
             <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-              <EditableText id="news.empty_headlines">No headlines yet — the live news feeds populate within a few minutes.</EditableText>
+              {"No headlines yet — the live news feeds populate within a few minutes."}
             </div>
           ) : shown.length === 0 ? (
             <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
@@ -516,7 +515,7 @@ function NewsForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?
   }
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? <EditableText id="news.form_edit_headline">Edit headline</EditableText> : <EditableText id="news.form_new_headline">New headline</EditableText>}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? "Edit headline" : "New headline"}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Headline" style={{ ...input, flex: '1 1 100%' }} />
         <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Detail / context (optional)" rows={2} style={{ ...input, flex: '1 1 100%', resize: 'vertical', fontFamily: 'inherit' }} />
@@ -538,7 +537,7 @@ function NewsForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button onClick={submit} disabled={busy || !title.trim()} style={{ ...goldBtn, opacity: busy || !title.trim() ? 0.6 : 1 }}>{submitLabel}</button>
-        <button onClick={onCancel} style={ghostBtn}><EditableText id="news.newsform_cancel">Cancel</EditableText></button>
+        <button onClick={onCancel} style={ghostBtn}>{"Cancel"}</button>
       </div>
     </div>
   );
@@ -560,7 +559,7 @@ function EventForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial
   }
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? <EditableText id="news.form_edit_event">Edit event</EditableText> : <EditableText id="news.form_new_event">New calendar event</EditableText>}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? "Edit event" : "New calendar event"}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event (e.g. CPI m/m)" style={{ ...input, flex: '1 1 220px' }} />
         <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country (e.g. US)" style={{ ...input, flex: '0 0 110px' }} />
@@ -576,10 +575,10 @@ function EventForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial
         <input value={previous} onChange={(e) => setPrevious(e.target.value)} placeholder="Previous" style={{ ...input, flex: '1 1 110px' }} />
         <input value={actual} onChange={(e) => setActual(e.target.value)} placeholder="Actual" style={{ ...input, flex: '1 1 110px' }} />
       </div>
-      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}><EditableText id="news.eventform_tz_hint">Time is entered in your local zone and shown to everyone in Eastern Time.</EditableText></div>
+      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>{"Time is entered in your local zone and shown to everyone in Eastern Time."}</div>
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button onClick={submit} disabled={busy || !title.trim()} style={{ ...goldBtn, opacity: busy || !title.trim() ? 0.6 : 1 }}>{submitLabel}</button>
-        <button onClick={onCancel} style={ghostBtn}><EditableText id="news.eventform_cancel">Cancel</EditableText></button>
+        <button onClick={onCancel} style={ghostBtn}>{"Cancel"}</button>
       </div>
     </div>
   );

@@ -3,7 +3,6 @@ import { api, ApiError } from '../../api/client';
 import type { TeamDeck } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
-import { EditableText } from '../../copy/SiteCopy';
 
 // The study-game editor: rename the game, manage its categories, and edit every
 // question (stem, the four options, the correct answer, the explanation, and the
@@ -285,7 +284,7 @@ export function DeckEditor({
       <div style={wrap}>
         <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
         <div style={{ ...card(theme), color: muted, fontSize: 13, marginTop: 12 }}>
-          <EditableText id="deckeditor.loading" text="Loading the study game…" />
+          {"Loading the study game…"}
         </div>
       </div>
     );
@@ -295,7 +294,7 @@ export function DeckEditor({
       <div style={wrap}>
         <button onClick={() => onClose()} style={ghostBtn(theme)}>‹ Back</button>
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13, marginTop: 12 }}>
-          <EditableText id="deckeditor.load_error" text="Couldn’t load this study game." />
+          {"Couldn’t load this study game."}
         </div>
       </div>
     );
@@ -307,32 +306,32 @@ export function DeckEditor({
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <button onClick={() => onClose()} style={ghostBtn(theme)}>
-          <EditableText id="deckeditor.back" text="‹ Back to games" />
+          {"‹ Back to games"}
         </button>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={save} disabled={saving} style={{ ...primaryBtn(theme, accentGrad), opacity: saving ? 0.6 : 1 }}>
-            {saving ? <EditableText id="deckeditor.saving" text="Saving…" /> : <EditableText id="deckeditor.save" text="Save changes" />}
+            {saving ? "Saving…" : "Save changes"}
           </button>
         </div>
       </div>
 
       {/* Rename */}
       <div style={{ ...card(theme), marginBottom: 12 }}>
-        <label style={fieldLabel}><EditableText id="deckeditor.game_name" text="Game name" /></label>
+        <label style={fieldLabel}>{"Game name"}</label>
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={120} style={field(theme)} />
       </div>
 
       {/* Categories */}
       <div style={{ ...card(theme), marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}><EditableText id="deckeditor.categories" text="Categories" /></span>
-          <button onClick={() => setCatOpen((v) => !v)} style={ghostBtn(theme)}><EditableText id="deckeditor.auto_cat_btn" text="✦ Auto-categorize" /></button>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{"Categories"}</span>
+          <button onClick={() => setCatOpen((v) => !v)} style={ghostBtn(theme)}>{"✦ Auto-categorize"}</button>
         </div>
 
         {catOpen && (
           <div style={{ border: `1px solid ${theme.navBorder}`, borderRadius: 10, padding: 12, marginBottom: 12, background: 'rgba(10,8,26,.35)' }}>
             <p style={{ margin: '0 0 8px', fontSize: 12, color: muted, lineHeight: 1.5 }}>
-              <EditableText id="deckeditor.auto_cat_blurb" text="VTS AI sorts every question into a category. Leave the prompt blank to let it choose the groupings, or describe how you want them grouped." />
+              {"VTS AI sorts every question into a category. Leave the prompt blank to let it choose the groupings, or describe how you want them grouped."}
             </p>
             <textarea
               value={catPrompt}
@@ -344,16 +343,16 @@ export function DeckEditor({
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: muted, margin: '8px 0', cursor: 'pointer' }}>
               <input type="checkbox" checked={catConstrain} onChange={(e) => setCatConstrain(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
-              <EditableText id="deckeditor.constrain_label" text="Only use my current categories (don’t invent new ones)" />
+              {"Only use my current categories (don’t invent new ones)"}
             </label>
             <button onClick={runAutoCategorize} disabled={catBusy} style={{ ...primaryBtn(theme, accentGrad), opacity: catBusy ? 0.6 : 1 }}>
-              {catBusy ? <EditableText id="deckeditor.categorizing" text="Categorizing…" /> : <EditableText id="deckeditor.run_cat" text="Run auto-categorize" />}
+              {catBusy ? "Categorizing…" : "Run auto-categorize"}
             </button>
           </div>
         )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {allCategories.length === 0 && <span style={{ fontSize: 12, color: muted }}><EditableText id="deckeditor.no_categories" text="No categories yet — add one below or auto-categorize." /></span>}
+          {allCategories.length === 0 && <span style={{ fontSize: 12, color: muted }}>{"No categories yet — add one below or auto-categorize."}</span>}
           {allCategories.map((c) => {
             const count = questions.filter((q) => q.topic.trim().toLowerCase() === c.toLowerCase()).length;
             return (
@@ -378,26 +377,26 @@ export function DeckEditor({
             maxLength={60}
             style={{ ...field(theme), flex: 1, minWidth: 160 }}
           />
-          <button onClick={addCategory} style={ghostBtn(theme)}><EditableText id="deckeditor.add_category" text="+ Add category" /></button>
+          <button onClick={addCategory} style={ghostBtn(theme)}>{"+ Add category"}</button>
         </div>
       </div>
 
       {/* Questions toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}><EditableText id="deckeditor.questions_heading" text="Questions" /> · {questions.length}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{"Questions"} · {questions.length}</span>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, color: muted, cursor: 'pointer' }}>
             <input type="checkbox" checked={sortByCat} onChange={(e) => setSortByCat(e.target.checked)} style={{ width: 15, height: 15, accentColor: theme.accent }} />
-            <EditableText id="deckeditor.sort_by_cat" text="Sort by category" />
+            {"Sort by category"}
           </label>
           <button onClick={runAudit} disabled={auditBusy || questions.length === 0} style={{ ...ghostBtn(theme), opacity: auditBusy || questions.length === 0 ? 0.6 : 1 }}>
             {auditBusy ? (
-              <EditableText id="deckeditor.auditing" text="Auditing…" />
+              "Auditing…"
             ) : (
-              <EditableText id="deckeditor.audit_btn" text="✓ Audit answers" />
+              "✓ Audit answers"
             )}
           </button>
-          <button onClick={() => addQuestion()} style={ghostBtn(theme)}><EditableText id="deckeditor.add_question" text="+ Add question" /></button>
+          <button onClick={() => addQuestion()} style={ghostBtn(theme)}>{"+ Add question"}</button>
         </div>
       </div>
 
@@ -407,20 +406,20 @@ export function DeckEditor({
       {auditFound !== null && !auditBusy && (
         auditFound === 0 ? (
           <div style={{ ...okBanner, marginBottom: 10 }}>
-            <EditableText id="deckeditor.audit_clear" text="Audit found no problems — every answer key checks out." />
+            {"Audit found no problems — every answer key checks out."}
           </div>
         ) : issueCount > 0 ? (
           <div style={{ ...warn, marginBottom: 10 }}>
-            <EditableText id="deckeditor.audit_found_pre" text="Audit flagged" /> {issueCount}{' '}
+            {"Audit flagged"} {issueCount}{' '}
             {issueCount === 1 ? (
-              <EditableText id="deckeditor.audit_found_one" text="question to review — see the highlighted question below." />
+              "question to review — see the highlighted question below."
             ) : (
-              <EditableText id="deckeditor.audit_found_many" text="questions to review — see the highlighted questions below." />
+              "questions to review — see the highlighted questions below."
             )}
           </div>
         ) : (
           <div style={{ ...okBanner, marginBottom: 10 }}>
-            <EditableText id="deckeditor.audit_addressed" text="All flagged questions addressed — save your changes, then re-audit to confirm." />
+            {"All flagged questions addressed — save your changes, then re-audit to confirm."}
           </div>
         )
       )}
@@ -453,16 +452,16 @@ export function DeckEditor({
         })}
         {questions.length === 0 && (
           <div style={{ ...card(theme), color: muted, fontSize: 13, textAlign: 'center' }}>
-            <EditableText id="deckeditor.no_questions" text="No questions. Add one above." />
+            {"No questions. Add one above."}
           </div>
         )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
         <button onClick={save} disabled={saving} style={{ ...primaryBtn(theme, accentGrad), opacity: saving ? 0.6 : 1 }}>
-          {saving ? <EditableText id="deckeditor.saving" text="Saving…" /> : <EditableText id="deckeditor.save" text="Save changes" />}
+          {saving ? "Saving…" : "Save changes"}
         </button>
-        <button onClick={() => onClose()} style={ghostBtn(theme)}><EditableText id="deckeditor.cancel" text="Cancel" /></button>
+        <button onClick={() => onClose()} style={ghostBtn(theme)}>{"Cancel"}</button>
       </div>
     </div>
   );
@@ -522,9 +521,9 @@ function QuestionEditor({
         >
           <div style={{ fontWeight: 700, color: flagColor, marginBottom: 2 }}>
             {high ? (
-              <EditableText id="deckeditor.audit_flag_high" text="⚠ Possible answer-key issue" />
+              "⚠ Possible answer-key issue"
             ) : (
-              <EditableText id="deckeditor.audit_flag_low" text="⚠ Possible issue" />
+              "⚠ Possible issue"
             )}
           </div>
           <div>{issue.problem}</div>

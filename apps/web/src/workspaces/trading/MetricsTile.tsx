@@ -7,7 +7,6 @@ import { configFrom } from './outcome';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { BORDER, BORDER2, FAINT, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
-import { EditableText } from '../../copy/SiteCopy';
 import { Icon } from '../../components/Icon';
 
 const REFRESH_MS = 20_000;
@@ -98,7 +97,7 @@ export function MetricsTile({
         </div>
       </div>
       <div style={body}>
-        {!data && !error && <div style={hint}><EditableText id="metrics.loading">Loading metrics…</EditableText></div>}
+        {!data && !error && <div style={hint}>{"Loading metrics…"}</div>}
         {error && !data && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {data && s && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(112px,1fr))', gap: 1, background: BORDER }}>

@@ -2,7 +2,6 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
 import type {
   DayWindow,
@@ -107,7 +106,7 @@ export function StrategySessions() {
   }
 
   if (err && !sessions) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{err}</div>;
-  if (!sessions) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="sessions.loading">Loading sessions…</EditableText></div>;
+  if (!sessions) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading sessions…"}</div>;
 
   const groups: SessionStatus[] = ['active', 'opening', 'idle'];
 
@@ -115,10 +114,10 @@ export function StrategySessions() {
     <div style={{ maxWidth: 1180, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <ScreenTitle id="sessions.title">Strategy Sessions</ScreenTitle>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}><EditableText id="sessions.subtitle">Your trading windows (Eastern Time) per instrument — pick the days and hours, or fill them from the market's full open hours.</EditableText></div>
+          <ScreenTitle>Strategy Sessions</ScreenTitle>
+          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>{"Your trading windows (Eastern Time) per instrument — pick the days and hours, or fill them from the market's full open hours."}</div>
         </div>
-        {!readOnly && <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? <EditableText id="sessions.close">Close</EditableText> : <EditableText id="sessions.new">+ New session</EditableText>}</button>}
+        {!readOnly && <button onClick={() => setAdding((v) => !v)} style={goldBtn}>{adding ? "Close" : "+ New session"}</button>}
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
@@ -129,7 +128,7 @@ export function StrategySessions() {
 
       {sessions.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          <EditableText id="sessions.empty">No sessions yet. Add one (e.g. “London Open”) — choose the days and hours, or let VTS AI fill the instrument's full market hours.</EditableText>
+          {"No sessions yet. Add one (e.g. “London Open”) — choose the days and hours, or let VTS AI fill the instrument's full market hours."}
         </div>
       ) : (
         groups.map((g) => {
@@ -180,7 +179,7 @@ function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySessi
       {/* Schedule */}
       <div style={{ padding: '0 15px 10px', display: 'flex', flexDirection: 'column', gap: 5, fontSize: 11.5, color: MUTED }}>
         {sched == null ? (
-          <span style={{ color: FAINT }}><EditableText id="sessions.no_days">No days set</EditableText></span>
+          <span style={{ color: FAINT }}>{"No days set"}</span>
         ) : sched.uniform ? (
           <span style={{ fontFamily: "'IBM Plex Mono', monospace", color: TEXT }}>
             {sched.label} · {hoursWithEt(sched.hours)}
@@ -196,7 +195,7 @@ function SessionCard({ s, busy, readOnly, onSave, onRemove }: { s: StrategySessi
         )}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ ...metaChip, color: b.color, borderColor: b.color }}>{b.label}</span>
-          {s.marketHours && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}><EditableText id="sessions.mh_chip">Market hours</EditableText></span>}
+          {s.marketHours && <span style={{ ...metaChip, color: GOLD, borderColor: 'rgba(235,203,116,.4)' }}>{"Market hours"}</span>}
           {!s.active && <span style={{ ...metaChip, color: FAINT }}>paused</span>}
         </div>
       </div>
@@ -314,7 +313,7 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? <EditableText id="sessions.form_edit">Edit session</EditableText> : <EditableText id="sessions.form_new">New session</EditableText>}</div>
+      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? "Edit session" : "New session"}</div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. London Open)" style={{ ...input, flex: '1 1 180px' }} />
         <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument (e.g. EUR/USD)" style={{ ...input, flex: '1 1 150px' }} />
@@ -328,11 +327,11 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
       {/* Day selector + per-day time windows */}
       <div style={{ marginTop: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-          <span style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}><EditableText id="sessions.days_label">Trading days</EditableText></span>
+          <span style={{ fontSize: 10.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{"Trading days"}</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button type="button" onClick={setAll24_7} style={ghostBtn}><EditableText id="sessions.all_247">24/7</EditableText></button>
+            <button type="button" onClick={setAll24_7} style={ghostBtn}>{"24/7"}</button>
             <button type="button" onClick={() => void fillMarketHours()} disabled={mhBusy} style={{ ...ghostBtn, color: GOLD, borderColor: 'rgba(235,203,116,.5)', opacity: mhBusy ? 0.6 : 1 }}>
-              {mhBusy ? <EditableText id="sessions.mh_loading">Reading market hours…</EditableText> : <EditableText id="sessions.mh_btn">All open market hours</EditableText>}
+              {mhBusy ? "Reading market hours…" : "All open market hours"}
             </button>
           </div>
         </div>
@@ -351,7 +350,7 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
 
         {enabledDays.length === 0 ? (
           <div style={{ marginTop: 10, fontSize: 11.5, color: FAINT }}>
-            <EditableText id="sessions.pick_days">Pick one or more days to set their hours, or tap “All open market hours”.</EditableText>
+            {"Pick one or more days to set their hours, or tap “All open market hours”."}
           </div>
         ) : (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -360,12 +359,12 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
                 <span style={{ width: 36, fontSize: 12, color: TEXT, fontWeight: 600 }}>{DAY_LABEL[d]}</span>
                 <label style={{ ...timeLbl, color: days[d]!.allDay ? GOLD : MUTED }}>
                   <input type="checkbox" checked={!!days[d]!.allDay} onChange={(e) => setDayAllDay(d, e.target.checked)} style={{ accentColor: GOLD }} />
-                  <EditableText id="sessions.allday_24">24 hours</EditableText>
+                  {"24 hours"}
                 </label>
                 {!days[d]!.allDay && (
                   <>
-                    <label style={timeLbl}><EditableText id="sessions.open">Open</EditableText><input value={days[d]!.open} onChange={(e) => setDayTime(d, 'open', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
-                    <label style={timeLbl}><EditableText id="sessions.close_time">Close</EditableText><input value={days[d]!.close} onChange={(e) => setDayTime(d, 'close', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+                    <label style={timeLbl}>{"Open"}<input value={days[d]!.open} onChange={(e) => setDayTime(d, 'open', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
+                    <label style={timeLbl}>{"Close"}<input value={days[d]!.close} onChange={(e) => setDayTime(d, 'close', e.target.value)} type="time" style={{ ...input, width: 120 }} /></label>
                   </>
                 )}
               </div>
@@ -380,7 +379,7 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
 
       <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
         <button onClick={submit} disabled={busy || !canSubmit} style={{ ...goldBtn, opacity: busy || !canSubmit ? 0.6 : 1 }}>{submitLabel}</button>
-        <button onClick={onCancel} style={ghostBtn}><EditableText id="sessions.cancel">Cancel</EditableText></button>
+        <button onClick={onCancel} style={ghostBtn}>{"Cancel"}</button>
       </div>
     </div>
   );

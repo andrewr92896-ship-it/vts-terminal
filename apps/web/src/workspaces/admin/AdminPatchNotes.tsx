@@ -17,7 +17,6 @@ import {
   panelLabel,
   primaryBtn,
 } from './adminUi';
-import { EditableText } from '../../copy/SiteCopy';
 
 // One line per bullet; blank lines dropped.
 function linesToNotes(text: string): string[] {
@@ -127,7 +126,7 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}><EditableText id="admin.notes.loading">Loading patch notes...</EditableText></div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>{"Loading patch notes..."}</div>;
 
   // The member-facing Site Help ▸ Patch notes merges these DB entries with the
   // compiled-in PATCH_NOTES history. Show that same bundled archive here (read
@@ -140,7 +139,6 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
-        titleId="admin.notes.title" subtitleId="admin.notes.subtitle"
         title="Patch Notes"
         subtitle="Write release notes, review them as a draft, then release. Only released notes show up in Site Help ▸ Patch notes for members."
       />
@@ -153,18 +151,18 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
 
       {/* New note */}
       <div style={{ ...panel(theme), marginBottom: 18 }}>
-        <div style={panelLabel}><EditableText id="admin.notes.new_heading">New release note</EditableText></div>
+        <div style={panelLabel}>{"New release note"}</div>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
           <div style={{ flex: '1 1 160px' }}>
-            <label style={fieldLabel}><EditableText id="admin.notes.f_version">Version</EditableText></label>
+            <label style={fieldLabel}>{"Version"}</label>
             <input value={version} onChange={(e) => setVersion(e.target.value)} placeholder="e.g. Beta V 3.2" maxLength={60} style={inputStyle} />
           </div>
           <div style={{ flex: '1 1 160px' }}>
-            <label style={fieldLabel}><EditableText id="admin.notes.f_date">Date (optional)</EditableText></label>
+            <label style={fieldLabel}>{"Date (optional)"}</label>
             <input value={dateLabel} onChange={(e) => setDateLabel(e.target.value)} placeholder="Defaults to today" maxLength={60} style={inputStyle} />
           </div>
         </div>
-        <label style={fieldLabel}><EditableText id="admin.notes.f_notes">Notes — one bullet per line</EditableText></label>
+        <label style={fieldLabel}>{"Notes — one bullet per line"}</label>
         <textarea
           value={body}
           onChange={(e) => setBody(e.target.value)}
@@ -177,14 +175,14 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
           disabled={creating || !version.trim() || linesToNotes(body).length === 0}
           style={{ ...primaryBtn(theme, accentGrad), marginTop: 10, opacity: creating || !version.trim() || linesToNotes(body).length === 0 ? 0.55 : 1 }}
         >
-          {creating ? 'Saving…' : <EditableText id="admin.notes.save_draft">Save as draft</EditableText>}
+          {creating ? 'Saving…' : "Save as draft"}
         </button>
       </div>
 
       {/* Existing notes */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {notes.length === 0 && archive.length === 0 && (
-          <div style={{ fontSize: 12.5, color: '#8ea3cc' }}><EditableText id="admin.notes.empty">No patch notes yet.</EditableText></div>
+          <div style={{ fontSize: 12.5, color: '#8ea3cc' }}>{"No patch notes yet."}</div>
         )}
         {notes.map((n) =>
           editId === n.id ? (
@@ -246,9 +244,9 @@ export function AdminPatchNotes({ theme }: { theme: Theme }) {
             predate the database store, so they are read only here. */}
         {archive.length > 0 && (
           <div style={{ marginTop: notes.length > 0 ? 10 : 0, marginBottom: 2 }}>
-            <div style={panelLabel}><EditableText id="admin.notes.archive_heading">Archive — live for members</EditableText></div>
+            <div style={panelLabel}>{"Archive — live for members"}</div>
             <div style={{ fontSize: 11.5, color: '#7488b5', lineHeight: 1.5 }}>
-              <EditableText id="admin.notes.archive_blurb">These releases ship with the app and already appear in Site Help ▸ Patch notes. They are read only; to change history, re-create a release above.</EditableText>
+              {"These releases ship with the app and already appear in Site Help ▸ Patch notes. They are read only; to change history, re-create a release above."}
             </div>
           </div>
         )}

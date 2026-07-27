@@ -6,7 +6,6 @@ import { decodeEntities, fmtRelative } from './newsFormat';
 import { NEWS_FEEDS, newsFeeds } from './newsRelevance';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
-import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 120_000;
 const AMBER = '#e0a23a';
@@ -115,7 +114,7 @@ export function NewsTile({
       </div>
 
       <div style={body}>
-        {!headlines && !error && <div style={hint}><EditableText id="newstile.loading">Loading news…</EditableText></div>}
+        {!headlines && !error && <div style={hint}>{"Loading news…"}</div>}
         {error && !headlines && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {headlines && shown.length === 0 && (
           <div style={hint}>No {feed === 'all' ? '' : `${feedLabel} `}headlines yet. New stories appear here automatically.</div>

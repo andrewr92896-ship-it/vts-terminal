@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { accentGradient, type Theme } from '../theme/themes';
 import { api, ApiError } from '../api/client';
 import type { SupportKind } from '../api/types';
-import { EditableText } from '../copy/SiteCopy';
 import {
   loadThreads,
   saveThreads,
@@ -166,13 +165,11 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
           <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
             <Icon name="life-buoy" size={18} color={theme.accent} />
             <div style={{ fontSize: 14, fontWeight: 700, color: '#eef3ff' }}>
-              <EditableText id="support.demo.title">Support</EditableText>
+              {"Support"}
             </div>
           </div>
           <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: '#aebcd8' }}>
-            <EditableText id="support.demo.body">
-              Read-only demo. Sign in to the live portal to report a bug, send a suggestion, or ask for help.
-            </EditableText>
+            {"Read-only demo. Sign in to the live portal to report a bug, send a suggestion, or ask for help."}
           </p>
         </div>
       </div>
@@ -186,7 +183,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         {threads.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.4px', textTransform: 'uppercase', color: '#7e92c0', margin: '0 2px' }}>
-              <EditableText id="support.history.title">Previous requests</EditableText>
+              {"Previous requests"}
             </div>
             {threads.map((t) => {
               const cat = categoryFor(t.kind);
@@ -255,7 +252,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, fontSize: 10.5, color: '#8ea3cc' }}>
                         <span style={{ color: status.color, fontWeight: 600 }}>
-                          <EditableText id={status.id}>{status.label}</EditableText>
+                          {status.label}
                         </span>
                         <span>·</span>
                         <span>{whenLabel(t.updatedAt)}</span>
@@ -277,10 +274,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         )}
 
         <p style={{ margin: '2px 2px 4px', fontSize: 12.5, color: '#aebcd8', lineHeight: 1.55 }}>
-          <EditableText id="support.picker.intro">
-            What can we help with? Pick one and the assistant will ask a couple of quick questions, then send it to the
-            admins.
-          </EditableText>
+          {"What can we help with? Pick one and the assistant will ask a couple of quick questions, then send it to the admins."}
         </p>
         {CATEGORIES.map((c) => (
           <button
@@ -317,10 +311,10 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
             </span>
             <span style={{ minWidth: 0 }}>
               <span style={{ display: 'block', fontSize: 13.5, fontWeight: 600 }}>
-                <EditableText id={`support.cat.${c.kind}.label`}>{c.label}</EditableText>
+                {c.label}
               </span>
               <span style={{ display: 'block', fontSize: 11.5, color: '#8ea3cc', marginTop: 1 }}>
-                <EditableText id={`support.cat.${c.kind}.blurb`}>{c.blurb}</EditableText>
+                {c.blurb}
               </span>
             </span>
           </button>
@@ -346,7 +340,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         </button>
         <Icon name={cat.icon} size={15} color={theme.accent} />
         <span style={{ fontSize: 12.5, fontWeight: 600, color: '#eef3ff' }}>
-          <EditableText id={`support.cat.${active.kind}.label`}>{cat.label}</EditableText>
+          {cat.label}
         </span>
       </div>
 
@@ -355,7 +349,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
           <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
             {m.role === 'ai' && (
               <div style={{ fontSize: 10, color: '#7e92c0', margin: '0 2px 3px' }}>
-                <EditableText id="support.assistant.name">VTS AI</EditableText>
+                {"VTS AI"}
               </div>
             )}
             <div
@@ -378,7 +372,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         ))}
         {busy && (
           <div style={{ fontSize: 11.5, color: '#7e92c0', margin: '0 2px' }}>
-            <EditableText id="support.typing">Assistant is typing…</EditableText>
+            {"Assistant is typing…"}
           </div>
         )}
       </div>
@@ -393,14 +387,14 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         <div style={{ padding: '10px 12px', borderTop: '1px solid #16294f', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 12, color: '#7fd6a3', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icon name="check-check" size={14} />
-            <EditableText id="support.sent">Sent to the admins.</EditableText>
+            {"Sent to the admins."}
           </span>
           {!followUp && (
             <button
               onClick={() => setFollowUp(true)}
               style={{ border: `1px solid ${theme.accent}`, background: 'transparent', color: '#dfe7fa', fontWeight: 600, fontSize: 12, padding: '7px 12px', borderRadius: 8, cursor: 'pointer' }}
             >
-              <EditableText id="support.followup">Add a follow-up</EditableText>
+              {"Add a follow-up"}
             </button>
           )}
         </div>

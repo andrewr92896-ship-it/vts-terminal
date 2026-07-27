@@ -1,7 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { Theme } from '../../theme/themes';
 import { C } from '../../theme/tokens';
-import { EditableText } from '../../copy/SiteCopy';
 import { SectionHeader, panel, panelLabel } from '../admin/adminUi';
 import { getTradeLayout, setTradeLayout, type Layout } from '../trading/preferences';
 
@@ -26,19 +25,14 @@ export function Preferences({ theme }: { theme: Theme }) {
       <SectionHeader
         title="Preferences"
         subtitle="Your personal view choices. Saved for you on this device."
-        titleId="prefs.title"
-        subtitleId="prefs.subtitle"
       />
 
       <section style={panel(theme)}>
         <div style={panelLabel}>
-          <EditableText id="prefs.tradelog_layout">Trade Log layout</EditableText>
+          {"Trade Log layout"}
         </div>
         <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-          <EditableText id="prefs.tradelog_layout_help">
-            How the Trade Log lays out your trades. This replaces the Deck / Tape switch that used to
-            sit in the Trade Log header.
-          </EditableText>
+          {"How the Trade Log lays out your trades. This replaces the Deck / Tape switch that used to sit in the Trade Log header."}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
           {opts.map((o) => {

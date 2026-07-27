@@ -3,7 +3,6 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import type { BreakEvenMode, BrokerConnection, DeskMember, DeskSettings } from '../../api/types';
-import { EditableText } from '../../copy/SiteCopy';
 
 // The "count trades since" cutoff maps to UTC midnight of the chosen day, so it
 // means the same instant regardless of timezone. Blank clears it.
@@ -309,7 +308,7 @@ export function DeskSettingsModal({
           {members.length > 1 && (
             <div style={{ marginBottom: 16 }}>
               <label htmlFor="desk-whose" style={{ ...sectionLabel, marginTop: 0, display: 'block', marginBottom: 6 }}>
-                <EditableText id="desksettings.whose">Whose settings</EditableText>
+                {"Whose settings"}
               </label>
               <select
                 id="desk-whose"
@@ -332,7 +331,7 @@ export function DeskSettingsModal({
             </div>
           )}
           {!loaded && !error ? (
-            <div style={{ color: MUTED, fontSize: 13 }}><EditableText id="desksettings.loading">Loading settings…</EditableText></div>
+            <div style={{ color: MUTED, fontSize: 13 }}>{"Loading settings…"}</div>
           ) : (
             <div style={panel}>
               <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Break-even buffer</div>
@@ -510,7 +509,7 @@ export function DeskSettingsModal({
               {/* Test-trade floor: broker fills under N units drop out of the
                   Trade Log / History entirely (stats and list). */}
               <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
-                <div style={sectionLabel}><EditableText id="desksettings.mintrade_label">Ignore test trades</EditableText></div>
+                <div style={sectionLabel}>{"Ignore test trades"}</div>
                 <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
                   Broker fills smaller than this many <b>units</b> are treated as test trades and left out of the
                   Trade Log and History — stats <i>and</i> the list. Handy for the 1-unit orders you place to check a
@@ -543,7 +542,7 @@ export function DeskSettingsModal({
                   for it, right where a trader looks for metric settings. */}
               {!readOnly && editingSelf && conns.filter((c) => c.broker !== 'manual').length > 0 && (
                 <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
-                  <div style={sectionLabel}><EditableText id="desksettings.cutoff_label">Count trades since (per account)</EditableText></div>
+                  <div style={sectionLabel}>{"Count trades since (per account)"}</div>
                   <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
                     Pick the date your real trading on each broker account began. Trades opened before it are left
                     out of your Trade Log and History — and never re-imported. Blank counts everything.

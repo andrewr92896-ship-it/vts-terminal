@@ -1,7 +1,6 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { EmployeeApiError, employeeApi, setCsrfToken, type EmployeeMe } from './api';
 import { EMP, RADIUS, SHADOW } from './theme';
-import { T } from './copy';
 import { Button, ErrorNote, Field, Input } from './ui';
 import { Icon } from '../components/Icon';
 
@@ -61,7 +60,7 @@ export function EmployeeLogin({
   return (
     <Shell>
       <form onSubmit={submit} style={{ display: 'grid', gap: 14 }}>
-        <Field label={<T id="emp.login.email">Work email</T>}>
+        <Field label={"Work email"}>
           <Input
             value={email}
             onChange={setEmail}
@@ -72,7 +71,7 @@ export function EmployeeLogin({
             disabled={needCode}
           />
         </Field>
-        <Field label={<T id="emp.login.password">Password</T>}>
+        <Field label={"Password"}>
           <Input
             value={password}
             onChange={setPassword}
@@ -84,11 +83,9 @@ export function EmployeeLogin({
 
         {needCode && (
           <Field
-            label={<T id="emp.login.code">Authenticator code</T>}
+            label={"Authenticator code"}
             hint={
-              <T id="emp.login.code_hint">
-                Six digits from your authenticator app. A single-use recovery code works here too.
-              </T>
+              "Six digits from your authenticator app. A single-use recovery code works here too."
             }
           >
             <Input
@@ -108,11 +105,11 @@ export function EmployeeLogin({
 
         <Button type="submit" variant="primary" disabled={busy} style={{ padding: '11px 15px' }}>
           {busy ? (
-            <T id="emp.login.busy">Checking…</T>
+            "Checking…"
           ) : needCode ? (
-            <T id="emp.login.verify">Verify and enter</T>
+            "Verify and enter"
           ) : (
-            <T id="emp.login.submit">Sign in</T>
+            "Sign in"
           )}
         </Button>
 
@@ -133,7 +130,7 @@ export function EmployeeLogin({
               fontFamily: EMP.sans,
             }}
           >
-            <T id="emp.login.back">Start over</T>
+            {"Start over"}
           </button>
         )}
       </form>
@@ -191,10 +188,7 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
     return (
       <Shell title="Save your recovery codes">
         <p style={{ margin: '0 0 14px', fontSize: 12.5, color: EMP.muted, lineHeight: 1.65 }}>
-          <T id="emp.enroll.recovery_blurb">
-            These are shown once and never again. Each one signs you in a single time if you lose your
-            phone. Keep them somewhere only you can reach.
-          </T>
+          {"These are shown once and never again. Each one signs you in a single time if you lose your phone. Keep them somewhere only you can reach."}
         </p>
         <div
           style={{
@@ -222,10 +216,10 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
             }}
           >
             <Icon name="copy" size={14} />
-            <T id="emp.enroll.copy_codes">Copy codes</T>
+            {"Copy codes"}
           </Button>
           <Button variant="primary" onClick={() => onEnrolled(me)}>
-            <T id="emp.enroll.done">I have saved them — continue</T>
+            {"I have saved them — continue"}
           </Button>
         </div>
       </Shell>
@@ -237,13 +231,10 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
     return (
       <Shell title="Set up your authenticator">
         <p style={{ margin: '0 0 14px', fontSize: 12.5, color: EMP.muted, lineHeight: 1.65 }}>
-          <T id="emp.enroll.blurb">
-            Add this key to an authenticator app (1Password, Authy, Google Authenticator), then type the
-            six digits it shows to confirm the pairing.
-          </T>
+          {"Add this key to an authenticator app (1Password, Authy, Google Authenticator), then type the six digits it shows to confirm the pairing."}
         </p>
         <div style={{ marginBottom: 14 }}>
-          <Field label={<T id="emp.enroll.key">Setup key</T>}>
+          <Field label={"Setup key"}>
             <div
               style={{
                 fontFamily: EMP.mono,
@@ -267,7 +258,7 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
               }}
             >
               <Icon name="copy" size={14} />
-              <T id="emp.enroll.copy_key">Copy key</T>
+              {"Copy key"}
             </Button>
             <Button
               onClick={() => {
@@ -276,13 +267,13 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
               title="The otpauth:// URI, for apps that accept a pasted link"
             >
               <Icon name="external-link" size={14} />
-              <T id="emp.enroll.copy_link">Copy setup link</T>
+              {"Copy setup link"}
             </Button>
           </div>
         </div>
 
         <form onSubmit={complete} style={{ display: 'grid', gap: 12 }}>
-          <Field label={<T id="emp.enroll.confirm">Confirmation code</T>}>
+          <Field label={"Confirmation code"}>
             <Input
               value={code}
               onChange={setCode}
@@ -296,7 +287,7 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
           </Field>
           <ErrorNote>{error}</ErrorNote>
           <Button type="submit" variant="primary" disabled={busy}>
-            {busy ? <T id="emp.enroll.busy">Confirming…</T> : <T id="emp.enroll.submit">Confirm</T>}
+            {busy ? "Confirming…" : "Confirm"}
           </Button>
         </form>
       </Shell>
@@ -307,14 +298,11 @@ export function EmployeeEnroll({ onEnrolled }: { onEnrolled: (me: EmployeeMe) =>
   return (
     <Shell title="Two-factor setup required">
       <p style={{ margin: '0 0 16px', fontSize: 12.5, color: EMP.muted, lineHeight: 1.65 }}>
-        <T id="emp.enroll.intro">
-          The employee portal requires a second factor. Set one up now — it takes about a minute, and
-          you will need it every time you sign in here.
-        </T>
+        {"The employee portal requires a second factor. Set one up now — it takes about a minute, and you will need it every time you sign in here."}
       </p>
       <ErrorNote>{error}</ErrorNote>
       <Button variant="primary" onClick={begin} disabled={busy} style={{ marginTop: error ? 12 : 0 }}>
-        {busy ? <T id="emp.enroll.starting">Starting…</T> : <T id="emp.enroll.start">Begin setup</T>}
+        {busy ? "Starting…" : "Begin setup"}
       </Button>
     </Shell>
   );
@@ -365,7 +353,7 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
               marginBottom: 8,
             }}
           >
-            <T id="emp.login.eyebrow">Vitalis Trading Systems</T>
+            {"Vitalis Trading Systems"}
           </div>
           <h1
             style={{
@@ -376,7 +364,7 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
               color: EMP.text,
             }}
           >
-            {title ? title : <T id="emp.login.title">Employee Portal</T>}
+            {title ? title : "Employee Portal"}
           </h1>
         </div>
 
@@ -402,7 +390,7 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
               fontFamily: EMP.sans,
             }}
           >
-            <T id="emp.login.back_to_portal">← Back to the main portal</T>
+            {"← Back to the main portal"}
           </a>
         </div>
       </div>

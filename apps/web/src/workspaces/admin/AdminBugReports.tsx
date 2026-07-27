@@ -4,7 +4,6 @@ import type { BugReport } from '../../api/types';
 import { api, ApiError } from '../../api/client';
 import { panel, SectionHeader, ghostBtn, dangerBtn, msgStyle } from './adminUi';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 
 function dayTime(ms: number): string {
   return new Date(ms).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -72,16 +71,15 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 780, margin: '0 auto' }}>
       <SectionHeader
-        titleId="admin.bugs.title"
         title="Bug Reports"
         subtitle={`Reports filed from Site Help, with the assistant’s intake chat.${openCount ? ` ${openCount} open.` : ''}`}
       />
       {error && <div style={msgStyle(false)}>{error}</div>}
       {!loaded ? (
-        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}><EditableText id="admin.bugs.loading">Loading...</EditableText></div>
+        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}>{"Loading..."}</div>
       ) : items.length === 0 ? (
         <div style={panel(theme)}>
-          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}><EditableText id="admin.bugs.empty">No bug reports yet.</EditableText></p>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>{"No bug reports yet."}</p>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -114,9 +112,9 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
                         <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'admin' ? 'flex-end' : 'flex-start' }}>
                           <div style={{ fontSize: 10, color: m.role === 'ai' ? theme.accent : m.role === 'admin' ? '#2FC77E' : '#7e92c0', margin: '0 0 3px', fontWeight: 600 }}>
                             {m.role === 'ai' ? (
-                              <EditableText id="feedback.assistant.name">VTS AI</EditableText>
+                              "VTS AI"
                             ) : m.role === 'admin' ? (
-                              <EditableText id="feedback.admin.name">Admin</EditableText>
+                              "Admin"
                             ) : (
                               r.author
                             )}
@@ -175,7 +173,7 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
                         disabled={replying || !reply.trim()}
                         style={{ ...ghostBtn, opacity: replying || !reply.trim() ? 0.55 : 1, whiteSpace: 'nowrap' }}
                       >
-                        <EditableText id="admin.bugs.send_reply">Send reply</EditableText>
+                        {"Send reply"}
                       </button>
                     </div>
 

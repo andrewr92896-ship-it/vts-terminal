@@ -9,7 +9,6 @@ import {
   type ProfilePatch,
 } from '../api';
 import { EMP, EMPLOYMENT_LABELS, STATUS_LABELS, fmtDate, fmtDateTime } from '../theme';
-import { T } from '../copy';
 import {
   Banner,
   Button,
@@ -58,7 +57,7 @@ export function People({ myUserId }: { myUserId: string }) {
   if (!data) {
     return (
       <Empty icon="refresh-cw">
-        <T id="emp.people.loading">Loading…</T>
+        {"Loading…"}
       </Empty>
     );
   }
@@ -67,17 +66,14 @@ export function People({ myUserId }: { myUserId: string }) {
     <div>
       <ScreenHeader
         icon="user-plus"
-        title={<T id="emp.people.title">People</T>}
+        title={"People"}
         subtitle={
-          <T id="emp.people.subtitle">
-            Who has employee-portal access, and their record. Granting access adds the Employee role to
-            their portal account; revoking it ends every session they have open.
-          </T>
+          "Who has employee-portal access, and their record. Granting access adds the Employee role to their portal account; revoking it ends every session they have open."
         }
         actions={
           <Button variant="primary" onClick={() => setGranting((v) => !v)}>
             <Icon name="user-plus" size={14} />
-            {granting ? <T id="emp.people.cancel">Cancel</T> : <T id="emp.people.grant">Grant access</T>}
+            {granting ? "Cancel" : "Grant access"}
           </Button>
         }
       />
@@ -94,7 +90,7 @@ export function People({ myUserId }: { myUserId: string }) {
 
       {data.people.length === 0 ? (
         <Empty icon="users">
-          <T id="emp.people.empty">No employee records yet. Grant access to get started.</T>
+          {"No employee records yet. Grant access to get started."}
         </Empty>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
@@ -161,10 +157,7 @@ function GrantForm({
     return (
       <Card style={{ marginBottom: 18 }}>
         <Banner tone="warn">
-          <T id="emp.people.no_candidates">
-            Every active portal account already has employee access. Create the account in the main
-            portal's Admin ▸ Users first.
-          </T>
+          {"Every active portal account already has employee access. Create the account in the main portal's Admin ▸ Users first."}
         </Banner>
       </Card>
     );
@@ -174,8 +167,8 @@ function GrantForm({
     <Card style={{ marginBottom: 18 }}>
       <div style={{ display: 'grid', gap: 13 }}>
         <Field
-          label={<T id="emp.people.account">Portal account</T>}
-          hint={<T id="emp.people.account_hint">Only active accounts without employee access are listed.</T>}
+          label={"Portal account"}
+          hint={"Only active accounts without employee access are listed."}
         >
           <Select
             value={userId}
@@ -187,19 +180,19 @@ function GrantForm({
           />
         </Field>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 13 }}>
-          <Field label={<T id="emp.people.job_title">Title</T>}>
+          <Field label={"Title"}>
             <Input value={title} onChange={setTitle} maxLength={120} />
           </Field>
-          <Field label={<T id="emp.people.department">Department</T>}>
+          <Field label={"Department"}>
             <Input value={department} onChange={setDepartment} maxLength={120} />
           </Field>
-          <Field label={<T id="emp.people.work_email">Work email</T>}>
+          <Field label={"Work email"}>
             <Input value={workEmail} onChange={setWorkEmail} maxLength={255} />
           </Field>
-          <Field label={<T id="emp.people.employment">Employment</T>}>
+          <Field label={"Employment"}>
             <Select value={employmentType} onChange={setEmploymentType} options={TYPE_OPTIONS} />
           </Field>
-          <Field label={<T id="emp.people.start">Start date</T>} hint="YYYY-MM-DD">
+          <Field label={"Start date"} hint="YYYY-MM-DD">
             <Input value={startedOn} onChange={setStartedOn} placeholder="2026-01-15" maxLength={10} />
           </Field>
         </div>
@@ -207,12 +200,12 @@ function GrantForm({
           style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: EMP.muted, cursor: 'pointer' }}
         >
           <input type="checkbox" checked={isAdmin} onChange={(e) => setIsAdmin(e.target.checked)} />
-          <T id="emp.people.make_admin">Portal administrator (can manage people, announcements and documents)</T>
+          {"Portal administrator (can manage people, announcements and documents)"}
         </label>
         <ErrorNote>{error}</ErrorNote>
         <div>
           <Button variant="primary" onClick={grant} disabled={busy}>
-            {busy ? <T id="emp.people.granting">Granting…</T> : <T id="emp.people.grant_confirm">Grant access</T>}
+            {busy ? "Granting…" : "Grant access"}
           </Button>
         </div>
       </div>
@@ -290,22 +283,22 @@ function PersonRow({
             <Pill tone={statusTone}>{STATUS_LABELS[person.status] ?? person.status}</Pill>
             {person.isPortalAdmin && (
               <Pill tone="accent">
-                <T id="emp.people.admin_pill">Admin</T>
+                {"Admin"}
               </Pill>
             )}
             {!person.hasRole && (
               <Pill tone="bad">
-                <T id="emp.people.no_role">No access</T>
+                {"No access"}
               </Pill>
             )}
             {!person.twoFactorEnrolled && (
               <Pill tone="warn">
-                <T id="emp.people.no_2fa">No 2FA</T>
+                {"No 2FA"}
               </Pill>
             )}
             {!person.accountActive && (
               <Pill tone="bad">
-                <T id="emp.people.deactivated">Account off</T>
+                {"Account off"}
               </Pill>
             )}
           </div>
@@ -318,63 +311,63 @@ function PersonRow({
         </div>
         <Button onClick={onToggle}>
           <Icon name={expanded ? 'chevron-up' : 'chevron-down'} size={13} />
-          {expanded ? <T id="emp.people.close">Close</T> : <T id="emp.people.edit">Edit</T>}
+          {expanded ? "Close" : "Edit"}
         </Button>
       </div>
 
       {expanded && (
         <div style={{ marginTop: 15, paddingTop: 15, borderTop: `1px solid ${EMP.line}`, display: 'grid', gap: 13 }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 13 }}>
-            <Field label={<T id="emp.people.f_no">Employee no.</T>}>
+            <Field label={"Employee no."}>
               <Input
                 value={field('employeeNo', person.employeeNo) ?? ''}
                 onChange={(v) => setPatch((p) => ({ ...p, employeeNo: v }))}
                 maxLength={40}
               />
             </Field>
-            <Field label={<T id="emp.people.f_title">Title</T>}>
+            <Field label={"Title"}>
               <Input
                 value={field('title', person.title) ?? ''}
                 onChange={(v) => setPatch((p) => ({ ...p, title: v }))}
                 maxLength={120}
               />
             </Field>
-            <Field label={<T id="emp.people.f_dept">Department</T>}>
+            <Field label={"Department"}>
               <Input
                 value={field('department', person.department) ?? ''}
                 onChange={(v) => setPatch((p) => ({ ...p, department: v }))}
                 maxLength={120}
               />
             </Field>
-            <Field label={<T id="emp.people.f_email">Work email</T>}>
+            <Field label={"Work email"}>
               <Input
                 value={field('workEmail', person.workEmail) ?? ''}
                 onChange={(v) => setPatch((p) => ({ ...p, workEmail: v }))}
                 maxLength={255}
               />
             </Field>
-            <Field label={<T id="emp.people.f_phone">Work phone</T>}>
+            <Field label={"Work phone"}>
               <Input
                 value={field('workPhone', person.workPhone) ?? ''}
                 onChange={(v) => setPatch((p) => ({ ...p, workPhone: v }))}
                 maxLength={40}
               />
             </Field>
-            <Field label={<T id="emp.people.f_location">Location</T>}>
+            <Field label={"Location"}>
               <Input
                 value={field('location', person.location) ?? ''}
                 onChange={(v) => setPatch((p) => ({ ...p, location: v }))}
                 maxLength={120}
               />
             </Field>
-            <Field label={<T id="emp.people.f_type">Employment</T>}>
+            <Field label={"Employment"}>
               <Select
                 value={(field('employmentType', person.employmentType) ?? 'full_time') as EmploymentType}
                 onChange={(v) => setPatch((p) => ({ ...p, employmentType: v }))}
                 options={TYPE_OPTIONS}
               />
             </Field>
-            <Field label={<T id="emp.people.f_start">Start date</T>} hint="YYYY-MM-DD">
+            <Field label={"Start date"} hint="YYYY-MM-DD">
               <Input
                 value={field('startedOn', person.startedOn) ?? ''}
                 onChange={(v) => setPatch((p) => ({ ...p, startedOn: v }))}
@@ -382,7 +375,7 @@ function PersonRow({
                 placeholder="2026-01-15"
               />
             </Field>
-            <Field label={<T id="emp.people.f_status">Status</T>}>
+            <Field label={"Status"}>
               <Select
                 value={(field('status', person.status) ?? 'active') as EmployeeStatus}
                 onChange={(v) => setPatch((p) => ({ ...p, status: v }))}
@@ -400,10 +393,10 @@ function PersonRow({
               disabled={isMe}
               onChange={(e) => setPatch((p) => ({ ...p, isAdmin: e.target.checked }))}
             />
-            <T id="emp.people.f_admin">Portal administrator</T>
+            {"Portal administrator"}
             {isMe && (
               <span style={{ ...label, color: EMP.faint }}>
-                <T id="emp.people.self_lock">— you cannot remove your own</T>
+                {"— you cannot remove your own"}
               </span>
             )}
           </label>
@@ -412,16 +405,16 @@ function PersonRow({
 
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <Button variant="primary" onClick={save} disabled={busy || Object.keys(patch).length === 0}>
-              {busy ? <T id="emp.people.saving">Saving…</T> : <T id="emp.people.save">Save changes</T>}
+              {busy ? "Saving…" : "Save changes"}
             </Button>
             <Button onClick={reset2fa} disabled={!person.twoFactorEnrolled}>
               <Icon name="refresh-cw" size={13} />
-              <T id="emp.people.reset_2fa">Reset 2FA</T>
+              {"Reset 2FA"}
             </Button>
             {!isMe && (
               <Button variant="danger" onClick={revoke}>
                 <Icon name="x-circle" size={13} />
-                <T id="emp.people.revoke">Revoke access</T>
+                {"Revoke access"}
               </Button>
             )}
           </div>

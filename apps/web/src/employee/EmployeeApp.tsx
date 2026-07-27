@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { employeeApi, setCsrfToken, type EmployeeMe } from './api';
 import { EMP, RADIUS, tint } from './theme';
-import { EmployeeCopyProvider, T } from './copy';
 import { EmployeeEnroll, EmployeeLogin } from './Login';
 import { Overview } from './screens/Overview';
 import { Directory } from './screens/Directory';
@@ -130,28 +129,24 @@ export function EmployeeApp() {
 
   if (phase === 'signed_out') {
     return (
-      <EmployeeCopyProvider>
-        <EmployeeLogin
-          onSignedIn={(user) => {
-            setMe(user);
-            setPhase('ready');
-          }}
-          onEnrollNeeded={() => setPhase('enrolling')}
-        />
-      </EmployeeCopyProvider>
+      <EmployeeLogin
+        onSignedIn={(user) => {
+          setMe(user);
+          setPhase('ready');
+        }}
+        onEnrollNeeded={() => setPhase('enrolling')}
+      />
     );
   }
 
   if (phase === 'enrolling') {
     return (
-      <EmployeeCopyProvider>
-        <EmployeeEnroll
-          onEnrolled={(user) => {
-            setMe(user);
-            setPhase('ready');
-          }}
-        />
-      </EmployeeCopyProvider>
+      <EmployeeEnroll
+        onEnrolled={(user) => {
+          setMe(user);
+          setPhase('ready');
+        }}
+      />
     );
   }
 
@@ -160,37 +155,85 @@ export function EmployeeApp() {
   const items = NAV.filter((n) => !n.adminOnly || me.isPortalAdmin);
 
   return (
-    // Only a developer sees the wording editor. The sign-in and enrollment
-    // screens above mount the provider without it — there is no `me` yet, and
-    // nobody should be editing copy from outside the door.
-    <EmployeeCopyProvider canEdit={me.isDeveloper}>
-      <div
+    <div
+      style={{
+        minHeight: '100vh',
+        background: EMP.bg,
+        color: EMP.text,
+        fontFamily: EMP.sans,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      {/* Top bar */}
+      <header
         style={{
-          minHeight: '100vh',
-          background: EMP.bg,
-          color: EMP.text,
-          fontFamily: EMP.sans,
           display: 'flex',
-          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 12,
+          padding: '14px 22px',
+          background: EMP.forest,
+          color: EMP.onDark,
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
         }}
       >
-        {/* Top bar */}
-        <header
+        <button
+          onClick={() => setNavOpen((v) => !v)}
+          aria-label="Toggle navigation"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 12,
-            padding: '14px 22px',
-            background: EMP.forest,
+            justifyContent: 'center',
+            width: 32,
+            height: 32,
+            borderRadius: RADIUS.control,
+            border: '1px solid rgba(255,255,255,.22)',
+            background: 'rgba(255,255,255,.1)',
             color: EMP.onDark,
-            position: 'sticky',
-            top: 0,
-            zIndex: 20,
+            cursor: 'pointer',
           }}
         >
-          <button
-            onClick={() => setNavOpen((v) => !v)}
-            aria-label="Toggle navigation"
+          <Icon name={navOpen ? 'panel-left-close' : 'panel-left-open'} size={15} />
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+          <span style={{ color: EMP.apricot, display: 'flex' }}>
+            <Icon name="shield-check" size={17} />
+          </span>
+          <span
+            style={{
+              fontFamily: EMP.serif,
+              fontSize: 17,
+              fontWeight: 600,
+              letterSpacing: '0.2px',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {"Employee Portal"}
+          </span>
+        </div>
+
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span
+            style={{
+              fontSize: 13.5,
+              fontWeight: 700,
+              color: '#ffffff',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: 180,
+            }}
+          >
+            {me.name}
+          </span>
+          <a
+            href="/"
+            title="Main portal"
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -199,165 +242,112 @@ export function EmployeeApp() {
               height: 32,
               borderRadius: RADIUS.control,
               border: '1px solid rgba(255,255,255,.22)',
+              color: EMP.onDark,
+              textDecoration: 'none',
+            }}
+          >
+            <Icon name="external-link" size={15} />
+          </a>
+          <button
+            onClick={signOut}
+            title="Sign out of the employee portal"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 12px',
+              borderRadius: RADIUS.control,
+              border: '1px solid rgba(255,255,255,.22)',
               background: 'rgba(255,255,255,.1)',
               color: EMP.onDark,
               cursor: 'pointer',
+              fontSize: 12.5,
+              fontWeight: 600,
+              fontFamily: EMP.sans,
             }}
           >
-            <Icon name={navOpen ? 'panel-left-close' : 'panel-left-open'} size={15} />
+            <Icon name="log-out" size={14} />
+            {"Sign out"}
           </button>
+        </div>
+      </header>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-            <span style={{ color: EMP.apricot, display: 'flex' }}>
-              <Icon name="shield-check" size={17} />
-            </span>
-            <span
-              style={{
-                fontFamily: EMP.serif,
-                fontSize: 17,
-                fontWeight: 600,
-                letterSpacing: '0.2px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}
-            >
-              <T id="emp.shell.title">Employee Portal</T>
-            </span>
-          </div>
+      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+        {/* Sidebar — collapses to a top strip on narrow screens */}
+        <nav
+          style={{
+            width: navOpen ? 216 : 60,
+            flex: 'none',
+            borderRight: `1px solid ${EMP.line}`,
+            background: EMP.panel,
+            padding: navOpen ? '16px 12px' : '16px 8px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 4,
+            transition: 'width .18s ease',
+          }}
+        >
+          {items.map((item) => {
+            const active = item.key === screen;
+            return (
+              <button
+                key={item.key}
+                onClick={() => setScreen(item.key)}
+                title={item.label}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: navOpen ? '9px 11px' : '9px 0',
+                  justifyContent: navOpen ? 'flex-start' : 'center',
+                  borderRadius: RADIUS.control,
+                  border: '1px solid transparent',
+                  borderColor: active ? tint(EMP.accent, 0.28) : 'transparent',
+                  background: active ? tint(EMP.accent, 0.09) : 'transparent',
+                  color: active ? EMP.accent : EMP.muted,
+                  cursor: 'pointer',
+                  fontSize: 12.5,
+                  fontFamily: EMP.sans,
+                  fontWeight: active ? 600 : 500,
+                  textAlign: 'left',
+                  width: '100%',
+                }}
+              >
+                <Icon name={item.icon} size={16} />
+                {navOpen && (
+                  <span>
+                    {item.label}
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span
-              style={{
-                fontSize: 13.5,
-                fontWeight: 700,
-                color: '#ffffff',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: 180,
-              }}
-            >
-              {me.name}
-            </span>
-            <a
-              href="/"
-              title="Main portal"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 32,
-                height: 32,
-                borderRadius: RADIUS.control,
-                border: '1px solid rgba(255,255,255,.22)',
-                color: EMP.onDark,
-                textDecoration: 'none',
-              }}
-            >
-              <Icon name="external-link" size={15} />
-            </a>
-            <button
-              onClick={signOut}
-              title="Sign out of the employee portal"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 12px',
-                borderRadius: RADIUS.control,
-                border: '1px solid rgba(255,255,255,.22)',
-                background: 'rgba(255,255,255,.1)',
-                color: EMP.onDark,
-                cursor: 'pointer',
-                fontSize: 12.5,
-                fontWeight: 600,
-                fontFamily: EMP.sans,
-              }}
-            >
-              <Icon name="log-out" size={14} />
-              <T id="emp.shell.signout">Sign out</T>
-            </button>
-          </div>
-        </header>
-
-        <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-          {/* Sidebar — collapses to a top strip on narrow screens */}
-          <nav
+          <div
             style={{
-              width: navOpen ? 216 : 60,
-              flex: 'none',
-              borderRight: `1px solid ${EMP.line}`,
-              background: EMP.panel,
-              padding: navOpen ? '16px 12px' : '16px 8px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 4,
-              transition: 'width .18s ease',
+              marginTop: 'auto',
+              paddingTop: 12,
+              borderTop: `1px solid ${EMP.lineSoft}`,
+              textAlign: navOpen ? 'left' : 'center',
             }}
           >
-            {items.map((item) => {
-              const active = item.key === screen;
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => setScreen(item.key)}
-                  title={item.label}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: navOpen ? '9px 11px' : '9px 0',
-                    justifyContent: navOpen ? 'flex-start' : 'center',
-                    borderRadius: RADIUS.control,
-                    border: '1px solid transparent',
-                    borderColor: active ? tint(EMP.accent, 0.28) : 'transparent',
-                    background: active ? tint(EMP.accent, 0.09) : 'transparent',
-                    color: active ? EMP.accent : EMP.muted,
-                    cursor: 'pointer',
-                    fontSize: 12.5,
-                    fontFamily: EMP.sans,
-                    fontWeight: active ? 600 : 500,
-                    textAlign: 'left',
-                    width: '100%',
-                  }}
-                >
-                  <Icon name={item.icon} size={16} />
-                  {navOpen && (
-                    <span>
-                      <T id={`emp.nav.${item.key}`} text={item.label} />
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+            <span style={{ fontFamily: EMP.sans, fontSize: 10, fontWeight: 700, color: EMP.faint, letterSpacing: '0.8px' }}>
+              {navOpen ? "SECURE ZONE" : '●'}
+            </span>
+          </div>
+        </nav>
 
-            <div
-              style={{
-                marginTop: 'auto',
-                paddingTop: 12,
-                borderTop: `1px solid ${EMP.lineSoft}`,
-                textAlign: navOpen ? 'left' : 'center',
-              }}
-            >
-              <span style={{ fontFamily: EMP.sans, fontSize: 10, fontWeight: 700, color: EMP.faint, letterSpacing: '0.8px' }}>
-                {navOpen ? <T id="emp.shell.zone">SECURE ZONE</T> : '●'}
-              </span>
-            </div>
-          </nav>
-
-          <main style={{ flex: 1, minWidth: 0, padding: '24px 28px 44px', overflowX: 'hidden' }}>
-            <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-              {screen === 'overview' && <Overview onNavigate={(s) => setScreen(s as Screen)} />}
-              {screen === 'directory' && <Directory />}
-              {screen === 'announcements' && <Announcements canManage={me.isPortalAdmin} />}
-              {screen === 'documents' && <Documents canManage={me.isPortalAdmin} />}
-              {screen === 'security' && <Security me={me} onMeChanged={setMe} />}
-              {screen === 'people' && me.isPortalAdmin && <People myUserId={me.userId} />}
-            </div>
-          </main>
-        </div>
+        <main style={{ flex: 1, minWidth: 0, padding: '24px 28px 44px', overflowX: 'hidden' }}>
+          <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+            {screen === 'overview' && <Overview onNavigate={(s) => setScreen(s as Screen)} />}
+            {screen === 'directory' && <Directory />}
+            {screen === 'announcements' && <Announcements canManage={me.isPortalAdmin} />}
+            {screen === 'documents' && <Documents canManage={me.isPortalAdmin} />}
+            {screen === 'security' && <Security me={me} onMeChanged={setMe} />}
+            {screen === 'people' && me.isPortalAdmin && <People myUserId={me.userId} />}
+          </div>
+        </main>
       </div>
-    </EmployeeCopyProvider>
+    </div>
   );
 }

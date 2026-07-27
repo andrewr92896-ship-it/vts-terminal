@@ -3,7 +3,6 @@ import type { RoleKey } from '../../api/types';
 import { ALL_ROLES, ROLE_LABELS, ROLE_DESCRIPTIONS } from '../../auth/access';
 import { panel, SectionHeader } from './adminUi';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 
 // The admin-only "View as role" preview, moved out of the account menu into its
 // own Admin section. Emulate someone who holds only the one selected role, so
@@ -56,7 +55,6 @@ export function AdminViewAs({
   return (
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <SectionHeader
-        titleId="admin.viewas.title" subtitleId="admin.viewas.subtitle"
         title="View as role"
         subtitle="Preview the portal as a member with only the selected role. This changes what you see in the app; your real admin access is unchanged."
       />
@@ -84,15 +82,15 @@ export function AdminViewAs({
       <div style={panel(theme)}>
         {row(
           !actingRole,
-          <EditableText id="admin.viewas.myaccess_label">My access (all my roles)</EditableText>,
-          <EditableText id="admin.viewas.myaccess_desc">Your normal admin view with every workspace.</EditableText>,
+          "My access (all my roles)",
+          "Your normal admin view with every workspace.",
           () => onSetActingRole(null),
         )}
         {ALL_ROLES.map((r: RoleKey) => row(actingRole === r, ROLE_LABELS[r], ROLE_DESCRIPTIONS[r], () => onSetActingRole(actingRole === r ? null : r)))}
       </div>
 
       <p style={{ marginTop: 14, fontSize: 11.5, color: '#7488b5', lineHeight: 1.5, background: 'transparent' }}>
-        <EditableText id="admin.viewas.tip">Tip: while previewing, the workspaces and sections in the sidebar update to match that role. Come back to this section (Admin → View as role) to switch back — it stays available to you.</EditableText>
+        {"Tip: while previewing, the workspaces and sections in the sidebar update to match that role. Come back to this section (Admin → View as role) to switch back — it stays available to you."}
       </p>
     </div>
   );

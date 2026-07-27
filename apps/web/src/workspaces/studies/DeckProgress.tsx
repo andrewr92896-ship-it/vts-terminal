@@ -3,7 +3,6 @@ import { api } from '../../api/client';
 import type { TeamDeckDetail } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { useAuth } from '../../auth/AuthContext';
-import { EditableText } from '../../copy/SiteCopy';
 import { overallLevel, levelAtStep, scorePct } from './gameEngine';
 import { deckGameKey, deckLifetimeAccuracy, emptyDeckGame, parseDeckGame, type DeckGameState } from './studyEngine';
 import { StudyProgressBars } from './StudyProgress';
@@ -68,7 +67,7 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
       <div style={{ maxWidth: 820, margin: '0 auto', color: '#eef3ff' }}>
         <div style={{ marginBottom: 12 }}>{backBtn}</div>
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          <EditableText id="deckprogress.load_error" text="Couldn’t load this study game." />
+          {"Couldn’t load this study game."}
         </div>
       </div>
     );
@@ -78,7 +77,7 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
       <div style={{ maxWidth: 820, margin: '0 auto', color: '#eef3ff' }}>
         <div style={{ marginBottom: 12 }}>{backBtn}</div>
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          <EditableText id="deckprogress.loading" text="Loading…" />
+          {"Loading…"}
         </div>
       </div>
     );
@@ -97,20 +96,20 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>{deck.name} · Progress</h2>
         </div>
         <p style={{ margin: '5px 0 0', fontSize: 12, color: muted }}>
-          <EditableText id="deckprogress.subtitle" text="Your progress on this study game, synced to your account." />
+          {"Your progress on this study game, synced to your account."}
         </p>
       </div>
 
       {game.totalAttempted === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-            <EditableText id="deckprogress.empty_title" text="No progress yet" />
+            {"No progress yet"}
           </div>
           <div style={{ fontSize: 12.5, color: muted, marginBottom: 14 }}>
-            <EditableText id="deckprogress.empty_blurb" text="Play this game to start levelling up and tracking your accuracy." />
+            {"Play this game to start levelling up and tracking your accuracy."}
           </div>
           <button onClick={onPlay} style={primaryBtn(theme)}>
-            <EditableText id="deckprogress.play_now" text="Play now" />
+            {"Play now"}
           </button>
         </div>
       ) : (
@@ -126,13 +125,13 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
                 </div>
               </div>
               <div style={{ fontSize: 11.5, color: muted }}>
-                <EditableText id="deckprogress.best_reached" text="Best reached" /><br />
+                {"Best reached"}<br />
                 <span style={{ color: '#fff', fontWeight: 600 }}>{best.main.emoji} Lv {best.mainIndex + 1} {best.stars}</span>
               </div>
             </div>
             <div style={{ ...card(theme), flex: '1 1 200px' }}>
               <div style={{ fontSize: 11, color: muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                <EditableText id="deckprogress.lifetime_accuracy" text="Lifetime accuracy" />
+                {"Lifetime accuracy"}
               </div>
               <div style={{ fontSize: 32, fontWeight: 800, color: '#fff', margin: '4px 0' }}>
                 {lifetime != null ? `${lifetime.toFixed(1)}%` : '—'}
@@ -149,7 +148,7 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
           {/* Per-category accuracy (last 100 answers) */}
           <div style={card(theme)}>
             <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: theme.accent, marginBottom: 10 }}>
-              <EditableText id="deckprogress.accuracy_by_topic" text="Accuracy by topic" />
+              {"Accuracy by topic"}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
               {cats.map((c) => {
@@ -172,7 +171,7 @@ export function DeckProgress({ theme, deckId, onBack, onPlay }: { theme: Theme; 
 
           <div style={{ marginTop: 14 }}>
             <button onClick={onPlay} style={primaryBtn(theme)}>
-              <EditableText id="deckprogress.play_this" text="Play this game ›" />
+              {"Play this game ›"}
             </button>
           </div>
         </>

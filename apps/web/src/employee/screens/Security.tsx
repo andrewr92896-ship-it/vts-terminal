@@ -6,7 +6,6 @@ import {
   type SessionView,
 } from '../api';
 import { EMP, fmtDateTime, tint } from '../theme';
-import { T } from '../copy';
 import {
   Banner,
   Button,
@@ -128,12 +127,9 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
     <div>
       <ScreenHeader
         icon="shield-check"
-        title={<T id="emp.security.title">Security</T>}
+        title={"Security"}
         subtitle={
-          <T id="emp.security.subtitle">
-            Your second factor, the devices currently signed in as you, and the record of activity on
-            your account.
-          </T>
+          "Your second factor, the devices currently signed in as you, and the record of activity on your account."
         }
       />
 
@@ -147,18 +143,18 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
         {/* ---- Two-factor ---- */}
         <Card>
           <div style={{ ...label, marginBottom: 12 }}>
-            <T id="emp.security.2fa_heading">Two-factor authentication</T>
+            {"Two-factor authentication"}
           </div>
           {me.twoFactorEnrolled ? (
             <>
               <DetailGrid>
-                <Detail term={<T id="emp.security.2fa_state">Status</T>}>
+                <Detail term={"Status"}>
                   <Pill tone="good">
                     <Icon name="check" size={10} />
-                    <T id="emp.security.2fa_enrolled">Enrolled</T>
+                    {"Enrolled"}
                   </Pill>
                 </Detail>
-                <Detail term={<T id="emp.security.recovery_left">Recovery codes left</T>}>
+                <Detail term={"Recovery codes left"}>
                   {me.recoveryCodesLeft}
                 </Detail>
               </DetailGrid>
@@ -166,9 +162,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
               {me.recoveryCodesLeft <= 2 && (
                 <div style={{ marginTop: 14 }}>
                   <Banner tone="warn">
-                    <T id="emp.security.recovery_low">
-                      You are nearly out of recovery codes. Generate a fresh set below.
-                    </T>
+                    {"You are nearly out of recovery codes. Generate a fresh set below."}
                   </Banner>
                 </div>
               )}
@@ -176,9 +170,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
               {recovery ? (
                 <div style={{ marginTop: 16 }}>
                   <Banner tone="good">
-                    <T id="emp.security.recovery_new">
-                      New codes generated. The old ones no longer work. These are shown once.
-                    </T>
+                    {"New codes generated. The old ones no longer work. These are shown once."}
                   </Banner>
                   <div
                     style={{
@@ -205,17 +197,15 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                     }}
                   >
                     <Icon name="copy" size={14} />
-                    <T id="emp.security.copy_codes">Copy codes</T>
+                    {"Copy codes"}
                   </Button>
                 </div>
               ) : (
                 <div style={{ marginTop: 16, maxWidth: 320, display: 'grid', gap: 11 }}>
                   <Field
-                    label={<T id="emp.security.regen_label">Generate new recovery codes</T>}
+                    label={"Generate new recovery codes"}
                     hint={
-                      <T id="emp.security.regen_hint">
-                        Confirm with a live authenticator code. The current codes stop working.
-                      </T>
+                      "Confirm with a live authenticator code. The current codes stop working."
                     }
                   >
                     <Input
@@ -231,9 +221,9 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                   <div>
                     <Button onClick={regenerate} disabled={busy || code.trim().length < 6}>
                       {busy ? (
-                        <T id="emp.security.regen_busy">Working…</T>
+                        "Working…"
                       ) : (
-                        <T id="emp.security.regen">Generate new codes</T>
+                        "Generate new codes"
                       )}
                     </Button>
                   </div>
@@ -242,10 +232,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
             </>
           ) : (
             <Banner tone="warn">
-              <T id="emp.security.no_2fa">
-                No authenticator is enrolled on this account. Sign out and back in to be walked through
-                setup — or ask a portal administrator to reset it for you.
-              </T>
+              {"No authenticator is enrolled on this account. Sign out and back in to be walked through setup — or ask a portal administrator to reset it for you."}
             </Banner>
           )}
         </Card>
@@ -253,15 +240,15 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
         {/* ---- Sessions ---- */}
         <Card>
           <div style={{ ...label, marginBottom: 12 }}>
-            <T id="emp.security.sessions_heading">Active sessions</T>
+            {"Active sessions"}
           </div>
           {!sessions ? (
             <Empty icon="refresh-cw">
-              <T id="emp.security.sessions_loading">Loading…</T>
+              {"Loading…"}
             </Empty>
           ) : sessions.length === 0 ? (
             <Empty icon="shield">
-              <T id="emp.security.sessions_empty">No active sessions.</T>
+              {"No active sessions."}
             </Empty>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
@@ -293,7 +280,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                       <span style={{ fontFamily: EMP.mono }}>{s.ip || 'unknown address'}</span>
                       {s.current && (
                         <Pill tone="accent">
-                          <T id="emp.security.this_device">This device</T>
+                          {"This device"}
                         </Pill>
                       )}
                     </div>
@@ -315,7 +302,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                   </div>
                   <Button variant="danger" onClick={() => revoke(s)}>
                     <Icon name="log-out" size={13} />
-                    <T id="emp.security.revoke">Revoke</T>
+                    {"Revoke"}
                   </Button>
                 </div>
               ))}
@@ -336,7 +323,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
             }}
           >
             <div style={label}>
-              <T id="emp.security.audit_heading">Activity log</T>
+              {"Activity log"}
             </div>
             {me.isPortalAdmin && (
               <div style={{ display: 'flex', gap: 6 }}>
@@ -344,13 +331,13 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                   onClick={() => setScope('mine')}
                   style={scope === 'mine' ? { borderColor: EMP.accent, color: EMP.accent } : undefined}
                 >
-                  <T id="emp.security.audit_mine">Mine</T>
+                  {"Mine"}
                 </Button>
                 <Button
                   onClick={() => setScope('all')}
                   style={scope === 'all' ? { borderColor: EMP.accent, color: EMP.accent } : undefined}
                 >
-                  <T id="emp.security.audit_all">Everyone</T>
+                  {"Everyone"}
                 </Button>
               </div>
             )}
@@ -358,11 +345,11 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
 
           {!entries ? (
             <Empty icon="refresh-cw">
-              <T id="emp.security.audit_loading">Loading…</T>
+              {"Loading…"}
             </Empty>
           ) : entries.length === 0 ? (
             <Empty icon="file-clock">
-              <T id="emp.security.audit_empty">Nothing recorded yet.</T>
+              {"Nothing recorded yet."}
             </Empty>
           ) : (
             <div style={{ overflowX: 'auto' }}>
@@ -379,7 +366,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        <T id={id} text={h} />
+                        {h}
                       </th>
                     ))}
                   </tr>
@@ -403,7 +390,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                       <td style={{ padding: '9px 12px 9px 0', color: e.ok ? EMP.text : EMP.red }}>
                         {/* The action names are our wording, so they are editable
                             too; an unmapped action falls back to its raw key. */}
-                        <T id={`emp.security.action.${e.action}`} text={ACTION_LABELS[e.action] ?? e.action} />
+                        {ACTION_LABELS[e.action] ?? e.action}
                       </td>
                       <td style={{ padding: '9px 12px 9px 0', color: EMP.faint }}>
                         {e.detail || e.target || '—'}

@@ -5,7 +5,6 @@ import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
 import { ownerHandle } from '../workspaces/trading/TradeCard';
 import { usePushNotifications } from '../push/usePushNotifications';
-import { EditableText } from '../copy/SiteCopy';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 
@@ -32,9 +31,7 @@ export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
   if (!canUsePush && !canManageBrokers) {
     return (
       <div style={hintStyle}>
-        <EditableText id="my_settings.connections.none">
-          No notification or connection settings are available for your account.
-        </EditableText>
+        {"No notification or connection settings are available for your account."}
       </div>
     );
   }
@@ -633,35 +630,31 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
   return (
     <section>
       <div style={sectionLabel}>
-        <EditableText id="widget.title">Home-screen widget (iPhone)</EditableText>
+        {"Home-screen widget (iPhone)"}
       </div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
-        <EditableText id="widget.intro">
-          Put your team’s open positions on your iPhone Home Screen with the free Scriptable app.
-          Generate your personal read-only token, copy the script, and add a widget. Add one widget
-          per teammate — each shows one person’s positions.
-        </EditableText>
+        {"Put your team’s open positions on your iPhone Home Screen with the free Scriptable app. Generate your personal read-only token, copy the script, and add a widget. Add one widget per teammate — each shows one person’s positions."}
       </p>
 
       {!token ? (
         <button onClick={() => void generate()} disabled={busy} style={primaryBtn}>
           {status?.exists ? (
-            <EditableText id="widget.regenerate">Regenerate token &amp; script</EditableText>
+            "Regenerate token &amp; script"
           ) : (
-            <EditableText id="widget.generate">Generate widget token</EditableText>
+            "Generate widget token"
           )}
         </button>
       ) : (
         <>
           <div style={{ fontSize: 11, color: '#f0c674', marginBottom: 8, fontWeight: 600 }}>
-            <EditableText id="widget.once">Copy your token and script now — you won’t see them again.</EditableText>
+            {"Copy your token and script now — you won’t see them again."}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
             <button onClick={() => void copy('token', token)} style={ghost}>
-              {copied === 'token' ? 'Copied ✓' : <EditableText id="widget.copytoken">Copy token</EditableText>}
+              {copied === 'token' ? 'Copied ✓' : "Copy token"}
             </button>
             <button onClick={() => void copy('script', script)} style={{ ...primaryBtn, minHeight: 0 }}>
-              {copied === 'script' ? 'Copied ✓' : <EditableText id="widget.copyscript">Copy Scriptable script</EditableText>}
+              {copied === 'script' ? 'Copied ✓' : "Copy Scriptable script"}
             </button>
           </div>
           <textarea
@@ -676,34 +669,31 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
 
       {status?.exists && (
         <button onClick={() => void revoke()} disabled={busy} style={{ ...ghost, color: '#ff9a9a', marginTop: 10 }}>
-          <EditableText id="widget.revoke">Revoke token</EditableText>
+          {"Revoke token"}
         </button>
       )}
 
       <div style={{ marginTop: 16 }}>
         <div style={{ ...sectionLabel, marginBottom: 8 }}>
-          <EditableText id="widget.steps.title">Set it up</EditableText>
+          {"Set it up"}
         </div>
         <ol style={{ margin: 0, paddingLeft: 18, fontSize: 12, color: '#9fb0d6', lineHeight: 1.7 }}>
-          <li><EditableText id="widget.step1">Install the free Scriptable app from the App Store.</EditableText></li>
-          <li><EditableText id="widget.step2">In Scriptable, tap ＋, paste the script above, and name it “VTS Positions”.</EditableText></li>
-          <li><EditableText id="widget.step3">Long-press your Home Screen → ＋ → Scriptable → pick a size (Large = full cards, Medium = compact list, Small = your top trade) → Add.</EditableText></li>
-          <li><EditableText id="widget.step4">Long-press the new widget → Edit Widget → choose the “VTS Positions” script.</EditableText></li>
-          <li><EditableText id="widget.step5">Set its Parameter to a teammate’s handle (below). Repeat for one widget per person.</EditableText></li>
+          <li>{"Install the free Scriptable app from the App Store."}</li>
+          <li>{"In Scriptable, tap ＋, paste the script above, and name it “VTS Positions”."}</li>
+          <li>{"Long-press your Home Screen → ＋ → Scriptable → pick a size (Large = full cards, Medium = compact list, Small = your top trade) → Add."}</li>
+          <li>{"Long-press the new widget → Edit Widget → choose the “VTS Positions” script."}</li>
+          <li>{"Set its Parameter to a teammate’s handle (below). Repeat for one widget per person."}</li>
         </ol>
       </div>
 
       <p style={{ ...hintStyle, marginTop: 12 }}>
-        <EditableText id="widget.param.hint">
-          The Parameter is the handle shown after “@” on the Live Wall. Leave it blank to show your
-          whole team on one widget.
-        </EditableText>
+        {"The Parameter is the handle shown after “@” on the Live Wall. Leave it blank to show your whole team on one widget."}
       </p>
 
       {people.length > 0 && (
         <div style={{ marginTop: 6 }}>
           <div style={{ fontSize: 11, color: '#7488b5', marginBottom: 6 }}>
-            <EditableText id="widget.people.title">Handles with open positions right now:</EditableText>
+            {"Handles with open positions right now:"}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {people.map((h) => (
@@ -716,10 +706,7 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
       )}
 
       <p style={{ ...hintStyle, marginTop: 12, marginBottom: 0, fontStyle: 'italic' }}>
-        <EditableText id="widget.disclaimer">
-          Informational only — not investment advice. Positions may be delayed (iOS refreshes
-          widgets roughly every 15 minutes). Your token is read-only and can’t place trades.
-        </EditableText>
+        {"Informational only — not investment advice. Positions may be delayed (iOS refreshes widgets roughly every 15 minutes). Your token is read-only and can’t place trades."}
       </p>
 
       {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}

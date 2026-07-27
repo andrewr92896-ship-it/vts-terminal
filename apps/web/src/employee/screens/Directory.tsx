@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { employeeApi, type DirectoryEntry } from '../api';
 import { EMP, EMPLOYMENT_LABELS, fmtDate } from '../theme';
-import { T, useCopy } from '../copy';
 import { Card, Detail, DetailGrid, Empty, Input, Pill, ScreenHeader } from '../ui';
 import { Avatar } from './Overview';
 import { WORKING_COLORS, WORKING_LABELS } from './Photos';
@@ -15,7 +14,7 @@ export function Directory() {
   const [people, setPeople] = useState<DirectoryEntry[] | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
-  const searchPlaceholder = useCopy('emp.directory.search', 'Search by name, title or department');
+  const searchPlaceholder = 'Search by name, title or department';
 
   useEffect(() => {
     employeeApi
@@ -50,7 +49,7 @@ export function Directory() {
   if (!people) {
     return (
       <Empty icon="refresh-cw">
-        <T id="emp.directory.loading">Loading…</T>
+        {"Loading…"}
       </Empty>
     );
   }
@@ -59,12 +58,9 @@ export function Directory() {
     <div>
       <ScreenHeader
         icon="users"
-        title={<T id="emp.directory.title">Directory</T>}
+        title={"Directory"}
         subtitle={
-          <T id="emp.directory.subtitle">
-            Everyone currently on the team, grouped by department. Contact details are internal — do not
-            forward them outside the company.
-          </T>
+          "Everyone currently on the team, grouped by department. Contact details are internal — do not forward them outside the company."
         }
       />
 
@@ -74,7 +70,7 @@ export function Directory() {
 
       {filtered.length === 0 ? (
         <Empty icon="search">
-          <T id="emp.directory.empty">No one matches that search.</T>
+          {"No one matches that search."}
         </Empty>
       ) : (
         <div style={{ display: 'grid', gap: 22 }}>
@@ -134,7 +130,7 @@ function PersonCard({ person }: { person: DirectoryEntry }) {
             </span>
             {person.isMe && (
               <Pill tone="accent">
-                <T id="emp.directory.you">You</T>
+                {"You"}
               </Pill>
             )}
           </div>
@@ -143,7 +139,7 @@ function PersonCard({ person }: { person: DirectoryEntry }) {
       </div>
 
       <DetailGrid>
-        <Detail term={<T id="emp.directory.email">Email</T>}>
+        <Detail term={"Email"}>
           {person.workEmail ? (
             <a href={`mailto:${person.workEmail}`} style={{ color: EMP.accent, textDecoration: 'none' }}>
               {person.workEmail}
@@ -152,12 +148,12 @@ function PersonCard({ person }: { person: DirectoryEntry }) {
             '—'
           )}
         </Detail>
-        <Detail term={<T id="emp.directory.phone">Phone</T>}>{person.workPhone || '—'}</Detail>
-        <Detail term={<T id="emp.directory.type">Employment</T>}>
+        <Detail term={"Phone"}>{person.workPhone || '—'}</Detail>
+        <Detail term={"Employment"}>
           {EMPLOYMENT_LABELS[person.employmentType] ?? person.employmentType}
         </Detail>
-        <Detail term={<T id="emp.directory.started">Started</T>}>{fmtDate(person.startedOn)}</Detail>
-        <Detail term={<T id="emp.directory.working">Working</T>}>
+        <Detail term={"Started"}>{fmtDate(person.startedOn)}</Detail>
+        <Detail term={"Working"}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
             <span
               style={{
@@ -199,7 +195,7 @@ function PersonCard({ person }: { person: DirectoryEntry }) {
           )}
           {person.isPortalAdmin && (
             <Pill tone="accent">
-              <T id="emp.directory.admin">Portal admin</T>
+              {"Portal admin"}
             </Pill>
           )}
         </div>

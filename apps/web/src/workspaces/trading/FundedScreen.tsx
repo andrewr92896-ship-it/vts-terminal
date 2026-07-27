@@ -4,7 +4,6 @@ import { useAuth } from '../../auth/AuthContext';
 import { usePrivacy } from '../../privacy/privacy';
 import { readClipboardImage } from '../../lib/clipboard';
 import { FundedManager } from './Funded';
-import { EditableText } from '../../copy/SiteCopy';
 import type { FundedAccount } from '../../api/types';
 
 const GOLD = '#EBCB74';
@@ -36,15 +35,15 @@ export function FundedScreen() {
     <div style={{ maxWidth: 1080, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="funded.title">Manual Trades</EditableText></h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{"Manual Trades"}</h2>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6, maxWidth: 640 }}>
-            <EditableText id="funded.subtitle">Your own book, kept by hand. Add an account, place trades by typing them in or reading them off a screenshot, and track open positions live on the Live Wall — with each account’s balance and Today / This week / 30-day P/L. Nothing connects to an outside platform; you keep it current yourself.</EditableText>
+            {"Your own book, kept by hand. Add an account, place trades by typing them in or reading them off a screenshot, and track open positions live on the Live Wall — with each account’s balance and Today / This week / 30-day P/L. Nothing connects to an outside platform; you keep it current yourself."}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
           {!readOnly && (
-            <button onClick={() => setImporting((v) => !v)} style={goldBtn}>{importing ? <EditableText id="funded.import_close">Close</EditableText> : <EditableText id="funded.import">Import from screenshot</EditableText>}</button>
+            <button onClick={() => setImporting((v) => !v)} style={goldBtn}>{importing ? "Close" : "Import from screenshot"}</button>
           )}
         </div>
       </div>
@@ -143,13 +142,13 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
 
   return (
     <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={panelLabel}><EditableText id="funded.import_title">Place trades from a screenshot</EditableText></div>
+      <div style={panelLabel}>{"Place trades from a screenshot"}</div>
       <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10 }}>
-        <EditableText id="funded.import_blurb">Paste or upload a photo of your trade history. VTS AI reads the trades (and the account balance, if shown) off the image and logs them on the chosen account. Duplicates are skipped by time + profit.</EditableText>
+        {"Paste or upload a photo of your trade history. VTS AI reads the trades (and the account balance, if shown) off the image and logs them on the chosen account. Duplicates are skipped by time + profit."}
       </div>
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         {accounts === null ? (
-          <span style={{ fontSize: 12, color: MUTED }}><EditableText id="funded.loading_accounts">Loading accounts…</EditableText></span>
+          <span style={{ fontSize: 12, color: MUTED }}>{"Loading accounts…"}</span>
         ) : (
           <select value={accountId} onChange={(e) => setAccountId(e.target.value)} style={{ ...input, flex: '0 0 200px', width: 'auto' }}>
             {accounts.map((a) => (
@@ -164,12 +163,12 @@ function FundedImportPanel({ onClose }: { onClose: () => void }) {
             <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="New account name" style={{ ...input, flex: '1 1 160px', width: 'auto' }} />
           </>
         )}
-        <button onClick={paste} disabled={busy} style={{ ...ghostBtn, opacity: busy ? 0.6 : 1 }}><EditableText id="funded.paste">Paste</EditableText></button>
+        <button onClick={paste} disabled={busy} style={{ ...ghostBtn, opacity: busy ? 0.6 : 1 }}>{"Paste"}</button>
         <button onClick={() => fileRef.current?.click()} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>
-          {busy ? <EditableText id="funded.reading">Reading…</EditableText> : <EditableText id="funded.upload">Upload screenshot</EditableText>}
+          {busy ? "Reading…" : "Upload screenshot"}
         </button>
         <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { void handleFile(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
-        <button onClick={onClose} style={ghostBtn}><EditableText id="funded.done">Done</EditableText></button>
+        <button onClick={onClose} style={ghostBtn}>{"Done"}</button>
       </div>
       {msg && <div style={{ fontSize: 12, color: GREEN, marginTop: 10 }}>{msg}</div>}
       {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginTop: 10 }}>{error}</div>}

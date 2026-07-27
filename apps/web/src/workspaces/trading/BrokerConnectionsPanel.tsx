@@ -7,7 +7,6 @@ import type {
   ManualPosition,
   OwnedBrokerConnection,
 } from '../../api/types';
-import { EditableText } from '../../copy/SiteCopy';
 
 // The list + add/edit form for a user's broker connections. Shared by the Live
 // Wall "Connections" modal and the Account Settings page so both stay in sync.
@@ -187,7 +186,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
       {error && <div style={banner}>{error}</div>}
 
       {!loaded ? (
-        <div style={{ color: MUTED, fontSize: 12.5, marginBottom: 14 }}><EditableText id="broker.loading">Loading…</EditableText></div>
+        <div style={{ color: MUTED, fontSize: 12.5, marginBottom: 14 }}>{"Loading…"}</div>
       ) : conns.length === 0 ? (
         <div style={{ ...panel, marginBottom: 14, color: MUTED, fontSize: 12.5 }}>
           {readOnly ? 'No broker connections to show.' : 'No connections yet. Add one below.'}
@@ -436,7 +435,7 @@ function TeamConnections({ onChanged }: { onChanged?: () => void }) {
                   <span style={{ fontSize: 10.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>@{c.owner}</span>
                   <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: 10, color: FAINT }} title="Only trades opened on or after this date count in the desk stats. Blank = count everything.">
-                      <EditableText id="broker.cutoff_admin">since</EditableText>
+                      {"since"}
                     </span>
                     <input
                       type="date"
@@ -619,9 +618,9 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
       {err && <div style={banner}>{err}</div>}
 
       {!loaded ? (
-        <div style={{ color: MUTED, fontSize: 12 }}><EditableText id="broker.positions_loading">Loading positions…</EditableText></div>
+        <div style={{ color: MUTED, fontSize: 12 }}>{"Loading positions…"}</div>
       ) : positions.length === 0 ? (
-        <div style={{ color: MUTED, fontSize: 12, marginBottom: 10 }}><EditableText id="broker.positions_empty">No positions yet. Add one below.</EditableText></div>
+        <div style={{ color: MUTED, fontSize: 12, marginBottom: 10 }}>{"No positions yet. Add one below."}</div>
       ) : (
         <div style={{ display: 'grid', gap: 6, marginBottom: 10 }}>
           {positions.map((p) => (
@@ -734,7 +733,7 @@ function CutoffRow({
   return (
     <div style={{ ...panel, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '9px 12px' }}>
       <span style={{ fontSize: 11, fontWeight: 600, color: MUTED, flex: '0 0 auto' }}>
-        <EditableText id="broker.cutoff_inline_label">Count trades since</EditableText>
+        {"Count trades since"}
       </span>
       {readOnly ? (
         <span style={{ fontSize: 11.5, color: TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>
@@ -750,13 +749,13 @@ function CutoffRow({
           />
           {c.historyStartAt != null && (
             <button onClick={() => onSet(null)} style={ghostBtn}>
-              <EditableText id="broker.cutoff_inline_clear">Clear</EditableText>
+              {"Clear"}
             </button>
           )}
         </>
       )}
       <span style={{ fontSize: 10.5, color: FAINT, flex: '1 1 100%', lineHeight: 1.45 }}>
-        <EditableText id="broker.cutoff_inline_help">Only trades opened on or after this date count in the Trade Log and History — earlier trades are left out and never re-imported. Blank counts everything.</EditableText>
+        {"Only trades opened on or after this date count in the Trade Log and History — earlier trades are left out and never re-imported. Blank counts everything."}
       </span>
     </div>
   );

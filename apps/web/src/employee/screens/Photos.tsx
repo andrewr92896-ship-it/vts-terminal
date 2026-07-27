@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { employeeApi, type DirectoryEntry, type WorkingStatus } from '../api';
 import { EMP, RADIUS, tint } from '../theme';
-import { T, useCopy } from '../copy';
 import { Button, Card, ErrorNote, Select, label } from '../ui';
 import { fileToSquareDataUrl, readImageSize } from '../image';
 import { Avatar } from './Overview';
@@ -53,7 +52,7 @@ export function Photos({
   const fileRef = useRef<HTMLInputElement>(null);
   const forRef = useRef<HTMLInputElement>(null);
   const targetRef = useRef<DirectoryEntry | null>(null);
-  const guidance = useCopy('emp.photos.guidance', 'Square JPG or PNG, at least 400×400');
+  const guidance = 'Square JPG or PNG, at least 400×400';
 
   function load() {
     employeeApi
@@ -152,12 +151,10 @@ export function Photos({
       >
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: EMP.serif, fontSize: 17, fontWeight: 700, color: EMP.text }}>
-            <T id="emp.photos.title">Employee photos</T>
+            {"Employee photos"}
           </div>
           <div style={{ fontSize: 12.5, color: EMP.muted, marginTop: 2 }}>
-            <T id="emp.photos.subtitle">
-              A face next to a name makes the directory worth opening.
-            </T>
+            {"A face next to a name makes the directory worth opening."}
           </div>
         </div>
         {missing > 0 && (
@@ -179,9 +176,9 @@ export function Photos({
             {/* A live count, so not editable copy — the words around it are. */}
             {missing}{' '}
             {missing === 1 ? (
-              <T id="emp.photos.missing_one">still needs a photo</T>
+              "still needs a photo"
             ) : (
-              <T id="emp.photos.missing">still need a photo</T>
+              "still need a photo"
             )}
           </span>
         )}
@@ -231,7 +228,7 @@ export function Photos({
             <Icon name="camera" size={22} />
           </span>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: EMP.text }}>
-            <T id="emp.photos.drop">Drop your headshot here</T>
+            {"Drop your headshot here"}
           </div>
           <div style={{ fontSize: 12, color: EMP.muted, lineHeight: 1.5 }}>{guidance}</div>
           <input
@@ -251,9 +248,9 @@ export function Photos({
             style={{ background: EMP.forest, color: '#ffffff' }}
           >
             {busyId === 'me' ? (
-              <T id="emp.photos.uploading">Uploading…</T>
+              "Uploading…"
             ) : (
-              <T id="emp.photos.choose">Choose a file</T>
+              "Choose a file"
             )}
           </Button>
           {note && noteFor === 'me' && <div style={{ fontSize: 12, color: EMP.green }}>{note}</div>}
@@ -262,13 +259,11 @@ export function Photos({
         {/* Roster */}
         <div>
           <div style={{ ...label, marginBottom: 10 }}>
-            <T id="emp.photos.roster">Who has one</T>
+            {"Who has one"}
           </div>
           {canManageAll && (
             <div style={{ fontSize: 12, color: EMP.faint, marginTop: -5, marginBottom: 11, lineHeight: 1.5 }}>
-              <T id="emp.photos.dev_hint">
-                You can add a photo for anyone here. Each change is recorded in the activity log.
-              </T>
+              {"You can add a photo for anyone here. Each change is recorded in the activity log."}
             </div>
           )}
           {/* One shared picker for the roster; targetRef says whose it is. */}
@@ -285,7 +280,7 @@ export function Photos({
           />
           {!people ? (
             <div style={{ fontSize: 13, color: EMP.muted }}>
-              <T id="emp.photos.loading">Loading…</T>
+              {"Loading…"}
             </div>
           ) : (
             <div
@@ -322,9 +317,9 @@ export function Photos({
                     }}
                   >
                     {p.hasPhoto ? (
-                      <T id="emp.photos.has">Photo added</T>
+                      "Photo added"
                     ) : (
-                      <T id="emp.photos.needs">Needs photo</T>
+                      "Needs photo"
                     )}
                   </div>
                   {canManageAll && !p.isMe && (
@@ -339,20 +334,20 @@ export function Photos({
                     >
                       {busyId === p.userId ? (
                         <span style={{ color: EMP.faint }}>
-                          <T id="emp.photos.tile_busy">Working…</T>
+                          {"Working…"}
                         </span>
                       ) : (
                         <>
                           <TileAction onClick={() => pickFor(p)}>
                             {p.hasPhoto ? (
-                              <T id="emp.photos.tile_replace">Replace</T>
+                              "Replace"
                             ) : (
-                              <T id="emp.photos.tile_add">Add</T>
+                              "Add"
                             )}
                           </TileAction>
                           {p.hasPhoto && (
                             <TileAction muted onClick={() => void removeFor(p)}>
-                              <T id="emp.photos.tile_remove">Remove</T>
+                              {"Remove"}
                             </TileAction>
                           )}
                         </>
@@ -388,12 +383,10 @@ export function Photos({
       >
         <div style={{ minWidth: 0 }}>
           <div style={{ ...label }}>
-            <T id="emp.photos.working">Where you are working today</T>
+            {"Where you are working today"}
           </div>
           <div style={{ fontSize: 12, color: EMP.faint, marginTop: 3 }}>
-            <T id="emp.photos.working_hint">
-              Shown beside your name in the directory. Only you can change it.
-            </T>
+            {"Shown beside your name in the directory. Only you can change it."}
           </div>
         </div>
         <div style={{ marginLeft: 'auto', minWidth: 170 }}>

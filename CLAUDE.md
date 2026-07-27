@@ -537,36 +537,12 @@ and `RADIUS`. Every employee screen composes from those tokens and the `ui.tsx`
 primitives, so restyling happens in those two files rather than screen by screen.
 Full spec and implementation status in `docs/design/employee-portal/`.
 
-**Editable copy — with its own inline editor.** The employee bundle stores
-wording in the same `copy.<id>` settings table the main portal uses, but has its
-own end-to-end editor rather than depending on main-portal auth
-(`src/employee/copy.tsx`):
-
-- Wrap every developer-authored string in `<T id="emp.…">text</T>` (or
-  `useCopy(id, def)` for placeholders/titles that need a plain string). Ids are
-  `emp.<screen>.<slug>`. **This is required for all new employee-portal copy**,
-  the same standing expectation `<EditableText>` carries in the main portal.
-- **Never wrap** database content (names, document titles, announcement bodies),
-  live figures (counts, dates, times), or interpolated strings — a rewrite must
-  not be able to contradict the data underneath it.
-- A **founder-level** viewer gets a floating pencil (lower right). It toggles
-  edit mode: every wrapped string is outlined, clicking one opens an anchored
-  popover (a bottom sheet under 640px) with Save / Reset / Hide. Blank or
-  default-equal saves clear the override; **Hide** stores the shared
-  `[[vts:hidden]]` sentinel and the string renders as nothing for everyone,
-  while staying struck-through-but-visible to a developer in edit mode.
-- Routes: `GET /api/employee/copy` (any employee — everyone must see current
-  wording), `PUT|DELETE /api/employee/copy/:key` behind
-  `requireEmployeeDeveloper`. Writes are **confined to the `emp.` namespace**, so
-  a developer signed in here can never reach across and rewrite the main portal's
-  copy. Every change is audited (`copy.updated` / `copy.hidden` / `copy.reset`,
-  with the key and new wording).
-- `isDeveloper` on the session `me` is founder-level only — deliberately narrower
-  than `isPortalAdmin`, which is the HR flag. The editor's own chrome (Save,
-  Reset, Hide, the banner) is **not** itself editable; hiding the Save button
-  would break the editor.
-- The launch row in the main portal's sidebar is ordinary main-portal copy and
-  uses `<EditableText id="myemp.…">`.
+**Copy is plain hardcoded text.** The employee bundle has no in-app wording
+editor — every developer-authored string is a normal string literal in the
+`.tsx` file it lives in. There is no `copy.<id>` override store, no floating
+pencil, and no founder-only edit mode on this surface. To reword anything,
+edit the source and deploy. (This mirrors the main portal — see "Coded copy is
+hardcoded" below.)
 
 ## Auth & security specifics
 
@@ -661,28 +637,23 @@ some documented vars aren't in the schema and vice-versa.
   for the record.
 - **Editable copy:** `howto.<screen>` and `ai.<id>` keys live in `app_settings`;
   prefer editing via **Admin ▸ Site Wording / AI Instructions** over hardcoding
-  where a key already exists.
-- **Inline editable wording (`<EditableText>`) — REQUIRED for all new coded copy.**
-  Every hardcoded, site-coded string (screen titles, subtitles, blurbs, button
-  labels, empty/loading/error states, static captions) must be wrapped in
-  `<EditableText id="…">` from `apps/web/src/copy/SiteCopy.tsx`. This makes it
-  admin-editable live from the floating admin-shield button beside the corner chat
-  bubble (admins only) — click it to enter edit mode, then click any highlighted
-  string to reword it, or **Hide** it (renders as nothing for everyone until
-  reset). The edit stores an override in `app_settings` under `copy.<id>`
-  (routes in `routes/content.ts`, served to everyone via `GET /api/site-content`,
-  written via `PUT/DELETE /api/admin/site-content/copy/:key`). Rules:
-  - Wrap it: `<EditableText id="alerts.title">Live Alerts</EditableText>`, or use
-    the `text={expr}` form when the string is a variable. The bundled text stays
-    the default; a blank/identical override clears it.
-  - **id** is a globally-unique dotted key, `<screenslug>.<slug>` (lowercase, dots
-    / underscores), e.g. `desk.empty`, `admin.users.title`.
-  - **Never wrap** user/team-created data (deck/team/user names, tickers, message
-    bodies), live figures (prices, P&L, counts, dates/times), interpolated strings,
-    or paragraphs containing embedded markup like `<strong>`. It is only for text
-    coded into the site.
-  - When you build any new screen or component, wrap its coded copy this way by
-    default — this is a universal, site-wide expectation, not opt-in.
+  where a key already exists. (This is the "How-to" walkthrough text and the AI
+  system prompts specifically — see below, this is the only remaining
+  DB-backed wording.)
+- **Coded copy is hardcoded — no in-app text editor.** Every other site-coded
+  string (screen titles, subtitles, blurbs, button labels, empty/loading/error
+  states, static captions, on both the main portal and the Employee Portal) is
+  a plain string literal in its `.tsx` file. There used to be a floating-icon
+  mechanism (`<EditableText>` / the employee portal's `<T>`) that let a founder
+  rewrite any of this live from the browser, backed by `copy.<id>` overrides in
+  `app_settings`; **it has been removed** (owner decision — all wording changes
+  now go through code). To reword anything, edit the source and deploy. Do not
+  reintroduce a live text-editing affordance, a `copy.<id>`-style override
+  store, or a floating edit icon for coded strings — that mechanism is
+  deliberately gone. Never wrap user/team-created data (deck/team/user names,
+  tickers, message bodies) or live figures (prices, P&L, counts, dates/times) in
+  anything that resembles that old mechanism either — those were never eligible
+  for it and still aren't.
 - Keep the plain, terminal-style voice in UI copy and AI prompts.
 - **Naming the AI — always "VTS AI":** in all user-facing copy (labels, blurbs,
   buttons, empty/loading states, prompts the user reads), refer to the portal's

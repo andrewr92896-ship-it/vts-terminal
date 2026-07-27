@@ -1,6 +1,5 @@
 import type { CSSProperties, ReactNode } from 'react';
 import type { Theme } from '../../theme/themes';
-import { EditableText } from '../../copy/SiteCopy';
 
 // Shared styles and small pieces for the Admin workspace sections (Users,
 // Teams, Early Access). Kept in one place so the three sections look identical.
@@ -141,29 +140,12 @@ export function Badge({ color, children }: { color: string; children: ReactNode 
   );
 }
 
-// A simple page header used at the top of each Admin section. Pass `titleId` /
-// `subtitleId` to make that line admin-editable (via <EditableText>). Omit
-// `subtitleId` for a subtitle that carries a live value (e.g. a "3 new" count) —
-// dynamic copy is never wrapped.
-export function SectionHeader({
-  title,
-  subtitle,
-  titleId,
-  subtitleId,
-}: {
-  title: string;
-  subtitle: string;
-  titleId?: string;
-  subtitleId?: string;
-}) {
+// A simple page header used at the top of each Admin section.
+export function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div style={{ marginBottom: 16 }}>
-      <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>
-        {titleId ? <EditableText id={titleId} text={title} /> : title}
-      </h2>
-      <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc', lineHeight: 1.5 }}>
-        {subtitleId ? <EditableText id={subtitleId} text={subtitle} /> : subtitle}
-      </p>
+      <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>{title}</h2>
+      <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc', lineHeight: 1.5 }}>{subtitle}</p>
     </div>
   );
 }

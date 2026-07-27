@@ -6,7 +6,6 @@ import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { fileToScaledDataUrl } from '../../lib/image';
-import { EditableText } from '../../copy/SiteCopy';
 import { GuidePresentation } from './GuidePresentation';
 import { GuideEditor } from './GuideEditor';
 
@@ -108,41 +107,41 @@ export function StudyGuidesLibrary({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-            <EditableText id="guides.lib_title" text="Team Study Presentations" />
+            {"Team Study Presentations"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            <EditableText id="guides.lib_blurb" text="Present your team’s slide-by-slide study presentations. Build a new one over in Study Creation." />
+            {"Present your team’s slide-by-slide study presentations. Build a new one over in Study Creation."}
           </p>
         </div>
         {!readOnly && onNavigate && guides.length > 0 && (
           <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-            <EditableText id="guides.lib_build_btn" text="✦ Build a presentation" />
+            {"✦ Build a presentation"}
           </button>
         )}
       </div>
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          <EditableText id="guides.lib_loading" text="Loading your team’s study guides…" />
+          {"Loading your team’s study guides…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          <EditableText id="guides.lib_error" text="Couldn’t load your team’s study guides. Try again in a moment." />
+          {"Couldn’t load your team’s study guides. Try again in a moment."}
         </div>
       ) : guides.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>📽️</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-            <EditableText id="guides.lib_empty_title" text="No presentations yet" />
+            {"No presentations yet"}
           </div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? <EditableText id="guides.lib_empty_ro" text="A team builds study presentations in Study Creation — chatting with VTS AI or uploading a presentation — then presents them here." />
-              : <EditableText id="guides.lib_empty_rw" text="Head to Study Creation to build one: chat with VTS AI to draft the slides, or upload a PowerPoint. Your presentations then show up here to present." />}
+              ? "A team builds study presentations in Study Creation — chatting with VTS AI or uploading a presentation — then presents them here."
+              : "Head to Study Creation to build one: chat with VTS AI to draft the slides, or upload a PowerPoint. Your presentations then show up here to present."}
           </div>
           {!readOnly && onNavigate && (
             <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGradient(theme)), marginTop: 16 }}>
-              <EditableText id="guides.lib_empty_btn" text="Go to Study Creation" />
+              {"Go to Study Creation"}
             </button>
           )}
         </div>
@@ -231,16 +230,16 @@ export function StudyGuideCreator({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-            <EditableText id="guides.creator_title" text="Team Study Presentations" />
+            {"Team Study Presentations"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            <EditableText id="guides.creator_blurb" text="Build a slide-by-slide study presentation with VTS AI, or upload a presentation — then present it from Study Presentations." />
+            {"Build a slide-by-slide study presentation with VTS AI, or upload a presentation — then present it from Study Presentations."}
           </p>
         </div>
         {!readOnly && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => { setSavedName(null); setError(null); setBuilderInit({}); }} style={primaryBtn(theme, accentGrad)}>
-              <EditableText id="guides.creator_new_btn" text="✦ New presentation" />
+              {"✦ New presentation"}
             </button>
             <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', gap: 6, cursor: parsing ? 'default' : 'pointer', opacity: parsing ? 0.6 : 1 }}>
               {parsing ? 'Reading…' : '⬆ Upload a presentation'}
@@ -278,17 +277,17 @@ export function StudyGuideCreator({
       <div style={{ ...card(theme), textAlign: 'center' }}>
         <div style={{ fontSize: 28, marginBottom: 8 }}>📽️</div>
         <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-          <EditableText id="guides.creator_card_title" text="Build a study guide" />
+          {"Build a study guide"}
         </div>
         <div style={{ fontSize: 12.5, color: muted, maxWidth: 460, margin: '0 auto', lineHeight: 1.55 }}>
           {readOnly
-            ? <EditableText id="guides.creator_card_ro" text="A team builds study guides here by chatting with VTS AI to draft the slides, or by uploading a PowerPoint. They add screenshots, then present it from Study Guides." />
-            : <EditableText id="guides.creator_card_rw" text="Describe what you want to teach and go back and forth with VTS AI to shape the slides — or upload a PowerPoint (export Google Slides as .pptx). Refine, drop in screenshots, then present it from Study Guides." />}
+            ? "A team builds study guides here by chatting with VTS AI to draft the slides, or by uploading a PowerPoint. They add screenshots, then present it from Study Guides."
+            : "Describe what you want to teach and go back and forth with VTS AI to shape the slides — or upload a PowerPoint (export Google Slides as .pptx). Refine, drop in screenshots, then present it from Study Guides."}
         </div>
         {!readOnly && (
           <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
             <button onClick={() => { setSavedName(null); setError(null); setBuilderInit({}); }} style={primaryBtn(theme, accentGrad)}>
-              <EditableText id="guides.creator_new_guide_btn" text="✦ New study guide" />
+              {"✦ New study guide"}
             </button>
             <label style={{ ...ghostBtn(theme), display: 'inline-flex', alignItems: 'center', gap: 6, cursor: parsing ? 'default' : 'pointer', opacity: parsing ? 0.6 : 1 }}>
               {parsing ? 'Reading…' : '⬆ Upload a presentation'}
@@ -566,7 +565,7 @@ function GuideBuilder({
   const chatPane = (
     <div style={{ ...card(theme), display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
-        <EditableText id="guides.builder_chat_title" text="Build it with VTS AI" />
+        {"Build it with VTS AI"}
       </div>
       <div
         ref={threadRef}
@@ -608,7 +607,7 @@ function GuideBuilder({
         {busy && (
           <div style={assistantRow}>
             <div style={{ ...assistantBubble(theme), color: muted }}>
-              <EditableText id="guides.builder_drafting" text="Drafting…" />
+              {"Drafting…"}
             </div>
           </div>
         )}
@@ -639,17 +638,17 @@ function GuideBuilder({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>
-          <EditableText id="guides.builder_slides" text="Slides" /> {slides.length > 0 && <span style={{ color: muted, fontWeight: 500 }}>· {slides.length}</span>}
+          {"Slides"} {slides.length > 0 && <span style={{ color: muted, fontWeight: 500 }}>· {slides.length}</span>}
         </div>
         {slides.length > 0 && (
           <button onClick={addBlankSlide} style={ghostBtn(theme)}>
-            <EditableText id="guides.builder_blank_slide" text="+ Blank slide" />
+            {"+ Blank slide"}
           </button>
         )}
       </div>
       {slides.length === 0 ? (
         <div style={{ ...card(theme), color: muted, fontSize: 12.5, textAlign: 'center', lineHeight: 1.6 }}>
-          <EditableText id="guides.builder_empty" text="Your slides appear here as VTS AI drafts them. Click a slide to select it, then add a screenshot — or paste one straight in." />
+          {"Your slides appear here as VTS AI drafts them. Click a slide to select it, then add a screenshot — or paste one straight in."}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -677,7 +676,7 @@ function GuideBuilder({
     <div style={{ maxWidth: 1120, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <button onClick={onCancel} style={ghostBtn(theme)}>
-          <EditableText id="guides.builder_back" text="‹ Back" />
+          {"‹ Back"}
         </button>
         <input
           value={name}
@@ -687,7 +686,7 @@ function GuideBuilder({
           style={{ flex: 1, minWidth: 180, fontSize: 16, padding: '10px 12px', borderRadius: 8, border: `1px solid ${theme.navBorder}`, background: 'rgba(10,8,26,.6)', color: '#fff', outline: 'none' }}
         />
         <button onClick={() => void save()} disabled={!canSave} style={{ ...primaryBtn(theme, accentGrad), opacity: canSave ? 1 : 0.6 }}>
-          {saving ? <EditableText id="guides.builder_saving" text="Saving…" /> : <EditableText id="guides.builder_save" text="Save guide" />}
+          {saving ? "Saving…" : "Save guide"}
         </button>
       </div>
 

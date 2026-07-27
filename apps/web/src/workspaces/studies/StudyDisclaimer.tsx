@@ -1,6 +1,5 @@
 import type { CSSProperties } from 'react';
 import type { Theme } from '../../theme/themes';
-import { EditableText } from '../../copy/SiteCopy';
 import { Icon } from '../../components/Icon';
 
 // A small, reusable disclaimer strip shown across the study-game surfaces (the
@@ -25,14 +24,8 @@ export function StudyDisclaimer({ theme, style }: { theme: Theme; style?: CSSPro
     <div style={{ ...wrap(theme), ...style }}>
       <Icon name="scale" size={15} color={theme.accent} style={{ flex: 'none', marginTop: 1, opacity: 0.85 }} />
       <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: DIM }}>
-        <EditableText
-          id="studies.disclaimer.advice"
-          text="Educational content only — informational, not financial, investment, legal, or tax advice."
-        />{' '}
-        <EditableText
-          id="studies.disclaimer.affiliation"
-          text="Study games may name third-party methods, brands, or people to teach about them, and are not affiliated with or endorsed by anyone they reference."
-        />
+        {"Educational content only — informational, not financial, investment, legal, or tax advice."}{' '}
+        {"Study games may name third-party methods, brands, or people to teach about them, and are not affiliated with or endorsed by anyone they reference."}
       </p>
     </div>
   );
