@@ -507,7 +507,14 @@ the browser** (`src/employee/image.ts`) before `PUT /api/employee/photo` stores 
 in **`users.avatar`** — the same column the main portal uses, so one person has
 one face on both surfaces; the route caps the body at 400 KB and refuses anything
 that is not an image data URL. Beside it, a roster shows who has a photo
-(`DirectoryEntry.hasPhoto`) with the design's "N still need a photo" nudge.
+(`DirectoryEntry.hasPhoto`) with the design's "N still need a photo" nudge. A
+**founder-level** viewer additionally gets Add / Replace / Remove under every
+other person's tile, backed by `PUT /api/employee/admin/people/:id/photo`
+(`requireEmployeeDeveloper`, target must be an active employee) — a directory
+only ever fills up if somebody can do it on everyone's behalf. That is
+deliberately **narrower than `isPortalAdmin`**: HR edits records, not faces.
+Acting on someone else is audited with `target` set to their name and
+`detail: 'set by a developer'`, so it is distinguishable from a self-change.
 **Working status** (`employee_profiles.working_status`: `in_office | remote |
 away`, default `in_office`) is set only by its owner via
 `PUT /api/employee/working-status` — there is no endpoint for changing anyone

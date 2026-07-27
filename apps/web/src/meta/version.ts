@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.63';
+export const APP_VERSION = 'Beta V 5.64';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.64',
+    date: 'July 27, 2026',
+    notes: [
+      'Developers can add a headshot for anyone in the Employee Portal. Each person on the photo roster now carries an Add link — or Replace and Remove once they have one — so the directory can be filled in without waiting on everybody individually.',
+      'Only founder-level accounts get this; a portal admin still manages records but not faces. Every photo set on someone else’s behalf is written to the activity log with who did it and who it was about.',
+    ],
+  },
   {
     version: 'Beta V 5.63',
     date: 'July 27, 2026',

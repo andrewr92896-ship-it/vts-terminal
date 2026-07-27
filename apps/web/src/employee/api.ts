@@ -258,8 +258,11 @@ export const employeeApi = {
   resetCopy: (key: string) =>
     request<{ ok: true }>('DELETE', `/copy/${encodeURIComponent(key)}`),
 
-  // ---- your own photo and working status ----
+  // ---- photos and working status ----
   setPhoto: (photo: string) => request<{ ok: true }>('PUT', '/photo', { photo }),
+  // Founder-level only: set or clear someone else's headshot. Passing '' removes it.
+  setPhotoFor: (userId: string, photo: string) =>
+    request<{ ok: true; people: DirectoryEntry[] }>('PUT', `/admin/people/${userId}/photo`, { photo }),
   setWorkingStatus: (workingStatus: WorkingStatus) =>
     request<{ ok: true }>('PUT', '/working-status', { workingStatus }),
 
