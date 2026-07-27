@@ -56,6 +56,15 @@ const ACTION_LABELS: Record<string, string> = {
   'people.revoked': 'Employee access revoked',
 };
 
+// Display-only column headings for the activity log, each independently editable.
+const AUDIT_COLUMNS: [string, string][] = [
+  ['emp.security.col_when', 'When'],
+  ['emp.security.col_who', 'Who'],
+  ['emp.security.col_what', 'What'],
+  ['emp.security.col_detail', 'Detail'],
+  ['emp.security.col_from', 'From'],
+];
+
 export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me: EmployeeMe) => void }) {
   const [sessions, setSessions] = useState<SessionView[] | null>(null);
   const [entries, setEntries] = useState<AuditEntry[] | null>(null);
@@ -360,9 +369,9 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                 <thead>
                   <tr>
-                    {['When', 'Who', 'What', 'Detail', 'From'].map((h) => (
+                    {AUDIT_COLUMNS.map(([id, h]) => (
                       <th
-                        key={h}
+                        key={id}
                         style={{
                           ...label,
                           textAlign: 'left',
@@ -370,7 +379,7 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {h}
+                        <T id={id} text={h} />
                       </th>
                     ))}
                   </tr>
@@ -392,7 +401,9 @@ export function Security({ me, onMeChanged }: { me: EmployeeMe; onMeChanged: (me
                         {e.actor || '—'}
                       </td>
                       <td style={{ padding: '9px 12px 9px 0', color: e.ok ? EMP.text : EMP.red }}>
-                        {ACTION_LABELS[e.action] ?? e.action}
+                        {/* The action names are our wording, so they are editable
+                            too; an unmapped action falls back to its raw key. */}
+                        <T id={`emp.security.action.${e.action}`} text={ACTION_LABELS[e.action] ?? e.action} />
                       </td>
                       <td style={{ padding: '9px 12px 9px 0', color: EMP.faint }}>
                         {e.detail || e.target || '—'}

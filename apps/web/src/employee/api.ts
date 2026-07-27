@@ -85,6 +85,8 @@ export interface EmployeeMe {
   status: EmployeeStatus;
   managerName: string | null;
   isPortalAdmin: boolean;
+  /** Founder-level — gates the inline wording editor. Narrower than isPortalAdmin. */
+  isDeveloper: boolean;
   twoFactorEnrolled: boolean;
   recoveryCodesLeft: number;
   lastLoginAt: number | null;
@@ -226,6 +228,12 @@ export const employeeApi = {
   overview: () => request<OverviewData>('GET', '/overview'),
   directory: () => request<{ people: DirectoryEntry[] }>('GET', '/directory'),
   copy: () => request<{ copy: Record<string, string> }>('GET', '/copy'),
+  // Wording writes. Founder-level only server-side, and confined to the `emp.`
+  // namespace — the UI gate is a convenience, not the control.
+  saveCopy: (key: string, value: string) =>
+    request<{ ok: true; cleared: boolean }>('PUT', `/copy/${encodeURIComponent(key)}`, { value }),
+  resetCopy: (key: string) =>
+    request<{ ok: true }>('DELETE', `/copy/${encodeURIComponent(key)}`),
 
   announcements: () => request<{ announcements: AnnouncementView[] }>('GET', '/announcements'),
   createAnnouncement: (input: { title: string; body: string; pinned?: boolean }) =>

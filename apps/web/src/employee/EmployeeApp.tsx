@@ -28,6 +28,7 @@ interface NavItem {
   adminOnly?: boolean;
 }
 
+// Labels are the bundled defaults; each is editable under `emp.nav.<key>`.
 const NAV: NavItem[] = [
   { key: 'overview', label: 'Overview', icon: 'briefcase' },
   { key: 'directory', label: 'Directory', icon: 'users' },
@@ -159,7 +160,10 @@ export function EmployeeApp() {
   const items = NAV.filter((n) => !n.adminOnly || me.isPortalAdmin);
 
   return (
-    <EmployeeCopyProvider>
+    // Only a developer sees the wording editor. The sign-in and enrollment
+    // screens above mount the provider without it — there is no `me` yet, and
+    // nobody should be editing copy from outside the door.
+    <EmployeeCopyProvider canEdit={me.isDeveloper}>
       <div
         style={{
           minHeight: '100vh',
@@ -316,7 +320,11 @@ export function EmployeeApp() {
                   }}
                 >
                   <Icon name={item.icon} size={16} />
-                  {navOpen && <span>{item.label}</span>}
+                  {navOpen && (
+                    <span>
+                      <T id={`emp.nav.${item.key}`} text={item.label} />
+                    </span>
+                  )}
                 </button>
               );
             })}
@@ -330,7 +338,7 @@ export function EmployeeApp() {
               }}
             >
               <span style={{ fontFamily: EMP.mono, fontSize: 9, color: EMP.faint, letterSpacing: '0.5px' }}>
-                {navOpen ? 'SECURE ZONE' : '●'}
+                {navOpen ? <T id="emp.shell.zone">SECURE ZONE</T> : '●'}
               </span>
             </div>
           </nav>

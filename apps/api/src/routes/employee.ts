@@ -16,7 +16,7 @@ import { verifyPassword } from '../auth/passwords.js';
 import { canAccessEmployeePortal, isFounder, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME, isDemoUser } from '../demo/identity.js';
 import { encryptSecret, decryptSecret } from '../security/secretbox.js';
-import { getSettingsByPrefix } from '../settings/service.js';
+import { clearSetting, getSettingsByPrefix, setSetting } from '../settings/service.js';
 import {
   EMPLOYEE_COOKIE,
   createEmployeeSession,
@@ -36,6 +36,7 @@ import {
   loadEmployeeContext,
   requireEmployee,
   requireEmployeeAdmin,
+  requireEmployeeDeveloper,
   requirePendingEmployee,
   requestMeta,
 } from '../employee/guard.js';
@@ -89,6 +90,25 @@ const loginSchema = z.object({
 });
 
 const codeSchema = z.object({ code: z.string().trim().min(1).max(32) });
+
+// Editable wording. Employee-portal copy ids are namespaced `emp.` and stored
+// under `copy.emp.…` alongside the main portal's — so the read filters on that
+// prefix and the writes refuse anything outside it. Without the namespace check
+// a developer signed in *here* could rewrite the main portal's wording through
+// the employee session, which is exactly the cross-surface reach this portal is
+// built to avoid.
+const EMPLOYEE_COPY_PREFIX = 'copy.emp.';
+const COPY_KEY_RE = /^emp\.[a-z0-9_]+(\.[a-z0-9_]+)+$/;
+
+function isEmployeeCopyKey(key: string): boolean {
+  return key.length <= 120 && COPY_KEY_RE.test(key);
+}
+
+// The sentinel that means "render nothing at all". Shared with the main portal's
+// <EditableText>, so a hidden string behaves identically on both surfaces.
+const HIDDEN_COPY = '[[vts:hidden]]';
+
+const copyValueSchema = z.object({ value: z.string().max(4000) });
 
 const announcementSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -241,7 +261,7 @@ export async function employeeRoutes(app: FastifyInstance) {
       stage,
       requires2fa: config.EMPLOYEE_REQUIRE_2FA,
       csrfToken: employeeCsrfToken(ctx.sessionId),
-      me: stage === 'active' ? await buildMe(ctx.user, ctx.profile, ctx.isPortalAdmin) : null,
+      me: stage === 'active' ? await buildMe(ctx.user, ctx.profile, ctx.isPortalAdmin, ctx.isDeveloper) : null,
     };
   });
 
@@ -395,7 +415,7 @@ export async function employeeRoutes(app: FastifyInstance) {
     return {
       status: 'ok',
       csrfToken: created.csrfToken,
-      me: await buildMe(user, fresh, fresh.isAdmin || isFounder(roles)),
+      me: await buildMe(user, fresh, fresh.isAdmin || isFounder(roles), isFounder(roles)),
     };
   });
 
@@ -493,7 +513,7 @@ export async function employeeRoutes(app: FastifyInstance) {
     )[0];
     return {
       recoveryCodes,
-      me: await buildMe(ctx.user, fresh, ctx.isPortalAdmin),
+      me: await buildMe(ctx.user, fresh, ctx.isPortalAdmin, ctx.isDeveloper),
     };
   });
 
@@ -528,7 +548,7 @@ export async function employeeRoutes(app: FastifyInstance) {
   app.get('/api/employee/overview', { preHandler: requireEmployee }, async (request) => {
     const ctx = request.employee!;
     const [me, announcements, directory, documents] = await Promise.all([
-      buildMe(ctx.user, ctx.profile, ctx.isPortalAdmin),
+      buildMe(ctx.user, ctx.profile, ctx.isPortalAdmin, ctx.isDeveloper),
       listAnnouncements(5),
       getDirectory(ctx.user.id),
       listDocuments(),
@@ -550,14 +570,82 @@ export async function employeeRoutes(app: FastifyInstance) {
     return { people: await getDirectory(request.employee!.user.id) };
   });
 
-  // The employee bundle's copy overrides — the same `copy.<id>` store the main
-  // portal's <EditableText> uses, so wording stays admin-editable here too.
+  // ---- Editable wording ----
+  //
+  // The employee bundle's copy overrides live in the same `copy.<id>` store the
+  // main portal's <EditableText> uses, so one mechanism covers both surfaces.
+  // Reading is open to any signed-in employee (everyone must see the current
+  // wording); writing is founder-level only, and is confined to the `emp.`
+  // namespace so this surface can never rewrite the main portal's copy.
   app.get('/api/employee/copy', { preHandler: requireEmployee }, async () => {
-    const raw = await getSettingsByPrefix('copy.');
+    const raw = await getSettingsByPrefix(EMPLOYEE_COPY_PREFIX);
     const copy: Record<string, string> = {};
     for (const [k, v] of Object.entries(raw)) copy[k.slice('copy.'.length)] = v;
     return { copy };
   });
+
+  app.put(
+    '/api/employee/copy/:key',
+    { preHandler: [requireEmployee, requireEmployeeDeveloper] },
+    async (request, reply) => {
+      const { key } = request.params as { key: string };
+      if (!isEmployeeCopyKey(key)) {
+        return reply.code(400).send({ error: 'Invalid copy key' });
+      }
+      const parsed = copyValueSchema.safeParse(request.body);
+      if (!parsed.success) return reply.code(400).send({ error: 'Invalid wording' });
+      const ctx = request.employee!;
+      const value = parsed.data.value;
+
+      // A blank value means "reset", not "store an empty string" — the caller
+      // gets the coded default back rather than a hole in the page.
+      if (!value.trim()) {
+        await clearSetting(`copy.${key}`);
+        await audit({
+          action: 'copy.reset',
+          userId: ctx.user.id,
+          actor: ctx.user.displayName,
+          target: key,
+          ...requestMeta(request),
+        });
+        return { ok: true, cleared: true };
+      }
+
+      await setSetting(`copy.${key}`, value);
+      await audit({
+        action: value === HIDDEN_COPY ? 'copy.hidden' : 'copy.updated',
+        userId: ctx.user.id,
+        actor: ctx.user.displayName,
+        target: key,
+        // The wording itself is the change; recording it makes the log useful
+        // for answering "who changed that, and to what".
+        detail: value === HIDDEN_COPY ? null : value.slice(0, 300),
+        ...requestMeta(request),
+      });
+      return { ok: true, cleared: false };
+    },
+  );
+
+  app.delete(
+    '/api/employee/copy/:key',
+    { preHandler: [requireEmployee, requireEmployeeDeveloper] },
+    async (request, reply) => {
+      const { key } = request.params as { key: string };
+      if (!isEmployeeCopyKey(key)) {
+        return reply.code(400).send({ error: 'Invalid copy key' });
+      }
+      const ctx = request.employee!;
+      await clearSetting(`copy.${key}`);
+      await audit({
+        action: 'copy.reset',
+        userId: ctx.user.id,
+        actor: ctx.user.displayName,
+        target: key,
+        ...requestMeta(request),
+      });
+      return { ok: true };
+    },
+  );
 
   // ---- Announcements ----
 
