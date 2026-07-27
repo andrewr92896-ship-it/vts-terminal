@@ -5,7 +5,6 @@ import {
   type TaskView,
 } from '../api';
 import { EMP, RADIUS, fmtDate } from '../theme';
-import { T, useCopy } from '../copy';
 import { Button, Card, ErrorNote, Field, Input, Select, label } from '../ui';
 import { Icon } from '../../components/Icon';
 
@@ -69,11 +68,11 @@ export function MyTasks({ canAssign }: { canAssign: boolean }) {
         }}
       >
         <span style={{ fontFamily: EMP.serif, fontSize: 17, fontWeight: 700, color: EMP.text }}>
-          <T id="emp.tasks.title">My tasks</T>
+          {"My tasks"}
         </span>
         <span style={{ marginLeft: 'auto', fontSize: 12.5, color: EMP.faint }}>
           {/* A live figure, so never editable copy — but the word beside it is. */}
-          {openCount} <T id="emp.tasks.open_suffix">open</T>
+          {openCount} {"open"}
         </span>
       </div>
 
@@ -85,7 +84,7 @@ export function MyTasks({ canAssign }: { canAssign: boolean }) {
 
       {!tasks ? (
         <div style={{ padding: '22px 16px', fontSize: 13, color: EMP.muted, textAlign: 'center' }}>
-          <T id="emp.tasks.loading">Loading…</T>
+          {"Loading…"}
         </div>
       ) : tasks.length === 0 ? (
         <div
@@ -101,9 +100,7 @@ export function MyTasks({ canAssign }: { canAssign: boolean }) {
             lineHeight: 1.6,
           }}
         >
-          <T id="emp.tasks.empty">
-            Nothing on your list. Add something you need to remember, like renewing a certification.
-          </T>
+          {"Nothing on your list. Add something you need to remember, like renewing a certification."}
         </div>
       ) : (
         <div>
@@ -124,7 +121,7 @@ export function MyTasks({ canAssign }: { canAssign: boolean }) {
       >
         <Button onClick={() => setAdding((v) => !v)}>
           <Icon name="plus" size={13} />
-          {adding ? <T id="emp.tasks.cancel">Cancel</T> : <T id="emp.tasks.add">Add a task</T>}
+          {adding ? "Cancel" : "Add a task"}
         </Button>
         {canAssign && <AssignTask onAssigned={(next) => setTasks(next)} />}
       </div>
@@ -209,10 +206,10 @@ function TaskRow({
         <div style={{ fontSize: 11.5, color: EMP.faint, marginTop: 4 }}>
           {task.dueOn ? (
             <>
-              <T id="emp.tasks.due">Due</T> {fmtDate(task.dueOn)}
+              {"Due"} {fmtDate(task.dueOn)}
             </>
           ) : (
-            <T id="emp.tasks.no_due">No due date</T>
+            "No due date"
           )}
           {task.assigned && task.assignedByName ? ` · ${task.assignedByName}` : ''}
         </div>
@@ -243,7 +240,7 @@ function AddTask({ onDone }: { onDone: (tasks: TaskView[]) => void }) {
   const [dueOn, setDueOn] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const placeholder = useCopy('emp.tasks.title_ph', 'What do you need to remember?');
+  const placeholder = 'What do you need to remember?';
 
   async function save() {
     if (busy) return;
@@ -265,17 +262,17 @@ function AddTask({ onDone }: { onDone: (tasks: TaskView[]) => void }) {
   return (
     <div style={{ padding: '0 16px 16px', display: 'grid', gap: 11 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: 11 }}>
-        <Field label={<T id="emp.tasks.field_title">Task</T>}>
+        <Field label={"Task"}>
           <Input value={title} onChange={setTitle} maxLength={200} placeholder={placeholder} autoFocus />
         </Field>
-        <Field label={<T id="emp.tasks.field_due">Due date</T>} hint="YYYY-MM-DD">
+        <Field label={"Due date"} hint="YYYY-MM-DD">
           <Input value={dueOn} onChange={setDueOn} maxLength={10} placeholder="2026-08-01" />
         </Field>
       </div>
       <ErrorNote>{error}</ErrorNote>
       <div>
         <Button variant="primary" onClick={save} disabled={busy}>
-          {busy ? <T id="emp.tasks.saving">Adding…</T> : <T id="emp.tasks.save">Add task</T>}
+          {busy ? "Adding…" : "Add task"}
         </Button>
       </div>
     </div>
@@ -338,7 +335,7 @@ function AssignTask({ onAssigned }: { onAssigned: (tasks: TaskView[]) => void })
       <>
         <Button onClick={() => setOpen(true)}>
           <Icon name="user-plus" size={13} />
-          <T id="emp.tasks.assign">Assign to someone</T>
+          {"Assign to someone"}
         </Button>
         {note && <span style={{ fontSize: 12, color: EMP.green, alignSelf: 'center' }}>{note}</span>}
       </>
@@ -348,10 +345,10 @@ function AssignTask({ onAssigned }: { onAssigned: (tasks: TaskView[]) => void })
   return (
     <div style={{ width: '100%', display: 'grid', gap: 11 }}>
       <div style={{ ...label }}>
-        <T id="emp.tasks.assign_heading">Assign a task</T>
+        {"Assign a task"}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 11 }}>
-        <Field label={<T id="emp.tasks.assign_who">Who</T>}>
+        <Field label={"Who"}>
           <Select
             value={target}
             onChange={setTarget}
@@ -361,20 +358,20 @@ function AssignTask({ onAssigned }: { onAssigned: (tasks: TaskView[]) => void })
             ]}
           />
         </Field>
-        <Field label={<T id="emp.tasks.assign_title">Task</T>}>
+        <Field label={"Task"}>
           <Input value={title} onChange={setTitle} maxLength={200} />
         </Field>
-        <Field label={<T id="emp.tasks.assign_due">Due date</T>} hint="YYYY-MM-DD">
+        <Field label={"Due date"} hint="YYYY-MM-DD">
           <Input value={dueOn} onChange={setDueOn} maxLength={10} placeholder="2026-08-01" />
         </Field>
       </div>
       <ErrorNote>{error}</ErrorNote>
       <div style={{ display: 'flex', gap: 8 }}>
         <Button variant="primary" onClick={assign} disabled={busy}>
-          {busy ? <T id="emp.tasks.assigning">Assigning…</T> : <T id="emp.tasks.assign_save">Assign</T>}
+          {busy ? "Assigning…" : "Assign"}
         </Button>
         <Button onClick={() => setOpen(false)}>
-          <T id="emp.tasks.assign_cancel">Cancel</T>
+          {"Cancel"}
         </Button>
       </div>
     </div>

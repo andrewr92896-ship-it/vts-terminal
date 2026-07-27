@@ -6,7 +6,6 @@ import { accentGradient } from '../../theme/themes';
 import { NAV, type NavWorkspace } from '../../theme/nav';
 import { buildNavOrder, isDefaultOrder } from '../../theme/navOrder';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 import { SectionHeader, panel, ghostBtn, primaryBtn, msgStyle } from './adminUi';
 
 // Developer Portal ▸ Sidebar Layout. A founder-only tool to reorder the
@@ -141,25 +140,21 @@ export function AdminSidebarLayout({
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
-        titleId="admin.sidebar.title"
-        subtitleId="admin.sidebar.subtitle"
         title="Sidebar Layout"
         subtitle="Reorder the workspaces and the sections inside each one. Changes apply to the sidebar for everyone once you save."
       />
 
       <div style={{ ...msgStyle(true), marginTop: 0, marginBottom: 16, color: '#9fb4dd', background: 'rgba(11,26,58,.5)', border: `1px solid ${theme.navBorder}` }}>
-        <EditableText id="admin.sidebar.note">
-          Use the arrows to move a workspace up or down. Click a workspace (or "Expand all") to open it and reorder the sections inside it with their own arrows. This only changes the order — nothing is added, removed, or moved between workspaces.
-        </EditableText>
+        {"Use the arrows to move a workspace up or down. Click a workspace (or \"Expand all\") to open it and reorder the sections inside it with their own arrows. This only changes the order — nothing is added, removed, or moved between workspaces."}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
         <button onClick={toggleAll} disabled={busy} style={{ ...linkBtn, opacity: busy ? 0.55 : 1, cursor: busy ? 'default' : 'pointer' }}>
           <Icon name={allOpen ? 'chevrons-down-up' : 'chevrons-up-down'} size={14} />
           {allOpen ? (
-            <EditableText id="admin.sidebar.collapseAll">Collapse all</EditableText>
+            "Collapse all"
           ) : (
-            <EditableText id="admin.sidebar.expandAll">Expand all</EditableText>
+            "Expand all"
           )}
         </button>
       </div>
@@ -195,9 +190,9 @@ export function AdminSidebarLayout({
                     {w.sections.length} section{w.sections.length === 1 ? '' : 's'}
                     {' · '}
                     {open ? (
-                      <EditableText id="admin.sidebar.openHint">reorder below</EditableText>
+                      "reorder below"
                     ) : (
-                      <EditableText id="admin.sidebar.closedHint">click to reorder</EditableText>
+                      "click to reorder"
                     )}
                   </div>
                 </div>
@@ -218,7 +213,7 @@ export function AdminSidebarLayout({
               {open && (
                 <div style={{ marginTop: 12, paddingTop: 12, borderTop: `1px solid ${theme.navBorder}`, display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '.4px', textTransform: 'uppercase', color: '#7f93bd', marginBottom: 2 }}>
-                    <EditableText id="admin.sidebar.sectionsHeading">Reorder sections</EditableText>
+                    {"Reorder sections"}
                   </div>
                   {w.sections.map((s, si) => (
                     <div
@@ -263,7 +258,7 @@ export function AdminSidebarLayout({
           disabled={busy || !dirty}
           style={{ ...primaryBtn(theme, accentGrad), opacity: busy || !dirty ? 0.55 : 1, cursor: busy || !dirty ? 'default' : 'pointer' }}
         >
-          {busy ? 'Saving…' : <EditableText id="admin.sidebar.save">Save layout</EditableText>}
+          {busy ? 'Saving…' : "Save layout"}
         </button>
         <button
           onClick={resetToDefault}
@@ -271,7 +266,7 @@ export function AdminSidebarLayout({
           title="Restore the built-in sidebar order"
           style={{ ...ghostBtn, opacity: busy || !canReset ? 0.55 : 1, cursor: busy || !canReset ? 'default' : 'pointer' }}
         >
-          <EditableText id="admin.sidebar.reset">Reset to default</EditableText>
+          {"Reset to default"}
         </button>
       </div>
     </div>

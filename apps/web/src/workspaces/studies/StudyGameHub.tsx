@@ -2,7 +2,6 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api } from '../../api/client';
 import type { TeamDeck } from '../../api/types';
 import type { Theme } from '../../theme/themes';
-import { EditableText } from '../../copy/SiteCopy';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { TeamStudyGame } from './TeamStudyGame';
@@ -133,40 +132,37 @@ export function StudyGameHub({
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-          <EditableText id={`studygame.${target}.title`} text={copy.title} />
+          {copy.title}
         </h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-          <EditableText id={`studygame.${target}.blurb`} text={copy.blurb} />
+          {copy.blurb}
         </p>
       </div>
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          <EditableText id="studygame.loading" text="Loading your study games…" />
+          {"Loading your study games…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          <EditableText id="studygame.load_error" text="Couldn’t load your study games. Try again in a moment." />
+          {"Couldn’t load your study games. Try again in a moment."}
         </div>
       ) : mode === 'browse' ? (
         <>
           <div style={headerRow}>
             <h3 style={sectionHeading}>
-              <EditableText id="studygame.browse_heading" text="Browse study games" />
+              {"Browse study games"}
             </h3>
             <button onClick={() => setMode('list')} style={ghostBtn(theme)}>
-              <EditableText id="studygame.back_btn" text="← Back to your games" />
+              {"← Back to your games"}
             </button>
           </div>
           <p style={{ margin: '0 0 12px', fontSize: 12.5, color: muted, maxWidth: 560, lineHeight: 1.5 }}>
-            <EditableText
-              id="studygame.browse_blurb"
-              text="Ready-made games built into the portal. Add the ones you want and they’ll show up in your study games."
-            />
+            {"Ready-made games built into the portal. Add the ones you want and they’ll show up in your study games."}
           </p>
           {builtIn.length === 0 ? (
             <div style={{ ...card(theme), color: muted, fontSize: 13, textAlign: 'center' }}>
-              <EditableText id="studygame.browse_empty" text="No built-in games are available right now." />
+              {"No built-in games are available right now."}
             </div>
           ) : (
             <div style={grid(isPhone)}>
@@ -189,14 +185,14 @@ export function StudyGameHub({
         <>
           <div style={headerRow}>
             <h3 style={sectionHeading}>
-              <EditableText id="studygame.games_heading" text="Your study games" />
+              {"Your study games"}
             </h3>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={() => setMode('browse')} style={ghostBtn(theme)}>
-                <EditableText id="studygame.browse_btn" text="Browse Study Games" />
+                {"Browse Study Games"}
               </button>
               <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-                <EditableText id="studygame.create_btn" text="✦ Create a study game" />
+                {"✦ Create a study game"}
               </button>
             </div>
           </div>
@@ -205,19 +201,19 @@ export function StudyGameHub({
             <div style={{ ...card(theme), textAlign: 'center' }}>
               <div style={{ fontSize: 28, marginBottom: 8 }}>🎓</div>
               <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-                <EditableText id="studygame.empty_title" text="No study games yet" />
+                {"No study games yet"}
               </div>
               <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
-                <EditableText id={`studygame.${target}.empty`} text={copy.empty} />
+                {copy.empty}
               </div>
               <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
                 {builtIn.length > 0 && (
                   <button onClick={() => setMode('browse')} style={accentBtn(BUILTIN_ACCENT)}>
-                    <EditableText id="studygame.empty_browse" text="Browse Study Games" />
+                    {"Browse Study Games"}
                   </button>
                 )}
                 <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-                  <EditableText id="studygame.open_creation" text="Open Study Creation" />
+                  {"Open Study Creation"}
                 </button>
               </div>
             </div>

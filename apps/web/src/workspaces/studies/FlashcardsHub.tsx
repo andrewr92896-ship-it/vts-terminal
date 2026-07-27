@@ -5,7 +5,6 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
-import { EditableText, EditableRich } from '../../copy/SiteCopy';
 import { card } from './TeamStudyDecks';
 import { FlashcardSetPlayer } from './FlashcardSetPlayer';
 
@@ -53,47 +52,44 @@ export function FlashcardsHub({ theme, onNavigate }: { theme: Theme; onNavigate:
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 16 }}>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-          <EditableText id="flashcards.title" text="Flashcards" />
+          {"Flashcards"}
         </h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-          <EditableRich
-            id="flashcards.subtitle"
-            text="Pick a set to study with auto-rotate, topic filters, and “Ask VTS AI”. Build your own in **Study Creation**."
-          />
+          Pick a set to study with auto-rotate, topic filters, and “Ask VTS AI”. Build your own in <strong>Study Creation</strong>.
         </p>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '0 0 10px' }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#fff' }}>
-          <EditableText id="flashcards.sets_heading" text="Your team’s flashcard sets" />
+          {"Your team’s flashcard sets"}
         </h3>
         {!readOnly && (
           <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-            <EditableText id="flashcards.create_btn" text="✦ Create a flashcard set" />
+            {"✦ Create a flashcard set"}
           </button>
         )}
       </div>
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          <EditableText id="flashcards.loading" text="Loading your team’s flashcard sets…" />
+          {"Loading your team’s flashcard sets…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          <EditableText id="flashcards.load_error" text="Couldn’t load your team’s flashcard sets. Try again in a moment." />
+          {"Couldn’t load your team’s flashcard sets. Try again in a moment."}
         </div>
       ) : sets.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🃏</div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-            <EditableText id="flashcards.empty_title" text="No flashcard sets yet" />
+            {"No flashcard sets yet"}
           </div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>
-            <EditableText id="flashcards.empty_blurb" text="Build one in Study Creation — type the cards in, generate them from a topic with AI, or upload a text file — and it shows up here to study." />
+            {"Build one in Study Creation — type the cards in, generate them from a topic with AI, or upload a text file — and it shows up here to study."}
           </div>
           {!readOnly && (
             <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
-              <EditableText id="flashcards.open_creation" text="Open Study Creation" />
+              {"Open Study Creation"}
             </button>
           )}
         </div>
@@ -166,7 +162,7 @@ function SetPlayer({ theme, setId, readOnly, onBack }: { theme: Theme; setId: st
     <div style={{ maxWidth: 940, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 16 }}>
         <button onClick={onBack} style={{ ...ghostBtn(theme), marginBottom: 8 }}>
-          <EditableText id="flashcards.all_sets_back" text="‹ All sets" />
+          {"‹ All sets"}
         </button>
         <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{set?.name ?? 'Flashcards'}</h2>
         {set && (
@@ -178,11 +174,11 @@ function SetPlayer({ theme, setId, readOnly, onBack }: { theme: Theme; setId: st
       </div>
       {error ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          <EditableText id="flashcards.set_error" text="Couldn’t load that set. Try again in a moment." />
+          {"Couldn’t load that set. Try again in a moment."}
         </div>
       ) : !set ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          <EditableText id="flashcards.cards_loading" text="Loading cards…" />
+          {"Loading cards…"}
         </div>
       ) : (
         <FlashcardSetPlayer theme={theme} setId={set.id} name={set.name} cards={set.cards} readOnly={readOnly} embedded />

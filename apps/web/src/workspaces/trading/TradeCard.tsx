@@ -4,7 +4,6 @@ import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
 import { DesignationTag, tileTint } from './DesignationTag';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
-import { EditableText } from '../../copy/SiteCopy';
 
 // The full "trading card" for one open position — the rich card shown on the
 // Live Wall's Positions view (and, optionally, inside the Master board's Open
@@ -259,7 +258,7 @@ export function TradeCard({
       {canClose && (
         <div style={{ borderTop: `1px solid ${BORDER}`, padding: '10px 14px', background: PANEL }}>
           {!closing ? (
-            <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}><EditableText id="tradecard.close">Close trade</EditableText></button>
+            <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}>{"Close trade"}</button>
           ) : (
             <div>
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 9, lineHeight: 1.45 }}>
@@ -282,7 +281,7 @@ export function TradeCard({
                   {closeBusy ? 'Reading…' : 'Upload photo'}
                 </button>
                 <input ref={closeFileRef} type="file" accept="image/*" onChange={(e) => { closeFromShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
-                <button onClick={() => setClosing(false)} disabled={closeBusy} style={ghostBtnSm}><EditableText id="tradecard.cancel">Cancel</EditableText></button>
+                <button onClick={() => setClosing(false)} disabled={closeBusy} style={ghostBtnSm}>{"Cancel"}</button>
               </div>
               {closeErr && <div style={{ fontSize: 11, color: RED, marginTop: 9 }}>{closeErr}</div>}
             </div>

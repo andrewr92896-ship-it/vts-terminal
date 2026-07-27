@@ -11,9 +11,23 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.64';
+export const APP_VERSION = 'Beta V 5.66';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.66',
+    date: 'July 27, 2026',
+    notes: [
+      'Removed the in-app wording editor (the floating icon that let a founder rewrite site text live) from both the main portal and the Employee Portal. All coded text is now fixed directly in the source — the same wording as before, just no longer changeable from the browser.',
+    ],
+  },
+  {
+    version: 'Beta V 5.65',
+    date: 'July 27, 2026',
+    notes: [
+      'The Employee Portal sign-in page drops the line under its heading about being a separate area with its own session. The heading and the form carry the point on their own.',
+    ],
+  },
   {
     version: 'Beta V 5.64',
     date: 'July 27, 2026',

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { EditableText } from '../../copy/SiteCopy';
 import type { BoardTile, PriceAlertCondition, PriceAlertRepeat } from '../../api/types';
 import { TvWidget } from './TvWidget';
 import { TileConfigModal } from './TileConfigModal';
@@ -153,7 +152,7 @@ function QuickAlertModal({ symbol, onClose }: { symbol: string; onClose: () => v
     <TileConfigModal onClose={onClose}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>
-          🔔 <EditableText id="chart.alert.title">New price alert</EditableText>
+          🔔 {"New price alert"}
         </span>
         <button onClick={onClose} style={iconBtn} title="Close">✕</button>
       </div>
@@ -161,21 +160,21 @@ function QuickAlertModal({ symbol, onClose }: { symbol: string; onClose: () => v
 
       {done ? (
         <div style={{ fontSize: 12.5, color: GREEN, padding: '6px 0' }}>
-          <EditableText id="chart.alert.done">Alert created ✓</EditableText>
+          {"Alert created ✓"}
         </div>
       ) : (
         <>
-          <label style={lbl}><EditableText id="chart.alert.trigger">Trigger</EditableText></label>
+          <label style={lbl}>{"Trigger"}</label>
           <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
             <button onClick={() => setCondition('above')} style={pickChip(condition === 'above')}>
-              <EditableText id="chart.alert.above">Crosses above</EditableText>
+              {"Crosses above"}
             </button>
             <button onClick={() => setCondition('below')} style={pickChip(condition === 'below')}>
-              <EditableText id="chart.alert.below">Crosses below</EditableText>
+              {"Crosses below"}
             </button>
           </div>
 
-          <label style={lbl}><EditableText id="chart.alert.price">Price</EditableText></label>
+          <label style={lbl}>{"Price"}</label>
           <input
             type="number"
             inputMode="decimal"
@@ -189,13 +188,13 @@ function QuickAlertModal({ symbol, onClose }: { symbol: string; onClose: () => v
 
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: MUTED, marginBottom: 12, cursor: 'pointer' }}>
             <input type="checkbox" checked={repeat === 'always'} onChange={(e) => setRepeat(e.target.checked ? 'always' : 'once')} />
-            <EditableText id="chart.alert.repeat">Keep alerting on every cross</EditableText>
+            {"Keep alerting on every cross"}
           </label>
 
           {error && <div style={{ fontSize: 11.5, color: '#ff9a9a', marginBottom: 8 }}>{error}</div>}
 
           <button onClick={() => void submit()} disabled={busy} style={{ ...goldBtn, width: '100%', opacity: busy ? 0.6 : 1 }}>
-            {busy ? <EditableText id="chart.alert.adding">Adding…</EditableText> : <EditableText id="chart.alert.add">Add alert</EditableText>}
+            {busy ? "Adding…" : "Add alert"}
           </button>
         </>
       )}

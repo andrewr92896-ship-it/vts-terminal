@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { employeeApi, type DocCategory, type DocumentView } from '../api';
 import { DOC_CATEGORY_LABELS, EMP, fmtDateTime, tint } from '../theme';
-import { T, useCopy } from '../copy';
 import {
   Button,
   Card,
@@ -39,9 +38,9 @@ export function Documents({ canManage }: { canManage: boolean }) {
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const titlePlaceholder = useCopy('emp.docs.title_ph', 'e.g. Expense policy');
-  const summaryPlaceholder = useCopy('emp.docs.summary_ph', 'One line on what this covers');
-  const bodyPlaceholder = useCopy('emp.docs.body_ph', 'The document text, or leave blank if you are linking out.');
+  const titlePlaceholder = 'e.g. Expense policy';
+  const summaryPlaceholder = 'One line on what this covers';
+  const bodyPlaceholder = 'The document text, or leave blank if you are linking out.';
 
   function load() {
     employeeApi
@@ -105,7 +104,7 @@ export function Documents({ canManage }: { canManage: boolean }) {
   if (!docs) {
     return (
       <Empty icon="refresh-cw">
-        <T id="emp.docs.loading">Loading…</T>
+        {"Loading…"}
       </Empty>
     );
   }
@@ -114,17 +113,15 @@ export function Documents({ canManage }: { canManage: boolean }) {
     <div>
       <ScreenHeader
         icon="file-text"
-        title={<T id="emp.docs.title">Documents</T>}
+        title={"Documents"}
         subtitle={
-          <T id="emp.docs.subtitle">
-            Policies, handbook sections, forms and process guides. Internal use only.
-          </T>
+          "Policies, handbook sections, forms and process guides. Internal use only."
         }
         actions={
           canManage && (
             <Button variant="primary" onClick={() => setComposing((v) => !v)}>
               <Icon name="plus" size={14} />
-              {composing ? <T id="emp.docs.cancel">Cancel</T> : <T id="emp.docs.new">New document</T>}
+              {composing ? "Cancel" : "New document"}
             </Button>
           )
         }
@@ -134,29 +131,29 @@ export function Documents({ canManage }: { canManage: boolean }) {
         <Card style={{ marginBottom: 18 }}>
           <div style={{ display: 'grid', gap: 13 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 13 }}>
-              <Field label={<T id="emp.docs.field_title">Title</T>}>
+              <Field label={"Title"}>
                 <Input value={title} onChange={setTitle} maxLength={160} placeholder={titlePlaceholder} />
               </Field>
-              <Field label={<T id="emp.docs.field_category">Category</T>}>
+              <Field label={"Category"}>
                 <Select value={category} onChange={setCategory} options={CATEGORY_OPTIONS} />
               </Field>
             </div>
-            <Field label={<T id="emp.docs.field_summary">Summary</T>}>
+            <Field label={"Summary"}>
               <Input value={summary} onChange={setSummary} maxLength={400} placeholder={summaryPlaceholder} />
             </Field>
-            <Field label={<T id="emp.docs.field_body">Document text</T>}>
+            <Field label={"Document text"}>
               <TextArea value={body} onChange={setBody} rows={8} maxLength={20000} placeholder={bodyPlaceholder} />
             </Field>
             <Field
-              label={<T id="emp.docs.field_link">Link</T>}
-              hint={<T id="emp.docs.link_hint">Optional. Must start with http:// or https://</T>}
+              label={"Link"}
+              hint={"Optional. Must start with http:// or https://"}
             >
               <Input value={linkUrl} onChange={setLinkUrl} placeholder="https://" maxLength={2000} />
             </Field>
             <ErrorNote>{formError}</ErrorNote>
             <div>
               <Button variant="primary" onClick={create} disabled={busy}>
-                {busy ? <T id="emp.docs.saving">Saving…</T> : <T id="emp.docs.save">Save document</T>}
+                {busy ? "Saving…" : "Save document"}
               </Button>
             </div>
           </div>
@@ -165,7 +162,7 @@ export function Documents({ canManage }: { canManage: boolean }) {
 
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', marginBottom: 16 }}>
         <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>
-          <T id="emp.docs.filter_all">All</T>
+          {"All"}
         </FilterChip>
         {CATEGORY_OPTIONS.map((c) => (
           <FilterChip key={c.value} active={filter === c.value} onClick={() => setFilter(c.value)}>
@@ -176,7 +173,7 @@ export function Documents({ canManage }: { canManage: boolean }) {
 
       {filtered.length === 0 ? (
         <Empty icon="file-text">
-          <T id="emp.docs.empty">Nothing filed here yet.</T>
+          {"Nothing filed here yet."}
         </Empty>
       ) : (
         <div style={{ display: 'grid', gap: 12 }}>
@@ -204,7 +201,7 @@ export function Documents({ canManage }: { canManage: boolean }) {
                     {doc.body && (
                       <Button onClick={() => setOpen(isOpen ? null : doc.id)}>
                         <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size={13} />
-                        {isOpen ? <T id="emp.docs.hide">Hide</T> : <T id="emp.docs.read">Read</T>}
+                        {isOpen ? "Hide" : "Read"}
                       </Button>
                     )}
                     {doc.linkUrl && (
@@ -218,7 +215,7 @@ export function Documents({ canManage }: { canManage: boolean }) {
                       >
                         <Button>
                           <Icon name="external-link" size={13} />
-                          <T id="emp.docs.open">Open</T>
+                          {"Open"}
                         </Button>
                       </a>
                     )}

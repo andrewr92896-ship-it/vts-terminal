@@ -4,7 +4,6 @@ import type { AiPrompt } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { Badge, SectionHeader, fieldLabel, ghostBtn, inputStyle, msgStyle, panel, primaryBtn } from './adminUi';
-import { EditableText } from '../../copy/SiteCopy';
 
 // Admin panel: edit the AI system prompts (the instructions the assistant
 // follows) that used to be hardcoded. Each prompt shows its current text; the
@@ -82,13 +81,12 @@ export function AdminAiInstructions({ theme }: { theme: Theme }) {
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}><EditableText id="admin.ai.loading">Loading AI instructions...</EditableText></div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>{"Loading AI instructions..."}</div>;
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
-        titleId="admin.ai.title" subtitleId="admin.ai.subtitle"
         title="AI Instructions"
         subtitle="Edit what each AI feature is told to do. Changes apply the next time the feature runs. Reset any prompt to restore the built-in wording. Keep any {tokens} and JSON-format instructions intact."
       />
@@ -114,7 +112,7 @@ export function AdminAiInstructions({ theme }: { theme: Theme }) {
                       Keep this token in place: <code style={{ fontFamily: "'IBM Plex Mono', monospace" }}>{p.placeholder}</code>
                     </div>
                   )}
-                  <label style={fieldLabel}><EditableText id="admin.ai.f_instructions">Instructions</EditableText></label>
+                  <label style={fieldLabel}>{"Instructions"}</label>
                   <textarea
                     value={draft}
                     onChange={(e) => setDrafts((prev) => ({ ...prev, [p.id]: e.target.value }))}

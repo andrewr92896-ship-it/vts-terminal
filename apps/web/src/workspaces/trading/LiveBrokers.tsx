@@ -3,7 +3,6 @@ import { api } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
-import { EditableText } from '../../copy/SiteCopy';
 import type { OandaCapital } from '../../api/types';
 
 const GOLD = '#EBCB74';
@@ -62,9 +61,9 @@ export function LiveBrokers() {
     <div style={{ maxWidth: 1080, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}><EditableText id="brokers.title">Live Brokers</EditableText></h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{"Live Brokers"}</h2>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-            <EditableText id="brokers.subtitle">Your team’s live brokerage capital, each account tagged with its trader, pulled from the broker API so it updates as trades are placed. Hand-kept accounts are on the Manual Trades tab.</EditableText>
+            {"Your team’s live brokerage capital, each account tagged with its trader, pulled from the broker API so it updates as trades are placed. Hand-kept accounts are on the Manual Trades tab."}
           </div>
         </div>
         {!readOnly && oanda?.configured && (
@@ -73,16 +72,16 @@ export function LiveBrokers() {
       </div>
 
       {!loaded ? (
-        <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="brokers.loading">Loading live brokers…</EditableText></div>
+        <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading live brokers…"}</div>
       ) : readOnly ? (
         <div style={{ ...panel, fontSize: 12, color: MUTED }}>
-          <EditableText id="brokers.readonly">Live broker capital is available to full traders only.</EditableText>
+          {"Live broker capital is available to full traders only."}
         </div>
       ) : oanda?.configured ? (
         <OandaCapitalCard oanda={oanda} showMoney={showMoney} isPhone={isPhone} />
       ) : (
         <div style={{ ...panel, fontSize: 12.5, color: MUTED }}>
-          <EditableText id="brokers.not_connected">No live broker connected yet. Connect an OANDA account from the Admin → Broker connections panel and your live capital (NAV, balance, open P/L) will appear here.</EditableText>
+          {"No live broker connected yet. Connect an OANDA account from the Admin → Broker connections panel and your live capital (NAV, balance, open P/L) will appear here."}
         </div>
       )}
     </div>
@@ -106,7 +105,7 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
             <span style={{ fontSize: 11, color: GOLD }}>· @{oanda.accounts[0].owner}</span>
           )}
         </div>
-        <span style={{ fontSize: 10.5, color: FAINT }}><EditableText id="brokers.api_caption">From the OANDA API — updates as trades are placed</EditableText></span>
+        <span style={{ fontSize: 10.5, color: FAINT }}>{"From the OANDA API — updates as trades are placed"}</span>
       </div>
 
       {/* Headline NAV / balance / open P/L (combined when one currency) */}

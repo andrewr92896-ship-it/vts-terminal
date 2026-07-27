@@ -5,7 +5,6 @@ import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { TutorChat } from './TutorChat';
-import { EditableText } from '../../copy/SiteCopy';
 
 // The auto-rotate flashcard player, generalized to study ANY team-authored set
 // (term/definition cards). It keeps every feature the old built-in flashcards
@@ -372,7 +371,7 @@ export function FlashcardSetPlayer({
                   ✓ I know this
                 </button>
               )}
-              <button onClick={() => go(1)} style={navBtn(theme)}><EditableText id="flashcardplayer.next">Next ›</EditableText></button>
+              <button onClick={() => go(1)} style={navBtn(theme)}>{"Next ›"}</button>
             </div>
           )}
 

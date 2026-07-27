@@ -3,7 +3,6 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { usePrivacy } from '../../privacy/privacy';
 import type { DeletedTradeRecord } from '../../api/types';
-import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
 
 const GOLD = '#EBCB74';
@@ -64,21 +63,18 @@ export function DeletedTrades() {
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
-      <ScreenTitle id="deleted.title">Deleted Trades</ScreenTitle>
+      <ScreenTitle>Deleted Trades</ScreenTitle>
       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6, marginBottom: 16, lineHeight: 1.5 }}>
-        <EditableText id="deleted.subtitle">
-          Trades you removed from the Trade Log or History. They don’t count toward your stats (win rate,
-          profit factor, P/L), but nothing is gone for good — restore any you deleted by mistake.
-        </EditableText>
+        {"Trades you removed from the Trade Log or History. They don’t count toward your stats (win rate, profit factor, P/L), but nothing is gone for good — restore any you deleted by mistake."}
       </div>
 
       {error && <div style={banner}>{error}</div>}
 
       {trades == null ? (
-        <div style={{ color: MUTED, fontSize: 13, padding: 20 }}><EditableText id="deleted.loading">Loading…</EditableText></div>
+        <div style={{ color: MUTED, fontSize: 13, padding: 20 }}>{"Loading…"}</div>
       ) : trades.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          <EditableText id="deleted.empty">Nothing deleted. Anything you remove from the Trade Log or History shows up here, ready to restore.</EditableText>
+          {"Nothing deleted. Anything you remove from the Trade Log or History shows up here, ready to restore."}
         </div>
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
@@ -99,7 +95,7 @@ export function DeletedTrades() {
                   <div style={{ fontSize: 11, color: MUTED, fontFamily: MONO }}>
                     {t.units} @ {fmtPrice(t.entryPrice)}
                     {t.exitPrice != null ? ` → ${fmtPrice(t.exitPrice)}` : ''} ·{' '}
-                    <EditableText id="deleted.removed_at">removed</EditableText> {etDateTime(t.deletedAt)}
+                    {"removed"} {etDateTime(t.deletedAt)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -110,7 +106,7 @@ export function DeletedTrades() {
                   )}
                   {canRestore && (
                     <button onClick={() => restore(t.id)} disabled={busy === t.id} style={{ ...restoreBtn, opacity: busy === t.id ? 0.6 : 1 }}>
-                      {busy === t.id ? <EditableText id="deleted.restoring">Restoring…</EditableText> : <EditableText id="deleted.restore">Restore</EditableText>}
+                      {busy === t.id ? "Restoring…" : "Restore"}
                     </button>
                   )}
                 </div>

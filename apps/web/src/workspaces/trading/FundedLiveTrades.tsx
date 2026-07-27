@@ -3,7 +3,6 @@ import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { useLivePrices, type LiveMark } from './useLivePrices';
 import type { FundedAccount, FundedData, FundedTrade } from '../../api/types';
-import { EditableText } from '../../copy/SiteCopy';
 
 // Live funded trades, embedded on the private Funded (prop-challenge) page.
 // Funded / prop accounts have no API, so an open position is tracked by reading
@@ -102,7 +101,7 @@ export function FundedLiveTrades({ showMoney, readOnly }: { showMoney: boolean; 
       {loadError ? (
         <div style={{ color: RED, fontSize: 12.5 }}>{loadError}</div>
       ) : !data ? (
-        <div style={{ color: MUTED, fontSize: 12.5 }}><EditableText id="fundedtrades.loading">Loading funded trades…</EditableText></div>
+        <div style={{ color: MUTED, fontSize: 12.5 }}>{"Loading funded trades…"}</div>
       ) : openRows.length === 0 ? (
         <div style={{ ...panel, textAlign: 'center', color: MUTED, fontSize: 12.5, padding: '22px 16px' }}>
           No live funded trades open.
@@ -244,7 +243,7 @@ function LiveTradeRow({
                 {busy ? 'Reading…' : 'Upload photo'}
               </button>
               <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { closeFromShot(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
-              <button onClick={() => setClosing(false)} disabled={busy} style={ghostBtn}><EditableText id="fundedtrades.cancel">Cancel</EditableText></button>
+              <button onClick={() => setClosing(false)} disabled={busy} style={ghostBtn}>{"Cancel"}</button>
             </div>
           </div>
         </div>
@@ -354,7 +353,7 @@ function TrackLivePanel({
           {busy ? 'Reading…' : 'Upload photo'}
         </button>
         <input ref={fileRef} type="file" accept="image/*" onChange={(e) => { void handleFile(e.target.files?.[0]); e.currentTarget.value = ''; }} style={{ display: 'none' }} />
-        <button onClick={onDone} style={ghostBtn}><EditableText id="fundedtrades.done">Done</EditableText></button>
+        <button onClick={onDone} style={ghostBtn}>{"Done"}</button>
       </div>
       {msg && <div style={{ fontSize: 12, color: GREEN, marginTop: 10 }}>{msg}</div>}
     </div>

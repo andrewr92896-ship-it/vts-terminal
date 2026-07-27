@@ -1,6 +1,5 @@
 import type { Theme } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { EditableText } from '../../copy/SiteCopy';
 import { Icon } from '../../components/Icon';
 
 // The Investments workspace foundation. Every section here is a themed
@@ -152,15 +151,15 @@ export function ComingSoon({ screen, theme }: { screen: string; theme: Theme }) 
               opacity: 0.9,
             }}
           >
-            <EditableText id="coming_soon.badge">Coming Soon</EditableText>
+            {"Coming Soon"}
           </span>
         </div>
 
         <h2 style={{ margin: '0 0 10px', fontSize: 24, fontWeight: 700, color: '#eef3ff' }}>
-          <EditableText id={`${info.id}.title`} text={info.title} />
+          {info.title}
         </h2>
         <p style={{ margin: 0, fontSize: 14, lineHeight: 1.65, color: '#aebcd8' }}>
-          <EditableText id={`${info.id}.blurb`} text={info.blurb} />
+          {info.blurb}
         </p>
 
         <div style={{ marginTop: 22, paddingTop: 16, borderTop: `1px solid ${theme.navBorder}` }}>
@@ -173,10 +172,7 @@ export function ComingSoon({ screen, theme }: { screen: string; theme: Theme }) 
               fontFamily: "'IBM Plex Mono', monospace",
             }}
           >
-            <EditableText id="investments.disclaimer">
-              We’re building this now. Investments is an informational, read-only tracker — it never
-              places trades or moves money, and nothing here is investment, tax, or financial advice.
-            </EditableText>
+            {"We’re building this now. Investments is an informational, read-only tracker — it never places trades or moves money, and nothing here is investment, tax, or financial advice."}
           </p>
         </div>
       </div>

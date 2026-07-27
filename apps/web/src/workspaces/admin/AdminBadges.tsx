@@ -4,7 +4,6 @@ import type { BadgeType } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 import {
   SectionHeader,
   dangerSolidBtn,
@@ -131,12 +130,11 @@ export function AdminBadges({ theme }: { theme: Theme }) {
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}><EditableText id="admin.badges.loading">Loading badges...</EditableText></div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>{"Loading badges..."}</div>;
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
-        titleId="admin.badges.title" subtitleId="admin.badges.subtitle"
         title="Badges"
         subtitle="Recognition icons shown next to a member's name. The Admin shield is granted automatically to admins; the Early Release star and any custom badges are assigned to members in the Users section."
       />
@@ -149,7 +147,7 @@ export function AdminBadges({ theme }: { theme: Theme }) {
 
       {/* Existing badges */}
       <div style={{ ...panel(theme), marginBottom: 16 }}>
-        <div style={panelLabel}><EditableText id="admin.badges.list_heading">Badges</EditableText></div>
+        <div style={panelLabel}>{"Badges"}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {badges.map((b) =>
             editId === b.id ? (
@@ -222,29 +220,29 @@ export function AdminBadges({ theme }: { theme: Theme }) {
 
       {/* Create a new badge */}
       <div style={panel(theme)}>
-        <div style={panelLabel}><EditableText id="admin.badges.create_heading">Create a badge</EditableText></div>
+        <div style={panelLabel}>{"Create a badge"}</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div>
-            <label style={fieldLabel}><EditableText id="admin.badges.f_icon">Icon</EditableText></label>
+            <label style={fieldLabel}>{"Icon"}</label>
             <IconPicker value={icon} onChange={setIcon} color={color} theme={theme} wrap />
           </div>
           <div>
-            <label style={fieldLabel}><EditableText id="admin.badges.f_color">Color</EditableText></label>
+            <label style={fieldLabel}>{"Color"}</label>
             <ColorPicker value={color} onChange={setColor} wrap />
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <div style={{ flex: '1 1 160px' }}>
-              <label style={fieldLabel}><EditableText id="admin.badges.f_name">Name</EditableText></label>
+              <label style={fieldLabel}>{"Name"}</label>
               <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Founding Member" maxLength={40} style={inputStyle} />
             </div>
             <div style={{ flex: '2 1 220px' }}>
-              <label style={fieldLabel}><EditableText id="admin.badges.f_description">Description (tooltip, optional)</EditableText></label>
+              <label style={fieldLabel}>{"Description (tooltip, optional)"}</label>
               <input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Shown on hover" maxLength={200} style={inputStyle} />
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={create} disabled={busy || !label.trim()} style={primaryBtn(theme, accentGrad)}>
-              {busy ? 'Saving…' : <EditableText id="admin.badges.add_btn">Add badge</EditableText>}
+              {busy ? 'Saving…' : "Add badge"}
             </button>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#9fb0d6' }}>
               Preview: <Icon name={icon} size={16} color={color} /> {label.trim() || 'Badge name'}

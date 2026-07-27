@@ -5,7 +5,6 @@ import { PATCH_NOTES } from '../../meta/version';
 import { api, ApiError } from '../../api/client';
 import type { Announcement, BugReport, PatchNoteEntry, User } from '../../api/types';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 
 // The Site Help workspace screens: How to, Announcements, Patch notes, Report a
 // bug (AI intake), and Suggestion. These replace the old corner help hub tabs;
@@ -79,8 +78,8 @@ export function HelpHowTo({ theme }: { theme: Theme }) {
   return page(
     <>
       <Header
-        title={<EditableText id="help.howto.title">How to</EditableText>}
-        subtitle={<EditableText id="help.howto.subtitle">Step-by-step walkthroughs for the main areas of the portal.</EditableText>}
+        title={"How to"}
+        subtitle={"Step-by-step walkthroughs for the main areas of the portal."}
       />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
         {HOWTO_TOPICS.map((tp) => {
@@ -164,8 +163,8 @@ export function HelpPatchNotes({ theme }: { theme: Theme }) {
   return page(
     <>
       <Header
-        title={<EditableText id="help.notes.title">Patch notes</EditableText>}
-        subtitle={<EditableText id="help.notes.subtitle">What changed in each release of the portal.</EditableText>}
+        title={"Patch notes"}
+        subtitle={"What changed in each release of the portal."}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {all.map((p) => (
@@ -239,18 +238,18 @@ export function HelpAnnouncements({ theme, user }: { theme: Theme; user: User })
   return page(
     <>
       <Header
-        title={<EditableText id="help.news.title">Announcements</EditableText>}
-        subtitle={<EditableText id="help.news.subtitle">Desk-wide notices and updates from the admins.</EditableText>}
+        title={"Announcements"}
+        subtitle={"Desk-wide notices and updates from the admins."}
       />
       {canManage && !user.isDemo && (
         <div style={{ ...panel(theme), marginBottom: 16 }}>
           <div style={{ fontSize: 11, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#7488b5', marginBottom: 8 }}>
-            <EditableText id="help.news.post_heading">Post an announcement</EditableText>
+            {"Post an announcement"}
           </div>
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" maxLength={120} style={inputStyle} />
           <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Message" rows={3} maxLength={4000} style={{ ...inputStyle, marginTop: 8, resize: 'vertical', fontFamily: 'inherit' }} />
           <button onClick={add} disabled={busy || !title.trim() || !body.trim()} style={{ ...primaryBtn(theme, busy || !title.trim() || !body.trim()), marginTop: 10 }}>
-            {busy ? 'Posting...' : <EditableText id="help.news.post_btn">Post</EditableText>}
+            {busy ? 'Posting...' : "Post"}
           </button>
         </div>
       )}
@@ -258,9 +257,9 @@ export function HelpAnnouncements({ theme, user }: { theme: Theme; user: User })
       {error && <div style={errorBanner}>{error}</div>}
 
       {!loaded ? (
-        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}><EditableText id="help.news.loading">Loading...</EditableText></div>
+        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}>{"Loading..."}</div>
       ) : items.length === 0 ? (
-        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}><EditableText id="help.news.empty">No announcements yet.</EditableText></div>
+        <div style={{ color: '#9fb0d6', fontSize: 12.5 }}>{"No announcements yet."}</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {items.map((a) => (
@@ -350,11 +349,11 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
     return page(
       <>
         <Header
-          title={<EditableText id="help.bug.title">Report a bug</EditableText>}
-          subtitle={<EditableText id="help.bug.subtitle_demo">Tell us what went wrong and our assistant will help file it.</EditableText>}
+          title={"Report a bug"}
+          subtitle={"Tell us what went wrong and our assistant will help file it."}
         />
         <div style={panel(theme)}>
-          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}><EditableText id="help.bug.demo">Read-only demo. Sign in to the live portal to report a bug.</EditableText></p>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>{"Read-only demo. Sign in to the live portal to report a bug."}</p>
         </div>
       </>,
     );
@@ -368,8 +367,8 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
     return page(
       <>
         <Header
-          title={<EditableText id="help.bug.title">Report a bug</EditableText>}
-          subtitle={<EditableText id="help.bug.subtitle_active">Our assistant reads your report and files a ticket for the admins.</EditableText>}
+          title={"Report a bug"}
+          subtitle={"Our assistant reads your report and files a ticket for the admins."}
         />
         <div style={{ ...panel(theme), display: 'flex', flexDirection: 'column', gap: 0, padding: 0, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${theme.navBorder}` }}>
@@ -384,11 +383,11 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
               <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
                 <div style={{ fontSize: 10, margin: '0 2px 3px', color: m.role === 'admin' ? '#2FC77E' : '#7e92c0', fontWeight: m.role === 'admin' ? 600 : 400 }}>
                   {m.role === 'ai' ? (
-                    <EditableText id="feedback.assistant.name">VTS AI</EditableText>
+                    "VTS AI"
                   ) : m.role === 'admin' ? (
-                    <EditableText id="feedback.admin.name">Admin</EditableText>
+                    "Admin"
                   ) : (
-                    <EditableText id="help.bug.you">You</EditableText>
+                    "You"
                   )}
                 </div>
                 <div
@@ -429,17 +428,17 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
                 style={inputStyle}
               />
               <button onClick={() => void sendReply()} disabled={busy || !reply.trim()} style={primaryBtn(theme, busy || !reply.trim())}>
-                {busy ? '…' : <EditableText id="help.bug.send_reply">Send</EditableText>}
+                {busy ? '…' : "Send"}
               </button>
             </div>
           ) : (
             <div style={{ padding: 14, borderTop: `1px solid ${theme.navBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: '#7fd6a3', fontWeight: 600 }}>
                 <Icon name="check-check" size={14} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 6 }} />
-                <EditableText id="help.bug.ticket_sent">Ticket sent to the admins.</EditableText>
+                {"Ticket sent to the admins."}
               </span>
               <button onClick={() => setActive(null)} style={{ ...primaryBtn(theme), padding: '9px 14px', minHeight: 38 }}>
-                <EditableText id="help.bug.report_another">Report another bug</EditableText>
+                {"Report another bug"}
               </button>
             </div>
           )}
@@ -451,12 +450,12 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
   return page(
     <>
       <Header
-        title={<EditableText id="help.bug.title">Report a bug</EditableText>}
-        subtitle={<EditableText id="help.bug.subtitle">Tell us what went wrong. Our assistant will ask for anything missing, then file the ticket for the admins.</EditableText>}
+        title={"Report a bug"}
+        subtitle={"Tell us what went wrong. Our assistant will ask for anything missing, then file the ticket for the admins."}
       />
       <div style={panel(theme)}>
         <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.4px', textTransform: 'uppercase', color: '#8ea3cc', marginBottom: 8 }}>
-          <EditableText id="help.bug.what_happened">What happened?</EditableText>
+          {"What happened?"}
         </label>
         <textarea
           value={draft}
@@ -468,14 +467,14 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
         />
         {error && <div style={errorBanner}>{error}</div>}
         <button onClick={() => void start()} disabled={busy || !draft.trim()} style={{ ...primaryBtn(theme, busy || !draft.trim()), marginTop: 12 }}>
-          {busy ? 'Sending…' : <EditableText id="help.bug.send_report">Send report</EditableText>}
+          {busy ? 'Sending…' : "Send report"}
         </button>
       </div>
 
       {reports.length > 0 && (
         <div style={{ marginTop: 20 }}>
           <div style={{ fontSize: 11, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#7488b5', marginBottom: 10 }}>
-            <EditableText id="help.bug.your_reports">Your reports</EditableText>
+            {"Your reports"}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {reports.map((r) => (
@@ -546,16 +545,16 @@ export function HelpSuggestion({ theme, user }: { theme: Theme; user: User }) {
   return page(
     <>
       <Header
-        title={<EditableText id="help.suggest.title">Suggestion</EditableText>}
-        subtitle={<EditableText id="help.suggest.subtitle">Have an idea to improve the portal? Send it straight to the admins.</EditableText>}
+        title={"Suggestion"}
+        subtitle={"Have an idea to improve the portal? Send it straight to the admins."}
       />
       <div style={panel(theme)}>
         {user.isDemo ? (
-          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}><EditableText id="help.suggest.demo">Read-only demo. Sign in to the live portal to send a suggestion.</EditableText></p>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>{"Read-only demo. Sign in to the live portal to send a suggestion."}</p>
         ) : (
           <>
             <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.4px', textTransform: 'uppercase', color: '#8ea3cc', marginBottom: 8 }}>
-              <EditableText id="help.suggest.your_suggestion">Your suggestion</EditableText>
+              {"Your suggestion"}
             </label>
             <textarea
               value={body}
@@ -569,7 +568,7 @@ export function HelpSuggestion({ theme, user }: { theme: Theme; user: User }) {
               <div style={msg.ok ? okBanner : errorBanner}>{msg.text}</div>
             )}
             <button onClick={() => void send()} disabled={busy || !body.trim()} style={{ ...primaryBtn(theme, busy || !body.trim()), marginTop: 12 }}>
-              {busy ? 'Sending…' : <EditableText id="help.suggest.send">Send suggestion</EditableText>}
+              {busy ? 'Sending…' : "Send suggestion"}
             </button>
           </>
         )}

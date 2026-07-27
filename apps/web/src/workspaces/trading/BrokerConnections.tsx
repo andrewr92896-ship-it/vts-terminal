@@ -1,6 +1,5 @@
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { BrokerConnectionsPanel } from './BrokerConnectionsPanel';
-import { EditableText } from '../../copy/SiteCopy';
 
 const PAGE = '#081226';
 const BORDER2 = '#1c3a7a';
@@ -47,7 +46,7 @@ export function BrokerConnections({ open, onClose, onChanged }: { open: boolean;
             borderBottom: `1px solid ${BORDER2}`,
           }}
         >
-          <strong style={{ fontSize: 15, color: '#fff' }}><EditableText id="connections.title">Broker Connections</EditableText></strong>
+          <strong style={{ fontSize: 15, color: '#fff' }}>{"Broker Connections"}</strong>
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#9fb0d6', fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>
             ×
           </button>

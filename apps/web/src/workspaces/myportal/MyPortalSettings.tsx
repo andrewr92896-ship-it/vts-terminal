@@ -8,7 +8,6 @@ import { useAlertSound, ALERT_SOUNDS } from '../../sound/alertSound';
 import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { useAuth } from '../../auth/AuthContext';
 import { canAccessWorkspace } from '../../auth/access';
-import { EditableText } from '../../copy/SiteCopy';
 import { NotificationsConnectionsPanel } from '../../components/DeviceSettings';
 import { SectionHeader, panel, panelLabel } from '../admin/adminUi';
 
@@ -63,8 +62,6 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
       <SectionHeader
         title="Settings"
         subtitle="Your personal device and connection preferences. These are saved for you and, where noted, for this device only."
-        titleId="my_settings.title"
-        subtitleId="my_settings.subtitle"
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -72,7 +69,7 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
         {hasBrokerStatus && (
           <section style={panel(theme)}>
             <div style={panelLabel}>
-              <EditableText id="my_settings.status.label">Status</EditableText>
+              {"Status"}
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
               {brokers.map((b) => (
@@ -102,7 +99,7 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
         {/* Privacy mode */}
         <section style={panel(theme)}>
           <div style={panelLabel}>
-            <EditableText id="my_settings.privacy.label">Privacy</EditableText>
+            {"Privacy"}
           </div>
           <button
             onClick={togglePrivacy}
@@ -131,24 +128,21 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
             />
             <span style={{ fontSize: 13.5, fontWeight: 600 }}>
               {privacy ? (
-                <EditableText id="my_settings.privacy.on">Privacy on</EditableText>
+                "Privacy on"
               ) : (
-                <EditableText id="my_settings.privacy.off">Privacy off</EditableText>
+                "Privacy off"
               )}
             </span>
             <span style={{ marginLeft: 'auto', fontSize: 11.5, color: C.faint }}>
               {privacy ? (
-                <EditableText id="my_settings.privacy.on_hint">hiding names &amp; $</EditableText>
+                "hiding names &amp; $"
               ) : (
-                <EditableText id="my_settings.privacy.off_hint">visible</EditableText>
+                "visible"
               )}
             </span>
           </button>
           <p style={{ margin: '10px 0 0', fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
-            <EditableText id="my_settings.privacy.help">
-              When on, names and dollar amounts are masked across the portal — useful when sharing
-              your screen. Nothing is changed, only what's shown.
-            </EditableText>
+            {"When on, names and dollar amounts are masked across the portal — useful when sharing your screen. Nothing is changed, only what's shown."}
           </p>
         </section>
 
@@ -157,7 +151,7 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
           <section style={panel(theme)}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <span style={{ ...panelLabel, marginBottom: 0 }}>
-                <EditableText id="my_settings.sound.label">Trade alert sound</EditableText>
+                {"Trade alert sound"}
               </span>
               <button
                 onClick={() => sound.setEnabled(!sound.enabled)}
@@ -174,9 +168,9 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
                 }}
               >
                 {sound.enabled ? (
-                  <EditableText id="my_settings.sound.on">On</EditableText>
+                  "On"
                 ) : (
-                  <EditableText id="my_settings.sound.off">Off</EditableText>
+                  "Off"
                 )}
               </button>
             </div>
@@ -237,9 +231,7 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
               })}
             </div>
             <p style={{ margin: '12px 0 0', fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
-              <EditableText id="my_settings.sound.help">
-                Plays on this device when a new TradingView alert arrives.
-              </EditableText>
+              {"Plays on this device when a new TradingView alert arrives."}
             </p>
           </section>
         )}
@@ -247,7 +239,7 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
         {/* Notifications & connections */}
         <section style={panel(theme)}>
           <div style={panelLabel}>
-            <EditableText id="my_settings.connections.label">Notifications &amp; connections</EditableText>
+            {"Notifications &amp; connections"}
           </div>
           <NotificationsConnectionsPanel theme={theme} />
         </section>
@@ -255,7 +247,7 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
         {/* App updates */}
         <section style={panel(theme)}>
           <div style={panelLabel}>
-            <EditableText id="my_settings.app.label">App</EditableText>
+            {"App"}
           </div>
           <button
             onClick={() => void appUpdate.run()}

@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { employeeApi, type AnnouncementView } from '../api';
 import { EMP, fmtDateTime } from '../theme';
-import { T, useCopy } from '../copy';
 import {
   Banner,
   Button,
@@ -29,8 +28,8 @@ export function Announcements({ canManage }: { canManage: boolean }) {
   const [pinned, setPinned] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
-  const titlePlaceholder = useCopy('emp.news.title_ph', 'Short, plain headline');
-  const bodyPlaceholder = useCopy('emp.news.body_ph', 'What everyone needs to know.');
+  const titlePlaceholder = 'Short, plain headline';
+  const bodyPlaceholder = 'What everyone needs to know.';
 
   function load() {
     employeeApi
@@ -86,7 +85,7 @@ export function Announcements({ canManage }: { canManage: boolean }) {
   if (!items) {
     return (
       <Empty icon="refresh-cw">
-        <T id="emp.news.loading">Loading…</T>
+        {"Loading…"}
       </Empty>
     );
   }
@@ -95,21 +94,18 @@ export function Announcements({ canManage }: { canManage: boolean }) {
     <div>
       <ScreenHeader
         icon="megaphone"
-        title={<T id="emp.news.title">Announcements</T>}
+        title={"Announcements"}
         subtitle={
-          <T id="emp.news.subtitle">
-            Internal notices for staff. Nothing posted here is visible anywhere in the member-facing
-            portal.
-          </T>
+          "Internal notices for staff. Nothing posted here is visible anywhere in the member-facing portal."
         }
         actions={
           canManage && (
             <Button variant="primary" onClick={() => setComposing((v) => !v)}>
               <Icon name="plus" size={14} />
               {composing ? (
-                <T id="emp.news.cancel">Cancel</T>
+                "Cancel"
               ) : (
-                <T id="emp.news.new">New announcement</T>
+                "New announcement"
               )}
             </Button>
           )
@@ -119,10 +115,10 @@ export function Announcements({ canManage }: { canManage: boolean }) {
       {composing && canManage && (
         <Card style={{ marginBottom: 18 }}>
           <div style={{ display: 'grid', gap: 13 }}>
-            <Field label={<T id="emp.news.field_title">Title</T>}>
+            <Field label={"Title"}>
               <Input value={title} onChange={setTitle} maxLength={160} placeholder={titlePlaceholder} />
             </Field>
-            <Field label={<T id="emp.news.field_body">Body</T>}>
+            <Field label={"Body"}>
               <TextArea value={body} onChange={setBody} rows={6} maxLength={8000} placeholder={bodyPlaceholder} />
             </Field>
             <label
@@ -136,12 +132,12 @@ export function Announcements({ canManage }: { canManage: boolean }) {
               }}
             >
               <input type="checkbox" checked={pinned} onChange={(e) => setPinned(e.target.checked)} />
-              <T id="emp.news.pin">Pin to the top</T>
+              {"Pin to the top"}
             </label>
             <ErrorNote>{formError}</ErrorNote>
             <div>
               <Button variant="primary" onClick={post} disabled={busy}>
-                {busy ? <T id="emp.news.posting">Posting…</T> : <T id="emp.news.post">Post</T>}
+                {busy ? "Posting…" : "Post"}
               </Button>
             </div>
           </div>
@@ -150,7 +146,7 @@ export function Announcements({ canManage }: { canManage: boolean }) {
 
       {items.length === 0 ? (
         <Empty icon="megaphone">
-          <T id="emp.news.empty">No announcements yet.</T>
+          {"No announcements yet."}
         </Empty>
       ) : (
         <div style={{ display: 'grid', gap: 13 }}>
@@ -162,7 +158,7 @@ export function Announcements({ canManage }: { canManage: boolean }) {
                     <span style={{ fontSize: 15, fontWeight: 650, color: EMP.text }}>{a.title}</span>
                     {a.pinned && (
                       <Pill tone="accent">
-                        <T id="emp.news.pinned">Pinned</T>
+                        {"Pinned"}
                       </Pill>
                     )}
                   </div>
@@ -200,9 +196,7 @@ export function Announcements({ canManage }: { canManage: boolean }) {
       {!canManage && items.length > 0 && (
         <div style={{ marginTop: 18 }}>
           <Banner>
-            <T id="emp.news.readonly">
-              Only portal administrators can post here. Ask one of them if something needs announcing.
-            </T>
+            {"Only portal administrators can post here. Ask one of them if something needs announcing."}
           </Banner>
         </div>
       )}

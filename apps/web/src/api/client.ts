@@ -422,11 +422,10 @@ export const api = {
     return request(`/api/admin/patch-notes/${id}`, { method: 'DELETE' });
   },
 
-  // ---- Editable site content (How-to overrides + site-wide copy) ----
+  // ---- Editable site content (How-to overrides) ----
   // Members read the merged content; the client applies overrides over its
-  // bundled defaults. `howto` values are JSON blobs keyed by screen; `copy`
-  // values are plain-text overrides keyed by an <EditableText> id.
-  siteContent(): Promise<{ howto: Record<string, string>; copy: Record<string, string> }> {
+  // bundled defaults. `howto` values are JSON blobs keyed by screen.
+  siteContent(): Promise<{ howto: Record<string, string> }> {
     return request('/api/site-content');
   },
   adminSiteContent(): Promise<{ howto: Record<string, string> }> {
@@ -437,13 +436,6 @@ export const api = {
   },
   adminResetHowto(screen: string): Promise<{ ok: boolean }> {
     return request(`/api/admin/site-content/howto/${screen}`, { method: 'DELETE' });
-  },
-  // Site-wide copy overrides — the <EditableText> inline-edit mechanism.
-  adminSaveCopy(key: string, value: string): Promise<{ ok: boolean; cleared: boolean }> {
-    return request(`/api/admin/site-content/copy/${key}`, { method: 'PUT', body: JSON.stringify({ value }) });
-  },
-  adminResetCopy(key: string): Promise<{ ok: boolean }> {
-    return request(`/api/admin/site-content/copy/${key}`, { method: 'DELETE' });
   },
   // ---- Sidebar layout (workspace + section ordering) ----
   // Any signed-in user reads the effective order; only a founder can change it.

@@ -6,7 +6,6 @@ import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenConfig } from './outcome';
 import { tradePips, fmtPips, netPips, hasAnyPips } from './pips';
 import { DesignationTag } from './DesignationTag';
-import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
 import type { HistoryData, HistoryGroup, HistoryRecord, HistorySummary, TradeInput, TradeSide } from '../../api/types';
 
@@ -231,7 +230,7 @@ export function History() {
   );
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data || !activeSummary) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="history.loading">Loading History…</EditableText></div>;
+  if (!data || !activeSummary) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading History…"}</div>;
 
   const s = activeSummary;
   const canSeeBalances = canSeeBalancesRaw;
@@ -264,9 +263,9 @@ export function History() {
     <div style={{ maxWidth: 1240, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <ScreenTitle id="history.title">History</ScreenTitle>
+          <ScreenTitle>History</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            <EditableText id="history.subtitle">Closed trades across your team — recorded automatically when a Live Wall position closes, tagged by trader.</EditableText>
+            {"Closed trades across your team — recorded automatically when a Live Wall position closes, tagged by trader."}
             {!readOnly && ' Delete any of your own rows to clear out test trades.'}
           </div>
         </div>
@@ -275,7 +274,7 @@ export function History() {
             <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
           )}
           <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
-            {refreshing ? <EditableText id="history.refreshing">Refreshing…</EditableText> : <EditableText id="history.refresh">Refresh</EditableText>}
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </div>
@@ -283,7 +282,7 @@ export function History() {
       {/* Day-of-week / month filters */}
       <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16, padding: '12px 16px' }}>
         <label style={filterField}>
-          <span style={filterLabel}><EditableText id="history.filter_day">Day of week</EditableText></span>
+          <span style={filterLabel}>{"Day of week"}</span>
           <select value={dayFilter} onChange={(e) => setDayFilter(e.target.value)} style={select} aria-label="Filter by day of week">
             <option value="all">All days</option>
             {WEEKDAYS.map((d) => (
@@ -292,7 +291,7 @@ export function History() {
           </select>
         </label>
         <label style={filterField}>
-          <span style={filterLabel}><EditableText id="history.filter_month">Month</EditableText></span>
+          <span style={filterLabel}>{"Month"}</span>
           <select
             value={monthFilter}
             onChange={(e) => setMonthFilter(e.target.value)}
@@ -311,7 +310,7 @@ export function History() {
           {filterActive ? `${filtered.length} of ${allTrades.length}` : `${allTrades.length}`} trade{allTrades.length === 1 ? '' : 's'}
         </span>
         {filterActive && (
-          <button onClick={() => { setDayFilter('all'); setMonthFilter('all'); }} style={ghostBtn}><EditableText id="history.clear">Clear</EditableText></button>
+          <button onClick={() => { setDayFilter('all'); setMonthFilter('all'); }} style={ghostBtn}>{"Clear"}</button>
         )}
       </div>
 
@@ -332,7 +331,7 @@ export function History() {
       {filtered.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
           {allTrades.length === 0
-            ? <EditableText id="history.empty">No closed trades yet. When an open position on the Live Wall closes, it’s recorded here automatically.</EditableText>
+            ? "No closed trades yet. When an open position on the Live Wall closes, it’s recorded here automatically."
             : `No closed trades for ${scopeLabel}. Try a different day or month.`}
         </div>
       ) : (
@@ -346,7 +345,7 @@ export function History() {
           {/* Closed trades */}
           <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '13px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: 14, fontWeight: 600, color: '#fff' }}>
-              <EditableText id="history.closed_trades">Closed Trades</EditableText>
+              {"Closed Trades"}
             </div>
             {!isPhone && (
               <div style={{ ...row, color: FAINT, fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', borderBottom: `1px solid ${BORDER}` }}>
@@ -397,7 +396,7 @@ function Breakdown({ title, groups, money, showPips }: { title: string; groups: 
     <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${BORDER}`, fontSize: 13, fontWeight: 600, color: '#fff' }}>{title}</div>
       {groups.length === 0 ? (
-        <div style={{ padding: '14px 16px', fontSize: 12, color: MUTED }}><EditableText id="history.breakdown_empty">No data yet.</EditableText></div>
+        <div style={{ padding: '14px 16px', fontSize: 12, color: MUTED }}>{"No data yet."}</div>
       ) : (
         groups.slice(0, 6).map((g) => {
           const pl = g.realizedPl;
@@ -506,7 +505,7 @@ function HistoryEditModal({ t, busy, onSave, onClose }: { t: HistoryRecord; busy
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 60, animation: 'fadeIn .2s ease' }} />
       <div role="dialog" aria-modal="true" aria-label="Edit closed trade" style={modalCard}>
         <div style={modalHeader}>
-          <strong style={{ fontSize: 15, color: '#fff' }}><EditableText id="history.modal_title">Edit trade</EditableText>{t.code ? ` · ${t.code}` : ''}</strong>
+          <strong style={{ fontSize: 15, color: '#fff' }}>{"Edit trade"}{t.code ? ` · ${t.code}` : ''}</strong>
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: MUTED, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>×</button>
         </div>
         <div style={{ padding: 18 }}>
@@ -525,11 +524,11 @@ function HistoryEditModal({ t, busy, onSave, onClose }: { t: HistoryRecord; busy
             <input value={closedAt} onChange={(e) => setClosedAt(e.target.value)} type="date" style={{ ...input, flex: '0 0 150px' }} />
           </div>
           <div style={{ fontSize: 11, color: FAINT, marginTop: 10 }}>
-            <EditableText id="history.modal_hint">Win / loss / break-even is decided by the entry → exit price move, so correcting the exit updates how this trade is scored.</EditableText>
+            {"Win / loss / break-even is decided by the entry → exit price move, so correcting the exit updates how this trade is scored."}
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button onClick={submit} disabled={disabled} style={{ ...goldBtn, opacity: disabled ? 0.6 : 1 }}>{busy ? <EditableText id="history.modal_saving">Saving…</EditableText> : <EditableText id="history.modal_save">Save</EditableText>}</button>
-            <button onClick={onClose} style={ghostBtn}><EditableText id="history.modal_cancel">Cancel</EditableText></button>
+            <button onClick={submit} disabled={disabled} style={{ ...goldBtn, opacity: disabled ? 0.6 : 1 }}>{busy ? "Saving…" : "Save"}</button>
+            <button onClick={onClose} style={ghostBtn}>{"Cancel"}</button>
           </div>
         </div>
       </div>

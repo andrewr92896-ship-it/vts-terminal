@@ -3,7 +3,6 @@ import { api, ApiError } from '../../api/client';
 import type { AlertRecord, BoardTile } from '../../api/types';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
-import { EditableText } from '../../copy/SiteCopy';
 
 const REFRESH_MS = 30_000;
 const ET = 'America/New_York';
@@ -112,7 +111,7 @@ export function AlertsTile({
       </div>
 
       <div style={body}>
-        {!alerts && !error && <div style={hint}><EditableText id="alertstile.loading">Loading alerts…</EditableText></div>}
+        {!alerts && !error && <div style={hint}>{"Loading alerts…"}</div>}
         {error && !alerts && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {alerts && shown.length === 0 && (
           <div style={hint}>No {filter === 'new' ? 'new ' : ''}alerts yet. TradingView webhook alerts appear here automatically.</div>

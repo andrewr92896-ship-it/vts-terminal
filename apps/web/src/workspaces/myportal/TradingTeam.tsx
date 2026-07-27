@@ -5,7 +5,6 @@ import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 import {
   SectionHeader,
   dangerSolidBtn,
@@ -166,14 +165,12 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
         <SectionHeader
           title="Trading Team"
           subtitle="Create your own trading team, invite up to five teammates, and lead it."
-          titleId="myteam.title"
-          subtitleId="myteam.subtitle"
         />
 
         {incoming.length > 0 && (
           <div style={{ ...panel(theme), marginBottom: 16 }}>
             <div style={panelLabel}>
-              <EditableText id="myteam.invites.heading">Invitations</EditableText>
+              {"Invitations"}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {incoming.map((inv) => (
@@ -197,10 +194,10 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button style={primaryBtn(theme, grad)} disabled={busy} onClick={() => respond(inv.id, true)}>
-                      <EditableText id="myteam.invite.accept">Accept</EditableText>
+                      {"Accept"}
                     </button>
                     <button style={ghostBtn} disabled={busy} onClick={() => respond(inv.id, false)}>
-                      <EditableText id="myteam.invite.decline">Decline</EditableText>
+                      {"Decline"}
                     </button>
                   </div>
                 </div>
@@ -211,10 +208,10 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
 
         <div style={panel(theme)}>
           <div style={panelLabel}>
-            <EditableText id="myteam.create.heading">Create a team</EditableText>
+            {"Create a team"}
           </div>
           <label style={fieldLabel}>
-            <EditableText id="myteam.create.namelabel">Team name</EditableText>
+            {"Team name"}
           </label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <input
@@ -226,14 +223,11 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
               onKeyDown={(e) => e.key === 'Enter' && teamName.trim() && create()}
             />
             <button style={primaryBtn(theme, grad)} disabled={busy || !teamName.trim()} onClick={create}>
-              <EditableText id="myteam.create.button">Create team</EditableText>
+              {"Create team"}
             </button>
           </div>
           <p style={{ margin: '10px 0 0', fontSize: 12, color: '#8ea3cc', lineHeight: 1.5 }}>
-            <EditableText id="myteam.create.help">
-              You become the team leader. You can invite up to four others, assign badges, and set each member’s
-              permissions.
-            </EditableText>
+            {"You become the team leader. You can invite up to four others, assign badges, and set each member’s permissions."}
           </p>
           {error && <div style={msgStyle(false)}>{error}</div>}
           {notice && <div style={msgStyle(true)}>{notice}</div>}
@@ -292,7 +286,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
           </p>
         </div>
         <button style={ghostDangerBtn} disabled={busy} onClick={() => setConfirmLeave(true)}>
-          <EditableText id="myteam.leave">Leave team</EditableText>
+          {"Leave team"}
         </button>
       </div>
 
@@ -300,19 +294,17 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
         <div style={{ ...panel(theme), marginBottom: 16, borderColor: 'rgba(239,84,104,.4)' }}>
           <p style={{ margin: '0 0 10px', fontSize: 13, color: '#ffd7d2' }}>
             {isLeader && team.members.length > 1 ? (
-              <EditableText id="myteam.leave.leaderwarn">
-                You lead this team. Hand leadership to another member before you can leave.
-              </EditableText>
+              "You lead this team. Hand leadership to another member before you can leave."
             ) : isLeader ? (
-              <EditableText id="myteam.leave.disband">You are the only member — leaving will disband the team.</EditableText>
+              "You are the only member — leaving will disband the team."
             ) : (
-              <EditableText id="myteam.leave.confirm">Leave this team? You can be re-invited later.</EditableText>
+              "Leave this team? You can be re-invited later."
             )}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             {!(isLeader && team.members.length > 1) && (
               <button style={dangerSolidBtn} disabled={busy} onClick={leave}>
-                <EditableText id="myteam.leave.yes">Yes, leave</EditableText>
+                {"Yes, leave"}
               </button>
             )}
             <button style={ghostBtn} disabled={busy} onClick={() => setConfirmLeave(false)}>
@@ -325,7 +317,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
       {/* Roster */}
       <div style={{ ...panel(theme), marginBottom: 16 }}>
         <div style={panelLabel}>
-          <EditableText id="myteam.roster.heading">Members</EditableText>
+          {"Members"}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {team.members.map((m) => (
@@ -359,11 +351,11 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
       {canInvite && (
         <div style={{ ...panel(theme), marginBottom: 16 }}>
           <div style={panelLabel}>
-            <EditableText id="myteam.invite.heading">Invite a teammate</EditableText>
+            {"Invite a teammate"}
           </div>
           {full ? (
             <p style={{ margin: 0, fontSize: 12.5, color: '#8ea3cc' }}>
-              <EditableText id="myteam.invite.full">Your team is full. Remove a member to invite someone new.</EditableText>
+              {"Your team is full. Remove a member to invite someone new."}
             </p>
           ) : (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -376,7 +368,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
                 onKeyDown={(e) => e.key === 'Enter' && inviteName.trim() && invite()}
               />
               <button style={primaryBtn(theme, grad)} disabled={busy || !inviteName.trim()} onClick={invite}>
-                <EditableText id="myteam.invite.send">Send invite</EditableText>
+                {"Send invite"}
               </button>
             </div>
           )}
@@ -384,7 +376,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
           {team.invites.length > 0 && (
             <div style={{ marginTop: 14 }}>
               <div style={{ ...fieldLabel, marginBottom: 8 }}>
-                <EditableText id="myteam.invite.pending">Pending invites</EditableText>
+                {"Pending invites"}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {team.invites.map((inv) => (

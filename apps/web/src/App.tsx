@@ -5,7 +5,6 @@ import { ChangePassword } from './pages/ChangePassword';
 import { AcceptTerms } from './pages/AcceptTerms';
 import { Portal } from './components/Portal';
 import { UpdatePrompt } from './components/UpdatePrompt';
-import { SiteCopyProvider } from './copy/SiteCopy';
 
 export function App() {
   const { user, loading } = useAuth();
@@ -39,13 +38,7 @@ export function App() {
     // Policy before operating the portal (re-prompted when the docs are updated).
     content = <AcceptTerms />;
   } else {
-    // The SiteCopyProvider makes every <EditableText> in the portal resolve its
-    // admin override and, for admins, drives the live "edit site wording" mode.
-    content = (
-      <SiteCopyProvider user={user}>
-        <Portal />
-      </SiteCopyProvider>
-    );
+    content = <Portal />;
   }
 
   // The "Update available" popup lives outside the auth branches so it can show

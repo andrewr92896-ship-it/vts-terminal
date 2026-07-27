@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
-import { EditableText } from '../../copy/SiteCopy';
 
 type Msg = { role: 'user' | 'assistant'; content: string };
 
@@ -93,7 +92,7 @@ export function TutorChat({
               <div style={m.role === 'user' ? userBubble(theme) : assistantBubble(theme, isPhone)}>
                 {m.role === 'assistant' && (
                   <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: theme.accent, marginBottom: 4 }}>
-                    <EditableText id="tutor.badge" text="VTS AI tutor" />
+                    {"VTS AI tutor"}
                   </div>
                 )}
                 {m.content}
@@ -103,7 +102,7 @@ export function TutorChat({
           {busy && (
             <div style={assistantRow}>
               <div style={{ ...assistantBubble(theme, isPhone), color: '#a99ff0' }}>
-                <EditableText id="tutor.thinking" text="Thinking…" />
+                {"Thinking…"}
               </div>
             </div>
           )}

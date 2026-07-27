@@ -1,6 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import type { Theme } from '../../theme/themes';
-import { EditableText } from '../../copy/SiteCopy';
 import { deckLifetimeAccuracy, deckSessionAccuracy, type DeckGameState } from './studyEngine';
 import {
   clampPass,
@@ -27,7 +26,6 @@ const muted = '#a99ff0';
 function ScoreBar({
   theme,
   label,
-  labelId,
   suffix,
   pct,
   detail,
@@ -35,7 +33,6 @@ function ScoreBar({
 }: {
   theme: Theme;
   label: string;
-  labelId: string;
   suffix?: string; // live, non-editable label tail (e.g. " · last 50")
   pct: number | null;
   detail?: string; // live, non-editable (e.g. "34/50 correct")
@@ -51,12 +48,12 @@ function ScoreBar({
     <div>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
         <span style={{ fontSize: 11.5, fontWeight: 700, color: '#e7e0ff' }}>
-          <EditableText id={labelId} text={label} />
+          {label}
           {suffix && <span style={{ color: muted, fontWeight: 500 }}>{suffix}</span>}
           {passing != null && (
             <span style={{ fontSize: 10.5, color: muted, fontWeight: 500 }}>
               {' · '}
-              <EditableText id="studyprogress.pass_label" text="pass" /> {passing}%
+              {"pass"} {passing}%
             </span>
           )}
         </span>
@@ -120,7 +117,7 @@ export function StudyProgressBars({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: theme.accent }}>
-          <EditableText id="studyprogress.heading" text="Progress" />
+          {"Progress"}
         </span>
         <button
           onClick={() => setEditing((e) => !e)}
@@ -137,9 +134,9 @@ export function StudyProgressBars({
           }}
         >
           {editing ? (
-            <EditableText id="studyprogress.done" text="Done" />
+            "Done"
           ) : (
-            <EditableText id="studyprogress.adjust" text="⚙ Adjust" />
+            "⚙ Adjust"
           )}
         </button>
       </div>
@@ -147,7 +144,7 @@ export function StudyProgressBars({
       <ScoreBar
         theme={theme}
         label="Lifetime"
-        labelId="studyprogress.lifetime"
+       
         pct={lifetime}
         detail={game.totalAttempted > 0 ? `${game.totalCorrect}/${game.totalAttempted} correct all-time` : undefined}
         passing={prefs.lifetimePass}
@@ -156,7 +153,7 @@ export function StudyProgressBars({
       <ScoreBar
         theme={theme}
         label="Session"
-        labelId="studyprogress.session"
+       
         suffix={` · last ${session.window}`}
         pct={session.pct}
         detail={session.attempted > 0 ? `${session.correct}/${session.attempted} correct in window` : undefined}
@@ -189,7 +186,7 @@ function PrefsEditor({
         gap: 12,
       }}
     >
-      <Field label="Session window (last N answers)" labelId="studyprogress.window_label">
+      <Field label="Session window (last N answers)">
         <input
           type="number"
           min={SESSION_WINDOW_MIN}
@@ -200,19 +197,16 @@ function PrefsEditor({
         />
       </Field>
 
-      <Field label="Lifetime passing %" labelId="studyprogress.lifetime_pass_label">
+      <Field label="Lifetime passing %">
         <PassInput theme={theme} value={prefs.lifetimePass} onChange={(v) => onPrefsChange({ ...prefs, lifetimePass: v })} />
       </Field>
 
-      <Field label="Session passing %" labelId="studyprogress.session_pass_label">
+      <Field label="Session passing %">
         <PassInput theme={theme} value={prefs.sessionPass} onChange={(v) => onPrefsChange({ ...prefs, sessionPass: v })} />
       </Field>
 
       <div style={{ fontSize: 10.5, color: muted, lineHeight: 1.5 }}>
-        <EditableText
-          id="studyprogress.hint"
-          text="Personal to you and saved on this device. Leave a passing % blank to hide its pass line. Leaderboards always rank by lifetime %."
-        />
+        {"Personal to you and saved on this device. Leave a passing % blank to hide its pass line. Leaderboards always rank by lifetime %."}
       </div>
     </div>
   );
@@ -235,17 +229,15 @@ function PassInput({ theme, value, onChange }: { theme: Theme; value: number | n
 
 function Field({
   label,
-  labelId,
   children,
 }: {
   label: string;
-  labelId: string;
   children: ReactNode;
 }) {
   return (
     <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
       <span style={{ fontSize: 12, color: '#e7e0ff' }}>
-        <EditableText id={labelId} text={label} />
+        {label}
       </span>
       {children}
     </label>

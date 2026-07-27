@@ -4,7 +4,6 @@ import type { DeckQuestion, TeamDeckDetail } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { EditableText } from '../../copy/SiteCopy';
 import { StudyDisclaimer } from './StudyDisclaimer';
 
 // A configurable, graded test over a team-built study game's questions. This is
@@ -130,7 +129,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
       <div style={{ maxWidth: 820, margin: '0 auto', color: '#eef3ff' }}>
         <div style={{ marginBottom: 12 }}>{backBtn}</div>
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          <EditableText id="decktest.load_error" text="Couldn’t load this study game." />
+          {"Couldn’t load this study game."}
         </div>
       </div>
     );
@@ -140,7 +139,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
       <div style={{ maxWidth: 820, margin: '0 auto', color: '#eef3ff' }}>
         <div style={{ marginBottom: 12 }}>{backBtn}</div>
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          <EditableText id="decktest.loading" text="Loading…" />
+          {"Loading…"}
         </div>
       </div>
     );
@@ -162,7 +161,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
         {header}
         {deck.questionCount === 0 ? (
           <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-            <EditableText id="decktest.no_questions" text="This study game has no questions yet." />
+            {"This study game has no questions yet."}
           </div>
         ) : (
           <div style={card(theme)}>
@@ -172,7 +171,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13, color: '#e7e0ff' }}>
-                <span style={{ minWidth: 130 }}><EditableText id="decktest.num_questions" text="Number of questions" /></span>
+                <span style={{ minWidth: 130 }}>{"Number of questions"}</span>
                 <input
                   type="number"
                   min={1}
@@ -184,7 +183,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
                 <span style={{ fontSize: 11.5, color: muted }}>up to {maxSize}</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13, color: '#e7e0ff' }}>
-                <span style={{ minWidth: 130 }}><EditableText id="decktest.pass_line" text="Pass line" /></span>
+                <span style={{ minWidth: 130 }}>{"Pass line"}</span>
                 <input
                   type="number"
                   min={1}
@@ -193,11 +192,11 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
                   onChange={(e) => setPassLine(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
                   style={{ ...field(theme), width: 90 }}
                 />
-                <span style={{ fontSize: 11.5, color: muted }}><EditableText id="decktest.pass_hint" text="% correct to pass" /></span>
+                <span style={{ fontSize: 11.5, color: muted }}>{"% correct to pass"}</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#e7e0ff', cursor: 'pointer' }}>
                 <input type="checkbox" checked={feedback} onChange={(e) => setFeedback(e.target.checked)} style={{ width: 16, height: 16, accentColor: theme.accent }} />
-                <EditableText id="decktest.feedback_label" text="Show feedback as I go (otherwise graded only at the end)" />
+                {"Show feedback as I go (otherwise graded only at the end)"}
               </label>
             </div>
             <div style={{ marginTop: 20 }}>
@@ -220,7 +219,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
         {header}
         <div style={{ ...card(theme), textAlign: 'center', marginBottom: 14 }}>
           <div style={{ fontSize: 13, color: muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            <EditableText id="decktest.your_score" text="Your score" />
+            {"Your score"}
           </div>
           <div style={{ fontSize: 46, fontWeight: 800, color: result.passed ? GREEN : RED, lineHeight: 1.1, margin: '6px 0' }}>
             {result.score}%
@@ -235,7 +234,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
 
         <div style={{ ...card(theme), marginBottom: 14 }}>
           <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: theme.accent, marginBottom: 10 }}>
-            <EditableText id="decktest.by_topic" text="By topic" />
+            {"By topic"}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {Object.entries(result.breakdown).map(([topic, b]) => {
@@ -257,10 +256,10 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => setPhase('intro')} style={primaryBtn(theme, accentGrad)}>
-            <EditableText id="decktest.take_another" text="Take another" />
+            {"Take another"}
           </button>
           <button onClick={onBack} style={ghostBtn(theme)}>
-            <EditableText id="decktest.done" text="Done" />
+            {"Done"}
           </button>
         </div>
       </div>
@@ -343,7 +342,7 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
                   disabled={selected == null}
                   style={{ ...primaryBtn(theme, accentGrad), flex: 1, minWidth: 160, opacity: selected == null ? 0.6 : 1 }}
                 >
-                  {selected == null ? <EditableText id="decktest.select_answer" text="Select an answer" /> : <EditableText id="decktest.check_answer" text="Check answer" />}
+                  {selected == null ? "Select an answer" : "Check answer"}
                 </button>
                 <button onClick={() => { setRevealed(true); }} style={{ ...ghostBtn(theme), borderStyle: 'dashed' }}>Skip</button>
               </>

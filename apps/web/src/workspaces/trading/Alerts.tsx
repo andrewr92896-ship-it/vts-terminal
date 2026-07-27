@@ -3,7 +3,6 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePushNotifications } from '../../push/usePushNotifications';
-import { EditableText } from '../../copy/SiteCopy';
 import { ScreenTitle } from './ScreenTitle';
 import { SYMBOL_SUGGESTIONS, symbolLabel } from './tvChart';
 import type {
@@ -78,7 +77,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
   }, []);
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}><EditableText id="alerts.loading">Loading alerts…</EditableText></div>;
+  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading alerts…"}</div>;
 
   const active = data.alerts.filter((a) => a.status !== 'dismissed');
 
@@ -86,22 +85,22 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
     <div style={{ maxWidth: 1100, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <ScreenTitle id="alerts.title">Trading Alerts</ScreenTitle>
+          <ScreenTitle>Trading Alerts</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            <EditableText id="alerts.subtitle">TradingView alerts arrive by webhook. Paste a chart screenshot and VTS AI analyzes the trade.</EditableText>
+            {"TradingView alerts arrive by webhook. Paste a chart screenshot and VTS AI analyzes the trade."}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {!readOnly && <PhoneAlerts />}
           <button onClick={() => void load()} disabled={refreshing} style={{ ...goldBtn, opacity: refreshing ? 0.6 : 1 }}>
-            {refreshing ? <EditableText id="alerts.refreshing">Refreshing…</EditableText> : <EditableText id="alerts.refresh">Refresh</EditableText>}
+            {refreshing ? "Refreshing…" : "Refresh"}
           </button>
         </div>
       </div>
 
       {!data.aiConfigured && (
         <div style={warnBanner}>
-          <EditableText id="alerts.ai_unconfigured">VTS AI isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server.</EditableText>
+          {"VTS AI isn’t configured yet — alerts still arrive, but screenshot analysis needs an API key set on the server."}
         </div>
       )}
 
@@ -174,11 +173,11 @@ function PhoneAlerts() {
       {on && open && (
         <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 20, width: 230, background: '#0b1a3a', border: `1px solid ${BORDER2}`, borderRadius: 10, padding: 12, boxShadow: '0 18px 40px rgba(0,0,0,.5)' }}>
           <div style={{ fontSize: 11.5, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
-            <EditableText id="alerts.push_blurb">This device will buzz on new alerts and when trades open or close.</EditableText>
+            {"This device will buzz on new alerts and when trades open or close."}
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => void sendTest()} style={{ ...ghostBtn, flex: 1 }}><EditableText id="alerts.send_test">Send test</EditableText></button>
-            <button onClick={() => { setOpen(false); void disable(); }} style={{ ...ghostBtn, flex: 1, color: '#ff9a9a' }}><EditableText id="alerts.turn_off">Turn off</EditableText></button>
+            <button onClick={() => void sendTest()} style={{ ...ghostBtn, flex: 1 }}>{"Send test"}</button>
+            <button onClick={() => { setOpen(false); void disable(); }} style={{ ...ghostBtn, flex: 1, color: '#ff9a9a' }}>{"Turn off"}</button>
           </div>
         </div>
       )}
@@ -230,7 +229,7 @@ function SessionAlertSettings() {
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', color: TEXT, cursor: 'pointer', padding: '13px 16px', textAlign: 'left' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>🔔 <EditableText id="alerts.session_title">Strategy session alerts</EditableText></span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>🔔 {"Strategy session alerts"}</span>
           {anyOn && <span style={{ ...badge, color: GREEN, border: `1px solid ${GREEN}` }}>ON</span>}
         </div>
         <span style={{ fontSize: 12, color: FAINT }}>{open ? '▾' : '▸'}</span>
@@ -238,16 +237,16 @@ function SessionAlertSettings() {
       {open && (
         <div style={{ padding: '0 16px 14px' }}>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
-            <EditableText id="alerts.session_blurb">Get notified when your Strategy Sessions open and close, and ahead of time before they start. Turn on phone alerts above so a device actually buzzes.</EditableText>
+            {"Get notified when your Strategy Sessions open and close, and ahead of time before they start. Turn on phone alerts above so a device actually buzzes."}
           </div>
           <ToggleRow
-            label={<EditableText id="alerts.session_pre">Before a session opens</EditableText>}
+            label={"Before a session opens"}
             on={prefs.notifyPreOpen}
             onChange={(v) => persist({ ...prefs, notifyPreOpen: v })}
           />
           {prefs.notifyPreOpen && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '2px 0 12px', paddingLeft: 4, fontSize: 12, color: MUTED }}>
-              <EditableText id="alerts.session_lead_pre">Notify me</EditableText>
+              {"Notify me"}
               <input
                 type="number"
                 min={1}
@@ -257,16 +256,16 @@ function SessionAlertSettings() {
                 onBlur={() => persist({ ...prefs, preOpenLeadMin: Math.max(1, Math.min(240, lead || 30)) })}
                 style={{ ...numInput }}
               />
-              <EditableText id="alerts.session_lead_post">minutes before it opens</EditableText>
+              {"minutes before it opens"}
             </div>
           )}
           <ToggleRow
-            label={<EditableText id="alerts.session_open">When a session opens</EditableText>}
+            label={"When a session opens"}
             on={prefs.notifyOpen}
             onChange={(v) => persist({ ...prefs, notifyOpen: v })}
           />
           <ToggleRow
-            label={<EditableText id="alerts.session_close">When a session closes</EditableText>}
+            label={"When a session closes"}
             on={prefs.notifyClose}
             onChange={(v) => persist({ ...prefs, notifyClose: v })}
           />
@@ -382,7 +381,7 @@ function PriceAlertSettings() {
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', color: TEXT, cursor: 'pointer', padding: '13px 16px', textAlign: 'left' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>🎯 <EditableText id="alerts.price_title">Price alerts</EditableText></span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#fff' }}>🎯 {"Price alerts"}</span>
           {activeCount > 0 && <span style={{ ...badge, color: GOLD, border: `1px solid ${GOLD}` }}>{activeCount}</span>}
         </div>
         <span style={{ fontSize: 12, color: FAINT }}>{open ? '▾' : '▸'}</span>
@@ -390,19 +389,19 @@ function PriceAlertSettings() {
       {open && (
         <div style={{ padding: '0 16px 14px' }}>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
-            <EditableText id="alerts.price_blurb">Get buzzed when a market crosses a price you set. Covers forex, metals, indices and crypto. Turn on phone alerts above so a device actually buzzes.</EditableText>
+            {"Get buzzed when a market crosses a price you set. Covers forex, metals, indices and crypto. Turn on phone alerts above so a device actually buzzes."}
           </div>
 
           {!priceSource && (
             <div style={{ ...warnBanner, marginBottom: 12 }}>
-              <EditableText id="alerts.price_no_source">Crypto alerts work out of the box. Forex, metals and index alerts need an OANDA connection to fire — add one under Trade Desk ▸ Live Brokers.</EditableText>
+              {"Crypto alerts work out of the box. Forex, metals and index alerts need an OANDA connection to fire — add one under Trade Desk ▸ Live Brokers."}
             </div>
           )}
 
           {/* New-rule form */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginBottom: 4 }}>
             <div style={{ flex: '1 1 150px', minWidth: 130 }}>
-              <label style={fieldLbl}><EditableText id="alerts.price_symbol">Symbol</EditableText></label>
+              <label style={fieldLbl}>{"Symbol"}</label>
               <input
                 value={symbol}
                 list="price-alert-symbols"
@@ -415,14 +414,14 @@ function PriceAlertSettings() {
               </datalist>
             </div>
             <div style={{ flex: '0 0 auto' }}>
-              <label style={fieldLbl}><EditableText id="alerts.price_when">When it</EditableText></label>
+              <label style={fieldLbl}>{"When it"}</label>
               <select value={condition} onChange={(e) => setCondition(e.target.value as PriceAlertCondition)} style={{ ...fieldInput, cursor: 'pointer' }}>
                 <option value="above">crosses above</option>
                 <option value="below">crosses below</option>
               </select>
             </div>
             <div style={{ flex: '0 0 auto' }}>
-              <label style={fieldLbl}><EditableText id="alerts.price_level">Price</EditableText></label>
+              <label style={fieldLbl}>{"Price"}</label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -434,7 +433,7 @@ function PriceAlertSettings() {
               />
             </div>
             <button onClick={() => void add()} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>
-              {busy ? <EditableText id="alerts.price_adding">Adding…</EditableText> : <EditableText id="alerts.price_add">Add alert</EditableText>}
+              {busy ? "Adding…" : "Add alert"}
             </button>
           </div>
 
@@ -448,7 +447,7 @@ function PriceAlertSettings() {
             />
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: MUTED, cursor: 'pointer' }}>
               <input type="checkbox" checked={repeat === 'always'} onChange={(e) => setRepeat(e.target.checked ? 'always' : 'once')} />
-              <EditableText id="alerts.price_repeat">Keep alerting on every cross</EditableText>
+              {"Keep alerting on every cross"}
             </label>
           </div>
 
@@ -457,7 +456,7 @@ function PriceAlertSettings() {
           {/* Existing rules */}
           {alerts.length === 0 ? (
             <div style={{ fontSize: 12, color: FAINT, paddingTop: 8, borderTop: `1px solid ${BORDER}` }}>
-              <EditableText id="alerts.price_empty">No price alerts yet.</EditableText>
+              {"No price alerts yet."}
             </div>
           ) : (
             <div style={{ display: 'grid', gap: 0 }}>
@@ -593,7 +592,7 @@ function AlertCard({
       {analyzed && alert.analysis ? (
         <Analysis analysis={alert.analysis.parsed} raw={alert.analysis.raw} model={alert.analysis.model} hasTrade={!!alert.tradeId} onViewTrade={onViewTrade} />
       ) : readOnly ? (
-        <div style={{ padding: '0 16px 14px', fontSize: 12, color: FAINT }}><EditableText id="alerts.awaiting">Awaiting screenshot analysis.</EditableText></div>
+        <div style={{ padding: '0 16px 14px', fontSize: 12, color: FAINT }}>{"Awaiting screenshot analysis."}</div>
       ) : (
         <div style={{ padding: '0 16px 14px' }}>
           <div
@@ -615,7 +614,7 @@ function AlertCard({
             ) : (
               <div style={{ fontSize: 12.5, color: MUTED }}>
                 <div style={{ fontSize: 22, marginBottom: 6 }}>📋</div>
-                <EditableText id="alerts.paste_hint">Paste a chart screenshot here (Ctrl/Cmd-V), or click to upload.</EditableText>
+                {"Paste a chart screenshot here (Ctrl/Cmd-V), or click to upload."}
               </div>
             )}
           </div>
@@ -633,12 +632,12 @@ function AlertCard({
               title={!aiConfigured ? 'VTS AI API key not configured on the server' : undefined}
               style={{ ...goldBtn, opacity: busy || !image || !aiConfigured ? 0.55 : 1 }}
             >
-              {busy ? <EditableText id="alerts.analyzing">Analyzing…</EditableText> : <EditableText id="alerts.analyze">Analyze with VTS AI</EditableText>}
+              {busy ? "Analyzing…" : "Analyze with VTS AI"}
             </button>
             {image && (
-              <button onClick={() => setImage(null)} style={ghostBtn}><EditableText id="alerts.clear_image">Clear image</EditableText></button>
+              <button onClick={() => setImage(null)} style={ghostBtn}>{"Clear image"}</button>
             )}
-            <button onClick={dismiss} disabled={busy} style={{ ...ghostBtn, marginLeft: 'auto' }}><EditableText id="alerts.dismiss">Dismiss</EditableText></button>
+            <button onClick={dismiss} disabled={busy} style={{ ...ghostBtn, marginLeft: 'auto' }}>{"Dismiss"}</button>
           </div>
         </div>
       )}
@@ -685,7 +684,7 @@ function Analysis({
       )}
 
       {hasTrade && (
-        <button onClick={onViewTrade} style={{ ...ghostBtn, marginTop: 8 }}><EditableText id="alerts.view_trade">View in Trade Log →</EditableText></button>
+        <button onClick={onViewTrade} style={{ ...ghostBtn, marginTop: 8 }}>{"View in Trade Log →"}</button>
       )}
     </div>
   );

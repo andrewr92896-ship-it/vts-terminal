@@ -1,7 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { employeeApi, type OverviewData } from '../api';
 import { EMP, EMPLOYMENT_LABELS, fmtDate, fmtDateTime, tint } from '../theme';
-import { T } from '../copy';
 import { Banner, Card, Detail, DetailGrid, Empty, Pill, ScreenHeader, label } from '../ui';
 import { Icon } from '../../components/Icon';
 import { MyTasks } from './MyTasks';
@@ -29,7 +28,7 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
   if (!data) {
     return (
       <Empty icon="refresh-cw">
-        <T id="emp.overview.loading">Loading…</T>
+        {"Loading…"}
       </Empty>
     );
   }
@@ -40,20 +39,16 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
     <div>
       <ScreenHeader
         icon="briefcase"
-        title={<T id="emp.overview.title">Overview</T>}
+        title={"Overview"}
         subtitle={
-          <T id="emp.overview.subtitle">
-            Your employment record and everything the internal portal is currently holding.
-          </T>
+          "Your employment record and everything the internal portal is currently holding."
         }
       />
 
       {!me.twoFactorEnrolled && (
         <div style={{ marginBottom: 18 }}>
           <Banner tone="warn">
-            <T id="emp.overview.no2fa">
-              This account has no authenticator enrolled. Set one up from the Security section.
-            </T>
+            {"This account has no authenticator enrolled. Set one up from the Security section."}
           </Banner>
         </div>
       )}
@@ -65,7 +60,7 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
             <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 16, fontWeight: 650, color: EMP.text }}>{me.name}</div>
               <div style={{ fontSize: 12.5, color: EMP.muted }}>
-                {me.title || <T id="emp.overview.no_title">No title on record</T>}
+                {me.title || "No title on record"}
                 {me.department ? ` · ${me.department}` : ''}
               </div>
             </div>
@@ -73,32 +68,32 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
               {me.isPortalAdmin && (
                 <Pill tone="accent">
                   <Icon name="shield-check" size={10} />
-                  <T id="emp.overview.admin_pill">Portal admin</T>
+                  {"Portal admin"}
                 </Pill>
               )}
               <Pill tone={me.twoFactorEnrolled ? 'good' : 'warn'}>
                 {me.twoFactorEnrolled ? (
-                  <T id="emp.overview.2fa_on">2FA on</T>
+                  "2FA on"
                 ) : (
-                  <T id="emp.overview.2fa_off">2FA off</T>
+                  "2FA off"
                 )}
               </Pill>
             </div>
           </div>
 
           <DetailGrid>
-            <Detail term={<T id="emp.overview.employee_no">Employee no.</T>}>
+            <Detail term={"Employee no."}>
               {me.employeeNo || '—'}
             </Detail>
-            <Detail term={<T id="emp.overview.type">Employment</T>}>
+            <Detail term={"Employment"}>
               {EMPLOYMENT_LABELS[me.employmentType] ?? me.employmentType}
             </Detail>
-            <Detail term={<T id="emp.overview.started">Start date</T>}>{fmtDate(me.startedOn)}</Detail>
-            <Detail term={<T id="emp.overview.manager">Reports to</T>}>{me.managerName || '—'}</Detail>
-            <Detail term={<T id="emp.overview.work_email">Work email</T>}>{me.workEmail || '—'}</Detail>
-            <Detail term={<T id="emp.overview.work_phone">Work phone</T>}>{me.workPhone || '—'}</Detail>
-            <Detail term={<T id="emp.overview.location">Location</T>}>{me.location || '—'}</Detail>
-            <Detail term={<T id="emp.overview.last_login">Previous sign-in</T>}>
+            <Detail term={"Start date"}>{fmtDate(me.startedOn)}</Detail>
+            <Detail term={"Reports to"}>{me.managerName || '—'}</Detail>
+            <Detail term={"Work email"}>{me.workEmail || '—'}</Detail>
+            <Detail term={"Work phone"}>{me.workPhone || '—'}</Detail>
+            <Detail term={"Location"}>{me.location || '—'}</Detail>
+            <Detail term={"Previous sign-in"}>
               {fmtDateTime(me.lastLoginAt)}
             </Detail>
           </DetailGrid>
@@ -114,42 +109,42 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
           <StatCard
             icon="users"
             value={counts.people}
-            caption={<T id="emp.overview.stat_people">People in the directory</T>}
+            caption={"People in the directory"}
             onClick={() => onNavigate('directory')}
           />
           <StatCard
             icon="file-text"
             value={counts.documents}
-            caption={<T id="emp.overview.stat_docs">Internal documents</T>}
+            caption={"Internal documents"}
             onClick={() => onNavigate('documents')}
           />
           <StatCard
             icon="megaphone"
             value={announcements.length}
-            caption={<T id="emp.overview.stat_news">Recent announcements</T>}
+            caption={"Recent announcements"}
             onClick={() => onNavigate('announcements')}
           />
         </div>
 
         <Card>
           <div style={{ ...label, marginBottom: 12 }}>
-            <T id="emp.overview.session_heading">This session</T>
+            {"This session"}
           </div>
           <DetailGrid>
-            <Detail term={<T id="emp.overview.session_len">Maximum length</T>}>
+            <Detail term={"Maximum length"}>
               {security.sessionHours}h
             </Detail>
-            <Detail term={<T id="emp.overview.session_idle">Signs you out after</T>}>
+            <Detail term={"Signs you out after"}>
               {security.idleMinutes} min idle
             </Detail>
-            <Detail term={<T id="emp.overview.session_2fa">Second factor</T>}>
+            <Detail term={"Second factor"}>
               {security.requires2fa ? (
-                <T id="emp.overview.session_2fa_req">Required</T>
+                "Required"
               ) : (
-                <T id="emp.overview.session_2fa_opt">Optional</T>
+                "Optional"
               )}
             </Detail>
-            <Detail term={<T id="emp.overview.session_ip">Signed in from</T>}>
+            <Detail term={"Signed in from"}>
               {me.lastLoginIp || '—'}
             </Detail>
           </DetailGrid>
@@ -177,7 +172,7 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
             }}
           >
             <div style={label}>
-              <T id="emp.overview.news_heading">Latest announcements</T>
+              {"Latest announcements"}
             </div>
             <button
               onClick={() => onNavigate('announcements')}
@@ -190,12 +185,12 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
                 fontFamily: EMP.sans,
               }}
             >
-              <T id="emp.overview.news_all">See all</T>
+              {"See all"}
             </button>
           </div>
           {announcements.length === 0 ? (
             <Empty icon="megaphone">
-              <T id="emp.overview.news_empty">Nothing posted yet.</T>
+              {"Nothing posted yet."}
             </Empty>
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
@@ -213,7 +208,7 @@ export function Overview({ onNavigate }: { onNavigate: (screen: string) => void 
                     <span style={{ fontSize: 13.5, fontWeight: 600, color: EMP.text }}>{a.title}</span>
                     {a.pinned && (
                       <Pill tone="accent">
-                        <T id="emp.overview.pinned">Pinned</T>
+                        {"Pinned"}
                       </Pill>
                     )}
                   </div>

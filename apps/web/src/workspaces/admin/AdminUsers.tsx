@@ -7,7 +7,6 @@ import type { AdminUser, RoleKey, Team } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { Icon } from '../../components/Icon';
-import { EditableText } from '../../copy/SiteCopy';
 import { UserBadges, useBadgeRegistry } from '../../components/UserBadges';
 import {
   Badge,
@@ -214,20 +213,19 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}><EditableText id="admin.users.loading">Loading users...</EditableText></div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>{"Loading users..."}</div>;
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
-        titleId="admin.users.title" subtitleId="admin.users.subtitle"
         title="Users"
         subtitle="Create accounts and assign roles. A user can hold several roles; only admins can change them. New users set their own password on first sign-in."
       />
 
       {/* Create a user */}
       <div style={{ ...panel(theme), marginBottom: 18 }}>
-        <div style={panelLabel}><EditableText id="admin.users.add_heading">Add a user</EditableText></div>
+        <div style={panelLabel}>{"Add a user"}</div>
         <div
           style={{
             display: 'grid',
@@ -236,11 +234,11 @@ export function AdminUsers({ theme }: { theme: Theme }) {
           }}
         >
           <div>
-            <label style={fieldLabel}><EditableText id="admin.users.f_name">Display name</EditableText></label>
+            <label style={fieldLabel}>{"Display name"}</label>
             <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Jane Smith" style={inputStyle} />
           </div>
           <div>
-            <label style={fieldLabel}><EditableText id="admin.users.f_email">Email</EditableText></label>
+            <label style={fieldLabel}>{"Email"}</label>
             <input
               type="email"
               value={email}
@@ -252,22 +250,22 @@ export function AdminUsers({ theme }: { theme: Theme }) {
             />
           </div>
           <div>
-            <label style={fieldLabel}><EditableText id="admin.users.f_username">Username</EditableText></label>
+            <label style={fieldLabel}>{"Username"}</label>
             <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="jsmith" autoCapitalize="none" autoCorrect="off" style={inputStyle} />
           </div>
           <div>
-            <label style={fieldLabel}><EditableText id="admin.users.f_temp_password">Temporary password</EditableText></label>
+            <label style={fieldLabel}>{"Temporary password"}</label>
             <div style={{ display: 'flex', gap: 8 }}>
               <input value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" style={{ ...inputStyle, flex: 1 }} />
               <button type="button" onClick={() => setPassword(genPassword())} style={ghostBtn} title="Generate a password">
-                <EditableText id="admin.users.generate">Generate</EditableText>
+                {"Generate"}
               </button>
             </div>
           </div>
         </div>
 
         <div style={{ marginTop: 14 }}>
-          <label style={fieldLabel}><EditableText id="admin.users.f_roles">Roles</EditableText></label>
+          <label style={fieldLabel}>{"Roles"}</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
             {grantableRoles.map((r) => (
               <RoleToggle
@@ -282,7 +280,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
         </div>
 
         <div style={{ marginTop: 14, maxWidth: isPhone ? '100%' : 320 }}>
-          <label style={fieldLabel}><EditableText id="admin.users.f_team">Trading team</EditableText></label>
+          <label style={fieldLabel}>{"Trading team"}</label>
           <TeamSelect value={teamId} onChange={setTeamId} teams={teams} />
         </div>
 
@@ -301,7 +299,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
             disabled={createBusy}
             style={{ ...primaryBtn(theme, accentGrad), opacity: createBusy ? 0.6 : 1 }}
           >
-            {createBusy ? 'Creating...' : <EditableText id="admin.users.create_btn">Create user</EditableText>}
+            {createBusy ? 'Creating...' : "Create user"}
           </button>
         </div>
       </div>

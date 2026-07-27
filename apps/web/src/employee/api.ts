@@ -250,13 +250,6 @@ export const employeeApi = {
   // ---- content ----
   overview: () => request<OverviewData>('GET', '/overview'),
   directory: () => request<{ people: DirectoryEntry[] }>('GET', '/directory'),
-  copy: () => request<{ copy: Record<string, string> }>('GET', '/copy'),
-  // Wording writes. Founder-level only server-side, and confined to the `emp.`
-  // namespace — the UI gate is a convenience, not the control.
-  saveCopy: (key: string, value: string) =>
-    request<{ ok: true; cleared: boolean }>('PUT', `/copy/${encodeURIComponent(key)}`, { value }),
-  resetCopy: (key: string) =>
-    request<{ ok: true }>('DELETE', `/copy/${encodeURIComponent(key)}`),
 
   // ---- photos and working status ----
   setPhoto: (photo: string) => request<{ ok: true }>('PUT', '/photo', { photo }),
