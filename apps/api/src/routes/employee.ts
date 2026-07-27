@@ -6,6 +6,7 @@ import {
   EMPLOYEE_DOC_CATEGORIES,
   EMPLOYEE_STATUSES,
   EMPLOYMENT_TYPES,
+  WORKING_STATUSES,
   employeeProfiles,
   users,
   type EmployeeProfileRow,
@@ -69,6 +70,8 @@ import {
   listPeople,
   resetTwoFactor,
   revokeEmployeeAccess,
+  setMyPhoto,
+  setMyWorkingStatus,
   setTaskDone,
   updateAnnouncement,
   updateDocument,
@@ -130,6 +133,20 @@ const assignTaskSchema = taskSchema.extend({
   userId: z.string().trim().min(1).max(64).optional(),
   everyone: z.boolean().optional(),
 });
+
+// A headshot, already center-cropped and downscaled in the browser. The cap and
+// the data-URL shape are the server's checks — it will not accept an arbitrary
+// blob just because the client said it was a picture. An empty string removes it.
+const photoSchema = z.object({
+  photo: z
+    .string()
+    .max(400_000)
+    .refine((v) => v === '' || /^data:image\/(png|jpe?g|webp);base64,/.test(v), {
+      message: 'That does not look like an image',
+    }),
+});
+
+const workingStatusSchema = z.object({ workingStatus: z.enum(WORKING_STATUSES) });
 
 const announcementSchema = z.object({
   title: z.string().trim().min(1).max(160),
@@ -589,6 +606,34 @@ export async function employeeRoutes(app: FastifyInstance) {
 
   app.get('/api/employee/directory', { preHandler: requireEmployee }, async (request) => {
     return { people: await getDirectory(request.employee!.user.id) };
+  });
+
+  // ---- Your own photo and working status ----
+  // Both are self-service. A portal admin edits titles and departments from the
+  // People screen, but not someone else's face or where they are working today.
+
+  app.put('/api/employee/photo', { preHandler: requireEmployee }, async (request, reply) => {
+    const parsed = photoSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.issues[0]?.message ?? 'Invalid image' });
+    }
+    const ctx = request.employee!;
+    await setMyPhoto(ctx.user.id, parsed.data.photo || null);
+    await audit({
+      action: parsed.data.photo ? 'photo.updated' : 'photo.removed',
+      userId: ctx.user.id,
+      actor: ctx.user.displayName,
+      ...requestMeta(request),
+    });
+    return { ok: true };
+  });
+
+  app.put('/api/employee/working-status', { preHandler: requireEmployee }, async (request, reply) => {
+    const parsed = workingStatusSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid status' });
+    const ctx = request.employee!;
+    await setMyWorkingStatus(ctx.user.id, parsed.data.workingStatus);
+    return { ok: true };
   });
 
   // ---- Tasks ----

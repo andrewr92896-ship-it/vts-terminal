@@ -4,6 +4,7 @@ import { EMP, EMPLOYMENT_LABELS, fmtDate } from '../theme';
 import { T, useCopy } from '../copy';
 import { Card, Detail, DetailGrid, Empty, Input, Pill, ScreenHeader } from '../ui';
 import { Avatar } from './Overview';
+import { WORKING_COLORS, WORKING_LABELS } from './Photos';
 import { Icon } from '../../components/Icon';
 
 // The staff directory. Only people with an active employee record appear —
@@ -156,6 +157,20 @@ function PersonCard({ person }: { person: DirectoryEntry }) {
           {EMPLOYMENT_LABELS[person.employmentType] ?? person.employmentType}
         </Detail>
         <Detail term={<T id="emp.directory.started">Started</T>}>{fmtDate(person.startedOn)}</Detail>
+        <Detail term={<T id="emp.directory.working">Working</T>}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: WORKING_COLORS[person.workingStatus],
+                flex: 'none',
+              }}
+            />
+            {WORKING_LABELS[person.workingStatus]}
+          </span>
+        </Detail>
       </DetailGrid>
 
       {(person.managerName || person.location || person.isPortalAdmin) && (

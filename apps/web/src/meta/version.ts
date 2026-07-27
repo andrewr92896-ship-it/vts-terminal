@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.62';
+export const APP_VERSION = 'Beta V 5.63';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.63',
+    date: 'July 27, 2026',
+    notes: [
+      'The Employee Portal takes headshots. Drop a photo onto the Overview card, or pick a file, and it appears beside your name in the directory. It is cropped square and resized in the browser before it is sent, so a large photo off a phone is fine.',
+      'A roster beside the dropzone shows who has a photo and who does not, with a count of how many are still missing — a nudge, not a leaderboard.',
+      'You can set where you are working today — in office, remote, or away — and it shows against your name in the directory. Only you can change your own.',
+    ],
+  },
   {
     version: 'Beta V 5.62',
     date: 'July 27, 2026',

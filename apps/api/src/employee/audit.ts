@@ -43,6 +43,9 @@ export type AuditAction =
   | 'copy.hidden'
   // tasks
   | 'task.assigned'
+  // profile
+  | 'photo.updated'
+  | 'photo.removed'
   // people
   | 'people.granted'
   | 'people.updated'

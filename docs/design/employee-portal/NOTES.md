@@ -40,11 +40,22 @@ else has ticked off. That would be a different, more loaded feature and nothing
 in the design asks for it. The card lives on Overview for now; it moves to the
 Home screen when that is built.
 
+**Done — headshots and working status** (Beta V 5.63). The "Employee photos" card
+on Overview: a drag-and-drop dropzone, the roster of who has a photo with the
+design's "N still need a photo" nudge, and the in office / remote / away picker,
+which reads back as a coloured dot in the directory. The photo is cropped square
+and re-encoded to a 400px JPEG **in the browser** (`src/employee/image.ts`) before
+it is sent, so what reaches the server is small and uniform regardless of what
+came off the phone. Images live in `users.avatar` — the same column the main
+portal already uses — rather than a second store, so one person has one face
+across both surfaces. Working status is per-profile
+(`employee_profiles.working_status`) and only ever self-set: there is no endpoint
+that lets one person change another's.
+
 **Not started — the rest of the Home screen and its data.** Still missing behind
-`/employee`: a company calendar with per-user RSVP, employee headshot upload with
-a "still needs a photo" roster, working status (in office / away / remote),
-birthdays and milestones, and a Training section. Each needs its own tables and
-routes. Company news exists as `employee_announcements` but has no lead image.
+`/employee`: a company calendar with per-user RSVP, birthdays and milestones, and
+a Training section. Each needs its own tables and routes. Company news exists as
+`employee_announcements` but has no lead image.
 
 ## Decisions taken that depart from the handoff
 

@@ -1305,6 +1305,12 @@ export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 export const EMPLOYEE_STATUSES = ['active', 'suspended', 'offboarded'] as const;
 export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
 
+// Where someone is working from today — the directory's "Working" column. This
+// is a courtesy signal the employee sets themselves, not attendance tracking:
+// nothing records when it changed, and nobody but the person can set it.
+export const WORKING_STATUSES = ['in_office', 'remote', 'away'] as const;
+export type WorkingStatus = (typeof WORKING_STATUSES)[number];
+
 // One row per portal user granted employee-portal access. Presence of the row is
 // the HR record; the `employee` role on the user is the access grant. Both must
 // line up (role + an `active` profile) for a sign-in to succeed, so revoking
@@ -1324,6 +1330,8 @@ export const employeeProfiles = sqliteTable('employee_profiles', {
   employmentType: text('employment_type', { enum: EMPLOYMENT_TYPES }).notNull().default('full_time'),
   startedOn: text('started_on'), // ISO date (YYYY-MM-DD); no time component needed
   status: text('status', { enum: EMPLOYEE_STATUSES }).notNull().default('active'),
+  // Set by the employee themselves; see WORKING_STATUSES.
+  workingStatus: text('working_status', { enum: WORKING_STATUSES }).notNull().default('in_office'),
   // HR/administrator *of the employee portal* — may manage people, announcements
   // and documents in it. Distinct from the main portal's admin role; founder-level
   // users are treated as portal admins implicitly.

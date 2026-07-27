@@ -68,6 +68,7 @@ async function request<T>(
 export type EmploymentType = 'full_time' | 'part_time' | 'contractor' | 'intern';
 export type EmployeeStatus = 'active' | 'suspended' | 'offboarded';
 export type DocCategory = 'policy' | 'handbook' | 'form' | 'guide' | 'other';
+export type WorkingStatus = 'in_office' | 'remote' | 'away';
 
 export interface EmployeeMe {
   userId: string;
@@ -83,6 +84,7 @@ export interface EmployeeMe {
   employmentType: EmploymentType;
   startedOn: string | null;
   status: EmployeeStatus;
+  workingStatus: WorkingStatus;
   managerName: string | null;
   isPortalAdmin: boolean;
   /** Founder-level — gates the inline wording editor. Narrower than isPortalAdmin. */
@@ -104,6 +106,9 @@ export interface DirectoryEntry {
   location: string | null;
   employmentType: EmploymentType;
   startedOn: string | null;
+  workingStatus: WorkingStatus;
+  /** Whether they have uploaded a headshot yet. */
+  hasPhoto: boolean;
   managerName: string | null;
   isPortalAdmin: boolean;
   isMe: boolean;
@@ -252,6 +257,11 @@ export const employeeApi = {
     request<{ ok: true; cleared: boolean }>('PUT', `/copy/${encodeURIComponent(key)}`, { value }),
   resetCopy: (key: string) =>
     request<{ ok: true }>('DELETE', `/copy/${encodeURIComponent(key)}`),
+
+  // ---- your own photo and working status ----
+  setPhoto: (photo: string) => request<{ ok: true }>('PUT', '/photo', { photo }),
+  setWorkingStatus: (workingStatus: WorkingStatus) =>
+    request<{ ok: true }>('PUT', '/working-status', { workingStatus }),
 
   // ---- tasks ----
   tasks: () => request<{ tasks: TaskView[] }>('GET', '/tasks'),
