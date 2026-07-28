@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.67';
+export const APP_VERSION = 'Beta V 5.68';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.68',
+    date: 'July 28, 2026',
+    notes: [
+      'Setup notes only: the deployment guide now records how to connect the mail account that sends the Employee Portal sign-in codes. Nothing about the portal itself changed.',
+    ],
+  },
   {
     version: 'Beta V 5.67',
     date: 'July 27, 2026',
