@@ -506,6 +506,14 @@ step**: a correct password issues a `pending_2fa` session that can reach **only*
 - **SMTP is optional.** With no `SMTP_HOST` set the code is written to the server
   log instead of emailed, and the response carries `delivered: false` so the UI
   says so. Deliberate: a misconfigured deploy must not lock every employee out.
+- **The send is bounded (10s connect/greeting, 15s socket, in `mailer.ts`).**
+  `/login` awaits delivery so it can report `delivered` honestly, which means an
+  unbounded send is an unbounded sign-in: nodemailer's defaults (2 min to
+  connect, 10 min socket) once hung the login request until the browser gave up
+  with "load failed", locking people out via the exact path the log fallback
+  exists to prevent. Keep any mail added here on a short timeout. The usual way
+  to trigger it is a port/`SMTP_SECURE` mismatch — plaintext on 465 or implicit
+  TLS on 587 — where each end waits for the other to speak first.
 
 **"Remember this device for 30 days."** Ticked on the code screen, backed by
 `employee/trustedDevices.ts` + `employee_trusted_devices`. A remembered browser

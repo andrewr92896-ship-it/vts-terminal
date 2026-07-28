@@ -26,6 +26,20 @@ function getTransport(): Transporter | null {
       host: config.SMTP_HOST,
       port: config.SMTP_PORT,
       secure: config.SMTP_SECURE,
+      // Bound every stage of the conversation. Nodemailer's defaults are two
+      // minutes to connect and ten on the socket, which is far too long for
+      // something a sign-in waits on: a mail server that accepts the TCP
+      // connection and then says nothing would hang the login request until the
+      // browser gave up, and the employee would be locked out by a mail
+      // misconfiguration rather than shown the "could not be emailed" notice
+      // that is supposed to cover exactly this case.
+      //
+      // The classic way to land here is a port/secure mismatch — plaintext on
+      // 465, or implicit TLS on 587 — where each side waits for the other to
+      // speak first and neither ever does.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
       ...(config.SMTP_USER
         ? { auth: { user: config.SMTP_USER, pass: config.SMTP_PASS ?? '' } }
         : {}),

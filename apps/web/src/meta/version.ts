@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.70';
+export const APP_VERSION = 'Beta V 5.71';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.71',
+    date: 'July 28, 2026',
+    notes: [
+      'Fixed the Employee Portal hanging on "Checking…" and then failing to load when the mail server does not answer. Signing in waits for the code to be sent, and that wait was unbounded — a mail server that accepted the connection and then went quiet held the sign-in open for up to two minutes, until the browser gave up.',
+      'The wait is now capped at ten seconds. A mail server that is unreachable or misconfigured gets you the "code could not be emailed" notice instead of a broken page, which is what was always intended.',
+    ],
+  },
   {
     version: 'Beta V 5.70',
     date: 'July 28, 2026',
