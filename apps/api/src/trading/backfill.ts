@@ -21,17 +21,52 @@ import { fetchOandaClosedTradeRows } from './brokers/oanda.js';
 // against whatever reconcile already captured. It writes rows straight to the
 // closed state, so it never fires the open/close push notifications reconcile
 // does — a backfill must not buzz phones about trades from days ago.
+//
+// It is also the CORRECTOR for what reconcile recorded. Reconcile can only
+// estimate how a trade ended: it stamps the last mark it polled before the
+// position vanished from the feed, which is a bid/ask midpoint and so never a
+// price that actually filled, plus the last open P/L it saw. The broker's own
+// closed-trade record is authoritative, so where the two disagree the numbers
+// below win.
 
 function oandaBase(env: OandaCreds['env']): string {
   return env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com';
 }
 
-// Reconcile keys an OANDA position as `oanda:<tradeId>` (see mapOandaTrades), so
-// a backfilled closed trade using the same key dedups naturally against a row
-// reconcile may already hold for that trade — whether it's still open or already
-// closed. Keeping the key identical is what makes the two writers safe to mix.
-function keyFor(tradeId: string): string {
-  return `oanda:${tradeId}`;
+// Reconcile stores a position under the id the Live Wall gave it, and the desk
+// loader namespaces that id by connection so two accounts on the same broker can
+// never collide: `loadConnection` (service.ts) re-keys the `oanda:<tradeId>` that
+// mapOandaTrades produced into `<connectionId>:oanda:<tradeId>`. The backfill
+// writes that SAME key, which is what lets the two writers dedupe against each
+// other.
+//
+// This used to build the un-namespaced `oanda:<tradeId>` — reading mapOandaTrades
+// and missing the re-key one layer up — so it never matched a reconcile row and
+// every trade the live poll had already captured got a second, phantom row.
+// Migration 0077 merged and removed those, but keep the two key builders in step:
+// if the Live Wall's keying changes, this must change with it.
+function keyFor(connectionId: string, tradeId: string): string {
+  return `${connectionId}:oanda:${tradeId}`;
+}
+
+const OANDA_KEY_PART = 'oanda:';
+
+// The OANDA trade id inside a position key. Tolerates the legacy un-namespaced
+// shape as well as the current one, so a row written before migration 0077 (or
+// by an older build racing the deploy) still dedupes. Null when the key is not
+// an OANDA position at all (kraken/manual/funded), which never matches here.
+function oandaTradeId(key: string): string | null {
+  const at = key.indexOf(OANDA_KEY_PART);
+  if (at === -1) return null;
+  return key.slice(at + OANDA_KEY_PART.length) || null;
+}
+
+// Prices and P/L are reals that round-trip through the DB, so compare them with
+// the same small tolerance reconcile uses for stop/target moves rather than on
+// exact equality — otherwise last-bit noise would rewrite every row every pass.
+function sameNum(a: number | null, b: number | null): boolean {
+  if (a == null || b == null) return a == null && b == null;
+  return Math.abs(a - b) < 1e-9;
 }
 
 // Don't hammer OANDA on every desk read: a connection is re-pulled at most once
@@ -41,15 +76,17 @@ const BACKFILL_MIN_INTERVAL_MS = Math.max(60, Number(process.env.BACKFILL_INTERV
 const lastRunByConn = new Map<string, number>();
 
 // Ingest OANDA closed trades for the given team scope (or the whole install when
-// omitted) into `tradingPositions`, inserting only trades not already recorded.
-// Best-effort per connection: a broker error on one account never blocks the
-// others or throws to the caller. Returns how many new rows were inserted.
+// omitted) into `tradingPositions`: inserting trades not already recorded, and
+// correcting the fills of ones reconcile only estimated. Best-effort per
+// connection — a broker error on one account never blocks the others or throws
+// to the caller. Returns how many rows were written (inserted + corrected).
 export async function backfillClosedTrades(scopeIds?: Set<string>): Promise<number> {
   const conns = (await getAllActiveDecrypted(scopeIds)).filter((c) => c.broker === 'oanda');
   if (conns.length === 0) return 0;
 
   const now = Date.now();
   let inserted = 0;
+  let corrected = 0;
   for (const c of conns) {
     const last = lastRunByConn.get(c.id);
     if (last != null && now - last < BACKFILL_MIN_INTERVAL_MS) continue;
@@ -68,15 +105,67 @@ export async function backfillClosedTrades(scopeIds?: Set<string>): Promise<numb
         cutoff == null ? rows : rows.filter((r) => (r.openedAtMs ?? r.closeTimeMs) >= cutoff);
       if (eligible.length === 0) continue;
 
-      // Every key we already hold for this owner (any status), so we skip trades
-      // reconcile captured live and never insert the same trade twice.
+      // Every row we already hold on THIS connection (any status), indexed by
+      // OANDA trade id, so we never insert a trade reconcile captured live.
+      // Scoped to the connection because OANDA numbers trades per account — two
+      // accounts under one owner routinely carry the same trade ids, and a
+      // connection-blind index would silently swallow the second account's.
+      // Soft-deleted rows are indexed too: they must still block a re-import (a
+      // trade the trader deleted never comes back), though they are never
+      // corrected below.
       const existing = await db
-        .select({ key: tradingPositions.key })
+        .select({
+          id: tradingPositions.id,
+          key: tradingPositions.key,
+          connectionId: tradingPositions.connectionId,
+          status: tradingPositions.status,
+          entryPrice: tradingPositions.entryPrice,
+          exitPrice: tradingPositions.exitPrice,
+          realizedPl: tradingPositions.realizedPl,
+          units: tradingPositions.units,
+          closedAt: tradingPositions.closedAt,
+          deletedAt: tradingPositions.deletedAt,
+        })
         .from(tradingPositions)
         .where(eq(tradingPositions.userId, c.ownerId));
-      const known = new Set(existing.map((r) => r.key));
+      const known = new Map<string, (typeof existing)[number]>();
+      for (const r of existing) {
+        if (r.connectionId !== c.id) continue;
+        const tradeId = oandaTradeId(r.key);
+        if (tradeId) known.set(tradeId, r);
+      }
 
-      const fresh = eligible.filter((r) => !known.has(keyFor(r.tradeId)));
+      // Replace reconcile's estimated exit with the broker's real one wherever
+      // the two disagree. Only already-closed, live rows are touched: an open row
+      // is left for reconcile to close so its "trade closed" push still fires,
+      // and a deleted row stays deleted.
+      for (const r of eligible) {
+        const row = known.get(r.tradeId);
+        if (!row || row.deletedAt != null || row.status !== 'closed') continue;
+        const closedAtMs = row.closedAt ? row.closedAt.getTime() : null;
+        const matches =
+          sameNum(row.exitPrice, r.exitPrice) &&
+          sameNum(row.realizedPl, r.realizedPl) &&
+          sameNum(row.entryPrice, r.entryPrice) &&
+          sameNum(row.units, r.units) &&
+          closedAtMs === r.closeTimeMs;
+        if (matches) continue;
+        await db
+          .update(tradingPositions)
+          .set({
+            entryPrice: r.entryPrice,
+            exitPrice: r.exitPrice,
+            realizedPl: r.realizedPl,
+            // Size at open — reconcile stores whatever was left at the last poll,
+            // which understates a position that was closed in parts.
+            units: r.units,
+            closedAt: new Date(r.closeTimeMs),
+          })
+          .where(eq(tradingPositions.id, row.id));
+        corrected += 1;
+      }
+
+      const fresh = eligible.filter((r) => !known.has(r.tradeId));
       if (fresh.length === 0) continue;
 
       const stamp = new Date();
@@ -84,7 +173,7 @@ export async function backfillClosedTrades(scopeIds?: Set<string>): Promise<numb
         fresh.map((r) => ({
           id: crypto.randomUUID(),
           userId: c.ownerId,
-          key: keyFor(r.tradeId),
+          key: keyFor(c.id, r.tradeId),
           connectionId: c.id,
           broker: 'oanda',
           instrument: r.instrument,
@@ -117,5 +206,5 @@ export async function backfillClosedTrades(scopeIds?: Set<string>): Promise<numb
       lastRunByConn.delete(c.id);
     }
   }
-  return inserted;
+  return inserted + corrected;
 }
