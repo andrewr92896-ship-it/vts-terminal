@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.69';
+export const APP_VERSION = 'Beta V 5.70';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.70',
+    date: 'July 28, 2026',
+    notes: [
+      'Maintenance only: added a behind-the-scenes check that confirms each broker trade is recorded once and that the desk’s trade counts and P/L match the broker. Nothing in the portal itself changed.',
+    ],
+  },
   {
     version: 'Beta V 5.69',
     date: 'July 28, 2026',

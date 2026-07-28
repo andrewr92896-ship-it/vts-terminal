@@ -55,7 +55,8 @@ const OANDA_KEY_PART = 'oanda:';
 // shape as well as the current one, so a row written before migration 0077 (or
 // by an older build racing the deploy) still dedupes. Null when the key is not
 // an OANDA position at all (kraken/manual/funded), which never matches here.
-function oandaTradeId(key: string): string | null {
+// Exported so the `db:verify-positions` check reads keys the same way this does.
+export function oandaTradeId(key: string): string | null {
   const at = key.indexOf(OANDA_KEY_PART);
   if (at === -1) return null;
   return key.slice(at + OANDA_KEY_PART.length) || null;
