@@ -50,8 +50,6 @@ export function EmployeeApp() {
   // Where the outstanding sign-in code went, and whether it actually sent.
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   const [codeDelivered, setCodeDelivered] = useState(true);
-  // 30 straight after a send; 0 when a reload resumed a flow already in progress.
-  const [codeCooldown, setCodeCooldown] = useState(30);
   const [rememberDays, setRememberDays] = useState(30);
 
   // Bootstrap: ask the server whether this browser already holds an employee
@@ -69,12 +67,19 @@ export function EmployeeApp() {
       setCsrfToken(s.csrfToken ?? null);
       if (s.rememberDays) setRememberDays(s.rememberDays);
       if (s.stage === 'pending_2fa') {
-        // A reload mid-code lands back on the code screen rather than starting
-        // the whole sign-in again — the pending session is still good.
-        setCodeSentTo(s.sentTo ?? null);
-        setCodeDelivered(true);
-        setCodeCooldown(0);
-        setPhase('verifying');
+        // Opening the portal starts a sign-in from the beginning, always.
+        //
+        // A pending session is half a sign-in: the password is spent but the
+        // code is not in yet. Resuming one on page load meant coming back to
+        // /employee later dropped you on a code screen referring to a code that
+        // had almost certainly expired — and it left that half-authenticated
+        // state addressable for the session's full lifetime. Ending it here
+        // costs one password re-entry and makes the front door predictable:
+        // arriving at /employee always shows the sign-in form.
+        await employeeApi.logout().catch(() => {});
+        setCsrfToken(null);
+        setMe(null);
+        setPhase('signed_out');
         return;
       }
       setMe(s.me ?? null);
@@ -149,7 +154,6 @@ export function EmployeeApp() {
         onCodeSent={(sentTo, delivered) => {
           setCodeSentTo(sentTo);
           setCodeDelivered(delivered);
-          setCodeCooldown(30);
           setPhase('verifying');
         }}
       />
@@ -162,7 +166,6 @@ export function EmployeeApp() {
         sentTo={codeSentTo}
         delivered={codeDelivered}
         rememberDays={rememberDays}
-        initialCooldown={codeCooldown}
         onVerified={(user) => {
           setMe(user);
           setPhase('ready');
