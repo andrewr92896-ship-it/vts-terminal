@@ -226,6 +226,10 @@ async function loadConnection(
       const cr = c.creds as KrakenCreds;
       trades = await fetchKrakenPositions({ apiKey: cr.apiKey, apiSecret: cr.apiSecret });
     }
+    // This id becomes the `key` reconcile stores the position under, and the
+    // closed-trade backfill builds the same string to dedupe against it
+    // (`keyFor` in backfill.ts). Changing the shape here without changing it
+    // there is what produced the duplicate-row bug migration 0077 cleaned up.
     trades = trades.map((t) => ({
       ...t,
       id: `${c.id}:${t.id}`,

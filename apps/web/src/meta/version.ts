@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.68';
+export const APP_VERSION = 'Beta V 5.69';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.69',
+    date: 'July 28, 2026',
+    notes: [
+      'Fixed the Trade Desk showing two records for every broker position. Trades captured live were being stored a second time by the closed-trade import, so trade counts and realized P/L were both inflated.',
+      'The duplicates have been merged away. Each trade now keeps one record, with the exit price and P/L taken from the broker’s own fill rather than the last price the desk polled before the position closed.',
+      'Broker history keeps correcting itself: where the live feed could only estimate how a trade ended, the broker’s record now replaces that estimate on the next sync.',
+    ],
+  },
   {
     version: 'Beta V 5.68',
     date: 'July 28, 2026',
