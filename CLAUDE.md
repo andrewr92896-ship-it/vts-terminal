@@ -365,6 +365,19 @@ act on the same team:
 - **Desk watch** (`trading/service.ts`, prod-only, every **10 s**,
   `DESK_WATCH_SECONDS`): reconciles broker positions so trade open/close/TP-SL
   notifications fire even with no client open. **Only runs if push is configured.**
+- **Closed-trade backfill** (`trading/backfill.ts`, throttled per connection to
+  `BACKFILL_INTERVAL_SECONDS`, default 300): pulls OANDA's closed-trade page into
+  `trading_positions` so trades that opened and closed between polls still land
+  on the desk, and **corrects** what reconcile could only estimate — reconcile
+  stamps the last mark it polled (a bid/ask mid, never a real fill) plus the last
+  *unrealized* P/L, so the broker's record replaces those. It leaves **open** rows
+  for reconcile to close (so the "trade closed" push still fires) and never
+  resurrects a soft-deleted one. **Two writers, one key:** reconcile stores a
+  position under the id `loadConnection` assigns (`<connectionId>:oanda:<tradeId>`)
+  and the backfill must build the exact same string — when they drifted apart
+  every live-captured trade got a second, phantom row (migration `0077` cleaned
+  those up). There is no unique constraint on `(user_id, key)` to catch it, so
+  check with `db:verify-positions` below.
 - **Session watch** (`trading/sessionWatch.ts`, prod-only, every **30 s**,
   `SESSION_WATCH_SECONDS`): fires a trader's OWN Strategy Session notifications —
   a pre-open heads-up, an open buzz, and a close buzz — on each session's per-day
@@ -731,6 +744,15 @@ Run before merging (both must pass):
   latter is missing, `/employee` serves a plain "not built" 404.
 
 Run `npm install` first in a fresh container.
+
+**Desk data health:** `npm run db:verify-positions` (root or `@vts/api`) is a
+read-only check over `trading_positions` — it flags rows still on the legacy
+un-namespaced key, any broker trade stored more than once on a connection, and
+closed rows with no exit price, then prints per-trader closed-trade counts and
+realized P/L to diff against the broker's own export. Defaults to the current
+**ET** month; narrow it with `-- --from=2026-07-01 --to=2026-08-01` (`to` is
+exclusive). Exits non-zero when it finds a structural problem. Run it against
+prod after any change to the reconcile/backfill writers.
 
 ## Deployment workflow (owner preference)
 
