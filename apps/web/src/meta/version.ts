@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.71';
+export const APP_VERSION = 'Beta V 5.72';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.72',
+    date: 'July 28, 2026',
+    notes: [
+      'Opening the Employee Portal now always starts a sign-in from the beginning. Leaving part-way through and coming back used to drop you on the code screen, still waiting on a code that had usually expired by then.',
+      'The sign-in button says "Signing you in…" while it works, rather than "Checking…".',
+      'A mail setting left blank in the deployment config is now treated as not set at all, instead of overriding the built-in default with an empty value — which could stop sign-in codes sending, or in one case stop the site starting.',
+    ],
+  },
   {
     version: 'Beta V 5.71',
     date: 'July 28, 2026',

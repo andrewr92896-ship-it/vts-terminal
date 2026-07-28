@@ -683,6 +683,19 @@ defaults; the app runs locally with almost nothing set.
   `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` (`false`), `SMTP_FROM`. Currently used
   only for the Employee Portal's sign-in codes; with `SMTP_HOST` unset the code
   is logged instead of sent, so a misconfigured deploy cannot lock everyone out.
+  Every `SMTP_*` var treats a **blank value as unset** (`blankAsUnset` in
+  `config.ts`) — a hosting dashboard hands you an empty string the moment
+  somebody adds a variable and tabs away, and Zod's `.default()` only fires on a
+  *missing* var, so a blank would otherwise beat the default: a blank
+  `SMTP_FROM` sent every code with an empty From (rejected by every mail
+  server), and a blank `SMTP_PORT` failed validation and **crashed the API at
+  boot**. `SMTP_PORT`/`SMTP_SECURE` also `.catch()` a junk value rather than
+  refusing to start.
+  **Host note:** many PaaS block outbound SMTP — Railway blocks ports
+  25/465/587/2525 on Free/Trial/Hobby, Pro and above only. A block shows up as a
+  ~10s `ETIMEDOUT`/`Greeting never received`, never as an auth error, so time-to-
+  fail is the fastest way to tell a network block from a bad credential. If SMTP
+  is unavailable, move to an HTTPS email API (port 443) rather than fighting it.
 - **Employee Portal:** `EMPLOYEE_SESSION_HOURS` (8), `EMPLOYEE_IDLE_MINUTES` (30),
   `EMPLOYEE_REQUIRE_2FA` (`true`), `EMPLOYEE_OTP_TTL_MINUTES` (10),
   `EMPLOYEE_REMEMBER_DEVICE_DAYS` (30), `EMPLOYEE_EMAIL_DOMAIN`

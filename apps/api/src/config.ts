@@ -7,6 +7,17 @@ import { z } from 'zod';
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 dotenv.config({ path: path.join(apiRoot, '.env') });
 
+// An optional string in which "" means "not set". Hosting dashboards hand you a
+// blank value the moment somebody adds a variable and tabs away, and a blank is
+// almost never what was meant — it is an unfinished edit, not a setting.
+const blankAsUnset = z
+  .string()
+  .optional()
+  .transform((v) => {
+    const t = v?.trim();
+    return t ? t : undefined;
+  });
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -54,15 +65,26 @@ const envSchema = z.object({
   // Portal's sign-in codes. Optional: when unset, a code is printed to the
   // server log instead of emailed (same "printed once to logs" fallback as an
   // unset ADMIN_PASSWORD), so a misconfigured deploy cannot lock everyone out.
-  SMTP_HOST: z.string().optional(),
-  SMTP_PORT: z.coerce.number().int().positive().default(587),
-  SMTP_USER: z.string().optional(),
-  SMTP_PASS: z.string().optional(),
+  //
+  // Every one of these treats a BLANK value as "not set". That is not
+  // decoration: a hosting dashboard makes it very easy to create a variable and
+  // leave its box empty, and `.default()` only fires when a variable is absent
+  // entirely — an empty string sails straight through it. A blank SMTP_FROM
+  // would therefore beat the default below and send every code with an empty
+  // From header, which mail servers reject, producing "the code could not be
+  // emailed" against otherwise perfect settings.
+  SMTP_HOST: blankAsUnset,
+  SMTP_PORT: z.coerce.number().int().positive().catch(587).default(587),
+  SMTP_USER: blankAsUnset,
+  SMTP_PASS: blankAsUnset,
   SMTP_SECURE: z
     .enum(['true', 'false'])
+    .catch('false')
     .default('false')
     .transform((v) => v === 'true'),
-  SMTP_FROM: z.string().default('"Vitalis Trading Systems" <no-reply@vitalistradingsystems.com>'),
+  SMTP_FROM: blankAsUnset.pipe(
+    z.string().default('"Vitalis Trading Systems" <no-reply@vitalistradingsystems.com>'),
+  ),
   // ---- Employee portal (/employee) ----
   // A deliberately separate, hardened surface with its own sessions. These knobs
   // are all "secure by default": the shipped values are the strict ones, and
