@@ -679,7 +679,18 @@ defaults; the app runs locally with almost nothing set.
 - **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
   `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`, `SESSION_WATCH_SECONDS` (session-notif
   poll cadence, default 30).
-- **Email (SMTP):** `SMTP_HOST` (unset = email off), `SMTP_PORT` (587),
+- **Email — two transports, Resend first.** `RESEND_API_KEY` (an HTTPS send API
+  on port **443**) is the preferred path and wins when set; `SMTP_*` is the
+  fallback, kept for local catchers like MailHog. `MAIL_FROM` is the From header
+  for either (falls back to `SMTP_FROM`); with Resend it must be on a domain
+  verified in their dashboard. With neither transport configured the code is
+  logged instead of sent. **Prefer the HTTPS API on any PaaS:** most block
+  outbound SMTP — Railway blocks 25/465/587/2525 on everything below Pro (Aug
+  2025) — and a block presents as a **~10s connection timeout, never an auth
+  error**, because the provider is never reached. Time-to-fail is the fastest way
+  to tell a blocked port from a bad credential: auth rejections return in under a
+  second.
+- **Email (SMTP fallback):** `SMTP_HOST` (unset = SMTP off), `SMTP_PORT` (587),
   `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE` (`false`), `SMTP_FROM`. Currently used
   only for the Employee Portal's sign-in codes; with `SMTP_HOST` unset the code
   is logged instead of sent, so a misconfigured deploy cannot lock everyone out.
