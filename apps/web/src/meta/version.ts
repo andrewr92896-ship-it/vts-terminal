@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.72';
+export const APP_VERSION = 'Beta V 5.73';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.73',
+    date: 'July 28, 2026',
+    notes: [
+      'Employee Portal sign-in codes can now be sent through Resend, over the same kind of secure web connection the rest of the site uses. The previous method needed a mail port that most hosting providers block outright, which is why codes were not arriving.',
+      'The old mail settings still work where they are supported, so nothing needs changing on a host that allows them.',
+    ],
+  },
   {
     version: 'Beta V 5.72',
     date: 'July 28, 2026',

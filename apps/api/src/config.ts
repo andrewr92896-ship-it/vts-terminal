@@ -85,6 +85,17 @@ const envSchema = z.object({
   SMTP_FROM: blankAsUnset.pipe(
     z.string().default('"Vitalis Trading Systems" <no-reply@vitalistradingsystems.com>'),
   ),
+  // Resend (https://resend.com) — an HTTPS send API on port 443, and the
+  // preferred transport. Most PaaS hosts block outbound SMTP (Railway blocks
+  // 25/465/587/2525 below its Pro plan), which shows up as a connection timeout
+  // rather than any error from the mail provider, because the provider is never
+  // reached. Port 443 cannot be blocked without breaking the app itself.
+  // When set, this wins over the SMTP_* settings.
+  RESEND_API_KEY: blankAsUnset,
+  // The From header for whichever transport is in use. Falls back to SMTP_FROM
+  // so an existing SMTP deployment keeps working untouched. With Resend this
+  // address must be on a domain verified in the Resend dashboard.
+  MAIL_FROM: blankAsUnset,
   // ---- Employee portal (/employee) ----
   // A deliberately separate, hardened surface with its own sessions. These knobs
   // are all "secure by default": the shipped values are the strict ones, and
