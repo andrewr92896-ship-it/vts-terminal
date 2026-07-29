@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth, requireWorkspace } from '../auth/middleware.js';
 import { canAccessWorkspace, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
-import { getPrompt } from '../ai/prompts.js';
+import { getPrompt, withStyle } from '../ai/prompts.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
 
 const schema = z.object({
@@ -26,18 +26,20 @@ const WORKSPACE_GUIDE: Record<string, { label: string; promptId: string }> = {
 // Short, friendly context so the assistant knows what app it lives in, plus
 // focused guidance for the current workspace. The base persona and each
 // workspace's guidance are admin-editable (ai/prompts.ts); "{workspace}" and
-// "{name}" in the base persona are filled in here.
+// "{name}" in the base persona are filled in here, and the portal-wide response
+// style is composed on last.
 async function systemPrompt(workspaceKey: string | undefined, displayName: string): Promise<string> {
   const ws = workspaceKey ? WORKSPACE_GUIDE[workspaceKey] : undefined;
   const base = await getPrompt('global');
   const guide = ws ? await getPrompt(ws.promptId) : '';
   const workspaceText = ws && guide ? `The user is currently in the ${ws.label} workspace. ${guide}` : '';
-  return base
+  const persona = base
     .replace(/\{workspace\}/g, workspaceText)
     .replace(/\{name\}/g, displayName)
     // Collapse any double spaces left when a placeholder resolved to empty.
     .replace(/\s{2,}/g, ' ')
     .trim();
+  return withStyle(persona);
 }
 
 const tutorSchema = z.object({
@@ -126,7 +128,7 @@ export async function aiRoutes(app: FastifyInstance) {
     }
     try {
       await enforceAiLimit(request.currentUser!.id, 'studies_tutor');
-      return { reply: await chatClaude(messages, await getPrompt('tutor')) };
+      return { reply: await chatClaude(messages, await withStyle(await getPrompt('tutor'))) };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });

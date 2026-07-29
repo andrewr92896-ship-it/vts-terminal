@@ -344,6 +344,31 @@ control — the server is still the enforcer.
     `{label}`), `metrics_coach` (prop-challenge read), `support` (bug intake —
     **structured**: must return the exact JSON `{needMore, reply}` or intake
     breaks).
+- **One response style, composed onto every prose prompt** (`style` in
+  `prompts.ts`, `STYLE_DEF`): the owner's communication style — answer first, no
+  preamble or self-description, bullets/numbered steps, short paragraphs, state
+  an assumption instead of asking, recommend one default rather than listing
+  alternatives. It is **not** copied into each prompt's default; call sites
+  compose it on with `withStyle(system)` (or `styleGuide()` where the system
+  prompt is built outside `prompts.ts`), so editing `ai.style` once — in code or
+  from **Admin ▸ AI Instructions ▸ Response style** — changes the voice of every
+  AI reply at once.
+  - Applied to: `global` (+ workspace guidance), `tutor`, `market_overview`,
+    `metrics_coach`, `support`, `support_intake`, the study-guide builder
+    (`chatStudyGuide`, which takes the style as an argument so `claude.ts` stays
+    free of the settings/DB layer), and the To Do command bar (`todo/command.ts`).
+  - `withStyle(system, { structured: true })` appends a reminder that the reply
+    is still JSON-only — use it for every prompt whose output is parsed, or the
+    intake/builder parsers break.
+  - **Deliberately not applied** to the data-extraction and content-authoring
+    prompts (screenshot parsing, market hours, news reads, calendar explainers,
+    deck/flashcard generation, the question audit): their output is structured
+    data or study material rather than a reply, and each carries its own tight
+    format and length rules.
+  - Replies render as **plain text** (`whiteSpace: 'pre-wrap'`), so the style
+    asks for `- ` bullets, `1.` steps and a colon-terminated label line instead
+    of markdown headings/tables/code fences, which would show up literally. If a
+    surface ever renders markdown, revisit that paragraph of `STYLE_DEF`.
 - **Vision flows** (Opus, non-editable prompts in `claude.ts`): paste-a-screenshot
   → parse. Used for alert analysis, manual/funded position import, funded-trade
   close, and reading challenge equity off an FTP screenshot. These endpoints take
