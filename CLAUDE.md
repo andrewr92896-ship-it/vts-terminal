@@ -592,6 +592,20 @@ founder-level implicitly): grant/revoke access, edit records, forget someone's
 remembered devices. Granting refuses a non-company address up front rather than
 creating an account that would fail at the door.
 
+**Navigation is a top bar, not a side rail** (`EmployeeApp.tsx`). The forest
+masthead carries the brand on the left, the signed-in name / main-portal link /
+sign-out on the right, and a second row of screen buttons beneath it. There is
+**no sidebar and no collapse toggle** — the screens get the full window width.
+Every row is `flexWrap: 'wrap'`, and that is the whole design: the bar **never
+scrolls sideways and never truncates a label to an ellipsis**. When a row runs
+out of width the items reflow onto another line and the bar grows **taller**, so
+every label stays readable in full at any viewport (verified down to 320px). Keep
+it that way — do not add `overflowX: 'auto'`, `textOverflow: 'ellipsis'`, or a
+fixed height here. Nav labels are `whiteSpace: 'nowrap'` so a two-word item wraps
+as a unit rather than splitting; the signed-in name is the one exception
+(`overflowWrap: 'anywhere'`), since a name long enough to fill the bar alone has
+to break somewhere and an ellipsis is not the answer.
+
 **Its own design language.** The employee portal does **not** use the main
 portal's theme. `src/employee/theme.ts` stands alone — a warm-sand page
 (`#f5f2ec`), white cards, a forest masthead (`#0f3d3a`), terracotta for action

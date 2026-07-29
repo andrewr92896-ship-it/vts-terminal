@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.75';
+export const APP_VERSION = 'Beta V 5.76';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.76',
+    date: 'July 29, 2026',
+    notes: [
+      'The Employee Portal navigation has moved out of the left sidebar and into the bar across the top of the page. The sidebar and its collapse button are gone, so every screen now gets the full width of the window.',
+      'The top bar never scrolls sideways and never shortens a label to "…". When the window is too narrow to fit everything on one line, the bar gets taller and the buttons move onto a second or third line instead, so every name stays readable in full.',
+    ],
+  },
   {
     version: 'Beta V 5.75',
     date: 'July 29, 2026',

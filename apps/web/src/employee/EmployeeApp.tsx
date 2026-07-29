@@ -43,10 +43,6 @@ export function EmployeeApp() {
   const [phase, setPhase] = useState<Phase>('loading');
   const [me, setMe] = useState<EmployeeMe | null>(null);
   const [screen, setScreen] = useState<Screen>('overview');
-  // Labelled by default. The rail collapses to icons on request, but a portal
-  // this small should never make someone hover six unlabelled glyphs to find
-  // out what is in it.
-  const [navOpen, setNavOpen] = useState(true);
   // Where the outstanding sign-in code went, and whether it actually sent.
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
   const [codeDelivered, setCodeDelivered] = useState(true);
@@ -197,13 +193,15 @@ export function EmployeeApp() {
         flexDirection: 'column',
       }}
     >
-      {/* Top bar */}
+      {/* Top bar — the masthead and the navigation, in one band across the top.
+          There is no side rail and nothing here scrolls sideways: every row is
+          `flexWrap: 'wrap'`, so when the window is too narrow to hold a row the
+          bar grows *taller* and the items reflow onto another line. Labels are
+          never abbreviated or clipped to an ellipsis — a nav item you cannot
+          read in full is a nav item you have to guess at, and the whole bar is
+          six words wide, so there is always room to spend a line on it. */}
       <header
         style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '14px 22px',
           background: EMP.forest,
           color: EMP.onDark,
           position: 'sticky',
@@ -211,112 +209,107 @@ export function EmployeeApp() {
           zIndex: 20,
         }}
       >
-        <button
-          onClick={() => setNavOpen((v) => !v)}
-          aria-label="Toggle navigation"
+        <div
           style={{
             display: 'flex',
+            flexWrap: 'wrap',
             alignItems: 'center',
-            justifyContent: 'center',
-            width: 32,
-            height: 32,
-            borderRadius: RADIUS.control,
-            border: '1px solid rgba(255,255,255,.22)',
-            background: 'rgba(255,255,255,.1)',
-            color: EMP.onDark,
-            cursor: 'pointer',
+            gap: '10px 14px',
+            padding: '12px 22px 10px',
           }}
         >
-          <Icon name={navOpen ? 'panel-left-close' : 'panel-left-open'} size={15} />
-        </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+            <span style={{ color: EMP.apricot, display: 'flex' }}>
+              <Icon name="shield-check" size={17} />
+            </span>
+            <span
+              style={{
+                fontFamily: EMP.serif,
+                fontSize: 17,
+                fontWeight: 600,
+                letterSpacing: '0.2px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {"Employee Portal"}
+            </span>
+          </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-          <span style={{ color: EMP.apricot, display: 'flex' }}>
-            <Icon name="shield-check" size={17} />
-          </span>
-          <span
+          <div
             style={{
-              fontFamily: EMP.serif,
-              fontSize: 17,
-              fontWeight: 600,
-              letterSpacing: '0.2px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              marginLeft: 'auto',
+              display: 'flex',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: 10,
             }}
           >
-            {"Employee Portal"}
-          </span>
+            <span
+              style={{
+                fontSize: 13.5,
+                fontWeight: 700,
+                color: '#ffffff',
+                minWidth: 0,
+                // Left free to wrap. A name long enough to fill the bar takes a
+                // second line rather than an ellipsis — the flex line-breaking
+                // moves it whole first, so an ordinary name never splits.
+                overflowWrap: 'anywhere',
+              }}
+            >
+              {me.name}
+            </span>
+            <a
+              href="/"
+              title="Main portal"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 32,
+                height: 32,
+                flex: 'none',
+                borderRadius: RADIUS.control,
+                border: '1px solid rgba(255,255,255,.22)',
+                color: EMP.onDark,
+                textDecoration: 'none',
+              }}
+            >
+              <Icon name="external-link" size={15} />
+            </a>
+            <button
+              onClick={signOut}
+              title="Sign out of the employee portal"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 12px',
+                borderRadius: RADIUS.control,
+                border: '1px solid rgba(255,255,255,.22)',
+                background: 'rgba(255,255,255,.1)',
+                color: EMP.onDark,
+                cursor: 'pointer',
+                fontSize: 12.5,
+                fontWeight: 600,
+                fontFamily: EMP.sans,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <Icon name="log-out" size={14} />
+              {"Sign out"}
+            </button>
+          </div>
         </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span
-            style={{
-              fontSize: 13.5,
-              fontWeight: 700,
-              color: '#ffffff',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: 180,
-            }}
-          >
-            {me.name}
-          </span>
-          <a
-            href="/"
-            title="Main portal"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 32,
-              height: 32,
-              borderRadius: RADIUS.control,
-              border: '1px solid rgba(255,255,255,.22)',
-              color: EMP.onDark,
-              textDecoration: 'none',
-            }}
-          >
-            <Icon name="external-link" size={15} />
-          </a>
-          <button
-            onClick={signOut}
-            title="Sign out of the employee portal"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '7px 12px',
-              borderRadius: RADIUS.control,
-              border: '1px solid rgba(255,255,255,.22)',
-              background: 'rgba(255,255,255,.1)',
-              color: EMP.onDark,
-              cursor: 'pointer',
-              fontSize: 12.5,
-              fontWeight: 600,
-              fontFamily: EMP.sans,
-            }}
-          >
-            <Icon name="log-out" size={14} />
-            {"Sign out"}
-          </button>
-        </div>
-      </header>
-
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* Sidebar — collapses to a top strip on narrow screens */}
         <nav
           style={{
-            width: navOpen ? 216 : 60,
-            flex: 'none',
-            borderRight: `1px solid ${EMP.line}`,
-            background: EMP.panel,
-            padding: navOpen ? '16px 12px' : '16px 8px',
             display: 'flex',
-            flexDirection: 'column',
-            gap: 4,
-            transition: 'width .18s ease',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 6,
+            padding: '9px 22px 11px',
+            borderTop: '1px solid rgba(255,255,255,.11)',
           }}
         >
           {items.map((item) => {
@@ -325,61 +318,59 @@ export function EmployeeApp() {
               <button
                 key={item.key}
                 onClick={() => setScreen(item.key)}
-                title={item.label}
+                aria-current={active ? 'page' : undefined}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 10,
-                  padding: navOpen ? '9px 11px' : '9px 0',
-                  justifyContent: navOpen ? 'flex-start' : 'center',
+                  gap: 8,
+                  flex: 'none',
+                  padding: '7px 12px',
                   borderRadius: RADIUS.control,
-                  border: '1px solid transparent',
-                  borderColor: active ? tint(EMP.accent, 0.28) : 'transparent',
-                  background: active ? tint(EMP.accent, 0.09) : 'transparent',
-                  color: active ? EMP.accent : EMP.muted,
+                  border: `1px solid ${active ? tint(EMP.apricot, 0.5) : 'rgba(255,255,255,.14)'}`,
+                  background: active ? 'rgba(255,255,255,.13)' : 'transparent',
+                  color: active ? EMP.apricot : EMP.onDarkMuted,
                   cursor: 'pointer',
                   fontSize: 12.5,
                   fontFamily: EMP.sans,
                   fontWeight: active ? 600 : 500,
-                  textAlign: 'left',
-                  width: '100%',
+                  // The label carries the whole meaning of the control, so it is
+                  // never truncated. `nowrap` keeps a two-word item whole; the
+                  // bar wraps around it instead of breaking it.
+                  whiteSpace: 'nowrap',
                 }}
               >
-                <Icon name={item.icon} size={16} />
-                {navOpen && (
-                  <span>
-                    {item.label}
-                  </span>
-                )}
+                <Icon name={item.icon} size={15} />
+                <span>{item.label}</span>
               </button>
             );
           })}
 
-          <div
+          <span
             style={{
-              marginTop: 'auto',
-              paddingTop: 12,
-              borderTop: `1px solid ${EMP.lineSoft}`,
-              textAlign: navOpen ? 'left' : 'center',
+              marginLeft: 'auto',
+              fontFamily: EMP.sans,
+              fontSize: 10,
+              fontWeight: 700,
+              color: 'rgba(255,255,255,.42)',
+              letterSpacing: '0.8px',
+              whiteSpace: 'nowrap',
             }}
           >
-            <span style={{ fontFamily: EMP.sans, fontSize: 10, fontWeight: 700, color: EMP.faint, letterSpacing: '0.8px' }}>
-              {navOpen ? "SECURE ZONE" : '●'}
-            </span>
-          </div>
+            {"SECURE ZONE"}
+          </span>
         </nav>
+      </header>
 
-        <main style={{ flex: 1, minWidth: 0, padding: '24px 28px 44px', overflowX: 'hidden' }}>
-          <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-            {screen === 'overview' && <Overview onNavigate={(s) => setScreen(s as Screen)} />}
-            {screen === 'directory' && <Directory />}
-            {screen === 'announcements' && <Announcements canManage={me.isPortalAdmin} />}
-            {screen === 'documents' && <Documents canManage={me.isPortalAdmin} />}
-            {screen === 'security' && <Security me={me} onMeChanged={setMe} />}
-            {screen === 'people' && me.isPortalAdmin && <People myUserId={me.userId} />}
-          </div>
-        </main>
-      </div>
+      <main style={{ flex: 1, minWidth: 0, padding: '24px 28px 44px', overflowX: 'hidden' }}>
+        <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+          {screen === 'overview' && <Overview onNavigate={(s) => setScreen(s as Screen)} />}
+          {screen === 'directory' && <Directory />}
+          {screen === 'announcements' && <Announcements canManage={me.isPortalAdmin} />}
+          {screen === 'documents' && <Documents canManage={me.isPortalAdmin} />}
+          {screen === 'security' && <Security me={me} onMeChanged={setMe} />}
+          {screen === 'people' && me.isPortalAdmin && <People myUserId={me.userId} />}
+        </div>
+      </main>
     </div>
   );
 }
