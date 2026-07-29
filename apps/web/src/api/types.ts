@@ -1049,6 +1049,7 @@ export interface DeletedTradeRecord {
   exitPrice: number | null;
   realizedPl: number | null;
   openedAt: number | null;
+  closedAt: number | null; // null when the trade was still open at deletion
   deletedAt: number;
 }
 

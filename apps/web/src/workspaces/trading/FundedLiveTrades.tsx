@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { useLivePrices, type LiveMark } from './useLivePrices';
+import { etStamp, etStampFull, etSince } from './tradeTime';
 import type { FundedAccount, FundedData, FundedTrade } from '../../api/types';
 
 // Live funded trades, embedded on the private Funded (prop-challenge) page.
@@ -35,12 +36,6 @@ function fmtPrice(n: number | null): string {
   if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
   return String(Number(n.toFixed(5)));
 }
-const ET = 'America/New_York';
-function etDate(ms: number | null): string {
-  if (ms == null) return '—';
-  return new Date(ms).toLocaleDateString('en-US', { timeZone: ET, month: 'short', day: 'numeric' });
-}
-
 interface OpenRow {
   trade: FundedTrade;
   account: FundedAccount;
@@ -115,7 +110,7 @@ export function FundedLiveTrades({ showMoney, readOnly }: { showMoney: boolean; 
             <span style={col}>Entry</span>
             <span style={col}>Live</span>
             <span style={col}>Size</span>
-            <span style={{ ...col, textAlign: 'right' }}>Opened</span>
+            <span style={{ ...timeCol, textAlign: 'right' }}>Opened</span>
             {!readOnly && <span style={{ flex: '0 0 90px' }} />}
           </div>
           {openRows.map(({ trade, account }) => (
@@ -203,7 +198,13 @@ function LiveTradeRow({
           )}
         </span>
         <span style={col}>{trade.units || '—'}</span>
-        <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(trade.openedAt ?? trade.createdAt)}</span>
+        {/* When it opened, with how long it has been running underneath. */}
+        <span style={{ ...timeCol, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.35 }}>
+          <span style={{ color: MUTED, whiteSpace: 'nowrap' }} title={`Opened ${etStampFull(trade.openedAt ?? trade.createdAt)}`}>
+            {etStamp(trade.openedAt ?? trade.createdAt)}
+          </span>
+          <span style={{ color: FAINT, whiteSpace: 'nowrap' }}>{etSince(trade.openedAt ?? trade.createdAt)}</span>
+        </span>
         {!readOnly && (
           <span style={{ flex: '0 0 90px', display: 'inline-flex', justifyContent: 'flex-end' }}>
             <button
@@ -369,5 +370,7 @@ const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7
 const closeTradeBtn: CSSProperties = { fontSize: 10.5, fontWeight: 700, color: '#bff0d4', background: 'rgba(53,196,123,.1)', border: '1px solid rgba(53,196,123,.5)', padding: '4px 9px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' };
 const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', fontSize: 11.5, fontFamily: MONO };
 const col: CSSProperties = { flex: '0 0 60px' };
+// Wider than the rest: it carries the open stamp with the running time beneath.
+const timeCol: CSSProperties = { flex: '0 0 118px' };
 const openPill: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.5px', color: GREEN, background: 'rgba(53,196,123,.12)', border: '1px solid rgba(53,196,123,.45)', borderRadius: 4, padding: '1px 5px' };
 const warnBanner: CSSProperties = { marginBottom: 12, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };

@@ -5,6 +5,7 @@ import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, LiveTrade, LiveWall } from '../../api/types';
 import { configFrom } from './outcome';
 import { TradeCard } from './TradeCard';
+import { etSince, etStamp, etStampFull } from './tradeTime';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
 
@@ -197,6 +198,10 @@ function PositionRow({ t, mine, showMoney, canSeeBalances }: { t: LiveTrade; min
             {t.forex.pipsOpen.toLocaleString('en-US', { maximumFractionDigits: 1 })} pips
           </div>
         )}
+        {/* When the position opened, and how long ago that was. */}
+        <div style={{ fontSize: 9, fontFamily: MONO, color: FAINT, marginTop: 2 }} title={etStampFull(t.openedAt)}>
+          {etStamp(t.openedAt)} · {etSince(t.openedAt)}
+        </div>
       </div>
     </div>
   );

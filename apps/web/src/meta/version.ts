@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.73';
+export const APP_VERSION = 'Beta V 5.74';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.74',
+    date: 'July 29, 2026',
+    notes: [
+      'Every position now shows the time and date it opened — and, once it is done, the time and date it closed. On a Live Wall card they sit in the bottom-right corner, just to the left of the "5h 18m ago" reading that was already there.',
+      'The same stamps are on the Trade Log (both card and row views), History, Manual Trades, the Deleted Trades list, the Master board\'s positions tile and the broker connection editor. The Trade Log and History date columns used to show only a date; they now show the open time with the close time beneath it.',
+      'A closed trade also reads how long it was held, in place of how long it has been open.',
+      'The iPhone home-screen widget shows the open time above the "ago" reading too.',
+      'Times are Eastern, the same clock the desk uses everywhere else. Hover any stamp for the full date, year and seconds.',
+    ],
+  },
   {
     version: 'Beta V 5.73',
     date: 'July 28, 2026',

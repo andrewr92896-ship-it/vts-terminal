@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { readClipboardImage } from '../../lib/clipboard';
 import { useLivePrices, type LiveMark } from './useLivePrices';
+import { TradeTimesCell } from './tradeTime';
 import type { FundedAccount, FundedData, FundedTrade, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — self-contained, matching the Live Wall / Trade Log.
@@ -28,11 +29,6 @@ function fmtPrice(n: number | null): string {
   if (n == null) return '—';
   if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
   return String(Number(n.toFixed(5)));
-}
-const ET = 'America/New_York';
-function etDate(ms: number | null): string {
-  if (ms == null) return '—';
-  return new Date(ms).toLocaleDateString('en-US', { timeZone: ET, month: 'short', day: 'numeric' });
 }
 const num = (s: string): number | undefined => {
   if (s.trim() === '') return undefined;
@@ -355,7 +351,7 @@ function AccountCard({
               <span style={col}>{"Exit"}</span>
               <span style={col}>{"Size"}</span>
               <span style={{ ...col, textAlign: 'right' }}>{"P/L"}</span>
-              <span style={{ ...col, textAlign: 'right' }}>{"Closed"}</span>
+              <span style={{ ...timeCol, textAlign: 'right' }}>{"Opened / Closed"}</span>
               {!readOnly && <span style={{ width: 24 }} />}
             </div>
           )}
@@ -462,7 +458,9 @@ function TradeRow({
         </span>
         <span style={col}>{t.units || '—'}</span>
         <span style={{ ...col, textAlign: 'right', fontWeight: 700, color: t.realizedPl == null ? MUTED : plUp ? GREEN : RED }}>{plText}</span>
-        <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.closedAt ?? t.openedAt)}</span>
+        <span style={{ ...timeCol, display: 'flex', justifyContent: 'flex-end' }}>
+          <TradeTimesCell openedAt={t.openedAt} closedAt={t.closedAt} />
+        </span>
         {!readOnly && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
             {isOpen && (
@@ -652,6 +650,9 @@ const miniGhost: CSSProperties = { ...ghostBtn, padding: '4px 9px', fontSize: 11
 const closeTradeBtn: CSSProperties = { fontSize: 10.5, fontWeight: 700, color: '#bff0d4', background: 'rgba(53,196,123,.1)', border: '1px solid rgba(53,196,123,.5)', padding: '4px 9px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' };
 const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', fontSize: 11.5, fontFamily: MONO };
 const col: CSSProperties = { flex: '0 0 64px' };
+// Wider than the rest: it stacks the trade's open stamp over its close stamp
+// ("Jul 29, 9:31 AM" / "→ Jul 29, 2:49 PM"), and reads "→ open" while it runs.
+const timeCol: CSSProperties = { flex: '0 0 118px' };
 const platformPill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: GOLD, background: 'rgba(235,203,116,.12)', border: '1px solid rgba(235,203,116,.4)', borderRadius: 4, padding: '2px 7px' };
 const openPill: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.5px', color: GREEN, background: 'rgba(53,196,123,.12)', border: '1px solid rgba(53,196,123,.45)', borderRadius: 4, padding: '1px 5px' };
 const warnBanner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
