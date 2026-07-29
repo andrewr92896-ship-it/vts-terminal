@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   tradingTrades,
@@ -18,6 +18,7 @@ import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEv
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
 import { scopedTraderIds, type Viewer } from './scope.js';
+import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 import { backfillClosedTrades } from './backfill.js';
 import { beforeCutoff, connectionCutoffs } from './connections.js';
 import { designationsFor, type TradeDesignation } from '../badges/designations.js';
@@ -462,16 +463,23 @@ export interface RemovedTrade {
 // remove anyone's on the shared desk. An undo snapshot is returned only when the
 // caller removed their *own* trade — restoring re-creates it under the caller, so
 // admin-removed teammates' trades are not offered an undo (it would re-own them).
-export async function removeTrade(userId: string, id: string, admin = false): Promise<RemovedTrade | null> {
+export async function removeTrade(userId: string, id: string, scope?: TradeDeleteScope): Promise<RemovedTrade | null> {
   // Soft delete: mark deleted (kept for the Deleted Trades section) rather than
   // dropping the row, so a mistaken delete can always be undone.
-  const where = admin
+  // `scope` says whose trades the caller may remove (their own by default; a
+  // team leader / Delete-trades grantee reaches their team, an admin anyone).
+  const reach = scope ?? ownTradesOnly(userId);
+  const where = reach.any
     ? and(eq(tradingTrades.id, id), isNull(tradingTrades.deletedAt))
-    : and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId), isNull(tradingTrades.deletedAt));
+    : and(
+        eq(tradingTrades.id, id),
+        inArray(tradingTrades.userId, [...reach.ownerIds]),
+        isNull(tradingTrades.deletedAt),
+      );
   const row = (await db.select().from(tradingTrades).where(where).limit(1))[0];
   if (!row) return null;
   await db.update(tradingTrades).set({ deletedAt: new Date(), updatedAt: new Date() }).where(where);
-  if (row.userId !== userId) return null; // admin removed a teammate's trade — no undo
+  if (row.userId !== userId) return null; // removed a teammate's trade — no undo bar
   return {
     id: row.id,
     broker: row.broker,

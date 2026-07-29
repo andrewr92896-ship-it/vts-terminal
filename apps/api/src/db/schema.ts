@@ -1212,6 +1212,8 @@ export const userTeamMembers = sqliteTable('user_team_members', {
   canManageBadges: integer('can_manage_badges', { mode: 'boolean' }).notNull().default(false),
   canRemoveMembers: integer('can_remove_members', { mode: 'boolean' }).notNull().default(false),
   canEditTeam: integer('can_edit_team', { mode: 'boolean' }).notNull().default(false),
+  // Remove any teammate's trade from the Trade Log / History (the leader always can).
+  canDeleteTrades: integer('can_delete_trades', { mode: 'boolean' }).notNull().default(false),
   joinedAt: integer('joined_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type UserTeamMemberRow = typeof userTeamMembers.$inferSelect;

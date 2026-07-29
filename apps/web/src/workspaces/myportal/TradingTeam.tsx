@@ -25,6 +25,7 @@ const PERMS: { key: keyof TeamMemberPermissions; label: string; help: string }[]
   { key: 'canManageBadges', label: 'Manage badges', help: 'Assign cosmetic titles to teammates' },
   { key: 'canRemoveMembers', label: 'Remove members', help: 'Remove teammates from the team' },
   { key: 'canEditTeam', label: 'Edit team info', help: 'Rename the team' },
+  { key: 'canDeleteTrades', label: 'Delete trades', help: "Remove and restore any teammate's trade on the desk" },
 ];
 
 function initials(name: string): string {
