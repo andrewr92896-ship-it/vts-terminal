@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VTS Portal — current shell reference</title>
+    <!--
+      A static, self-contained mock of the VTS Portal shell AS IT IS TODAY.
+      Hand this (or a screenshot of it) to a design tool alongside
+      docs/design/portal-shell.md so it designs inside the real chrome.
+
+      Every colour, size and label here is copied from the live code:
+        apps/web/src/theme/tokens.ts    — the C palette
+        apps/web/src/theme/themes.ts    — per-workspace accents
+        apps/web/src/theme/nav.ts       — workspaces + sections + icons
+        apps/web/src/components/Sidebar.tsx
+        apps/web/src/components/TopBar.tsx
+        apps/web/src/components/Portal.tsx  — the 248px + 1fr grid
+        apps/web/src/components/Icon.tsx     — the inline Lucide glyphs
+
+      Two deliberate differences from the running app:
+        1. The app renders IBM Plex Sans/Mono, self-hosted via @fontsource. This
+           file names them first and falls back to system fonts, so it looks
+           right without a CDN (the portal never calls one).
+        2. The brand mark is /brand/vitalis-wordmark.png in the app; it is drawn
+           as text here so the file stays self-contained.
+
+      The app styles with inline React styles, not CSS classes. Classes are used
+      here only to keep this reference readable.
+
+      NOT SHOWN, because they are separate surfaces or overlays, not the shell:
+      the Ask VTS AI slide-over, Team Chat, the mobile drawer, and /employee
+      (which has its own theme — see docs/design/employee-portal/).
+    -->
+    <style>
+      :root {
+        /* Meridian tokens — mirrors tokens.ts (C) and global.css */
+        --bg: #050b18;
+        --side: #071021;
+        --panel: #0a1426;
+        --panel-2: #0c1930;
+        --line: #152139;
+        --line-2: #1e2e52;
+        --hover: #24365f;
+        --text: #e9effb;
+        --muted: #93a5c9;
+        --faint: #5e7098;
+        --gold: #ebcb74;
+        --gold-2: #c9a24b;
+        --gold-text: #241a05;
+        --green: #2fc77e;
+        --red: #f0596e;
+        --amber: #e5a43b;
+        --info: #6c9eff;
+        --violet: #b69cff;
+        --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+        --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+        /* The active workspace's accent. Swap this one value to preview another
+           workspace: My Portal #34D399 · Investments #2DD4BF · Studies #B69CFF ·
+           Admin #E0708F · Developer #F5A524 · Site Help #6C9EFF */
+        --accent: #ebcb74;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      button { font-family: inherit; cursor: pointer; }
+
+      ::-webkit-scrollbar { width: 9px; height: 9px; }
+      ::-webkit-scrollbar-track { background: #0a1730; }
+      ::-webkit-scrollbar-thumb { background: #1d3560; border-radius: 5px; }
+
+      /* ---- Shell: a two-column grid, 248px rail + content. Collapsed = 72px. */
+      .shell {
+        display: grid;
+        grid-template-columns: 248px 1fr;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      /* ---- Sidebar ------------------------------------------------------- */
+      .rail {
+        background: var(--side);
+        border-right: 1px solid var(--line);
+        padding: 22px 16px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        overflow-y: auto;
+        overflow-x: hidden;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 2px 4px 0;
+        min-height: 30px;
+      }
+      /* Stands in for /brand/vitalis-wordmark.png (148px wide in the app). */
+      .wordmark { line-height: 1; }
+      .wordmark b {
+        display: block;
+        font-family: var(--mono);
+        font-size: 17px;
+        font-weight: 700;
+        letter-spacing: 1.5px;
+        color: var(--gold);
+      }
+      .wordmark span {
+        display: block;
+        margin-top: 3px;
+        font-size: 7.5px;
+        letter-spacing: 2.6px;
+        color: var(--faint);
+        font-weight: 600;
+      }
+      .collapse {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        flex: none;
+        border-radius: 8px;
+        color: var(--faint);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--line-2);
+      }
+
+      /* Standalone row above Workspaces — only for users with the `employee`
+         role AND a company-domain email. Opens /employee in a new tab. */
+      .employee-row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 10px 11px;
+        border-radius: 9px;
+        font-size: 13.5px;
+        font-weight: 600;
+        text-decoration: none;
+        color: var(--muted);
+        background: rgba(194, 90, 56, 0.05);
+        border: 1px solid rgba(194, 90, 56, 0.22);
+      }
+      .employee-row .label { flex: 1; }
+
+      .nav-label {
+        font-size: 10.5px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        color: var(--faint);
+        font-weight: 600;
+        padding: 0 10px;
+        margin-bottom: 8px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        width: 100%;
+        padding: 9px 10px;
+        border: none;
+        border-radius: 8px;
+        background: transparent;
+        color: var(--muted);
+        font-size: 13.5px;
+        font-weight: 500;
+        text-align: left;
+        margin-bottom: 2px;
+      }
+      .row .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .row:hover { background: rgba(255, 255, 255, 0.03); color: var(--text); }
+      /* Active WORKSPACE: neutral wash, icon takes that workspace's accent. */
+      .row.ws-active { background: rgba(255, 255, 255, 0.045); color: var(--text); font-weight: 600; }
+      /* Active SECTION: accent-tinted gradient pill, label AND icon in accent. */
+      .row.sec-active {
+        background: linear-gradient(180deg, rgba(235, 203, 116, 0.16), rgba(235, 203, 116, 0.08));
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .row .count { font-family: var(--mono); font-size: 11px; color: var(--faint); }
+      /* Unseen-activity marker (admin nav rows). Blinks in the app. */
+      .dot {
+        flex: none;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--red);
+        box-shadow: 0 0 6px var(--red);
+        margin-left: 6px;
+      }
+
+      .rail-foot {
+        margin-top: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 10px 0;
+        border-top: 1px solid var(--line);
+      }
+      .rail-foot .name { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.5px; }
+      .version {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 9.5px;
+        color: var(--gold);
+        border: 1px solid rgba(235, 203, 116, 0.35);
+        border-radius: 4px;
+        padding: 2px 7px;
+      }
+
+      /* ---- Main column --------------------------------------------------- */
+      .main { display: flex; flex-direction: column; min-width: 0; height: 100vh; }
+
+      .topbar {
+        height: 64px;
+        flex: none;
+        border-bottom: 1px solid var(--line);
+        background: var(--side);
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 24px 0 28px;
+        position: relative;
+        z-index: 30;
+      }
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--faint);
+        font-weight: 500;
+        min-width: 0;
+      }
+      .crumbs b { color: var(--text); font-weight: 600; }
+      .search {
+        margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        width: 240px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 12px;
+        color: var(--faint);
+        font-size: 12.5px;
+      }
+      .kbd {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 10px;
+        border: 1px solid var(--line-2);
+        border-radius: 4px;
+        padding: 1px 5px;
+      }
+      .bar-right { display: flex; align-items: center; gap: 12px; flex: none; }
+      .clock { text-align: right; line-height: 1.2; }
+      .clock b { display: block; font-family: var(--mono); font-size: 13px; color: var(--text); font-weight: 600; }
+      .clock span { display: block; font-size: 10px; color: var(--faint); }
+      /* THE primary action. Gold gradient, dark text — the only button that
+         looks like this anywhere in the shell. */
+      .ask {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        flex: none;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--gold-text);
+        background: linear-gradient(180deg, #ebcb74, #c9a24b);
+        border: none;
+        padding: 9px 14px;
+        border-radius: 8px;
+        white-space: nowrap;
+      }
+      .icon-btn {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        flex: none;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--line-2);
+        border-radius: 8px;
+      }
+      .badge {
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        min-width: 15px;
+        height: 15px;
+        padding: 0 3px;
+        border-radius: 8px;
+        background: var(--red);
+        color: #fff;
+        font-size: 9px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .avatar {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent);
+        background: rgba(235, 203, 116, 0.12);
+        border: 1px solid rgba(235, 203, 116, 0.4);
+      }
+
+      .content { flex: 1; overflow-y: auto; position: relative; }
+      .screen { padding: 22px 32px 8px; }
+
+      /* ---- Content patterns (what a screen is built from) ------------------ */
+      h2.title { margin: 0; font-size: 19px; font-weight: 700; color: #fff; }
+      .subtitle { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+      .card:hover { border-color: var(--hover); }
+      .panel { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+      .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+      .tile-label {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
+        color: var(--faint);
+      }
+      .live { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
+      /* Every figure is mono. Never set a number in the sans face. */
+      .figure { font-family: var(--mono); font-size: 25px; font-weight: 600; margin-top: 10px; letter-spacing: -0.5px; }
+      .figure small { font-size: 11px; color: var(--faint); font-weight: 400; margin-left: 3px; }
+      .delta { font-family: var(--mono); font-size: 11px; margin-top: 6px; }
+      .up { color: var(--green); }
+      .down { color: var(--red); }
+      .meta { font-size: 10.5px; color: var(--faint); margin-left: 6px; font-family: var(--sans); }
+      .chip {
+        font-size: 9.5px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        color: var(--muted);
+        border: 1px solid var(--line-2);
+        border-radius: 5px;
+        padding: 2px 7px;
+      }
+      .ghost-btn {
+        font-size: 11.5px;
+        font-weight: 600;
+        color: #dfe7fa;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--line-2);
+        padding: 8px 12px;
+        border-radius: 7px;
+      }
+      .gold-btn {
+        border: none;
+        background: linear-gradient(180deg, var(--gold), var(--gold-2));
+        color: #0c2768;
+        font-weight: 700;
+        font-size: 12px;
+        padding: 8px 14px;
+        border-radius: 7px;
+      }
+      .input {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--line-2);
+        border-radius: 7px;
+        color: var(--text);
+        font-size: 12.5px;
+        padding: 9px 11px;
+        outline: none;
+      }
+
+      .foot {
+        padding: 16px 32px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8px;
+        font-size: 10.5px;
+        color: var(--faint);
+        letter-spacing: 0.3px;
+      }
+      .foot-links { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+      /* Phone: the rail becomes an off-canvas drawer (264px) behind a hamburger
+         in the top bar. There is no bottom tab bar. Breakpoints: phone ≤480,
+         tablet ≤768. This file is the desktop shell; the drawer is not mocked. */
+      @media (max-width: 900px) {
+        .shell { grid-template-columns: 1fr; }
+        .rail { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <!-- ============================ SIDEBAR ============================ -->
+      <aside class="rail">
+        <div class="brand">
+          <div class="wordmark">
+            <b>VITALIS</b>
+            <span>TRADING SYSTEMS</span>
+          </div>
+          <button class="collapse" aria-label="Collapse sidebar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg>
+          </button>
+        </div>
+
+        <a class="employee-row" href="#" title="Employee Portal — a separate site, opens in a new tab">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#C25A38" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+          <span class="label">Employee Portal</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>
+        </a>
+
+        <!-- Tier 1: the workspaces this user may see, in nav order.
+             My Portal is pinned to the top. -->
+        <nav>
+          <div class="nav-label">Workspaces</div>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+            <span class="label">My Portal</span>
+          </button>
+
+          <button class="row ws-active">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EBCB74" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5v4"/><rect width="4" height="6" x="7" y="9" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect width="4" height="8" x="15" y="5" rx="1"/><path d="M17 13v3"/><path d="M3 3v18h18"/></svg>
+            <span class="label">Advanced Trading</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>
+            <span class="label">Investments</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>
+            <span class="label">Studies</span>
+          </button>
+
+          <!-- Admin-only -->
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span class="label">Admin Portal</span>
+            <span class="dot" title="unseen activity"></span>
+          </button>
+
+          <!-- Founder-level only -->
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg>
+            <span class="label">Developer Portal</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></svg>
+            <span class="label">Site Help</span>
+          </button>
+        </nav>
+
+        <!-- Tier 2: the sections of the ACTIVE workspace, under its group label. -->
+        <nav>
+          <div class="nav-label">Advanced Trading</div>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+            <span class="label">Live Wall</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+            <span class="label">Trading Alerts</span>
+            <span class="count">3</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5v4"/><rect width="4" height="6" x="7" y="9" rx="1"/><path d="M9 15v2"/><path d="M17 3v2"/><rect width="4" height="8" x="15" y="5" rx="1"/><path d="M17 13v3"/><path d="M3 3v18h18"/></svg>
+            <span class="label">Trade Desk</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+            <span class="label">Deleted Trades</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></svg>
+            <span class="label">Strategy Sessions</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+            <span class="label">Manual Trades</span>
+          </button>
+
+          <!-- Role-gated: only holders of the `funded` role see this row. -->
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
+            <span class="label">Funded</span>
+          </button>
+
+          <button class="row sec-active">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EBCB74" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
+            <span class="label">Market News</span>
+          </button>
+
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
+            <span class="label">To Do</span>
+          </button>
+        </nav>
+
+        <div class="rail-foot">
+          <span class="name">VTS Portal</span>
+          <span class="version">Beta V 5.78</span>
+        </div>
+      </aside>
+
+      <!-- ============================== MAIN ============================== -->
+      <div class="main">
+        <header class="topbar">
+          <!-- Breadcrumb: team › workspace › section. The section is the bold one.
+               There are NO workspace tabs in this bar — the rail owns navigation. -->
+          <div class="crumbs">
+            <span>Vitalis Trading Team</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <span>Advanced Trading</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            <b>Market News</b>
+          </div>
+
+          <div class="search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            Search…
+            <span class="kbd">⌘K</span>
+          </div>
+
+          <div class="bar-right">
+            <div class="clock">
+              <b>3:38:49 PM ET</b>
+              <span>Wed, Jul 29</span>
+            </div>
+
+            <button class="ask">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></svg>
+              Ask VTS AI
+            </button>
+
+            <button class="icon-btn" aria-label="Notifications">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+              <span class="badge">2</span>
+            </button>
+
+            <div class="avatar">A</div>
+          </div>
+        </header>
+
+        <main class="content">
+          <!-- Everything below is EXAMPLE CONTENT showing the patterns a screen
+               is built from. Replace it with the screen being designed. -->
+          <div class="screen">
+            <div style="display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap">
+              <div style="min-width: 0">
+                <h2 class="title">Market News</h2>
+                <p class="subtitle">
+                  Headlines, the Forex Factory calendar, and a board of the rates and prints you choose to watch —
+                  every time Eastern.
+                </p>
+              </div>
+              <div style="margin-left: auto; display: flex; align-items: center; gap: 8px">
+                <span style="font-family: var(--mono); font-size: 11px; color: var(--faint)">Data as of 3:54:03 PM ET</span>
+                <button class="ghost-btn">Refresh</button>
+                <button class="gold-btn">Brief me</button>
+              </div>
+            </div>
+
+            <div class="tiles" style="margin-top: 18px">
+              <div class="card">
+                <div class="tile-label"><span class="live"></span> Fed funds target</div>
+                <div class="figure">4.25–4.50<small>%</small></div>
+                <div class="delta"><span style="color: var(--faint)">held since Dec 2025</span></div>
+              </div>
+              <div class="card">
+                <div class="tile-label"><span class="live"></span> Gold · XAU/USD</div>
+                <div class="figure">3,486.40</div>
+                <div class="delta up">▲ 0.72%<span class="meta">record high</span></div>
+              </div>
+              <div class="card">
+                <div class="tile-label"><span class="live"></span> DXY dollar index</div>
+                <div class="figure">96.84</div>
+                <div class="delta down">▼ 0.31%<span class="meta">3-week low</span></div>
+              </div>
+              <div class="card">
+                <div class="tile-label"><span class="live"></span> VIX</div>
+                <div class="figure">14.20</div>
+                <div class="delta down">▼ 2.06%<span class="meta">live</span></div>
+              </div>
+            </div>
+
+            <div class="panel" style="margin-top: 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+              <span class="chip">POLICY &amp; RATES</span>
+              <span class="chip">INFLATION</span>
+              <span class="chip">FX</span>
+              <input class="input" placeholder="rate, CPI, yield, gold…" style="margin-left: auto; width: 220px" />
+            </div>
+          </div>
+
+          <footer class="foot">
+            <span>© 2026 Vitalis Trading Systems LLC. All rights reserved. Confidential.</span>
+            <span class="foot-links">
+              <span>Terms</span>
+              <span>Privacy</span>
+              <span>Rules</span>
+              <span style="font-family: var(--mono)">Full access</span>
+            </span>
+          </footer>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

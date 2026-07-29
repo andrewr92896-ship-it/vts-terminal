@@ -11,11 +11,11 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.77';
+export const APP_VERSION = 'Beta V 5.80';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.77',
+    version: 'Beta V 5.80',
     date: 'July 29, 2026',
     notes: [
       'New section: Advanced Trading \u25b8 Market Data, sitting just above Market News. One screen for every rate, print and price the desk watches \u2014 policy rates, inflation, jobs, the Treasury curve, FX, commodities, crypto, indices, liquidity, and the four trading sessions.',
@@ -24,6 +24,32 @@ export const PATCH_NOTES: PatchNote[] = [
       'Each series shows five changes side by side \u2014 1 day, 1 week, 1 month, year to date, 1 year \u2014 plus who publishes it, when it was last revised, and when it is next due. A due date inside a week is highlighted.',
       'A second view carries the Forex Factory release calendar: actual against forecast and previous, grouped by day in Eastern Time, with past releases dimmed below and a plain-language explanation of what the bigger releases actually are.',
       'The series figures on this first release are placeholder values from the design and the screen says so at the top. The economic calendar, the session open/closed readings and the Fed countdown are all real.',
+    ],
+  },
+  {
+    version: 'Beta V 5.79',
+    date: 'July 29, 2026',
+    notes: [
+      'Design notes only: the repo now carries an up-to-date description of the portal\'s layout — the sidebar, the top bar, the colours and the standard cards and buttons — for use when mocking up new screens in a design tool. Nothing in the portal itself changed.',
+    ],
+  },
+  {
+    version: 'Beta V 5.78',
+    date: 'July 29, 2026',
+    notes: [
+      'VTS AI now answers the same way everywhere in the portal: the answer first, no preamble or padding, bullets for lists, numbered steps for anything done in order, and short paragraphs instead of blocks of text.',
+      'It states an assumption and keeps going rather than stopping to ask, and only asks when the missing detail would change the answer. It no longer compliments the question or describes its own reply.',
+      'This covers Ask VTS AI, the study tutor, the Market News and challenge briefs, the study-guide builder, the To Do command bar and the support chat.',
+      'Admin ▸ AI Instructions has a new "Response style" box at the top holding all of it. Editing that one box changes the voice of every AI reply in the portal at once.',
+    ],
+  },
+  {
+    version: 'Beta V 5.77',
+    date: 'July 29, 2026',
+    notes: [
+      'Deleting a trade is no longer limited to the trader who placed it. The team leader can now remove any trade on the desk, and can hand that out to a teammate with a new "Delete trades" permission in My Portal ▸ Trading Team — the same checkbox list that already covers invites, badges and the rest.',
+      'The permission covers putting a trade back too: anyone who can delete a teammate\'s trade can restore it from Deleted Trades. Correcting the numbers on a teammate\'s closed trade is still admins only.',
+      'Everyone else is unchanged — without the permission you still only see a delete button on your own rows, and nobody can reach a trade outside their own team.',
     ],
   },
   {

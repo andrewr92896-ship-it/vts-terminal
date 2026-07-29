@@ -320,7 +320,8 @@ act on the same team:
   - `user_teams` — one row per team naming its **leader** (`leaderId`).
   - `user_team_members` — optional per-user **badge** + **permission flags**
     (`canCreateStudyGuides / canInvite / canManageBadges / canRemoveMembers /
-    canEditTeam`); a missing row = defaults (no badge, no perms). Leader = all.
+    canEditTeam / canDeleteTrades`); a missing row = defaults (no badge, no
+    perms). Leader = all.
   - `user_team_invites` — pending invites; **accepting sets the invitee's
     `team_id`** (moves them onto the team's desk). Leaving / removal clears
     `team_id` (→ solo). Renaming updates the shared `trading_teams` name.
@@ -330,6 +331,21 @@ act on the same team:
   Because membership is `team_id`, the My Portal team **is** the trade-scoping
   team — the two are one. (Consequence: the Studies delete gate, keyed on team
   leadership, is now live — non-leader members can't delete team study content.)
+
+### Who may delete a trade (`trading/deleteAccess.ts`)
+
+A trader always removes their own. Beyond that it is a **team grant**: the
+**leader** holds it implicitly, and they can hand the **Delete trades**
+permission (`canDeleteTrades`, set from My Portal ▸ Trading Team) to any member.
+Admins keep their install-wide reach. `tradeDeleteScope(actor)` resolves this
+once per request into `{ any, ownerIds, others }`, which `removeTrade`,
+`removePosition` and `restoreDeleted` turn into the owner filter on their `WHERE`
+clause — every non-admin grant is bounded by `scopedTraderIds`, so a leader only
+ever reaches rows their own desk can already see. Whoever may delete may also
+**restore** (Deleted Trades); **editing** a teammate's closed trade stays
+admin-only. The trade payloads (`/api/trading/trades`, `/history`,
+`/deleted-trades`) carry `canDeleteAny` so the UI knows where to draw the
+control — the server is still the enforcer.
 
 ## AI / Ask VTS AI (`apps/api/src/ai`)
 
@@ -359,6 +375,31 @@ act on the same team:
     `{label}`), `metrics_coach` (prop-challenge read), `support` (bug intake —
     **structured**: must return the exact JSON `{needMore, reply}` or intake
     breaks).
+- **One response style, composed onto every prose prompt** (`style` in
+  `prompts.ts`, `STYLE_DEF`): the owner's communication style — answer first, no
+  preamble or self-description, bullets/numbered steps, short paragraphs, state
+  an assumption instead of asking, recommend one default rather than listing
+  alternatives. It is **not** copied into each prompt's default; call sites
+  compose it on with `withStyle(system)` (or `styleGuide()` where the system
+  prompt is built outside `prompts.ts`), so editing `ai.style` once — in code or
+  from **Admin ▸ AI Instructions ▸ Response style** — changes the voice of every
+  AI reply at once.
+  - Applied to: `global` (+ workspace guidance), `tutor`, `market_overview`,
+    `metrics_coach`, `support`, `support_intake`, the study-guide builder
+    (`chatStudyGuide`, which takes the style as an argument so `claude.ts` stays
+    free of the settings/DB layer), and the To Do command bar (`todo/command.ts`).
+  - `withStyle(system, { structured: true })` appends a reminder that the reply
+    is still JSON-only — use it for every prompt whose output is parsed, or the
+    intake/builder parsers break.
+  - **Deliberately not applied** to the data-extraction and content-authoring
+    prompts (screenshot parsing, market hours, news reads, calendar explainers,
+    deck/flashcard generation, the question audit): their output is structured
+    data or study material rather than a reply, and each carries its own tight
+    format and length rules.
+  - Replies render as **plain text** (`whiteSpace: 'pre-wrap'`), so the style
+    asks for `- ` bullets, `1.` steps and a colon-terminated label line instead
+    of markdown headings/tables/code fences, which would show up literally. If a
+    surface ever renders markdown, revisit that paragraph of `STYLE_DEF`.
 - **Vision flows** (Opus, non-editable prompts in `claude.ts`): paste-a-screenshot
   → parse. Used for alert analysis, manual/funded position import, funded-trade
   close, and reading challenge equity off an FTP screenshot. These endpoints take
@@ -701,6 +742,16 @@ hardcoded" below.)
   to the learner's Study-Game level.
 - **Responsive:** `useResponsive()` → `{ isPhone ≤480, isTablet ≤768 }`. Phones
   use an off-canvas nav drawer and a sections dropdown; there is no bottom TabBar.
+- **Design handoff:** `docs/design/portal-shell.md` is the paste-ready brief for
+  an external design tool (shell layout, tokens, workspace accents, section
+  lists, component patterns, and an explicit "this is no longer the design" list
+  — the pre-Meridian top-bar template with Kia Sales / Wealth / Finance keeps
+  resurfacing in generated mockups). `docs/design/portal-shell.html` is the same
+  shell as a self-contained static page to screenshot or attach; its colours,
+  sizes, nav rows and Lucide glyphs are copied from `theme/*`, `Sidebar.tsx`,
+  `TopBar.tsx` and `Icon.tsx`. **Update both when the shell changes** — a stale
+  brief is worse than none, because a tool will follow it. The Employee Portal
+  has its own, separate spec in `docs/design/employee-portal/`.
 
 ## Environment variables
 

@@ -27,14 +27,14 @@ function clip(s: string, n: number): string {
 }
 
 const SAMPLE_NOTE =
-  'This is a scripted sample reply in the read-only demo. The live portal answers with Claude (Sonnet), aware of the workspace you are in.';
+  'Scripted sample reply — this is the read-only demo. The live portal answers with VTS AI, aware of the workspace you are in.';
 
 function cannedAsk(body: unknown): string {
   const q = clip(lastUserMessage(body), 160);
   return [
     SAMPLE_NOTE,
     q ? `You asked: "${q}".` : '',
-    'In the real app I would give a concise, practical answer and point you to the exact screen for any specific numbers. Try the guided tour to see what each workspace does.',
+    'In the live portal you get a direct, structured answer, plus the exact screen to open for any specific numbers. Try the guided tour to see what each workspace does.',
   ]
     .filter(Boolean)
     .join(' ');
@@ -43,25 +43,25 @@ function cannedAsk(body: unknown): string {
 function cannedTutor(body: unknown): string {
   const q = clip(lastUserMessage(body), 160);
   return [
-    'This is a scripted sample reply in the demo; the live study tutor runs on Claude.',
+    'Scripted sample reply — this is the demo. The live study tutor runs on VTS AI.',
     q ? `On "${q}":` : '',
-    'In the real app I explain why the correct answer is right, why the tempting distractors are wrong, and give a short memory hook, all sized for a learner.',
+    'In the live portal it explains why the correct answer is right, why the tempting distractors are wrong, and gives a short memory hook.',
   ]
     .filter(Boolean)
     .join(' ');
 }
 
 const BRIEF_METRICS =
-  'Sample desk brief (demo). The account is tracking toward its profit target with healthy drawdown buffers: roughly two thirds of the daily allowance and over half of the max-drawdown allowance remain. The tightest constraint right now is the daily buffer on high-impact news days, so size down into releases and bank partial profits to protect the trailing drawdown. The live portal generates this from your real challenge metrics with Claude.';
+  'Sample desk brief (demo). The account is tracking toward its profit target with healthy drawdown buffers: roughly two thirds of the daily allowance and over half of the max-drawdown allowance remain. The tightest constraint right now is the daily buffer on high-impact news days, so size down into releases and bank partial profits to protect the trailing drawdown. The live portal generates this from your real challenge metrics with VTS AI.';
 
 const BRIEF_NEWS =
-  'Sample desk brief (demo). Tone is risk-on but headline-sensitive: indices firm, the dollar soft into the next inflation print, and energy steady. The two things that matter today are the CPI release and central-bank commentary; everything else is noise until those clear. Watch for a fade if inflation surprises hot. The live portal writes this from the current headlines with Claude.';
+  'Sample desk brief (demo). Tone is risk-on but headline-sensitive: indices firm, the dollar soft into the next inflation print, and energy steady. The two things that matter today are the CPI release and central-bank commentary; everything else is noise until those clear. Watch for a fade if inflation surprises hot. The live portal writes this from the current headlines with VTS AI.';
 
 const BRIEF_FINANCE =
-  'Sample brief (demo). Take-home comfortably covers fixed bills with room to save, and net worth is positive and trending up as liabilities come down. The clearest next step is to automate a fixed monthly transfer to savings on payday and keep the FTP payout scaling in testing until results are consistent. The live portal builds this from your real finances with Claude.';
+  'Sample brief (demo). Take-home comfortably covers fixed bills with room to save, and net worth is positive and trending up as liabilities come down. The clearest next step is to automate a fixed monthly transfer to savings on payday and keep the FTP payout scaling in testing until results are consistent. The live portal builds this from your real finances with VTS AI.';
 
 const BRIEF_WEALTH =
-  'Sample brief (demo). The book is concentrated in a few active households with steady AUM; model portfolios are diversified and within target bands. The priority this quarter is the compliance calendar: keep the ADV and filing dates from slipping, and document each client review. The live portal generates this from your real practice data with Claude.';
+  'Sample brief (demo). The book is concentrated in a few active households with steady AUM; model portfolios are diversified and within target bands. The priority this quarter is the compliance calendar: keep the ADV and filing dates from slipping, and document each client review. The live portal generates this from your real practice data with VTS AI.';
 
 // Overlay a scripted Claude analysis onto the chosen alert and return the alerts
 // list as the real analyze route would, but without calling the model or saving
@@ -80,7 +80,7 @@ export async function demoAnalyze(userId: string, alertId: string): Promise<Aler
     risk: 'Stop sits beyond the recent structure with about a 1:2 reward-to-risk to the first target.',
     verdict: 'good',
     summary:
-      'A disciplined, trend-aligned entry with a sensible stop. This is a scripted sample analysis in the demo; the live portal reads your chart screenshot with Claude (Opus).',
+      'A disciplined, trend-aligned entry with a sensible stop. Scripted sample analysis — this is the demo; the live portal reads your chart screenshot with VTS AI.',
   };
   const analysis: AnalyzeResult = {
     model: 'demo (sample analysis)',

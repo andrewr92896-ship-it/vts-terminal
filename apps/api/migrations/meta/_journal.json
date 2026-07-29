@@ -552,7 +552,14 @@
       "idx": 78,
       "version": "6",
       "when": 1782341036908,
-      "tag": "0078_market_data_layout",
+      "tag": "0078_team_delete_trades_perm",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "6",
+      "when": 1782341136908,
+      "tag": "0079_market_data_layout",
       "breakpoints": true
     }
   ]

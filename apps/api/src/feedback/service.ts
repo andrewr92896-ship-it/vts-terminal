@@ -10,7 +10,7 @@ import {
   type SuggestionRow,
 } from '../db/schema.js';
 import { aiConfigured, chatClaude, extractJson } from '../ai/claude.js';
-import { getPrompt } from '../ai/prompts.js';
+import { getPrompt, withStyle } from '../ai/prompts.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
 
@@ -135,7 +135,7 @@ function fallbackReply(needMore: boolean): { needMore: boolean; reply: string } 
     : {
         needMore: false,
         reply:
-          'Thank you for the report — this is really helpful. Your ticket has been sent to the admins and we’ll take a look. Feel free to reach out again if anything else comes up.',
+          'Thanks for the report. Your ticket has been sent to the admins. Reach out again if anything else comes up.',
       };
 }
 
@@ -160,7 +160,7 @@ async function triage(
     });
   }
   try {
-    const raw = await chatClaude(messages, await getPrompt('support'));
+    const raw = await chatClaude(messages, await withStyle(await getPrompt('support'), { structured: true }));
     const parsed = extractJson(raw) as { needMore?: unknown; reply?: unknown } | null;
     const reply = parsed && typeof parsed.reply === 'string' && parsed.reply.trim() ? parsed.reply.trim() : '';
     const needMore = !forceFile && parsed?.needMore === true;

@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingPositions, users, TRADE_SIDES, type TradeSide, type TradingPositionRow } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
@@ -13,6 +13,7 @@ import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
 import { scopedTraderIds, scopedTraderIdsForUser, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
+import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 import { beforeCutoff, connectionCutoffs } from './connections.js';
 import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 import type { LiveTrade } from './types.js';
@@ -369,13 +370,19 @@ function groupBy(
 // desk is shared. Returns true when a row was deleted. Note: a still-open
 // position will reappear on the next Live Wall reconcile (it is still live on
 // the broker); deleting a closed one is permanent.
-export async function removePosition(userId: string, id: string, admin = false): Promise<boolean> {
+export async function removePosition(userId: string, id: string, scope?: TradeDeleteScope): Promise<boolean> {
   // Soft delete: mark the row deleted (recoverable from Deleted Trades) instead
   // of dropping it. Because the row stays, its key still dedupes the backfill —
   // so a deleted broker trade never silently re-imports.
-  const where = admin
+  // `scope` says whose positions the caller may remove — see deleteAccess.ts.
+  const reach = scope ?? ownTradesOnly(userId);
+  const where = reach.any
     ? and(eq(tradingPositions.id, id), isNull(tradingPositions.deletedAt))
-    : and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId), isNull(tradingPositions.deletedAt));
+    : and(
+        eq(tradingPositions.id, id),
+        inArray(tradingPositions.userId, [...reach.ownerIds]),
+        isNull(tradingPositions.deletedAt),
+      );
   const row = (
     await db.select({ id: tradingPositions.id }).from(tradingPositions).where(where).limit(1)
   )[0];
@@ -412,7 +419,9 @@ function cleanText(v: string | null | undefined, max: number): string | null {
 }
 
 // Edit a CLOSED recorded trade. Owner-scoped by default; an admin can correct
-// anyone's on the shared desk (mirrors removePosition). Only closed rows are
+// anyone's on the shared desk. (Editing stays admin-only — the team's
+// Delete-trades permission widens removal, not rewriting a teammate's numbers.)
+// Only closed rows are
 // editable — an open position is still live on the broker and the next Live Wall
 // reconcile would overwrite hand-edits, so those stay read-only. Returns true
 // when a row was updated.

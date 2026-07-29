@@ -8,7 +8,7 @@ import {
   type SupportRequestMessageRow,
 } from '../db/schema.js';
 import { aiConfigured, chatClaude, extractJson } from '../ai/claude.js';
-import { getPrompt } from '../ai/prompts.js';
+import { getPrompt, withStyle } from '../ai/prompts.js';
 import { addSuggestion, fileBugReportFromConversation } from '../feedback/service.js';
 
 // The chat-bubble Support tab. A user picks a category — bug, suggestion, or a
@@ -53,15 +53,15 @@ function fallbackReply(kind: SupportKind, needMore: boolean): { needMore: boolea
         kind === 'bug'
           ? 'Thanks for flagging this. Could you add a bit more — what were you doing right before it happened, and what did you expect to see instead?'
           : kind === 'suggestion'
-            ? 'Great idea — could you say a little more about the problem it would solve or how you picture it working?'
+            ? 'Could you say a little more about the problem it would solve or how you picture it working?'
             : 'Happy to help. Could you add a little more detail about what you need and where in the portal you ran into it?',
     };
   }
   return {
     needMore: false,
-    reply: `Thank you — this is really helpful. Your ${kindLabel(
+    reply: `Thanks — your ${kindLabel(
       kind,
-    )} has been sent to the admins and we'll take a look. Feel free to reach out again anytime.`,
+    )} has been sent to the admins. Reach out again anytime.`,
   };
 }
 
@@ -76,7 +76,9 @@ async function triage(
   const forceFile = userTurns >= FORCE_FILE_AT;
   if (!aiConfigured()) return fallbackReply(kind, !forceFile && userTurns <= 1);
 
-  const system = (await getPrompt('support_intake')).replaceAll('{kind}', kindLabel(kind));
+  const system = await withStyle((await getPrompt('support_intake')).replaceAll('{kind}', kindLabel(kind)), {
+    structured: true,
+  });
   const messages = conversation.map((m) => ({
     role: (m.role === 'ai' ? 'assistant' : 'user') as 'user' | 'assistant',
     content: m.body,

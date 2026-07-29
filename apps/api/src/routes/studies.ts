@@ -28,6 +28,7 @@ import {
   parseFlashcardsFromText,
 } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
+import { styleGuide } from '../ai/prompts.js';
 import { getTeamName } from '../teams/service.js';
 import { createDeck, deleteDeck, getDeck, listDecks, mergeDecks, updateDeck } from '../studies/deckStore.js';
 import { ensureBakedInGamesForTeam, isBakedInSource } from '../studies/bakedGames.js';
@@ -729,7 +730,7 @@ export async function studiesRoutes(app: FastifyInstance) {
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     try {
       await enforceAiLimit(request.currentUser!.id, 'studies_guide_chat');
-      const result = await chatStudyGuide(parsed.data.messages);
+      const result = await chatStudyGuide(parsed.data.messages, await styleGuide(true));
       return { reply: result.reply, slides: result.slides };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });

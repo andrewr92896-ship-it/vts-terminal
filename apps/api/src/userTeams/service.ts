@@ -35,6 +35,9 @@ export interface MemberPermissions {
   canManageBadges: boolean;
   canRemoveMembers: boolean;
   canEditTeam: boolean;
+  // Remove (and restore) any teammate's trade, not just their own. Enforced in
+  // trading/deleteAccess.ts and bounded by the team's trade scope.
+  canDeleteTrades: boolean;
 }
 
 const ALL_PERMS: MemberPermissions = {
@@ -43,6 +46,7 @@ const ALL_PERMS: MemberPermissions = {
   canManageBadges: true,
   canRemoveMembers: true,
   canEditTeam: true,
+  canDeleteTrades: true,
 };
 
 const NO_PERMS: MemberPermissions = {
@@ -51,6 +55,7 @@ const NO_PERMS: MemberPermissions = {
   canManageBadges: false,
   canRemoveMembers: false,
   canEditTeam: false,
+  canDeleteTrades: false,
 };
 
 export interface TeamMemberView {
@@ -102,6 +107,7 @@ function permsFromRow(row: MemberMetaRow): MemberPermissions {
     canManageBadges: row.canManageBadges,
     canRemoveMembers: row.canRemoveMembers,
     canEditTeam: row.canEditTeam,
+    canDeleteTrades: row.canDeleteTrades,
   };
 }
 
@@ -571,6 +577,7 @@ export async function setMemberPermissions(
   if (perms.canManageBadges != null) patch.canManageBadges = perms.canManageBadges;
   if (perms.canRemoveMembers != null) patch.canRemoveMembers = perms.canRemoveMembers;
   if (perms.canEditTeam != null) patch.canEditTeam = perms.canEditTeam;
+  if (perms.canDeleteTrades != null) patch.canDeleteTrades = perms.canDeleteTrades;
   if (Object.keys(patch).length) await writeMemberMeta(teamId, memberUserId, patch);
   const view = await buildTeamView(teamId, actingUserId);
   if (!view) throw new UserTeamError('That team no longer exists');
