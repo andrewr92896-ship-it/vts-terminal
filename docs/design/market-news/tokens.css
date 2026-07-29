@@ -1,0 +1,109 @@
+/* ============================================================================
+   VTS Portal — design tokens for Market News redesign work
+   ============================================================================
+
+   Two palettes are in play on this screen and that is itself a finding:
+
+   1. `--c-*`  the app-wide Meridian tokens from apps/web/src/theme/tokens.ts.
+               Every other screen uses these.
+   2. `--mn-*` a second, near-duplicate set of local constants declared at the
+               top of MarketNews.tsx. They are close to the Meridian values but
+               not equal (see the drift comments below), so the news cards read
+               very slightly off against the rest of the shell.
+
+   A redesign should collapse these onto `--c-*` and delete the local set.
+   Both are listed here so the mock can be pixel-faithful to what ships today.
+   ========================================================================= */
+
+:root {
+  /* ---- App shell (theme/tokens.ts) — the ground truth ---- */
+  --c-bg:      #050B18;  /* app background, behind everything */
+  --c-side:    #071021;  /* sidebar */
+  --c-panel:   #0A1426;  /* cards */
+  --c-panel2:  #0C1930;  /* nested / footer strips */
+  --c-line:    #152139;  /* default card border, dividers */
+  --c-line2:   #1E2E52;  /* stronger border: inputs, chips */
+  --c-hover:   #24365F;  /* card border on hover */
+  --c-text:    #E9EFFB;
+  --c-muted:   #93A5C9;
+  --c-faint:   #5E7098;
+  --c-gold:    #EBCB74;  /* Trading workspace accent + primary action */
+  --c-gold2:   #C9A24B;  /* gold gradient bottom stop */
+  --c-goldtxt: #241A05;  /* text on a gold button */
+  --c-green:   #2FC77E;  /* long / positive / bullish */
+  --c-red:     #F0596E;  /* short / negative / high impact / bearish */
+  --c-amber:   #E5A43B;  /* warning / medium impact */
+
+  --c-gold-gradient: linear-gradient(180deg, #EBCB74, #C9A24B);
+
+  /* ---- MarketNews.tsx local constants — what actually renders today ---- */
+  --mn-gold:    #EBCB74;              /* same */
+  --mn-green:   #35c47b;              /* drift: --c-green is #2FC77E */
+  --mn-red:     #ef5468;              /* drift: --c-red   is #F0596E */
+  --mn-amber:   #e0a23a;              /* drift: --c-amber is #E5A43B */
+  --mn-text:    #eef3ff;              /* drift: --c-text  is #E9EFFB */
+  --mn-muted:   #9fb0d6;              /* drift: --c-muted is #93A5C9 */
+  --mn-faint:   #6f84b0;              /* drift: --c-faint is #5E7098 */
+  --mn-card:    rgba(13,31,68,.5);    /* drift: translucent, --c-panel is opaque */
+  --mn-panel:   rgba(11,26,58,.5);
+  --mn-input:   #091633;
+  --mn-border:  #16294f;              /* drift: --c-line  is #152139 */
+  --mn-border2: #1c3a7a;              /* drift: --c-line2 is #1E2E52 */
+
+  /* Body-copy colours used inline in the cards, no constant behind them */
+  --mn-body:      #dce6fb;  /* AI overview + Truth post body */
+  --mn-body-note: #d4def5;  /* "How it could affect us" body */
+  --mn-body-raw:  #c4d2ee;  /* raw source excerpt (no AI read) */
+  --mn-headline:  #ffffff;  /* headline title */
+  --mn-event:     #e7eefb;  /* calendar event title */
+  --mn-figure:    #cdd9f3;  /* forecast / previous figures */
+
+  /* ---- Type ---- */
+  --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
+
+  /* The screen's whole type scale, in the order it appears.
+     Note how compressed it is: nine sizes between 9 and 19px. */
+  --t-title:      19px;   /* 700 — "Market News" */
+  --t-subtitle:   12.5px; /* 400 — the paragraph under it */
+  --t-headline:   14px;   /* 600 — the story title, the largest thing in a card */
+  --t-body:       13px;   /* AI overview body, Truth post body */
+  --t-body-sm:    12.5px; /* trade note, event title, source name */
+  --t-event:      11.5px; /* mono — event clock time */
+  --t-meta:       11px;   /* source label, links, small buttons */
+  --t-figure:     10.5px; /* act / fcst / prev, relative timestamps (mono) */
+  --t-eyebrow:    10px;   /* dropdown labels, "Past", uppercase */
+  --t-chip:       9.5px;  /* 700 — impact / category / affects chips */
+  --t-microlabel: 9px;    /* "How it could affect us", "AI overview · VTS AI" */
+
+  /* ---- Radii (five values on one screen) ---- */
+  --r-card:  12px;  /* headline card, AI overview card */
+  --r-panel: 10px;  /* calendar event row, edit forms */
+  --r-note:  8px;   /* the "how it could affect us" inset, error banner */
+  --r-input: 7px;   /* inputs, gold + ghost buttons */
+  --r-small: 6px;   /* bias pill, small buttons */
+  --r-chip:  5px;   /* chips */
+
+  /* ---- Layout ---- */
+  --well-max:     860px;  /* the screen's own max-width — see README */
+  --shell-pad-x:  32px;   /* Portal content well, desktop */
+  --shell-pad-y:  16px;
+  --shell-pad-phone: 14px;
+  --sidebar-open:      248px;
+  --sidebar-collapsed: 72px;
+
+  /* ---- Rhythm actually used (no scale — these are ad-hoc per element) ---- */
+  --gap-headline-cards: 11px;
+  --gap-truth-cards:    10px;
+  --gap-event-rows:     6px;
+  --gap-day-groups:     12px;
+  --gap-filters:        12px;
+  --pad-card:           13px 15px;  /* headline card */
+  --pad-card-lg:        16px;       /* AI overview card */
+  --pad-event:          9px 12px;
+  --pad-empty:          34px 20px;
+}
+
+/* Breakpoints, from apps/web/src/hooks/useMediaQuery.ts — useResponsive() */
+/* isPhone:  max-width 480px  */
+/* isTablet: max-width 768px  */
