@@ -1238,7 +1238,10 @@ export function parseGuideChat(raw: string): GuideChatResult {
 // Run one turn of the study-guide builder conversation. `messages` is the running
 // transcript; the assistant turns carry the model's own prior JSON (so it sees
 // the previous slide draft and its ids). Returns the reply plus the full draft.
-export async function chatStudyGuide(messages: ChatMessage[]): Promise<GuideChatResult> {
-  const raw = await chatClaude(messages, GUIDE_SYSTEM, 8000);
+// `style` is the portal-wide response style (ai/prompts.ts) — passed in rather
+// than read here so this module stays free of the settings/DB layer.
+export async function chatStudyGuide(messages: ChatMessage[], style?: string): Promise<GuideChatResult> {
+  const system = style?.trim() ? `${GUIDE_SYSTEM}\n\n${style.trim()}` : GUIDE_SYSTEM;
+  const raw = await chatClaude(messages, system, 8000);
   return parseGuideChat(raw);
 }

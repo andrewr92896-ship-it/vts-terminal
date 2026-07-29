@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.76';
+export const APP_VERSION = 'Beta V 5.77';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.77',
+    date: 'July 29, 2026',
+    notes: [
+      'VTS AI now answers the same way everywhere in the portal: the answer first, no preamble or padding, bullets for lists, numbered steps for anything done in order, and short paragraphs instead of blocks of text.',
+      'It states an assumption and keeps going rather than stopping to ask, and only asks when the missing detail would change the answer. It no longer compliments the question or describes its own reply.',
+      'This covers Ask VTS AI, the study tutor, the Market News and challenge briefs, the study-guide builder, the To Do command bar and the support chat.',
+      'Admin ▸ AI Instructions has a new "Response style" box at the top holding all of it. Editing that one box changes the voice of every AI reply in the portal at once.',
+    ],
+  },
   {
     version: 'Beta V 5.76',
     date: 'July 29, 2026',
