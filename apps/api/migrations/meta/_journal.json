@@ -547,6 +547,13 @@
       "when": 1782340936908,
       "tag": "0077_dedupe_broker_positions",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "6",
+      "when": 1782341036908,
+      "tag": "0078_market_data_layout",
+      "breakpoints": true
     }
   ]
 }

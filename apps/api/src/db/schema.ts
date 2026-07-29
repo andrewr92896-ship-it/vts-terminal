@@ -886,6 +886,29 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
 });
 export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
 
+// ---- Trading — Market Data board layout ----
+// One row per trader holding how they have arranged the Market Data screen:
+// which series are pinned to the strip (ordered), which they removed from the
+// board entirely, and any metric they typed in themselves. The series catalog
+// itself lives in code (trading/marketData.ts) — this is only the personal
+// arrangement over it, so a catalog change never invalidates a saved layout
+// (unknown ids are dropped on read). A user with no row gets the default pins.
+// All three columns are JSON text: `pinned`/`hidden` are string arrays of series
+// ids, `custom` an array of user-authored metric objects.
+export const marketDataLayout = sqliteTable('market_data_layout', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  pinned: text('pinned').notNull().default('[]'),
+  hidden: text('hidden').notNull().default('[]'),
+  custom: text('custom').notNull().default('[]'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type MarketDataLayoutRow = typeof marketDataLayout.$inferSelect;
+
 // ---- Trading — user-authored price alerts ----
 // A personal "notify me when X crosses a level" rule, created in-portal (the
 // closest thing to a TradingView alert we can offer, since the embedded chart is

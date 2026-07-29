@@ -59,6 +59,7 @@ export const NAV: NavWorkspace[] = [
       // Private, role-gated: only shown to holders of the `funded` role (see
       // FUNDED_ONLY_SECTIONS + the sidebar filter). Never shown to the demo.
       { key: 'prop', label: 'Funded', icon: 'shield-check' },
+      { key: 'data', label: 'Market Data', icon: 'line-chart' },
       { key: 'news', label: 'Market News', icon: 'newspaper' },
       { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
     ],

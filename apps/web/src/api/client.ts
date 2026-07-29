@@ -43,6 +43,8 @@ import type {
   TradingBoard,
   BoardInput,
   MarketNewsData,
+  MarketDataPayload,
+  MarketDataLayout,
   NewsInput,
   EventInput,
   LiveWall,
@@ -540,6 +542,18 @@ export const api = {
   },
   marketNews(): Promise<MarketNewsData> {
     return request('/api/trading/news');
+  },
+  marketData(): Promise<MarketDataPayload> {
+    return request('/api/trading/market-data');
+  },
+  marketDataLayout(): Promise<{ layout: MarketDataLayout }> {
+    return request('/api/trading/market-data/layout');
+  },
+  saveMarketDataLayout(layout: MarketDataLayout): Promise<{ layout: MarketDataLayout }> {
+    return request('/api/trading/market-data/layout', {
+      method: 'PUT',
+      body: JSON.stringify(layout),
+    });
   },
   addNews(input: NewsInput): Promise<MarketNewsData> {
     return request('/api/trading/news', { method: 'POST', body: JSON.stringify(input) });
