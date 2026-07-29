@@ -445,7 +445,9 @@ function TradeRow({ t, config, isPhone, showMoney, canSeeBalances, canEdit, remo
         {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
       </span>
       <span style={{ ...timeCol, display: 'flex', justifyContent: 'flex-end' }}>
-        <TradeTimesCell openedAt={t.openedAt} closedAt={t.closedAt} />
+        {/* Every History row is a closed trade, so it always has a held time to
+            read — as long as the broker gave us both ends of it. */}
+        <TradeTimesCell openedAt={t.openedAt} closedAt={t.closedAt} showHeld />
       </span>
       {canEdit ? (
         <span style={{ display: 'flex', gap: 4, width: 60, justifyContent: 'flex-end' }}>

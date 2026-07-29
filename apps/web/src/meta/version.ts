@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.74';
+export const APP_VERSION = 'Beta V 5.75';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.75',
+    date: 'July 29, 2026',
+    notes: [
+      'History rows now show how long each trade was held, under its open and close times — "held 4h", "held 36m", and so on.',
+      'A trade held longer than a day reads in days rather than hours, so a four-day swing shows "held 4d" instead of "held 96h". This applies anywhere a held time is shown, including the Trade Log cards.',
+    ],
+  },
   {
     version: 'Beta V 5.74',
     date: 'July 29, 2026',
