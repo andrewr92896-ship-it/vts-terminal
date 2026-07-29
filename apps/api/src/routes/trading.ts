@@ -30,6 +30,8 @@ import {
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
 import { getSessionAlertPrefs, setSessionAlertPrefs } from '../trading/sessionAlertPrefs.js';
+import { getMarketData, MARKET_GROUP_KEYS } from '../trading/marketData.js';
+import { getMarketDataLayout, setMarketDataLayout } from '../trading/marketDataLayout.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
   getMarketNews,
@@ -414,6 +416,22 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.delete('/api/trading/boards/:id', write, async (request) => {
     await removeBoard(request.currentUser!.id, (request.params as { id: string }).id);
     return { boards: await listBoards(request.currentUser!.id) };
+  });
+
+  // ---- Market Data (the series catalog + this trader's board arrangement) ----
+  // The catalog is code-resident and identical for everyone; the layout is
+  // personal. Two calls rather than one so the catalog response stays cacheable
+  // and a layout save never has to round-trip 75 series.
+  app.get('/api/trading/market-data', read, async () => getMarketData());
+
+  app.get('/api/trading/market-data/layout', read, async (request) => ({
+    layout: await getMarketDataLayout(request.currentUser!.id),
+  }));
+
+  app.put('/api/trading/market-data/layout', write, async (request, reply) => {
+    const parsed = marketDataLayoutSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid board layout' });
+    return { layout: await setMarketDataLayout(request.currentUser!.id, parsed.data) };
   });
 
   // ---- Market News (shared desk feed: headlines + economic calendar) ----
@@ -1169,6 +1187,27 @@ const editSessionSchema = z
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 const marketHoursSchema = z.object({ symbol: z.string().trim().min(1).max(60) });
+
+// Market Data board arrangement. Every field is length-capped and the arrays are
+// bounded so a saved layout can never bloat the row; unknown series ids are
+// dropped server-side in setMarketDataLayout, not here.
+const marketDataLayoutSchema = z.object({
+  pinned: z.array(z.string().trim().min(1).max(64)).max(200),
+  hidden: z.array(z.string().trim().min(1).max(64)).max(200),
+  custom: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(60),
+        group: z.enum(MARKET_GROUP_KEYS),
+        label: z.string().trim().min(1).max(60),
+        value: z.string().trim().max(60),
+        unit: z.string().trim().max(16),
+        asOf: z.string().trim().max(60),
+        delta: z.string().trim().max(24),
+      }),
+    )
+    .max(40),
+});
 const sessionAlertPrefsSchema = z.object({
   notifyOpen: z.boolean(),
   notifyClose: z.boolean(),

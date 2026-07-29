@@ -148,7 +148,8 @@ top of the workspaces list** (see `theme/nav.ts` order).
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
   Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
   Manual Trades (`funded` key, `FundedScreen`), **Funded**
-  (`prop` key — role-gated prop-firm challenge dashboard), Market News, To Do.
+  (`prop` key — role-gated prop-firm challenge dashboard), **Market Data**
+  (`data` key, sits directly above Market News), Market News, To Do.
   - **Trade Desk settings are per trader** (`trading/settings.ts`,
     `getDeskSettings(userId)` / `updateDeskSettings(userId, patch)`): the
     break-even buffer, per-instrument buffers (`trading_be_overrides`, keyed
@@ -161,6 +162,36 @@ top of the workspaces list** (see `theme/nav.ts` order).
     (`canEditDeskSettingsFor` / `editableDeskMembers`). The `DeskSettingsModal`
     "Whose settings" picker surfaces this. `getTrades` / `getHistory` /
     `getLiveWall` score each viewer's desk with the **viewer's own** settings.
+  - **Market Data** (`data`, `workspaces/trading/MarketData.tsx`) is the desk's
+    read-only board of every rate, print and price it watches: 75 series across
+    ten groups (policy, inflation, labor, yields, FX, commodities, crypto,
+    indices, macro, sessions), each with five changes (1D/1W/1M/YTD/1Y) and who
+    publishes it / when it was last and is next revised. A bar at the top counts
+    down to the next **FOMC** statement and press conference. Two views: the
+    series board (search + group filter) and the **Forex Factory economic
+    calendar** — which reads the same `trading_calendar` rows Market News does,
+    so those events currently appear on both screens (see
+    `docs/design/market-data/NOTES.md`). Deliberately factual: **no AI note and
+    no advice-flavoured copy** anywhere on it, plus an "informational only"
+    footer line.
+    - The **catalog lives in code** (`trading/marketData.ts`), identical for
+      everyone. Its `value` / `changes` figures are **design fixtures** — there is
+      no macro-data provider wired — so the payload carries `sampleValues: true`
+      and the screen prints a sample-data notice. Do not remove that flag without
+      wiring real values. The calendar, the session Open/Closed readings and the
+      Fed countdown *are* real.
+    - The **arrangement is per user** (`trading/marketDataLayout.ts`,
+      `market_data_layout`): the ordered pinned strip, removed series, and
+      user-authored "custom metrics". `GET /api/trading/market-data`,
+      `GET|PUT /api/trading/market-data/layout`. Unknown series ids are dropped on
+      read, so a catalog change never invalidates a saved layout. It is in the
+      `admin/service.ts` per-user delete list.
+    - `workspaces/trading/etClock.ts` is the single place that **composes an
+      absolute Eastern instant** from a wall-clock date/time (a scheduled release,
+      an FOMC statement) rather than `now + offset`, which drifts across DST. It
+      also holds the session-window, countdown and "in 2h 18m" helpers. Use it
+      for anything schedule-shaped; `newsFormat.ts` remains the formatter for an
+      instant you already have.
 - **Investments** (teal, key `investments`): a read-only, layman-friendly
   **long-term portfolio tracker** — 401(k), IRA, ESA, and general holdings. This
   is the platform's intended "bread and butter" for a future public/App Store

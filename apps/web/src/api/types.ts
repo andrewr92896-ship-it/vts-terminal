@@ -998,6 +998,71 @@ export interface EventInput {
   actual?: string | null;
 }
 
+// ---- Trading — Market Data (mirror of apps/api/src/trading/marketData.ts and
+// apps/api/src/trading/marketDataLayout.ts) ----
+export type MarketGroupKey =
+  | 'policy'
+  | 'inflation'
+  | 'labor'
+  | 'yields'
+  | 'fx'
+  | 'commod'
+  | 'crypto'
+  | 'equity'
+  | 'macro'
+  | 'session';
+
+export type MarketFreshness = 'live' | 'manual' | 'stale';
+
+export interface MarketReview {
+  body: string; // who publishes it — 'FOMC', 'BLS', 'Cboe', …
+  last: string; // ISO date, or a cadence phrase ('continuous', 'daily · 3:30 PM')
+  next: string; // ISO date, 'fomc' (= the next Fed meeting), or '' for tbc
+}
+
+export interface MarketSeries {
+  id: string;
+  group: MarketGroupKey;
+  label: string;
+  value: string; // display-ready; empty on a session row (computed from the clock)
+  unit: string;
+  asOf: string;
+  source: MarketFreshness;
+  money: boolean; // masked in privacy mode
+  session: [number, number] | null; // ET minutes-of-day [open, close]
+  changes: [string, string, string, string, string]; // 1D, 1W, 1M, YTD, 1Y
+  review: MarketReview;
+}
+
+export interface MarketDataPayload {
+  groups: { key: MarketGroupKey; label: string }[];
+  series: MarketSeries[];
+  periods: string[];
+  defaultPins: string[];
+  meetings: string[]; // FOMC statement dates as 'MM-DD', 2:00 PM ET
+  meetingYear: number;
+  // True while the board's figures are design fixtures rather than a live feed.
+  // The screen says so out loud — see the note atop the API module.
+  sampleValues: boolean;
+}
+
+// A metric the trader entered themselves, for anything the feeds don't carry.
+export interface CustomMetric {
+  id: string;
+  group: MarketGroupKey;
+  label: string;
+  value: string;
+  unit: string;
+  asOf: string;
+  delta: string;
+}
+
+export interface MarketDataLayout {
+  pinned: string[]; // ordered series ids on the strip
+  hidden: string[]; // series removed from the board
+  custom: CustomMetric[];
+}
+
 // ---- Trading — Trade Log (mirror of apps/api/src/trading/trades.ts) ----
 export type TradeStatus = 'open' | 'closed';
 

@@ -11,9 +11,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.79';
+export const APP_VERSION = 'Beta V 5.80';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.80',
+    date: 'July 29, 2026',
+    notes: [
+      'New section: Advanced Trading \u25b8 Market Data, sitting just above Market News. One screen for every rate, print and price the desk watches \u2014 policy rates, inflation, jobs, the Treasury curve, FX, commodities, crypto, indices, liquidity, and the four trading sessions.',
+      'A bar across the top counts down to the next Federal Reserve decision and press conference, with the last meeting, the current target range, and what the market has priced for the next two meetings.',
+      'The board is yours to arrange: pin the numbers you care about to the strip at the top, drag them into the order you want, remove anything you never look at, and add your own metric for anything the feeds do not carry. Every removal can be undone, and your arrangement is saved to your account rather than the browser.',
+      'Each series shows five changes side by side \u2014 1 day, 1 week, 1 month, year to date, 1 year \u2014 plus who publishes it, when it was last revised, and when it is next due. A due date inside a week is highlighted.',
+      'A second view carries the Forex Factory release calendar: actual against forecast and previous, grouped by day in Eastern Time, with past releases dimmed below and a plain-language explanation of what the bigger releases actually are.',
+      'The series figures on this first release are placeholder values from the design and the screen says so at the top. The economic calendar, the session open/closed readings and the Fed countdown are all real.',
+    ],
+  },
   {
     version: 'Beta V 5.79',
     date: 'July 29, 2026',

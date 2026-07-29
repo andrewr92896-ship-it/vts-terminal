@@ -62,6 +62,7 @@ import { FundedScreen } from '../workspaces/trading/FundedScreen';
 import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
+import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
 import { ComingSoon, COMING_SOON_SCREENS } from '../workspaces/investments/ComingSoon';
 
@@ -126,6 +127,8 @@ function renderScreen(
       return <FundedChallengeScreen />;
     case 'sessions':
       return <StrategySessions />;
+    case 'data':
+      return <MarketData />;
     case 'news':
       return <MarketNews />;
     case 'td_trading':

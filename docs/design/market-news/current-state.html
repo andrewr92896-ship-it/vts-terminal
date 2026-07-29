@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>VTS Portal — Market News (current state)</title>
+<!--
+  ============================================================================
+  MARKET NEWS — FAITHFUL REPLICA OF WHAT SHIPS TODAY
+  ============================================================================
+  A standalone, dependency-free reproduction of
+  apps/web/src/workspaces/trading/MarketNews.tsx, built so the layout can be
+  torn apart and rebuilt in Claude Design without running the app.
+
+  This is the BEFORE. Every colour, size, radius and gap below is transcribed
+  from the source's inline styles — where something looks arbitrary, it is
+  arbitrary in the real screen too. Do not "fix" it here; fix it in the redesign.
+
+  Fidelity notes:
+   - Time is frozen at Wed Jul 29 2026, 11:42 AM ET so "12m ago" never drifts.
+   - IBM Plex is self-hosted in the real app; this file falls back to system
+     faces so it works offline and under a strict CSP. Type sizes are exact,
+     letterforms are not.
+   - The grey strip at the top is PROTOTYPE CHROME, not part of the design.
+     Delete the <div id="proto"> block and its CSS when you fork this.
+  ============================================================================
+-->
+<style>
+/* ===== prototype chrome — NOT part of the design ========================= */
+#proto{position:sticky;top:0;z-index:99;background:#1a1d24;border-bottom:1px solid #2c313c;
+  padding:9px 14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+  font:12px/1.4 ui-sans-serif,system-ui,sans-serif;color:#9aa3b2}
+#proto b{color:#e6e9ef;font-weight:600;letter-spacing:.2px}
+#proto label{display:inline-flex;gap:5px;align-items:center;cursor:pointer;user-select:none}
+#proto .sep{width:1px;height:16px;background:#2c313c}
+#proto em{font-style:normal;color:#6c7482}
+
+/* ===== app shell (Portal.tsx content well) =============================== */
+:root{
+  --gold:#EBCB74; --green:#35c47b; --red:#ef5468; --amber:#e0a23a;
+  --text:#eef3ff; --muted:#9fb0d6; --faint:#6f84b0;
+  --card:rgba(13,31,68,.5); --panel:rgba(11,26,58,.5);
+  --inputbg:#091633; --border:#16294f; --border2:#1c3a7a;
+  --sans:'IBM Plex Sans',-apple-system,BlinkMacSystemFont,system-ui,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#050B18;font-family:var(--sans)}
+/* Portal.tsx: padding 16px 32px desktop, 14px on phone */
+#shell{padding:16px 32px;margin:0 auto;transition:width .15s ease}
+#shell.phone{width:390px;padding:14px;border-left:1px dashed #22304d;border-right:1px dashed #22304d}
+/* MarketNews.tsx root: maxWidth 860, margin 0 auto */
+#well{max-width:860px;margin:0 auto;color:var(--text)}
+
+/* ===== primitives (transcribed from the bottom of MarketNews.tsx) ======== */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.input{background:var(--inputbg);border:1px solid var(--border2);border-radius:7px;color:var(--text);
+  font-size:12.5px;padding:9px 11px;outline:none;font-family:inherit}
+.chip{font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--muted);
+  border:1px solid var(--border2);border-radius:5px;padding:2px 7px;display:inline-block}
+.goldBtn{border:none;background:linear-gradient(180deg,#EBCB74,#C9A24B);color:#0c2768;
+  font-weight:700;font-size:12px;padding:8px 14px;border-radius:7px;cursor:pointer;font-family:inherit}
+.ghostBtn{font-size:11.5px;font-weight:600;color:#dfe7fa;background:rgba(255,255,255,.05);
+  border:1px solid var(--border2);padding:8px 12px;border-radius:7px;cursor:pointer;font-family:inherit}
+.smallBtn{background:none;border:1px solid var(--border2);color:var(--muted);font-size:11px;
+  font-weight:600;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:inherit}
+.banner{margin-bottom:14px;font-size:12.5px;color:#ffb4ab;background:rgba(239,84,104,.1);
+  border:1px solid rgba(239,84,104,.4);border-radius:8px;padding:9px 12px;cursor:pointer}
+.feedLabel{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);
+  font-weight:700;margin:0 0 10px}
+.mono{font-family:var(--mono)}
+
+/* ===== header =========================================================== */
+.head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px}
+.head h2{margin:0;font-size:19px;font-weight:700;color:#fff}
+.head .sub{font-size:12.5px;color:var(--muted);margin-top:6px}
+.head .actions{display:flex;gap:8px;flex-wrap:wrap}
+
+/* ===== AI overview card ================================================= */
+.brief{border-left:3px solid var(--gold);margin-bottom:16px;position:relative}
+.brief .eyebrow{font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--gold);margin-bottom:6px}
+.brief .body{font-size:13px;line-height:1.6;color:#dce6fb;white-space:pre-wrap}
+.brief .x{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--faint);
+  font-size:16px;cursor:pointer}
+
+/* ===== filter row ======================================================= */
+.filters{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px}
+.filters label{display:flex;flex-direction:column;gap:5px}
+.filters .lab{font-size:10px;letter-spacing:.4px;text-transform:uppercase;color:var(--faint);font-weight:600}
+.filters select{padding:8px 30px 8px 11px;min-width:150px;cursor:pointer;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239fb0d6' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 11px center}
+.filters .clear{border-color:transparent;color:var(--faint);margin-bottom:1px}
+
+/* ===== headline card ==================================================== */
+.list{display:flex;flex-direction:column;gap:11px}
+.hcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:13px 15px}
+.hcard .meta{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+.bias{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;
+  border-radius:6px;padding:3px 9px}
+.bias .arrow{font-size:9px}
+.affects{display:inline-flex;align-items:center;gap:5px;flex-wrap:wrap}
+.affects .word{font-size:9.5px;color:var(--faint);letter-spacing:.3px}
+.chip.sym{color:var(--gold);border-color:rgba(235,203,116,.5);background:rgba(235,203,116,.08)}
+.hcard .when{margin-left:auto;font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+.hcard .title{font-size:14px;font-weight:600;color:#fff;line-height:1.4}
+.note{margin-top:8px;padding:8px 11px;background:rgba(255,255,255,.03);border-radius:8px;border:1px solid var(--border)}
+.note .lab{font-size:9px;letter-spacing:.5px;text-transform:uppercase;font-weight:700;margin-bottom:3px}
+.note .txt{font-size:12.5px;color:#d4def5;line-height:1.55;white-space:pre-wrap}
+.raw{font-size:12.5px;color:#c4d2ee;line-height:1.55;margin-top:6px;white-space:pre-wrap}
+.hcard .foot{display:flex;align-items:center;gap:10px;margin-top:9px;flex-wrap:wrap}
+.hcard .foot .src{font-size:11px;color:var(--muted)}
+.hcard .foot a{font-size:11px;color:var(--gold);text-decoration:none}
+.hcard .foot .own{margin-left:auto;display:flex;gap:6px}
+.smallBtn.del{color:#ff9a9a;border-color:transparent}
+
+/* ===== truth card ======================================================= */
+.tlist{display:flex;flex-direction:column;gap:10px}
+.tcard{border-left:3px solid var(--gold)}
+.tcard .top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+.tcard .who{font-size:12.5px;font-weight:700;color:#fff}
+.tcard .who span{color:var(--faint);font-weight:400}
+.tcard .when{font-size:10.5px;color:var(--faint);font-family:var(--mono)}
+.tcard .body{font-size:13px;line-height:1.55;color:#dce6fb;white-space:pre-wrap}
+.tcard a{display:inline-block;margin-top:7px;font-size:11px;color:var(--gold);text-decoration:none}
+
+/* ===== calendar ========================================================= */
+.calwrap{display:flex;flex-direction:column;gap:14px}
+.calcol{display:flex;flex-direction:column;gap:12px}
+.day{font-size:11px;font-weight:700;color:var(--gold);margin-bottom:6px}
+.rows{display:flex;flex-direction:column;gap:6px}
+.erow{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:9px 12px;
+  display:flex;align-items:flex-start;gap:10px}
+.erow .dot{flex:none;width:6px;height:6px;margin-top:6px;border-radius:50%}
+.erow .mid{flex:1;min-width:0}
+.erow .l1{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.erow .t{font-family:var(--mono);font-size:11.5px;color:var(--text)}
+.erow .c{font-size:10px;color:var(--muted)}
+.erow .n{font-size:12.5px;color:#e7eefb;font-weight:500}
+.erow .figs{display:flex;gap:12px;margin-top:4px;font-size:10.5px;color:var(--muted)}
+.erow .figs b{color:#cdd9f3}
+.erow .figs b.act{color:var(--text)}
+.erow .exp{font-size:11px;color:var(--muted);line-height:1.5;margin-top:5px;display:flex;gap:5px}
+.erow .exp i{color:var(--gold);flex:none;font-style:normal}
+.erow .own{display:flex;gap:4px}
+.erow .own .smallBtn{padding:3px 7px}
+.past{opacity:.65}
+.past .pastlab{font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--faint);margin:4px 0 8px}
+
+/* ===== empty / loading ================================================== */
+.empty{text-align:center;padding:34px 20px;color:var(--muted);font-size:13px}
+.loading{color:var(--muted);padding:20px;font-size:13px}
+
+/* ===== edit form ======================================================== */
+.form{margin-bottom:16px}
+.form .lab{font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.form .grid{display:flex;gap:8px;flex-wrap:wrap}
+.form .grid > *{flex:1 1 100%}
+.form .grid .half{flex:1 1 160px}
+.form .grid .fixed{flex:0 0 140px}
+.form textarea{resize:vertical;font-family:inherit}
+.form .btns{display:flex;gap:8px;margin-top:12px}
+</style>
+</head>
+<body>
+
+<!-- ==================== PROTOTYPE CHROME — DELETE ON FORK ================ -->
+<div id="proto">
+  <b>Prototype states</b>
+  <span class="sep"></span>
+  <label><input type="checkbox" id="s-brief" checked> AI overview open</label>
+  <label><input type="checkbox" id="s-err"> Error banner</label>
+  <label><input type="checkbox" id="s-edit"> Edit form open</label>
+  <span class="sep"></span>
+  <label><input type="checkbox" id="s-ro"> Read-only (demo / viewer)</label>
+  <label><input type="checkbox" id="s-empty"> Empty feed</label>
+  <label><input type="checkbox" id="s-load"> Loading</label>
+  <span class="sep"></span>
+  <label><input type="checkbox" id="s-phone"> Phone width (390px)</label>
+  <em>— not part of the design</em>
+</div>
+
+<div id="shell"><div id="well"></div></div>
+
+<script>
+/* =========================================================================
+   Data — see sample-data.json in this folder for the same payload, annotated.
+   ========================================================================= */
+const NOW = 1785339720000; // Wed, Jul 29 2026 · 11:42 AM ET — frozen
+
+const HEADLINES = [
+ {id:'n_01',title:'Powell says the committee is &#x2018;not on a preset course&#x2019; as June PCE cools to 2.4%',body:null,tradeNote:"A softer PCE print with no forward commitment keeps the September cut live without pricing it fully. Dollar-negative at the margin — watch EUR/USD hold above the 1.0940 shelf into the 2:00 PM decision, and expect gold to stay bid while real yields drift.",source:'Reuters',url:'#',category:'economic',impact:'high',bias:'bullish',publishedAt:NOW-180000},
+ {id:'n_02',title:'Dollar slips to a three-week low as traders lift September cut odds to 78%',body:null,tradeNote:"Rate-cut repricing is doing the work here, not risk appetite. Short-dollar setups across the majors have the wind behind them, but the FOMC statement at 2:00 PM is the binary — size accordingly and be flat or hedged into it.",source:'MarketWatch',url:'#',category:'markets',impact:'high',bias:'bearish',publishedAt:NOW-720000},
+ {id:'n_03',title:'Gold pushes through $3,480 as real yields slide',body:null,tradeNote:"Clean continuation on the metal — the move is yield-driven rather than headline-driven, which tends to hold better. XAU/USD longs stay valid above 3,455; a hawkish hold this afternoon is the obvious invalidation.",source:'FXStreet',url:'#',category:'markets',impact:'high',bias:'bullish',publishedAt:NOW-1560000},
+ {id:'n_04',title:'Bitcoin holds $118K after $412M of spot ETF inflows',body:null,tradeNote:"Flows, not leverage, are carrying this leg — funding is still flat, so the move has room. BTC/USD dips into 116.2K remain buyable while the ETF tape stays positive.",source:'CoinDesk',url:'#',category:'crypto',impact:'medium',bias:'bullish',publishedAt:NOW-2460000},
+ {id:'n_05',title:'Eurozone flash CPI holds at 2.1%, keeping the ECB on hold into September',body:null,tradeNote:"An in-line print removes a euro-side catalyst, so EUR/USD trades off the dollar leg for the rest of the week. Nothing to fade here — it is a non-event that clears the decks for the FOMC.",source:'FXStreet',url:'#',category:'economic',impact:'medium',bias:'neutral',publishedAt:NOW-3480000},
+ {id:'n_06',title:'Nasdaq futures firm as Microsoft and Meta clear the bar after the bell',body:null,tradeNote:"Two of the four heaviest weights beat, so the index-level bid is mechanical. US100 longs have support into the open, though a 2:00 PM surprise outranks earnings for the afternoon session.",source:'CNBC',url:'#',category:'markets',impact:'medium',bias:'bullish',publishedAt:NOW-4320000},
+ {id:'n_07',title:'US and EU agree framework to defer auto tariffs to January',body:null,tradeNote:"Removes a tail risk that had been sitting on the euro and on European autos. Modestly EUR-supportive; not a reason to add size on its own.",source:'Reuters',url:'#',category:'geopolitical',impact:'medium',bias:'bullish',publishedAt:NOW-6120000},
+ {id:'n_08',title:'Fed&#x2019;s Waller repeats he sees room for two cuts this year',body:null,tradeNote:"Waller has said this before, so the marginal information is near zero — the tape barely moved. File it as confirmation of the dovish wing, not a new catalyst.",source:'Federal Reserve',url:'#',category:'economic',impact:'medium',bias:'bullish',publishedAt:NOW-7620000},
+ {id:'n_09',title:'Oil steadies near $71 as OPEC+ signals no change to October quotas',body:null,tradeNote:"Range-bound and off-book for this desk. Only matters second-hand, through the CAD leg and the headline-inflation read.",source:'CNBC',url:'#',category:'markets',impact:'low',bias:'neutral',publishedAt:NOW-9720000},
+ {id:'n_10',title:'Ethereum ETF options approved, opening a new hedging venue',body:null,tradeNote:"Structural rather than directional — it deepens the market without giving a trade today.",source:'Cointelegraph',url:'#',category:'crypto',impact:'low',bias:'neutral',publishedAt:NOW-12720000},
+ {id:'n_11',title:'Dow lags as industrials give back Tuesday&#x2019;s gains',body:null,tradeNote:"Rotation inside the index, not a market-wide risk-off. US30 relative weakness against US100 is the only readable signal.",source:'MarketWatch',url:'#',category:'markets',impact:'low',bias:'bearish',publishedAt:NOW-15720000},
+ {id:'n_12',title:'Treasury 10-year yield eases to 4.02% ahead of Friday&#x2019;s payrolls',body:null,tradeNote:"The 4.00% line is the level that matters — a break under it has been reliably gold-positive and dollar-negative all quarter.",source:'Reuters',url:'#',category:'markets',impact:'medium',bias:'bullish',publishedAt:NOW-18000000},
+ {id:'n_13',title:'Silver tops $41 for the first time since 2011',body:null,tradeNote:"Confirms the precious-metals bid rather than adding to it. Not an instrument this desk trades directly.",source:'FXStreet',url:'#',category:'markets',impact:'low',bias:'bullish',publishedAt:NOW-23400000},
+ /* No tradeNote — shows the "raw source excerpt, never mislabelled as AI" branch. */
+ {id:'n_14',title:'Japan&#x2019;s industrial output rebounds 1.8% m/m in June',body:'Factory output rose for a second month, led by autos and semiconductor equipment, the Ministry of Economy, Trade and Industry said. The reading beat the 1.1% consensus and follows a downwardly revised 0.4% gain in May.',tradeNote:null,source:'Reuters',url:'#',category:'economic',impact:'low',bias:'neutral',publishedAt:NOW-28800000},
+];
+
+const CALENDAR = [
+ /* Older than 6h — these are what fall into the dimmed "Past" block. */
+ {id:'c_00a',title:'German Ifo Business Climate',country:'EUR',impact:'medium',eventTime:NOW-99720000,forecast:'88.6',previous:'88.4',actual:'89.1',explainer:null,source:'Forex Factory'},
+ {id:'c_00b',title:'CB Consumer Confidence',country:'USD',impact:'medium',eventTime:NOW-92520000,forecast:'96.0',previous:'95.2',actual:'98.4',explainer:null,source:'Forex Factory'},
+ {id:'c_01',title:'MBA Mortgage Applications w/w',country:'USD',impact:'low',eventTime:NOW-15720000,forecast:null,previous:'-0.9%',actual:'2.1%',explainer:null,source:'Forex Factory'},
+ {id:'c_02',title:'Advance Goods Trade Balance',country:'USD',impact:'medium',eventTime:NOW-11520000,forecast:'-98.0B',previous:'-96.6B',actual:'-96.4B',explainer:"The first read on the month's goods deficit. It feeds straight into the GDP estimate, so a big miss moves growth forecasts more than it moves the dollar.",source:'Forex Factory'},
+ {id:'c_04',title:'Pending Home Sales m/m',country:'USD',impact:'medium',eventTime:NOW-6120000,forecast:'0.2%',previous:'1.8%',actual:'0.4%',explainer:null,source:'Forex Factory'},
+ {id:'c_03',title:'Crude Oil Inventories',country:'USD',impact:'low',eventTime:NOW-4320000,forecast:'-1.4M',previous:'-3.2M',actual:'-2.7M',explainer:null,source:'Forex Factory'},
+ {id:'c_05',title:'FOMC Rate Decision',country:'USD',impact:'high',eventTime:NOW+8280000,forecast:'4.25%-4.50%',previous:'4.25%-4.50%',actual:null,explainer:"The Fed sets the overnight rate every six weeks. The rate itself is usually priced in — the market trades the statement's wording and any change to the dot plot, so the first ten minutes are the volatile ones.",source:'Forex Factory'},
+ {id:'c_06',title:'FOMC Press Conference',country:'USD',impact:'high',eventTime:NOW+10080000,forecast:null,previous:null,actual:null,explainer:"Powell takes questions thirty minutes after the statement. It routinely produces a bigger move than the decision itself, because this is where the forward guidance gets softened or hardened live.",source:'Forex Factory'},
+ {id:'c_07',title:'German Prelim CPI m/m',country:'EUR',impact:'medium',eventTime:NOW+65880000,forecast:'0.2%',previous:'0.0%',actual:null,explainer:null,source:'Forex Factory'},
+ {id:'c_08',title:'Eurozone Flash CPI y/y',country:'EUR',impact:'high',eventTime:NOW+69480000,forecast:'2.0%',previous:'2.1%',actual:null,explainer:"The euro area's first inflation estimate for the month. It is the single number the ECB's next move hangs on, so it moves EUR/USD more than any other European release.",source:'Forex Factory'},
+ {id:'c_09',title:'Advance GDP q/q',country:'USD',impact:'high',eventTime:NOW+74880000,forecast:'2.3%',previous:'3.8%',actual:null,explainer:null,source:'Forex Factory'},
+ {id:'c_10',title:'Unemployment Claims',country:'USD',impact:'medium',eventTime:NOW+74880000,forecast:'224K',previous:'217K',actual:null,explainer:null,source:'Forex Factory'},
+ {id:'c_11',title:'Core PCE Price Index m/m',country:'USD',impact:'high',eventTime:NOW+161280000,forecast:'0.2%',previous:'0.2%',actual:null,explainer:"The Fed's preferred inflation gauge, stripped of food and energy. A tenth either side of forecast is enough to reprice the next cut.",source:'Forex Factory'},
+ {id:'c_12',title:'Employment Cost Index q/q',country:'USD',impact:'medium',eventTime:NOW+161280000,forecast:'0.9%',previous:'0.9%',actual:null,explainer:null,source:'Forex Factory'},
+ {id:'c_13',title:'Chicago PMI',country:'USD',impact:'low',eventTime:NOW+165780000,forecast:'42.8',previous:'40.4',actual:null,explainer:null,source:'Forex Factory'},
+ {id:'c_14',title:'Revised UoM Consumer Sentiment',country:'USD',impact:'low',eventTime:NOW+166680000,forecast:'61.8',previous:'61.8',actual:null,explainer:null,source:'Forex Factory'},
+];
+
+/* LABELLED PLACEHOLDER TEXT — sized to typical posts. Not real posts. */
+const TRUTH = [
+ {id:'t_01',author:'Donald J. Trump',content:'SAMPLE PLACEHOLDER — this is not a real post. Text sized to a typical medium-length entry so the card height, the line wrap and the relative-time alignment can all be judged in the layout. Roughly thirty to forty words is the common case for this feed.',url:'#',postedAt:NOW-1020000},
+ {id:'t_02',author:'Donald J. Trump',content:'SAMPLE PLACEHOLDER — short one-line entry.',url:null,postedAt:NOW-4620000},
+ {id:'t_03',author:'Donald J. Trump',content:'SAMPLE PLACEHOLDER — this is not a real post. This one is deliberately long, because the feed regularly carries entries that run several hundred characters across five or six rendered lines, and the current card gives that no separate treatment: the same padding, the same type size and the same border as the forty-word case above it. Whatever the redesign does about long-form entries, truncation with a reveal or a different card density, this block is the length to test it against. It also contains a line break below.\n\nThe second paragraph exists to verify that white-space: pre-wrap is preserved.',url:'#',postedAt:NOW-11220000},
+ {id:'t_04',author:'Donald J. Trump',content:'SAMPLE PLACEHOLDER — this is not a real post. A medium entry with no source link, so the card’s footer row is absent and the spacing below the body has to hold on its own.',url:null,postedAt:NOW-21720000},
+];
+
+const BRIEF_TEXT = "The desk is trading one thing today: the 2:00 PM FOMC decision. Rates are expected unchanged, so the move comes from the statement's wording — September cut odds have run to 78% and a hawkish hold is the asymmetric risk.\n\nDollar is at a three-week low with gold through $3,480 on the same real-yield impulse; both are the cleanest expressions of the dovish lean and both invalidate together. EUR/USD has no euro-side catalyst left this week after an in-line flash CPI, so it is a pure dollar trade into the print.\n\nBitcoin at $118K is being carried by ETF flow rather than leverage, which makes it the least Fed-sensitive book on the desk. Indices firm on Microsoft and Meta, but earnings are outranked by 2:00 PM for the afternoon session.";
+
+/* =========================================================================
+   Ported logic — newsFormat.ts, newsRelevance.ts
+   ========================================================================= */
+const ET='America/New_York';
+const fmtTime  = ms => new Intl.DateTimeFormat('en-US',{timeZone:ET,hour:'numeric',minute:'2-digit'}).format(ms);
+const fmtDayKey = ms => new Intl.DateTimeFormat('en-US',{timeZone:ET,weekday:'short',month:'short',day:'numeric'}).format(ms);
+function fmtRelative(ms){
+  const diff = NOW - ms;
+  if (diff < 0) return fmtTime(ms);
+  const m = Math.floor(diff/60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m+'m ago';
+  const h = Math.floor(m/60);
+  if (h < 24) return h+'h ago';
+  return fmtDayKey(ms);
+}
+function decodeEntities(s){
+  return s.replace(/&#x([0-9a-fA-F]+);/g,(_,h)=>String.fromCodePoint(parseInt(h,16)))
+          .replace(/&#(\d+);/g,(_,d)=>String.fromCodePoint(parseInt(d,10)))
+          .replace(/&nbsp;/g,' ').replace(/&mdash;/g,'—').replace(/&ndash;/g,'–')
+          .replace(/&hellip;/g,'…').replace(/&(?:rsquo|lsquo|apos);/g,"'")
+          .replace(/&(?:ldquo|rdquo);/g,'"').replace(/&amp;/g,'&');
+}
+
+const NEWS_FEEDS=[
+ {key:'fed',label:'Federal Reserve'},{key:'eurusd',label:'EUR/USD'},{key:'btc',label:'Bitcoin'},
+ {key:'gold',label:'Gold'},{key:'indices',label:'Indices'},{key:'markets',label:'General Market'},
+];
+const FEED_PATTERNS=[
+ {key:'fed',re:/\b(fed|feds|fomc|federal reserve|jerome powell|powell|rate cut|rate hike|rate decision|interest rate|interest rates|monetary policy|dot plot|beige book)\b/i},
+ {key:'btc',re:/\b(bitcoin|btc|crypto|cryptocurrency|ethereum|ether|stablecoin|coinbase|blackrock ibit|spot etf)\b/i},
+ {key:'eurusd',re:/\b(eur\/usd|eurusd|euro|euros|eurozone|ecb|european central bank|lagarde|germany|german|france|french)\b/i},
+ {key:'gold',re:/\b(gold|xau|bullion|precious metal|precious metals)\b/i},
+ {key:'indices',re:/\b(nasdaq|nas100|us100|s&p|s&p 500|sp500|spx|us500|dow jones|djia|us30|russell 2000|russell)\b/i},
+];
+function newsFeedsOf(item){
+  const text=[item.title,item.body,item.source].filter(Boolean).join(' ');
+  const keys=new Set();
+  for(const{key,re} of FEED_PATTERNS) if(re.test(text)) keys.add(key);
+  if((item.source||'').toLowerCase().includes('federal reserve')) keys.add('fed');
+  if(item.category==='crypto') keys.add('btc');
+  if(keys.size===0) keys.add('markets');
+  return [...keys];
+}
+
+const FACTOR_KEYWORDS={
+ USD:['USD','DOLLAR','GREENBACK','FED','FOMC','FEDERAL RESERVE','POWELL','TREASURY','NONFARM','NFP','US','U S','AMERICA','AMERICAN','UNITED STATES'],
+ EUR:['EUR','EURO','EUROZONE','ECB','LAGARDE','GERMANY','GERMAN','FRANCE','FRENCH'],
+ GBP:['GBP','POUND','STERLING','BOE','BANK OF ENGLAND','BRITAIN','BRITISH','UK'],
+ JPY:['JPY','YEN','BOJ','BANK OF JAPAN','JAPAN','JAPANESE','UEDA'],
+ AUD:['AUD','AUSSIE','RBA','AUSTRALIA','AUSTRALIAN'], NZD:['NZD','KIWI','RBNZ','NEW ZEALAND'],
+ CAD:['CAD','LOONIE','BOC','BANK OF CANADA','CANADA','CANADIAN'], CHF:['CHF','FRANC','SNB','SWISS','SWITZERLAND'],
+ GOLD:['GOLD','XAU','BULLION'], SILVER:['SILVER','XAG'], OIL:['OIL','CRUDE','WTI','BRENT','OPEC'],
+ BTC:['BTC','BITCOIN'], ETH:['ETH','ETHER','ETHEREUM'], CRYPTO:['CRYPTO','CRYPTOCURRENCY','DIGITAL ASSET','DIGITAL ASSETS'],
+ NASDAQ:['NASDAQ','NAS100','US100'], DOW:['DOW','DJIA','US30'], SP500:['S&P','SP500','US500','SP 500','S P 500'],
+ EQUITIES:['STOCKS','EQUITIES','EQUITY','WALL STREET','SHARES'],
+};
+const DEFAULT_WATCHLIST=['EUR/USD','BTC/USD','XAU/USD','US100','US500','US30','GBP/USD','USD/JPY'];
+function instrumentFactors(sym){
+  sym=sym.trim().toUpperCase();
+  const fx=/^([A-Z]{3})\/([A-Z]{3})$/.exec(sym);
+  if(fx){const f=new Set();for(const c of[fx[1],fx[2]]){
+    if(c==='XAU')f.add('GOLD');else if(c==='XAG')f.add('SILVER');
+    else if(c==='BTC'){f.add('BTC');f.add('CRYPTO');}else if(c==='ETH'){f.add('ETH');f.add('CRYPTO');}
+    else f.add(c);} return[...f];}
+  if(sym==='US100'||sym==='NAS100')return['NASDAQ','EQUITIES','USD'];
+  if(sym==='US30')return['DOW','EQUITIES','USD'];
+  if(sym==='US500'||sym==='SPX500'||sym==='SPX')return['SP500','EQUITIES','USD'];
+  if(sym.startsWith('BTC'))return['BTC','CRYPTO','USD'];
+  if(sym.startsWith('ETH'))return['ETH','CRYPTO','USD'];
+  return['EQUITIES','USD'];
+}
+function affectedInstruments(item,watchlist){
+  const hay=' '+[item.title,item.body,item.source].filter(Boolean).join(' ').toUpperCase().replace(/[^A-Z0-9&]+/g,' ')+' ';
+  const detected=new Set();
+  for(const[f,kws]of Object.entries(FACTOR_KEYWORDS)) if(kws.some(k=>hay.includes(' '+k+' '))) detected.add(f);
+  if(item.category==='crypto') detected.add('CRYPTO');
+  if(detected.size===0) return[];
+  return watchlist.map(s=>({s,n:instrumentFactors(s).filter(f=>detected.has(f)).length}))
+                  .filter(x=>x.n>0).sort((a,b)=>b.n-a.n).map(x=>x.s);
+}
+
+/* ========================================================================= */
+const IMPACT={high:{label:'High',color:'var(--red)'},medium:{label:'Med',color:'var(--amber)'},low:{label:'Low',color:'var(--faint)'}};
+const BIAS={bullish:{label:'Bullish',color:'#35c47b',arrow:'▲'},bearish:{label:'Bearish',color:'#ef5468',arrow:'▼'},neutral:{label:'Neutral',color:'#9fb0d6',arrow:'●'}};
+const CATEGORY={markets:'Markets',geopolitical:'Geopolitical',economic:'Economic',crypto:'Crypto',other:'Other'};
+
+const state={feed:'all',impact:'medhigh',bias:'all',source:'all'};
+const S = id => document.getElementById(id).checked;
+const esc = s => String(s).replace(/&(?![#a-zA-Z0-9]+;)/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const txt = s => esc(decodeEntities(s));
+
+function render(){
+  const well=document.getElementById('well');
+  document.getElementById('shell').className = S('s-phone') ? 'phone' : '';
+
+  if (S('s-load')) { well.innerHTML = '<div class="loading">Loading market news…</div>'; return; }
+
+  const canWrite = !S('s-ro');
+  const headlines = S('s-empty') ? [] : HEADLINES;
+  const calendar  = S('s-empty') ? [] : CALENDAR;
+  const truth     = S('s-empty') ? [] : TRUTH;
+  const isNewsTab = state.feed!=='trump' && state.feed!=='calendar';
+
+  /* calendar splits — upcoming keeps anything less than 6h old */
+  const split = evs => ({
+    upcoming: evs.filter(e=>e.eventTime >= NOW - 6*3600000),
+    past:     evs.filter(e=>e.eventTime <  NOW - 6*3600000).reverse(),
+  });
+  const cal = split(calendar);
+  const eurCal = split(calendar.filter(e=>['EUR','USD'].includes((e.country||'').toUpperCase())));
+  eurCal.total = calendar.filter(e=>['EUR','USD'].includes((e.country||'').toUpperCase())).length;
+
+  /* tab counts */
+  const counts={all:headlines.length,trump:truth.length,calendar:calendar.length};
+  for(const f of NEWS_FEEDS) counts[f.key]=0;
+  for(const h of headlines) for(const k of newsFeedsOf(h)) counts[k]=(counts[k]||0)+1;
+  counts.eurusd=(counts.eurusd||0)+eurCal.total;
+
+  const tabs=[{key:'all',label:'All'},{key:'trump',label:'Trump'},...NEWS_FEEDS,{key:'calendar',label:'Calendar'}];
+
+  const feedHeadlines = isNewsTab ? headlines.filter(h=>state.feed==='all'||newsFeedsOf(h).includes(state.feed)) : [];
+  const feedSources=[...new Set(feedHeadlines.map(h=>h.source).filter(Boolean))].sort();
+  const sourceActive = state.source!=='all' && feedSources.includes(state.source);
+  const shown = feedHeadlines.filter(h=>{
+    if(state.impact==='high'&&h.impact!=='high') return false;
+    if(state.impact==='medhigh'&&h.impact==='low') return false;
+    if(state.bias!=='all'&&h.bias!==state.bias) return false;
+    if(sourceActive&&h.source!==state.source) return false;
+    return true;
+  });
+  const filtersActive = state.impact!=='all'||state.bias!=='all'||sourceActive;
+  const passImpact = imp => state.impact==='all' ? true : state.impact==='high' ? imp==='high' : imp!=='low';
+
+  let html='';
+
+  /* ---- header ---- */
+  html+=`<div class="head">
+    <div>
+      <h2>Market News</h2>
+      <div class="sub">Live headlines across the desk's markets, each read by VTS AI for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time).</div>
+    </div>
+    <div class="actions">
+      <button class="ghostBtn">✨ AI overview</button>
+      <button class="${state.feed!=='calendar'?'goldBtn':'ghostBtn'}" data-feed="all">Live market news</button>
+      <button class="${state.feed==='calendar'?'goldBtn':'ghostBtn'}" data-feed="calendar">Calendar</button>
+    </div>
+  </div>`;
+
+  if (S('s-err')) html+=`<div class="banner">Failed to load — click to dismiss.</div>`;
+
+  if (S('s-brief')) html+=`<div class="card brief">
+    <div class="eyebrow">AI overview · VTS AI</div>
+    <div class="body">${esc(BRIEF_TEXT)}</div>
+    <button class="x">×</button>
+  </div>`;
+
+  /* ---- filter row ---- */
+  html+=`<div class="filters">
+    ${dropdown('Feed','feed',state.feed,tabs.map(t=>({v:t.key,l:`${t.label} (${counts[t.key]||0})`})))}
+    ${isNewsTab?dropdown('Impact','impact',state.impact,[{v:'all',l:'All'},{v:'medhigh',l:'Medium & up'},{v:'high',l:'High only'}]):''}
+    ${isNewsTab?dropdown('Bias','bias',state.bias,[{v:'all',l:'All'},{v:'bullish',l:'Bullish'},{v:'bearish',l:'Bearish'},{v:'neutral',l:'Neutral'}]):''}
+    ${isNewsTab&&feedSources.length?dropdown('Source','source',sourceActive?state.source:'all',[{v:'all',l:'All sources'},...feedSources.map(s=>({v:s,l:s}))]):''}
+    ${isNewsTab&&filtersActive?`<button class="smallBtn clear" data-clear="1">Clear</button>`:''}
+  </div>`;
+
+  /* ---- Trump ---- */
+  if(state.feed==='trump'){
+    html += truth.length===0
+      ? `<div class="card empty">No Truth Social posts yet — the feed mirrors @realDonaldTrump's posts as they land.</div>`
+      : `<div class="tlist">`+truth.map(p=>`
+          <div class="card tcard">
+            <div class="top">
+              <span class="who">${esc(p.author)} <span>· @realDonaldTrump</span></span>
+              <span class="when">${fmtRelative(p.postedAt)}</span>
+            </div>
+            <div class="body">${txt(p.content)}</div>
+            ${p.url?`<a href="#">View on Truth Social →</a>`:''}
+          </div>`).join('')+`</div>`;
+  }
+
+  /* ---- Calendar ---- */
+  if(state.feed==='calendar'){
+    html += calendar.length===0
+      ? `<div class="card empty">No events yet — the Forex Factory feed populates within a few minutes.</div>`
+      : `<div class="calwrap">${calCol(cal.upcoming,canWrite)}${cal.past.length?`<div class="past"><div class="pastlab">Past</div>${calCol(cal.past,canWrite)}</div>`:''}</div>`;
+  }
+
+  /* ---- EUR/USD leads with the calendar, then its headlines ---- */
+  if(state.feed==='eurusd'){
+    const up=eurCal.upcoming.filter(e=>passImpact(e.impact));
+    const pa=eurCal.past.filter(e=>passImpact(e.impact));
+    html+=`<div style="margin-bottom:18px">
+      <div class="feedLabel">Forex Factory · EUR &amp; USD economic calendar</div>
+      ${up.length+pa.length===0
+        ? `<div class="card empty" style="padding:22px 20px">No EUR/USD events${filtersActive?' match this filter':' in range yet'} — the Forex Factory feed populates within a few minutes.</div>`
+        : `<div class="calwrap">${calCol(up,canWrite)}${pa.length?`<div class="past"><div class="pastlab">Past</div>${calCol(pa,canWrite)}</div>`:''}</div>`}
+    </div>`;
+  }
+
+  /* ---- headline list ---- */
+  if(isNewsTab){
+    if(state.feed==='eurusd') html+=`<div class="feedLabel">EUR/USD headlines</div>`;
+    if(headlines.length===0){
+      html+=`<div class="card empty">No headlines yet — the live news feeds populate within a few minutes.</div>`;
+    } else if(shown.length===0){
+      html+=`<div class="card empty">${state.feed==='eurusd'?'No EUR/USD headlines match this filter.':'No stories match this filter'+(state.feed!=='all'?' in this feed':'')+'.'} ${filtersActive?'Try clearing the filters.':'Check back shortly.'}</div>`;
+    } else {
+      html+=`<div class="list">`+shown.map((h,i)=>(S('s-edit')&&i===0)?newsForm():headlineCard(h,canWrite)).join('')+`</div>`;
+    }
+  }
+
+  well.innerHTML=html;
+  wire();
+}
+
+function dropdown(label,key,value,options){
+  return `<label><span class="lab">${label}</span>
+    <select class="input" data-key="${key}">
+      ${options.map(o=>`<option value="${esc(o.v)}"${o.v===value?' selected':''}>${esc(o.l)}</option>`).join('')}
+    </select></label>`;
+}
+
+function headlineCard(h,canWrite){
+  const im=IMPACT[h.impact], bi=BIAS[h.bias];
+  const affected=affectedInstruments(h,DEFAULT_WATCHLIST);
+  return `<div class="hcard" style="border-left:3px solid ${bi.color}">
+    <div class="meta">
+      <span class="bias" style="color:${bi.color};background:${bi.color}1e;border:1px solid ${bi.color}55">
+        <span class="arrow">${bi.arrow}</span>${bi.label}</span>
+      <span class="chip" style="color:${im.color};border-color:${im.color}">${im.label} impact</span>
+      <span class="chip">${CATEGORY[h.category]}</span>
+      ${affected.length?`<span class="affects"><span class="word">affects</span>${affected.slice(0,5).map(s=>`<span class="chip sym">${esc(s)}</span>`).join('')}</span>`:''}
+      <span class="when">${fmtRelative(h.publishedAt)}</span>
+    </div>
+    <div class="title">${txt(h.title)}</div>
+    ${h.tradeNote
+      ? `<div class="note"><div class="lab" style="color:${bi.color}">How it could affect us</div><div class="txt">${txt(h.tradeNote)}</div></div>`
+      : h.body ? `<div class="raw">${txt(h.body)}</div>` : ''}
+    <div class="foot">
+      ${h.source?`<span class="src">${esc(h.source)}</span>`:''}
+      ${h.url?`<a href="#">Source ↗</a>`:''}
+      ${canWrite?`<span class="own"><button class="smallBtn">Edit</button><button class="smallBtn del" title="Remove">×</button></span>`:''}
+    </div>
+  </div>`;
+}
+
+function calCol(events,canWrite){
+  const groups=[];
+  for(const e of events){
+    const day=fmtDayKey(e.eventTime);
+    const g=groups.find(x=>x.day===day);
+    g?g.items.push(e):groups.push({day,items:[e]});
+  }
+  return `<div class="calcol">`+groups.map(g=>`
+    <div>
+      <div class="day">${esc(g.day)}</div>
+      <div class="rows">${g.items.map(e=>eventRow(e,canWrite)).join('')}</div>
+    </div>`).join('')+`</div>`;
+}
+
+function eventRow(e,canWrite){
+  const im=IMPACT[e.impact];
+  return `<div class="erow">
+    <span class="dot" style="background:${im.color}"></span>
+    <div class="mid">
+      <div class="l1">
+        <span class="t">${fmtTime(e.eventTime)}</span>
+        ${e.country?`<span class="c">${esc(e.country)}</span>`:''}
+        <span class="n">${esc(e.title)}</span>
+        <span class="chip sym">${esc(e.source||'Forex Factory')}</span>
+      </div>
+      ${(e.forecast||e.previous||e.actual)?`<div class="figs">
+        ${e.actual?`<span>Act <b class="act">${esc(e.actual)}</b></span>`:''}
+        ${e.forecast?`<span>Fcst <b>${esc(e.forecast)}</b></span>`:''}
+        ${e.previous?`<span>Prev <b>${esc(e.previous)}</b></span>`:''}
+      </div>`:''}
+      ${e.explainer?`<div class="exp"><i>ⓘ</i><span>${esc(e.explainer)}</span></div>`:''}
+    </div>
+    ${canWrite?`<span class="own"><button class="smallBtn">Edit</button><button class="smallBtn del" title="Remove">×</button></span>`:''}
+  </div>`;
+}
+
+/* The inline edit form that REPLACES a headline card when Edit is pressed. */
+function newsForm(){
+  return `<div class="panel form">
+    <div class="lab">Edit headline</div>
+    <div class="grid">
+      <input class="input" value="Powell says the committee is ‘not on a preset course’ as June PCE cools to 2.4%" placeholder="Headline">
+      <textarea class="input" rows="2" placeholder="Detail / context (optional)"></textarea>
+      <input class="input half" value="Reuters" placeholder="Source (e.g. Reuters)">
+      <input class="input half" value="https://example.com/a" placeholder="Link (https://…)">
+      <select class="input fixed"><option>Economic</option></select>
+      <select class="input fixed"><option>High impact</option></select>
+      <select class="input fixed"><option>Bullish</option></select>
+    </div>
+    <div class="btns"><button class="goldBtn">Save</button><button class="ghostBtn">Cancel</button></div>
+  </div>`;
+}
+
+function wire(){
+  document.querySelectorAll('[data-key]').forEach(sel=>{
+    sel.onchange=e=>{
+      const k=sel.dataset.key;
+      state[k]=e.target.value;
+      if(k==='feed') state.source='all';
+      render();
+    };
+  });
+  document.querySelectorAll('[data-feed]').forEach(b=>{
+    b.onclick=()=>{state.feed=b.dataset.feed;state.source='all';render();};
+  });
+  const c=document.querySelector('[data-clear]');
+  if(c) c.onclick=()=>{state.impact='all';state.bias='all';state.source='all';render();};
+}
+
+document.querySelectorAll('#proto input').forEach(i=>i.addEventListener('change',render));
+render();
+</script>
+</body>
+</html>

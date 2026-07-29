@@ -1,0 +1,411 @@
+{
+  "_readme": [
+    "Realistic sample payload for the Market News screen, for design work only.",
+    "Shapes mirror apps/web/src/api/types.ts exactly (NewsItem / CalendarEvent / TruthPost).",
+    "All timestamps are ms epoch and are anchored to `now` below so the mock renders",
+    "deterministically ('12m ago' is always '12m ago'). Change `now` and everything shifts.",
+    "The Truth Social entries are LABELLED PLACEHOLDER TEXT sized to a typical post —",
+    "they are not real posts and must never be presented as such."
+  ],
+
+  "now": 1785339720000,
+  "_nowLabel": "Wed, Jul 29 2026 · 11:42 AM ET",
+
+  "headlines": [
+    {
+      "id": "n_01",
+      "title": "Powell says the committee is &#x2018;not on a preset course&#x2019; as June PCE cools to 2.4%",
+      "body": null,
+      "tradeNote": "A softer PCE print with no forward commitment keeps the September cut live without pricing it fully. Dollar-negative at the margin — watch EUR/USD hold above the 1.0940 shelf into the 2:00 PM decision, and expect gold to stay bid while real yields drift.",
+      "source": "Reuters",
+      "url": "https://example.com/a",
+      "category": "economic",
+      "impact": "high",
+      "bias": "bullish",
+      "publishedAt": 1785339540000
+    },
+    {
+      "id": "n_02",
+      "title": "Dollar slips to a three-week low as traders lift September cut odds to 78%",
+      "body": null,
+      "tradeNote": "Rate-cut repricing is doing the work here, not risk appetite. Short-dollar setups across the majors have the wind behind them, but the FOMC statement at 2:00 PM is the binary — size accordingly and be flat or hedged into it.",
+      "source": "MarketWatch",
+      "url": "https://example.com/b",
+      "category": "markets",
+      "impact": "high",
+      "bias": "bearish",
+      "publishedAt": 1785339000000
+    },
+    {
+      "id": "n_03",
+      "title": "Gold pushes through $3,480 as real yields slide",
+      "body": null,
+      "tradeNote": "Clean continuation on the metal — the move is yield-driven rather than headline-driven, which tends to hold better. XAU/USD longs stay valid above 3,455; a hawkish hold this afternoon is the obvious invalidation.",
+      "source": "FXStreet",
+      "url": "https://example.com/c",
+      "category": "markets",
+      "impact": "high",
+      "bias": "bullish",
+      "publishedAt": 1785338160000
+    },
+    {
+      "id": "n_04",
+      "title": "Bitcoin holds $118K after $412M of spot ETF inflows",
+      "body": null,
+      "tradeNote": "Flows, not leverage, are carrying this leg — funding is still flat, so the move has room. BTC/USD dips into 116.2K remain buyable while the ETF tape stays positive.",
+      "source": "CoinDesk",
+      "url": "https://example.com/d",
+      "category": "crypto",
+      "impact": "medium",
+      "bias": "bullish",
+      "publishedAt": 1785337260000
+    },
+    {
+      "id": "n_05",
+      "title": "Eurozone flash CPI holds at 2.1%, keeping the ECB on hold into September",
+      "body": null,
+      "tradeNote": "An in-line print removes a euro-side catalyst, so EUR/USD trades off the dollar leg for the rest of the week. Nothing to fade here — it is a non-event that clears the decks for the FOMC.",
+      "source": "FXStreet",
+      "url": "https://example.com/e",
+      "category": "economic",
+      "impact": "medium",
+      "bias": "neutral",
+      "publishedAt": 1785336240000
+    },
+    {
+      "id": "n_06",
+      "title": "Nasdaq futures firm as Microsoft and Meta clear the bar after the bell",
+      "body": null,
+      "tradeNote": "Two of the four heaviest weights beat, so the index-level bid is mechanical. US100 longs have support into the open, though a 2:00 PM surprise outranks earnings for the afternoon session.",
+      "source": "CNBC",
+      "url": "https://example.com/f",
+      "category": "markets",
+      "impact": "medium",
+      "bias": "bullish",
+      "publishedAt": 1785335400000
+    },
+    {
+      "id": "n_07",
+      "title": "US and EU agree framework to defer auto tariffs to January",
+      "body": null,
+      "tradeNote": "Removes a tail risk that had been sitting on the euro and on European autos. Modestly EUR-supportive; not a reason to add size on its own.",
+      "source": "Reuters",
+      "url": "https://example.com/g",
+      "category": "geopolitical",
+      "impact": "medium",
+      "bias": "bullish",
+      "publishedAt": 1785333600000
+    },
+    {
+      "id": "n_08",
+      "title": "Fed&#x2019;s Waller repeats he sees room for two cuts this year",
+      "body": null,
+      "tradeNote": "Waller has said this before, so the marginal information is near zero — the tape barely moved. File it as confirmation of the dovish wing, not a new catalyst.",
+      "source": "Federal Reserve",
+      "url": "https://example.com/h",
+      "category": "economic",
+      "impact": "medium",
+      "bias": "bullish",
+      "publishedAt": 1785332100000
+    },
+    {
+      "id": "n_09",
+      "title": "Oil steadies near $71 as OPEC+ signals no change to October quotas",
+      "body": null,
+      "tradeNote": "Range-bound and off-book for this desk. Only matters second-hand, through the CAD leg and the headline-inflation read.",
+      "source": "CNBC",
+      "url": "https://example.com/i",
+      "category": "markets",
+      "impact": "low",
+      "bias": "neutral",
+      "publishedAt": 1785330000000
+    },
+    {
+      "id": "n_10",
+      "title": "Ethereum ETF options approved, opening a new hedging venue",
+      "body": null,
+      "tradeNote": "Structural rather than directional — it deepens the market without giving a trade today.",
+      "source": "Cointelegraph",
+      "url": "https://example.com/j",
+      "category": "crypto",
+      "impact": "low",
+      "bias": "neutral",
+      "publishedAt": 1785327000000
+    },
+    {
+      "id": "n_11",
+      "title": "Dow lags as industrials give back Tuesday&#x2019;s gains",
+      "body": null,
+      "tradeNote": "Rotation inside the index, not a market-wide risk-off. US30 relative weakness against US100 is the only readable signal.",
+      "source": "MarketWatch",
+      "url": "https://example.com/k",
+      "category": "markets",
+      "impact": "low",
+      "bias": "bearish",
+      "publishedAt": 1785324000000
+    },
+    {
+      "id": "n_12",
+      "title": "Treasury 10-year yield eases to 4.02% ahead of Friday&#x2019;s payrolls",
+      "body": null,
+      "tradeNote": "The 4.00% line is the level that matters — a break under it has been reliably gold-positive and dollar-negative all quarter.",
+      "source": "Reuters",
+      "url": "https://example.com/l",
+      "category": "markets",
+      "impact": "medium",
+      "bias": "bullish",
+      "publishedAt": 1785321720000
+    },
+    {
+      "id": "n_13",
+      "title": "Silver tops $41 for the first time since 2011",
+      "body": null,
+      "tradeNote": "Confirms the precious-metals bid rather than adding to it. Not an instrument this desk trades directly.",
+      "source": "FXStreet",
+      "url": "https://example.com/m",
+      "category": "markets",
+      "impact": "low",
+      "bias": "bullish",
+      "publishedAt": 1785316320000
+    },
+    {
+      "id": "n_14",
+      "title": "Japan&#x2019;s industrial output rebounds 1.8% m/m in June",
+      "body": "Factory output rose for a second month, led by autos and semiconductor equipment, the Ministry of Economy, Trade and Industry said. The reading beat the 1.1% consensus and follows a downwardly revised 0.4% gain in May.",
+      "tradeNote": null,
+      "source": "Reuters",
+      "url": "https://example.com/n",
+      "category": "economic",
+      "impact": "low",
+      "bias": "neutral",
+      "publishedAt": 1785310920000
+    }
+  ],
+
+  "calendar": [
+    {
+      "_note": "The two entries below are older than 6h, so they land in the dimmed 'Past' block.",
+      "id": "c_00a",
+      "title": "German Ifo Business Climate",
+      "country": "EUR",
+      "impact": "medium",
+      "eventTime": 1785240000000,
+      "forecast": "88.6",
+      "previous": "88.4",
+      "actual": "89.1",
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_00b",
+      "title": "CB Consumer Confidence",
+      "country": "USD",
+      "impact": "medium",
+      "eventTime": 1785247200000,
+      "forecast": "96.0",
+      "previous": "95.2",
+      "actual": "98.4",
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_01",
+      "title": "MBA Mortgage Applications w/w",
+      "country": "USD",
+      "impact": "low",
+      "eventTime": 1785324000000,
+      "forecast": null,
+      "previous": "-0.9%",
+      "actual": "2.1%",
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_02",
+      "title": "Advance Goods Trade Balance",
+      "country": "USD",
+      "impact": "medium",
+      "eventTime": 1785328200000,
+      "forecast": "-98.0B",
+      "previous": "-96.6B",
+      "actual": "-96.4B",
+      "explainer": "The first read on the month's goods deficit. It feeds straight into the GDP estimate, so a big miss moves growth forecasts more than it moves the dollar.",
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_03",
+      "title": "Crude Oil Inventories",
+      "country": "USD",
+      "impact": "low",
+      "eventTime": 1785335400000,
+      "forecast": "-1.4M",
+      "previous": "-3.2M",
+      "actual": "-2.7M",
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_04",
+      "title": "Pending Home Sales m/m",
+      "country": "USD",
+      "impact": "medium",
+      "eventTime": 1785333600000,
+      "forecast": "0.2%",
+      "previous": "1.8%",
+      "actual": "0.4%",
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_05",
+      "title": "FOMC Rate Decision",
+      "country": "USD",
+      "impact": "high",
+      "eventTime": 1785348000000,
+      "forecast": "4.25%-4.50%",
+      "previous": "4.25%-4.50%",
+      "actual": null,
+      "explainer": "The Fed sets the overnight rate every six weeks. The rate itself is usually priced in — the market trades the statement's wording and any change to the dot plot, so the first ten minutes are the volatile ones.",
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_06",
+      "title": "FOMC Press Conference",
+      "country": "USD",
+      "impact": "high",
+      "eventTime": 1785349800000,
+      "forecast": null,
+      "previous": null,
+      "actual": null,
+      "explainer": "Powell takes questions thirty minutes after the statement. It routinely produces a bigger move than the decision itself, because this is where the forward guidance gets softened or hardened live.",
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_07",
+      "title": "German Prelim CPI m/m",
+      "country": "EUR",
+      "impact": "medium",
+      "eventTime": 1785405600000,
+      "forecast": "0.2%",
+      "previous": "0.0%",
+      "actual": null,
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_08",
+      "title": "Eurozone Flash CPI y/y",
+      "country": "EUR",
+      "impact": "high",
+      "eventTime": 1785409200000,
+      "forecast": "2.0%",
+      "previous": "2.1%",
+      "actual": null,
+      "explainer": "The euro area's first inflation estimate for the month. It is the single number the ECB's next move hangs on, so it moves EUR/USD more than any other European release.",
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_09",
+      "title": "Advance GDP q/q",
+      "country": "USD",
+      "impact": "high",
+      "eventTime": 1785414600000,
+      "forecast": "2.3%",
+      "previous": "3.8%",
+      "actual": null,
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_10",
+      "title": "Unemployment Claims",
+      "country": "USD",
+      "impact": "medium",
+      "eventTime": 1785414600000,
+      "forecast": "224K",
+      "previous": "217K",
+      "actual": null,
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_11",
+      "title": "Core PCE Price Index m/m",
+      "country": "USD",
+      "impact": "high",
+      "eventTime": 1785501000000,
+      "forecast": "0.2%",
+      "previous": "0.2%",
+      "actual": null,
+      "explainer": "The Fed's preferred inflation gauge, stripped of food and energy. A tenth either side of forecast is enough to reprice the next cut.",
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_12",
+      "title": "Employment Cost Index q/q",
+      "country": "USD",
+      "impact": "medium",
+      "eventTime": 1785501000000,
+      "forecast": "0.9%",
+      "previous": "0.9%",
+      "actual": null,
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_13",
+      "title": "Chicago PMI",
+      "country": "USD",
+      "impact": "low",
+      "eventTime": 1785505500000,
+      "forecast": "42.8",
+      "previous": "40.4",
+      "actual": null,
+      "explainer": null,
+      "source": "Forex Factory"
+    },
+    {
+      "id": "c_14",
+      "title": "Revised UoM Consumer Sentiment",
+      "country": "USD",
+      "impact": "low",
+      "eventTime": 1785506400000,
+      "forecast": "61.8",
+      "previous": "61.8",
+      "actual": null,
+      "explainer": null,
+      "source": "Forex Factory"
+    }
+  ],
+
+  "truth": [
+    {
+      "id": "t_01",
+      "author": "Donald J. Trump",
+      "content": "SAMPLE PLACEHOLDER — this is not a real post. Text sized to a typical medium-length entry so the card height, the line wrap and the relative-time alignment can all be judged in the layout. Roughly thirty to forty words is the common case for this feed.",
+      "url": "https://example.com/t1",
+      "postedAt": 1785338700000
+    },
+    {
+      "id": "t_02",
+      "author": "Donald J. Trump",
+      "content": "SAMPLE PLACEHOLDER — short one-line entry.",
+      "url": null,
+      "postedAt": 1785335100000
+    },
+    {
+      "id": "t_03",
+      "author": "Donald J. Trump",
+      "content": "SAMPLE PLACEHOLDER — this is not a real post. This one is deliberately long, because the feed regularly carries entries that run several hundred characters across five or six rendered lines, and the current card gives that no separate treatment: the same padding, the same type size and the same border as the forty-word case above it. Whatever the redesign does about long-form entries, truncation with a reveal or a different card density, this block is the length to test it against. It also contains a line break below.\n\nThe second paragraph exists to verify that whiteSpace: pre-wrap is preserved.",
+      "url": "https://example.com/t3",
+      "postedAt": 1785328500000
+    },
+    {
+      "id": "t_04",
+      "author": "Donald J. Trump",
+      "content": "SAMPLE PLACEHOLDER — this is not a real post. A medium entry with no source link, so the card's footer row is absent and the spacing below the body has to hold on its own.",
+      "url": null,
+      "postedAt": 1785318000000
+    }
+  ]
+}
