@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.78';
+export const APP_VERSION = 'Beta V 5.79';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.79',
+    date: 'July 29, 2026',
+    notes: [
+      'Design notes only: the repo now carries an up-to-date description of the portal\'s layout — the sidebar, the top bar, the colours and the standard cards and buttons — for use when mocking up new screens in a design tool. Nothing in the portal itself changed.',
+    ],
+  },
   {
     version: 'Beta V 5.78',
     date: 'July 29, 2026',

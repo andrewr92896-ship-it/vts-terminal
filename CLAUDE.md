@@ -711,6 +711,16 @@ hardcoded" below.)
   to the learner's Study-Game level.
 - **Responsive:** `useResponsive()` → `{ isPhone ≤480, isTablet ≤768 }`. Phones
   use an off-canvas nav drawer and a sections dropdown; there is no bottom TabBar.
+- **Design handoff:** `docs/design/portal-shell.md` is the paste-ready brief for
+  an external design tool (shell layout, tokens, workspace accents, section
+  lists, component patterns, and an explicit "this is no longer the design" list
+  — the pre-Meridian top-bar template with Kia Sales / Wealth / Finance keeps
+  resurfacing in generated mockups). `docs/design/portal-shell.html` is the same
+  shell as a self-contained static page to screenshot or attach; its colours,
+  sizes, nav rows and Lucide glyphs are copied from `theme/*`, `Sidebar.tsx`,
+  `TopBar.tsx` and `Icon.tsx`. **Update both when the shell changes** — a stale
+  brief is worse than none, because a tool will follow it. The Employee Portal
+  has its own, separate spec in `docs/design/employee-portal/`.
 
 ## Environment variables
 
