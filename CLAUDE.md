@@ -825,7 +825,11 @@ with the close stamp beneath it (`→ open` while it runs).
 `etStampFull` (the compact stamp and its hover form), `etSince` ("5h 18m ago"),
 `heldFor` / `ageLabel` (a closed trade reads "held 5h 18m" instead), and the two
 renderers `<TradeTimes>` (labelled, for cards) and `<TradeTimesCell>` (stacked,
-for a dense row). Everything is **Eastern Time**, matching session windows,
+for a dense row; `showHeld` adds the held time as a third line, which History
+uses since every row there is closed). A **held** time rolls past a day into
+"4d 3h" — a swing hold reading "96h" is unparseable — while the live "x ago"
+reading deliberately keeps counting in hours, as it always has.
+Everything is **Eastern Time**, matching session windows,
 market hours and trade codes, so a stamp means the same instant to every
 teammate. Current call sites: `TradeCard` (Live Wall + the Master board's
 Positions tile), `TradeLog` (deck cards + tape rows), `History`, `Funded`,

@@ -46,11 +46,19 @@ export function etStampFull(ms: number | null | undefined): string {
 }
 
 // "18m" / "5h 18m" — the gap between two instants, rounded to the minute.
-function spanLabel(fromMs: number, toMs: number): string {
+// `withDays` rolls anything past a day up into "4d" / "4d 3h" instead of "96h",
+// which a multi-day swing hold needs to stay readable. It is off for the live
+// "x ago" reading, which has always counted in hours.
+function spanLabel(fromMs: number, toMs: number, withDays = false): string {
   const mins = Math.max(0, Math.round((toMs - fromMs) / 60000));
   if (mins < 60) return `${mins}m`;
   const h = Math.floor(mins / 60);
   const m = mins % 60;
+  if (withDays && h >= 24) {
+    const d = Math.floor(h / 24);
+    const rh = h % 24;
+    return rh ? `${d}d ${rh}h` : `${d}d`;
+  }
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
@@ -60,11 +68,12 @@ export function etSince(ms: number | null | undefined): string {
   return `${spanLabel(ms, Date.now())} ago`;
 }
 
-// "held 5h 18m" — how long a closed trade ran, once both ends are known. Null
-// when either stamp is missing, so a caller can fall back to the open reading.
+// "held 5h 18m" / "held 4d 3h" — how long a closed trade ran, once both ends are
+// known. Null when either stamp is missing, so a caller can fall back to the
+// open reading.
 export function heldFor(openedAt: number | null | undefined, closedAt: number | null | undefined): string | null {
   if (openedAt == null || closedAt == null) return null;
-  return `held ${spanLabel(openedAt, closedAt)}`;
+  return `held ${spanLabel(openedAt, closedAt, true)}`;
 }
 
 // The reading that sits furthest right on a position: how long it has been open
@@ -115,17 +124,22 @@ function TimeLine({ label, ms }: { label: string; ms: number | null }) {
 
 // The same pair of stamps for a dense table cell: the open time with the close
 // time stacked beneath it, so one column carries both ends of the trade. Font
-// size and family are inherited from the row.
+// size and family are inherited from the row. `showHeld` adds a third, smaller
+// line with how long the trade ran — it needs both ends, so it stays hidden on
+// a still-open row or one missing an open time.
 export function TradeTimesCell({
   openedAt,
   closedAt,
   openLabel = 'open',
+  showHeld = false,
 }: {
   openedAt: number | null | undefined;
   closedAt?: number | null;
   // What the second line says while the trade is still running.
   openLabel?: string;
+  showHeld?: boolean;
 }) {
+  const held = showHeld ? heldFor(openedAt, closedAt) : null;
   return (
     <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.35 }}>
       <span style={{ color: MUTED, whiteSpace: 'nowrap' }} title={openedAt == null ? 'Open time unknown' : `Opened ${etStampFull(openedAt)}`}>
@@ -134,9 +148,17 @@ export function TradeTimesCell({
       <span style={{ color: FAINT, whiteSpace: 'nowrap' }} title={closedAt == null ? 'Still open' : `Closed ${etStampFull(closedAt)}`}>
         {closedAt == null ? `→ ${openLabel}` : `→ ${etStamp(closedAt)}`}
       </span>
+      {held && (
+        <span style={heldLine} title="How long the trade ran, open to close">
+          {held}
+        </span>
+      )}
     </span>
   );
 }
 
 const timeTag: CSSProperties = { fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT };
 const timeValue: CSSProperties = { fontSize: 10.5, color: MUTED, fontFamily: MONO };
+// Smaller than the two stamps above it, the way a row's pip figure sits under
+// its P/L — the held time is a reading off the stamps, not a third fact.
+const heldLine: CSSProperties = { fontSize: 9.5, color: FAINT, whiteSpace: 'nowrap' };
