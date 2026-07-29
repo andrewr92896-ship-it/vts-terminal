@@ -289,7 +289,8 @@ act on the same team:
   - `user_teams` — one row per team naming its **leader** (`leaderId`).
   - `user_team_members` — optional per-user **badge** + **permission flags**
     (`canCreateStudyGuides / canInvite / canManageBadges / canRemoveMembers /
-    canEditTeam`); a missing row = defaults (no badge, no perms). Leader = all.
+    canEditTeam / canDeleteTrades`); a missing row = defaults (no badge, no
+    perms). Leader = all.
   - `user_team_invites` — pending invites; **accepting sets the invitee's
     `team_id`** (moves them onto the team's desk). Leaving / removal clears
     `team_id` (→ solo). Renaming updates the shared `trading_teams` name.
@@ -299,6 +300,21 @@ act on the same team:
   Because membership is `team_id`, the My Portal team **is** the trade-scoping
   team — the two are one. (Consequence: the Studies delete gate, keyed on team
   leadership, is now live — non-leader members can't delete team study content.)
+
+### Who may delete a trade (`trading/deleteAccess.ts`)
+
+A trader always removes their own. Beyond that it is a **team grant**: the
+**leader** holds it implicitly, and they can hand the **Delete trades**
+permission (`canDeleteTrades`, set from My Portal ▸ Trading Team) to any member.
+Admins keep their install-wide reach. `tradeDeleteScope(actor)` resolves this
+once per request into `{ any, ownerIds, others }`, which `removeTrade`,
+`removePosition` and `restoreDeleted` turn into the owner filter on their `WHERE`
+clause — every non-admin grant is bounded by `scopedTraderIds`, so a leader only
+ever reaches rows their own desk can already see. Whoever may delete may also
+**restore** (Deleted Trades); **editing** a teammate's closed trade stays
+admin-only. The trade payloads (`/api/trading/trades`, `/history`,
+`/deleted-trades`) carry `canDeleteAny` so the UI knows where to draw the
+control — the server is still the enforcer.
 
 ## AI / Ask VTS AI (`apps/api/src/ai`)
 

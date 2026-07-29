@@ -1,6 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import { useAuth } from '../../auth/AuthContext';
 import { usePrivacy } from '../../privacy/privacy';
 import type { DeletedTradeRecord } from '../../api/types';
 import { ScreenTitle } from './ScreenTitle';
@@ -29,12 +28,13 @@ function fmtPrice(n: number | null): string {
 
 // Trading ▸ Deleted Trades. Soft-deleted rows (from the Trade Log or History)
 // that are kept out of the stats but can be restored — undo for a mistaken
-// delete. Team-scoped; a trader restores their own (admins can restore any).
+// delete. Team-scoped; a trader restores their own, and whoever may delete a
+// teammate's trade (team leader, the team's "Delete trades" permission, or an
+// admin) may put it back — the server reports that as `canDeleteAny`.
 export function DeletedTrades() {
-  const { user } = useAuth();
   const { privacy } = usePrivacy();
-  const isAdmin = !!user?.roles.includes('admin');
   const [trades, setTrades] = useState<DeletedTradeRecord[] | null>(null);
+  const [canRestoreAny, setCanRestoreAny] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -42,7 +42,11 @@ export function DeletedTrades() {
     let alive = true;
     api
       .deletedTrades()
-      .then((d) => alive && setTrades(d.trades))
+      .then((d) => {
+        if (!alive) return;
+        setTrades(d.trades);
+        setCanRestoreAny(d.canDeleteAny);
+      })
       .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Failed to load deleted trades'));
     return () => {
       alive = false;
@@ -55,6 +59,7 @@ export function DeletedTrades() {
     try {
       const d = await api.restoreDeletedTrade(id);
       setTrades(d.trades);
+      setCanRestoreAny(d.canDeleteAny);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not restore the trade');
     } finally {
@@ -82,7 +87,7 @@ export function DeletedTrades() {
           {trades.map((t) => {
             const long = t.side === 'long';
             const plUp = (t.realizedPl ?? 0) >= 0;
-            const canRestore = t.isMine || isAdmin;
+            const canRestore = t.isMine || canRestoreAny;
             return (
               <div key={t.id} style={row}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: 1 }}>

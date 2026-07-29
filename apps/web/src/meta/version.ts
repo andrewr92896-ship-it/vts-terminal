@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.76';
+export const APP_VERSION = 'Beta V 5.77';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.77',
+    date: 'July 29, 2026',
+    notes: [
+      'Deleting a trade is no longer limited to the trader who placed it. The team leader can now remove any trade on the desk, and can hand that out to a teammate with a new "Delete trades" permission in My Portal ▸ Trading Team — the same checkbox list that already covers invites, badges and the rest.',
+      'The permission covers putting a trade back too: anyone who can delete a teammate\'s trade can restore it from Deleted Trades. Correcting the numbers on a teammate\'s closed trade is still admins only.',
+      'Everyone else is unchanged — without the permission you still only see a delete button on your own rows, and nobody can reach a trade outside their own team.',
+    ],
+  },
   {
     version: 'Beta V 5.76',
     date: 'July 29, 2026',

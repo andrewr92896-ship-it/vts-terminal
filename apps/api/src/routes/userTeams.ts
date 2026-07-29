@@ -30,6 +30,7 @@ const permsSchema = z.object({
   canManageBadges: z.boolean().optional(),
   canRemoveMembers: z.boolean().optional(),
   canEditTeam: z.boolean().optional(),
+  canDeleteTrades: z.boolean().optional(),
 });
 
 // My Portal — user-created Trading Teams. All routes require a signed-in user;

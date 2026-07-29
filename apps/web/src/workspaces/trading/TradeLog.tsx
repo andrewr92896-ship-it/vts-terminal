@@ -188,9 +188,6 @@ export function TradeLog() {
   const { privacy } = usePrivacy();
   const undo = useUndo<RemovedTrade>();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
-  // Admins manage the shared desk, so they can remove any teammate's trade
-  // (e.g. clear a test trade), not just their own.
-  const isAdmin = !!user?.roles.includes('admin');
 
   const [data, setData] = useState<TradeLogData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -259,6 +256,11 @@ export function TradeLog() {
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
   if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading the log…"}</div>;
+
+  // Whether this trader may clear a teammate's row as well as their own. The
+  // server decides (team leader, the team's "Delete trades" permission, or an
+  // admin) and enforces it — this only shows or hides the control.
+  const canRemoveAny = data.canDeleteAny;
 
   // Balances are shared across the whole trading team, so the desk summary
   // always carries a number here. (Kept as a guard for the older nullable shape;
@@ -448,7 +450,7 @@ export function TradeLog() {
               showMoney={showMoney}
               canSeeBalances={canSeeBalances}
               readOnly={readOnly}
-              canRemove={t.isMine || isAdmin}
+              canRemove={t.isMine || canRemoveAny}
               busy={busy}
               onRemove={() => removeWithUndo(t.id)}
               onSave={(patch) => run(api.updateTrade(t.id, patch))}
@@ -462,7 +464,7 @@ export function TradeLog() {
           showMoney={showMoney}
           canSeeBalances={canSeeBalances}
           readOnly={readOnly}
-          isAdmin={isAdmin}
+          canRemoveAny={canRemoveAny}
           busy={busy}
           isPhone={isPhone}
           onRemove={removeWithUndo}
@@ -644,7 +646,7 @@ function Tape({
   showMoney,
   canSeeBalances,
   readOnly,
-  isAdmin,
+  canRemoveAny,
   busy,
   isPhone,
   onRemove,
@@ -654,7 +656,7 @@ function Tape({
   showMoney: boolean;
   canSeeBalances: boolean;
   readOnly: boolean;
-  isAdmin: boolean;
+  canRemoveAny: boolean;
   busy: boolean;
   isPhone: boolean;
   onRemove: (id: string) => void;
@@ -715,7 +717,7 @@ function Tape({
               <TradeTimesCell openedAt={t.openedAt} closedAt={t.status === 'open' ? null : t.closedAt} />
             </span>
             {!readOnly &&
-              (t.isMine || isAdmin ? (
+              (t.isMine || canRemoveAny ? (
                 <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
               ) : (
                 <span style={{ width: 24 }} />
