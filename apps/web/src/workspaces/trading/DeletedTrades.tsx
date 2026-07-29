@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { usePrivacy } from '../../privacy/privacy';
 import type { DeletedTradeRecord } from '../../api/types';
 import { ScreenTitle } from './ScreenTitle';
+import { etStamp, etStampFull } from './tradeTime';
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -94,8 +95,13 @@ export function DeletedTrades() {
                   </div>
                   <div style={{ fontSize: 11, color: MUTED, fontFamily: MONO }}>
                     {t.units} @ {fmtPrice(t.entryPrice)}
-                    {t.exitPrice != null ? ` → ${fmtPrice(t.exitPrice)}` : ''} ·{' '}
-                    {"removed"} {etDateTime(t.deletedAt)}
+                    {t.exitPrice != null ? ` → ${fmtPrice(t.exitPrice)}` : ''}
+                  </div>
+                  {/* When it opened, when it closed (if it had), and when it was removed. */}
+                  <div style={{ fontSize: 10.5, color: FAINT, fontFamily: MONO, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <span title={`Opened ${etStampFull(t.openedAt)}`}>{"opened "}{etStamp(t.openedAt)}</span>
+                    {t.closedAt != null && <span title={`Closed ${etStampFull(t.closedAt)}`}>{"closed "}{etStamp(t.closedAt)}</span>}
+                    <span>{"removed "}{etDateTime(t.deletedAt)}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

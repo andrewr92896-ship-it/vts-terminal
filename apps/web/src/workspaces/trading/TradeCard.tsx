@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
 import { DesignationTag, tileTint } from './DesignationTag';
+import { TradeTimes, etSince } from './tradeTime';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
 
 // The full "trading card" for one open position — the rich card shown on the
@@ -60,14 +61,10 @@ export function etTime(ms: number): string {
     second: '2-digit',
   });
 }
-export function etSince(ms: number | null): string {
-  if (ms == null) return '—';
-  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
-  if (mins < 60) return `${mins}m ago`;
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return m ? `${h}h ${m}m ago` : `${h}h ago`;
-}
+// "5h 18m ago" and the open/close stamps beside it now live in `tradeTime.tsx`,
+// shared with every other surface that shows a position. Re-exported here so the
+// older `import { etSince } from './TradeCard'` call sites keep working.
+export { etSince, etStamp } from './tradeTime';
 
 // An owner's display handle: the part of their email/username before the "@"
 // domain, so "dale@vitalistradingsystems.com" shows as "dale".
@@ -236,8 +233,8 @@ export function TradeCard({
         </div>
       )}
 
-      {/* Footer: P/L + opened */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
+      {/* Footer: P/L + when it opened, and how long ago that was */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '9px 14px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>Open P/L</span>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
@@ -249,9 +246,13 @@ export function TradeCard({
             )}
           </div>
         </div>
-        <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }} title={t.openedAt ? `${etTime(t.openedAt)} ET` : ''}>
-          {etSince(t.openedAt)}
-        </span>
+        {/* The clock time this position opened, sitting to the left of how long
+            ago that was. A live position has no close time yet — the closed
+            stamp shows on the Trade Log / History card for the same trade. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <TradeTimes openedAt={t.openedAt} />
+          <span style={{ fontSize: 10.5, color: FAINT, fontFamily: MONO, whiteSpace: 'nowrap' }}>{etSince(t.openedAt)}</span>
+        </div>
       </div>
 
       {/* Close trade — funded (off-book) positions the viewer owns */}

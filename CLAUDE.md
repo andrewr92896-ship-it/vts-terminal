@@ -813,6 +813,28 @@ review step and no other users to protect from a bad merge. Because of that:
 
 ## Frontend conventions
 
+### Every position shows when it opened and closed
+
+Any surface that renders a position — open or closed, live or logged — shows the
+**clock time and date it opened** and, once it is closed, **the time and date it
+closed**. On a card those sit in the **bottom-right corner, to the left of** the
+existing "5h 18m ago" reading; in a table they take one column, the open stamp
+with the close stamp beneath it (`→ open` while it runs).
+
+`workspaces/trading/tradeTime.tsx` is the single source for this: `etStamp` /
+`etStampFull` (the compact stamp and its hover form), `etSince` ("5h 18m ago"),
+`heldFor` / `ageLabel` (a closed trade reads "held 5h 18m" instead), and the two
+renderers `<TradeTimes>` (labelled, for cards) and `<TradeTimesCell>` (stacked,
+for a dense row). Everything is **Eastern Time**, matching session windows,
+market hours and trade codes, so a stamp means the same instant to every
+teammate. Current call sites: `TradeCard` (Live Wall + the Master board's
+Positions tile), `TradeLog` (deck cards + tape rows), `History`, `Funded`,
+`FundedLiveTrades`, `DeletedTrades`, `PositionsTile`'s compact list,
+`BrokerConnectionsPanel`'s manual-position editor, and the Scriptable iOS widget
+script in `DeviceSettings.tsx` (which carries its own copy of the formatter, since
+it is a standalone script). **A new position surface must show them too** — use
+this module rather than formatting a date locally.
+
 ### Mobile input zoom (iOS)
 
 iOS Safari auto-zooms the viewport whenever a focused text field has a

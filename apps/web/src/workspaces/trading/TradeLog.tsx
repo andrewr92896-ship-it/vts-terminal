@@ -11,6 +11,7 @@ import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaled
 import { getTradeLayout, type Layout } from './preferences';
 import { DesignationTag, tileTint } from './DesignationTag';
 import { ScreenTitle } from './ScreenTitle';
+import { TradeTimes, TradeTimesCell, ageLabel } from './tradeTime';
 import type {
   RemovedTrade,
   TradeInput,
@@ -51,11 +52,6 @@ function fmtPrice(n: number | null): string {
   return String(Number(n.toFixed(5)));
 }
 
-const ET = 'America/New_York';
-function etDate(ms: number | null): string {
-  if (ms == null) return '—';
-  return new Date(ms).toLocaleDateString('en-US', { timeZone: ET, month: 'short', day: 'numeric' });
-}
 // A date input (YYYY-MM-DD) → ms at ET-ish midnight. Blank → undefined.
 function dateToMs(v: string): number | undefined {
   if (!v) return undefined;
@@ -562,7 +558,6 @@ function DeckCard({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {t.code && <span style={codeChip} title="Trade code — date + order that day">{t.code}</span>}
-          <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etDate(t.openedAt)}</span>
         </div>
       </div>
 
@@ -603,7 +598,7 @@ function DeckCard({
         </div>
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 14px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '9px 14px', borderTop: `1px solid ${BORDER}`, background: PANEL }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{plLabel}</span>
           {!canSeeBalances ? (
@@ -619,16 +614,24 @@ function DeckCard({
             </span>
           )}
         </div>
-        {!readOnly && ((t.isMine && t.editable) || canRemove) && (
-          <div style={{ display: 'flex', gap: 6 }}>
-            {t.isMine && t.editable && (
-              <button onClick={() => !busy && setEditing(true)} title="Edit trade" aria-label="Edit trade" style={iconBtn}>✏️</button>
-            )}
-            {canRemove && (
-              <button onClick={() => !busy && onRemove()} title="Delete trade" aria-label="Delete trade" style={{ ...iconBtn, color: '#52668f', fontSize: 16 }}>×</button>
-            )}
-          </div>
-        )}
+        {/* When the trade opened and, once it's done, when it closed — with how
+            long it has been open (or was held) reading on their right. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <TradeTimes openedAt={t.openedAt} closedAt={t.closedAt} />
+          <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace", whiteSpace: 'nowrap' }}>
+            {ageLabel(t.openedAt, isOpen ? null : t.closedAt)}
+          </span>
+          {!readOnly && ((t.isMine && t.editable) || canRemove) && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              {t.isMine && t.editable && (
+                <button onClick={() => !busy && setEditing(true)} title="Edit trade" aria-label="Edit trade" style={iconBtn}>✏️</button>
+              )}
+              {canRemove && (
+                <button onClick={() => !busy && onRemove()} title="Delete trade" aria-label="Delete trade" style={{ ...iconBtn, color: '#52668f', fontSize: 16 }}>×</button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -668,7 +671,7 @@ function Tape({
           <span style={col}>Slip</span>
           <span style={col}>Size</span>
           <span style={{ ...plCol, textAlign: 'right' }}>P/L</span>
-          <span style={{ ...col, textAlign: 'right' }}>Date</span>
+          <span style={{ ...timeCol, textAlign: 'right' }}>Opened / Closed</span>
           {!readOnly && <span style={{ width: 24 }} />}
         </div>
       )}
@@ -708,7 +711,9 @@ function Tape({
               </span>
               {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
             </span>
-            <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.openedAt)}</span>
+            <span style={{ ...timeCol, display: 'flex', justifyContent: 'flex-end' }}>
+              <TradeTimesCell openedAt={t.openedAt} closedAt={t.status === 'open' ? null : t.closedAt} />
+            </span>
             {!readOnly &&
               (t.isMine || isAdmin ? (
                 <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
@@ -1025,6 +1030,9 @@ const col: CSSProperties = { flex: '0 0 56px' };
 // The P/L column is a touch wider than the rest — it stacks the money figure
 // over the trade's pip move.
 const plCol: CSSProperties = { flex: '0 0 78px' };
+// Wider again: this one carries the full open stamp with the close stamp under
+// it ("Jul 29, 9:31 AM" / "→ Jul 29, 2:49 PM"), not just a date.
+const timeCol: CSSProperties = { flex: '0 0 118px' };
 const infoBanner: CSSProperties = { fontSize: 12.5, color: '#f3e3b8', background: 'rgba(235,203,116,.08)', border: '1px solid rgba(235,203,116,.35)', borderRadius: 8, padding: '9px 12px' };
 const menuButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 150, maxWidth: 240, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 8, color: TEXT, fontSize: 12.5, fontWeight: 600, padding: '8px 12px', cursor: 'pointer' };
 const menuPopup: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 220, maxWidth: 300, background: '#0c1f43', border: `1px solid ${BORDER2}`, borderRadius: 12, padding: 6, zIndex: 40, boxShadow: '0 16px 44px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflowY: 'auto' };

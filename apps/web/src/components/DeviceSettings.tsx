@@ -438,6 +438,9 @@ function money(n){ const s = Math.abs(n).toLocaleString("en-US",{minimumFraction
 function pips(n){ const s = Math.abs(n).toFixed(1); return (n>0?"+":n<0?"-":"")+s+" pip"+(Math.abs(n)===1?"":"s"); }
 function price(n){ if(n===null||n===undefined) return "—"; if(Math.abs(n)>=1000) return n.toLocaleString("en-US",{maximumFractionDigits:2}); return String(Number(n.toFixed(5))); }
 function since(ms){ if(!ms) return ""; let m = Math.max(0, Math.round((Date.now()-ms)/60000)); if(m<60) return m+"m ago"; const h=Math.floor(m/60); m=m%60; return m? h+"h "+m+"m ago" : h+"h ago"; }
+// When the position opened, on the desk's Eastern clock — same stamp the site
+// shows beside "5h 18m ago" on every position.
+function stamp(ms){ if(!ms) return ""; return new Date(ms).toLocaleString("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); }
 
 async function loadData(){
   let url = BASE + "/api/widget/positions";
@@ -478,7 +481,10 @@ function renderCard(w, p, detailed){
   if(p.unrealizedPl===null||p.unrealizedPl===undefined){ const t=plRow.addText("—"); t.font=Font.regularMonospacedSystemFont(13); t.textColor=C.muted; }
   else { const up=p.unrealizedPl>=0; const t=plRow.addText((up?"+":"")+money(p.unrealizedPl)); t.font=Font.boldSystemFont(14); t.textColor=up?C.green:C.red; }
   if(p.forex && p.forex.pipsOpen!==null && p.forex.pipsOpen!==undefined){ plRow.addSpacer(6); const pp=plRow.addText(pips(p.forex.pipsOpen)); pp.font=Font.regularMonospacedSystemFont(10.5); pp.textColor=p.forex.pipsOpen>=0?C.green:C.red; }
-  foot.addSpacer(); const ago=foot.addText(since(p.openedAt)); ago.font=Font.regularMonospacedSystemFont(9); ago.textColor=C.faint;
+  foot.addSpacer();
+  const when=foot.addStack(); when.layoutVertically(); when.spacing=1;
+  const at=when.addText(stamp(p.openedAt)); at.font=Font.regularMonospacedSystemFont(9); at.textColor=C.muted; at.rightAlignText(); at.lineLimit=1;
+  const ago=when.addText(since(p.openedAt)); ago.font=Font.regularMonospacedSystemFont(9); ago.textColor=C.faint; ago.rightAlignText(); ago.lineLimit=1;
 }
 
 // Compact single-line row — used by the MEDIUM widget to fit several people.
@@ -493,6 +499,8 @@ function renderRow(w, p){
   const sd = row.addText(long?"LONG":"SHORT"); sd.font=Font.boldSystemFont(8.5); sd.textColor=sideColor;
   row.addSpacer(7);
   const ow = row.addText("@"+p.owner); ow.font=Font.systemFont(10); ow.textColor=C.muted; ow.lineLimit=1;
+  row.addSpacer(7);
+  const at = row.addText(stamp(p.openedAt)); at.font=Font.regularMonospacedSystemFont(9); at.textColor=C.faint; at.lineLimit=1;
   row.addSpacer();
   const plCol = row.addStack(); plCol.layoutVertically(); plCol.spacing=1;
   if(p.unrealizedPl===null||p.unrealizedPl===undefined){ const t=plCol.addText("—"); t.font=Font.regularMonospacedSystemFont(12); t.textColor=C.muted; t.rightAlignText(); }
@@ -513,6 +521,7 @@ function renderSolo(w, p){
   if(p.forex && p.forex.pipsOpen!==null && p.forex.pipsOpen!==undefined){ const pp=w.addText(pips(p.forex.pipsOpen)); pp.font=Font.regularMonospacedSystemFont(12); pp.textColor=p.forex.pipsOpen>=0?C.green:C.red; }
   w.addSpacer();
   const foot = w.addText("@"+p.owner+" · "+(p.brokerName||p.broker)); foot.font=Font.systemFont(9.5); foot.textColor=C.faint; foot.lineLimit=1;
+  const at = w.addText(stamp(p.openedAt)); at.font=Font.regularMonospacedSystemFont(9); at.textColor=C.muted; at.lineLimit=1;
   const ago = w.addText(since(p.openedAt)); ago.font=Font.regularMonospacedSystemFont(9); ago.textColor=C.faint;
 }
 

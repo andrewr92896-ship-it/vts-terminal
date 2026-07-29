@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { etStamp, etStampFull } from './tradeTime';
 import type {
   BrokerConnection,
   BrokerConnectionKind,
@@ -630,6 +631,9 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
               <span style={{ color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>
                 {p.units} @ {p.entryPrice}
                 {p.currentPrice != null ? ` → ${p.currentPrice}` : ''}
+              </span>
+              <span style={{ color: FAINT, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10.5 }} title={`Opened ${etStampFull(p.openedAt)}`}>
+                {"opened "}{etStamp(p.openedAt)}
               </span>
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                 <button onClick={() => startEdit(p)} style={ghostBtn}>Edit</button>

@@ -25,6 +25,7 @@ export interface DeletedTradeRecord {
   exitPrice: number | null;
   realizedPl: number | null;
   openedAt: number | null;
+  closedAt: number | null; // null while the trade was still open when it was removed
   deletedAt: number; // ms — when it was removed (newest first)
 }
 
@@ -69,6 +70,7 @@ export async function listDeletedTrades(
       exitPrice: r.t.exitPrice,
       realizedPl: r.t.realizedPl,
       openedAt: r.t.openedAt ? r.t.openedAt.getTime() : null,
+      closedAt: r.t.closedAt ? r.t.closedAt.getTime() : null,
       deletedAt: r.t.deletedAt.getTime(),
     });
   }
@@ -90,6 +92,7 @@ export async function listDeletedTrades(
       exitPrice: r.p.exitPrice,
       realizedPl: r.p.status === 'closed' ? r.p.realizedPl : null,
       openedAt: opened.getTime(),
+      closedAt: r.p.status === 'closed' && r.p.closedAt ? r.p.closedAt.getTime() : null,
       deletedAt: r.p.deletedAt.getTime(),
     });
   }

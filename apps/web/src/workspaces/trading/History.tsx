@@ -7,6 +7,7 @@ import { classifyOutcome, configFrom, configActive, type BreakEvenConfig } from 
 import { tradePips, fmtPips, netPips, hasAnyPips } from './pips';
 import { DesignationTag } from './DesignationTag';
 import { ScreenTitle } from './ScreenTitle';
+import { TradeTimesCell } from './tradeTime';
 import type { HistoryData, HistoryGroup, HistoryRecord, HistorySummary, TradeInput, TradeSide } from '../../api/types';
 
 // Trading navy/gold palette — matches the Live Wall / Trade Log.
@@ -40,10 +41,6 @@ function fmtPrice(n: number | null): string {
   return String(Number(n.toFixed(5)));
 }
 const ET = 'America/New_York';
-function etDate(ms: number | null): string {
-  if (ms == null) return '—';
-  return new Date(ms).toLocaleDateString('en-US', { timeZone: ET, month: 'short', day: 'numeric' });
-}
 
 // Day-of-week / month are derived in Eastern Time so they line up with the ET
 // clock the desk runs on (and with the "Closed" column above, which is also ET).
@@ -356,7 +353,7 @@ export function History() {
                 <span style={col}>Exit</span>
                 <span style={{ flex: '1 1 90px' }}>Strategy</span>
                 <span style={{ ...col, textAlign: 'right' }}>P/L</span>
-                <span style={{ ...col, textAlign: 'right' }}>Closed</span>
+                <span style={{ ...timeCol, textAlign: 'right' }}>Opened / Closed</span>
                 {!readOnly && <span style={{ width: 60 }} />}
               </div>
             )}
@@ -447,7 +444,9 @@ function TradeRow({ t, config, isPhone, showMoney, canSeeBalances, canEdit, remo
         <span style={{ fontWeight: 700, color: plColor }}>{plText}</span>
         {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
       </span>
-      <span style={{ ...col, textAlign: 'right', color: FAINT }}>{etDate(t.closedAt)}</span>
+      <span style={{ ...timeCol, display: 'flex', justifyContent: 'flex-end' }}>
+        <TradeTimesCell openedAt={t.openedAt} closedAt={t.closedAt} />
+      </span>
       {canEdit ? (
         <span style={{ display: 'flex', gap: 4, width: 60, justifyContent: 'flex-end' }}>
           <button onClick={onEdit} disabled={removing} title="Edit this trade" aria-label="Edit trade" style={rowIconBtn}>✏️</button>
@@ -539,6 +538,9 @@ function HistoryEditModal({ t, busy, onSave, onClose }: { t: HistoryRecord; busy
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
 const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 16px', fontSize: 11.5, fontFamily: "'IBM Plex Mono', monospace" };
 const col: CSSProperties = { flex: '0 0 64px' };
+// Wider than the rest: it stacks the trade's open stamp over its close stamp
+// ("Jul 29, 9:31 AM" / "→ Jul 29, 2:49 PM"), not just the closing date.
+const timeCol: CSSProperties = { flex: '0 0 118px' };
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 11.5, padding: '8px 14px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '7px 12px', borderRadius: 7, cursor: 'pointer' };
 const rowIconBtn: CSSProperties = { background: 'none', border: 'none', color: MUTED, fontSize: 13, lineHeight: 1, padding: '2px 4px', cursor: 'pointer' };
