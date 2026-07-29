@@ -1,9 +1,10 @@
-import { and, eq, isNotNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingTrades, tradingPositions, users, type TradeSide } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { scopedTraderIds, type Viewer } from './scope.js';
+import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 
 // The Deleted Trades section: soft-deleted trades (hand-logged + broker-imported)
 // that a trader can restore if they removed the wrong one. Team-scoped exactly
@@ -101,12 +102,18 @@ export async function listDeletedTrades(
   return { trades: out };
 }
 
-// Restore a soft-deleted trade by clearing its delete marker. Owner-scoped by
-// default; an admin can restore anyone's on the shared desk. Tries the
-// hand-logged table first, then broker positions (ids don't collide). Returns
-// true when a row was restored.
-export async function restoreDeleted(userId: string, id: string, admin = false): Promise<boolean> {
-  const ownTrade = admin ? eq(tradingTrades.id, id) : and(eq(tradingTrades.id, id), eq(tradingTrades.userId, userId));
+// Restore a soft-deleted trade by clearing its delete marker. Whoever may delete
+// a trade may put it back: the same `scope` gates both (own trades by default; a
+// team leader / Delete-trades grantee reaches their team, an admin anyone — see
+// deleteAccess.ts). Tries the hand-logged table first, then broker positions
+// (ids don't collide). Returns true when a row was restored.
+export async function restoreDeleted(userId: string, id: string, scope?: TradeDeleteScope): Promise<boolean> {
+  const reach = scope ?? ownTradesOnly(userId);
+  const owners = [...reach.ownerIds];
+
+  const ownTrade = reach.any
+    ? eq(tradingTrades.id, id)
+    : and(eq(tradingTrades.id, id), inArray(tradingTrades.userId, owners));
   const tradeWhere = and(ownTrade, isNotNull(tradingTrades.deletedAt));
   const t = (await db.select({ id: tradingTrades.id }).from(tradingTrades).where(tradeWhere).limit(1))[0];
   if (t) {
@@ -114,7 +121,9 @@ export async function restoreDeleted(userId: string, id: string, admin = false):
     return true;
   }
 
-  const ownPos = admin ? eq(tradingPositions.id, id) : and(eq(tradingPositions.id, id), eq(tradingPositions.userId, userId));
+  const ownPos = reach.any
+    ? eq(tradingPositions.id, id)
+    : and(eq(tradingPositions.id, id), inArray(tradingPositions.userId, owners));
   const posWhere = and(ownPos, isNotNull(tradingPositions.deletedAt));
   const p = (await db.select({ id: tradingPositions.id }).from(tradingPositions).where(posWhere).limit(1))[0];
   if (p) {

@@ -14,6 +14,7 @@ import { getHistory, removePosition, updateClosedPosition } from '../trading/his
 import { listDeletedTrades, restoreDeleted } from '../trading/deleted.js';
 import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
+import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { scopedTraderIds } from '../trading/scope.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
@@ -142,24 +143,36 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // ---- Trade Log (scoped to the caller's team) ----
+  // Every trade payload carries `canDeleteAny`: whether this caller may remove a
+  // teammate's row (team leader, a member holding the team's Delete-trades
+  // permission, or an admin — see trading/deleteAccess.ts), so the UI knows
+  // where to offer a Delete control.
   app.get('/api/trading/trades', read, async (request) => {
     const u = request.currentUser!;
-    return getTrades(u, isDemoUser(u));
+    const [data, scope] = await Promise.all([getTrades(u, isDemoUser(u)), tradeDeleteScope(u)]);
+    return { ...data, canDeleteAny: scope.others };
   });
 
   // ---- History (closed positions, auto-recorded from the Live Wall) ----
   app.get('/api/trading/history', read, async (request) => {
     const u = request.currentUser!;
-    return getHistory(u, SEE_BALANCES, isDemoUser(u));
+    const [data, scope] = await Promise.all([
+      getHistory(u, SEE_BALANCES, isDemoUser(u)),
+      tradeDeleteScope(u),
+    ]);
+    return { ...data, canDeleteAny: scope.others };
   });
 
-  // Delete a recorded closed trade the caller owns (e.g. a test trade). Only the
-  // owner's own positions are removable; the refreshed History is returned.
+  // Delete a recorded closed trade (e.g. a test trade). The owner can always
+  // remove their own; a desk leader / Delete-trades grantee can remove a
+  // teammate's, and an admin anyone's. The refreshed History is returned.
   app.delete('/api/trading/history/:id', write, async (request) => {
     const u = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    await removePosition(u.id, id, isAdmin(parseRoles(u)));
-    return getHistory(u, SEE_BALANCES, isDemoUser(u));
+    const scope = await tradeDeleteScope(u);
+    await removePosition(u.id, id, scope);
+    const data = await getHistory(u, SEE_BALANCES, isDemoUser(u));
+    return { ...data, canDeleteAny: scope.others };
   });
 
   // Edit a recorded CLOSED trade (correct an exit, P/L, strategy, dates, …). The
@@ -539,22 +552,24 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   app.delete('/api/trading/trades/:id', write, async (request) => {
     const u = request.currentUser!;
-    const admin = isAdmin(parseRoles(u));
+    const scope = await tradeDeleteScope(u);
     const id = (request.params as { id: string }).id;
     // A Trade Log row is either a hand-logged trade (trading_trades) or an
     // auto-imported broker position (trading_positions). Try the hand-logged
     // table first; the returned `removed` snapshot powers undo for the trader's
-    // own trades (admins can also clear any teammate's row on the shared desk).
-    const removed = await removeTrade(u.id, id, admin);
+    // own trades (a teammate's row can be cleared by a desk leader / a member
+    // holding Delete trades / an admin, but never restored from the undo bar —
+    // Deleted Trades is where those come back).
+    const removed = await removeTrade(u.id, id, scope);
     // Nothing hand-logged matched → it's a broker-sourced row (e.g. a test trade
     // from OANDA). Clear the matching position so it can be removed here too.
     // Note: a still-open position will reappear on the next Live Wall sync (it's
     // still live on the broker); clearing a closed one is permanent. Ids don't
     // collide across the two tables, so this is a no-op when the id isn't a
     // position.
-    if (!removed) await removePosition(u.id, id, admin);
+    if (!removed) await removePosition(u.id, id, scope);
     const data = await getTrades(u, isDemoUser(u));
-    return { ...data, removed };
+    return { ...data, removed, canDeleteAny: scope.others };
   });
 
   app.post('/api/trading/trades/restore', write, async (request, reply) => {
@@ -568,17 +583,21 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // ---- Deleted Trades (soft-deleted rows, restorable) ----
+  // Whoever may delete a teammate's trade may also put it back, so both sides
+  // read the same `canDeleteAny` flag.
   app.get('/api/trading/deleted-trades', read, async (request) => {
     const u = request.currentUser!;
-    return listDeletedTrades(u, isDemoUser(u));
+    const [data, scope] = await Promise.all([listDeletedTrades(u, isDemoUser(u)), tradeDeleteScope(u)]);
+    return { ...data, canDeleteAny: scope.others };
   });
 
   app.post('/api/trading/deleted-trades/:id/restore', write, async (request) => {
     const u = request.currentUser!;
-    const admin = isAdmin(parseRoles(u));
+    const scope = await tradeDeleteScope(u);
     const id = (request.params as { id: string }).id;
-    await restoreDeleted(u.id, id, admin);
-    return listDeletedTrades(u, isDemoUser(u));
+    await restoreDeleted(u.id, id, scope);
+    const data = await listDeletedTrades(u, isDemoUser(u));
+    return { ...data, canDeleteAny: scope.others };
   });
 
   // ---- TradingView alerts (FTP/prop replacement) ----

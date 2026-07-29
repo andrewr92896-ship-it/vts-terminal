@@ -165,7 +165,10 @@ export function History() {
   }, []);
 
   async function remove(t: HistoryRecord) {
-    if (!window.confirm(`Delete this closed ${t.instrument} trade from History? This can't be undone.`)) return;
+    // Name the trader when it isn't your own row — a desk leader clearing a
+    // teammate's trade should see whose it is before confirming.
+    const who = t.isMine ? '' : ` (@${t.owner})`;
+    if (!window.confirm(`Delete this closed ${t.instrument} trade${who} from History? You can restore it from Deleted Trades.`)) return;
     setRemovingId(t.id);
     try {
       setData(await api.removeHistoryTrade(t.id));
@@ -263,7 +266,10 @@ export function History() {
           <ScreenTitle>History</ScreenTitle>
           <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
             {"Closed trades across your team — recorded automatically when a Live Wall position closes, tagged by trader."}
-            {!readOnly && ' Delete any of your own rows to clear out test trades.'}
+            {!readOnly &&
+              (data.canDeleteAny
+                ? " Delete any row on the desk to clear out test trades — you hold the team's delete permission."
+                : ' Delete any of your own rows to clear out test trades.')}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -366,6 +372,7 @@ export function History() {
                 showMoney={showMoney}
                 canSeeBalances={canSeeBalances}
                 canEdit={!readOnly && t.isMine}
+                canRemove={!readOnly && (t.isMine || data.canDeleteAny)}
                 removing={removingId === t.id}
                 onRemove={() => remove(t)}
                 onEdit={() => setEditing(t)}
@@ -415,7 +422,10 @@ function Breakdown({ title, groups, money, showPips }: { title: string; groups: 
   );
 }
 
-function TradeRow({ t, config, isPhone, showMoney, canSeeBalances, canEdit, removing, onRemove, onEdit }: { t: HistoryRecord; config: BreakEvenConfig; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean; canEdit: boolean; removing: boolean; onRemove: () => void; onEdit: () => void }) {
+// `canEdit` is the owner's own row (correcting a teammate's numbers stays with
+// admins); `canRemove` is wider — a desk leader or a teammate granted the team's
+// "Delete trades" permission can clear anyone's row.
+function TradeRow({ t, config, isPhone, showMoney, canSeeBalances, canEdit, canRemove, removing, onRemove, onEdit }: { t: HistoryRecord; config: BreakEvenConfig; isPhone: boolean; showMoney: boolean; canSeeBalances: boolean; canEdit: boolean; canRemove: boolean; removing: boolean; onRemove: () => void; onEdit: () => void }) {
   const long = t.side === 'long';
   const isBreakeven =
     t.realizedPl != null && classifyOutcome(t.side, t.entryPrice, t.exitPrice, t.realizedPl, t.instrument, config) === 'breakeven';
@@ -449,10 +459,10 @@ function TradeRow({ t, config, isPhone, showMoney, canSeeBalances, canEdit, remo
             read — as long as the broker gave us both ends of it. */}
         <TradeTimesCell openedAt={t.openedAt} closedAt={t.closedAt} showHeld />
       </span>
-      {canEdit ? (
+      {canEdit || canRemove ? (
         <span style={{ display: 'flex', gap: 4, width: 60, justifyContent: 'flex-end' }}>
-          <button onClick={onEdit} disabled={removing} title="Edit this trade" aria-label="Edit trade" style={rowIconBtn}>✏️</button>
-          <button onClick={onRemove} disabled={removing} title="Delete this trade" aria-label="Delete trade" style={{ ...rowIconBtn, color: '#52668f', fontSize: 15 }}>×</button>
+          {canEdit && <button onClick={onEdit} disabled={removing} title="Edit this trade" aria-label="Edit trade" style={rowIconBtn}>✏️</button>}
+          {canRemove && <button onClick={onRemove} disabled={removing} title="Delete this trade" aria-label="Delete trade" style={{ ...rowIconBtn, color: '#52668f', fontSize: 15 }}>×</button>}
         </span>
       ) : (
         !isPhone && <span style={{ width: 60 }} />

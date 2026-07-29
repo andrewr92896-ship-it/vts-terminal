@@ -11,17 +11,26 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.77';
+export const APP_VERSION = 'Beta V 5.78';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.77',
+    version: 'Beta V 5.78',
     date: 'July 29, 2026',
     notes: [
       'VTS AI now answers the same way everywhere in the portal: the answer first, no preamble or padding, bullets for lists, numbered steps for anything done in order, and short paragraphs instead of blocks of text.',
       'It states an assumption and keeps going rather than stopping to ask, and only asks when the missing detail would change the answer. It no longer compliments the question or describes its own reply.',
       'This covers Ask VTS AI, the study tutor, the Market News and challenge briefs, the study-guide builder, the To Do command bar and the support chat.',
       'Admin ▸ AI Instructions has a new "Response style" box at the top holding all of it. Editing that one box changes the voice of every AI reply in the portal at once.',
+    ],
+  },
+  {
+    version: 'Beta V 5.77',
+    date: 'July 29, 2026',
+    notes: [
+      'Deleting a trade is no longer limited to the trader who placed it. The team leader can now remove any trade on the desk, and can hand that out to a teammate with a new "Delete trades" permission in My Portal ▸ Trading Team — the same checkbox list that already covers invites, badges and the rest.',
+      'The permission covers putting a trade back too: anyone who can delete a teammate\'s trade can restore it from Deleted Trades. Correcting the numbers on a teammate\'s closed trade is still admins only.',
+      'Everyone else is unchanged — without the permission you still only see a delete button on your own rows, and nobody can reach a trade outside their own team.',
     ],
   },
   {

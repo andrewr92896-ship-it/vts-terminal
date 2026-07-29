@@ -130,6 +130,7 @@ export interface TeamMemberPermissions {
   canManageBadges: boolean;
   canRemoveMembers: boolean;
   canEditTeam: boolean;
+  canDeleteTrades: boolean; // remove/restore any teammate's trade (the leader always can)
 }
 export interface UserTeamMember {
   userId: string;
@@ -1074,6 +1075,16 @@ export interface TradeLogData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  // The viewer may remove a teammate's trade, not just their own (team leader,
+  // a member granted "Delete trades", or an admin).
+  canDeleteAny: boolean;
+}
+
+// The Deleted Trades payload — soft-deleted rows plus the viewer's reach over
+// them (whoever may delete a teammate's trade may also restore it).
+export interface DeletedTradesData {
+  trades: DeletedTradeRecord[];
+  canDeleteAny: boolean;
 }
 
 // Raw data returned when a trade is removed, so the client can offer undo.
@@ -1348,6 +1359,8 @@ export interface HistoryData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  // The viewer may remove a teammate's closed trade, not just their own.
+  canDeleteAny: boolean;
 }
 
 // Fields accepted when creating/editing a trade.
