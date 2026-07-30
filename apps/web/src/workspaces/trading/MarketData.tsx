@@ -45,12 +45,14 @@ import type {
 // read and no recommendation-flavoured copy anywhere on this screen (that was a
 // design decision, not an omission — see docs/design/market-data/).
 //
-// Two data sources, and they differ in how real they are:
+// How real the figures are, by region:
 //   • the calendar is the live Forex Factory feed (the same rows Market News
 //     shows), so those figures are real;
-//   • the series board is a code-resident catalog whose *values* are design
-//     fixtures until a macro provider is wired. The payload says so
-//     (`sampleValues`) and the screen prints a notice — see the API module.
+//   • the FX, dollar-index and crypto rows are quoted live from OANDA, changes
+//     included (see api trading/marketQuotes.ts);
+//   • every other series still carries the design's placeholder figures until a
+//     macro-data provider is wired. Those rows arrive with `sample: true`, show a
+//     distinct freshness dot, and are counted in the notice under the header.
 
 const REFRESH_MS = 120_000;
 const TICK_MS = 1000;
@@ -63,11 +65,21 @@ const ROW_LINE = 'rgba(21,33,57,.7)';
 const GOLD_TINT = 'linear-gradient(180deg, rgba(235,203,116,.16), rgba(235,203,116,.08))';
 const GOLD_BORDER = 'rgba(235,203,116,.35)';
 
+// The freshness dot, and its legend. `sample` is not one of the API's
+// `MarketFreshness` values — it is the `sample` flag surfacing through the same
+// vocabulary, because "where did this number come from" is the question the dot
+// already answers and a placeholder figure is not a live feed.
 const FRESHNESS: Record<MarketFreshness, { label: string; color: string }> = {
   live: { label: 'Live feed', color: C.green },
   manual: { label: 'Manual', color: C.amber },
   stale: { label: 'Stale', color: C.faint },
 };
+const SAMPLE_FRESHNESS = { label: 'Sample', color: DIM };
+const LEGEND = [FRESHNESS.live, FRESHNESS.manual, SAMPLE_FRESHNESS, FRESHNESS.stale];
+
+function freshnessOf(m: BoardMetric): { label: string; color: string } {
+  return m.sample ? SAMPLE_FRESHNESS : FRESHNESS[m.source];
+}
 
 const IMPACT: Record<NewsImpact, { label: string; color: string }> = {
   high: { label: 'High', color: C.red },
@@ -92,8 +104,15 @@ function customToMetric(c: CustomMetric): BoardMetric {
     session: null,
     changes: [c.delta || '—', '—', '—', '—', '—'],
     review: { body: 'Manual entry', last: 'when you update it', next: '' },
+    sample: false, // the trader's own figure, not a design placeholder
     custom: true,
   };
+}
+
+// "Crypto", "FX & dollar and Crypto", "FX & dollar, Crypto and Sessions".
+function listWords(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 }
 
 // Colour a display change string by its leading character. A signed zero
@@ -360,6 +379,12 @@ export function MarketData() {
     return m ? [m] : [];
   });
   const filtersActive = needle !== '' || groupFilter !== 'all';
+  // Which groups carry at least one real figure, and how many rows are still
+  // placeholders. Drives the notice above.
+  const sampleCount = visible.filter((m) => m.sample).length;
+  const liveGroupLabels = groups
+    .filter((g) => visible.some((m) => m.group === g.key && !m.sample))
+    .map((g) => g.label);
 
   return (
     <div ref={wellRef} style={wellStyle(isPhone)}>
@@ -419,13 +444,14 @@ export function MarketData() {
         </div>
       )}
 
-      {/* Sample-data notice. The board's figures are design fixtures until a
-          macro provider is wired; the calendar below is the real feed. */}
+      {/* What is live and what is not, counted off the payload rather than
+          hardcoded, so this stops overstating the moment a provider lands. */}
       {data.sampleValues && (
         <div style={sampleNotice}>
-          <b style={{ fontWeight: 700 }}>Sample data.</b> The series values and changes on this board
-          are placeholders from the design, not a live feed — the economic calendar is real. Session
-          open/closed and the Fed countdown are computed live.
+          <b style={{ fontWeight: 700 }}>Partly live.</b>{' '}
+          {liveGroupLabels.length > 0 && `${listWords(liveGroupLabels)} read live. `}
+          {`The other ${sampleCount} still show the design's placeholder figures until a macro-data provider is wired — they carry the grey Sample dot.`}{' '}
+          The economic calendar and the Fed countdown are real.
         </div>
       )}
 
@@ -443,10 +469,10 @@ export function MarketData() {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {(Object.keys(FRESHNESS) as MarketFreshness[]).map((k) => (
-              <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ ...dot, background: FRESHNESS[k].color }} />
-                <span style={legendLabel}>{FRESHNESS[k].label}</span>
+            {LEGEND.map((f) => (
+              <span key={f.label} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ ...dot, background: f.color }} />
+                <span style={legendLabel}>{f.label}</span>
               </span>
             ))}
           </div>
@@ -690,7 +716,7 @@ function Tile({
   onUnpin: () => void;
   onRemove: () => void;
 }) {
-  const fresh = FRESHNESS[m.source];
+  const fresh = freshnessOf(m);
   const rev = reviewInfo(m, now, fomc);
   const masked = m.money && privacy;
   const open = m.session ? sessionOpen(now, m.session) : false;
@@ -983,7 +1009,7 @@ function Row({
   onTogglePin: () => void;
   onRemove: () => void;
 }) {
-  const fresh = FRESHNESS[m.source];
+  const fresh = freshnessOf(m);
   const rev = reviewInfo(m, now, fomc);
   const masked = m.money && privacy;
   const open = m.session ? sessionOpen(now, m.session) : false;

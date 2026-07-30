@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.80';
+export const APP_VERSION = 'Beta V 5.81';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.81',
+    date: 'July 30, 2026',
+    notes: [
+      'Market Data now shows real prices for FX and crypto, quoted from OANDA: EUR/USD, GBP/USD, USD/JPY, USD/CAD, AUD/USD, the dollar index, Bitcoin and Ethereum.',
+      'Those rows also carry real changes over all five periods \u2014 1 day, 1 week, 1 month, year to date and 1 year \u2014 worked out from daily closing prices rather than estimated.',
+      'The dollar index is not something a broker quotes, so it is calculated from the six currencies and weights the official index uses. The row says so instead of crediting a publisher it did not come from.',
+      'Every figure still waiting on a data source now carries a grey Sample dot, and the notice at the top of the screen names exactly which groups are live and counts the rest \u2014 so it is clear at a glance which numbers you can trade off.',
+      'Prices refresh at most once a minute and the last good reading stays on screen if a refresh fails, so the board never blanks out.',
+    ],
+  },
   {
     version: 'Beta V 5.80',
     date: 'July 29, 2026',

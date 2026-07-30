@@ -2,18 +2,22 @@
 // flat list of series grouped into ten sections, plus the FOMC meeting schedule
 // the screen's Fed decision bar counts down to.
 //
-// SAMPLE VALUES. The portal has no macro-data provider wired yet (OANDA and
-// Kraken cover live FX/crypto/metals prices; nothing covers CPI, payrolls, the
-// Treasury curve, Fed balance sheet, …). Every `value` / `changes` entry below
-// is a fixture lifted from the design prototype so the screen is complete and
-// judgeable, and the payload carries `sampleValues: true` so the UI can say so
-// out loud. Per the design's copy conventions a figure that is not real must be
-// marked as sample data — do not drop that flag without wiring real values.
+// PARTLY LIVE. The **price** series — the FX majors, the dollar index and the two
+// crypto majors — are quoted from OANDA at request time (`marketQuotes.ts`),
+// including real 1D/1W/1M/YTD/1Y changes computed from daily candles. Everything
+// else needs a macro-data provider the portal does not have (nothing covers CPI,
+// payrolls, the Treasury curve or the Fed balance sheet), so those `value` /
+// `changes` entries below are still fixtures lifted from the design prototype.
 //
-// When a provider does land, keep this module's shape: replace `value`,
-// `changes`, `asOf` and `source` per series from the feed and flip
-// `sampleValues` (or move to a per-series `sample` flag) so partially-real
-// boards stay honest. `review` and `session` are structural and stay here.
+// Each series therefore carries `sample: true|false` and the payload's
+// `sampleValues` is just "is any of it sample" — the screen names which groups
+// are live rather than disclaiming the whole board. Per the design's copy
+// conventions a figure that is not real must be marked as sample data, so when
+// you wire a new provider, overlay it the way `applyLiveQuotes` does and let the
+// flag fall to false on its own. `review` and `session` are structural and always
+// live here.
+
+import { getMarketQuotes, type LiveQuote } from './marketQuotes.js';
 
 // Group order is the board's section order. Kept as a tuple so it doubles as the
 // Zod enum for a saved custom metric's group.
@@ -77,6 +81,9 @@ export interface MarketSeries {
   session: [number, number] | null;
   changes: [string, string, string, string, string]; // 1D, 1W, 1M, YTD, 1Y
   review: MarketReview;
+  // False once `value`/`changes` come from a real feed. True while they are the
+  // design's placeholder figures.
+  sample: boolean;
 }
 
 // The five change periods, in column order.
@@ -264,6 +271,9 @@ export const MARKET_SERIES: MarketSeries[] = DEFS.map((d) => ({
   session: d.sess ?? null,
   changes: d.c ?? NO_CHANGE,
   review: resolveReview(d),
+  // A session's Open/Closed is computed client-side from the ET clock, so it is
+  // never placeholder data even though the catalog carries no value for it.
+  sample: d.sess == null,
 }));
 
 export interface MarketDataPayload {
@@ -273,20 +283,47 @@ export interface MarketDataPayload {
   defaultPins: string[];
   meetings: string[];
   meetingYear: number;
-  // True while the board's figures are design fixtures rather than a live feed.
-  // The UI must say so; see the note at the top of this file.
+  // True while ANY series is still showing the design's placeholder figures. The
+  // per-series `sample` flag is the precise version; the screen uses both to name
+  // which groups are live instead of disclaiming everything.
   sampleValues: boolean;
 }
 
-export function getMarketData(): MarketDataPayload {
+// Overlay live quotes onto the catalog. A series the quote source priced loses
+// its `sample` flag and takes the real value, changes and as-of label; every
+// other row is returned untouched.
+export function applyLiveQuotes(
+  series: MarketSeries[],
+  quotes: Map<string, LiveQuote>,
+): MarketSeries[] {
+  if (quotes.size === 0) return series;
+  return series.map((s) => {
+    const q = quotes.get(s.id);
+    if (!q) return s;
+    return {
+      ...s,
+      value: q.value,
+      changes: q.changes,
+      asOf: q.asOf,
+      // Only a source that computes the figure itself restates the publisher.
+      review: q.reviewBody ? { ...s.review, body: q.reviewBody } : s.review,
+      sample: false,
+    };
+  });
+}
+
+export async function getMarketData(): Promise<MarketDataPayload> {
+  // Best-effort: with no OANDA credentials anywhere on the install this returns
+  // an empty map and the board renders entirely from the catalog.
+  const series = applyLiveQuotes(MARKET_SERIES, await getMarketQuotes());
   return {
     groups: MARKET_DATA_GROUPS,
-    series: MARKET_SERIES,
+    series,
     periods: [...MARKET_PERIODS],
     defaultPins: DEFAULT_PINNED_SERIES,
     meetings: FOMC_MEETINGS_2026,
     meetingYear: FOMC_MEETING_YEAR,
-    sampleValues: true,
+    sampleValues: series.some((s) => s.sample),
   };
 }
 
