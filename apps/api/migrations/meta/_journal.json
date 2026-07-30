@@ -561,6 +561,13 @@
       "when": 1782341136908,
       "tag": "0079_market_data_layout",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "6",
+      "when": 1782341236908,
+      "tag": "0080_market_news_streams",
+      "breakpoints": true
     }
   ]
 }

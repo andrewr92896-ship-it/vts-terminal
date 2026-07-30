@@ -206,6 +206,39 @@ top of the workspaces list** (see `theme/nav.ts` order).
       also holds the session-window, countdown and "in 2h 18m" helpers. Use it
       for anything schedule-shaped; `newsFormat.ts` remains the formatter for an
       instant you already have.
+  - **Market News** (`news`, `workspaces/trading/MarketNews.tsx`) is two things:
+    the **headline feed** and an embedded **YouTube live-stream wall**. The feed
+    is every story the desk's feeds carry (`GET /api/trading/news` — the same
+    shared `trading_news` rows; the payload's `calendar` is now read only by
+    Market Data), newest first, bucketed by recency (Last hour / Earlier today /
+    Yesterday / dated days), each row tagging the instruments it mentions
+    (`newsRelevance.affectedInstruments`) and filterable by topic pill or by the
+    Sources rail. One switchable **tape-read glyph** (`SHOW_BIAS`) is the only
+    directional cue. Deliberately **removed and not to be reintroduced**: the AI
+    overview brief, the "how it could affect us" note, the impact dots/chips, the
+    "Most mentioned" rail, and the Trump/Truth Social tab — an "informational
+    only, not investment advice" line sits under the feed instead. The economic
+    calendar lives on Market Data now, not here.
+    - The **live-stream wall** lets a trader follow YouTube channels and open
+      several at once (layout 1-up…6-up, one dockable corner mini-player), so a
+      press conference plays beside the headlines. A channel with a **channel ID**
+      embeds the keyless `youtube.com/embed/live_stream?channel=ID` player (which
+      plays when the channel is live and self-shows offline otherwise); a
+      handle-only channel links out until the ID is resolved. Each trader's setup
+      — followed `channels`, open `watching` list + order, `docked` stream, column
+      `cols`, and per-channel go-live `notify` toggles — **persists per user** in
+      `market_news_streams` (`trading/marketNewsStreams.ts`,
+      `GET|PUT /api/trading/market-news/streams`; in the `admin/service.ts`
+      per-user delete list). A trader with no row gets a default set of real desk
+      channels (Fed/Reuters/CNBC/ECB), nothing open.
+    - **Live status is not wired yet.** `LIVE_STREAMS_CONFIGURED` is `false`, so
+      every channel reads offline and the screen marks live/viewer figures as
+      **sample** — no LIVE badges, viewer counts or go-live pushes are faked.
+      Lighting it up is the remaining backend work: resolve `@handle → channelId`
+      server-side once (`youtube/v3/channels?forHandle=`) and poll live-state
+      (`youtube/v3/search?...&eventType=live`), cached, then fill `withLiveState`
+      in `marketNewsStreams.ts` and flip the flag — the UI already renders the
+      live path.
 - **Investments** (teal, key `investments`): a read-only, layman-friendly
   **long-term portfolio tracker** — 401(k), IRA, ESA, and general holdings. This
   is the platform's intended "bread and butter" for a future public/App Store

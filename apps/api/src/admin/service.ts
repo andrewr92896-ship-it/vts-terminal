@@ -20,6 +20,7 @@ import {
   notificationPrefs,
   sessionAlertPrefs,
   marketDataLayout,
+  marketNewsStreams,
   priceAlerts,
   widgetTokens,
   supportRequests,
@@ -372,6 +373,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
     await tx.delete(marketDataLayout).where(eq(marketDataLayout.userId, targetId));
+    await tx.delete(marketNewsStreams).where(eq(marketNewsStreams.userId, targetId));
     await tx.delete(priceAlerts).where(eq(priceAlerts.userId, targetId));
     await tx.delete(widgetTokens).where(eq(widgetTokens.userId, targetId));
     await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));

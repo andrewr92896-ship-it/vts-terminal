@@ -977,6 +977,38 @@ export interface MarketNewsData {
   calendar: CalendarEvent[];
 }
 
+// A followed YouTube channel on the Market News live-stream wall. Identity
+// fields are the trader's saved config; the live-state fields are attached by
+// the server (offline for everyone until a go-live poller is wired — see
+// `liveConfigured` on the payload).
+export interface StreamChannel {
+  key: string;
+  name: string;
+  handle: string;
+  channelId: string;
+  live: boolean;
+  streamTitle?: string;
+  viewers?: string;
+  lastLive?: string;
+  lastTitle?: string;
+}
+
+// This trader's personal live-stream setup. All five fields persist per user.
+export interface MarketNewsStreams {
+  channels: StreamChannel[];
+  watching: string[];
+  docked: string | null;
+  cols: number;
+  notify: Record<string, boolean>;
+}
+
+export interface MarketNewsStreamsPayload {
+  streams: MarketNewsStreams;
+  // False until a server-side YouTube poller populates live status / viewers —
+  // the screen marks channel live-state as sample while this is false.
+  liveConfigured: boolean;
+}
+
 export interface NewsInput {
   title?: string;
   body?: string | null;

@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.81';
+export const APP_VERSION = 'Beta V 5.82';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.82',
+    date: 'July 30, 2026',
+    notes: [
+      'Market News is rebuilt around two things: the headline feed and a live-stream wall. Headlines are grouped by recency (last hour, earlier today, yesterday, then by day), newest first, with the instruments each story mentions.',
+      'You can now watch news channels inside the portal — open as many as you want and lay them out 1-up through 6-up, so a Fed press conference plays right beside the headlines instead of in another tab. One stream can be docked to a floating corner player.',
+      'Follow, add and remove your own YouTube channels from Manage channels; a channel ID embeds the player, a handle links out until the ID is resolved. Your channel list and layout are saved to your account.',
+      'Filter the feed by topic (Federal Reserve, EUR/USD, Metals, Crypto, Indices, Rates & yields) or by source, with a Sources rail that shows what each feed carries.',
+      'The AI overview, the "how it could affect us" note and the impact dots are gone — the feed states plainly that it is informational only, not investment advice. The economic calendar now lives on Market Data.',
+    ],
+  },
   {
     version: 'Beta V 5.81',
     date: 'July 30, 2026',

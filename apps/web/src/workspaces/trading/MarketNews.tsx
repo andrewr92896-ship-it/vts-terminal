@@ -1,105 +1,158 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { api, ApiError, type FeedBriefPayload } from '../../api/client';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { api, ApiError } from '../../api/client';
 import { useNowTick } from '../../hooks/useNowTick';
-import { useAuth } from '../../auth/AuthContext';
-import { affectedInstruments, deriveWatchlist, newsFeeds, NEWS_FEEDS, DEFAULT_WATCHLIST } from './newsRelevance';
-import { decodeEntities, fmtDayKey, fmtRelative, fmtTime } from './newsFormat';
+import { Icon } from '../../components/Icon';
+import { C, tint } from '../../theme/tokens';
 import { ScreenTitle } from './ScreenTitle';
-import type {
-  CalendarEvent,
-  EventInput,
-  MarketNewsData,
-  NewsBias,
-  NewsCategory,
-  NewsImpact,
-  NewsInput,
-  NewsItem,
-  TruthPost,
-} from '../../api/types';
+import { newsFeeds, affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
+import { decodeEntities, fmtDayKey, fmtTime } from './newsFormat';
+import type { MarketNewsData, MarketNewsStreams, NewsItem, StreamChannel } from '../../api/types';
 
-const GOLD = '#EBCB74';
-const GREEN = '#35c47b';
-const RED = '#ef5468';
-const AMBER = '#e0a23a';
-const TEXT = '#eef3ff';
-const MUTED = '#9fb0d6';
-const FAINT = '#6f84b0';
-const CARD = 'rgba(13,31,68,.5)';
-const PANEL = 'rgba(11,26,58,.5)';
-const INPUT_BG = '#091633';
-const BORDER = '#16294f';
-const BORDER2 = '#1c3a7a';
+// Market News — the desk's headline feed plus an embedded YouTube live-stream
+// wall (watch a press conference beside the headlines). This screen deliberately
+// carries no AI overview, no "how it could affect us" note, no impact dots and
+// no economic calendar — the calendar moved to Market Data, and the rest were
+// removed to keep the screen free of recommendation-flavoured copy. A single
+// tape-read glyph per headline is the one directional cue, switchable off here.
+const SHOW_BIAS = true;
 
 const REFRESH_MS = 120_000;
+const ET = 'America/New_York';
 
-const IMPACT: Record<NewsImpact, { label: string; color: string }> = {
-  high: { label: 'High', color: RED },
-  medium: { label: 'Med', color: AMBER },
-  low: { label: 'Low', color: FAINT },
-};
-const BIAS: Record<NewsBias, { label: string; color: string }> = {
-  bullish: { label: 'Bullish', color: GREEN },
-  bearish: { label: 'Bearish', color: RED },
-  neutral: { label: 'Neutral', color: MUTED },
-};
-const CATEGORY: Record<NewsCategory, string> = {
+// Topic pills. `rates` isn't one of newsRelevance's feed keys, so membership for
+// it is matched here; the others reuse `newsFeeds`.
+const TOPICS: { key: string; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'fed', label: 'Federal Reserve' },
+  { key: 'eurusd', label: 'EUR/USD' },
+  { key: 'gold', label: 'Metals' },
+  { key: 'btc', label: 'Crypto' },
+  { key: 'indices', label: 'Indices' },
+  { key: 'rates', label: 'Rates & yields' },
+];
+const RATES_RE =
+  /\b(yield|yields|treasur\w*|bond|bonds|basis point|basis points|bps|bp|auction|bid-to-cover|2s10s|10-year|two-year|ten-year|coupon|curve|tips)\b/i;
+
+const CATEGORY_LABEL: Record<string, string> = {
   markets: 'Markets',
   geopolitical: 'Geopolitical',
   economic: 'Economic',
   crypto: 'Crypto',
-  other: 'Other',
+  other: 'Markets',
 };
 
-// Datetime-local <-> ms helpers, interpreted in the browser's local zone.
-function toLocalInput(ms: number): string {
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-// Compact a calendar event for the AI overview payload (ET day + time label).
-function eventPayload(e: CalendarEvent) {
+// A default matching the server's, so the screen still works if the streams
+// call fails (or on a read-only demo that can't persist).
+function localDefaultStreams(): MarketNewsStreams {
+  const mk = (key: string, name: string, handle: string, channelId: string): StreamChannel => ({
+    key,
+    name,
+    handle,
+    channelId,
+    live: false,
+  });
   return {
-    when: `${fmtDayKey(e.eventTime)} ${fmtTime(e.eventTime)}`,
-    country: e.country ?? undefined,
-    title: e.title,
-    impact: e.impact,
-    forecast: e.forecast ?? undefined,
-    previous: e.previous ?? undefined,
-    actual: e.actual ?? undefined,
+    channels: [
+      mk('fed', 'Federal Reserve', '@federalreserve', 'UCAzhpt9DmG6PnHXjmJTvRGQ'),
+      mk('reuters', 'Reuters', '@Reuters', ''),
+      mk('cnbc', 'CNBC Television', '@CNBCtelevision', ''),
+      mk('ecb', 'European Central Bank', '@ecbeuro', ''),
+    ],
+    watching: [],
+    docked: null,
+    cols: 2,
+    notify: {},
   };
 }
 
-export function MarketNews() {
-  // Keep the "x ago" headline times fresh between the 120s data polls.
-  useNowTick();
-  const { user } = useAuth();
-  // Read-only for trading view-only roles AND the public demo (which is marked
-  // read-only on every workspace). Gates the compose/edit/remove controls below.
-  const canWrite = !!user && !user.access.readOnlyWorkspaces.includes('trading');
+// --- time helpers (all Eastern) ---
+function etDayKey(ms: number): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: ET, year: 'numeric', month: '2-digit', day: '2-digit' }).format(ms);
+}
+function shortAge(ms: number, now: number): string {
+  const m = Math.floor((now - ms) / 60000);
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
+}
+function bucketLabel(ms: number, now: number): string {
+  if (now - ms < 3600_000) return 'Last hour';
+  const today = etDayKey(now);
+  if (etDayKey(ms) === today) return 'Earlier today';
+  if (etDayKey(ms) === etDayKey(now - 86400_000)) return 'Yesterday';
+  return fmtDayKey(ms);
+}
 
+function topicsOf(h: NewsItem): string[] {
+  const set = new Set(newsFeeds(h).filter((k) => k !== 'markets'));
+  const text = [h.title, h.body, h.source].filter(Boolean).join(' ');
+  if (RATES_RE.test(text)) set.add('rates');
+  return [...set];
+}
+
+function embedSrc(c: StreamChannel): string {
+  return c.channelId ? `https://www.youtube.com/embed/live_stream?channel=${c.channelId}&autoplay=1&rel=0` : '';
+}
+function channelUrl(c: StreamChannel): string {
+  if (c.channelId) return `https://www.youtube.com/channel/${c.channelId}/live`;
+  if (c.handle) return `https://www.youtube.com/${c.handle}/live`;
+  return 'https://www.youtube.com';
+}
+
+export function MarketNews() {
+  // Keep the "x ago" ages fresh between the 120s data polls.
+  const now = useNowTick(30_000);
+
+  // --- headline feed ---
   const [data, setData] = useState<MarketNewsData | null>(null);
-  const [truth, setTruth] = useState<TruthPost[]>([]);
-  // The instruments this trader actually trades, used to tag each headline with
-  // the positions it would affect. Best-effort: defaults until the log loads.
   const [watchlist, setWatchlist] = useState<string[]>(DEFAULT_WATCHLIST);
   const [err, setErr] = useState<string | null>(null);
+  const [lastLoaded, setLastLoaded] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
-  const [brief, setBrief] = useState<string | null>(null);
-  const [briefBusy, setBriefBusy] = useState(false);
-  // Which subfeed is showing, and the story filters within it (impact / bias).
-  const [feed, setFeed] = useState<string>('all');
-  // Default to Med+ so low-impact / no-read-through noise (the AI marks off-topic
-  // stories "low") is hidden out of the gate; "All" is one click away.
-  const [impactFilter, setImpactFilter] = useState<'all' | 'high' | 'medhigh'>('medhigh');
-  const [biasFilter, setBiasFilter] = useState<'all' | NewsBias>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all');
 
-  async function load() {
-    try { setData(await api.marketNews()); setErr(null); } catch (e) { setErr(e instanceof ApiError ? e.message : 'Failed to load'); }
-    // Best-effort: the Truth Social feed may be empty if the server poll is
-    // blocked, so a failure here never affects the rest of the page.
-    api.tradingTruth().then((r) => setTruth(r.posts)).catch(() => {});
+  // --- live-stream setup (persisted per user) ---
+  const [streams, setStreams] = useState<MarketNewsStreams | null>(null);
+  const [liveConfigured, setLiveConfigured] = useState(false);
+
+  // --- feed filters / ephemeral UI ---
+  const [topic, setTopic] = useState('all');
+  const [source, setSource] = useState('all');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [liveOpen, setLiveOpen] = useState(true);
+  const [manage, setManage] = useState(false);
+  const [form, setForm] = useState({ name: '', ref: '' });
+
+  // Content-column width drives the responsive column counts (the sidebar
+  // collapses, so a media query would fire at the wrong moment).
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [contentW, setContentW] = useState(1120);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setContentW(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  async function load(manual = false) {
+    if (manual) setBusy(true);
+    try {
+      const d = await api.marketNews();
+      setData(d);
+      setErr(null);
+      setLastLoaded(Date.now());
+    } catch (e) {
+      const at = lastLoaded ? `Showing headlines from ${fmtTime(lastLoaded)} ET. ` : '';
+      const why = e instanceof ApiError ? e.message : 'request failed';
+      setErr(`${at}Couldn't refresh: ${why}.`);
+    } finally {
+      if (manual) setBusy(false);
+    }
   }
   useEffect(() => {
     void load();
@@ -108,488 +161,915 @@ export function MarketNews() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Derive the watchlist from the trade log once on mount. Best-effort — on any
-  // failure (or an empty log) the default majors set keeps the tags working.
+  // Load persisted stream setup once; fall back to the local default so the
+  // wall still works when the call fails (or on the read-only demo).
   useEffect(() => {
-    api.tradeLog()
+    api
+      .marketNewsStreams()
+      .then((r) => {
+        setStreams(r.streams);
+        setLiveConfigured(r.liveConfigured);
+      })
+      .catch(() => setStreams(localDefaultStreams()));
+  }, []);
+
+  // Derive the watchlist from the trade log once, for the instrument tags.
+  useEffect(() => {
+    api
+      .tradeLog()
       .then((r) => setWatchlist(deriveWatchlist(r.trades.map((t) => t.instrument))))
       .catch(() => {});
   }, []);
 
-  async function run(p: Promise<MarketNewsData>): Promise<boolean> {
-    setBusy(true);
-    try { setData(await p); setErr(null); return true; } catch (e) { setErr(e instanceof ApiError ? e.message : 'Action failed'); return false; } finally { setBusy(false); }
-  }
-
-  async function getBrief() {
-    setBriefBusy(true);
-    try {
-      // Summarize exactly what the active feed is showing: headlines for a news
-      // feed (plus the EUR/USD calendar on that feed), the calendar on Calendar,
-      // and Trump's posts on Trump.
-      const label = tabs.find((t) => t.key === feed)?.label ?? 'Market News';
-      const payload: FeedBriefPayload = { label };
-      if (feed === 'trump') {
-        payload.posts = truth.slice(0, 20).map((p) => ({ content: p.content.slice(0, 2000) }));
-      } else if (feed === 'calendar') {
-        payload.events = upcoming.slice(0, 50).map(eventPayload);
-      } else {
-        payload.headlines = shown.slice(0, 50).map((h) => ({
-          title: h.title, category: h.category, impact: h.impact, bias: h.bias, source: h.source ?? undefined,
-        }));
-        if (feed === 'eurusd') payload.events = eurusdCal.upcoming.slice(0, 40).map(eventPayload);
-      }
-      setBrief((await api.feedBrief(payload)).brief); setErr(null);
+  // Persist the stream setup (debounced) on every change after the initial load.
+  const loadedRef = useRef(false);
+  useEffect(() => {
+    if (!streams) return;
+    if (!loadedRef.current) {
+      loadedRef.current = true;
+      return;
     }
-    catch (e) { setErr(e instanceof ApiError ? (e.status === 503 ? 'VTS AI isn’t configured yet — an API key needs to be set on the server.' : e.message) : 'Overview failed'); }
-    finally { setBriefBusy(false); }
-  }
+    const t = window.setTimeout(() => {
+      api.saveMarketNewsStreams(streams).catch(() => {});
+    }, 700);
+    return () => window.clearTimeout(t);
+  }, [streams]);
 
-  // Upcoming events first; split out past events into their own (collapsed-feel) tail.
-  const { upcoming, past } = useMemo(() => {
-    const now = Date.now();
-    const cal = data?.calendar ?? [];
-    return {
-      upcoming: cal.filter((e) => e.eventTime >= now - 6 * 3600_000),
-      past: cal.filter((e) => e.eventTime < now - 6 * 3600_000).reverse(),
-    };
-  }, [data]);
+  const mutate = (fn: (s: MarketNewsStreams) => MarketNewsStreams) =>
+    setStreams((prev) => (prev ? fn(prev) : prev));
 
-  // The EUR/USD feed leads with Forex Factory — its economic calendar is the
-  // primary source there — narrowed to the two currencies that drive the pair.
-  const eurusdCal = useMemo(() => {
-    const now = Date.now();
-    const evs = (data?.calendar ?? []).filter((e) => {
-      const c = (e.country ?? '').toUpperCase();
-      return c === 'EUR' || c === 'USD';
-    });
-    return {
-      upcoming: evs.filter((e) => e.eventTime >= now - 6 * 3600_000),
-      past: evs.filter((e) => e.eventTime < now - 6 * 3600_000).reverse(),
-      total: evs.length,
-    };
-  }, [data]);
+  const headlines = data?.headlines ?? [];
 
-  if (err && !data) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{err}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading market news…"}</div>;
+  // Topic counts (over every headline, stable regardless of the active filter).
+  const topicCounts = useMemo(() => {
+    const out: Record<string, number> = { all: headlines.length };
+    for (const t of TOPICS) if (t.key !== 'all') out[t.key] = 0;
+    for (const h of headlines) for (const k of topicsOf(h)) out[k] = (out[k] ?? 0) + 1;
+    return out;
+  }, [headlines]);
 
-  const headlines = data.headlines;
+  // Source counts (over every headline), for the Sources rail.
+  const sourceRows = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const h of headlines) {
+      const s = h.source;
+      if (s) out[s] = (out[s] ?? 0) + 1;
+    }
+    return Object.entries(out).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [headlines]);
 
-  // Tab counts key on topic membership only (the impact/bias filters narrow the
-  // list inside a feed but leave the tab counts stable).
-  const counts: Record<string, number> = { all: headlines.length, trump: truth.length, calendar: data.calendar.length };
-  for (const f of NEWS_FEEDS) counts[f.key] = 0;
-  for (const h of headlines) for (const k of newsFeeds(h)) counts[k] = (counts[k] ?? 0) + 1;
-  // EUR/USD leads with the Forex Factory calendar, so its tab count includes
-  // those EUR/USD events alongside the classified headlines.
-  counts.eurusd = (counts.eurusd ?? 0) + eurusdCal.total;
+  const sourceActive = source !== 'all' && sourceRows.some(([s]) => s === source);
 
-  const isNewsTab = feed !== 'trump' && feed !== 'calendar';
-
-  // Headlines that belong to the active feed (topic membership only) — the basis
-  // for the Source dropdown's options and for the filtered list below.
-  const feedHeadlines = isNewsTab
-    ? headlines.filter((h) => feed === 'all' || newsFeeds(h).includes(feed))
-    : [];
-  const feedSources = [...new Set(feedHeadlines.map((h) => h.source).filter((s): s is string => !!s))].sort((a, b) =>
-    a.localeCompare(b),
+  const shown = useMemo(
+    () =>
+      headlines.filter(
+        (h) =>
+          (topic === 'all' || topicsOf(h).includes(topic)) && (!sourceActive || h.source === source),
+      ),
+    [headlines, topic, source, sourceActive],
   );
-  // A stale source selection (e.g. after switching feeds) falls back to "all".
-  const sourceActive = sourceFilter !== 'all' && feedSources.includes(sourceFilter);
 
-  // Headlines for the active news tab, after the impact/bias/source filters.
-  const shown = feedHeadlines.filter((h) => {
-    if (impactFilter === 'high' && h.impact !== 'high') return false;
-    if (impactFilter === 'medhigh' && h.impact === 'low') return false;
-    if (biasFilter !== 'all' && h.bias !== biasFilter) return false;
-    if (sourceActive && h.source !== sourceFilter) return false;
-    return true;
-  });
+  // Group the filtered headlines into recency buckets, newest first.
+  const groups = useMemo(() => {
+    const gs: { label: string; items: NewsItem[] }[] = [];
+    for (const h of shown) {
+      const label = bucketLabel(h.publishedAt, now);
+      const g = gs.find((x) => x.label === label);
+      if (g) g.items.push(h);
+      else gs.push({ label, items: [h] });
+    }
+    return gs;
+  }, [shown, now]);
 
-  const tabs: { key: string; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'trump', label: 'Trump' },
-    ...NEWS_FEEDS,
-    { key: 'calendar', label: 'Calendar' },
-  ];
+  const newest = headlines.reduce((a, h) => Math.max(a, h.publishedAt), 0);
+  const filtersActive = topic !== 'all' || sourceActive;
 
-  const filtersActive = impactFilter !== 'all' || biasFilter !== 'all' || sourceActive;
+  const clearFilters = () => {
+    setTopic('all');
+    setSource('all');
+  };
+
+  if (err && !data) {
+    return (
+      <div ref={rootRef} style={rootStyle}>
+        <div style={{ maxWidth: 1120, margin: '0 auto' }}>
+          <div style={{ color: C.red, fontSize: 13 }}>{err}</div>
+        </div>
+      </div>
+    );
+  }
+  if (!data) {
+    return (
+      <div ref={rootRef} style={rootStyle}>
+        <div style={{ maxWidth: 1120, margin: '0 auto', color: C.muted, fontSize: 13 }}>Loading market news…</div>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <ScreenTitle>Market News</ScreenTitle>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            {"Live headlines across the desk's markets, each read by VTS AI for bias, impact, and how it could affect our trading — plus Trump's Truth Social posts and the Forex Factory economic calendar (Eastern Time)."}
+    <div ref={rootRef} style={rootStyle}>
+      <div style={{ maxWidth: 1120, margin: '0 auto', color: C.text }}>
+        {/* ---- screen header ---- */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ minWidth: 0 }}>
+            <ScreenTitle>Market News</ScreenTitle>
+            <div style={subtitle}>
+              {"Every headline the desk's feeds carry, newest first, with the instruments each story mentions. All times Eastern."}
+            </div>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, animation: 'livePulse 2s infinite' }} />
+              <span style={{ fontFamily: C.mono, fontSize: 11, color: C.faint }}>
+                {newest ? `Newest ${shortAge(newest, now)} ago · ${shown.length} of ${headlines.length}` : `${shown.length} of ${headlines.length}`}
+              </span>
+            </span>
+            <button onClick={() => void load(true)} disabled={busy} style={{ ...ghostBtn, opacity: busy ? 0.6 : 1 }}>
+              {busy ? 'Refreshing…' : 'Refresh'}
+            </button>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => void getBrief()} disabled={briefBusy} style={{ ...ghostBtn, opacity: briefBusy ? 0.6 : 1 }}>
-            {briefBusy ? "Reading…" : "✨ AI overview"}
-          </button>
-          <button onClick={() => { setFeed('all'); setSourceFilter('all'); }} style={feed !== 'calendar' ? goldBtn : ghostBtn}>
-            {"Live market news"}
-          </button>
-          <button onClick={() => setFeed('calendar')} style={feed === 'calendar' ? goldBtn : ghostBtn}>
-            {"Calendar"}
-          </button>
-        </div>
-      </div>
 
-      {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
-
-      {brief && (
-        <div style={{ ...card, borderLeft: `3px solid ${GOLD}`, marginBottom: 16, position: 'relative' }}>
-          <div style={{ fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: GOLD, marginBottom: 6 }}>AI overview · VTS AI</div>
-          <div style={{ fontSize: 13, lineHeight: 1.6, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{brief}</div>
-          <button onClick={() => setBrief(null)} style={{ position: 'absolute', top: 10, right: 12, background: 'none', border: 'none', color: FAINT, fontSize: 16, cursor: 'pointer' }}>×</button>
-        </div>
-      )}
-
-      {/* Feed + story filters, each its own dropdown */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
-        <Dropdown label="Feed" value={feed} onChange={(v) => { setFeed(v); setSourceFilter('all'); }}
-          options={tabs.map((t) => ({ v: t.key, l: `${t.label} (${counts[t.key] ?? 0})` }))} />
-        {isNewsTab && (
-          <>
-            <Dropdown label="Impact" value={impactFilter} onChange={(v) => setImpactFilter(v as typeof impactFilter)}
-              options={[{ v: 'all', l: 'All' }, { v: 'medhigh', l: 'Medium & up' }, { v: 'high', l: 'High only' }]} />
-            <Dropdown label="Bias" value={biasFilter} onChange={(v) => setBiasFilter(v as typeof biasFilter)}
-              options={[{ v: 'all', l: 'All' }, { v: 'bullish', l: 'Bullish' }, { v: 'bearish', l: 'Bearish' }, { v: 'neutral', l: 'Neutral' }]} />
-            {feedSources.length > 0 && (
-              <Dropdown label="Source" value={sourceActive ? sourceFilter : 'all'} onChange={setSourceFilter}
-                options={[{ v: 'all', l: 'All sources' }, ...feedSources.map((s) => ({ v: s, l: s }))]} />
-            )}
-            {filtersActive && (
-              <button onClick={() => { setImpactFilter('all'); setBiasFilter('all'); setSourceFilter('all'); }} style={{ ...smallBtn, borderColor: 'transparent', color: FAINT, marginBottom: 1 }}>Clear</button>
-            )}
-          </>
+        {err && (
+          <div onClick={() => setErr(null)} style={banner}>
+            {err} — click to dismiss.
+          </div>
         )}
-      </div>
 
-      {/* Trump / Truth Social feed */}
-      {feed === 'trump' && (
-        truth.length === 0 ? (
-          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-            {"No Truth Social posts yet — the feed mirrors @realDonaldTrump's posts as they land."}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {truth.map((p) => (
-              <div key={p.id} style={{ ...card, borderLeft: `3px solid ${GOLD}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff' }}>{p.author} <span style={{ color: FAINT, fontWeight: 400 }}>· @realDonaldTrump</span></span>
-                  <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(p.postedAt)}</span>
-                </div>
-                <div style={{ fontSize: 13, lineHeight: 1.55, color: '#dce6fb', whiteSpace: 'pre-wrap' }}>{decodeEntities(p.content)}</div>
-                {p.url && (
-                  <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 7, fontSize: 11, color: GOLD, textDecoration: 'none' }}>
-                    View on Truth Social →
-                  </a>
-                )}
-              </div>
-            ))}
-          </div>
-        )
-      )}
+        {/* ---- live streams block ---- */}
+        <LiveStreams
+          streams={streams}
+          liveConfigured={liveConfigured}
+          contentW={contentW}
+          liveOpen={liveOpen}
+          setLiveOpen={setLiveOpen}
+          manage={manage}
+          setManage={setManage}
+          form={form}
+          setForm={setForm}
+          mutate={mutate}
+        />
 
-      {/* Economic calendar feed */}
-      {feed === 'calendar' && (
-        data.calendar.length === 0 ? (
-          <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-            {"No events yet — the Forex Factory feed populates within a few minutes."}
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <CalendarColumn events={upcoming} canWrite={canWrite} busy={busy} run={run} />
-            {past.length > 0 && (
-              <div style={{ opacity: 0.65 }}>
-                <div style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, margin: '4px 0 8px' }}>Past</div>
-                <CalendarColumn events={past} canWrite={canWrite} busy={busy} run={run} />
-              </div>
+        {/* ---- topic pills ---- */}
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 18 }}>
+          {TOPICS.map((t) => {
+            const active = topic === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTopic(t.key)}
+                style={{
+                  ...pillBase,
+                  fontWeight: active ? 600 : 500,
+                  color: active ? C.gold : C.muted,
+                  background: active ? GOLD_TINT_GRADIENT : 'rgba(255,255,255,.02)',
+                  borderColor: active ? tint(C.gold, 0.35) : C.line2,
+                }}
+              >
+                {t.label}
+                <span style={{ fontFamily: C.mono, fontSize: 11, color: active ? C.gold : C.faint }}>
+                  {topicCounts[t.key] ?? 0}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ---- active filter chips ---- */}
+        {filtersActive && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+            <span style={miniLabel}>FILTERED BY</span>
+            {topic !== 'all' && (
+              <FilterChip label={TOPICS.find((t) => t.key === topic)?.label ?? topic} onClear={() => setTopic('all')} />
             )}
+            {sourceActive && <FilterChip label={source} onClear={() => setSource('all')} />}
+            <button onClick={clearFilters} style={{ background: 'none', border: 'none', color: C.muted, fontSize: 11, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer' }}>
+              Clear all
+            </button>
           </div>
-        )
-      )}
+        )}
 
-      {/* EUR/USD leads with Forex Factory — its economic calendar is the primary
-          source for the pair; the classified EUR/USD headlines follow below. */}
-      {feed === 'eurusd' && (() => {
-        const passImpact = (imp: NewsImpact) =>
-          impactFilter === 'all' ? true : impactFilter === 'high' ? imp === 'high' : imp !== 'low';
-        const up = eurusdCal.upcoming.filter((e) => passImpact(e.impact));
-        const pa = eurusdCal.past.filter((e) => passImpact(e.impact));
-        return (
-          <div style={{ marginBottom: 18 }}>
-            <div style={feedSectionLabel}>Forex Factory · EUR &amp; USD economic calendar</div>
-            {up.length + pa.length === 0 ? (
-              <div style={{ ...card, textAlign: 'center', padding: '22px 20px', color: MUTED, fontSize: 13 }}>
-                No EUR/USD events{filtersActive ? ' match this filter' : ' in range yet'} — the Forex Factory feed populates within a few minutes.
+        {/* ---- feed grid ---- */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: contentW >= 900 ? 'minmax(0,1fr) 288px' : 'minmax(0,1fr)',
+            gap: 28,
+            alignItems: 'start',
+            marginTop: 18,
+          }}
+        >
+          <div>
+            {headlines.length === 0 ? (
+              <EmptyCard>No headlines yet — the live feeds populate within a few minutes.</EmptyCard>
+            ) : shown.length === 0 ? (
+              <div style={{ ...emptyCard }}>
+                <div style={{ color: C.muted, fontSize: 13, marginBottom: 12 }}>No headlines match this filter.</div>
+                <button onClick={clearFilters} style={ghostBtn}>
+                  Clear the filters
+                </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <CalendarColumn events={up} canWrite={canWrite} busy={busy} run={run} />
-                {pa.length > 0 && (
-                  <div style={{ opacity: 0.65 }}>
-                    <div style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, margin: '4px 0 8px' }}>Past</div>
-                    <CalendarColumn events={pa} canWrite={canWrite} busy={busy} run={run} />
+              groups.map((g) => (
+                <div key={g.label} style={{ marginBottom: 24 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <span style={groupLabel}>{g.label}</span>
+                    <span style={{ fontFamily: C.mono, fontSize: 11, color: '#3A4A6C' }}>{g.items.length}</span>
+                    <span style={{ flex: 1, height: 1, background: C.line }} />
                   </div>
-                )}
-              </div>
+                  {g.items.map((h) => (
+                    <HeadlineRow
+                      key={h.id}
+                      h={h}
+                      now={now}
+                      watchlist={watchlist}
+                      open={openId === h.id}
+                      onToggle={() => setOpenId(openId === h.id ? null : h.id)}
+                    />
+                  ))}
+                </div>
+              ))
             )}
           </div>
+
+          {/* Sources rail */}
+          <div style={{ ...card, padding: '13px 15px' }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={miniLabel}>SOURCES</span>
+              <span style={{ fontSize: 10, color: '#3A4A6C' }}>click to filter</span>
+            </div>
+            {sourceRows.length === 0 ? (
+              <div style={{ fontSize: 11.5, color: C.faint }}>No sources yet.</div>
+            ) : (
+              sourceRows.map(([name, count]) => {
+                const active = sourceActive && source === name;
+                return (
+                  <button
+                    key={name}
+                    onClick={() => setSource(active ? 'all' : name)}
+                    style={{
+                      display: 'flex',
+                      width: '100%',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 10,
+                      padding: '5px 0',
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: active ? C.gold : C.muted,
+                        fontWeight: active ? 600 : 400,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {name}
+                    </span>
+                    <span style={{ fontFamily: C.mono, fontSize: 11, color: active ? C.gold : C.faint }}>{count}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* ---- content footer (informational only) ---- */}
+        <div style={{ marginTop: 20, fontSize: 10.5, color: C.faint, letterSpacing: '0.3px' }}>
+          Headlines are reproduced from the desk's news feeds for information only — not investment advice.
+        </div>
+      </div>
+
+      {/* ---- docked mini-player ---- */}
+      {streams && streams.docked && (() => {
+        const c = streams.channels.find((x) => x.key === streams.docked);
+        if (!c) return null;
+        return (
+          <MiniPlayer
+            c={c}
+            onUndock={() => mutate((s) => ({ ...s, docked: null }))}
+            onClose={() =>
+              mutate((s) => ({ ...s, docked: null, watching: s.watching.filter((k) => k !== c.key) }))
+            }
+          />
         );
       })()}
+    </div>
+  );
+}
 
-      {/* News headline feeds */}
-      {isNewsTab && (
+// ---------------------------------------------------------------------------
+// Live streams block
+// ---------------------------------------------------------------------------
+
+function LiveStreams({
+  streams,
+  liveConfigured,
+  contentW,
+  liveOpen,
+  setLiveOpen,
+  manage,
+  setManage,
+  form,
+  setForm,
+  mutate,
+}: {
+  streams: MarketNewsStreams | null;
+  liveConfigured: boolean;
+  contentW: number;
+  liveOpen: boolean;
+  setLiveOpen: (v: boolean) => void;
+  manage: boolean;
+  setManage: (v: boolean) => void;
+  form: { name: string; ref: string };
+  setForm: (v: { name: string; ref: string }) => void;
+  mutate: (fn: (s: MarketNewsStreams) => MarketNewsStreams) => void;
+}) {
+  if (!streams) return null;
+  const channels = streams.channels;
+  const watching = streams.watching;
+  const liveCount = channels.filter((c) => c.live).length;
+
+  const maxCols = contentW >= 1500 ? 6 : contentW >= 1240 ? 4 : contentW >= 900 ? 3 : 1;
+  const cols = Math.min(streams.cols, maxCols);
+
+  const tiles = watching
+    .map((k) => channels.find((c) => c.key === k))
+    .filter((c): c is StreamChannel => !!c && c.key !== streams.docked);
+  const dockedChan = streams.docked ? channels.find((c) => c.key === streams.docked) : null;
+
+  const toggleWatch = (key: string) =>
+    mutate((s) => {
+      const open = s.watching.includes(key);
+      return {
+        ...s,
+        watching: open ? s.watching.filter((k) => k !== key) : [...s.watching, key],
+        docked: open && s.docked === key ? null : s.docked,
+      };
+    });
+  const closeTile = (key: string) =>
+    mutate((s) => ({
+      ...s,
+      watching: s.watching.filter((k) => k !== key),
+      docked: s.docked === key ? null : s.docked,
+    }));
+  const removeChannel = (key: string) =>
+    mutate((s) => {
+      const notify = { ...s.notify };
+      delete notify[key];
+      return {
+        ...s,
+        channels: s.channels.filter((c) => c.key !== key),
+        watching: s.watching.filter((k) => k !== key),
+        docked: s.docked === key ? null : s.docked,
+        notify,
+      };
+    });
+  const toggleNotify = (key: string) =>
+    mutate((s) => ({ ...s, notify: { ...s.notify, [key]: !s.notify[key] } }));
+  const addChannel = () => {
+    const name = form.name.trim();
+    const ref = form.ref.trim();
+    if (!name || !ref) return;
+    const idMatch = ref.match(/UC[A-Za-z0-9_-]{20,}/);
+    const handleMatch = ref.match(/@[A-Za-z0-9._-]+/);
+    const key = `c_${Date.now()}`;
+    mutate((s) => ({
+      ...s,
+      channels: [
+        ...s.channels,
+        {
+          key,
+          name,
+          handle: handleMatch ? handleMatch[0] : '',
+          channelId: idMatch ? idMatch[0] : '',
+          live: false,
+        },
+      ],
+    }));
+    setForm({ name: '', ref: '' });
+  };
+
+  const watchingLabel =
+    `${tiles.length} ${tiles.length === 1 ? 'stream' : 'streams'} open` +
+    (streams.cols > maxCols ? ` · ${maxCols} across at this width` : '');
+
+  return (
+    <div style={{ marginTop: 20, paddingBottom: 20, borderBottom: `1px solid ${C.line}` }}>
+      {/* block header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        {liveCount > 0 && (
+          <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.red, boxShadow: `0 0 6px ${C.red}`, animation: 'livePulse 2s infinite' }} />
+        )}
+        <span style={{ fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.4px', color: C.faint, whiteSpace: 'nowrap' }}>
+          LIVE STREAMS
+        </span>
+        <span style={{ fontFamily: C.mono, fontSize: 11, color: '#3A4A6C' }}>
+          {liveCount} live · {channels.length} channels
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button
+            onClick={() => setManage(!manage)}
+            style={{
+              fontSize: 11,
+              fontWeight: 600,
+              padding: '6px 11px',
+              borderRadius: 7,
+              cursor: 'pointer',
+              color: manage ? C.gold : '#DFE7FA',
+              background: manage ? GOLD_TINT_GRADIENT : 'rgba(255,255,255,.05)',
+              border: `1px solid ${manage ? tint(C.gold, 0.4) : C.line2}`,
+            }}
+          >
+            {manage ? 'Done' : 'Manage channels'}
+          </button>
+          <button onClick={() => setLiveOpen(!liveOpen)} style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+            {liveOpen ? 'Hide' : 'Show'}
+          </button>
+        </div>
+      </div>
+
+      {liveOpen && (
         <>
-          {feed === 'eurusd' && <div style={feedSectionLabel}>EUR/USD headlines</div>}
-          {headlines.length === 0 ? (
-            <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-              {"No headlines yet — the live news feeds populate within a few minutes."}
-            </div>
-          ) : shown.length === 0 ? (
-            <div style={{ ...card, textAlign: 'center', padding: '34px 20px', color: MUTED, fontSize: 13 }}>
-              {feed === 'eurusd' ? 'No EUR/USD headlines match this filter.' : `No stories match this filter${feed !== 'all' ? ' in this feed' : ''}.`} {filtersActive ? 'Try clearing the filters.' : 'Check back shortly.'}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-              {shown.map((h) => (
-                <HeadlineCard key={h.id} h={h} canWrite={canWrite} busy={busy} watchlist={watchlist}
-                  onSave={(p) => run(api.updateNews(h.id, p))}
-                  onRemove={() => run(api.removeNews(h.id))} />
-              ))}
+          {!liveConfigured && (
+            <div style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.5, marginBottom: 12 }}>
+              Live status and viewer counts aren't wired up yet (sample) — channels read as offline. Any channel with a channel ID still plays here when it goes live.
             </div>
           )}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: contentW >= 900 ? 'minmax(0,1fr) 288px' : 'minmax(0,1fr)',
+              gap: 20,
+              alignItems: 'start',
+            }}
+          >
+            {/* left column: layout controls + tiles */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint }}>
+                  LAYOUT
+                </span>
+                {[1, 2, 3, 4, 5, 6].map((n) => {
+                  const active = streams.cols === n;
+                  return (
+                    <button
+                      key={n}
+                      onClick={() => mutate((s) => ({ ...s, cols: n }))}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 600,
+                        padding: '5px 10px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        color: active ? C.gold : C.muted,
+                        background: active ? GOLD_TINT_GRADIENT : 'rgba(255,255,255,.02)',
+                        border: `1px solid ${active ? tint(C.gold, 0.35) : C.line2}`,
+                      }}
+                    >
+                      {n} up
+                    </button>
+                  );
+                })}
+                <span style={{ marginLeft: 'auto', fontSize: 10.5, color: C.faint }}>{watchingLabel}</span>
+              </div>
+
+              {dockedChan && (
+                <div style={{ ...noticePanel, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: C.muted }}>{dockedChan.name} is playing in the corner.</span>
+                  <button onClick={() => mutate((s) => ({ ...s, docked: null }))} style={{ ...ghostBtn, marginLeft: 'auto' }}>
+                    Bring it back here
+                  </button>
+                </div>
+              )}
+
+              {tiles.length === 0 && !dockedChan ? (
+                <StreamsEmpty channels={channels} onWatch={(k) => toggleWatch(k)} />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(cols, Math.max(1, tiles.length))}, minmax(0,1fr))`, gap: 12 }}>
+                  {tiles.map((c) => (
+                    <StreamTile key={c.key} c={c} onDock={() => mutate((s) => ({ ...s, docked: c.key }))} onClose={() => closeTile(c.key)} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* right column: channel list */}
+            <div style={{ ...card, padding: 0 }}>
+              {channels.map((c, i) => {
+                const isWatching = watching.includes(c.key);
+                const armed = !!streams.notify[c.key];
+                return (
+                  <div
+                    key={c.key}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: 10,
+                      padding: '11px 13px',
+                      borderTop: `1px solid ${i === 0 ? 'transparent' : C.line}`,
+                      background: isWatching ? tint(C.gold, 0.04) : 'transparent',
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: 'none',
+                        width: 7,
+                        height: 7,
+                        marginTop: 5,
+                        borderRadius: '50%',
+                        background: c.live ? C.red : '#3A4A6C',
+                        boxShadow: c.live ? `0 0 6px ${C.red}` : 'none',
+                        animation: c.live ? 'livePulse 2s infinite' : 'none',
+                      }}
+                    />
+                    <button
+                      onClick={() => toggleWatch(c.key)}
+                      style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 600, color: isWatching ? C.gold : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.name}
+                        </span>
+                        {isWatching && (
+                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', color: C.gold, border: `1px solid ${tint(C.gold, 0.4)}`, borderRadius: 4, padding: '1px 5px' }}>
+                            OPEN
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: c.live ? C.muted : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                        {c.live ? c.streamTitle ?? 'Live' : c.lastLive ?? 'Offline'}
+                      </div>
+                      {c.handle && <div style={{ fontFamily: C.mono, fontSize: 9.5, color: '#3A4A6C', marginTop: 2 }}>{c.handle}</div>}
+                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        onClick={() => toggleNotify(c.key)}
+                        title={armed ? 'Alert on when this channel goes live' : 'Alert me when this channel goes live'}
+                        style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+                      >
+                        <Icon name="bell" size={13} color={armed ? C.gold : '#3A4A6C'} />
+                      </button>
+                      {manage && (
+                        <button onClick={() => removeChannel(c.key)} title="Remove channel" style={{ background: 'none', border: 'none', color: C.faint, fontSize: 15, cursor: 'pointer', lineHeight: 1 }}>
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {manage && (
+                <div style={{ padding: '12px 13px', borderTop: `1px solid ${C.line}`, background: C.panel2 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint, marginBottom: 8 }}>
+                    ADD A CHANNEL
+                  </div>
+                  <input
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                    placeholder="Channel name"
+                    style={{ ...addInput, marginBottom: 8 }}
+                  />
+                  <input
+                    value={form.ref}
+                    onChange={(e) => setForm({ ...form, ref: e.target.value })}
+                    placeholder="youtube.com/@handle or channel ID"
+                    style={{ ...addInput, marginBottom: 8 }}
+                  />
+                  <button
+                    onClick={addChannel}
+                    style={{ fontSize: 11, fontWeight: 600, color: C.text, background: tint(C.gold, 0.14), border: `1px solid ${tint(C.gold, 0.4)}`, padding: '7px 12px', borderRadius: 7, cursor: 'pointer' }}
+                  >
+                    Add channel
+                  </button>
+                  <div style={{ fontSize: 10, color: '#3A4A6C', marginTop: 8, lineHeight: 1.5 }}>
+                    A channel ID (UC…) embeds the player. A handle links out until the ID is resolved.
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </>
       )}
     </div>
   );
 }
 
-function Dropdown({ label, value, options, onChange }: { label: string; value: string; options: { v: string; l: string }[]; onChange: (v: string) => void }) {
+function StreamTile({ c, onDock, onClose }: { c: StreamChannel; onDock: () => void; onClose: () => void }) {
+  const canEmbed = !!c.channelId;
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-      <span style={{ fontSize: 10, letterSpacing: '0.4px', textTransform: 'uppercase', color: FAINT, fontWeight: 600 }}>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...input, padding: '8px 30px 8px 11px', minWidth: 150, cursor: 'pointer', appearance: 'none', backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%239fb0d6' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 11px center' }}>
-        {options.map((o) => <option key={o.v} value={o.v} style={{ background: INPUT_BG, color: TEXT }}>{o.l}</option>)}
-      </select>
-    </label>
-  );
-}
-
-function HeadlineCard({ h, canWrite, busy, watchlist, onSave, onRemove }: { h: NewsItem; canWrite: boolean; busy: boolean; watchlist: string[]; onSave: (p: NewsInput) => void; onRemove: () => void }) {
-  const [editing, setEditing] = useState(false);
-  // Which of the trader's instruments this headline is likely to move.
-  const affected = useMemo(() => affectedInstruments(h, watchlist), [h, watchlist]);
-  if (editing) {
-    return <NewsForm busy={busy} initial={h} submitLabel="Save" onSubmit={(p) => { onSave(p); setEditing(false); }} onCancel={() => setEditing(false)} />;
-  }
-  const im = IMPACT[h.impact];
-  const bi = BIAS[h.bias];
-  const arrow = h.bias === 'bullish' ? '▲' : h.bias === 'bearish' ? '▼' : '●';
-  return (
-    <div style={{ ...card, padding: '13px 15px', borderLeft: `3px solid ${bi.color}` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 8 }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: bi.color, background: `${bi.color}1e`, border: `1px solid ${bi.color}55`, borderRadius: 6, padding: '3px 9px' }}>
-          <span style={{ fontSize: 9 }}>{arrow}</span>{bi.label}
-        </span>
-        <span style={{ ...chip, color: im.color, borderColor: im.color }}>{im.label} impact</span>
-        <span style={chip}>{CATEGORY[h.category]}</span>
-        {affected.length > 0 && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 9.5, color: FAINT, letterSpacing: '0.3px' }}>affects</span>
-            {affected.slice(0, 5).map((sym) => (
-              <span key={sym} style={{ ...chip, color: GOLD, borderColor: 'rgba(235,203,116,.5)', background: 'rgba(235,203,116,.08)' }}>{sym}</span>
-            ))}
-          </span>
+    <div style={{ background: C.panel, borderRadius: 12, overflow: 'hidden', border: `1px solid ${c.live ? tint(C.red, 0.35) : C.line}` }}>
+      <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18' }}>
+        {canEmbed ? (
+          <iframe
+            title={c.name}
+            src={embedSrc(c)}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, textAlign: 'center' }}>
+            <div style={{ fontSize: 11.5, color: C.muted, maxWidth: 300, lineHeight: 1.5 }}>
+              Linked by handle. Add this channel's ID in Manage channels to embed the stream here.
+            </div>
+            <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
+              Open on YouTube ↗
+            </a>
+          </div>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{fmtRelative(h.publishedAt)}</span>
       </div>
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.4 }}>{decodeEntities(h.title)}</div>
-      {h.tradeNote ? (
-        // VTS AI's desk read — only labelled when it's an actual AI note.
-        <div style={{ marginTop: 8, padding: '8px 11px', background: 'rgba(255,255,255,.03)', borderRadius: 8, border: `1px solid ${BORDER}` }}>
-          <div style={{ fontSize: 9, letterSpacing: '0.5px', textTransform: 'uppercase', color: bi.color, fontWeight: 700, marginBottom: 3 }}>How it could affect us</div>
-          <div style={{ fontSize: 12.5, color: '#d4def5', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{decodeEntities(h.tradeNote)}</div>
+      <div style={{ padding: '10px 12px', borderTop: `1px solid ${C.line}`, background: C.panel2 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {c.live && (
+            <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: '#fff', background: C.red, borderRadius: 4, padding: '1px 5px' }}>
+              LIVE
+            </span>
+          )}
+          <span style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</span>
+          <button onClick={onClose} title="Stop watching" style={{ marginLeft: 'auto', background: 'none', border: 'none', color: C.faint, fontSize: 15, cursor: 'pointer', lineHeight: 1 }}>
+            ×
+          </button>
         </div>
-      ) : h.body ? (
-        // Raw source excerpt (no AI read yet) — shown plainly, never mislabeled.
-        <div style={{ fontSize: 12.5, color: '#c4d2ee', lineHeight: 1.55, marginTop: 6, whiteSpace: 'pre-wrap' }}>{decodeEntities(h.body)}</div>
-      ) : null}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 9, flexWrap: 'wrap' }}>
-        {h.source && <span style={{ fontSize: 11, color: MUTED }}>{h.source}</span>}
-        {h.url && <a href={h.url} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: GOLD, textDecoration: 'none' }}>Source ↗</a>}
-        {canWrite && (
-          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            <button onClick={() => setEditing(true)} style={smallBtn}>Edit</button>
-            <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
-          </span>
-        )}
+        <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>
+          {c.live ? c.streamTitle ?? 'Live' : `Offline · last stream ${c.lastTitle ?? '—'}`}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap', marginTop: 6 }}>
+          <span style={{ fontFamily: C.mono, fontSize: 10, color: C.faint }}>{c.live ? c.viewers ?? '' : c.lastLive ?? 'offline'}</span>
+          <button onClick={onDock} style={{ background: 'none', border: 'none', fontSize: 10.5, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+            Dock to corner
+          </button>
+          <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10.5, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
+            YouTube ↗
+          </a>
+        </div>
       </div>
     </div>
   );
 }
 
-function CalendarColumn({ events, canWrite, busy, run }: { events: CalendarEvent[]; canWrite: boolean; busy: boolean; run: (p: Promise<MarketNewsData>) => Promise<boolean> }) {
-  // Group by ET day.
-  const groups: { day: string; items: CalendarEvent[] }[] = [];
-  for (const e of events) {
-    const day = fmtDayKey(e.eventTime);
-    const g = groups.find((x) => x.day === day);
-    if (g) g.items.push(e);
-    else groups.push({ day, items: [e] });
-  }
+function StreamsEmpty({ channels, onWatch }: { channels: StreamChannel[]; onWatch: (key: string) => void }) {
+  const firstLive = channels.find((c) => c.live);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {groups.map((g) => (
-        <div key={g.day}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, marginBottom: 6 }}>{g.day}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {g.items.map((e) => (
-              <EventRow key={e.id} e={e} canWrite={canWrite} busy={busy}
-                onSave={(p) => run(api.updateCalendarEvent(e.id, p))}
-                onRemove={() => run(api.removeCalendarEvent(e.id))} />
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function EventRow({ e, canWrite, busy, onSave, onRemove }: { e: CalendarEvent; canWrite: boolean; busy: boolean; onSave: (p: EventInput) => void; onRemove: () => void }) {
-  const [editing, setEditing] = useState(false);
-  if (editing) {
-    return <EventForm busy={busy} initial={e} submitLabel="Save" onSubmit={(p) => { onSave(p); setEditing(false); }} onCancel={() => setEditing(false)} />;
-  }
-  const im = IMPACT[e.impact];
-  return (
-    <div style={{ ...panel, padding: '9px 12px', display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-      <span style={{ flex: 'none', width: 6, height: 6, marginTop: 6, borderRadius: '50%', background: im.color }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: TEXT }}>{fmtTime(e.eventTime)}</span>
-          {e.country && <span style={{ fontSize: 10, color: MUTED }}>{e.country}</span>}
-          <span style={{ fontSize: 12.5, color: '#e7eefb', fontWeight: 500 }}>{e.title}</span>
-          <span style={{ ...chip, color: GOLD, borderColor: 'rgba(235,203,116,.5)', background: 'rgba(235,203,116,.08)' }}>{e.source ?? 'Forex Factory'}</span>
-        </div>
-        {(e.forecast || e.previous || e.actual) && (
-          <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 10.5, color: MUTED }}>
-            {e.actual && <span>Act <b style={{ color: TEXT }}>{e.actual}</b></span>}
-            {e.forecast && <span>Fcst <b style={{ color: '#cdd9f3' }}>{e.forecast}</b></span>}
-            {e.previous && <span>Prev <b style={{ color: '#cdd9f3' }}>{e.previous}</b></span>}
-          </div>
-        )}
-        {e.explainer && (
-          <div style={{ fontSize: 11, color: MUTED, lineHeight: 1.5, marginTop: 5, display: 'flex', gap: 5 }}>
-            <span style={{ color: GOLD, flex: 'none' }}>ⓘ</span>
-            <span>{e.explainer}</span>
-          </div>
-        )}
+    <div style={{ background: C.panel, border: `1px dashed ${C.line2}`, borderRadius: 12, padding: '34px 20px', textAlign: 'center' }}>
+      <div style={{ fontSize: 13, color: C.muted, maxWidth: 430, margin: '0 auto', lineHeight: 1.55 }}>
+        Open as many channels as you want — they play side by side here, so a press conference runs beside the headlines instead of in another tab.
       </div>
-      {canWrite && (
-        <span style={{ display: 'flex', gap: 4 }}>
-          <button onClick={() => setEditing(true)} style={{ ...smallBtn, padding: '3px 7px' }}>Edit</button>
-          <button onClick={() => !busy && onRemove()} title="Remove" style={{ ...smallBtn, padding: '3px 7px', color: '#ff9a9a', borderColor: 'transparent' }}>×</button>
-        </span>
+      {firstLive && (
+        <button
+          onClick={() => onWatch(firstLive.key)}
+          style={{ marginTop: 14, fontSize: 11.5, fontWeight: 600, color: C.text, background: tint(C.red, 0.12), border: `1px solid ${tint(C.red, 0.45)}`, padding: '8px 13px', borderRadius: 7, cursor: 'pointer' }}
+        >
+          Watch {firstLive.name}
+        </button>
       )}
     </div>
   );
 }
 
-function NewsForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?: NewsItem; busy: boolean; submitLabel: string; onSubmit: (input: NewsInput) => void; onCancel: () => void }) {
-  const [title, setTitle] = useState(initial?.title ?? '');
-  const [body, setBody] = useState(initial?.body ?? '');
-  const [source, setSource] = useState(initial?.source ?? '');
-  const [url, setUrl] = useState(initial?.url ?? '');
-  const [category, setCategory] = useState<NewsCategory>(initial?.category ?? 'markets');
-  const [impact, setImpact] = useState<NewsImpact>(initial?.impact ?? 'medium');
-  const [bias, setBias] = useState<NewsBias>(initial?.bias ?? 'neutral');
-
-  function submit() {
-    if (!title.trim()) return;
-    onSubmit({ title: title.trim(), body: body.trim() || null, source: source.trim() || null, url: url.trim() || null, category, impact, bias });
-  }
+function MiniPlayer({ c, onUndock, onClose }: { c: StreamChannel; onUndock: () => void; onClose: () => void }) {
+  const canEmbed = !!c.channelId;
   return (
-    <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? "Edit headline" : "New headline"}</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Headline" style={{ ...input, flex: '1 1 100%' }} />
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Detail / context (optional)" rows={2} style={{ ...input, flex: '1 1 100%', resize: 'vertical', fontFamily: 'inherit' }} />
-        <input value={source} onChange={(e) => setSource(e.target.value)} placeholder="Source (e.g. Reuters)" style={{ ...input, flex: '1 1 160px' }} />
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link (https://…)" style={{ ...input, flex: '1 1 200px' }} />
-        <select value={category} onChange={(e) => setCategory(e.target.value as NewsCategory)} style={{ ...input, flex: '0 0 140px' }}>
-          {(Object.keys(CATEGORY) as NewsCategory[]).map((c) => <option key={c} value={c}>{CATEGORY[c]}</option>)}
-        </select>
-        <select value={impact} onChange={(e) => setImpact(e.target.value as NewsImpact)} style={{ ...input, flex: '0 0 130px' }}>
-          <option value="high">High impact</option>
-          <option value="medium">Med impact</option>
-          <option value="low">Low impact</option>
-        </select>
-        <select value={bias} onChange={(e) => setBias(e.target.value as NewsBias)} style={{ ...input, flex: '0 0 130px' }}>
-          <option value="neutral">Neutral</option>
-          <option value="bullish">Bullish</option>
-          <option value="bearish">Bearish</option>
-        </select>
+    <div
+      style={{
+        position: 'fixed',
+        right: 20,
+        bottom: 20,
+        width: 380,
+        maxWidth: 'calc(100vw - 40px)',
+        zIndex: 60,
+        background: C.panel,
+        border: `1px solid ${C.line2}`,
+        borderRadius: 12,
+        overflow: 'hidden',
+        boxShadow: '0 16px 40px rgba(0,0,0,.5)',
+      }}
+    >
+      <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18' }}>
+        {canEmbed ? (
+          <iframe
+            title={c.name}
+            src={embedSrc(c)}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 0 }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, textAlign: 'center' }}>
+            <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
+              Open on YouTube ↗
+            </a>
+          </div>
+        )}
       </div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button onClick={submit} disabled={busy || !title.trim()} style={{ ...goldBtn, opacity: busy || !title.trim() ? 0.6 : 1 }}>{submitLabel}</button>
-        <button onClick={onCancel} style={ghostBtn}>{"Cancel"}</button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', background: C.panel2 }}>
+        {c.live && (
+          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: '#fff', background: C.red, borderRadius: 4, padding: '1px 5px' }}>
+            LIVE
+          </span>
+        )}
+        <span style={{ fontSize: 11.5, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+          {c.name}
+          {c.live && c.streamTitle ? ` — ${c.streamTitle}` : ''}
+        </span>
+        <button onClick={onUndock} style={{ marginLeft: 'auto', background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
+          Undock
+        </button>
+        <button onClick={onClose} title="Stop watching" style={{ background: 'none', border: 'none', color: C.faint, fontSize: 15, cursor: 'pointer', lineHeight: 1 }}>
+          ×
+        </button>
       </div>
     </div>
   );
 }
 
-function EventForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initial?: CalendarEvent; busy: boolean; submitLabel: string; onSubmit: (input: EventInput) => void; onCancel: () => void }) {
-  const [title, setTitle] = useState(initial?.title ?? '');
-  const [country, setCountry] = useState(initial?.country ?? '');
-  const [impact, setImpact] = useState<NewsImpact>(initial?.impact ?? 'medium');
-  const [when, setWhen] = useState(toLocalInput(initial?.eventTime ?? Date.now()));
-  const [forecast, setForecast] = useState(initial?.forecast ?? '');
-  const [previous, setPrevious] = useState(initial?.previous ?? '');
-  const [actual, setActual] = useState(initial?.actual ?? '');
+// ---------------------------------------------------------------------------
+// Headline feed pieces
+// ---------------------------------------------------------------------------
 
-  function submit() {
-    const ms = new Date(when).getTime();
-    if (!title.trim() || Number.isNaN(ms)) return;
-    onSubmit({ title: title.trim(), country: country.trim() || null, impact, eventTime: ms, forecast: forecast.trim() || null, previous: previous.trim() || null, actual: actual.trim() || null });
-  }
+function HeadlineRow({
+  h,
+  now,
+  watchlist,
+  open,
+  onToggle,
+}: {
+  h: NewsItem;
+  now: number;
+  watchlist: string[];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const mentions = useMemo(() => affectedInstruments(h, watchlist).slice(0, 3), [h, watchlist]);
+  const bias =
+    h.bias === 'bullish'
+      ? { glyph: '▲', color: C.green, label: 'Tape read: bullish' }
+      : h.bias === 'bearish'
+        ? { glyph: '▼', color: C.red, label: 'Tape read: bearish' }
+        : { glyph: '●', color: C.faint, label: 'Tape read: flat' };
+  const excerpt = h.body ? decodeEntities(h.body) : '';
   return (
-    <div style={{ ...panel, marginBottom: 16 }}>
-      <div style={{ fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 }}>{initial ? "Edit event" : "New calendar event"}</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Event (e.g. CPI m/m)" style={{ ...input, flex: '1 1 220px' }} />
-        <input value={country} onChange={(e) => setCountry(e.target.value)} placeholder="Country (e.g. US)" style={{ ...input, flex: '0 0 110px' }} />
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: MUTED }}>
-          When<input value={when} onChange={(e) => setWhen(e.target.value)} type="datetime-local" style={{ ...input, width: 210 }} />
-        </label>
-        <select value={impact} onChange={(e) => setImpact(e.target.value as NewsImpact)} style={{ ...input, flex: '0 0 130px' }}>
-          <option value="high">High impact</option>
-          <option value="medium">Med impact</option>
-          <option value="low">Low impact</option>
-        </select>
-        <input value={forecast} onChange={(e) => setForecast(e.target.value)} placeholder="Forecast" style={{ ...input, flex: '1 1 110px' }} />
-        <input value={previous} onChange={(e) => setPrevious(e.target.value)} placeholder="Previous" style={{ ...input, flex: '1 1 110px' }} />
-        <input value={actual} onChange={(e) => setActual(e.target.value)} placeholder="Actual" style={{ ...input, flex: '1 1 110px' }} />
-      </div>
-      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>{"Time is entered in your local zone and shown to everyone in Eastern Time."}</div>
-      <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-        <button onClick={submit} disabled={busy || !title.trim()} style={{ ...goldBtn, opacity: busy || !title.trim() ? 0.6 : 1 }}>{submitLabel}</button>
-        <button onClick={onCancel} style={ghostBtn}>{"Cancel"}</button>
+    <div
+      onClick={onToggle}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '48px minmax(0,1fr)',
+        gap: 14,
+        alignItems: 'start',
+        padding: '13px 0',
+        borderTop: `1px solid ${C.line}`,
+        cursor: 'pointer',
+      }}
+    >
+      <span style={{ fontFamily: C.mono, fontSize: 11, color: C.faint }}>{shortAge(h.publishedAt, now)}</span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.45, color: open ? '#fff' : C.text }}>
+          {decodeEntities(h.title)}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 7 }}>
+          {SHOW_BIAS && (
+            <span title={bias.label} style={{ fontSize: 9, color: bias.color }}>
+              {bias.glyph}
+            </span>
+          )}
+          {h.source && <span style={{ fontSize: 11.5, color: C.muted }}>{h.source}</span>}
+          <span style={{ fontSize: 10, color: '#3A4A6C' }}>·</span>
+          <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: C.faint }}>
+            {CATEGORY_LABEL[h.category] ?? 'Markets'}
+          </span>
+          {mentions.map((sym) => (
+            <span
+              key={sym}
+              style={{
+                fontFamily: C.mono,
+                fontSize: 9.5,
+                fontWeight: 700,
+                letterSpacing: '.3px',
+                color: C.gold,
+                background: tint(C.gold, 0.1),
+                border: `1px solid ${tint(C.gold, 0.3)}`,
+                borderRadius: 5,
+                padding: '1px 6px',
+              }}
+            >
+              {sym}
+            </span>
+          ))}
+        </div>
+        {open && (
+          <div style={{ marginTop: 10, paddingLeft: 12, borderLeft: `2px solid ${C.line2}` }}>
+            {excerpt && <div style={{ fontSize: 13, color: C.muted, lineHeight: 1.6, maxWidth: 660 }}>{excerpt}</div>}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginTop: excerpt ? 8 : 0 }}>
+              {h.url && (
+                <a
+                  href={h.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ fontSize: 11.5, fontWeight: 600, color: C.gold, textDecoration: 'none' }}
+                >
+                  Open at {h.source ?? 'source'} ↗
+                </a>
+              )}
+              <span style={{ fontFamily: C.mono, fontSize: 10.5, color: C.faint }}>
+                {fmtTime(h.publishedAt)} ET · {fmtDayKey(h.publishedAt)}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
-const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' };
-const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none' };
-const chip: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.3px', color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 7px' };
-const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '8px 14px', borderRadius: 7, cursor: 'pointer' };
-const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
-const smallBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' };
-const banner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
-const feedSectionLabel: CSSProperties = { fontSize: 11, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, fontWeight: 700, margin: '0 0 10px' };
+function FilterChip({ label, onClear }: { label: string; onClear: () => void }) {
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        fontSize: 11,
+        fontWeight: 600,
+        color: C.gold,
+        background: tint(C.gold, 0.12),
+        border: `1px solid ${tint(C.gold, 0.4)}`,
+        borderRadius: 6,
+        padding: '4px 9px',
+      }}
+    >
+      {label}
+      <button onClick={onClear} style={{ background: 'none', border: 'none', color: C.gold2, fontSize: 12, cursor: 'pointer', lineHeight: 1, padding: 0 }}>
+        ×
+      </button>
+    </span>
+  );
+}
+
+function EmptyCard({ children }: { children: ReactNode }) {
+  return <div style={{ ...emptyCard, color: C.muted, fontSize: 13 }}>{children}</div>;
+}
+
+// ---------------------------------------------------------------------------
+// styles
+// ---------------------------------------------------------------------------
+
+const rootStyle: CSSProperties = { color: C.text, animation: 'fadeIn .25s ease', padding: '22px 32px 8px' };
+const subtitle: CSSProperties = { fontSize: 12.5, color: C.muted, margin: '6px 0 0', maxWidth: 640 };
+const card: CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' };
+const noticePanel: CSSProperties = { background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 13px' };
+const emptyCard: CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: '32px 18px', textAlign: 'center' };
+const ghostBtn: CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 600,
+  color: '#DFE7FA',
+  background: 'rgba(255,255,255,.05)',
+  border: `1px solid ${C.line2}`,
+  padding: '8px 12px',
+  borderRadius: 7,
+  cursor: 'pointer',
+};
+const pillBase: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 7,
+  fontSize: 12.5,
+  padding: '7px 13px',
+  borderRadius: 8,
+  border: '1px solid',
+  cursor: 'pointer',
+};
+const miniLabel: CSSProperties = { fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint };
+const groupLabel: CSSProperties = { fontSize: 10.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '1.4px', color: C.faint };
+const addInput: CSSProperties = {
+  display: 'block',
+  width: '100%',
+  boxSizing: 'border-box',
+  background: 'rgba(255,255,255,.03)',
+  border: `1px solid ${C.line2}`,
+  borderRadius: 7,
+  fontSize: 12.5,
+  padding: '8px 10px',
+  color: C.text,
+  outline: 'none',
+};
+const banner: CSSProperties = {
+  marginTop: 14,
+  fontSize: 12.5,
+  color: '#ffb4ab',
+  background: tint(C.red, 0.1),
+  border: `1px solid ${tint(C.red, 0.4)}`,
+  borderRadius: 8,
+  padding: '9px 12px',
+  cursor: 'pointer',
+};
+const GOLD_TINT_GRADIENT = `linear-gradient(180deg, ${tint(C.gold, 0.16)}, ${tint(C.gold, 0.08)})`;
