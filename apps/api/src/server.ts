@@ -42,6 +42,7 @@ import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
 import { startDeskWatch } from './trading/service.js';
 import { startSessionWatch } from './trading/sessionWatch.js';
+import { startYoutubeWatch } from './trading/youtubeWatch.js';
 import { startPriceAlertWatch } from './trading/priceAlertWatch.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
@@ -211,6 +212,9 @@ async function main() {
     // Watch user-authored price alerts against live OANDA prices, firing each
     // trader's own level-cross notifications (production + push/Pushover only).
     startPriceAlertWatch();
+    // Refresh YouTube live status for the Market News stream wall and buzz
+    // whoever armed a channel's bell (production + YOUTUBE_API_KEY only).
+    startYoutubeWatch();
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { marketNewsStreams, type MarketNewsStreamsRow } from '../db/schema.js';
+import { cachedChannelIdForHandle, cachedLiveState, youtubeConfigured } from './youtube.js';
 
 // How one trader has set up the Market News live-stream wall: the YouTube
 // channels they follow and their personal viewing state (open streams and their
@@ -37,12 +38,14 @@ export interface MarketNewsStreams {
 // The identity subset actually written to the row.
 type StoredChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId'>;
 
-// Flipped on once a server-side YouTube Data API poller populates live status,
-// stream titles and viewer counts. Until then every channel reads offline and
-// the screen says its live-state is sample. Channels that carry a channel ID
-// still embed the keyless live_stream player, which plays when the channel is
-// actually live regardless of this flag.
-export const LIVE_STREAMS_CONFIGURED = false;
+// True once the YouTube Data API is wired up (a YOUTUBE_API_KEY is set), which
+// is what makes live status, stream titles and viewer counts real. Without a
+// key every channel reads offline and the screen says its live-state is sample.
+// Channels that carry a channel ID still embed the keyless live_stream player,
+// which plays when the channel is actually live regardless of this flag.
+export function liveStreamsConfigured(): boolean {
+  return youtubeConfigured();
+}
 
 const MAX_CHANNELS = 40;
 const MAX_TEXT = 80;
@@ -67,8 +70,11 @@ export function defaultMarketNewsStreams(): MarketNewsStreams {
   });
 }
 
-// Attach live-state to each channel. A no-op-shaped seam: when a go-live poller
-// is added, look each channel up here instead of stamping everything offline.
+// Attach live-state to each channel from the poller's cache, and fill in a
+// channelId the poller has resolved from a handle (so a handle-only channel
+// becomes embeddable without the trader re-saving it — the resolved id is NOT
+// written back to the row; the cache is the source and it re-resolves cheaply).
+// With no API key, or before the first poll, every channel reads offline.
 function withLiveState(cfg: {
   channels: StoredChannel[];
   watching: string[];
@@ -76,7 +82,14 @@ function withLiveState(cfg: {
   cols: number;
   notify: Record<string, boolean>;
 }): MarketNewsStreams {
-  return { ...cfg, channels: cfg.channels.map((c) => ({ ...c, live: false })) };
+  return {
+    ...cfg,
+    channels: cfg.channels.map((c) => {
+      const channelId = c.channelId || (c.handle ? cachedChannelIdForHandle(c.handle) ?? '' : '');
+      const live = channelId ? cachedLiveState(channelId) : undefined;
+      return { ...c, channelId, live: false, ...live };
+    }),
+  };
 }
 
 function parseChannels(raw: string): StoredChannel[] {
@@ -169,6 +182,32 @@ function rowToStreams(row: MarketNewsStreamsRow): MarketNewsStreams {
     notify: parseNotify(row.notify),
   });
   return withLiveState(clean);
+}
+
+// Every distinct channel any trader follows, deduped by channelId (or by handle
+// when the id isn't known yet). This is the poller's work list — it polls the
+// union of everyone's channels once, not once per trader, so the quota cost
+// scales with distinct channels rather than with headcount. The default set is
+// always included so a fresh install still shows live status on day one.
+export async function listFollowedChannels(): Promise<{ handle: string; channelId: string }[]> {
+  const rows = await db
+    .select({ channels: marketNewsStreams.channels })
+    .from(marketNewsStreams);
+  const all: StoredChannel[] = [...DEFAULT_CHANNELS];
+  for (const r of rows) all.push(...parseChannels(r.channels));
+  const out: { handle: string; channelId: string }[] = [];
+  const seen = new Set<string>();
+  for (const c of all) {
+    const key = c.channelId || normKey(c.handle);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ handle: c.handle, channelId: c.channelId });
+  }
+  return out;
+}
+
+function normKey(handle: string): string {
+  return (handle || '').trim().replace(/^@/, '').toLowerCase();
 }
 
 export async function getMarketNewsStreams(userId: string): Promise<MarketNewsStreams> {

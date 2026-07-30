@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.82';
+export const APP_VERSION = 'Beta V 5.83';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.83',
+    date: 'July 30, 2026',
+    notes: [
+      'Market News live streams now show real status: a channel that is actually broadcasting gets a LIVE badge, its stream title and its viewer count, and goes back to offline on its own when the stream ends.',
+      'Turn the bell on for a channel and your phone buzzes the moment it goes live — useful for catching the start of a Fed press conference without watching for it.',
+      'Channels you added by handle now resolve themselves, so they start embedding the player here instead of only linking out to YouTube.',
+      'Offline channels name their most recent broadcast, so you can see what you missed.',
+      'This needs a YouTube key on the server. Without one nothing is invented — every channel simply reads offline and the screen says the live figures are sample.',
+    ],
+  },
   {
     version: 'Beta V 5.82',
     date: 'July 30, 2026',

@@ -654,7 +654,13 @@ function LiveStreams({
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(cols, Math.max(1, tiles.length))}, minmax(0,1fr))`, gap: 12 }}>
                   {tiles.map((c) => (
-                    <StreamTile key={c.key} c={c} onDock={() => mutate((s) => ({ ...s, docked: c.key }))} onClose={() => closeTile(c.key)} />
+                    <StreamTile
+                      key={c.key}
+                      c={c}
+                      liveConfigured={liveConfigured}
+                      onDock={() => mutate((s) => ({ ...s, docked: c.key }))}
+                      onClose={() => closeTile(c.key)}
+                    />
                   ))}
                 </div>
               )}
@@ -762,8 +768,22 @@ function LiveStreams({
   );
 }
 
-function StreamTile({ c, onDock, onClose }: { c: StreamChannel; onDock: () => void; onClose: () => void }) {
-  const canEmbed = !!c.channelId;
+function StreamTile({
+  c,
+  liveConfigured,
+  onDock,
+  onClose,
+}: {
+  c: StreamChannel;
+  liveConfigured: boolean;
+  onDock: () => void;
+  onClose: () => void;
+}) {
+  // Embed when the channel has an id AND we don't positively know it's offline.
+  // Before the poller exists (or with no API key) live-state is unknown, so we
+  // still embed and let the keyless live_stream player self-show offline —
+  // better than claiming "not live" about a channel we never checked.
+  const canEmbed = !!c.channelId && (c.live || !liveConfigured);
   return (
     <div style={{ background: C.panel, borderRadius: 12, overflow: 'hidden', border: `1px solid ${c.live ? tint(C.red, 0.35) : C.line}` }}>
       <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18' }}>
@@ -779,7 +799,9 @@ function StreamTile({ c, onDock, onClose }: { c: StreamChannel; onDock: () => vo
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, textAlign: 'center' }}>
             <div style={{ fontSize: 11.5, color: C.muted, maxWidth: 300, lineHeight: 1.5 }}>
-              Linked by handle. Add this channel's ID in Manage channels to embed the stream here.
+              {c.channelId
+                ? `${c.name} is not live right now. This slot starts playing when it goes live.`
+                : "Linked by handle. Add this channel's ID in Manage channels to embed the stream here."}
             </div>
             <a href={channelUrl(c)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: C.gold, textDecoration: 'none' }}>
               Open on YouTube ↗
