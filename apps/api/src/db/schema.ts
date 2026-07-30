@@ -909,6 +909,31 @@ export const marketDataLayout = sqliteTable('market_data_layout', {
 });
 export type MarketDataLayoutRow = typeof marketDataLayout.$inferSelect;
 
+// ---- Trading — Market News live-stream setup, one row per trader ----
+// The YouTube channels a trader follows on the Market News screen plus their
+// personal viewing setup: which streams are open (and in what order), which one
+// is docked to the corner, the desired column count, and per-channel go-live
+// alert toggles. Purely personal — never shared. All four data columns are JSON
+// text: `channels` an array of channel objects, `watching` a string array of
+// channel keys, `notify` a map of channel-key → boolean; `docked` is a single
+// channel key or null. A trader with no row falls back to the default channel
+// set (see trading/marketNewsStreams.ts).
+export const marketNewsStreams = sqliteTable('market_news_streams', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  channels: text('channels').notNull().default('[]'),
+  watching: text('watching').notNull().default('[]'),
+  docked: text('docked'),
+  cols: integer('cols').notNull().default(2),
+  notify: text('notify').notNull().default('{}'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type MarketNewsStreamsRow = typeof marketNewsStreams.$inferSelect;
+
 // ---- Trading — user-authored price alerts ----
 // A personal "notify me when X crosses a level" rule, created in-portal (the
 // closest thing to a TradingView alert we can offer, since the embedded chart is

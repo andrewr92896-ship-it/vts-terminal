@@ -43,6 +43,8 @@ import type {
   TradingBoard,
   BoardInput,
   MarketNewsData,
+  MarketNewsStreams,
+  MarketNewsStreamsPayload,
   MarketDataPayload,
   MarketDataLayout,
   NewsInput,
@@ -542,6 +544,16 @@ export const api = {
   },
   marketNews(): Promise<MarketNewsData> {
     return request('/api/trading/news');
+  },
+  // This trader's Market News live-stream setup (followed channels + view state).
+  marketNewsStreams(): Promise<MarketNewsStreamsPayload> {
+    return request('/api/trading/market-news/streams');
+  },
+  saveMarketNewsStreams(streams: MarketNewsStreams): Promise<MarketNewsStreamsPayload> {
+    return request('/api/trading/market-news/streams', {
+      method: 'PUT',
+      body: JSON.stringify(streams),
+    });
   },
   marketData(): Promise<MarketDataPayload> {
     return request('/api/trading/market-data');

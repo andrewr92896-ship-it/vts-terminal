@@ -32,6 +32,11 @@ import { addSession, listSessions, removeSession, updateSession } from '../tradi
 import { getSessionAlertPrefs, setSessionAlertPrefs } from '../trading/sessionAlertPrefs.js';
 import { getMarketData, MARKET_GROUP_KEYS } from '../trading/marketData.js';
 import { getMarketDataLayout, setMarketDataLayout } from '../trading/marketDataLayout.js';
+import {
+  getMarketNewsStreams,
+  setMarketNewsStreams,
+  LIVE_STREAMS_CONFIGURED,
+} from '../trading/marketNewsStreams.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
   getMarketNews,
@@ -432,6 +437,27 @@ export async function tradingRoutes(app: FastifyInstance) {
     const parsed = marketDataLayoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid board layout' });
     return { layout: await setMarketDataLayout(request.currentUser!.id, parsed.data) };
+  });
+
+  // ---- Market News live streams (this trader's followed YouTube channels) ----
+  // Personal setup, per user. `liveConfigured` tells the client whether channel
+  // live-state is real yet (a YouTube poller) — false today, so the screen marks
+  // live/offline and viewer counts as sample.
+  app.get('/api/trading/market-news/streams', read, async (request) => ({
+    streams: await getMarketNewsStreams(request.currentUser!.id),
+    liveConfigured: LIVE_STREAMS_CONFIGURED,
+  }));
+
+  app.put('/api/trading/market-news/streams', write, async (request, reply) => {
+    const parsed = marketNewsStreamsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid stream setup' });
+    return {
+      streams: await setMarketNewsStreams(request.currentUser!.id, {
+        ...parsed.data,
+        channels: parsed.data.channels.map((c) => ({ ...c, live: false })),
+      }),
+      liveConfigured: LIVE_STREAMS_CONFIGURED,
+    };
   });
 
   // ---- Market News (shared desk feed: headlines + economic calendar) ----
@@ -1208,6 +1234,26 @@ const marketDataLayoutSchema = z.object({
     )
     .max(40),
 });
+// This trader's Market News live-stream setup. Every field is bounded; unknown
+// channel references in watching/docked/notify are dropped server-side in
+// `sanitize`, so the schema only has to guard shape and size.
+const marketNewsStreamsSchema = z.object({
+  channels: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(80),
+        name: z.string().trim().min(1).max(80),
+        handle: z.string().trim().max(80),
+        channelId: z.string().trim().max(80),
+      }),
+    )
+    .max(40),
+  watching: z.array(z.string().trim().min(1).max(80)).max(40),
+  docked: z.string().trim().min(1).max(80).nullable(),
+  cols: z.number().int().min(1).max(6),
+  notify: z.record(z.string().trim().min(1).max(80), z.boolean()),
+});
+
 const sessionAlertPrefsSchema = z.object({
   notifyOpen: z.boolean(),
   notifyClose: z.boolean(),
