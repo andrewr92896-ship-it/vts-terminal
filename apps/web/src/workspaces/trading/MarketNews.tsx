@@ -123,6 +123,11 @@ export function MarketNews() {
   const [liveOpen, setLiveOpen] = useState(true);
   const [manage, setManage] = useState(false);
   const [form, setForm] = useState({ name: '', ref: '' });
+  // Add-a-channel flow: whether a lookup is in flight, whether we had to fall
+  // back to asking for a name, and the one-line explanation shown under it.
+  const [adding, setAdding] = useState(false);
+  const [needsName, setNeedsName] = useState(false);
+  const [addNote, setAddNote] = useState<string | null>(null);
 
   // Content-column width drives the responsive column counts (the sidebar
   // collapses, so a media query would fire at the wrong moment).
@@ -307,6 +312,12 @@ export function MarketNews() {
           setManage={setManage}
           form={form}
           setForm={setForm}
+          adding={adding}
+          setAdding={setAdding}
+          needsName={needsName}
+          setNeedsName={setNeedsName}
+          addNote={addNote}
+          setAddNote={setAddNote}
           mutate={mutate}
         />
 
@@ -478,6 +489,12 @@ function LiveStreams({
   setManage,
   form,
   setForm,
+  adding,
+  setAdding,
+  needsName,
+  setNeedsName,
+  addNote,
+  setAddNote,
   mutate,
 }: {
   streams: MarketNewsStreams | null;
@@ -489,6 +506,12 @@ function LiveStreams({
   setManage: (v: boolean) => void;
   form: { name: string; ref: string };
   setForm: (v: { name: string; ref: string }) => void;
+  adding: boolean;
+  setAdding: (v: boolean) => void;
+  needsName: boolean;
+  setNeedsName: (v: boolean) => void;
+  addNote: string | null;
+  setAddNote: (v: string | null | ((prev: string | null) => string | null)) => void;
   mutate: (fn: (s: MarketNewsStreams) => MarketNewsStreams) => void;
 }) {
   if (!streams) return null;
@@ -533,27 +556,73 @@ function LiveStreams({
     });
   const toggleNotify = (key: string) =>
     mutate((s) => ({ ...s, notify: { ...s.notify, [key]: !s.notify[key] } }));
-  const addChannel = () => {
-    const name = form.name.trim();
+  // Add whatever the trader pasted. The server looks the link up and hands back
+  // the channel's real name, handle and id, so in the normal case the trader
+  // types nothing but the link. When the lookup can't answer (no server key, an
+  // unknown channel, YouTube unreachable) we keep whatever the link itself
+  // revealed and ask for a name rather than refusing the paste outright.
+  const addChannel = async () => {
     const ref = form.ref.trim();
-    if (!name || !ref) return;
-    const idMatch = ref.match(/UC[A-Za-z0-9_-]{20,}/);
-    const handleMatch = ref.match(/@[A-Za-z0-9._-]+/);
-    const key = `c_${Date.now()}`;
+    if (!ref || adding) return;
+    setAdding(true);
+    setAddNote(null);
+    let name = form.name.trim();
+    let handle = '';
+    let channelId = '';
+    try {
+      const r = await api.resolveStreamChannel(ref);
+      if (r.channel) {
+        channelId = r.channel.channelId;
+        handle = r.channel.handle;
+        if (!name) name = r.channel.name;
+      }
+      if (!r.resolved && r.reason) setAddNote(r.reason);
+    } catch {
+      setAddNote("Couldn't look that link up. Add a name and it will still be saved.");
+    } finally {
+      setAdding(false);
+    }
+    // Fall back to reading the link ourselves so a paste is never wasted when
+    // the lookup is unavailable. Mirrors the server's parser: an id, an @handle,
+    // or a bare word typed on its own (which is what someone means by
+    // "federalreserve"). A stream link alone can't be salvaged here — only the
+    // server can turn a video into its channel.
+    if (!channelId) channelId = ref.match(/UC[A-Za-z0-9_-]{20,}/)?.[0] ?? '';
+    if (!handle) {
+      handle =
+        ref.match(/youtube\.com\/@([A-Za-z0-9._-]+)/i)?.[0].replace(/.*\//, '') ??
+        ref.match(/@[A-Za-z0-9._-]+/)?.[0] ??
+        (/^[A-Za-z0-9._-]+$/.test(ref) ? `@${ref}` : '');
+      if (handle && !handle.startsWith('@')) handle = `@${handle}`;
+    }
+    if (!channelId && !handle) {
+      setAddNote("That doesn't look like a YouTube link.");
+      return;
+    }
+    // The only thing we genuinely cannot invent is a name. Keep the draft so
+    // the trader just types one and presses Add again.
+    if (!name) {
+      setNeedsName(true);
+      setAddNote((prev) => prev ?? 'Give this channel a name to finish adding it.');
+      return;
+    }
+    // Don't add the same channel twice.
+    const already = streams?.channels.some(
+      (c) =>
+        (channelId && c.channelId === channelId) ||
+        (handle && c.handle.toLowerCase() === handle.toLowerCase()),
+    );
+    if (already) {
+      setAddNote('You already follow that channel.');
+      return;
+    }
     mutate((s) => ({
       ...s,
-      channels: [
-        ...s.channels,
-        {
-          key,
-          name,
-          handle: handleMatch ? handleMatch[0] : '',
-          channelId: idMatch ? idMatch[0] : '',
-          live: false,
-        },
-      ],
+      channels: [...s.channels, { key: `c_${Date.now()}`, name, handle, channelId, live: false }],
     }));
     setForm({ name: '', ref: '' });
+    setNeedsName(false);
+    setAddNote(null);
   };
 
   const watchingLabel =
@@ -733,37 +802,88 @@ function LiveStreams({
               })}
 
               {manage && (
-                <div style={{ padding: '12px 13px', borderTop: `1px solid ${C.line}`, background: C.panel2 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint, marginBottom: 8 }}>
-                    ADD A CHANNEL
-                  </div>
-                  <input
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    placeholder="Channel name"
-                    style={{ ...addInput, marginBottom: 8 }}
-                  />
-                  <input
-                    value={form.ref}
-                    onChange={(e) => setForm({ ...form, ref: e.target.value })}
-                    placeholder="youtube.com/@handle or channel ID"
-                    style={{ ...addInput, marginBottom: 8 }}
-                  />
-                  <button
-                    onClick={addChannel}
-                    style={{ fontSize: 11, fontWeight: 600, color: C.text, background: tint(C.gold, 0.14), border: `1px solid ${tint(C.gold, 0.4)}`, padding: '7px 12px', borderRadius: 7, cursor: 'pointer' }}
-                  >
-                    Add channel
-                  </button>
-                  <div style={{ fontSize: 10, color: '#3A4A6C', marginTop: 8, lineHeight: 1.5 }}>
-                    A channel ID (UC…) embeds the player. A handle links out until the ID is resolved.
-                  </div>
-                </div>
+                <AddChannel
+                  form={form}
+                  setForm={setForm}
+                  needsName={needsName}
+                  onAdd={addChannel}
+                  busy={adding}
+                  note={addNote}
+                />
               )}
             </div>
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Paste a YouTube link and the portal works out which channel it is. The name
+// box only appears when the lookup couldn't supply one, so the normal path is
+// paste → Add, with nothing else typed.
+function AddChannel({
+  form,
+  setForm,
+  needsName,
+  onAdd,
+  busy,
+  note,
+}: {
+  form: { name: string; ref: string };
+  setForm: (v: { name: string; ref: string }) => void;
+  needsName: boolean;
+  onAdd: () => void;
+  busy: boolean;
+  note: string | null;
+}) {
+  return (
+    <div style={{ padding: '12px 13px', borderTop: `1px solid ${C.line}`, background: C.panel2 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint, marginBottom: 8 }}>
+        ADD A CHANNEL
+      </div>
+      <input
+        value={form.ref}
+        onChange={(e) => setForm({ ...form, ref: e.target.value })}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') onAdd();
+        }}
+        placeholder="Paste a YouTube link"
+        style={{ ...addInput, marginBottom: 8 }}
+      />
+      {needsName && (
+        <input
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onAdd();
+          }}
+          placeholder="Channel name"
+          autoFocus
+          style={{ ...addInput, marginBottom: 8 }}
+        />
+      )}
+      <button
+        onClick={onAdd}
+        disabled={busy || !form.ref.trim()}
+        style={{
+          fontSize: 11,
+          fontWeight: 600,
+          color: C.text,
+          background: tint(C.gold, 0.14),
+          border: `1px solid ${tint(C.gold, 0.4)}`,
+          padding: '7px 12px',
+          borderRadius: 7,
+          cursor: busy || !form.ref.trim() ? 'default' : 'pointer',
+          opacity: busy || !form.ref.trim() ? 0.6 : 1,
+        }}
+      >
+        {busy ? 'Looking it up…' : 'Add channel'}
+      </button>
+      <div style={{ fontSize: 10, color: note ? C.amber : '#3A4A6C', marginTop: 8, lineHeight: 1.5 }}>
+        {note ??
+          'Any YouTube link works — the channel, its @handle, or the live stream itself. The name and ID are filled in for you.'}
+      </div>
     </div>
   );
 }

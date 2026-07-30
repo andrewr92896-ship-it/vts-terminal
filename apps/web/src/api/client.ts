@@ -45,6 +45,7 @@ import type {
   MarketNewsData,
   MarketNewsStreams,
   MarketNewsStreamsPayload,
+  ResolvedChannelPayload,
   MarketDataPayload,
   MarketDataLayout,
   NewsInput,
@@ -548,6 +549,14 @@ export const api = {
   // This trader's Market News live-stream setup (followed channels + view state).
   marketNewsStreams(): Promise<MarketNewsStreamsPayload> {
     return request('/api/trading/market-news/streams');
+  },
+  // Look up a pasted YouTube link so the trader doesn't have to find the
+  // channel id or type a name.
+  resolveStreamChannel(url: string): Promise<ResolvedChannelPayload> {
+    return request('/api/trading/market-news/streams/resolve', {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    });
   },
   saveMarketNewsStreams(streams: MarketNewsStreams): Promise<MarketNewsStreamsPayload> {
     return request('/api/trading/market-news/streams', {
