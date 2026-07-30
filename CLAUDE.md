@@ -175,11 +175,25 @@ top of the workspaces list** (see `theme/nav.ts` order).
     no advice-flavoured copy** anywhere on it, plus an "informational only"
     footer line.
     - The **catalog lives in code** (`trading/marketData.ts`), identical for
-      everyone. Its `value` / `changes` figures are **design fixtures** — there is
-      no macro-data provider wired — so the payload carries `sampleValues: true`
-      and the screen prints a sample-data notice. Do not remove that flag without
-      wiring real values. The calendar, the session Open/Closed readings and the
-      Fed countdown *are* real.
+      everyone, and is **partly live**. `trading/marketQuotes.ts` quotes the **FX
+      majors, the dollar index and the two crypto majors from OANDA** at request
+      time — spot from `/pricing`, and the 1D/1W/1M/YTD/1Y changes computed from
+      `/v3/instruments/{sym}/candles` daily closes — and `applyLiveQuotes` overlays
+      them. Two subtleties: a look-back matches on a candle's **close** (`time +
+      24h`), never its start, or the change reads a close that had not happened
+      yet; and **DXY is computed** from the six ICE components (it is not an OANDA
+      instrument), so that row restates its publisher rather than claiming ICE.
+      Crypto availability differs per OANDA entity, so the account's
+      `/instruments` list is checked first and spot falls back to the keyless coin
+      feed (changes then stay sample). Quotes are cached stale-while-revalidate
+      (60s spot / 30min candles) and a failed refresh keeps the last good figures.
+    - Every other series' `value` / `changes` are still **design fixtures** — no
+      macro-data provider covers CPI, payrolls, the curve or the balance sheet — so
+      each series carries `sample: true|false`, the payload's `sampleValues` means
+      "any of it is sample", and the screen names which groups read live plus a
+      **Sample** dot in the freshness legend on each placeholder row. Keep that
+      marking accurate when you wire a provider. The calendar, the session
+      Open/Closed readings and the Fed countdown *are* real.
     - The **arrangement is per user** (`trading/marketDataLayout.ts`,
       `market_data_layout`): the ordered pinned strip, removed series, and
       user-authored "custom metrics". `GET /api/trading/market-data`,

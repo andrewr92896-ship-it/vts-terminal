@@ -250,16 +250,86 @@ export function mapOandaPrices(json: OandaPricingResponse): Map<string, number> 
   return out;
 }
 
-async function getJson<T>(url: string, token: string): Promise<T | null> {
+async function getJson<T>(url: string, token: string, timeoutMs?: number): Promise<T | null> {
   try {
+    // Callers on a request path pass a timeout: OANDA occasionally holds a
+    // connection open, and an unbounded read here would stall the screen that is
+    // waiting on it.
+    const ctrl = timeoutMs != null ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      signal: ctrl?.signal,
     });
+    if (timer) clearTimeout(timer);
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
     return null;
   }
+}
+
+// ---- Instrument history & availability (account-independent market data) ----
+
+interface OandaCandlesResponse {
+  candles?: { time?: string; complete?: boolean; mid?: { c?: string } }[];
+}
+interface OandaInstrumentsResponse {
+  instruments?: { name?: string }[];
+}
+
+// One completed daily candle, reduced to when it started and where it closed.
+export interface OandaDailyClose {
+  timeMs: number;
+  close: number;
+}
+
+// Completed daily closes for an instrument, oldest first. Daily candles are
+// aligned to 5pm New York by default, which is the convention every FX desk
+// reads a "daily close" as, so no alignment override is passed.
+//
+// This is the `/v3/instruments` endpoint, not an account one: the candles are
+// shared market data, identical on every account, so any working token can read
+// the history of any instrument the account is allowed to see. Best-effort —
+// returns [] rather than throwing, since callers overlay this onto a board that
+// must render either way.
+export async function fetchOandaDailyCloses(
+  cfg: OandaConfig,
+  instrument: string,
+  count = 400,
+): Promise<OandaDailyClose[]> {
+  const sym = toOandaSymbol(instrument);
+  const json = await getJson<OandaCandlesResponse>(
+    `${cfg.base}/v3/instruments/${encodeURIComponent(sym)}/candles?granularity=D&price=M&count=${count}`,
+    cfg.token,
+    8000,
+  );
+  if (!json) return [];
+  const out: OandaDailyClose[] = [];
+  for (const c of json.candles ?? []) {
+    if (c.complete !== true) continue; // today's candle is still forming
+    const close = num(c.mid?.c);
+    const t = c.time ? Date.parse(c.time) : NaN;
+    if (close == null || !Number.isFinite(t)) continue;
+    out.push({ timeMs: t, close });
+  }
+  out.sort((a, b) => a.timeMs - b.timeMs);
+  return out;
+}
+
+// The instruments this account may quote, as OANDA symbols ("EUR_USD"). Which
+// instruments exist depends on the OANDA entity the account belongs to — crypto
+// CFDs in particular are offered by some and not others — so callers check here
+// before asking for a price rather than reading a 400 as an outage.
+export async function fetchOandaTradeableInstruments(cfg: OandaConfig): Promise<Set<string>> {
+  const json = await getJson<OandaInstrumentsResponse>(
+    `${cfg.base}/v3/accounts/${cfg.accountId}/instruments`,
+    cfg.token,
+    8000,
+  );
+  const out = new Set<string>();
+  for (const i of json?.instruments ?? []) if (i.name) out.add(i.name);
+  return out;
 }
 
 export async function fetchOandaTrades(cfg: OandaConfig): Promise<LiveTrade[]> {

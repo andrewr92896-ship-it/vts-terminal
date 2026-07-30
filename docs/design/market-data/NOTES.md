@@ -17,12 +17,14 @@ Implemented in `Beta V 5.77`:
 
 ## Deviations from the spec
 
-1. **A sample-data notice was added.** The spec has no such element, but its own
-   copy conventions require that "any figure that is not real must be marked as
-   sample data" — and every series value/change is a fixture (see below). One
-   amber notice under the header says so, rather than marking 75 tiles
-   individually. Delete it when the values become real; the payload's
-   `sampleValues` flag drives it.
+1. **A sample-data notice and a fourth freshness state were added.** The spec has
+   neither, but its own copy conventions require that "any figure that is not real
+   must be marked as sample data". Now that the board is *partly* live, marking it
+   has two parts: an amber notice under the header that names which groups read
+   live and counts the rest, and a **Sample** dot in the freshness legend so every
+   placeholder row is identifiable on its own. Both are driven by the per-series
+   `sample` flag, so they shrink by themselves as more groups go live and vanish
+   when none are left.
 2. **`Data as of …` shows the last successful fetch, not a ticking clock.** The
    prototype ticks that readout every second off `NOW`, which makes the label
    state something untrue. Visual treatment is unchanged (same position, 11px
@@ -57,22 +59,55 @@ Implemented in `Beta V 5.77`:
 
 ## What is real and what is not
 
-- **Real:** the economic calendar (the live Forex Factory rows out of
-  `trading_calendar`, the same feed Market News reads), session Open/Closed
-  computed against the ET clock, the FOMC countdown and meeting dates, and the
-  trader's saved board layout.
-- **Sample:** every series `value` and `changes` set, the Fed bar's two odds bars,
-  and its "held at 4.25–4.50%" sub-line. The portal has no macro-data provider —
-  OANDA and Kraken cover live FX/crypto/metals prices, nothing covers CPI,
-  payrolls, the Treasury curve or the Fed balance sheet.
+- **Real:** the **FX & dollar** and **Crypto** groups (see below), the economic
+  calendar (the live Forex Factory rows out of `trading_calendar`, the same feed
+  Market News reads), session Open/Closed computed against the ET clock, the FOMC
+  countdown and meeting dates, and the trader's saved board layout.
+- **Sample:** every other series' `value` and `changes`, the Fed bar's two odds
+  bars, and its "held at 4.25–4.50%" sub-line. Nothing available to the portal
+  covers CPI, payrolls, the Treasury curve or the Fed balance sheet.
+
+## The live price path (`apps/api/src/trading/marketQuotes.ts`)
+
+FX, the dollar index and crypto are quoted from OANDA at request time and overlaid
+onto the catalog by `applyLiveQuotes`. Points worth knowing before changing it:
+
+- **Changes come from daily candles, not spot.** A spot price gives no change
+  columns and the five of them are the board's point, so each symbol gets one
+  `/v3/instruments/{sym}/candles?granularity=D&count=400` read (~19 months of
+  completed daily closes, enough for year-to-date).
+- **Look-backs match on the candle's CLOSE, not its start.** OANDA reports a
+  candle's `time` as its start and a daily candle closes 24h later, so
+  `closeAtOrBefore` compares `timeMs + 24h`. Matching the start reads the close of
+  the candle that was still forming at the look-back instant — a value from up to a
+  day in that point's future, which skews every period by a session. This was a
+  real bug caught in testing; don't reintroduce it.
+- **1D is measured against the most recent completed daily close**, which is what
+  a desk means by "today's move". Year-to-date uses the last close before the
+  **Eastern-Time** year began.
+- **DXY is computed, not quoted.** It is not an OANDA instrument, so it is derived
+  from the six ICE components and weights (`DXY_LEGS`), with a synthetic close
+  series built by evaluating the index on every day all six legs closed. A missing
+  leg invalidates the index rather than producing a wrong number, and the row's
+  "Reviewed by" is restated to `Computed · ICE weights` so it never claims ICE
+  published the figure on screen.
+- **Crypto availability varies by OANDA entity.** The account's `/instruments`
+  list is checked first, so a symbol the entity does not carry is skipped instead
+  of failing the whole pricing request. Where OANDA has no crypto, spot falls back
+  to the portal's existing keyless coin feed and the change columns stay sample —
+  that feed has no history behind it.
+- **Caching is stale-while-revalidate**, 60s for spot and 30min for candles, with
+  a snapshot that is never replaced by an empty result. A transient OANDA failure
+  leaves the last good figures on screen rather than blanking the board.
 
 ## Next
 
-- **Wire a macro provider.** `marketData.ts` is shaped for it: replace `value`,
-  `changes`, `asOf` and `source` per series and drop `sampleValues`. If only some
-  groups go live, move to a per-series `sample` flag so a partially-real board
-  stays honest. FX / metals / crypto / indices could come off the existing broker
-  connections before any new vendor is added.
+- **Wire a macro provider** for the remaining groups. `applyLiveQuotes` is the
+  seam: hand it more entries and the `sample` flags fall on their own.
+- **Commodities are the cheapest next group** — `XAU_USD`, `XAG_USD`, `WTICO_USD`,
+  `BCO_USD` and copper are all OANDA instruments, so adding them is five rows in
+  `QUOTES` with no new vendor. Indices (`NAS100_USD`, `SPX500_USD`, `US30_USD`) are
+  the same, though OANDA quotes the CFD rather than the index itself.
 - **Real last/next review inputs on the custom-metric form** (flagged in the
   handoff's own "next" list). Custom metrics currently read "Manual entry · when
   you update it".

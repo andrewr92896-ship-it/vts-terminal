@@ -1032,6 +1032,10 @@ export interface MarketSeries {
   session: [number, number] | null; // ET minutes-of-day [open, close]
   changes: [string, string, string, string, string]; // 1D, 1W, 1M, YTD, 1Y
   review: MarketReview;
+  // False once `value`/`changes` come from a real feed (the FX, dollar-index and
+  // crypto rows are quoted from OANDA). True while they are the design's
+  // placeholder figures.
+  sample: boolean;
 }
 
 export interface MarketDataPayload {
@@ -1041,8 +1045,8 @@ export interface MarketDataPayload {
   defaultPins: string[];
   meetings: string[]; // FOMC statement dates as 'MM-DD', 2:00 PM ET
   meetingYear: number;
-  // True while the board's figures are design fixtures rather than a live feed.
-  // The screen says so out loud — see the note atop the API module.
+  // True while ANY series is still showing placeholder figures. The per-series
+  // `sample` flag is the precise version.
   sampleValues: boolean;
 }
 
