@@ -35,7 +35,7 @@ import { getMarketDataLayout, setMarketDataLayout } from '../trading/marketDataL
 import {
   getMarketNewsStreams,
   setMarketNewsStreams,
-  LIVE_STREAMS_CONFIGURED,
+  liveStreamsConfigured,
 } from '../trading/marketNewsStreams.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
@@ -445,7 +445,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   // live/offline and viewer counts as sample.
   app.get('/api/trading/market-news/streams', read, async (request) => ({
     streams: await getMarketNewsStreams(request.currentUser!.id),
-    liveConfigured: LIVE_STREAMS_CONFIGURED,
+    liveConfigured: liveStreamsConfigured(),
   }));
 
   app.put('/api/trading/market-news/streams', write, async (request, reply) => {
@@ -456,7 +456,7 @@ export async function tradingRoutes(app: FastifyInstance) {
         ...parsed.data,
         channels: parsed.data.channels.map((c) => ({ ...c, live: false })),
       }),
-      liveConfigured: LIVE_STREAMS_CONFIGURED,
+      liveConfigured: liveStreamsConfigured(),
     };
   });
 

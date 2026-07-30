@@ -231,14 +231,34 @@ top of the workspaces list** (see `theme/nav.ts` order).
       `GET|PUT /api/trading/market-news/streams`; in the `admin/service.ts`
       per-user delete list). A trader with no row gets a default set of real desk
       channels (Fed/Reuters/CNBC/ECB), nothing open.
-    - **Live status is not wired yet.** `LIVE_STREAMS_CONFIGURED` is `false`, so
-      every channel reads offline and the screen marks live/viewer figures as
-      **sample** — no LIVE badges, viewer counts or go-live pushes are faked.
-      Lighting it up is the remaining backend work: resolve `@handle → channelId`
-      server-side once (`youtube/v3/channels?forHandle=`) and poll live-state
-      (`youtube/v3/search?...&eventType=live`), cached, then fill `withLiveState`
-      in `marketNewsStreams.ts` and flip the flag — the UI already renders the
-      live path.
+    - **Live status is real when `YOUTUBE_API_KEY` is set** (`trading/youtube.ts`
+      + `trading/youtubeWatch.ts`). `liveStreamsConfigured()` just reports whether
+      that key exists; with no key every channel reads offline and the screen
+      marks live/viewer figures as **sample** rather than faking them (a channel
+      with an id still embeds the keyless player). The watch is production-only,
+      polls the **union of every trader's channels** deduped (so cost scales with
+      distinct channels, not headcount), resolves `@handle → channelId` once and
+      caches it — which is what makes a handle-only channel embeddable without the
+      trader re-saving it — and buzzes whoever armed the bell on a genuine
+      **offline → live edge** (never on the first observation after a restart,
+      which would buzz about an already-running stream).
+    - **Quota is the whole design constraint, so do not "simplify" the detection
+      path.** The Data API allows 10,000 units/day and
+      `search.list?eventType=live` — the obvious way to find a live video — costs
+      **100 units per channel per check**: 4 channels every 5 minutes would burn
+      ~57,600/day and die before lunch daily. Detection instead goes
+      `channels.list` (uploads playlist id, cached forever) →`playlistItems.list`
+      (recent video ids) → `videos.list` (`liveBroadcastContent === 'live'` plus
+      concurrent viewers), which is **2 units** steady-state — a 50× saving, and
+      the only reason a real cadence fits. `search.list` survives as an opt-in
+      fallback (`YOUTUBE_USE_SEARCH=true`) for a channel whose stream never
+      appears in uploads. On top: a daily unit ledger with a hard ceiling
+      (`YOUTUBE_DAILY_QUOTA`), a stop-for-the-day on a `quotaExceeded` 403, a
+      round-robin `YOUTUBE_CHANNELS_PER_TICK` cap so adding channels lengthens
+      each one's refresh interval instead of multiplying daily spend, and a
+      negative cache on unresolved handles (else a typo'd handle is re-queried
+      every tick forever). A cached live reading older than 30 min is treated as
+      unknown, so a stalled poller can never leave a channel stuck showing LIVE.
 - **Investments** (teal, key `investments`): a read-only, layman-friendly
   **long-term portfolio tracker** — 401(k), IRA, ESA, and general holdings. This
   is the platform's intended "bread and butter" for a future public/App Store
@@ -819,6 +839,13 @@ defaults; the app runs locally with almost nothing set.
   `TRADESTATION_*`, `FTP_API_URL/TOKEN/ACCOUNT_ID`.
 - **Feeds:** `FINNHUB_API_KEY`, `RSS_NEWS_ENABLED`, `NEWS_AI_SUMMARY_ENABLED`,
   `FOREX_FACTORY_ENABLED`, `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`.
+- **YouTube (Market News live streams):** `YOUTUBE_API_KEY` (unset = poller off,
+  every channel reads offline and live figures are marked sample),
+  `YOUTUBE_WATCH_SECONDS` (300), `YOUTUBE_CHANNELS_PER_TICK` (8),
+  `YOUTUBE_DAILY_QUOTA` (9000 units — the watch stops for the day at this
+  ceiling rather than erroring), `YOUTUBE_USE_SEARCH` (`false`; the 100-unit
+  `search.list` fallback, opt-in only). See the Market News section for why the
+  cheap detection path matters.
 - **Notifications:** `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`,
   `PUSHOVER_APP_TOKEN`, `PUSHOVER_SOUND`, `SESSION_WATCH_SECONDS` (session-notif
   poll cadence, default 30).

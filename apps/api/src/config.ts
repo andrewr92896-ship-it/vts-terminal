@@ -54,6 +54,15 @@ const envSchema = z.object({
   VAPID_PUBLIC_KEY: z.string().optional(),
   VAPID_PRIVATE_KEY: z.string().optional(),
   VAPID_SUBJECT: z.string().default('mailto:admin@vitalistradingsystems.com'),
+  // YouTube Data API key, for the Market News live-stream wall: resolves a
+  // channel @handle to its UC… id and reads live status / stream title /
+  // viewer counts. Optional — with no key every channel reads offline and the
+  // screen marks live-state as sample rather than faking it (channels that
+  // carry an id still embed the keyless player). Quota is the real constraint:
+  // the default budget is 10,000 units/day and the live-search costs 100 per
+  // channel per sweep, so the watch refreshes a few channels per tick and stops
+  // for the day once YOUTUBE_DAILY_QUOTA units are spent.
+  YOUTUBE_API_KEY: blankAsUnset,
   // Pushover application token (one per app, from pushover.net/apps/build). Each
   // trader connects their own Pushover "user key" in settings. When unset,
   // Pushover features report "not configured". Optional per-event sound name
