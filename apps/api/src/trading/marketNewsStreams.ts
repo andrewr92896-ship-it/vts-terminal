@@ -2,7 +2,13 @@ import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { marketNewsStreams, type MarketNewsStreamsRow } from '../db/schema.js';
-import { cachedChannelIdForHandle, cachedLiveState, youtubeConfigured } from './youtube.js';
+import {
+  cachedChannelIdForHandle,
+  cachedLiveState,
+  channelIdFromRef,
+  normHandle,
+  youtubeConfigured,
+} from './youtube.js';
 
 // The Market News live-stream wall: a **curated, code-resident** list of news
 // channels, plus each trader's own view state over it (which streams are open
@@ -58,15 +64,22 @@ type CatalogChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId
 // ---------------------------------------------------------------------------
 // The curated catalog. Real channels, identical for every user.
 //
-// `channelId` is what lets a tile embed the keyless live_stream player with no
-// API key at all, so prefer filling it in. Leaving it blank is safe: the poller
-// resolves the handle once (`channels.list?forHandle`, 1 unit), caches it, and
-// `withLiveState` hands the resolved id to the client — the channel just cannot
-// embed until that first resolution happens.
-//
 // To add a channel: append a row with a stable `key` (a saved `watching` /
-// `notify` entry references it), the display name, and the @handle. To remove
-// one, delete the row — stale references in saved rows are dropped on read.
+// `notify` entry references it), the display name, and whatever identifies the
+// channel. To remove one, delete the row — stale references in saved rows are
+// dropped on read.
+//
+// The `handle` field takes **any YouTube URL or a bare @handle** — paste the
+// address bar and it is parsed (see parseYouTubeRef). Which form you paste only
+// changes how the id is obtained:
+//
+//   .../channel/UC…   the id is read straight out of the URL. Free, instant,
+//                     works with no API key — leave `channelId` blank.
+//   .../@handle       resolved once by the poller (1 quota unit) and cached, so
+//                     the tile cannot embed until that first resolution.
+//
+// So filling in `channelId` by hand is never required; it is just the same
+// answer a /channel/ URL already gives you for nothing.
 // ---------------------------------------------------------------------------
 const CATALOG: CatalogChannel[] = [
   // ---- Always on ----
@@ -115,6 +128,32 @@ export function listFollowedChannels(): { handle: string; channelId: string }[] 
   return CATALOG.map((c) => ({ handle: c.handle, channelId: c.channelId }));
 }
 
+// The channel id for a catalog row, cheapest source first: the id written into
+// the row, then one carried by the `handle` field itself (a /channel/UC… URL —
+// free, no API call), then one the poller resolved from the handle. '' means
+// the channel is not embeddable yet.
+//
+// Every caller uses this: the screen, the poller's round-robin, and the go-live
+// notifier all have to agree on which id a row means, or a channel resolves one
+// way for the wall and another for the buzz.
+export function resolvedChannelId(c: { channelId: string; handle: string }): string {
+  // Both fields go through the parser, so a URL pasted into either one works and
+  // a malformed id is rejected rather than passed to the embed as if it were one.
+  const explicit = channelIdFromRef(c.channelId);
+  if (explicit) return explicit;
+  if (!c.handle) return '';
+  return channelIdFromRef(c.handle) || cachedChannelIdForHandle(c.handle) || '';
+}
+
+// The catalog's `handle` field is an *input* — it accepts a pasted URL of any
+// shape — but the client renders it on the tile and builds a channel link from
+// it, so the payload carries the tidy `@name` form instead of whatever was
+// pasted. A row identified only by a /channel/ URL has no handle, and reads ''.
+function displayHandle(raw: string): string {
+  const h = normHandle(raw);
+  return h ? `@${h}` : '';
+}
+
 // Attach live-state to each catalog entry, and fill in a channelId the poller
 // resolved from a handle (so a handle-only channel becomes embeddable without
 // anyone editing code — the resolved id lives in the cache, not the catalog).
@@ -122,9 +161,9 @@ function withLiveState(view: MarketNewsView): MarketNewsStreams {
   return {
     ...view,
     channels: CATALOG.map((c) => {
-      const channelId = c.channelId || (c.handle ? cachedChannelIdForHandle(c.handle) ?? '' : '');
+      const channelId = resolvedChannelId(c);
       const live = channelId ? cachedLiveState(channelId) : undefined;
-      return { ...c, channelId, live: false, ...live };
+      return { ...c, channelId, handle: displayHandle(c.handle), live: false, ...live };
     }),
   };
 }
@@ -204,8 +243,8 @@ export async function setMarketNewsStreams(
 export function catalogChannel(channelId: string, handle: string): CatalogChannel | undefined {
   return CATALOG.find(
     (c) =>
-      (c.channelId && c.channelId === channelId) ||
-      (!!c.handle && c.handle.toLowerCase() === handle.toLowerCase()),
+      (!!channelId && resolvedChannelId(c) === channelId) ||
+      (!!c.handle && normHandle(c.handle) === normHandle(handle)),
   );
 }
 

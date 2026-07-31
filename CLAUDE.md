@@ -326,10 +326,24 @@ top of the workspaces list** (see `theme/nav.ts` order).
       10,000/day budget cannot absorb. Rough ceiling: ~15 channels at a 5-minute
       cadence, ~20 at 10 minutes.
       To add one, append a row with a stable `key` (saved `watching`/`notify`
-      entries reference it), a name, and the @handle; filling in `channelId` is
-      preferable because it lets the tile embed with **no API key at all**,
-      whereas a handle-only row cannot embed until the poller resolves it once.
-      Removing a row is safe — stale references are dropped on read.
+      entries reference it), a name, and **any YouTube URL or @handle** — the
+      address bar is parsed (`parseYouTubeRef` in `trading/youtube.ts`). Which
+      form you paste only changes how the id is obtained: a `/channel/UC…` URL
+      carries the id literally, so it is read for free and that tile embeds with
+      **no API key at all**, whereas an `@handle` (or a legacy `/c/`, `/user/`
+      URL) cannot embed until the poller resolves it once, for 1 unit. Filling
+      `channelId` in by hand is therefore never required — it is the same answer
+      a `/channel/` URL gives for nothing. Removing a row is safe — stale
+      references are dropped on read.
+      **Parse, never string-slice.** Reading a `/channel/` URL wrongly is worse
+      than not trying: the old parser turned it into the handle `"channel"`,
+      which spends a unit, fails, and is negative-cached for six hours.
+      `resolvedChannelId` (in `marketNewsStreams.ts`) is the one place that
+      decides which id a row means — the screen, the poller's round-robin and the
+      go-live notifier all call it, or a channel resolves one way for the wall and
+      another for the buzz. The `handle` field is an *input* that accepts a pasted
+      URL; the payload always carries the tidy `@name` form, because the client
+      prints it on the tile and builds a link from it.
     - Catalog entries carry `alwaysOn` for the channels that **broadcast around
       the clock** (Bloomberg, Yahoo Finance, Sky News, DW, Al Jazeera), shown as
       a `24/7` tag; the rest (Fed, ECB, Reuters) are dark until they cover

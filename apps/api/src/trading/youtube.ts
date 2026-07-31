@@ -83,17 +83,71 @@ const HANDLE_RETRY_MS = 6 * 60 * 60 * 1000;
 // channelId -> live entry (with its own freshness stamp).
 const liveCache = new Map<string, LiveEntry>();
 
-// Normalize whatever is stored as a channel's handle to the bare handle the
-// Data API's forHandle expects: strip a URL wrapper, a leading @, lowercase.
+// ---- Identifying a channel from whatever you were given ----
+//
+// A channel can be named four ways, and only one of them costs nothing:
+//
+//   youtube.com/channel/UC…   the id, literally — free, no API call
+//   youtube.com/@handle       a handle, resolvable for 1 unit
+//   youtube.com/c/Name        a legacy custom URL; usually the handle too
+//   youtube.com/user/Name     a legacy username; may not equal the handle
+//
+// So parsing is not cosmetic: reading `/channel/UC…` correctly is the
+// difference between a free answer and a quota-spending lookup, and reading it
+// *incorrectly* is worse than not trying — the old parser turned that URL into
+// the handle "channel", which spends a unit, fails, and gets negative-cached.
+
+// A YouTube channel id: "UC" + 22 chars of base64url. Checked rather than
+// trusted, so a malformed path segment can never be passed off as an id.
+const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
+
+export interface YouTubeRef {
+  // Set when the input names the channel by id — nothing to resolve.
+  channelId: string;
+  // Set when the input names it by handle/custom name — resolvable for 1 unit.
+  handle: string;
+}
+
+// Pull whatever identifies a channel out of a bare handle or any YouTube URL.
+// Both fields empty means the input named no channel (a /watch URL, junk).
+export function parseYouTubeRef(raw: string): YouTubeRef {
+  const text = (raw || '').trim();
+  if (!text) return { channelId: '', handle: '' };
+
+  // A bare id, or one sitting in a /channel/ path.
+  const idPath = text.match(/channel\/(UC[A-Za-z0-9_-]{22})/);
+  if (idPath) return { channelId: idPath[1], handle: '' };
+  if (CHANNEL_ID_RE.test(text)) return { channelId: text, handle: '' };
+
+  // A handle, with or without a URL around it: /@name, or just @name.
+  const at = text.match(/@([A-Za-z0-9._-]+)/);
+  if (at) return { channelId: '', handle: at[1].toLowerCase() };
+
+  // Legacy custom-URL forms. Best effort: these usually match the handle, but
+  // /user/ is a pre-handle username and may not, in which case the resolver
+  // simply misses and the row stays handle-only.
+  const legacy = text.match(/youtube\.com\/(?:c|user)\/([A-Za-z0-9._-]+)/i);
+  if (legacy) return { channelId: '', handle: legacy[1].toLowerCase() };
+
+  // Any other youtube.com URL (/watch, /playlist, /results…) names no channel.
+  if (/youtube\.com|youtu\.be/i.test(text)) return { channelId: '', handle: '' };
+
+  // Not a URL at all — treat it as a bare handle typed without the @.
+  const bare = text.match(/^[A-Za-z0-9._-]+$/);
+  return { channelId: '', handle: bare ? text.toLowerCase() : '' };
+}
+
+// The channel id an input carries outright, or '' when it carries none. This is
+// the free path — no API key, no quota, no waiting for the poller.
+export function channelIdFromRef(raw: string): string {
+  return parseYouTubeRef(raw).channelId;
+}
+
+// The bare handle the Data API's `forHandle` expects (no @, lowercased), or ''
+// when the input names the channel some other way. Callers treat '' as "nothing
+// to look up" rather than looking up an empty handle.
 export function normHandle(raw: string): string {
-  let h = (raw || '').trim();
-  const at = h.match(/@[A-Za-z0-9._-]+/);
-  if (at) h = at[0];
-  else {
-    const m = h.match(/youtube\.com\/@?([A-Za-z0-9._-]+)/i);
-    if (m) h = m[1];
-  }
-  return h.replace(/^@/, '').toLowerCase();
+  return parseYouTubeRef(raw).handle;
 }
 
 export function cachedChannelIdForHandle(handle: string): string | undefined {
