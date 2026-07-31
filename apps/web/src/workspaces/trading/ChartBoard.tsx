@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import GridLayout, { WidthProvider, type Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { Icon } from '../../components/Icon';
 import type { BoardTile, BoardTileKind, TradingBoard } from '../../api/types';
 import { ChartTile } from './ChartTile';
 import { WatchlistTile } from './WatchlistTile';
@@ -13,12 +15,13 @@ import { NewsTile } from './NewsTile';
 import { CalendarTile } from './CalendarTile';
 import { AlertsTile } from './AlertsTile';
 import { MobileScrollLockBar } from './scrollLock';
-import { BORDER, BORDER2, FAINT, GOLD, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
+import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
 
 const RGL = WidthProvider(GridLayout);
 const COLS = 12;
 const ROW_H = 30;
 const MARGIN = 10;
+const MENU_W = 260; // preset dropdown width, clamped to the viewport when narrower
 
 // A positions tile set to grow to fit its trades (rather than scroll in a fixed
 // cell). Its grid height is driven by measured content, not the stored h.
@@ -271,24 +274,17 @@ export function ChartBoard() {
       <style>{PLACEHOLDER_CSS}</style>
       <MobileScrollLockBar />
 
-      {/* Presets bar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        <span style={{ fontSize: 9, letterSpacing: '.5px', textTransform: 'uppercase', color: FAINT, marginRight: 2 }}>Presets</span>
-        {boards.map((b) => (
-          <button
-            key={b.id}
-            onClick={() => confirmSwitch(() => applyBoard(b))}
-            style={boardPill(b.id === activeId)}
-          >
-            {b.name}
-          </button>
-        ))}
-        {isUnsaved && <span style={boardPill(true)}>{name} <span style={{ color: FAINT }}>· unsaved</span></span>}
-        {editing && <button onClick={saveAsNew} style={{ ...ghostBtn, padding: '6px 10px' }}>{"Save as new"}</button>}
-      </div>
-
-      {/* Actions bar */}
+      {/* Toolbar — the preset picker and the layout actions share one wrapping
+          row, so the board starts right below it when you're just watching. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <span style={{ fontSize: 9, letterSpacing: '.5px', textTransform: 'uppercase', color: FAINT, marginRight: 2 }}>Presets</span>
+        <PresetPicker
+          boards={boards}
+          activeId={activeId}
+          name={name}
+          isUnsaved={isUnsaved}
+          onPick={(b) => confirmSwitch(() => applyBoard(b))}
+        />
         <button onClick={() => setEditing((v) => !v)} style={editing ? goldBtn : ghostBtn}>
           {editing ? '✓ Done editing' : '✎ Edit layout'}
         </button>
@@ -310,6 +306,7 @@ export function ChartBoard() {
             {!isUnsaved && (
               <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>{"Delete"}</button>
             )}
+            <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>
           </>
         )}
         {editing && (
@@ -395,6 +392,135 @@ export function ChartBoard() {
   );
 }
 
+// The saved-preset picker. A trader with a few boards used to get a wrapping
+// wall of pills — three rows deep on a phone — sitting above every tile, so the
+// list collapses into one dropdown and the board starts that much higher up.
+//
+// It is drawn by the portal itself (a button plus a body-portalled menu, the
+// same shape as the metrics tile's trader picker) rather than a native
+// <select>: on iOS that renders the OS picker wheel, which ignores the desk's
+// theme entirely. Portalling to <body> keeps the menu clear of the grid's
+// stacking context, and it closes on outside click, scroll, resize or Escape so
+// it can never float detached from its button.
+function PresetPicker({
+  boards,
+  activeId,
+  name,
+  isUnsaved,
+  onPick,
+}: {
+  boards: TradingBoard[];
+  activeId: string | null;
+  name: string;
+  isUnsaved: boolean;
+  onPick: (b: TradingBoard) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (!open && btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen((v) => !v);
+  }
+
+  const active = boards.find((b) => b.id === activeId);
+  const label = active?.name ?? name;
+  // With nothing saved yet there is only the working board, so the button is
+  // just a label — opening an empty menu would say nothing.
+  const empty = boards.length === 0;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={empty ? undefined : toggle}
+        disabled={empty}
+        title={empty ? 'Save this board to keep it as a preset' : 'Switch preset'}
+        style={{
+          ...presetBtn,
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          maxWidth: 'min(72vw, 260px)',
+          cursor: empty ? 'default' : 'pointer',
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
+        {isUnsaved && <span style={{ color: FAINT, flex: '0 0 auto' }}>· unsaved</span>}
+        {!empty && <Icon name="chevron-down" size={12} color={FAINT} />}
+      </button>
+      {open &&
+        rect &&
+        createPortal(
+          <>
+            <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
+            <div
+              style={{
+                position: 'fixed',
+                top: rect.bottom + 6,
+                left: Math.max(8, Math.min(rect.left, window.innerWidth - MENU_W - 8)),
+                width: Math.min(MENU_W, window.innerWidth - 16),
+                maxHeight: '50vh',
+                overflowY: 'auto',
+                background: '#0C1C3C',
+                border: `1px solid ${BORDER2}`,
+                borderRadius: 10,
+                boxShadow: '0 16px 40px rgba(0,0,0,.5)',
+                padding: 6,
+                zIndex: 201,
+              }}
+            >
+              {isUnsaved && (
+                <button onClick={() => setOpen(false)} style={menuRow(true)}>
+                  <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                    <Icon name="check" size={13} color={GREEN} />
+                  </span>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>unsaved</span>
+                </button>
+              )}
+              {boards.map((b) => {
+                const sel = b.id === activeId;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => {
+                      setOpen(false);
+                      onPick(b);
+                    }}
+                    style={menuRow(sel)}
+                  >
+                    <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                      {sel ? <Icon name="check" size={13} color={GREEN} /> : null}
+                    </span>
+                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
+                    {b.isDefault && <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>default</span>}
+                  </button>
+                );
+              })}
+            </div>
+          </>,
+          document.body,
+        )}
+    </>
+  );
+}
+
 // react-grid-layout drag/resize visuals themed to the navy/gold desk.
 const PLACEHOLDER_CSS = `
 .react-grid-item.react-grid-placeholder { background: rgba(235,203,116,.22) !important; border: 1px dashed ${GOLD}; border-radius: 10px; }
@@ -402,18 +528,34 @@ const PLACEHOLDER_CSS = `
 .react-grid-item.react-draggable-dragging { z-index: 20; opacity: .95; }
 `;
 
-function boardPill(active: boolean): CSSProperties {
-  return {
-    fontSize: 11.5,
-    fontWeight: 600,
-    color: active ? '#fff' : '#cbd8f5',
-    background: active ? 'rgba(235,203,116,.14)' : 'rgba(255,255,255,.04)',
-    border: `1px solid ${active ? 'rgba(235,203,116,.5)' : BORDER2}`,
-    borderRadius: 7,
-    padding: '6px 11px',
-    cursor: 'pointer',
-  };
-}
+// The picker's trigger — the gold "this is the open preset" pill the row used
+// to render per board, now the one thing standing in for the whole list.
+const presetBtn: CSSProperties = {
+  fontSize: 11.5,
+  fontWeight: 600,
+  color: '#fff',
+  background: 'rgba(235,203,116,.14)',
+  border: '1px solid rgba(235,203,116,.5)',
+  borderRadius: 7,
+  padding: '6px 11px',
+  cursor: 'pointer',
+};
+const menuRow = (sel: boolean): CSSProperties => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  width: '100%',
+  background: sel ? 'rgba(255,255,255,.06)' : 'transparent',
+  border: 'none',
+  borderRadius: 7,
+  color: sel ? '#fff' : '#cfe0ff',
+  fontSize: 13,
+  fontWeight: sel ? 700 : 500,
+  fontFamily: 'inherit',
+  textAlign: 'left',
+  padding: '9px 8px',
+  cursor: 'pointer',
+});
 const namePromptRow: CSSProperties = {
   display: 'flex',
   alignItems: 'center',
