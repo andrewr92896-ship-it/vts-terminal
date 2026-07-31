@@ -145,15 +145,25 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   // crypto and (later) shares have no pip, and labelling their price moves in
   // pips would be inventing a unit. `forexPair` is the portal's single test for
   // this (mirrored server-side in trading/forex.ts), so the ticket agrees with
-  // how the Live Wall, Trade Log and History already score a trade. The pip's
-  // *size* still comes from the broker's own pipLocation rather than a guess.
+  // how the Live Wall, Trade Log and History already score a trade.
   const isForex = forexPair(instrument) != null;
 
-  // What one pip is worth at this size, in the account's currency — the figure
-  // an FX trader sizes by. Needs the quote for the currency conversion, so it
-  // reads "—" for the second or two before the first quote lands.
-  const perPip =
-    isForex && factor != null && Number.isFinite(units) && units > 0 ? units * pipSize * factor : null;
+  // The unit of price movement this instrument is read in. For a currency pair
+  // that is a pip, sized by the broker's own pipLocation rather than a
+  // JPY-or-not guess. For everything else it is one whole point of price — an
+  // index going 5,000 → 5,001, a share moving a dollar — which is what "points"
+  // means everywhere it is used, and deliberately NOT the instrument's
+  // pipLocation: OANDA reports 0.01 for gold, so reading that as a "point"
+  // would quote the figure in cents.
+  const step = isForex ? pipSize : 1;
+  const stepName = isForex ? 'pip' : 'point'; // "$1.00 / pip"
+  const stepPlural = isForex ? 'pips' : 'pts'; // "43.5 pips", "1,355 pts"
+
+  // What one of those units is worth at this size, in the account's currency —
+  // the figure a trader sizes by. Needs the quote for the currency conversion,
+  // so it reads "—" for the second or two before the first quote lands.
+  const perStep =
+    factor != null && Number.isFinite(units) && units > 0 ? units * step * factor : null;
 
   // Money at risk / on offer, priced through the quote → account-currency factor
   // rather than assumed. Null whenever a piece is missing, so the ticket shows
@@ -279,21 +289,12 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         <div style={spreadCell}>
           <div style={{ fontSize: 8.5, color: FAINT, letterSpacing: '.6px' }}>{"SPREAD"}</div>
           <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: quote?.tradeable === false ? RED : MUTED }}>
-            {/* Pips for a currency pair; the raw price difference for anything
-                else, where a "pip" is not a unit that exists. */}
-            {quote?.spread == null
-              ? quoteError
-                ? '—'
-                : '·'
-              : isForex
-                ? (quote.spread / pipSize).toFixed(1)
-                : px(quote.spread)}
+            {/* Pips on a currency pair, points on everything else. */}
+            {quote?.spread == null ? (quoteError ? '—' : '·') : fmtSteps(quote.spread / step)}
           </div>
-          {(quote?.tradeable === false || isForex) && (
-            <div style={{ fontSize: 8.5, color: quote?.tradeable === false ? RED : FAINT, letterSpacing: '.4px' }}>
-              {quote?.tradeable === false ? 'CLOSED' : 'PIPS'}
-            </div>
-          )}
+          <div style={{ fontSize: 8.5, color: quote?.tradeable === false ? RED : FAINT, letterSpacing: '.4px' }}>
+            {quote?.tradeable === false ? 'CLOSED' : stepPlural.toUpperCase()}
+          </div>
         </div>
         <SideButton
           label="Buy"
@@ -340,16 +341,14 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
               inputMode="numeric"
               style={{ ...input, width: '100%', boxSizing: 'border-box' }}
             />
-            {/* What this size is worth per pip — currency pairs only. The blank
-                line on everything else keeps the row from jumping height when
-                the trader switches from EUR/USD to gold or bitcoin. */}
-            {isForex ? (
-              <div style={{ fontSize: 10.5, color: MUTED, marginTop: 4, fontFamily: MONO }} title="What one pip is worth at this size">
-                {perPip == null ? '—' : `${perPipMoney(perPip, account.currency)} / pip`}
-              </div>
-            ) : (
-              <div style={{ height: 15 }} />
-            )}
+            {/* What this size is worth per unit of price movement: per pip on a
+                currency pair, per point on an index, share, metal or coin. */}
+            <div
+              style={{ fontSize: 10.5, color: MUTED, marginTop: 4, fontFamily: MONO }}
+              title={`What one ${stepName} of price movement is worth at this size`}
+            >
+              {perStep == null ? '—' : `${perUnitMoney(perStep, account.currency)} / ${stepName}`}
+            </div>
           </Field>
           <Field label={`Risk (${account.currency})`}>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -388,7 +387,8 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           <input value={slText} onChange={(e) => setSlText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
           <SubReading
             money={riskMoney}
-            pips={!isForex || riskDistance == null ? null : Math.abs(riskDistance) / pipSize}
+            steps={riskDistance == null ? null : Math.abs(riskDistance) / step}
+            unit={stepPlural}
             ccy={account.currency}
             color={RED}
           />
@@ -397,7 +397,8 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           <input value={tpText} onChange={(e) => setTpText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
           <SubReading
             money={rewardMoney}
-            pips={!isForex || rewardDistance == null ? null : Math.abs(rewardDistance) / pipSize}
+            steps={rewardDistance == null ? null : Math.abs(rewardDistance) / step}
+            unit={stepPlural}
             ccy={account.currency}
             color={GREEN}
           />
@@ -582,12 +583,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-// Per-pip money, which spans a much wider range than the desk's other figures:
-// a standard lot is $10.00 a pip while a 1-unit connection test is $0.0001, and
-// the shared two-decimal formatter renders that second one as "$0.00". Small
-// values keep four decimals so a tiny size reads as tiny rather than as free.
-// Currency handling matches fmtMoney: USD gets "$", anything else its code.
-function perPipMoney(v: number, ccy: string): string {
+// A count of pips or points. Thousands are separated (a 1,355-point stop on
+// bitcoin is unreadable as "1355") and the decimal is dropped when it is zero,
+// so a round number does not read as falsely precise.
+function fmtSteps(n: number): string {
+  return n.toLocaleString('en-US', { maximumFractionDigits: 1 });
+}
+
+// Money per unit of price movement, which spans a much wider range than the
+// desk's other figures: a standard FX lot is $10.00 a pip while a 1-unit
+// connection test is $0.0001, and the shared two-decimal formatter renders that
+// second one as "$0.00". Small values keep four decimals so a tiny size reads as
+// tiny rather than as free. Currency handling matches fmtMoney: USD gets "$",
+// anything else its code.
+function perUnitMoney(v: number, ccy: string): string {
   const digits = Math.abs(v) < 0.01 ? 4 : 2;
   const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
   return ccy === 'USD' ? `$${abs}` : `${abs} ${ccy}`;
@@ -638,23 +647,28 @@ function SideButton({
   );
 }
 
+// The money a stop or target is worth, and how far away it is in the
+// instrument's own unit of movement — pips for a currency pair, points for an
+// index, share, metal or coin.
 function SubReading({
   money,
-  pips,
+  steps,
+  unit,
   ccy,
   color,
 }: {
   money: number | null;
-  pips: number | null;
+  steps: number | null;
+  unit: string;
   ccy: string;
   color: string;
 }) {
-  if (money == null && pips == null) return <div style={{ height: 15 }} />;
+  if (money == null && steps == null) return <div style={{ height: 15 }} />;
   return (
     <div style={{ fontSize: 10.5, color, marginTop: 4, fontFamily: MONO }}>
       {money != null ? fmtMoney(money, ccy) : ''}
-      {money != null && pips != null ? ' · ' : ''}
-      {pips != null ? `${pips.toFixed(1)} pips` : ''}
+      {money != null && steps != null ? ' · ' : ''}
+      {steps != null ? `${fmtSteps(steps)} ${unit}` : ''}
     </div>
   );
 }
