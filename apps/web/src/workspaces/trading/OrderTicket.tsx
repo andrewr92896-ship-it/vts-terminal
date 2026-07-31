@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import { fmtMoney, fmtPrice } from './TradeCard';
+import { fmtMoney } from './TradeCard';
 import type { DeskAccount, DeskInstrument, DeskOrderType, DeskQuote, TradeSide } from '../../api/types';
 
 // The order ticket — the one component in the portal that sends a real order to
@@ -70,6 +70,14 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
     () => instruments.find((i) => i.instrument === instrument) ?? null,
     [instruments, instrument],
   );
+
+  // Every price on the ticket is rendered at the instrument's own precision, so
+  // the two sides of a quote line up digit for digit. The generic price
+  // formatter trims trailing zeros, which is right on a card but reads as
+  // broken on a bid/ask pair — 1.153 sitting beside 1.15335 looks like two
+  // different instruments.
+  const px = (v: number | null | undefined): string =>
+    v == null ? '—' : v.toFixed(spec?.displayPrecision ?? 5);
 
   // Poll the live quote for the selected instrument only.
   const loadQuote = useCallback(async () => {
@@ -190,8 +198,8 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         kind: 'ok',
         message:
           res.status === 'filled'
-            ? `${verb} ${(res.units ?? units).toLocaleString('en-US')} ${res.instrument} at ${fmtPrice(res.fillPrice)}`
-            : `${type === 'limit' ? 'Limit' : 'Stop'} order working: ${side === 'long' ? 'buy' : 'sell'} ${units.toLocaleString('en-US')} ${res.instrument} at ${fmtPrice(limitPrice)}`,
+            ? `${verb} ${(res.units ?? units).toLocaleString('en-US')} ${res.instrument} at ${px(res.fillPrice)}`
+            : `${type === 'limit' ? 'Limit' : 'Stop'} order working: ${side === 'long' ? 'buy' : 'sell'} ${units.toLocaleString('en-US')} ${res.instrument} at ${px(limitPrice)}`,
       });
       setConfirming(false);
       onPlaced();
@@ -207,7 +215,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const sideColor = side === 'long' ? GREEN : RED;
 
   return (
-    <div style={{ ...panel, display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div style={{ ...panel, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: TEXT }}>{"Order ticket"}</div>
         <span style={live ? livePill : practicePill}>{live ? 'LIVE MONEY' : 'PRACTICE'}</span>
@@ -220,39 +228,37 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         disabled={readOnly}
       />
 
-      {/* Live two-sided price. The side you'd pay is highlighted. */}
-      <div style={quoteRow}>
-        <PriceCell
-          label="Sell / bid"
-          value={quote?.bid ?? null}
+      {/* One two-sided price control rather than a quote row above a Buy/Sell
+          row: at a desk, reading a side's price and choosing that side are the
+          same act, and two controls that do the same thing is what made this
+          look duplicated. The selected side is filled; the spread sits between
+          them where it is being compared. */}
+      <div style={{ display: 'flex', alignItems: 'stretch', gap: 6 }}>
+        <SideButton
+          label="Sell"
+          price={px(quote?.bid)}
           active={side === 'short'}
           color={RED}
+          disabled={readOnly}
           onClick={() => setSide('short')}
         />
-        <div style={{ textAlign: 'center', minWidth: 74 }}>
-          <div style={{ fontSize: 9.5, color: FAINT, letterSpacing: '.5px' }}>{"SPREAD"}</div>
-          <div style={{ fontFamily: MONO, fontSize: 13, color: quote?.tradeable === false ? RED : MUTED }}>
+        <div style={spreadCell}>
+          <div style={{ fontSize: 8.5, color: FAINT, letterSpacing: '.6px' }}>{"SPREAD"}</div>
+          <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: quote?.tradeable === false ? RED : MUTED }}>
             {quote?.spread != null ? (quote.spread / pipSize).toFixed(1) : quoteError ? '—' : '·'}
           </div>
-          {quote?.tradeable === false && <div style={{ fontSize: 9.5, color: RED }}>{"Closed"}</div>}
+          <div style={{ fontSize: 8.5, color: quote?.tradeable === false ? RED : FAINT, letterSpacing: '.4px' }}>
+            {quote?.tradeable === false ? 'CLOSED' : 'PIPS'}
+          </div>
         </div>
-        <PriceCell
-          label="Buy / ask"
-          value={quote?.ask ?? null}
+        <SideButton
+          label="Buy"
+          price={px(quote?.ask)}
           active={side === 'long'}
           color={GREEN}
+          disabled={readOnly}
           onClick={() => setSide('long')}
         />
-      </div>
-
-      {/* Buy / Sell */}
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button onClick={() => setSide('short')} style={sideBtn(side === 'short', RED)} disabled={readOnly}>
-          {"Sell"}
-        </button>
-        <button onClick={() => setSide('long')} style={sideBtn(side === 'long', GREEN)} disabled={readOnly}>
-          {"Buy"}
-        </button>
       </div>
 
       {/* Order type */}
@@ -273,22 +279,47 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             value={priceText}
             onChange={(e) => setPriceText(e.target.value)}
             inputMode="decimal"
-            placeholder={quote?.ask != null ? String(quote.ask) : '0.00000'}
-            style={input}
+            placeholder={quote?.ask != null ? px(quote.ask) : '0.00000'}
+            style={{ ...input, width: '100%', boxSizing: 'border-box' }}
           />
         </Field>
       )}
 
-      {/* Size */}
+      {/* Size, and the risk that sizes it, on one row — the second is only ever
+          used to fill the first. */}
       <div>
-        <Label>{"Size (units)"}</Label>
-        <input
-          value={unitsText}
-          onChange={(e) => setUnitsText(e.target.value)}
-          inputMode="numeric"
-          style={{ ...input, width: '100%', boxSizing: 'border-box' }}
-        />
-        <div style={{ display: 'flex', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <Field label="Size (units)">
+            <input
+              value={unitsText}
+              onChange={(e) => setUnitsText(e.target.value)}
+              inputMode="numeric"
+              style={{ ...input, width: '100%', boxSizing: 'border-box' }}
+            />
+          </Field>
+          <Field label={`Risk (${account.currency})`}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                value={riskText}
+                onChange={(e) => setRiskText(e.target.value)}
+                inputMode="decimal"
+                placeholder={riskDistance == null ? 'stop first' : '100'}
+                disabled={riskDistance == null}
+                title={riskDistance == null ? 'Set a stop loss and this will size the trade for you' : 'Size the trade from this risk'}
+                style={{ ...input, flex: 1, minWidth: 0, opacity: riskDistance == null ? 0.5 : 1 }}
+              />
+              <button
+                onClick={sizeFromRisk}
+                disabled={riskDistance == null}
+                title="Work the size out from the stop distance"
+                style={{ ...chip, padding: '0 11px', opacity: riskDistance == null ? 0.4 : 1 }}
+              >
+                {"Size"}
+              </button>
+            </div>
+          </Field>
+        </div>
+        <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
           {SIZE_CHIPS.map((n) => (
             <button key={n} onClick={() => setUnitsText(String(n))} style={chip}>
               {n >= 1000 ? `${n / 1000}k` : n}
@@ -300,7 +331,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
       {/* Stop / target */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <Field label="Stop loss">
-          <input value={slText} onChange={(e) => setSlText(e.target.value)} inputMode="decimal" placeholder="—" style={input} />
+          <input value={slText} onChange={(e) => setSlText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
           <SubReading
             money={riskMoney}
             pips={riskDistance == null ? null : Math.abs(riskDistance) / pipSize}
@@ -309,7 +340,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           />
         </Field>
         <Field label="Take profit">
-          <input value={tpText} onChange={(e) => setTpText(e.target.value)} inputMode="decimal" placeholder="—" style={input} />
+          <input value={tpText} onChange={(e) => setTpText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
           <SubReading
             money={rewardMoney}
             pips={rewardDistance == null ? null : Math.abs(rewardDistance) / pipSize}
@@ -319,37 +350,16 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         </Field>
       </div>
 
-      {/* Size-from-risk. Only useful once a stop exists, so it says so. */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-        <div style={{ flex: 1 }}>
-          <Label>{`Size from risk (${account.currency})`}</Label>
-          <input
-            value={riskText}
-            onChange={(e) => setRiskText(e.target.value)}
-            inputMode="decimal"
-            placeholder={riskDistance == null ? 'Set a stop first' : '100'}
-            disabled={riskDistance == null}
-            style={{ ...input, width: '100%', boxSizing: 'border-box', opacity: riskDistance == null ? 0.55 : 1 }}
-          />
-        </div>
-        <button onClick={sizeFromRisk} disabled={riskDistance == null} style={{ ...chip, padding: '10px 14px', opacity: riskDistance == null ? 0.5 : 1 }}>
-          {"Size it"}
-        </button>
-      </div>
-
       {/* What this order actually is, in money */}
       <div style={summaryBox}>
-        <SummaryRow label="Reference price" value={reference == null ? '—' : fmtPrice(reference)} />
-        <SummaryRow
-          label="Position value"
-          value={notional == null ? '—' : fmtMoney(notional, account.currency)}
-        />
-        <SummaryRow
+        <SummaryCell label="Entry" value={reference == null ? '—' : px(reference)} />
+        <SummaryCell label="Position value" value={notional == null ? '—' : fmtMoney(notional, account.currency)} />
+        <SummaryCell
           label="Margin (est.)"
           value={marginEstimate == null ? '—' : fmtMoney(marginEstimate, account.currency)}
-          hint={account.marginAvailable != null ? `${fmtMoney(account.marginAvailable, account.currency)} available` : undefined}
+          hint={account.marginAvailable != null ? `of ${fmtMoney(account.marginAvailable, account.currency)} free` : undefined}
         />
-        <SummaryRow
+        <SummaryCell
           label="Risk / reward"
           value={rr == null ? '—' : `${rr.toFixed(2)}R`}
           color={rr == null ? undefined : rr >= 1 ? GREEN : GOLD}
@@ -373,16 +383,16 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             {type === 'market' ? (
               <>
                 {side === 'long' ? 'Buy' : 'Sell'} <b style={{ color: sideColor }}>{units.toLocaleString('en-US')}</b> {instrument} at
-                market{reference != null ? ` (~${fmtPrice(reference)})` : ''}
+                market{reference != null ? ` (~${px(reference)})` : ''}
               </>
             ) : (
               <>
                 {type === 'limit' ? 'Limit' : 'Stop'} {side === 'long' ? 'buy' : 'sell'}{' '}
-                <b style={{ color: sideColor }}>{units.toLocaleString('en-US')}</b> {instrument} at {fmtPrice(limitPrice)}
+                <b style={{ color: sideColor }}>{units.toLocaleString('en-US')}</b> {instrument} at {px(limitPrice)}
               </>
             )}
-            {stopLoss != null && <> · stop {fmtPrice(stopLoss)}</>}
-            {takeProfit != null && <> · target {fmtPrice(takeProfit)}</>}
+            {stopLoss != null && <> · stop {px(stopLoss)}</>}
+            {takeProfit != null && <> · target {px(takeProfit)}</>}
           </div>
           <div style={{ fontSize: 11, color: live ? RED : FAINT, marginTop: 6 }}>
             {live
@@ -505,44 +515,59 @@ function Label({ children }: { children: string }) {
   );
 }
 
+// `minWidth: 0` matters: a grid/flex child defaults to min-width:auto, so a
+// field holding an input plus a button refuses to shrink and steals the width
+// from the field beside it — which squeezed the size box down to three digits
+// on a phone.
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
+    <div style={{ minWidth: 0 }}>
       <Label>{label}</Label>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>{children}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>{children}</div>
     </div>
   );
 }
 
-function PriceCell({
+// One side of the book: its price, and the act of choosing it. Selected reads
+// as a filled block in the side's colour so which way the ticket points is
+// legible from across the room; unselected still shows its price, because the
+// other side is what you are deciding against.
+function SideButton({
   label,
-  value,
+  price,
   active,
   color,
+  disabled,
   onClick,
 }: {
   label: string;
-  value: number | null;
+  price: string;
   active: boolean;
   color: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
+      aria-pressed={active}
       style={{
         flex: 1,
-        background: active ? `${color}1f` : INPUT_BG,
+        minWidth: 0,
+        background: active ? `${color}24` : INPUT_BG,
         border: `1px solid ${active ? color : BORDER}`,
-        borderRadius: 8,
-        padding: '9px 10px',
-        cursor: 'pointer',
+        borderRadius: 9,
+        padding: '8px 10px 9px',
+        cursor: disabled ? 'default' : 'pointer',
         textAlign: 'center',
       }}
     >
-      <div style={{ fontSize: 9.5, color: FAINT, letterSpacing: '.5px', textTransform: 'uppercase' }}>{label}</div>
-      <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: active ? color : TEXT }}>
-        {value == null ? '·' : fmtPrice(value)}
+      <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.7px', textTransform: 'uppercase', color: active ? color : MUTED }}>
+        {label}
+      </div>
+      <div style={{ fontFamily: MONO, fontSize: 18, fontWeight: 700, letterSpacing: '-.3px', color: active ? color : TEXT }}>
+        {price}
       </div>
     </button>
   );
@@ -569,26 +594,27 @@ function SubReading({
   );
 }
 
-function SummaryRow({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
+// One reading in the summary block. Stacked label-over-value in a 2×2 grid
+// rather than four label/value rows: the same four facts in half the height,
+// which is what keeps the Review button above the fold on a laptop.
+function SummaryCell({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, padding: '3px 0' }}>
-      <span style={{ fontSize: 11, color: MUTED }}>{label}</span>
-      <span style={{ textAlign: 'right' }}>
-        <span style={{ fontFamily: MONO, fontSize: 12.5, color: color ?? TEXT }}>{value}</span>
-        {hint && <span style={{ fontSize: 10, color: FAINT, marginLeft: 6 }}>{hint}</span>}
-      </span>
+    <div style={{ minWidth: 0 }}>
+      <div style={{ fontSize: 9.5, color: MUTED, letterSpacing: '.4px', textTransform: 'uppercase' }}>{label}</div>
+      <div style={{ fontFamily: MONO, fontSize: 13, color: color ?? TEXT, marginTop: 2 }}>{value}</div>
+      {hint && <div style={{ fontSize: 9.5, color: FAINT, marginTop: 1 }}>{hint}</div>}
     </div>
   );
 }
 
-const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
-const quoteRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8 };
+const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 15 };
+const spreadCell: CSSProperties = { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', flex: '0 0 auto', minWidth: 58, padding: '0 2px' };
 const seg: CSSProperties = { display: 'flex', background: INPUT_BG, border: `1px solid ${BORDER}`, borderRadius: 9, overflow: 'hidden' };
 const segBtn: CSSProperties = { flex: 1, background: 'none', border: 'none', color: MUTED, fontSize: 12, fontWeight: 600, padding: '8px 6px', cursor: 'pointer' };
 const segActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 15, padding: '9px 11px', outline: 'none', fontFamily: MONO };
-const chip: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, color: '#dfe7fa', fontSize: 11.5, fontWeight: 600, padding: '6px 11px', borderRadius: 6, cursor: 'pointer' };
-const summaryBox: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '10px 12px' };
+const chip: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, color: '#dfe7fa', fontSize: 11.5, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: 'pointer' };
+const summaryBox: CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '9px 12px', background: INPUT_BG, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '11px 12px' };
 const confirmBox: CSSProperties = { background: 'rgba(3,12,32,.75)', border: `1px solid ${BORDER2}`, borderRadius: 10, padding: 14 };
 const placeBtn: CSSProperties = { border: 'none', fontWeight: 700, fontSize: 13, padding: '12px 18px', borderRadius: 8, cursor: 'pointer', flex: 1 };
 const ghostBtn: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, color: '#dfe7fa', fontSize: 12.5, fontWeight: 600, padding: '12px 18px', borderRadius: 8, cursor: 'pointer' };
@@ -598,17 +624,3 @@ const dropdown: CSSProperties = { position: 'absolute', top: '100%', left: 0, ri
 const dropRow: CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, width: '100%', background: 'none', border: 'none', borderBottom: `1px solid ${BORDER}`, padding: '9px 11px', fontSize: 12.5, cursor: 'pointer', textAlign: 'left' };
 const livePill: CSSProperties = { fontSize: 9.5, fontWeight: 800, letterSpacing: '.6px', color: RED, background: 'rgba(239,84,104,.14)', border: '1px solid rgba(239,84,104,.45)', padding: '3px 8px', borderRadius: 999 };
 const practicePill: CSSProperties = { fontSize: 9.5, fontWeight: 800, letterSpacing: '.6px', color: '#6C9EFF', background: 'rgba(108,158,255,.12)', border: '1px solid rgba(108,158,255,.4)', padding: '3px 8px', borderRadius: 999 };
-
-function sideBtn(active: boolean, color: string): CSSProperties {
-  return {
-    flex: 1,
-    background: active ? `${color}26` : 'rgba(255,255,255,.04)',
-    border: `1px solid ${active ? color : BORDER2}`,
-    color: active ? color : MUTED,
-    fontSize: 13.5,
-    fontWeight: 700,
-    padding: '10px 0',
-    borderRadius: 8,
-    cursor: 'pointer',
-  };
-}

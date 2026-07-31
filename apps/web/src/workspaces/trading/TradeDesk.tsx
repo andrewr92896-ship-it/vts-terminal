@@ -212,13 +212,12 @@ export function TradeDesk() {
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>{a.label}</span>
                 <span style={a.env === 'live' ? livePill : practicePill}>{a.env === 'live' ? 'LIVE' : 'PRACTICE'}</span>
               </div>
+              <div style={{ fontSize: 9, color: FAINT, letterSpacing: '.5px' }}>{"ACCOUNT VALUE"}</div>
               <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: a.ok ? TEXT : FAINT }}>
                 {money ? '•••' : a.nav == null ? '—' : fmtMoney(a.nav, a.currency)}
               </div>
               <div style={{ fontSize: 10, color: FAINT, marginTop: 3 }}>
-                {a.ok
-                  ? `••${a.accountTail} · ${a.openTradeCount ?? 0} open${a.marginAvailable != null && !money ? ` · ${fmtMoney(a.marginAvailable, a.currency)} free` : ''}`
-                  : (a.error ?? 'Unreachable')}
+                {a.ok ? accountMeta(a, money) : (a.error ?? 'Unreachable')}
               </div>
             </button>
           ))}
@@ -238,9 +237,13 @@ export function TradeDesk() {
 
       {instrumentError && <Notice tone="error">{instrumentError}</Notice>}
 
-      {/* Ticket + book */}
-      <div style={{ display: 'grid', gridTemplateColumns: twoColumn ? 'minmax(340px, 420px) 1fr' : '1fr', gap: 14, alignItems: 'start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Ticket on the left, everything you watch while filling it on the right.
+          The ticket column is the only thing on its side, so the whole of it —
+          including the Review button — stays on screen; the book, the resting
+          orders and the journal share the wider column rather than stacking
+          under the ticket where they fell off the bottom of the page. */}
+      <div style={{ display: 'grid', gridTemplateColumns: twoColumn ? 'minmax(360px, 440px) 1fr' : '1fr', gap: 14, alignItems: 'start' }}>
+        <div>
           {account ? (
             <OrderTicket
               key={account.connectionId}
@@ -256,34 +259,20 @@ export function TradeDesk() {
           ) : (
             accounts.length > 0 && <Notice tone="muted">{"Pick an account above to start a ticket."}</Notice>
           )}
-          {!twoColumn && (
-            <TeamPositions
-              trades={teamTrades}
-              myUserId={user?.id ?? ''}
-              currency={currency}
-              hideMoney={money}
-              readOnly={readOnly}
-              sample={sampleBook}
-              onPick={setInstrument}
-              onChanged={afterAction}
-            />
-          )}
-          <WorkingOrders orders={working} readOnly={readOnly} onChanged={afterAction} />
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {twoColumn && (
-            <TeamPositions
-              trades={teamTrades}
-              myUserId={user?.id ?? ''}
-              currency={currency}
-              hideMoney={money}
-              readOnly={readOnly}
-              sample={sampleBook}
-              onPick={setInstrument}
-              onChanged={afterAction}
-            />
-          )}
+          <TeamPositions
+            trades={teamTrades}
+            myUserId={user?.id ?? ''}
+            currency={currency}
+            hideMoney={money}
+            readOnly={readOnly}
+            sample={sampleBook}
+            onPick={setInstrument}
+            onChanged={afterAction}
+          />
+          <WorkingOrders orders={working} readOnly={readOnly} onChanged={afterAction} />
           <OrderJournal orders={journal} currency={currency} />
         </div>
       </div>
@@ -295,6 +284,18 @@ export function TradeDesk() {
       <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={afterAction} />
     </div>
   );
+}
+
+// The line under an account's value. Free margin is only worth printing once
+// something is using margin — on a flat account it equals the account value
+// exactly, and the card read "$937.04 … $937.04 free", which looks like a bug.
+function accountMeta(a: DeskAccount, hideMoney: boolean): string {
+  const parts = [`••${a.accountTail}`, `${a.openTradeCount ?? 0} open`];
+  const free = a.marginAvailable;
+  if (!hideMoney && free != null && (a.nav == null || Math.abs(free - a.nav) >= 0.01)) {
+    parts.push(`${fmtMoney(free, a.currency)} free`);
+  }
+  return parts.join(' · ');
 }
 
 function Notice({ tone, children }: { tone: 'error' | 'muted'; children: string }) {
