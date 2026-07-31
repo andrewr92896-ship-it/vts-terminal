@@ -1011,6 +1011,26 @@ defaults; the app runs locally with almost nothing set.
 `.env.example` is the fullest list, but note it and `config.ts` have drifted —
 some documented vars aren't in the schema and vice-versa.
 
+## Reporting back to the owner
+
+The owner drives this portal through Claude Code but is **not a developer** and
+does not read the code. A long technical write-up is not thoroughness here — it
+is unreadable, and it forces a judgment call the owner has no way to make. So:
+
+- **One short paragraph when a job is done.** Not a section-by-section account,
+  not a file-by-file diff summary, not a bulleted list of every step taken.
+- **Say what changed and what it means for using the portal**, in plain
+  language. Skip file paths, function names, commit SHAs, PR numbers and
+  implementation detail unless the owner asks for them.
+- **Do surface the things only the owner can decide or must know:** a failure, a
+  real risk, something deliberately left out, or a genuine choice needing an
+  answer. Brevity never means hiding a problem — lead with it and keep it plain.
+- **Exercise judgment rather than handing it over.** Don't list options and ask
+  which to take when one is clearly right; make the call, say so in a sentence,
+  and move on. Ask only when the answer is genuinely the owner's (what to build,
+  whether to deploy).
+- Same voice as the rest of the portal: plain and terminal-style, no filler.
+
 ## Conventions
 
 - **Every deploy:** bump `APP_VERSION` and prepend a `PATCH_NOTES` entry in
