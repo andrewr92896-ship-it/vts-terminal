@@ -1079,20 +1079,33 @@ prod after any change to the reconcile/backfill writers.
 
 ## Deployment workflow (owner preference)
 
-This is a **private web portal** for a single owner — there is no external
-review step and no other users to protect from a bad merge. Because of that:
+This is a **private web portal** for a single owner, but work is often split
+across **several Claude Code sessions running at once**, each on its own
+branch. Whether a finished branch should go live — and in what order relative
+to the other branches in flight — is the owner's call, not the session's.
+Because of that:
 
-- **Always deploy automatically.** When work on a feature branch is complete
-  and verified (typecheck + build pass), open a PR to `main` and merge it
-  without waiting for approval. Merging to `main` is the deploy — Railway
-  auto-redeploys `main` per `railway.json`.
-- **Never ask the owner to check, review, or approve a PR** before merging,
-  and never end a task by asking whether to deploy. Just deploy.
-- Still verify before merging: run the web `typecheck` and `build` (and any
-  relevant API checks) and only merge when they pass. Automatic deploy does
-  not mean skipping verification.
+- **Never deploy without being asked.** When work on a feature branch is
+  complete and verified, **stop there**: commit, push the branch, and report
+  what's ready. Do **not** open a PR and do **not** merge to `main` unless the
+  owner asks for it in that session. Merging to `main` is the deploy — Railway
+  auto-redeploys `main` per `railway.json` — so a merge is a production
+  release, not a housekeeping step.
+- **Ask before deploying.** End the task by saying the branch is ready and
+  asking whether to deploy it, rather than deploying and reporting after the
+  fact.
+- **When the owner does ask to deploy**, first bring the branch up to date:
+  `git fetch origin main`, merge `origin/main` into the branch, resolve any
+  conflicts, then re-run verification. A branch that was verified before other
+  work landed on `main` has not been verified against what it is merging into.
+  Expect a conflict in `apps/web/src/meta/version.ts` whenever another branch
+  has deployed since — keep both patch-note entries and take the higher
+  `APP_VERSION`.
+- **Always verify before merging:** run the web `typecheck` and `build` (and
+  any relevant API checks) and only merge when they pass.
 - If a build or verification step **fails**, do not merge — report the failure
   instead. Railway keeps the previous version live on a failed build.
+- Prefer a **squash merge** (see Deploy mechanics below).
 
 ## Deploy mechanics
 
