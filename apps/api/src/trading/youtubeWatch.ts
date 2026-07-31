@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
-import { listFollowedChannels } from './marketNewsStreams.js';
+import { catalogChannels, listFollowedChannels } from './marketNewsStreams.js';
 import {
   cachedChannelIdForHandle,
   fetchLiveState,
@@ -17,23 +17,23 @@ import {
 } from './youtube.js';
 
 // Background watch for the Market News live-stream wall. Two jobs per tick:
-// resolve any handle-only channel to its `UC…` id (once, cached), and refresh
-// the live state of every channel anyone follows. Whoever armed the bell on a
+// resolve any handle-only catalog channel to its `UC…` id (once, cached), and
+// refresh live state for the channels due a check. Whoever armed the bell on a
 // channel gets a go-live notification the moment it flips offline → live.
 //
-// The poll list is the UNION of every trader's channels, deduped — the desk
-// mostly follows the same handful of channels, so this costs the same whether
-// one trader or twenty are watching.
+// The work list is the **code-resident catalog**, not anything per user, which
+// is what makes this affordable at any scale: every viewer reads one shared
+// cache, so the cost is the same for one trader or a hundred thousand. See
+// marketNewsStreams.ts for why the catalog is fixed.
 //
 // Quota still shapes the cadence, even at the cheap 2-units-per-check path
 // youtube.ts uses. The defaults below — every 5 minutes, 8 channels per tick —
 // cost at most 288 ticks × 8 × 2 ≈ 4,600 units/day, comfortably inside the
 // 10,000/day default budget with room for handle resolution. CHANNELS_PER_TICK
-// is the backstop that keeps a desk following 30 channels from blowing through
-// it: each tick refreshes only the least-recently-checked ones, round-robin, so
-// adding channels lengthens each channel's refresh interval instead of
-// multiplying the daily spend. The ledger in youtube.ts stops the sweep
-// outright once the day's budget is gone.
+// is the backstop if the catalog ever grows: each tick refreshes only the
+// least-recently-checked channels, round-robin, so adding one lengthens every
+// channel's refresh interval instead of multiplying the daily spend. The ledger
+// in youtube.ts stops the sweep outright once the day's budget is gone.
 const WATCH_MS = Math.max(60, Number(process.env.YOUTUBE_WATCH_SECONDS) || 300) * 1000;
 const CHANNELS_PER_TICK = Math.max(1, Number(process.env.YOUTUBE_CHANNELS_PER_TICK) || 8);
 
@@ -108,14 +108,22 @@ export async function tickYoutubeWatch(): Promise<void> {
   }
 }
 
-// Buzz everyone who armed the bell for this channel. Each trader's row holds
-// their own channel list and notify map, so we match on the channel's id or
-// handle within that row. Demo excluded; delivery is best-effort.
+// Buzz everyone who armed the bell for this channel. With the catalog in code,
+// the channel resolves to a single key and each trader's row only has to be
+// checked for that key. Demo excluded; delivery is best-effort.
 async function notifyGoLive(channelId: string, state: LiveState): Promise<void> {
+  // Which catalog entry is this? Either it carries the id outright, or its
+  // handle is one the resolver has actually mapped here — never a name match.
+  const channel = catalogChannels().find(
+    (c) =>
+      (c.channelId && c.channelId === channelId) ||
+      (!!c.handle && cachedChannelIdForHandle(c.handle) === channelId),
+  );
+  if (!channel) return;
+
   const rows = await db
     .select({
       userId: marketNewsStreams.userId,
-      channels: marketNewsStreams.channels,
       notify: marketNewsStreams.notify,
       username: users.username,
     })
@@ -123,36 +131,18 @@ async function notifyGoLive(channelId: string, state: LiveState): Promise<void> 
     .innerJoin(users, eq(users.id, marketNewsStreams.userId));
 
   const recipients: string[] = [];
-  let channelName = 'A channel';
   for (const r of rows) {
     if (r.username === DEMO_USERNAME) continue;
-    let notify: Record<string, unknown>;
-    let chans: { key?: unknown; name?: unknown; handle?: unknown; channelId?: unknown }[];
     try {
-      notify = JSON.parse(r.notify) as Record<string, unknown>;
-      chans = JSON.parse(r.channels) as typeof chans;
+      const notify = JSON.parse(r.notify) as Record<string, unknown>;
+      if (notify[channel.key] === true) recipients.push(r.userId);
     } catch {
       continue;
     }
-    if (!Array.isArray(chans)) continue;
-    // The row stores whatever the trader saved: an id for some channels, only a
-    // handle for others. A handle matches this channelId only when the resolver
-    // has actually mapped it there — never by string similarity.
-    const match = chans.find((c) => {
-      const id = typeof c.channelId === 'string' ? c.channelId : '';
-      if (id) return id === channelId;
-      const h = typeof c.handle === 'string' ? c.handle : '';
-      return !!h && cachedChannelIdForHandle(h) === channelId;
-    });
-    if (!match) continue;
-    const key = typeof match.key === 'string' ? match.key : '';
-    if (!key || notify[key] !== true) continue;
-    if (typeof match.name === 'string' && match.name) channelName = match.name;
-    recipients.push(r.userId);
   }
   if (recipients.length === 0) return;
 
-  const title = `${channelName} is live`;
+  const title = `${channel.name} is live`;
   const body = state.streamTitle ?? 'Streaming now on YouTube.';
   await Promise.all([
     sendToUsers(recipients, { title, body, url: '/?screen=news', tag: `golive-${channelId}` }),

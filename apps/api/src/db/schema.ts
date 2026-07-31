@@ -910,21 +910,24 @@ export const marketDataLayout = sqliteTable('market_data_layout', {
 export type MarketDataLayoutRow = typeof marketDataLayout.$inferSelect;
 
 // ---- Trading — Market News live-stream setup, one row per trader ----
-// The YouTube channels a trader follows on the Market News screen plus their
-// personal viewing setup: which streams are open (and in what order), which one
-// is docked to the corner, the desired column count, and per-channel go-live
-// alert toggles. Purely personal — never shared. All four data columns are JSON
-// text: `channels` an array of channel objects, `watching` a string array of
-// channel keys, `notify` a map of channel-key → boolean; `docked` is a single
-// channel key or null. A trader with no row falls back to the default channel
-// set (see trading/marketNewsStreams.ts).
+// A trader's personal view state over the Market News stream wall: which
+// streams are open (and in what order), which one is docked to the corner, the
+// desired column count, and per-channel go-live alert toggles. Purely personal
+// — never shared.
+//
+// The channel catalog itself is NOT here: it lives in code
+// (trading/marketNewsStreams.ts) and is identical for everyone, because live
+// status costs API quota per distinct channel and a fixed catalog is what keeps
+// that cost independent of how many people use the portal. These columns only
+// ever hold catalog keys; anything else is dropped on read. `watching` is a
+// JSON string array, `notify` a JSON map of channel-key → boolean, and `docked`
+// a single channel key or null.
 export const marketNewsStreams = sqliteTable('market_news_streams', {
   id: text('id').primaryKey(),
   userId: text('user_id')
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
-  channels: text('channels').notNull().default('[]'),
   watching: text('watching').notNull().default('[]'),
   docked: text('docked'),
   cols: integer('cols').notNull().default(2),

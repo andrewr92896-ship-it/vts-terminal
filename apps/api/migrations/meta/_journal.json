@@ -568,6 +568,13 @@
       "when": 1782341236908,
       "tag": "0080_market_news_streams",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "6",
+      "when": 1782341336908,
+      "tag": "0081_market_news_fixed_channels",
+      "breakpoints": true
     }
   ]
 }

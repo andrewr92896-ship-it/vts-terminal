@@ -224,29 +224,35 @@ top of the workspaces list** (see `theme/nav.ts` order).
       press conference plays beside the headlines. A channel with a **channel ID**
       embeds the keyless `youtube.com/embed/live_stream?channel=ID` player (which
       plays when the channel is live and self-shows offline otherwise); a
-      handle-only channel links out until the ID is resolved. Each trader's setup
-      — followed `channels`, open `watching` list + order, `docked` stream, column
-      `cols`, and per-channel go-live `notify` toggles — **persists per user** in
-      `market_news_streams` (`trading/marketNewsStreams.ts`,
-      `GET|PUT /api/trading/market-news/streams`; in the `admin/service.ts`
-      per-user delete list). A trader with no row gets a default set of real desk
-      channels (Fed/Reuters/CNBC/ECB), nothing open — those defaults are a
-      starting point, not a fixed list: each is removable and the trader builds
-      their own. `listFollowedChannels` therefore counts the defaults **only when
-      nobody has saved a row yet**, so a desk that replaced them stops paying
-      quota for channels no one follows.
-    - **Adding a channel is "paste a link"** (`POST /api/trading/market-news/streams/resolve`,
-      write-gated so the demo can't spend quota). `parseChannelRef` reads every
-      form a trader might copy out of the address bar — `@handle`, a bare handle,
-      `/channel/UC…`, `watch?v=`, `youtu.be/`, `/live/`, `/shorts/`, `/embed/`,
-      and legacy `/user/` and `/c/` — and `resolveChannelRef` turns it into the
-      channel's real id, name and handle for **1–2 units**. A link to the *stream*
-      resolves via `videos.list` → its `channelId`, which is why pasting the video
-      you are watching works. The name box only appears when the lookup can't
-      supply one (no API key, unknown channel, YouTube unreachable), so the normal
-      path is paste → Add with nothing else typed. A `/c/` vanity URL is retried
-      as a handle and otherwise refused rather than spending 100 units on a
-      search.
+      handle-only channel links out until the ID is resolved.
+    - **The channel catalog is code-resident and fixed** (`CATALOG` in
+      `trading/marketNewsStreams.ts`), identical for every user — same shape as
+      Market Data's series catalog. This is a **scaling decision, not a
+      limitation, so do not make it user-editable.** Live status costs YouTube
+      quota *per distinct channel*: the poller checks the deduped catalog and
+      every viewer reads one shared cache, so a fixed list decouples quota from
+      headcount entirely — the current 8 channels cost ~4,600 units/day whether
+      one trader or the whole public is signed up. Let users add arbitrary
+      channels and distinct-channel count grows with the user base, which the
+      10,000/day budget cannot absorb. Rough ceiling: ~15 channels at a 5-minute
+      cadence, ~20 at 10 minutes.
+      To add one, append a row with a stable `key` (saved `watching`/`notify`
+      entries reference it), a name, and the @handle; filling in `channelId` is
+      preferable because it lets the tile embed with **no API key at all**,
+      whereas a handle-only row cannot embed until the poller resolves it once.
+      Removing a row is safe — stale references are dropped on read.
+    - Catalog entries carry `alwaysOn` for the channels that **broadcast around
+      the clock** (Bloomberg, Yahoo Finance, Sky News, DW, Al Jazeera), shown as
+      a `24/7` tag; the rest (Fed, ECB, Reuters) are dark until they cover
+      something, which is what the per-channel bell is for. Keep both kinds: the
+      always-on ones are what sit open beside the headlines, and the Fed is live
+      only a few hours a month but they are the hours that matter most here.
+    - Only the trader's **view state** persists per user in `market_news_streams`
+      (`watching` order, `docked`, `cols`, `notify`; migration `0081` dropped the
+      old per-user `channels` column). `GET|PUT /api/trading/market-news/streams`;
+      in the `admin/service.ts` per-user delete list. Nothing a client sends can
+      introduce a channel — every key is checked against the catalog in
+      `sanitize`.
     - **Live status is real when `YOUTUBE_API_KEY` is set** (`trading/youtube.ts`
       + `trading/youtubeWatch.ts`). `liveStreamsConfigured()` just reports whether
       that key exists; with no key every channel reads offline and the screen

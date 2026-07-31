@@ -11,17 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.84';
+export const APP_VERSION = 'Beta V 5.85';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.84',
-    date: 'July 30, 2026',
+    version: 'Beta V 5.85',
+    date: 'July 31, 2026',
     notes: [
-      'You can now add any YouTube channel to your Market News stream wall by pasting a link — open Manage channels, paste, and press Add. Nothing else to type.',
-      'Any link works: the channel page, its @handle, or the live stream you are watching right now. The portal looks it up and fills in the channel name and ID for you.',
-      'The four channels the portal starts you with are only a starting point — remove any of them and build your own list.',
-      'If a link cannot be looked up, it now says why and lets you name the channel yourself rather than silently doing nothing.',
+      'The Market News stream wall now carries five channels that broadcast around the clock — Bloomberg Television, Yahoo Finance, Sky News, DW News and Al Jazeera English — so there is always something playing beside the headlines. They are marked 24/7 in the channel list.',
+      'The Federal Reserve, the ECB and Reuters stay on the list for the times they do broadcast. Arm the bell on those and you get buzzed when a press conference starts rather than watching a dark tile.',
+      'The channel list is now the same curated set for everyone instead of something each person builds. That is what keeps the live status working no matter how many people use the portal — the cost of checking a channel is shared by everybody watching it.',
+      'Your own setup still saves: which streams you have open, how they are laid out, which one is docked to the corner, and which channels buzz you.',
     ],
   },
   {

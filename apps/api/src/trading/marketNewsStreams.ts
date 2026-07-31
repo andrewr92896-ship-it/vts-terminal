@@ -4,22 +4,35 @@ import { db } from '../db/index.js';
 import { marketNewsStreams, type MarketNewsStreamsRow } from '../db/schema.js';
 import { cachedChannelIdForHandle, cachedLiveState, youtubeConfigured } from './youtube.js';
 
-// How one trader has set up the Market News live-stream wall: the YouTube
-// channels they follow and their personal viewing state (open streams and their
-// order, the docked stream, the desired column count, per-channel go-live
-// alerts). Personal, never shared — two traders on the same desk keep their own
-// channel lists. A trader with no stored row falls back to the default set.
+// The Market News live-stream wall: a **curated, code-resident** list of news
+// channels, plus each trader's own view state over it (which streams are open
+// and in what order, which one is docked, the column count, and which channels
+// buzz them when they go live).
+//
+// The catalog is deliberately fixed rather than user-editable, and that is a
+// scaling decision, not a limitation. Live status costs YouTube Data API quota
+// **per distinct channel** — the poller checks the deduped union of what is
+// followed and every viewer reads one shared cache, so ten users cost the same
+// as ten thousand. A fixed catalog therefore decouples quota from headcount
+// entirely: this list at a five-minute cadence costs the same on a private desk
+// as it would with the whole public signed up. Let users add arbitrary channels
+// and distinct-channel count grows with the user base, which the 10,000
+// units/day budget cannot absorb. Keep the catalog bounded (see the table in
+// CLAUDE.md — roughly 15 channels at 5 minutes, or 20 at 10).
+//
+// This mirrors how Market Data works: catalog in code, arrangement per user.
 
-// A followed YouTube channel. Only the identity fields (key/name/handle/
-// channelId) are persisted; the live-state fields are attached on read by
-// `withLiveState` from a go-live poller — offline until that poller is wired.
+// A channel on the wall. The identity fields come from the catalog below; the
+// live-state fields are attached per request from the poller's cache.
 export interface StreamChannel {
   key: string;
   name: string;
   handle: string;
   channelId: string;
-  // Live-state — not persisted; filled per request once the YouTube poller
-  // exists (see LIVE_STREAMS_CONFIGURED). Offline for everyone until then.
+  // Marks a channel that broadcasts continuously, so the trader can tell at a
+  // glance which tiles will actually be playing versus which sit dark until
+  // there is something to cover. Catalog fact, not a live reading.
+  alwaysOn?: boolean;
   live: boolean;
   streamTitle?: string;
   viewers?: string;
@@ -27,93 +40,93 @@ export interface StreamChannel {
   lastTitle?: string;
 }
 
-export interface MarketNewsStreams {
-  channels: StreamChannel[];
+// What one trader has saved: view state only. No channel list — that is code.
+export interface MarketNewsView {
   watching: string[];
   docked: string | null;
   cols: number;
   notify: Record<string, boolean>;
 }
 
-// The identity subset actually written to the row.
-type StoredChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId'>;
+// What the screen receives: the catalog with live-state, plus that view state.
+export interface MarketNewsStreams extends MarketNewsView {
+  channels: StreamChannel[];
+}
+
+type CatalogChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId' | 'alwaysOn'>;
+
+// ---------------------------------------------------------------------------
+// The curated catalog. Real channels, identical for every user.
+//
+// `channelId` is what lets a tile embed the keyless live_stream player with no
+// API key at all, so prefer filling it in. Leaving it blank is safe: the poller
+// resolves the handle once (`channels.list?forHandle`, 1 unit), caches it, and
+// `withLiveState` hands the resolved id to the client — the channel just cannot
+// embed until that first resolution happens.
+//
+// To add a channel: append a row with a stable `key` (a saved `watching` /
+// `notify` entry references it), the display name, and the @handle. To remove
+// one, delete the row — stale references in saved rows are dropped on read.
+// ---------------------------------------------------------------------------
+const CATALOG: CatalogChannel[] = [
+  // ---- Always on ----
+  // These run a continuous live stream, so a tile here is playing essentially
+  // whenever the wall is open. Listed first because they are what you want
+  // sitting open beside the headlines.
+  { key: 'bloomberg', name: 'Bloomberg Television', handle: '@markets', channelId: '', alwaysOn: true },
+  { key: 'yahoofinance', name: 'Yahoo Finance', handle: '@YahooFinance', channelId: '', alwaysOn: true },
+  { key: 'skynews', name: 'Sky News', handle: '@SkyNews', channelId: '', alwaysOn: true },
+  { key: 'dwnews', name: 'DW News', handle: '@dwnews', channelId: '', alwaysOn: true },
+  { key: 'aljazeera', name: 'Al Jazeera English', handle: '@aljazeeraenglish', channelId: '', alwaysOn: true },
+
+  // ---- When they broadcast ----
+  // Dark most of the time and live for the thing you actually care about, so
+  // arm the bell rather than keeping a tile open. The Fed is live for maybe a
+  // few hours a month (FOMC statements and Chair pressers) — but those are the
+  // hours that matter most on this desk, which is why it stays.
+  {
+    key: 'fed',
+    name: 'Federal Reserve',
+    handle: '@federalreserve',
+    channelId: 'UCAzhpt9DmG6PnHXjmJTvRGQ',
+  },
+  { key: 'ecb', name: 'European Central Bank', handle: '@ecbeuro', channelId: '' },
+  { key: 'reuters', name: 'Reuters', handle: '@Reuters', channelId: '' },
+];
+
+const CATALOG_KEYS = new Set(CATALOG.map((c) => c.key));
 
 // True once the YouTube Data API is wired up (a YOUTUBE_API_KEY is set), which
 // is what makes live status, stream titles and viewer counts real. Without a
 // key every channel reads offline and the screen says its live-state is sample.
-// Channels that carry a channel ID still embed the keyless live_stream player,
-// which plays when the channel is actually live regardless of this flag.
+// A channel that carries a channel ID still embeds the keyless live_stream
+// player, which plays when the channel is actually live regardless of this flag.
 export function liveStreamsConfigured(): boolean {
   return youtubeConfigured();
 }
 
-const MAX_CHANNELS = 40;
-const MAX_TEXT = 80;
-
-// Real, working default channels — the desk's usual live sources. These are
-// genuine channel handles/IDs, not sample data; only their live-state is
-// unknown until the poller lands. Nothing is open by default.
-const DEFAULT_CHANNELS: StoredChannel[] = [
-  { key: 'fed', name: 'Federal Reserve', handle: '@federalreserve', channelId: 'UCAzhpt9DmG6PnHXjmJTvRGQ' },
-  { key: 'reuters', name: 'Reuters', handle: '@Reuters', channelId: '' },
-  { key: 'cnbc', name: 'CNBC Television', handle: '@CNBCtelevision', channelId: '' },
-  { key: 'ecb', name: 'European Central Bank', handle: '@ecbeuro', channelId: '' },
-];
-
-export function defaultMarketNewsStreams(): MarketNewsStreams {
-  return withLiveState({
-    channels: DEFAULT_CHANNELS.map((c) => ({ ...c })),
-    watching: [],
-    docked: null,
-    cols: 2,
-    notify: {},
-  });
+export function defaultMarketNewsView(): MarketNewsView {
+  return { watching: [], docked: null, cols: 2, notify: {} };
 }
 
-// Attach live-state to each channel from the poller's cache, and fill in a
-// channelId the poller has resolved from a handle (so a handle-only channel
-// becomes embeddable without the trader re-saving it — the resolved id is NOT
-// written back to the row; the cache is the source and it re-resolves cheaply).
-// With no API key, or before the first poll, every channel reads offline.
-function withLiveState(cfg: {
-  channels: StoredChannel[];
-  watching: string[];
-  docked: string | null;
-  cols: number;
-  notify: Record<string, boolean>;
-}): MarketNewsStreams {
+// The poller's work list: the catalog, which is the whole point — a fixed set
+// whose cost never grows with the number of traders using the portal.
+export function listFollowedChannels(): { handle: string; channelId: string }[] {
+  return CATALOG.map((c) => ({ handle: c.handle, channelId: c.channelId }));
+}
+
+// Attach live-state to each catalog entry, and fill in a channelId the poller
+// resolved from a handle (so a handle-only channel becomes embeddable without
+// anyone editing code — the resolved id lives in the cache, not the catalog).
+function withLiveState(view: MarketNewsView): MarketNewsStreams {
   return {
-    ...cfg,
-    channels: cfg.channels.map((c) => {
+    ...view,
+    channels: CATALOG.map((c) => {
       const channelId = c.channelId || (c.handle ? cachedChannelIdForHandle(c.handle) ?? '' : '');
       const live = channelId ? cachedLiveState(channelId) : undefined;
       return { ...c, channelId, live: false, ...live };
     }),
   };
-}
-
-function parseChannels(raw: string): StoredChannel[] {
-  try {
-    const v: unknown = JSON.parse(raw);
-    if (!Array.isArray(v)) return [];
-    return v.flatMap((x) => {
-      if (!x || typeof x !== 'object') return [];
-      const o = x as Record<string, unknown>;
-      const key = typeof o.key === 'string' ? o.key : '';
-      const name = typeof o.name === 'string' ? o.name : '';
-      if (!key || !name) return [];
-      return [
-        {
-          key,
-          name,
-          handle: typeof o.handle === 'string' ? o.handle : '',
-          channelId: typeof o.channelId === 'string' ? o.channelId : '',
-        },
-      ];
-    });
-  } catch {
-    return [];
-  }
 }
 
 function parseStrings(raw: string): string[] {
@@ -140,96 +153,41 @@ function parseNotify(raw: string): Record<string, boolean> {
   }
 }
 
-// Trim to sane bounds and drop any dangling references — a `watching`/`docked`/
-// `notify` entry that names a channel no longer in the list is discarded, and
-// `cols` is clamped to the 1–6 the layout pills offer.
-function sanitize(input: MarketNewsStreams): {
-  channels: StoredChannel[];
-  watching: string[];
-  docked: string | null;
-  cols: number;
-  notify: Record<string, boolean>;
-} {
-  const channels: StoredChannel[] = [];
-  const seen = new Set<string>();
-  for (const c of input.channels.slice(0, MAX_CHANNELS)) {
-    const key = c.key.slice(0, MAX_TEXT);
-    const name = c.name.trim().slice(0, MAX_TEXT);
-    if (!key || !name || seen.has(key)) continue;
-    seen.add(key);
-    channels.push({
-      key,
-      name,
-      handle: (c.handle ?? '').trim().slice(0, MAX_TEXT),
-      channelId: (c.channelId ?? '').trim().slice(0, MAX_TEXT),
-    });
-  }
-  const keys = new Set(channels.map((c) => c.key));
-  const watching = [...new Set(input.watching.filter((k) => keys.has(k)))].slice(0, MAX_CHANNELS);
-  const docked = input.docked && keys.has(input.docked) ? input.docked : null;
-  const cols = Math.min(6, Math.max(1, Math.round(input.cols) || 2));
+// Drop anything that doesn't name a catalog channel and clamp `cols` to the 1–6
+// the layout pills offer. This is also what quietly cleans up after a catalog
+// edit: a row still referencing a removed channel simply loses that reference.
+function sanitize(view: MarketNewsView): MarketNewsView {
+  const watching = [...new Set(view.watching.filter((k) => CATALOG_KEYS.has(k)))];
+  const docked = view.docked && CATALOG_KEYS.has(view.docked) ? view.docked : null;
+  const cols = Math.min(6, Math.max(1, Math.round(view.cols) || 2));
   const notify: Record<string, boolean> = {};
-  for (const [k, v] of Object.entries(input.notify)) if (keys.has(k) && v) notify[k] = true;
-  return { channels, watching, docked, cols, notify };
+  for (const [k, v] of Object.entries(view.notify)) if (CATALOG_KEYS.has(k) && v) notify[k] = true;
+  return { watching, docked, cols, notify };
 }
 
-function rowToStreams(row: MarketNewsStreamsRow): MarketNewsStreams {
-  const clean = sanitize({
-    channels: parseChannels(row.channels).map((c) => ({ ...c, live: false })),
+function rowToView(row: MarketNewsStreamsRow): MarketNewsView {
+  return sanitize({
     watching: parseStrings(row.watching),
     docked: row.docked ?? null,
     cols: row.cols,
     notify: parseNotify(row.notify),
   });
-  return withLiveState(clean);
-}
-
-// Every distinct channel any trader follows, deduped by channelId (or by handle
-// when the id isn't known yet). This is the poller's work list — it polls the
-// union of everyone's channels once, not once per trader, so the quota cost
-// scales with distinct channels rather than with headcount.
-//
-// The default set counts only when NOBODY has saved a row yet: those defaults
-// are what a new trader sees, so a fresh install still shows live status on day
-// one. Once anyone has their own list, the defaults stop being polled — a desk
-// that removed them and added its own channels must not keep paying quota for
-// channels no one follows any more.
-export async function listFollowedChannels(): Promise<{ handle: string; channelId: string }[]> {
-  const rows = await db
-    .select({ channels: marketNewsStreams.channels })
-    .from(marketNewsStreams);
-  const all: StoredChannel[] = rows.length === 0 ? [...DEFAULT_CHANNELS] : [];
-  for (const r of rows) all.push(...parseChannels(r.channels));
-  const out: { handle: string; channelId: string }[] = [];
-  const seen = new Set<string>();
-  for (const c of all) {
-    const key = c.channelId || normKey(c.handle);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push({ handle: c.handle, channelId: c.channelId });
-  }
-  return out;
-}
-
-function normKey(handle: string): string {
-  return (handle || '').trim().replace(/^@/, '').toLowerCase();
 }
 
 export async function getMarketNewsStreams(userId: string): Promise<MarketNewsStreams> {
   const row = (
     await db.select().from(marketNewsStreams).where(eq(marketNewsStreams.userId, userId)).limit(1)
   )[0];
-  return row ? rowToStreams(row) : defaultMarketNewsStreams();
+  return withLiveState(row ? rowToView(row) : defaultMarketNewsView());
 }
 
 export async function setMarketNewsStreams(
   userId: string,
-  streams: MarketNewsStreams,
+  view: MarketNewsView,
 ): Promise<MarketNewsStreams> {
-  const clean = sanitize(streams);
+  const clean = sanitize(view);
   const now = new Date();
   const values = {
-    channels: JSON.stringify(clean.channels),
     watching: JSON.stringify(clean.watching),
     docked: clean.docked,
     cols: clean.cols,
@@ -240,4 +198,17 @@ export async function setMarketNewsStreams(
     .values({ id: crypto.randomUUID(), userId, ...values, createdAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: marketNewsStreams.userId, set: { ...values, updatedAt: now } });
   return withLiveState(clean);
+}
+
+// Every channel the notifier may need to name, for the go-live push.
+export function catalogChannel(channelId: string, handle: string): CatalogChannel | undefined {
+  return CATALOG.find(
+    (c) =>
+      (c.channelId && c.channelId === channelId) ||
+      (!!c.handle && c.handle.toLowerCase() === handle.toLowerCase()),
+  );
+}
+
+export function catalogChannels(): CatalogChannel[] {
+  return CATALOG;
 }

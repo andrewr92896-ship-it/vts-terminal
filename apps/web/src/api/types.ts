@@ -986,6 +986,9 @@ export interface StreamChannel {
   name: string;
   handle: string;
   channelId: string;
+  // Broadcasts continuously (a 24/7 stream) rather than only when there is
+  // something to cover. A catalog fact, not a live reading.
+  alwaysOn?: boolean;
   live: boolean;
   streamTitle?: string;
   viewers?: string;
@@ -993,22 +996,18 @@ export interface StreamChannel {
   lastTitle?: string;
 }
 
-// This trader's personal live-stream setup. All five fields persist per user.
-export interface MarketNewsStreams {
-  channels: StreamChannel[];
+// A trader's personal view over the stream wall — the only part that persists
+// per user. The channel catalog is server-side and identical for everyone.
+export interface MarketNewsView {
   watching: string[];
   docked: string | null;
   cols: number;
   notify: Record<string, boolean>;
 }
 
-// The answer to "I pasted this link — what channel is it?". `resolved: false`
-// is a normal outcome (bad link, no server key, unknown channel): `reason` says
-// why, and `channel` may still carry whatever the link alone revealed.
-export interface ResolvedChannelPayload {
-  resolved: boolean;
-  reason?: string;
-  channel?: { channelId: string; name: string; handle: string };
+// What the screen receives: the catalog with live-state, plus that view state.
+export interface MarketNewsStreams extends MarketNewsView {
+  channels: StreamChannel[];
 }
 
 export interface MarketNewsStreamsPayload {
