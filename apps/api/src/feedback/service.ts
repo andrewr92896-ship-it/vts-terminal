@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   bugReportMessages,
@@ -371,4 +371,40 @@ export async function latestBugReportAt(): Promise<number> {
     .orderBy(desc(bugReports.updatedAt))
     .limit(1);
   return rows[0]?.updatedAt ? rows[0].updatedAt.getTime() : 0;
+}
+
+// How many bug reports are still waiting on a person: not resolved, and with no
+// admin reply after the reporter's latest message. The AI intake's own replies
+// don't count — it answers every report instantly, so counting them would mean
+// nothing ever reads as waiting. This drives the sidebar's Bug Reports dot, so
+// the dot is a live state ("someone still needs to answer this") rather than a
+// "since you last looked" reading that a resolved report could leave stuck on.
+export async function countBugReportsAwaiting(): Promise<number> {
+  const reports = await db
+    .select({ id: bugReports.id })
+    .from(bugReports)
+    .where(ne(bugReports.status, 'resolved'));
+  if (!reports.length) return 0;
+
+  const msgs = await db
+    .select({ reportId: bugReportMessages.reportId, role: bugReportMessages.role, createdAt: bugReportMessages.createdAt })
+    .from(bugReportMessages)
+    .where(inArray(bugReportMessages.reportId, reports.map((r) => r.id)));
+
+  const lastUser = new Map<string, number>();
+  const lastAdmin = new Map<string, number>();
+  for (const m of msgs) {
+    const at = m.createdAt.getTime();
+    const map = m.role === 'admin' ? lastAdmin : m.role === 'ai' ? null : lastUser;
+    if (!map) continue;
+    if ((map.get(m.reportId) ?? -1) < at) map.set(m.reportId, at);
+  }
+
+  let awaiting = 0;
+  for (const r of reports) {
+    const user = lastUser.get(r.id);
+    if (user === undefined) continue; // nothing from the reporter to answer
+    if ((lastAdmin.get(r.id) ?? -1) < user) awaiting += 1;
+  }
+  return awaiting;
 }

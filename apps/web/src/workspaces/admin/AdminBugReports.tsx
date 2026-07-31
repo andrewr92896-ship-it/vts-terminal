@@ -17,7 +17,9 @@ const STATUS_META: Record<string, { label: string; color: string }> = {
 
 // Admin section: bug reports filed from Site Help, with the AI intake thread so
 // the admin sees the full clarified report.
-export function AdminBugReports({ theme }: { theme: Theme }) {
+// `onChanged` re-reads the sidebar's waiting-on-a-person count, so replying to or
+// resolving a report clears its dot right away rather than on the next poll.
+export function AdminBugReports({ theme, onChanged }: { theme: Theme; onChanged?: () => void }) {
   const [items, setItems] = useState<BugReport[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -40,6 +42,7 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
     setError(null);
     try {
       setItems((await p).reports);
+      onChanged?.();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Something went wrong');
     }
@@ -59,6 +62,7 @@ export function AdminBugReports({ theme }: { theme: Theme }) {
     try {
       setItems((await api.adminReplyBug(id, text)).reports);
       setReply('');
+      onChanged?.();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not send reply');
     } finally {

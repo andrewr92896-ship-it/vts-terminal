@@ -16,7 +16,13 @@ import {
   listAnnouncements,
   removeAnnouncement,
 } from '../chat/announcements.js';
-import { latestSuggestionAt, latestBugReportAt, listSuggestions, listAllBugReports } from '../feedback/service.js';
+import {
+  latestSuggestionAt,
+  latestBugReportAt,
+  countBugReportsAwaiting,
+  listSuggestions,
+  listAllBugReports,
+} from '../feedback/service.js';
 import { latestSupportRequestAt, listSupportRequests } from '../support/service.js';
 
 const messageSchema = z.object({ body: z.string().trim().min(1).max(1000) });
@@ -127,14 +133,18 @@ export async function chatRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
     const elig = teamChatEligibility(u);
-    const [chat, announcements, suggestions, bugs, support] = await Promise.all([
+    const [chat, announcements, suggestions, bugs, bugsAwaiting, support] = await Promise.all([
       elig.eligible ? latestTeamMessageAt(u.teamId) : Promise.resolve(0),
       latestAnnouncementAt(),
       admin ? latestSuggestionAt() : Promise.resolve(0),
       admin ? latestBugReportAt() : Promise.resolve(0),
+      // Bug Reports' sidebar dot is driven by this live count (reports still
+      // waiting on a person), not by the last-activity stamp above — resolving a
+      // report has to clear the dot, and a stamp can only ever move forward.
+      admin ? countBugReportsAwaiting() : Promise.resolve(0),
       admin ? latestSupportRequestAt() : Promise.resolve(0),
     ]);
-    return { chat, announcements, suggestions, bugs, support };
+    return { chat, announcements, suggestions, bugs, bugsAwaiting, support };
   });
 
   app.get('/api/announcements', auth, async (request) => {
