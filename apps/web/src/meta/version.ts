@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.87';
+export const APP_VERSION = 'Beta V 5.88';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.88',
+    date: 'July 31, 2026',
+    notes: [
+      'Tidied up the Trade Desk. Prices on the ticket now carry the instrument’s own decimal places, so the two sides of a quote line up instead of reading 1.153 next to 1.15335.',
+      'The bid/ask boxes and the Buy/Sell buttons were two controls doing the same job — they are now one. Pick a side by clicking its price, with the spread in pips between them.',
+      'The ticket is shorter, so the Review button sits on screen on a laptop instead of below the fold. Size and risk share a row, and the summary reads as a compact block.',
+      'The desk’s open book, working orders and sent orders now share the wide right-hand column instead of stacking under the ticket where they ran off the bottom of the page.',
+      'Fixed the size box being squeezed to a few characters on a phone, and an account with nothing open no longer prints its balance twice.',
+    ],
+  },
   {
     version: 'Beta V 5.87',
     date: 'July 31, 2026',
