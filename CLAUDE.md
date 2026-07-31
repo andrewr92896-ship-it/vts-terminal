@@ -230,7 +230,23 @@ top of the workspaces list** (see `theme/nav.ts` order).
       `market_news_streams` (`trading/marketNewsStreams.ts`,
       `GET|PUT /api/trading/market-news/streams`; in the `admin/service.ts`
       per-user delete list). A trader with no row gets a default set of real desk
-      channels (Fed/Reuters/CNBC/ECB), nothing open.
+      channels (Fed/Reuters/CNBC/ECB), nothing open — those defaults are a
+      starting point, not a fixed list: each is removable and the trader builds
+      their own. `listFollowedChannels` therefore counts the defaults **only when
+      nobody has saved a row yet**, so a desk that replaced them stops paying
+      quota for channels no one follows.
+    - **Adding a channel is "paste a link"** (`POST /api/trading/market-news/streams/resolve`,
+      write-gated so the demo can't spend quota). `parseChannelRef` reads every
+      form a trader might copy out of the address bar — `@handle`, a bare handle,
+      `/channel/UC…`, `watch?v=`, `youtu.be/`, `/live/`, `/shorts/`, `/embed/`,
+      and legacy `/user/` and `/c/` — and `resolveChannelRef` turns it into the
+      channel's real id, name and handle for **1–2 units**. A link to the *stream*
+      resolves via `videos.list` → its `channelId`, which is why pasting the video
+      you are watching works. The name box only appears when the lookup can't
+      supply one (no API key, unknown channel, YouTube unreachable), so the normal
+      path is paste → Add with nothing else typed. A `/c/` vanity URL is retried
+      as a handle and otherwise refused rather than spending 100 units on a
+      search.
     - **Live status is real when `YOUTUBE_API_KEY` is set** (`trading/youtube.ts`
       + `trading/youtubeWatch.ts`). `liveStreamsConfigured()` just reports whether
       that key exists; with no key every channel reads offline and the screen

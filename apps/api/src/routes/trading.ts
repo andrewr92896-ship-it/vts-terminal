@@ -37,6 +37,7 @@ import {
   setMarketNewsStreams,
   liveStreamsConfigured,
 } from '../trading/marketNewsStreams.js';
+import { parseChannelRef, resolveChannelRef, youtubeConfigured } from '../trading/youtube.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
   getMarketNews,
@@ -447,6 +448,52 @@ export async function tradingRoutes(app: FastifyInstance) {
     streams: await getMarketNewsStreams(request.currentUser!.id),
     liveConfigured: liveStreamsConfigured(),
   }));
+
+  // Turn a pasted YouTube link into a real channel, so a trader only has to
+  // paste whatever is in their address bar — a handle, a /channel/UC… URL, or a
+  // link to the live stream itself — instead of hunting down a channel id and
+  // typing a name. Write-gated (so the demo can't spend quota) and metered
+  // against the same daily unit ledger as the poller. `resolved: false` is a
+  // normal answer, not an error: the caller shows why and can still save the
+  // channel by hand.
+  app.post('/api/trading/market-news/streams/resolve', write, async (request, reply) => {
+    const parsed = z
+      .object({ url: z.string().trim().min(1).max(400) })
+      .safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paste a YouTube link' });
+
+    const ref = parseChannelRef(parsed.data.url);
+    if (ref.kind === 'unknown') {
+      return { resolved: false, reason: "That doesn't look like a YouTube link." };
+    }
+    if (!youtubeConfigured()) {
+      // No key: fall back to what the link alone tells us. A channel id still
+      // embeds; a handle still links out until the id can be resolved.
+      return {
+        resolved: false,
+        reason: 'Live lookup is off on the server, so the channel name has to be entered by hand.',
+        channel:
+          ref.kind === 'channelId'
+            ? { channelId: ref.value, handle: '', name: '' }
+            : ref.kind === 'handle'
+              ? { channelId: '', handle: `@${ref.value}`, name: '' }
+              : undefined,
+      };
+    }
+    try {
+      const channel = await resolveChannelRef(parsed.data.url);
+      if (!channel) {
+        return {
+          resolved: false,
+          reason: "That link didn't match a YouTube channel we could look up.",
+        };
+      }
+      return { resolved: true, channel };
+    } catch (err) {
+      request.log.error({ err }, 'YouTube channel resolve failed');
+      return { resolved: false, reason: "Couldn't reach YouTube just now. Try again in a moment." };
+    }
+  });
 
   app.put('/api/trading/market-news/streams', write, async (request, reply) => {
     const parsed = marketNewsStreamsSchema.safeParse(request.body);

@@ -187,13 +187,18 @@ function rowToStreams(row: MarketNewsStreamsRow): MarketNewsStreams {
 // Every distinct channel any trader follows, deduped by channelId (or by handle
 // when the id isn't known yet). This is the poller's work list — it polls the
 // union of everyone's channels once, not once per trader, so the quota cost
-// scales with distinct channels rather than with headcount. The default set is
-// always included so a fresh install still shows live status on day one.
+// scales with distinct channels rather than with headcount.
+//
+// The default set counts only when NOBODY has saved a row yet: those defaults
+// are what a new trader sees, so a fresh install still shows live status on day
+// one. Once anyone has their own list, the defaults stop being polled — a desk
+// that removed them and added its own channels must not keep paying quota for
+// channels no one follows any more.
 export async function listFollowedChannels(): Promise<{ handle: string; channelId: string }[]> {
   const rows = await db
     .select({ channels: marketNewsStreams.channels })
     .from(marketNewsStreams);
-  const all: StoredChannel[] = [...DEFAULT_CHANNELS];
+  const all: StoredChannel[] = rows.length === 0 ? [...DEFAULT_CHANNELS] : [];
   for (const r of rows) all.push(...parseChannels(r.channels));
   const out: { handle: string; channelId: string }[] = [];
   const seen = new Set<string>();

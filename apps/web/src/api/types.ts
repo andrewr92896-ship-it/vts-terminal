@@ -1002,6 +1002,15 @@ export interface MarketNewsStreams {
   notify: Record<string, boolean>;
 }
 
+// The answer to "I pasted this link — what channel is it?". `resolved: false`
+// is a normal outcome (bad link, no server key, unknown channel): `reason` says
+// why, and `channel` may still carry whatever the link alone revealed.
+export interface ResolvedChannelPayload {
+  resolved: boolean;
+  reason?: string;
+  channel?: { channelId: string; name: string; handle: string };
+}
+
 export interface MarketNewsStreamsPayload {
   streams: MarketNewsStreams;
   // False until a server-side YouTube poller populates live status / viewers —

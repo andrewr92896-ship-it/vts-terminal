@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.83';
+export const APP_VERSION = 'Beta V 5.84';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.84',
+    date: 'July 30, 2026',
+    notes: [
+      'You can now add any YouTube channel to your Market News stream wall by pasting a link — open Manage channels, paste, and press Add. Nothing else to type.',
+      'Any link works: the channel page, its @handle, or the live stream you are watching right now. The portal looks it up and fills in the channel name and ID for you.',
+      'The four channels the portal starts you with are only a starting point — remove any of them and build your own list.',
+      'If a link cannot be looked up, it now says why and lets you name the channel yourself rather than silently doing nothing.',
+    ],
+  },
   {
     version: 'Beta V 5.83',
     date: 'July 30, 2026',
