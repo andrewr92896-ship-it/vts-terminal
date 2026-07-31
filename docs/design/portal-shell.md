@@ -184,8 +184,9 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 The sidebar's lower list. Sections a user lacks the role for are simply absent.
 
 - **My Portal** — Investment Holdings · Net Worth · Trading Team · Preferences · Settings
-- **Advanced Trading** — Live Wall · Trading Alerts · Trade Desk · Deleted Trades ·
-  Strategy Sessions · Manual Trades · Funded *(role-gated)* · Market News · To Do
+- **Advanced Trading** — Live Wall · Trading Alerts · Trade Desk · Trade Analysis ·
+  Deleted Trades · Strategy Sessions · Manual Trades · Funded *(role-gated)* ·
+  Market Data · Market News · To Do
 - **Investments** — Portfolio Overview · Accounts · Holdings · Allocation ·
   Performance · Dividends & Income · Contributions & Goals · Projections
   *(all currently "Coming Soon" placeholders)*

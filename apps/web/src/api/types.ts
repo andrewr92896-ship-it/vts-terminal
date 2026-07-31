@@ -475,7 +475,8 @@ export interface ForexMetrics {
 }
 
 export interface LiveTrade {
-  id: string;
+  id: string; // `${connectionId}:${broker}:${brokerTradeId}`
+  connectionId: string; // the broker connection this position came from
   ownerId: string; // the teammate whose broker account this position is on
   owner: string; // that teammate's username, shown on the position
   broker: BrokerKey;
@@ -561,6 +562,138 @@ export interface DeskSettings {
   // caller may switch between (their whole team if a desk lead, else just self).
   userId?: string;
   editableMembers?: DeskMember[];
+}
+
+// ---- Trading — the Trade Desk (live order placement) ----
+// Mirrors apps/api/src/trading/orderDesk.ts + brokers/oandaOrders.ts. Only the
+// trader's OWN accounts appear here: teammates' positions are read from the
+// team-scoped Live Wall, and there is no path that trades anyone else's account.
+
+export type DeskOrderType = 'market' | 'limit' | 'stop';
+export type DeskOrderKind = 'entry' | 'close' | 'modify' | 'cancel';
+export type DeskOrderStatus = 'filled' | 'accepted' | 'rejected';
+
+export interface DeskAccount {
+  connectionId: string;
+  label: string;
+  env: 'practice' | 'live';
+  accountTail: string; // tail of the broker account id, shown as "••…"
+  currency: string;
+  balance: number | null;
+  nav: number | null;
+  unrealizedPl: number | null;
+  marginUsed: number | null;
+  marginAvailable: number | null;
+  openTradeCount: number | null;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface DeskInstrument {
+  symbol: string; // "EUR_USD"
+  instrument: string; // "EUR/USD"
+  displayName: string;
+  type: string; // CURRENCY / CFD / METAL
+  pipSize: number;
+  displayPrecision: number; // max decimals a price may carry
+  tradeUnitsPrecision: number; // max decimals a size may carry
+  minimumTradeSize: number;
+  maximumOrderUnits: number | null;
+  marginRate: number | null;
+}
+
+export interface DeskQuote {
+  instrument: string;
+  bid: number | null;
+  ask: number | null;
+  spread: number | null;
+  tradeable: boolean;
+  time: number | null;
+  // Quote currency → account currency, so a stop can be priced in real money on
+  // any instrument (not just the ones quoted in the account's own currency).
+  quoteHomeFactor: number | null;
+}
+
+export interface DeskWorkingOrder {
+  id: string;
+  connectionId: string;
+  connectionLabel: string;
+  type: string; // LIMIT / STOP / MARKET_IF_TOUCHED
+  instrument: string;
+  units: number; // signed: + long / − short
+  price: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  timeInForce: string | null;
+  createdAt: number | null;
+  tradeId: string | null;
+}
+
+// One row of the order journal — every order sent, including the refused ones.
+export interface DeskOrderRecord {
+  id: string;
+  connectionId: string;
+  kind: DeskOrderKind;
+  instrument: string;
+  side: TradeSide | null;
+  orderType: DeskOrderType | null;
+  units: number | null;
+  requestedPrice: number | null;
+  takeProfit: number | null;
+  stopLoss: number | null;
+  status: DeskOrderStatus;
+  brokerOrderId: string | null;
+  brokerTradeId: string | null;
+  fillPrice: number | null;
+  realizedPl: number | null;
+  errorCode: string | null;
+  error: string | null;
+  createdAt: number;
+}
+
+export interface PlaceOrderInput {
+  connectionId: string;
+  instrument: string;
+  side: TradeSide;
+  units: number;
+  type: DeskOrderType;
+  price?: number | null;
+  takeProfit?: number | null;
+  stopLoss?: number | null;
+}
+
+export interface PlaceOrderResult {
+  status: 'filled' | 'accepted';
+  orderId: string | null;
+  tradeId: string | null;
+  fillPrice: number | null;
+  units: number | null;
+  instrument: string;
+  side: TradeSide;
+  env: 'practice' | 'live';
+}
+
+export interface CloseOrderInput {
+  connectionId: string;
+  tradeId: string;
+  instrument: string;
+  units?: number | null; // omitted = close the whole position
+}
+
+export interface CloseOrderResult {
+  closedUnits: number | null;
+  price: number | null;
+  realizedPl: number | null;
+  partial: boolean;
+}
+
+export interface ModifyPositionInput {
+  connectionId: string;
+  tradeId: string;
+  instrument: string;
+  // Omit to leave alone; null to remove that order.
+  takeProfit?: number | null;
+  stopLoss?: number | null;
 }
 
 // ---- Trading — broker connections (mirror of apps/api/src/trading/connections.ts) ----

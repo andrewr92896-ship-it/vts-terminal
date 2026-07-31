@@ -52,7 +52,11 @@ export const NAV: NavWorkspace[] = [
     sections: [
       { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
-      { key: 'desk', label: 'Trade Desk', icon: 'candlestick-chart' },
+      // Placing trades. The section key is `tradedesk`; `desk` (below) is the
+      // review screen that used to carry this name, and keeps its key so saved
+      // sidebar orders, how-to wording and in-app links stay pointed at it.
+      { key: 'tradedesk', label: 'Trade Desk', icon: 'zap' },
+      { key: 'desk', label: 'Trade Analysis', icon: 'candlestick-chart' },
       { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },

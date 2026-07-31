@@ -36,8 +36,14 @@ export const DEMO_STEPS: TourStep[] = [
   },
   {
     workspace: 'trading',
-    screen: 'desk',
+    screen: 'tradedesk',
     title: 'Trade Desk',
+    body: 'Where a trade gets placed. The ticket sends the order to your own connected broker account — size it from the risk you’re willing to take, see the stop and target priced in real money, and confirm on a review panel that states the trade in one sentence. Beside it sits your team’s open book, so you never size a position blind to what the desk already holds. The demo is read-only, so nothing here can be sent.',
+  },
+  {
+    workspace: 'trading',
+    screen: 'desk',
+    title: 'Trade Analysis',
     body: 'The Trade Log, Live Brokers, and History views in one place — a full journal of every fill with slippage and realized P/L, live broker capital, and closed-trade breakdowns by strategy and instrument. Log trades in plain English and get recaps from VTS AI.',
   },
   {

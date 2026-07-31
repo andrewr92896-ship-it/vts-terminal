@@ -46,6 +46,17 @@ function prune(now: number) {
   }
 }
 
+// Drop a team's cached snapshot so the next read goes back to the broker.
+//
+// Needed because the Trade Desk now *causes* position changes rather than only
+// observing them: a trader who places or closes a trade in-portal would
+// otherwise keep seeing the pre-trade wall for the rest of the TTL and think it
+// had not gone through. An in-flight load is deliberately left alone — it is
+// already fetching, and cancelling it would only start another.
+export function invalidateDeskSnapshot(key: string): void {
+  cache.delete(key);
+}
+
 // Serve a team's desk snapshot from the short-TTL, single-flight cache. `load`
 // does the real broker fetch + reconcile and only runs on a genuine miss.
 export async function getDeskSnapshot(

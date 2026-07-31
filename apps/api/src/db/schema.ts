@@ -937,6 +937,53 @@ export const marketNewsStreams = sqliteTable('market_news_streams', {
 });
 export type MarketNewsStreamsRow = typeof marketNewsStreams.$inferSelect;
 
+// ---- Trading — the Trade Desk's order journal ----
+// Every order this portal sends to a broker, and what came back. This is an
+// append-only record of *our* instructions, deliberately separate from
+// `trading_positions` (which mirrors what the broker says exists): a rejected or
+// cancelled order never becomes a position, and those are exactly the rows worth
+// keeping when working out what happened. One row is written per attempt —
+// before the broker answers the row does not exist, after it the row is stamped
+// once and never rewritten.
+export const TRADE_ORDER_KINDS = ['entry', 'close', 'modify', 'cancel'] as const;
+export type TradeOrderKind = (typeof TRADE_ORDER_KINDS)[number];
+export const TRADE_ORDER_TYPES = ['market', 'limit', 'stop'] as const;
+export type TradeOrderType = (typeof TRADE_ORDER_TYPES)[number];
+// 'filled'   — the broker filled it (money moved)
+// 'accepted' — a resting order is now working on the book
+// 'rejected' — the broker refused it; `error` says why
+export const TRADE_ORDER_STATUSES = ['filled', 'accepted', 'rejected'] as const;
+export type TradeOrderStatus = (typeof TRADE_ORDER_STATUSES)[number];
+
+export const tradingOrders = sqliteTable('trading_orders', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  connectionId: text('connection_id').notNull(),
+  broker: text('broker').notNull().default('oanda'),
+  kind: text('kind').$type<TradeOrderKind>().notNull().default('entry'),
+  instrument: text('instrument').notNull(),
+  side: text('side').$type<TradeSide>(), // null for a modify/cancel
+  orderType: text('order_type').$type<TradeOrderType>(),
+  units: real('units'), // absolute size requested
+  requestedPrice: real('requested_price'), // limit/stop price, null for market
+  takeProfit: real('take_profit'),
+  stopLoss: real('stop_loss'),
+  status: text('status').$type<TradeOrderStatus>().notNull(),
+  // The broker's own ids, so a row can be tied back to the account's history.
+  brokerOrderId: text('broker_order_id'),
+  brokerTradeId: text('broker_trade_id'),
+  fillPrice: real('fill_price'),
+  realizedPl: real('realized_pl'), // set on a close
+  // The broker's refusal reason ("INSUFFICIENT_MARGIN", "MARKET_HALTED", ...)
+  // alongside the message shown to the trader.
+  errorCode: text('error_code'),
+  error: text('error'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TradingOrderRow = typeof tradingOrders.$inferSelect;
+
 // ---- Trading — user-authored price alerts ----
 // A personal "notify me when X crosses a level" rule, created in-portal (the
 // closest thing to a TradingView alert we can offer, since the embedded chart is
