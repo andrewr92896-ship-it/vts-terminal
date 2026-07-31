@@ -193,9 +193,40 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
-  desk: {
+  tradedesk: {
     title: 'The Trade Desk',
-    intro: 'The Trade Log, Live Brokers, and History views in one place. Use the switch at the top to move between them — logging and reviewing trades, and your live broker capital, all under one tab.',
+    intro: 'Where you place a trade. The ticket on the left sends the order to your own connected broker account; the panel beside it shows every position your team currently has open, so you size a trade knowing what the desk already holds.',
+    steps: [
+      {
+        title: 'Connect your account',
+        body: 'The desk trades through your own OANDA account. Open Connections, add your API token and account ID, and pick practice or live. Your key is encrypted on the server — the browser never sees it. Every account you have connected appears as a card at the top with its live balance, and the one you pick is the one that gets the order.',
+      },
+      {
+        title: 'Build the ticket',
+        body: 'Pick the instrument, then Buy or Sell. Market fills now; Limit and Stop rest on the book until price reaches your level. Type the size in units, or set a stop and use “Size from risk” — enter the amount you are willing to lose and it works the size out from your stop distance.',
+      },
+      {
+        title: 'Read the money before you send',
+        body: 'The stop and target boxes show what they are worth in your account currency and in pips, priced from the live quote rather than assumed to be dollars. Under them, the position value, an estimated margin against what you have free, and the risk/reward as an R multiple.',
+      },
+      {
+        title: 'Review, then confirm',
+        body: 'The first click never sends the order — it opens a review panel that states the trade in one sentence with the amount at risk. A live account says so in red and names the account. The second click sends it.',
+      },
+      {
+        title: 'The desk’s open book',
+        body: 'Every position on your team, yours and your teammates’, with entry, current price and open P/L. Click any instrument to load it into the ticket. Your own positions carry Close and Stop/Target controls; teammates’ are watch-only — the desk never trades someone else’s account.',
+      },
+      {
+        title: 'Working orders and the journal',
+        body: 'Resting limit and stop orders are listed with a Cancel button. Below them, “Sent orders” is the record of everything the desk sent — including the ones the broker refused, with its reason, which is the only place a rejected order shows up at all.',
+      },
+    ],
+  },
+
+  desk: {
+    title: 'Trade Analysis',
+    intro: 'Reviewing what has already been traded: the Trade Log, Live Brokers, and History views in one place. Use the switch at the top to move between them — logging and reviewing trades, and your live broker capital, all under one tab. (Placing a trade is the Trade Desk, above.)',
     steps: [
       {
         title: 'Trade Log',
@@ -391,7 +422,8 @@ export function tutorialFor(screen: string): Tutorial {
 export const HOWTO_TOPICS: { key: string; label: string }[] = [
   { key: 'live', label: 'Live Wall' },
   { key: 'alerts', label: 'Trading Alerts' },
-  { key: 'desk', label: 'Trade Desk' },
+  { key: 'tradedesk', label: 'Trade Desk' },
+  { key: 'desk', label: 'Trade Analysis' },
   { key: 'sessions', label: 'Strategy Sessions' },
   { key: 'funded', label: 'Manual Trades' },
   { key: 'news', label: 'Market News' },

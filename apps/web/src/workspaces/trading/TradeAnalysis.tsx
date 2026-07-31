@@ -14,10 +14,15 @@ const PANEL = 'rgba(11,26,58,.5)';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
-// The Trade Log, Live Brokers, and History screens all cover the same ground —
-// the desk's trades and the capital behind them — so they live together here
-// under one tab, switched with the segmented control instead of three separate
-// tabs. Each view is the original screen, rendered verbatim.
+// Trade Analysis — reviewing what has already been traded. The Trade Log, Live
+// Brokers, and History screens all cover the same ground (the desk's trades and
+// the capital behind them), so they live together here under one tab, switched
+// with the segmented control instead of three separate tabs. Each view is the
+// original screen, rendered verbatim.
+//
+// Placing a trade is the other screen: Trade Desk (TradeDesk.tsx). This one was
+// called "Trade Desk" until that screen existed; its section key is still `desk`
+// so saved sidebar orders, how-to wording and links keep pointing at it.
 export type DeskView = 'log' | 'brokers' | 'history';
 
 const VIEWS: { key: DeskView; label: string; hint: string }[] = [
@@ -26,7 +31,7 @@ const VIEWS: { key: DeskView; label: string; hint: string }[] = [
   { key: 'history', label: 'History', hint: 'Closed trades with per-strategy and per-instrument breakdowns' },
 ];
 
-export function TradingDesk({ initialView = 'log' }: { initialView?: DeskView }) {
+export function TradeAnalysis({ initialView = 'log' }: { initialView?: DeskView }) {
   const { user } = useAuth();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
   const [view, setView] = useState<DeskView>(initialView);
@@ -42,7 +47,7 @@ export function TradingDesk({ initialView = 'log' }: { initialView?: DeskView })
           button for the whole desk. */}
       <div style={{ maxWidth: 1280, margin: '0 auto 18px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={segWrap} role="tablist" aria-label="Trade desk views">
+          <div style={segWrap} role="tablist" aria-label="Trade analysis views">
             {VIEWS.map((v) => (
               <button
                 key={v.key}
@@ -58,7 +63,7 @@ export function TradingDesk({ initialView = 'log' }: { initialView?: DeskView })
           </div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 8, paddingLeft: 2 }}>{active.hint}</div>
         </div>
-        <button onClick={() => setSettingsOpen(true)} style={gearBtn} title="Trade desk settings">
+        <button onClick={() => setSettingsOpen(true)} style={gearBtn} title="Trade analysis settings">
           <span aria-hidden style={{ fontSize: 14 }}>⚙</span> {"Settings"}
         </button>
       </div>

@@ -11,9 +11,22 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.85';
+export const APP_VERSION = 'Beta V 5.86';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.86',
+    date: 'July 31, 2026',
+    notes: [
+      'New: the Trade Desk places trades. Connect your own OANDA account under Connections and you can send market, limit and stop orders — with a stop and target attached — straight from the portal.',
+      'The screen that used to be called Trade Desk is now Trade Analysis. Nothing about it changed: the Trade Log, Live Brokers and History views are all still there, under the new name.',
+      'Beside the ticket sits the desk’s open book — every position your team currently holds, yours and your teammates’, so you size a trade knowing what the desk is already in. Click any instrument to load it into the ticket.',
+      'Size a trade from the risk you are willing to take: set a stop, type the amount, and the desk works the size out. The stop and target boxes read in your account currency and in pips, priced off the live quote rather than assumed to be dollars.',
+      'Nothing is sent on the first click. The ticket goes to a review panel that states the order in one sentence with the amount at risk, and a live account says so in red before you confirm.',
+      'Your own open positions carry Close and Stop/Target controls. Teammates’ positions are watch-only — the desk only ever trades the account you connected yourself.',
+      'Resting limit and stop orders are listed with a Cancel button, and “Sent orders” keeps the record of everything the desk sent, including the ones the broker refused and why.',
+    ],
+  },
   {
     version: 'Beta V 5.85',
     date: 'July 31, 2026',

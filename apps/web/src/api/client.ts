@@ -50,6 +50,16 @@ import type {
   NewsInput,
   EventInput,
   LiveWall,
+  DeskAccount,
+  DeskInstrument,
+  DeskQuote,
+  DeskWorkingOrder,
+  DeskOrderRecord,
+  PlaceOrderInput,
+  PlaceOrderResult,
+  CloseOrderInput,
+  CloseOrderResult,
+  ModifyPositionInput,
   TradeInput,
   TradeLogData,
   RemovedTrade,
@@ -473,6 +483,38 @@ export const api = {
   },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');
+  },
+  // ---- Trade Desk (live order placement, the caller's own accounts only) ----
+  deskAccounts(): Promise<{ accounts: DeskAccount[] }> {
+    return request('/api/trading/desk/accounts');
+  },
+  deskInstruments(connectionId: string): Promise<{ instruments: DeskInstrument[] }> {
+    return request(`/api/trading/desk/instruments?connectionId=${encodeURIComponent(connectionId)}`);
+  },
+  deskQuotes(connectionId: string, instruments: string[]): Promise<{ quotes: DeskQuote[] }> {
+    const list = encodeURIComponent(instruments.join(','));
+    return request(`/api/trading/desk/quotes?connectionId=${encodeURIComponent(connectionId)}&instruments=${list}`);
+  },
+  deskWorkingOrders(): Promise<{ orders: DeskWorkingOrder[] }> {
+    return request('/api/trading/desk/orders');
+  },
+  deskOrderJournal(): Promise<{ orders: DeskOrderRecord[] }> {
+    return request('/api/trading/desk/journal');
+  },
+  placeDeskOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
+    return request('/api/trading/desk/orders', { method: 'POST', body: JSON.stringify(input) });
+  },
+  closeDeskPosition(input: CloseOrderInput): Promise<CloseOrderResult> {
+    return request('/api/trading/desk/close', { method: 'POST', body: JSON.stringify(input) });
+  },
+  modifyDeskPosition(input: ModifyPositionInput): Promise<{ ok: boolean }> {
+    return request('/api/trading/desk/position', { method: 'PATCH', body: JSON.stringify(input) });
+  },
+  cancelDeskOrder(connectionId: string, orderId: string, instrument?: string): Promise<{ ok: boolean }> {
+    return request('/api/trading/desk/cancel', {
+      method: 'POST',
+      body: JSON.stringify({ connectionId, orderId, instrument }),
+    });
   },
   // ---- Home-screen widget token (read-only bearer for the phone widget) ----
   widgetTokenStatus(): Promise<WidgetTokenStatus> {

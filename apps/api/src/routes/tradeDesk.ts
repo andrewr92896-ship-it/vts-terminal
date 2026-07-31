@@ -1,0 +1,178 @@
+import type { FastifyInstance, FastifyReply } from 'fastify';
+import { z } from 'zod';
+import { requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
+import { TRADE_ORDER_TYPES, TRADE_SIDES } from '../db/schema.js';
+import {
+  cancelDeskOrder,
+  closeDeskPosition,
+  deskInstruments,
+  deskQuotes,
+  DeskError,
+  listDeskAccounts,
+  listDeskWorkingOrders,
+  modifyDeskPosition,
+  placeDeskOrder,
+  recentDeskOrders,
+} from '../trading/orderDesk.js';
+
+// The Trade Desk — the live order-placement surface. Split out of routes/trading
+// so the one namespace that can move money is a file of its own.
+//
+// Reads (accounts, instruments, quotes, working orders, the order journal) are
+// behind the trading workspace guard; every write is behind requireWorkspaceWrite,
+// which excludes the read-only `trading_viewer` role, and the demo is refused
+// twice over — once by demoGuard (every non-GET) and again inside the service.
+//
+// Teammates' live positions are NOT served from here: the desk reads them from
+// the existing team-scoped /api/trading/live, so the visibility boundary stays
+// defined in exactly one place (trading/scope.ts).
+
+const price = z.number().finite().positive();
+
+const placeSchema = z.object({
+  connectionId: z.string().min(1),
+  instrument: z.string().trim().min(1).max(40),
+  side: z.enum(TRADE_SIDES),
+  units: z.number().finite().positive().max(100_000_000),
+  type: z.enum(TRADE_ORDER_TYPES),
+  price: price.nullish(),
+  takeProfit: price.nullish(),
+  stopLoss: price.nullish(),
+});
+
+const closeSchema = z.object({
+  connectionId: z.string().min(1),
+  tradeId: z.string().min(1).max(64),
+  instrument: z.string().trim().min(1).max(40),
+  units: z.number().finite().positive().nullish(),
+});
+
+// `null` clears the order, an absent key leaves it alone — so the two are
+// deliberately distinguishable here (z.optional + .nullable, not .nullish
+// collapsed into one).
+const modifySchema = z
+  .object({
+    connectionId: z.string().min(1),
+    tradeId: z.string().min(1).max(64),
+    instrument: z.string().trim().min(1).max(40),
+    takeProfit: price.nullable().optional(),
+    stopLoss: price.nullable().optional(),
+  })
+  .refine((v) => v.takeProfit !== undefined || v.stopLoss !== undefined, {
+    message: 'Nothing to change',
+  });
+
+const cancelSchema = z.object({
+  connectionId: z.string().min(1),
+  orderId: z.string().min(1).max(64),
+  instrument: z.string().trim().max(40).optional(),
+});
+
+// Turn a service refusal into its own status code (400 validation, 404 unknown
+// connection, 409 duplicate/halted, 502 broker refusal) with the broker's reason
+// attached, so the ticket can show what OANDA actually said.
+function fail(reply: FastifyReply, e: unknown) {
+  if (e instanceof DeskError) {
+    return reply.code(e.status).send({ error: e.message, code: e.code });
+  }
+  const message = e instanceof Error ? e.message : 'Something went wrong';
+  return reply.code(500).send({ error: message });
+}
+
+export async function tradeDeskRoutes(app: FastifyInstance) {
+  const read = { preHandler: requireWorkspace('trading') };
+  const write = { preHandler: requireWorkspaceWrite('trading') };
+
+  // The caller's own tradeable accounts, with live capital.
+  app.get('/api/trading/desk/accounts', read, async (request) => ({
+    accounts: await listDeskAccounts(request.currentUser!.id),
+  }));
+
+  // What this account may trade, and to what precision.
+  app.get('/api/trading/desk/instruments', read, async (request, reply) => {
+    const q = z.object({ connectionId: z.string().min(1) }).safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: 'A connection is required' });
+    try {
+      return { instruments: await deskInstruments(request.currentUser!.id, q.data.connectionId) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  // Live two-sided prices for the ticket. Comma-separated instruments, capped so
+  // one request can't fan out into an enormous pricing query.
+  app.get('/api/trading/desk/quotes', read, async (request, reply) => {
+    const q = z
+      .object({ connectionId: z.string().min(1), instruments: z.string().min(1).max(600) })
+      .safeParse(request.query);
+    if (!q.success) return reply.code(400).send({ error: 'A connection and instruments are required' });
+    const list = q.data.instruments.split(',').map((s) => s.trim()).filter(Boolean).slice(0, 20);
+    try {
+      return { quotes: await deskQuotes(request.currentUser!.id, q.data.connectionId, list) };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  // Resting orders across the caller's own accounts.
+  app.get('/api/trading/desk/orders', read, async (request) => ({
+    orders: await listDeskWorkingOrders(request.currentUser!.id),
+  }));
+
+  // The caller's own order journal — including the attempts that were refused.
+  app.get('/api/trading/desk/journal', read, async (request) => ({
+    orders: await recentDeskOrders(request.currentUser!.id, 40),
+  }));
+
+  // ---- the writes ----
+
+  app.post('/api/trading/desk/orders', write, async (request, reply) => {
+    const parsed = placeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.errors[0]?.message ?? 'Invalid order' });
+    }
+    try {
+      return await placeDeskOrder(request.currentUser!, parsed.data);
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  app.post('/api/trading/desk/close', write, async (request, reply) => {
+    const parsed = closeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.errors[0]?.message ?? 'Invalid request' });
+    }
+    try {
+      return await closeDeskPosition(request.currentUser!, parsed.data);
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  app.patch('/api/trading/desk/position', write, async (request, reply) => {
+    const parsed = modifySchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.errors[0]?.message ?? 'Invalid request' });
+    }
+    try {
+      await modifyDeskPosition(request.currentUser!, parsed.data);
+      return { ok: true };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+
+  app.post('/api/trading/desk/cancel', write, async (request, reply) => {
+    const parsed = cancelSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.errors[0]?.message ?? 'Invalid request' });
+    }
+    try {
+      await cancelDeskOrder(request.currentUser!, parsed.data);
+      return { ok: true };
+    } catch (e) {
+      return fail(reply, e);
+    }
+  });
+}

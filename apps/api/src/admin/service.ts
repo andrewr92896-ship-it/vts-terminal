@@ -9,6 +9,7 @@ import {
   tradingTrades,
   tradingAlerts,
   tradingPositions,
+  tradingOrders,
   tradingSessions,
   brokerConnections,
   tradingChallenges,
@@ -370,6 +371,9 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingTrades).where(eq(tradingTrades.userId, targetId));
     await tx.delete(tradingAlerts).where(eq(tradingAlerts.userId, targetId));
     await tx.delete(tradingPositions).where(eq(tradingPositions.userId, targetId));
+    // The Trade Desk's order journal — this trader's own orders, including the
+    // refused ones. Nobody else's record references them, so they go with them.
+    await tx.delete(tradingOrders).where(eq(tradingOrders.userId, targetId));
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
     await tx.delete(marketDataLayout).where(eq(marketDataLayout.userId, targetId));

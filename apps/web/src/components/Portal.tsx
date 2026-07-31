@@ -56,7 +56,8 @@ import {
 } from '../workspaces/help/HelpScreens';
 import { HelpRules, HelpTerms, HelpPrivacy } from '../workspaces/help/LegalScreens';
 import { LiveWall } from '../workspaces/trading/LiveWall';
-import { TradingDesk } from '../workspaces/trading/TradingDesk';
+import { TradeDesk } from '../workspaces/trading/TradeDesk';
+import { TradeAnalysis } from '../workspaces/trading/TradeAnalysis';
 import { Alerts } from '../workspaces/trading/Alerts';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
 import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
@@ -119,8 +120,13 @@ function renderScreen(
       return <LiveWall />;
     case 'alerts':
       return <Alerts onNavigate={onNavigate} />;
+    // Placing trades (Trade Desk) and reviewing them (Trade Analysis) are two
+    // screens. `desk` stays on the review screen, which is what that key has
+    // always routed to.
+    case 'tradedesk':
+      return <TradeDesk />;
     case 'desk':
-      return <TradingDesk />;
+      return <TradeAnalysis />;
     case 'funded':
       return <FundedScreen />;
     case 'prop':

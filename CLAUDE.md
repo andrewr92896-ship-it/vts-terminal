@@ -50,12 +50,28 @@ architecture decisions.
 
 Agreed **lowest-liability** shape for that public launch (research done 2026-07):
 
-- **Read-only tracker, not a trading platform.** The app *displays* positions/P&L;
-  it must **not** execute trades or move money in-app. This keeps it in Apple's
-  accepted "portfolio tracker" lane (App Review Guideline **3.2.1(viii)** reserves
-  financial *trading/investing/money-management* apps to the financial institution)
-  and keeps regulatory exposure low. Do not add in-app order execution without
-  revisiting this.
+- **~~Read-only tracker, not a trading platform.~~ Superseded (owner decision,
+  2026-07): the web portal now places real orders** — see **Advanced Trading ▸
+  Trade Desk** below. The app still never *moves money* (no deposits, withdrawals
+  or custody: it sends an order to the trader's own broker under the trader's own
+  credentials), but it does now **execute trades**, which is the line App Review
+  Guideline **3.2.1(viii)** draws — that guideline reserves financial
+  *trading/investing/money-management* apps to the financial institution
+  providing the service, or an entity authorised to do so. **Consequences to plan
+  for, not to ignore:**
+  - The **iOS app cannot simply ship the Trade Desk** on the strength of being a
+    tracker. Either the native shell excludes order placement (leaving it a
+    tracker on iOS while the web app trades), or the App Store listing is made
+    under an entity that satisfies 3.2.1(viii) — which is a legal/licensing
+    question for the attorney review below, not a build-time decision.
+  - This is the change that makes the **securities/fintech attorney review a hard
+    launch blocker** rather than a strong recommendation, and it materially raises
+    the case for **E&O / tech / cyber insurance**.
+  - **Broker credential custody stops being optional to think about.** A
+    read-only key can no longer be the default advice for OANDA, because the desk
+    needs a trading token. Kraken stays query-only (no order path is built for
+    it) and must stay that way unless this is revisited again.
+  (None of this is legal advice.)
 - **Native shell = Capacitor wrap of the existing React app + a native SwiftUI
   WidgetKit extension** (widgets are always native Swift; no web/PWA widget exists
   on iOS). React Native/Expo is the heavier alternative.
@@ -94,7 +110,7 @@ Tech:
 
 - **DB:** SQLite via **Drizzle ORM** on the **libsql** driver (`@libsql/client`);
   file at `DATABASE_URL` (default `file:./data/vts.db`; prod uses a Railway
-  volume). Schema in `apps/api/src/db/schema.ts`; ~73 SQL migrations in
+  volume). Schema in `apps/api/src/db/schema.ts`; ~82 SQL migrations in
   `apps/api/migrations` (`db:migrate`), seed with `db:seed`. Per-user deletes
   are **explicit** in `admin/service.ts` (no `ON DELETE CASCADE`) — when you add
   a per-user table, add it to that delete list too.
@@ -111,8 +127,8 @@ Tech:
 
 - API modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,employee,feedback,legal,messageTemplates,notifications,patchNotes,security,settings,studies,support,teams,todo,trading,userTeams}`.
   Routes in `apps/api/src/routes/*`, registered in `server.ts` (health, auth,
-  admin, earlyAccess, brokers, trading, webhooks, tvWebhook, todo, ai, chat,
-  feedback, studies, push, pushover, content).
+  admin, earlyAccess, brokers, trading, tradeDesk, webhooks, tvWebhook, todo, ai,
+  chat, feedback, studies, push, pushover, content).
 - Web shell: `apps/web/src/components` (`Portal.tsx` is the router/shell,
   `Sidebar.tsx`, `TopBar.tsx`, `AskClaudePanel.tsx`, `TeamChat.tsx`,
   `UpdatePrompt.tsx`, `InstallPrompt.tsx`, …).
@@ -141,8 +157,13 @@ Tech:
 Sections a user lacks the role for are hidden. **My Portal is pinned to the very
 top of the workspaces list** (see `theme/nav.ts` order).
 
-- **Advanced Trading** (gold, internal key `trading`): Live Wall, Trading Alerts (`alerts`), Trade Desk (`desk` — merges Trade Log +
-  History + Live Brokers; legacy keys `log`/`history`/`metrics` alias into it),
+- **Advanced Trading** (gold, internal key `trading`): Live Wall, Trading Alerts (`alerts`),
+  **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
+  (`desk` — merges Trade Log + History + Live Brokers; legacy keys
+  `log`/`history`/`metrics` alias into it. **The key stayed `desk` when the label
+  changed** from "Trade Desk" to "Trade Analysis", so saved `nav.order`
+  overrides, the `howto.desk` wording and every in-app link keep pointing at the
+  review screen; the new placement screen took the *new* key `tradedesk`),
   Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
@@ -150,7 +171,55 @@ top of the workspaces list** (see `theme/nav.ts` order).
   Manual Trades (`funded` key, `FundedScreen`), **Funded**
   (`prop` key — role-gated prop-firm challenge dashboard), **Market Data**
   (`data` key, sits directly above Market News), Market News, To Do.
-  - **Trade Desk settings are per trader** (`trading/settings.ts`,
+  - **Trade Desk** (`tradedesk`, `workspaces/trading/TradeDesk.tsx` +
+    `OrderTicket.tsx` + `DeskPositions.tsx`) is where a trade is **placed**. It
+    sends real orders to the trader's **own** OANDA account: market / limit /
+    stop, with a stop-loss and take-profit attached on fill, plus closing (whole
+    or partial), amending a live trade's stop/target, and cancelling a resting
+    order. Beside the ticket sits the desk's open book — every position the
+    trader's **team** currently holds — so a trade is sized knowing what the desk
+    is already in.
+    - **The split in what the two halves may do is the design.** *Watching* is
+      team-wide: the book is the same team-scoped `/api/trading/live` feed every
+      other screen reads, so the visibility boundary stays defined once
+      (`trading/scope.ts`). *Acting* is personal: every write resolves its
+      connection through `getActiveDecrypted(userId)`, which is keyed on the
+      caller, so **there is no code path that trades a teammate's account** —
+      teammates' rows on the book are watch-only by construction. Do not add an
+      "act on behalf of" path here; a desk lead editing a teammate's *settings*
+      (below) is a different thing entirely from placing their trades.
+    - **Server:** `trading/orderDesk.ts` (validation, journaling, the personal
+      boundary) over `trading/brokers/oandaOrders.ts` (the only file that can
+      trade — `brokers/oanda.ts` stays read-only). Routes are their own file,
+      `routes/tradeDesk.ts` under `/api/trading/desk/*`: reads behind
+      `requireWorkspace('trading')`, **every write behind
+      `requireWorkspaceWrite`** so `trading_viewer` is read-only here too, and
+      the demo refused twice (demoGuard blocks every non-GET; `refuseDemo` in the
+      service is the second lock, deliberately, on the one surface that moves
+      money).
+    - **OANDA answers `201 Created` even when it immediately cancels the order**
+      (insufficient margin, market halted, an unfillable FOK). Reading `res.ok`
+      as success reports a position that does not exist — so an
+      `orderCancelTransaction` in the body is raised as an error. Keep that.
+    - **Every attempt is journalled** to `trading_orders` (migration `0082`),
+      including the refusals with the broker's own reason — a rejected order
+      never becomes a position, so this is the only record it happened. Rows are
+      append-only and in the `admin/service.ts` per-user delete list.
+    - **Order validity is checked against the instrument's own spec**
+      (`/v3/accounts/{id}/instruments`: price precision, size precision, minimum
+      and maximum size), cached 10 min per connection. An over-precise price is
+      rejected outright by OANDA, so the rounding is validation, not tidying.
+      Protective levels are checked against the price the order will actually
+      transact at — the **ask** for a buy, the **bid** for a sell — not the mid.
+    - Two guards worth keeping: identical entry tickets inside a **5-second
+      window** are refused (a double-click at a broker means two positions, not
+      one), and any successful action **drops the team's cached desk snapshot**
+      (`invalidateDeskSnapshot`) so the trader does not keep seeing the pre-trade
+      wall for the rest of its TTL.
+    - No notification is fired here on purpose: the desk watch reconciles within
+      ~10s and sends the existing "trade opened/closed" push, so firing one at
+      placement would double every buzz.
+  - **Trade Analysis settings are per trader** (`trading/settings.ts`,
     `getDeskSettings(userId)` / `updateDeskSettings(userId, patch)`): the
     break-even buffer, per-instrument buffers (`trading_be_overrides`, keyed
     `(owner_id, instrument)`; `owner_id = userId`, or `'desk'` for the shared
@@ -502,11 +571,21 @@ control — the server is still the enforcer.
 
 ## External integrations & background jobs (`apps/api/src/trading`)
 
-- **OANDA** (`brokers/oanda.ts`) — v20 REST, host per connection env: live
-  (`api-fxtrade`) vs practice (`api-fxpractice`). Fetches open trades, pricing,
-  account summary (NAV/balance/PL) and closed trades. NAV = live "capital" figure.
+- **OANDA — two files, split by what they can do.**
+  - `brokers/oanda.ts` is the **read** side: v20 REST, host per connection env,
+    live (`api-fxtrade`) vs practice (`api-fxpractice`). Fetches open trades,
+    pricing, account summary (NAV/balance/PL), daily candles and closed trades.
+    NAV = live "capital" figure.
+  - `brokers/oandaOrders.ts` is the **write** side and the *only* file in the
+    repo that can move money: place, close, amend, cancel, plus the instrument
+    specs and two-sided quotes the ticket needs. Kept separate on purpose so the
+    file that can trade is one small, auditable unit — add order-placement code
+    here, never to the read connector.
+
   Kraken and TradeStation/FTP connectors exist but the self-service connection UI
-  only supports `oanda | kraken | manual`.
+  only supports `oanda | kraken | manual`, and **only OANDA has an order path** —
+  Kraken stays read-only (query-only keys), which is a deliberate posture, not an
+  omission.
 - **TradingView webhooks — TWO endpoints, easy to misconfigure:**
   - `POST /api/webhooks/tradingview` — secret `TRADINGVIEW_WEBHOOK_SECRET` (in
     body or query). Writes `trading_alerts`; **this is the one wired to the
@@ -1026,6 +1105,7 @@ market hours and trade codes, so a stamp means the same instant to every
 teammate. Current call sites: `TradeCard` (Live Wall + the Master board's
 Positions tile), `TradeLog` (deck cards + tape rows), `History`, `Funded`,
 `FundedLiveTrades`, `DeletedTrades`, `PositionsTile`'s compact list,
+`DeskPositions` (the Trade Desk's team book),
 `BrokerConnectionsPanel`'s manual-position editor, and the Scriptable iOS widget
 script in `DeviceSettings.tsx` (which carries its own copy of the formatter, since
 it is a standalone script). **A new position surface must show them too** — use
