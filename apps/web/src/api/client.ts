@@ -774,7 +774,17 @@ export const api = {
   notifications(): Promise<{ items: NotificationItem[]; latestAt: number }> {
     return request('/api/notifications');
   },
-  hubActivity(): Promise<{ chat: number; announcements: number; suggestions: number; bugs: number; support: number }> {
+  // `bugsAwaiting` is a live count of bug reports still waiting on a person (not
+  // resolved, no admin reply after the reporter's last message) — the others are
+  // last-activity timestamps.
+  hubActivity(): Promise<{
+    chat: number;
+    announcements: number;
+    suggestions: number;
+    bugs: number;
+    bugsAwaiting: number;
+    support: number;
+  }> {
     return request('/api/chat/activity');
   },
   tradingTruth(): Promise<{ posts: TruthPost[] }> {

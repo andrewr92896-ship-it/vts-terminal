@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.90';
+export const APP_VERSION = 'Beta V 5.91';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.91',
+    date: 'July 31, 2026',
+    notes: [
+      'The red dot on Admin ▸ Bug Reports now means what it says: a report is still waiting on a person — not resolved, and nobody has replied to the reporter’s latest message yet.',
+      'It clears the moment you reply or mark the report resolved, so a handled report can no longer leave the dot stuck on after a relaunch. The assistant’s own intake reply does not count as an answer.',
+    ],
+  },
   {
     version: 'Beta V 5.90',
     date: 'July 31, 2026',

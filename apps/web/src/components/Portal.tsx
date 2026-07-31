@@ -180,11 +180,18 @@ function renderScreen(
 // Which admin section each pollable activity source maps to, for the sidebar's
 // new-activity dots. Keys are section screen keys; values index the hubActivity
 // response (see the admin dots logic in Portal).
-const SECTION_ACTIVITY: Record<string, 'suggestions' | 'bugs' | 'support'> = {
+// Bug Reports is deliberately absent: its dot is not a "since you last looked"
+// reading but a live state — see BUG_DOT_SECTION below.
+const SECTION_ACTIVITY: Record<string, 'suggestions' | 'support'> = {
   ad_suggestions: 'suggestions',
-  ad_bugs: 'bugs',
   ad_support: 'support',
 };
+
+// Bug Reports lights up whenever a report is still waiting on a person (not
+// resolved and not yet answered by an admin) and goes dark the moment the last
+// one is handled — opening the section does not clear it, because the work is
+// still outstanding until somebody replies or closes the report.
+const BUG_DOT_SECTION = 'ad_bugs';
 
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
   if (allowed.includes('trading')) return 'trading';
@@ -275,9 +282,11 @@ export function Portal() {
   // shows next to the Admin workspace and the specific administration tab
   // (Suggestions / Bug Reports / Support) until the admin opens that section.
   const isAdminUser = allowed.includes('admin');
-  const [adminActivity, setAdminActivity] = useState<{ suggestions: number; bugs: number; support: number } | null>(
-    null,
-  );
+  const [adminActivity, setAdminActivity] = useState<{
+    suggestions: number;
+    bugsAwaiting: number;
+    support: number;
+  } | null>(null);
   const [adminSeen, setAdminSeen] = useState<Record<string, number>>(() => {
     const out: Record<string, number> = {};
     for (const key of Object.keys(SECTION_ACTIVITY)) {
@@ -304,26 +313,29 @@ export function Portal() {
     });
   }, []);
 
+  // Also exposed to the admin sections themselves, so replying to or resolving a
+  // bug report clears its dot immediately instead of on the next poll.
+  const refreshAdminActivity = useCallback(() => {
+    if (!isAdminUser) return;
+    void api
+      .hubActivity()
+      .then((a) =>
+        setAdminActivity({ suggestions: a.suggestions, bugsAwaiting: a.bugsAwaiting ?? 0, support: a.support }),
+      )
+      .catch(() => {
+        /* transient — keep last values */
+      });
+  }, [isAdminUser]);
+
   useEffect(() => {
     if (!isAdminUser) {
       setAdminActivity(null);
       return;
     }
-    let alive = true;
-    const tick = () =>
-      api
-        .hubActivity()
-        .then((a) => alive && setAdminActivity({ suggestions: a.suggestions, bugs: a.bugs, support: a.support }))
-        .catch(() => {
-          /* transient — keep last values */
-        });
-    void tick();
-    const id = window.setInterval(tick, 20000);
-    return () => {
-      alive = false;
-      window.clearInterval(id);
-    };
-  }, [isAdminUser]);
+    refreshAdminActivity();
+    const id = window.setInterval(refreshAdminActivity, 20000);
+    return () => window.clearInterval(id);
+  }, [isAdminUser, refreshAdminActivity]);
 
   const sectionDots = useMemo(() => {
     const dots = new Set<string>();
@@ -331,6 +343,7 @@ export function Portal() {
       for (const [key, src] of Object.entries(SECTION_ACTIVITY)) {
         if (adminActivity[src] > (adminSeen[key] ?? 0)) dots.add(key);
       }
+      if (adminActivity.bugsAwaiting > 0) dots.add(BUG_DOT_SECTION);
     }
     return dots;
   }, [adminActivity, adminSeen]);
@@ -484,7 +497,7 @@ export function Portal() {
       case 'ad_suggestions':
         return <AdminSuggestions theme={theme} />;
       case 'ad_bugs':
-        return <AdminBugReports theme={theme} />;
+        return <AdminBugReports theme={theme} onChanged={refreshAdminActivity} />;
       case 'ad_support':
         return <AdminSupport theme={theme} />;
       default:
