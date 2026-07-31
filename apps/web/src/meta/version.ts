@@ -11,9 +11,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.92';
+export const APP_VERSION = 'Beta V 5.93';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.93',
+    date: 'July 31, 2026',
+    notes: [
+      'New: My Portal ▸ Feature Access. You now choose which optional parts of the portal you want. Advanced Trading — the trading desk — is opt-in, and Funded Account sits under it as a second tick. Everyone already using the portal keeps everything they had.',
+      'Turning a feature off only hides it. Nothing is deleted, and switching it back on brings the workspace back exactly as it was.',
+      'The market-watching screens moved into a new Markets workspace that everybody gets with no opt-in: the Live Wall board, Market Data and Market News. Charts, watchlists, headlines, the economic calendar and price alerts are all there.',
+      'The Live Wall now serves both. Without Advanced Trading you get the board — charts, watchlist, news, calendar — on one saved layout. With it you also get the Positions view, the desk tiles and your named presets, on the same screen as before.',
+      'A feature you have not turned on still shows in the sidebar, dimmed with a padlock; clicking it takes you to Feature Access.',
+      'The first time you turn on Advanced Trading it states plainly that the desk places real orders through your own broker, and asks you to confirm. The Funded role is retired — anyone can now opt into the challenge tracker themselves.',
+    ],
+  },
   {
     version: 'Beta V 5.92',
     date: 'July 30, 2026',

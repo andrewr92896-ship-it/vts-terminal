@@ -2,11 +2,17 @@ import type { UserRow } from '../db/schema.js';
 import { config } from '../config.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { LEGAL_VERSION } from '../legal/version.js';
+import { DEFAULT_FEATURES, type UserFeatures } from '../features/service.js';
 
 // The company email domain that gates the Employee Portal (EMPLOYEE_EMAIL_DOMAIN).
 export const COMPANY_EMAIL_DOMAIN = config.EMPLOYEE_EMAIL_DOMAIN;
 
 export type WorkspaceKey = 'trading' | 'studies';
+
+// The optional features a user turns on for themselves. Which parts of the
+// portal are optional at all lives in features/service.ts; roles and features
+// are separate axes — a role says what you are allowed to do, a feature says
+// what you have asked to see.
 
 // The portal owner's account, identified by the immutable created username
 // (matches the first-boot seed, ADMIN_USERNAME). Only the owner may grant the
@@ -25,8 +31,6 @@ export function isOwnerUser(u: Pick<UserRow, 'username' | 'createdUsername'>): b
 //                          Site Wording, View as role, the site-wording editor).
 //   • software_developer — permission-equivalent to founder (same access).
 //   • admin              — user/team management and the Admin Portal.
-//   • funded             — reveals the private Funded (prop-challenge) section in
-//                          Trading. Only a founder-level user can grant it.
 //   • employee           — grants access to the separate, hardened Employee
 //                          Portal at /employee. It unlocks nothing inside the
 //                          main portal; it only makes the employee sign-in at
@@ -36,11 +40,15 @@ export function isOwnerUser(u: Pick<UserRow, 'username' | 'createdUsername'>): b
 //   • member             — the baseline. Every signed-in user is at least a
 //                          member and sees every non-admin workspace (Trading,
 //                          Studies, My Portal, Site Help).
+//
+// Retired: `funded`. The Funded (prop-challenge) tracker used to be revealed by
+// an admin-granted role; it is now a per-user opt-in under Advanced Trading (see
+// features/service.ts), so the role is gone and the opt-in is the only gate.
+// Migration 0083 carried every role-holder over to the feature.
 export const ROLE_KEYS = [
   'founder',
   'software_developer',
   'admin',
-  'funded',
   'employee',
   'member',
 ] as const;
@@ -50,7 +58,6 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   founder: 'Founder',
   software_developer: 'Software Developer',
   admin: 'Admin',
-  funded: 'Funded',
   employee: 'Employee',
   member: 'Member',
 };
@@ -99,19 +106,12 @@ export function parseBadges(u: { badges?: string | null }): string[] {
   }
 }
 
-// Workspace access under the Member = full-access model: every signed-in user
-// (member and up) can reach Trading and Studies. The Admin Portal and Founder
-// Portal are gated separately (isAdmin / isFounder), not through this function.
+// Workspace access by ROLE. No role stands between a member and Trading or
+// Studies — what gates Trading now is the per-user opt-in (Feature Access),
+// checked by requireWorkspace in the middleware, not a role. The Admin Portal
+// and Founder Portal are gated separately (isAdmin / isFounder).
 export function canAccessWorkspace(_roles: RoleKey[], _ws: WorkspaceKey): boolean {
   return true;
-}
-
-// The private Funded section (the prop-firm challenge dashboard) is an add-on
-// inside Trading, revealed only to holders of the `funded` role (admins and
-// founder-level users included). It grants no workspace on its own and is never
-// shown to the demo.
-export function canAccessFunded(roles: RoleKey[]): boolean {
-  return isAdmin(roles) || roles.includes('funded');
 }
 
 // Whether a sign-in email is on the company domain. Note that `seed.ts`
@@ -192,8 +192,12 @@ export interface PublicUser {
     label: string;
     workspaces: WorkspaceKey[];
     readOnlyWorkspaces: WorkspaceKey[];
-    // Whether the private Funded (prop-challenge) section is revealed. Never true
-    // for the demo account.
+    // The optional features this user has turned on for themselves (My Portal ▸
+    // Feature Access). Drives which workspaces the sidebar draws; the server is
+    // still the enforcer on every endpoint.
+    features: UserFeatures;
+    // Whether the Funded (prop-challenge) section is revealed — the Funded
+    // opt-in, which is nested under Advanced Trading. Never true for the demo.
     funded: boolean;
     // Whether the separate Employee Portal (/employee) launch link is revealed.
     // Only says the link is shown — reaching the portal still requires a fresh,
@@ -209,9 +213,13 @@ export interface PublicUser {
   };
 }
 
-// `teamName` is resolved by the caller (routes) from the user's teamId, since
-// this module stays free of database access.
-export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
+// `teamName` and `features` are resolved by the caller (routes), since this
+// module stays free of database access.
+export function toPublicUser(
+  u: UserRow,
+  teamName?: string | null,
+  features: UserFeatures = DEFAULT_FEATURES,
+): PublicUser {
   const roles = parseRoles(u);
   const workspaces = workspacesForRoles(roles);
   const isDemo = u.username === DEMO_USERNAME;
@@ -239,7 +247,8 @@ export function toPublicUser(u: UserRow, teamName?: string | null): PublicUser {
       // reach is read-only, so the UI hides all add/edit/delete controls (the
       // demoGuard already refuses the writes server-side regardless).
       readOnlyWorkspaces: isDemo ? workspaces : workspaces.filter((ws) => isWorkspaceReadOnly(roles, ws)),
-      funded: !isDemo && canAccessFunded(roles),
+      features,
+      funded: !isDemo && features.funded,
       employee: !isDemo && canAccessEmployeePortal(roles, u.email),
       admin: !isDemo && isAdmin(roles),
       founder: !isDemo && isFounder(roles),

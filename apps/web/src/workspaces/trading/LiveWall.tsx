@@ -29,10 +29,18 @@ const REFRESH_MS = 10_000;
 // the initial app bundle lean (same pattern as the Studies screens).
 const ChartBoard = lazy(() => import('./ChartBoard').then((m) => ({ default: m.ChartBoard })));
 
+// The Live Wall is the Markets workspace's board, and it serves two kinds of
+// user off one screen. Without Advanced Trading it is a market-watching board:
+// charts, watchlists, headlines and the economic calendar, on a single saved
+// layout. With Advanced Trading it also carries the desk — the team's open
+// positions view, the desk tiles, named presets, and broker connections. The
+// server applies the same split independently (routes/trading.ts), so nothing
+// here is the gate; it just stops offering what would be refused.
 export function LiveWall() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
   const { user } = useAuth();
+  const desk = !!user?.access.features.advancedTrading;
   const [data, setData] = useState<LiveWallData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   // A failed *refresh* after the first load: keep the last data on screen but
@@ -46,6 +54,9 @@ export function LiveWall() {
   // presets ("Master", the default) and the live positions grid.
   const [view, setView] = useState<'positions' | 'charts'>('charts');
   const firstLoad = useRef(true);
+  // Positions is the desk half of the wall. Without Advanced Trading it is not
+  // offered, and the effective view is pinned to the board.
+  const showPositions = desk && view === 'positions';
 
   const load = useCallback(async () => {
     setRefreshing(true);
@@ -67,10 +78,13 @@ export function LiveWall() {
   }, []);
 
   useEffect(() => {
+    // The positions feed is a desk endpoint (403 without Advanced Trading), so
+    // a Markets-only viewer never asks for it — the board half needs none of it.
+    if (!desk) return;
     void load();
     const id = window.setInterval(() => void load(), REFRESH_MS);
     return () => window.clearInterval(id);
-  }, [load]);
+  }, [load, desk]);
 
   // The demo (and trading view-only roles) can browse the wall but not manage
   // broker connections — hide the entry point to the connection editor.
@@ -83,17 +97,20 @@ export function LiveWall() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <ScreenTitle>Live Wall</ScreenTitle>
-            {view === 'positions' && data && (
+            {showPositions && data && (
               <span style={data.source === 'sample' ? sampledPill : livePill}>{data.source === 'sample' ? 'Sample data' : 'Live'}</span>
             )}
           </div>
-          {/* Master (charts board) ⇄ Positions view toggle */}
-          <div style={segWrap}>
-            <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>{"Master"}</button>
-            <button onClick={() => setView('positions')} style={segBtn(view === 'positions')}>{"Positions"}</button>
-          </div>
+          {/* Master (charts board) ⇄ Positions view toggle — the Positions half
+              is the desk, so the toggle only appears with Advanced Trading. */}
+          {desk && (
+            <div style={segWrap}>
+              <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>{"Master"}</button>
+              <button onClick={() => setView('positions')} style={segBtn(view === 'positions')}>{"Positions"}</button>
+            </div>
+          )}
         </div>
-        {view === 'positions' && data && (
+        {showPositions && data && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>
               Updated {etTime(data.generatedAt)} ET
@@ -114,19 +131,23 @@ export function LiveWall() {
         )}
       </div>
 
-      <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={() => void load()} />
-      <DeskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} readOnly={readOnly} onSaved={() => void load()} />
+      {desk && (
+        <>
+          <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={() => void load()} />
+          <DeskSettingsModal open={settingsOpen} onClose={() => setSettingsOpen(false)} readOnly={readOnly} onSaved={() => void load()} />
+        </>
+      )}
 
       {/* Master board — kept mounted (just hidden) when the Positions view is
           open, so the preset you have open and any unsaved edits survive
           switching to Positions and back. */}
-      <div style={{ display: view === 'charts' ? 'block' : 'none' }}>
+      <div style={{ display: showPositions ? 'none' : 'block' }}>
         <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading charts…"}</div>}>
-          <ChartBoard />
+          <ChartBoard desk={desk} />
         </Suspense>
       </div>
 
-      {view === 'positions' &&
+      {showPositions &&
         (loadError ? (
           <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>
         ) : !data ? (

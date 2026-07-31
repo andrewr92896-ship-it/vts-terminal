@@ -30,6 +30,7 @@ import { contentRoutes } from './routes/content.js';
 import { userTeamRoutes } from './routes/userTeams.js';
 import { messageTemplateRoutes } from './routes/messageTemplates.js';
 import { employeeRoutes } from './routes/employee.js';
+import { featureRoutes } from './routes/features.js';
 import { applyEmployeeSecurityHeaders, enforceIpAllowlist } from './employee/guard.js';
 import { seedBadges } from './badges/service.js';
 import { runMigrations } from './db/migrate.js';
@@ -113,6 +114,7 @@ export async function buildServer() {
   await app.register(userTeamRoutes);
   await app.register(messageTemplateRoutes);
   await app.register(employeeRoutes);
+  await app.register(featureRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).

@@ -1,4 +1,4 @@
-import type { RoleKey } from '../api/types';
+import type { RoleKey, UserFeatures } from '../api/types';
 import type { WorkspaceKey } from '../theme/themes';
 
 // Mirror of the backend role model (auth/rbac.ts). The backend is the real
@@ -9,7 +9,6 @@ export const ALL_ROLES: RoleKey[] = [
   'founder',
   'software_developer',
   'admin',
-  'funded',
   'employee',
   'member',
 ];
@@ -18,7 +17,6 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
   founder: 'Founder',
   software_developer: 'Software Developer',
   admin: 'Admin',
-  funded: 'Funded',
   employee: 'Employee',
   member: 'Member',
 };
@@ -28,7 +26,6 @@ export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
   founder: 'Full access, incl. the Developer Portal. Granted only by the owner.',
   software_developer: 'Founder-equivalent access. Granted only by the owner.',
   admin: 'Manage users and teams (Admin Portal). Granted by a founder.',
-  funded: 'Private — reveals the Funded (prop-challenge) section in Trading.',
   employee:
     'Reveals the Employee Portal section in My Portal. Also requires a company email address, and its own sign-in plus a second factor at /employee.',
   member: 'Baseline access to every standard workspace.',
@@ -44,22 +41,30 @@ export function isAdmin(roles: RoleKey[]): boolean {
   return roles.includes('admin') || isFounder(roles);
 }
 
-export function canAccessWorkspace(roles: RoleKey[], ws: WorkspaceKey): boolean {
+// Whether a workspace is reachable, given the user's roles AND the optional
+// features they have turned on. Two separate axes: a role says what you are
+// allowed to do, a feature says what you have asked to see.
+export function canAccessWorkspace(
+  roles: RoleKey[],
+  ws: WorkspaceKey,
+  features?: UserFeatures,
+): boolean {
   // The Founder Portal is founder-level only.
   if (ws === 'founder') return isFounder(roles);
   // The Admin Portal is for admins (founder-level included).
   if (ws === 'admin') return isAdmin(roles);
-  // Every other workspace (Trading, Studies, My Portal, Site Help) is open to
-  // every signed-in user under the Member = full-access model.
+  // Advanced Trading is opt-in — the one workspace a signed-in user does not get
+  // by default, because it places real orders. Everything else (Markets,
+  // Investments, Studies, My Portal, Site Help) is included with every account.
+  if (ws === 'trading') return !!features?.advancedTrading;
   return true;
 }
 
-// The private Funded (prop-challenge) section is revealed to holders of the
-// `funded` role (admins and founder-level included). Mirror of the backend
-// canAccessFunded; the server is the enforcer, this just drives nav/screen
-// gating and the "view as" preview.
-export function canAccessFunded(roles: RoleKey[]): boolean {
-  return isAdmin(roles) || roles.includes('funded');
+// Whether the Funded (prop-challenge) section is revealed: the nested opt-in,
+// which the service will not store enabled unless Advanced Trading is on too.
+// The server is the enforcer; this drives nav/screen gating.
+export function canAccessFunded(features?: UserFeatures): boolean {
+  return !!features?.funded;
 }
 
 // The company email domain that gates the Employee Portal. Mirrors the backend's
@@ -93,33 +98,35 @@ export function isWorkspaceReadOnly(_roles: RoleKey[], _ws: WorkspaceKey): boole
   return false;
 }
 
-// Ordered as the sidebar shows them. Every member reaches Advanced Trading,
-// Investments, Studies, My Portal and Site Help; the Admin and Founder portals
-// come last for those roles. (Actual sidebar order is driven by the NAV array;
-// this list only gates which workspaces a user may see.)
-export function workspacesForRoles(roles: RoleKey[]): WorkspaceKey[] {
-  const order: WorkspaceKey[] = [
-    'trading',
-    'investments',
-    'studies',
-    'myportal',
-    'help',
-    'admin',
-    'founder',
-  ];
-  return order.filter((ws) => canAccessWorkspace(roles, ws));
+// The workspaces this user may open, given their roles and their feature
+// opt-ins. Advanced Trading is absent until they turn it on.
+export function workspacesForRoles(roles: RoleKey[], features?: UserFeatures): WorkspaceKey[] {
+  return ALL_WORKSPACES.filter((ws) => canAccessWorkspace(roles, ws, features));
 }
+
+// Every workspace in the order the sidebar gates them. (Actual display order is
+// driven by the NAV array; this list only decides which a user may see.)
+export const ALL_WORKSPACES: WorkspaceKey[] = [
+  'markets',
+  'trading',
+  'investments',
+  'studies',
+  'myportal',
+  'help',
+  'admin',
+  'founder',
+];
 
 // Which roles a given actor may grant/revoke (mirror of the backend's
 // assertCanAssignRoles). The owner grants everything; a founder grants
-// admin/funded/member; a plain admin grants only member. Drives which role
+// admin/employee/member; a plain admin grants only member. Drives which role
 // options the admin Users picker shows to the acting user.
 export function canGrantRole(
   actor: { owner: boolean; founder: boolean },
   role: RoleKey,
 ): boolean {
   if (role === 'founder' || role === 'software_developer') return actor.owner;
-  if (role === 'admin' || role === 'funded' || role === 'employee') return actor.founder;
+  if (role === 'admin' || role === 'employee') return actor.founder;
   return true; // member
 }
 

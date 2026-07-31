@@ -21,6 +21,10 @@ interface AuthState {
   // Self-service account actions; each updates the cached user on success.
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   updateProfile: (patch: { username?: string; displayName?: string; email?: string; avatar?: string }) => Promise<void>;
+  // Re-read the signed-in user from the server. Used after a change that alters
+  // what the account can reach — turning a feature on or off — so the sidebar
+  // and routing pick it up without a reload.
+  refreshUser: () => Promise<void>;
 }
 
 const AuthCtx = createContext<AuthState | null>(null);
@@ -86,9 +90,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const refreshUser = useCallback(async () => {
+    const r = await api.me();
+    setUser(r.user);
+  }, []);
+
   return (
     <AuthCtx.Provider
-      value={{ user, loading, login, demoLogin, logout, acceptTerms, changePassword, updateProfile }}
+      value={{ user, loading, login, demoLogin, logout, acceptTerms, changePassword, updateProfile, refreshUser }}
     >
       {children}
     </AuthCtx.Provider>

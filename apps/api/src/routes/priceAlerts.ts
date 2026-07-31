@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
+import { requireMarkets } from '../auth/middleware.js';
 import { PRICE_ALERT_CONDITIONS, PRICE_ALERT_REPEATS } from '../db/schema.js';
 import {
   createPriceAlert,
@@ -10,10 +10,12 @@ import {
 } from '../trading/priceAlerts.js';
 import { hasPriceSource } from '../trading/priceSource.js';
 
-// User-authored price alerts. Every endpoint is behind the trading workspace
-// guard; writes additionally require write access (so trading_viewer and the
-// demo are read-only, and demoGuard 403s the writes anyway). Alerts are
-// personal — each is owned by, and fired only to, its creator.
+// User-authored price alerts. These sit in the always-on Markets workspace
+// rather than behind the Advanced Trading opt-in: setting one is watching a
+// price, not trading it — no broker of the user's own is involved and no order
+// can result — and the alert control lives on the chart tile, which every
+// account has. The demo is read-only regardless (demoGuard 403s every write).
+// Alerts are personal — each is owned by, and fired only to, its creator.
 const createSchema = z.object({
   symbol: z.string().trim().min(1).max(40),
   condition: z.enum(PRICE_ALERT_CONDITIONS),
@@ -35,8 +37,8 @@ const patchSchema = z
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
 export async function priceAlertRoutes(app: FastifyInstance) {
-  const read = { preHandler: requireWorkspace('trading') };
-  const write = { preHandler: requireWorkspaceWrite('trading') };
+  const read = { preHandler: requireMarkets };
+  const write = { preHandler: requireMarkets };
 
   app.get('/api/trading/price-alerts', read, async (request) => ({
     alerts: await listPriceAlerts(request.currentUser!.id),

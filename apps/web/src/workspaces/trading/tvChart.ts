@@ -147,6 +147,27 @@ export function starterTiles(): BoardTile[] {
   ];
 }
 
+// The starter board for a viewer without Advanced Trading. Same shape as above,
+// but the open-positions cell — which reads the desk — is a headline feed
+// instead, so a market-watching board opens complete rather than with a hole
+// where a tile they can't have used to be.
+export function marketStarterTiles(): BoardTile[] {
+  return [
+    {
+      id: `watchlist-start-${idCounter()}`,
+      kind: 'watchlist',
+      x: 0,
+      y: 0,
+      w: 12,
+      h: 3,
+      title: 'Watchlist',
+      symbols: ['OANDA:EURUSD', 'OANDA:GBPUSD', 'OANDA:USDJPY', 'OANDA:XAUUSD', 'OANDA:NAS100USD', 'BINANCE:BTCUSDT'],
+    },
+    { id: `chart-start-${idCounter()}`, kind: 'chart', x: 0, y: 3, w: 8, h: 16, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] },
+    { id: `news-start-${idCounter()}`, kind: 'news', x: 8, y: 3, w: 4, h: 16, title: 'Market News' },
+  ];
+}
+
 // A monotonic counter so ids added in the same millisecond don't collide
 // (Date.now() alone can repeat within a burst of "Add chart" clicks).
 let _n = 0;

@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { eq } from 'drizzle-orm';
 import { db } from './db/index.js';
-import { tradingTeams, users } from './db/schema.js';
+import { tradingTeams, userFeatures, users } from './db/schema.js';
 import { hashPassword } from './auth/passwords.js';
 import { parseRoles } from './auth/rbac.js';
 import { seedConnectionsFromEnv } from './trading/connections.js';
@@ -122,6 +122,20 @@ export async function seedAdmin(): Promise<void> {
     viewBrokerage: true,
     active: true,
     mustChangePassword: generated,
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  // The first-boot owner gets the optional features turned on. On a fresh
+  // install migration 0083 has nothing to grandfather (the users table is empty
+  // until this runs), so without this the owner would find their own desk
+  // switched off on the very first sign-in.
+  await db.insert(userFeatures).values({
+    id: crypto.randomUUID(),
+    userId: adminId,
+    advancedTrading: true,
+    funded: true,
+    tradingAckAt: now,
     createdAt: now,
     updatedAt: now,
   });
