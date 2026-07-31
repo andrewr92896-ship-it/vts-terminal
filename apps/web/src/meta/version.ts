@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.86';
+export const APP_VERSION = 'Beta V 5.87';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.87',
+    date: 'July 31, 2026',
+    notes: [
+      'The Live Wall presets are a dropdown now. They used to sit above the board as a row of buttons that wrapped onto three or four lines on a phone once you had a few saved — now it is one line: the preset you have open, and a tap to switch.',
+      'The menu opens inside the portal, in the desk’s own colours, rather than handing you the phone’s built-in picker wheel. It marks which preset you are on and which one is your default.',
+      'Edit layout moved up beside it, so the whole bar is one row and the board starts higher up the screen.',
+    ],
+  },
   {
     version: 'Beta V 5.86',
     date: 'July 31, 2026',
