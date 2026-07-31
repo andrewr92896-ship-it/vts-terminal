@@ -43,9 +43,8 @@ import type {
   TradingBoard,
   BoardInput,
   MarketNewsData,
-  MarketNewsStreams,
+  MarketNewsView,
   MarketNewsStreamsPayload,
-  ResolvedChannelPayload,
   MarketDataPayload,
   MarketDataLayout,
   NewsInput,
@@ -550,18 +549,11 @@ export const api = {
   marketNewsStreams(): Promise<MarketNewsStreamsPayload> {
     return request('/api/trading/market-news/streams');
   },
-  // Look up a pasted YouTube link so the trader doesn't have to find the
-  // channel id or type a name.
-  resolveStreamChannel(url: string): Promise<ResolvedChannelPayload> {
-    return request('/api/trading/market-news/streams/resolve', {
-      method: 'POST',
-      body: JSON.stringify({ url }),
-    });
-  },
-  saveMarketNewsStreams(streams: MarketNewsStreams): Promise<MarketNewsStreamsPayload> {
+  // Only the view state is saved — the channel catalog lives on the server.
+  saveMarketNewsStreams(view: MarketNewsView): Promise<MarketNewsStreamsPayload> {
     return request('/api/trading/market-news/streams', {
       method: 'PUT',
-      body: JSON.stringify(streams),
+      body: JSON.stringify(view),
     });
   },
   marketData(): Promise<MarketDataPayload> {

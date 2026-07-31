@@ -37,7 +37,6 @@ import {
   setMarketNewsStreams,
   liveStreamsConfigured,
 } from '../trading/marketNewsStreams.js';
-import { parseChannelRef, resolveChannelRef, youtubeConfigured } from '../trading/youtube.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
   getMarketNews,
@@ -440,69 +439,22 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { layout: await setMarketDataLayout(request.currentUser!.id, parsed.data) };
   });
 
-  // ---- Market News live streams (this trader's followed YouTube channels) ----
-  // Personal setup, per user. `liveConfigured` tells the client whether channel
-  // live-state is real yet (a YouTube poller) — false today, so the screen marks
-  // live/offline and viewer counts as sample.
+  // ---- Market News live streams ----
+  // The channel catalog is code-resident and identical for everyone (see
+  // trading/marketNewsStreams.ts for why: a fixed catalog keeps YouTube quota
+  // independent of how many people use the portal). Only the trader's view
+  // state over it is personal. `liveConfigured` tells the client whether live
+  // status is real yet, so the screen can mark it as sample when it isn't.
   app.get('/api/trading/market-news/streams', read, async (request) => ({
     streams: await getMarketNewsStreams(request.currentUser!.id),
     liveConfigured: liveStreamsConfigured(),
   }));
 
-  // Turn a pasted YouTube link into a real channel, so a trader only has to
-  // paste whatever is in their address bar — a handle, a /channel/UC… URL, or a
-  // link to the live stream itself — instead of hunting down a channel id and
-  // typing a name. Write-gated (so the demo can't spend quota) and metered
-  // against the same daily unit ledger as the poller. `resolved: false` is a
-  // normal answer, not an error: the caller shows why and can still save the
-  // channel by hand.
-  app.post('/api/trading/market-news/streams/resolve', write, async (request, reply) => {
-    const parsed = z
-      .object({ url: z.string().trim().min(1).max(400) })
-      .safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Paste a YouTube link' });
-
-    const ref = parseChannelRef(parsed.data.url);
-    if (ref.kind === 'unknown') {
-      return { resolved: false, reason: "That doesn't look like a YouTube link." };
-    }
-    if (!youtubeConfigured()) {
-      // No key: fall back to what the link alone tells us. A channel id still
-      // embeds; a handle still links out until the id can be resolved.
-      return {
-        resolved: false,
-        reason: 'Live lookup is off on the server, so the channel name has to be entered by hand.',
-        channel:
-          ref.kind === 'channelId'
-            ? { channelId: ref.value, handle: '', name: '' }
-            : ref.kind === 'handle'
-              ? { channelId: '', handle: `@${ref.value}`, name: '' }
-              : undefined,
-      };
-    }
-    try {
-      const channel = await resolveChannelRef(parsed.data.url);
-      if (!channel) {
-        return {
-          resolved: false,
-          reason: "That link didn't match a YouTube channel we could look up.",
-        };
-      }
-      return { resolved: true, channel };
-    } catch (err) {
-      request.log.error({ err }, 'YouTube channel resolve failed');
-      return { resolved: false, reason: "Couldn't reach YouTube just now. Try again in a moment." };
-    }
-  });
-
   app.put('/api/trading/market-news/streams', write, async (request, reply) => {
     const parsed = marketNewsStreamsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid stream setup' });
     return {
-      streams: await setMarketNewsStreams(request.currentUser!.id, {
-        ...parsed.data,
-        channels: parsed.data.channels.map((c) => ({ ...c, live: false })),
-      }),
+      streams: await setMarketNewsStreams(request.currentUser!.id, parsed.data),
       liveConfigured: liveStreamsConfigured(),
     };
   });
@@ -1281,20 +1233,10 @@ const marketDataLayoutSchema = z.object({
     )
     .max(40),
 });
-// This trader's Market News live-stream setup. Every field is bounded; unknown
-// channel references in watching/docked/notify are dropped server-side in
-// `sanitize`, so the schema only has to guard shape and size.
+// This trader's Market News view state. The channel catalog is code-resident,
+// so nothing here can introduce a channel — every key is checked against the
+// catalog server-side in `sanitize`, and the schema only guards shape and size.
 const marketNewsStreamsSchema = z.object({
-  channels: z
-    .array(
-      z.object({
-        key: z.string().trim().min(1).max(80),
-        name: z.string().trim().min(1).max(80),
-        handle: z.string().trim().max(80),
-        channelId: z.string().trim().max(80),
-      }),
-    )
-    .max(40),
   watching: z.array(z.string().trim().min(1).max(80)).max(40),
   docked: z.string().trim().min(1).max(80).nullable(),
   cols: z.number().int().min(1).max(6),

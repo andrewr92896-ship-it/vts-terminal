@@ -1,0 +1,11 @@
+-- The Market News channel catalog moved into code (trading/marketNewsStreams.ts):
+-- it is now a curated, fixed list identical for every user, because YouTube live
+-- status costs API quota per distinct channel and a fixed catalog keeps that
+-- cost independent of how many people use the portal. The per-user row keeps
+-- only view state (open streams, docked stream, columns, go-live toggles), so
+-- the per-user channel list is dropped.
+--
+-- Saved `watching` / `docked` / `notify` entries that referenced a user-added
+-- channel are left alone here — they no longer match a catalog key and are
+-- discarded harmlessly on read.
+ALTER TABLE `market_news_streams` DROP COLUMN `channels`;
