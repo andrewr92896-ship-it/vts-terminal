@@ -216,18 +216,26 @@ top of the workspaces list** (see `theme/nav.ts` order).
       one), and any successful action **drops the team's cached desk snapshot**
       (`invalidateDeskSnapshot`) so the trader does not keep seeing the pre-trade
       wall for the rest of its TTL.
-    - **Pips are an FX convention, so the ticket only ever speaks them for a
-      genuine currency pair** — `forexPair(instrument)` (`workspaces/trading/pips.ts`,
-      mirrored server-side in `trading/forex.ts`) is the single test, so the desk
-      agrees with how the Live Wall, Trade Log and History already score a trade.
-      For a pair the Size field reads "$10.00 / pip", the spread reads in pips,
-      and the stop/target read "money · pips"; for gold, an index or crypto those
-      same places show the raw price difference and money only, never an invented
-      unit. The pip's *size* comes from OANDA's own `pipLocation`, not a
-      JPY-or-not guess. The quick-size chips split the same way — thousands for
+    - **Every instrument states what a unit of price movement is worth, in the
+      unit that instrument is actually read in** — the figure a trader sizes by.
+      One switch decides which: `forexPair(instrument)`
+      (`workspaces/trading/pips.ts`, mirrored server-side in `trading/forex.ts`)
+      is the portal's single test for a genuine currency pair, so the desk agrees
+      with how the Live Wall, Trade Log and History already score a trade.
+      - A **pair** speaks pips: "$10.00 / pip", a spread in `PIPS`, stop/target
+        as "money · pips". The pip's *size* comes from OANDA's own `pipLocation`,
+        not a JPY-or-not guess.
+      - **Everything else** — indices, shares, metals, crypto — speaks points,
+        where a point is **one whole unit of price** (5,000 → 5,001; a dollar of
+        share price): "$10.00 / point", a spread in `PTS`, "money · pts".
+        Deliberately *not* that instrument's `pipLocation`, which OANDA reports
+        as 0.01 for gold — reading that as a "point" would quote the figure in
+        cents.
+      Never label a non-pair's movement in pips; never size a point from
+      `pipLocation`. The quick-size chips split on a related axis — thousands for
       whole-unit instruments, fractions for anything the broker allows a
-      fractional size on, and always bounded by that instrument's min/max order
-      size. Keep this split when adding stocks or another broker.
+      fractional size on, always bounded by that instrument's min/max order size.
+      Keep all of this when adding stocks or another broker.
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.

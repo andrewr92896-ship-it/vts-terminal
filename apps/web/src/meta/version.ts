@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.89';
+export const APP_VERSION = 'Beta V 5.90';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.90',
+    date: 'July 31, 2026',
+    notes: [
+      'Indices, gold, crypto — and shares, when they arrive — now get their own version of the per-pip figure: what the trade is worth per point. 10 units of the S&P reads “$10.00 / point”, 100 ounces of gold reads “$100.00 / point”.',
+      'A point is one whole unit of price: the index going 5,000 to 5,001, or a dollar of share price. Currency pairs keep pips, so nothing about an FX ticket changed.',
+      'The spread and the stop/target distances follow the same unit, so a stop on bitcoin now reads “$677.50 · 1,355 pts” instead of a bare dollar figure, and big numbers get their thousands separator.',
+    ],
+  },
   {
     version: 'Beta V 5.89',
     date: 'July 31, 2026',
