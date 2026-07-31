@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.91';
+export const APP_VERSION = 'Beta V 5.92';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.92',
+    date: 'July 30, 2026',
+    notes: [
+      'Adding a YouTube channel to the Market News stream wall now accepts the address straight from the browser bar, in any form \u2014 a /channel/ link, an @handle link, a bare @handle, or the older /c/ and /user/ links.',
+      'A /channel/ link already contains the channel ID, so the portal now reads it out of the address instead of looking it up. That channel starts playing immediately, uses none of the daily YouTube allowance, and works even with no YouTube key set.',
+      'Fixed: pasting anything other than an @handle link used to be silently misread \u2014 a /channel/ address became the nonsense handle \u201cchannel\u201d, which wasted a lookup, failed, and was then ignored for six hours.',
+    ],
+  },
   {
     version: 'Beta V 5.91',
     date: 'July 31, 2026',

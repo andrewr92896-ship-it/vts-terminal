@@ -5,9 +5,8 @@ import { config } from '../config.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
-import { catalogChannels, listFollowedChannels } from './marketNewsStreams.js';
+import { catalogChannels, listFollowedChannels, resolvedChannelId } from './marketNewsStreams.js';
 import {
-  cachedChannelIdForHandle,
   fetchLiveState,
   isQuotaError,
   quotaStatus,
@@ -54,8 +53,10 @@ export async function tickYoutubeWatch(): Promise<void> {
     if (channels.length === 0) return;
 
     // 1) Resolve handles we don't have an id for yet (1 unit each, cached).
+    // A row whose handle field is a /channel/ URL already carries its id, so
+    // resolvedChannelId answers for free and no unit is spent here.
     for (const c of channels) {
-      if (c.channelId || !c.handle) continue;
+      if (resolvedChannelId(c) || !c.handle) continue;
       try {
         await resolveHandle(c.handle);
       } catch (err) {
@@ -67,9 +68,7 @@ export async function tickYoutubeWatch(): Promise<void> {
     // 2) Refresh live state for the stalest channels, round-robin.
     const ids = [
       ...new Set(
-        channels
-          .map((c) => c.channelId || (c.handle ? cachedChannelIdForHandle(c.handle) ?? '' : ''))
-          .filter(Boolean),
+        channels.map(resolvedChannelId).filter(Boolean),
       ),
     ];
     const due = ids
@@ -114,11 +113,7 @@ export async function tickYoutubeWatch(): Promise<void> {
 async function notifyGoLive(channelId: string, state: LiveState): Promise<void> {
   // Which catalog entry is this? Either it carries the id outright, or its
   // handle is one the resolver has actually mapped here — never a name match.
-  const channel = catalogChannels().find(
-    (c) =>
-      (c.channelId && c.channelId === channelId) ||
-      (!!c.handle && cachedChannelIdForHandle(c.handle) === channelId),
-  );
+  const channel = catalogChannels().find((c) => resolvedChannelId(c) === channelId);
   if (!channel) return;
 
   const rows = await db
