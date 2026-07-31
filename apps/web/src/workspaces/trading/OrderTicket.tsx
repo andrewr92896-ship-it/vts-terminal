@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { fmtMoney } from './TradeCard';
+import { forexPair } from './pips';
 import type { DeskAccount, DeskInstrument, DeskOrderType, DeskQuote, TradeSide } from '../../api/types';
 
 // The order ticket — the one component in the portal that sends a real order to
@@ -39,7 +40,26 @@ const TYPES: { key: DeskOrderType; label: string; hint: string }[] = [
   { key: 'stop', label: 'Stop', hint: 'Trigger once price trades through your level' },
 ];
 
-const SIZE_CHIPS = [1000, 5000, 10_000, 25_000, 100_000];
+// Quick-size shortcuts. Which ladder applies depends on how the instrument is
+// actually sized: FX and the whole-unit CFDs trade in thousands (a micro lot is
+// 1,000 units), while anything the broker allows a fractional size on — crypto,
+// most notably — trades in fractions of one. A "1k" chip beside a bitcoin
+// ticket is not a shortcut, it is a trap.
+const WHOLE_UNIT_CHIPS = [1000, 5000, 10_000, 25_000, 100_000];
+const FRACTIONAL_CHIPS = [0.01, 0.05, 0.1, 0.5, 1];
+
+// The ladder for one instrument, bounded by what the broker will actually
+// accept. A chip the broker would reject is worse than no chip.
+function sizeChipsFor(spec: DeskInstrument | null): number[] {
+  if (!spec) return WHOLE_UNIT_CHIPS;
+  const ladder = spec.tradeUnitsPrecision > 0 ? FRACTIONAL_CHIPS : WHOLE_UNIT_CHIPS;
+  const usable = ladder.filter(
+    (n) => n >= spec.minimumTradeSize && (spec.maximumOrderUnits == null || n <= spec.maximumOrderUnits),
+  );
+  // An instrument whose limits exclude the whole ladder still gets one useful
+  // shortcut: the smallest size it will take.
+  return usable.length > 0 ? usable : [spec.minimumTradeSize];
+}
 
 interface Props {
   account: DeskAccount;
@@ -120,6 +140,20 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
 
   const factor = quote?.quoteHomeFactor ?? null;
   const pipSize = spec?.pipSize ?? 0.0001;
+
+  // Is this a genuine currency pair? A pip is an FX convention — gold, indices,
+  // crypto and (later) shares have no pip, and labelling their price moves in
+  // pips would be inventing a unit. `forexPair` is the portal's single test for
+  // this (mirrored server-side in trading/forex.ts), so the ticket agrees with
+  // how the Live Wall, Trade Log and History already score a trade. The pip's
+  // *size* still comes from the broker's own pipLocation rather than a guess.
+  const isForex = forexPair(instrument) != null;
+
+  // What one pip is worth at this size, in the account's currency — the figure
+  // an FX trader sizes by. Needs the quote for the currency conversion, so it
+  // reads "—" for the second or two before the first quote lands.
+  const perPip =
+    isForex && factor != null && Number.isFinite(units) && units > 0 ? units * pipSize * factor : null;
 
   // Money at risk / on offer, priced through the quote → account-currency factor
   // rather than assumed. Null whenever a piece is missing, so the ticket shows
@@ -245,11 +279,21 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         <div style={spreadCell}>
           <div style={{ fontSize: 8.5, color: FAINT, letterSpacing: '.6px' }}>{"SPREAD"}</div>
           <div style={{ fontFamily: MONO, fontSize: 14, fontWeight: 700, color: quote?.tradeable === false ? RED : MUTED }}>
-            {quote?.spread != null ? (quote.spread / pipSize).toFixed(1) : quoteError ? '—' : '·'}
+            {/* Pips for a currency pair; the raw price difference for anything
+                else, where a "pip" is not a unit that exists. */}
+            {quote?.spread == null
+              ? quoteError
+                ? '—'
+                : '·'
+              : isForex
+                ? (quote.spread / pipSize).toFixed(1)
+                : px(quote.spread)}
           </div>
-          <div style={{ fontSize: 8.5, color: quote?.tradeable === false ? RED : FAINT, letterSpacing: '.4px' }}>
-            {quote?.tradeable === false ? 'CLOSED' : 'PIPS'}
-          </div>
+          {(quote?.tradeable === false || isForex) && (
+            <div style={{ fontSize: 8.5, color: quote?.tradeable === false ? RED : FAINT, letterSpacing: '.4px' }}>
+              {quote?.tradeable === false ? 'CLOSED' : 'PIPS'}
+            </div>
+          )}
         </div>
         <SideButton
           label="Buy"
@@ -296,6 +340,16 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
               inputMode="numeric"
               style={{ ...input, width: '100%', boxSizing: 'border-box' }}
             />
+            {/* What this size is worth per pip — currency pairs only. The blank
+                line on everything else keeps the row from jumping height when
+                the trader switches from EUR/USD to gold or bitcoin. */}
+            {isForex ? (
+              <div style={{ fontSize: 10.5, color: MUTED, marginTop: 4, fontFamily: MONO }} title="What one pip is worth at this size">
+                {perPip == null ? '—' : `${perPipMoney(perPip, account.currency)} / pip`}
+              </div>
+            ) : (
+              <div style={{ height: 15 }} />
+            )}
           </Field>
           <Field label={`Risk (${account.currency})`}>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -320,7 +374,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           </Field>
         </div>
         <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
-          {SIZE_CHIPS.map((n) => (
+          {sizeChipsFor(spec).map((n) => (
             <button key={n} onClick={() => setUnitsText(String(n))} style={chip}>
               {n >= 1000 ? `${n / 1000}k` : n}
             </button>
@@ -334,7 +388,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           <input value={slText} onChange={(e) => setSlText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
           <SubReading
             money={riskMoney}
-            pips={riskDistance == null ? null : Math.abs(riskDistance) / pipSize}
+            pips={!isForex || riskDistance == null ? null : Math.abs(riskDistance) / pipSize}
             ccy={account.currency}
             color={RED}
           />
@@ -343,7 +397,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           <input value={tpText} onChange={(e) => setTpText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
           <SubReading
             money={rewardMoney}
-            pips={rewardDistance == null ? null : Math.abs(rewardDistance) / pipSize}
+            pips={!isForex || rewardDistance == null ? null : Math.abs(rewardDistance) / pipSize}
             ccy={account.currency}
             color={GREEN}
           />
@@ -526,6 +580,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>{children}</div>
     </div>
   );
+}
+
+// Per-pip money, which spans a much wider range than the desk's other figures:
+// a standard lot is $10.00 a pip while a 1-unit connection test is $0.0001, and
+// the shared two-decimal formatter renders that second one as "$0.00". Small
+// values keep four decimals so a tiny size reads as tiny rather than as free.
+// Currency handling matches fmtMoney: USD gets "$", anything else its code.
+function perPipMoney(v: number, ccy: string): string {
+  const digits = Math.abs(v) < 0.01 ? 4 : 2;
+  const abs = Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  return ccy === 'USD' ? `$${abs}` : `${abs} ${ccy}`;
 }
 
 // One side of the book: its price, and the act of choosing it. Selected reads

@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.88';
+export const APP_VERSION = 'Beta V 5.89';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.89',
+    date: 'July 31, 2026',
+    notes: [
+      'The Trade Desk’s size box now tells you what the trade is worth per pip — 10,000 units of EUR/USD reads “$1.00 / pip”, 100,000 reads “$10.00 / pip”. It is worked out from the live quote, so a pair that isn’t quoted in your account currency is converted properly rather than assumed.',
+      'Pips only show up where a pip actually exists. On gold, an index or crypto the desk now shows the raw price move and the money instead of labelling it in pips — the spread and the stop/target readings too, not just the new line.',
+      'The quick-size buttons match the instrument as well: thousands for currency pairs, fractions for anything that trades in fractions, and never a size the broker would reject as too big or too small.',
+    ],
+  },
   {
     version: 'Beta V 5.88',
     date: 'July 31, 2026',

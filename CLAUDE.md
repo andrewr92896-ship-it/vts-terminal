@@ -216,6 +216,18 @@ top of the workspaces list** (see `theme/nav.ts` order).
       one), and any successful action **drops the team's cached desk snapshot**
       (`invalidateDeskSnapshot`) so the trader does not keep seeing the pre-trade
       wall for the rest of its TTL.
+    - **Pips are an FX convention, so the ticket only ever speaks them for a
+      genuine currency pair** — `forexPair(instrument)` (`workspaces/trading/pips.ts`,
+      mirrored server-side in `trading/forex.ts`) is the single test, so the desk
+      agrees with how the Live Wall, Trade Log and History already score a trade.
+      For a pair the Size field reads "$10.00 / pip", the spread reads in pips,
+      and the stop/target read "money · pips"; for gold, an index or crypto those
+      same places show the raw price difference and money only, never an invented
+      unit. The pip's *size* comes from OANDA's own `pipLocation`, not a
+      JPY-or-not guess. The quick-size chips split the same way — thousands for
+      whole-unit instruments, fractions for anything the broker allows a
+      fractional size on, and always bounded by that instrument's min/max order
+      size. Keep this split when adding stocks or another broker.
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
