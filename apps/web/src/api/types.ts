@@ -646,6 +646,10 @@ export interface DeskOrderRecord {
   brokerTradeId: string | null;
   fillPrice: number | null;
   realizedPl: number | null;
+  // What the broker charged on the fill, in account currency. 0 on a
+  // spread-priced account, null when nothing was charged (a resting order, an
+  // amendment, a refusal).
+  commission: number | null;
   errorCode: string | null;
   error: string | null;
   createdAt: number;

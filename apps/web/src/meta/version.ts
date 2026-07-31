@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.90';
+export const APP_VERSION = 'Beta V 5.91';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.91',
+    date: 'July 31, 2026',
+    notes: [
+      'The per-pip figure now shows its own arithmetic when the pair is not quoted in your account currency: USD/JPY at 1,000 units reads “$0.07 / pip = 10.00 JPY”. The pip really is a round ten yen — about seven US cents once converted — and nothing is deducted to get there.',
+      'Beside it, on the right, is what the trade costs to enter: the spread at that size, in your account currency.',
+      'Commission is now recorded from the broker itself and shown on the filled order in Sent orders — including when it is zero, which is the only way to be sure nothing was taken on top of the spread.',
+    ],
+  },
   {
     version: 'Beta V 5.90',
     date: 'July 31, 2026',

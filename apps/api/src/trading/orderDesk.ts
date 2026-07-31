@@ -207,6 +207,10 @@ export interface DeskOrderRecord {
   brokerTradeId: string | null;
   fillPrice: number | null;
   realizedPl: number | null;
+  // What the broker charged on the fill, in account currency. 0 on a
+  // spread-priced account — recorded rather than assumed, since it is the only
+  // authoritative answer to "was anything taken on top of the spread?".
+  commission: number | null;
   errorCode: string | null;
   error: string | null;
   createdAt: number;
@@ -234,6 +238,7 @@ async function journal(
     brokerTradeId: row.brokerTradeId,
     fillPrice: row.fillPrice,
     realizedPl: row.realizedPl,
+    commission: row.commission,
     errorCode: row.errorCode,
     error: row.error,
     createdAt: new Date(),
@@ -263,6 +268,7 @@ export async function recentDeskOrders(userId: string, limit = 40): Promise<Desk
     brokerTradeId: r.brokerTradeId,
     fillPrice: r.fillPrice,
     realizedPl: r.realizedPl,
+    commission: r.commission,
     errorCode: r.errorCode,
     error: r.error,
     createdAt: r.createdAt.getTime(),
@@ -410,6 +416,7 @@ export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<
     takeProfit,
     stopLoss,
     realizedPl: null,
+    commission: null, // replaced with the broker's figure once it fills
   };
 
   try {
@@ -430,6 +437,7 @@ export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<
       brokerOrderId: res.orderId,
       brokerTradeId: res.tradeId,
       fillPrice: res.fillPrice,
+      commission: res.commission,
       errorCode: null,
       error: null,
     });
@@ -507,6 +515,7 @@ export async function closeDeskPosition(user: UserRow, input: CloseInput): Promi
       brokerTradeId: input.tradeId,
       fillPrice: res.price,
       realizedPl: res.realizedPl,
+      commission: res.commission,
       errorCode: null,
       error: null,
     });
@@ -522,6 +531,7 @@ export async function closeDeskPosition(user: UserRow, input: CloseInput): Promi
       brokerTradeId: input.tradeId,
       fillPrice: null,
       realizedPl: null,
+      commission: null,
       errorCode: err?.code ?? null,
       error: message.slice(0, 400),
     });
@@ -561,6 +571,7 @@ export async function modifyDeskPosition(user: UserRow, input: ModifyInput): Pro
     takeProfit: takeProfit ?? null,
     stopLoss: stopLoss ?? null,
     realizedPl: null,
+    commission: null, // amending a level costs nothing
   };
 
   try {
@@ -639,6 +650,7 @@ export async function cancelDeskOrder(
     takeProfit: null,
     stopLoss: null,
     realizedPl: null,
+    commission: null, // cancelling costs nothing
     brokerOrderId: input.orderId,
     brokerTradeId: null,
     fillPrice: null,

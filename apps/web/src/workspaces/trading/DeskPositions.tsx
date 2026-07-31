@@ -375,6 +375,14 @@ export function OrderJournal({ orders, currency }: { orders: DeskOrderRecord[]; 
             <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4, fontFamily: MONO }}>
               {o.fillPrice != null && `at ${fmtPrice(o.fillPrice)} · `}
               {o.realizedPl != null && `${o.realizedPl >= 0 ? '+' : ''}${fmtMoney(o.realizedPl, currency)} · `}
+              {/* What the broker actually charged. Shown even when it is zero:
+                  a spread-priced account reading "$0.00 commission" is the only
+                  authoritative answer to whether anything was taken on top. */}
+              {o.commission != null && (
+                <span title="Commission charged by the broker on this fill">
+                  {`${fmtMoney(o.commission, currency)} commission · `}
+                </span>
+              )}
               {etSince(o.createdAt)}
             </div>
             {o.error && <div style={{ fontSize: 11, color: RED, marginTop: 4 }}>{o.error}</div>}

@@ -165,6 +165,29 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const perStep =
     factor != null && Number.isFinite(units) && units > 0 ? units * step * factor : null;
 
+  // The same figure before conversion, in the currency the instrument is quoted
+  // in, plus that currency's code. Shown beside the converted one whenever the
+  // two differ, because otherwise the converted number looks like something has
+  // been deducted from it: 1,000 units of a JPY pair is a round ¥10 a pip, which
+  // lands at about $0.07 — correct, but unrecognisable without the ¥10 beside
+  // it. Nothing is ever subtracted here; the ticket charges no fee of its own.
+  // Value and currency travel together, so the currency is known wherever the
+  // figure is.
+  const quoteCcy = quoteCurrencyOf(instrument);
+  const native =
+    quoteCcy != null && quoteCcy !== account.currency && Number.isFinite(units) && units > 0
+      ? { value: units * step, ccy: quoteCcy }
+      : null;
+
+  // What crossing the spread costs at this size, in account currency — the real
+  // cost of entering, and on a spread-priced account the whole of it. The
+  // broker's own commission (zero on most OANDA accounts) is only knowable once
+  // it answers, so the filled row in Sent orders carries the charged figure.
+  const spreadCost =
+    quote?.spread != null && factor != null && Number.isFinite(units) && units > 0
+      ? quote.spread * units * factor
+      : null;
+
   // Money at risk / on offer, priced through the quote → account-currency factor
   // rather than assumed. Null whenever a piece is missing, so the ticket shows
   // "—" instead of a confidently wrong number.
@@ -341,14 +364,6 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
               inputMode="numeric"
               style={{ ...input, width: '100%', boxSizing: 'border-box' }}
             />
-            {/* What this size is worth per unit of price movement: per pip on a
-                currency pair, per point on an index, share, metal or coin. */}
-            <div
-              style={{ fontSize: 10.5, color: MUTED, marginTop: 4, fontFamily: MONO }}
-              title={`What one ${stepName} of price movement is worth at this size`}
-            >
-              {perStep == null ? '—' : `${perUnitMoney(perStep, account.currency)} / ${stepName}`}
-            </div>
           </Field>
           <Field label={`Risk (${account.currency})`}>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -372,6 +387,32 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             </div>
           </Field>
         </div>
+
+        {/* What this size is worth per unit of price movement, and what it costs
+            to get into. Full width under both fields so the two sit left and
+            right of each other rather than being squeezed into half a column. */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, marginTop: 5, flexWrap: 'wrap' }}>
+          <span
+            style={{ fontSize: 10.5, color: MUTED, fontFamily: MONO }}
+            title={
+              native != null
+                ? `${units.toLocaleString('en-US')} units × ${step} ${native.ccy} = ${perUnitMoney(native.value, native.ccy)} per ${stepName}, converted to ${account.currency} at the current rate. Nothing is deducted.`
+                : `What one ${stepName} of price movement is worth at this size`
+            }
+          >
+            {perStep == null ? '—' : `${perUnitMoney(perStep, account.currency)} / ${stepName}`}
+            {native != null && (
+              <span style={{ color: FAINT }}>{` = ${perUnitMoney(native.value, native.ccy)}`}</span>
+            )}
+          </span>
+          <span
+            style={{ fontSize: 10.5, color: FAINT, fontFamily: MONO }}
+            title="What crossing the spread costs at this size — the position opens this far behind. Any commission the broker charges on top is shown on the filled order in Sent orders."
+          >
+            {spreadCost == null ? '' : `spread ${perUnitMoney(spreadCost, account.currency)}`}
+          </span>
+        </div>
+
         <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
           {sizeChipsFor(spec).map((n) => (
             <button key={n} onClick={() => setUnitsText(String(n))} style={chip}>
@@ -581,6 +622,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>{children}</div>
     </div>
   );
+}
+
+// The currency an instrument is quoted in — the second half of "USD/JPY". Null
+// for anything not written as a pair (a future share ticker), where there is
+// nothing to convert from and the native figure is simply not shown.
+function quoteCurrencyOf(instrument: string): string | null {
+  const parts = instrument.trim().toUpperCase().split('/');
+  return parts.length === 2 && /^[A-Z]{3}$/.test(parts[1]) ? parts[1] : null;
 }
 
 // A count of pips or points. Thousands are separated (a 1,355-point stop on

@@ -236,6 +236,23 @@ top of the workspaces list** (see `theme/nav.ts` order).
       whole-unit instruments, fractions for anything the broker allows a
       fractional size on, always bounded by that instrument's min/max order size.
       Keep all of this when adding stocks or another broker.
+      - **The pre-conversion figure is shown beside it whenever the instrument's
+        quote currency is not the account's** ("$0.07 / pip = 10.00 JPY").
+        Without it the converted number looks like a deduction: 1,000 units of a
+        JPY pair is a round ¥10 a pip, which lands at ~$0.07 on a USD account,
+        and the obvious reading of a small figure is that a fee came out of it.
+        Nothing is ever netted off these numbers — **the desk charges nothing of
+        its own** — so keep the arithmetic visible rather than explaining it
+        again later.
+      - **Cost is shown in two places, because only one of them is knowable in
+        advance.** The ticket shows the *spread* cost (`spread × units × factor`),
+        which is the whole cost of entry on a spread-priced account. The
+        broker's **commission** is not exposed pre-trade by the v20 API at all,
+        so it is captured from the fill (`orderFillTransaction.commission`),
+        stored on `trading_orders.commission` (migration `0083`) and shown on the
+        filled row in Sent orders — **including when it is zero**, which is the
+        only authoritative answer to "was anything taken on top of the spread?".
+        Do not estimate a commission the broker has not stated.
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.

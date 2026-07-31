@@ -40,6 +40,9 @@ export interface PlaceOrderResult {
   fillPrice: number | null;
   units: number | null;
   time: number | null; // ms epoch
+  // Commission charged on the fill, in account currency. 0 on a spread-priced
+  // account; null when the order only rests on the book (nothing charged yet).
+  commission: number | null;
 }
 
 export interface OandaWorkingOrder {
@@ -198,6 +201,13 @@ interface FillTransaction {
   tradesClosed?: { tradeID?: string; units?: string; price?: string; realizedPL?: string }[];
   tradeReduced?: { tradeID?: string; units?: string; price?: string; realizedPL?: string };
   pl?: string;
+  // What the broker actually charged for this fill, in account currency, and
+  // the half-spread it priced in. OANDA reports commission as a positive
+  // quantity and sends "0" on a spread-priced account — which is worth
+  // recording rather than assuming, since it is the only authoritative answer
+  // to "was I charged anything on top of the spread?".
+  commission?: string;
+  halfSpreadCost?: string;
 }
 
 interface OrderResponse {
@@ -266,6 +276,7 @@ export async function placeOandaOrder(
       fillPrice: num(fill.price),
       units: num(fill.tradeOpened?.units ?? fill.units),
       time: ms(fill.time),
+      commission: num(fill.commission),
     };
   }
   return {
@@ -275,6 +286,7 @@ export async function placeOandaOrder(
     fillPrice: null,
     units: input.units,
     time: ms(json.orderCreateTransaction?.time),
+    commission: null, // nothing is charged until it fills
   };
 }
 
@@ -287,6 +299,8 @@ export interface CloseTradeResult {
   time: number | null;
   // True when only part of the position was closed.
   partial: boolean;
+  // Commission charged on the closing fill, in account currency.
+  commission: number | null;
 }
 
 // Close an open trade — all of it, or `units` of it. OANDA takes "ALL" or a
@@ -317,6 +331,7 @@ export async function closeOandaTrade(
     realizedPl: num(closed?.realizedPL ?? reduced?.realizedPL ?? fill.pl),
     time: ms(fill.time),
     partial: !closed && !!reduced,
+    commission: num(fill.commission),
   };
 }
 

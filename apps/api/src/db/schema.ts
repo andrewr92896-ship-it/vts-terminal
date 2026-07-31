@@ -976,6 +976,10 @@ export const tradingOrders = sqliteTable('trading_orders', {
   brokerTradeId: text('broker_trade_id'),
   fillPrice: real('fill_price'),
   realizedPl: real('realized_pl'), // set on a close
+  // What the broker charged for this fill, in account currency. Recorded rather
+  // than assumed: on a spread-priced account it is 0, and that zero is the only
+  // authoritative answer to "was anything taken on top of the spread?".
+  commission: real('commission'),
   // The broker's refusal reason ("INSUFFICIENT_MARGIN", "MARKET_HALTED", ...)
   // alongside the message shown to the trader.
   errorCode: text('error_code'),
