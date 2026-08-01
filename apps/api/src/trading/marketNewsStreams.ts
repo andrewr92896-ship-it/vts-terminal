@@ -131,6 +131,26 @@ const SEED_CHANNELS: CatalogChannel[] = [
   { key: 'reuters', name: 'Reuters', handle: '@Reuters', channelId: '', alwaysOn: true },
 ];
 
+// Channels known to refuse embedded playback, by channel id.
+//
+// The automatic route is `playableInEmbed` on the page (see `embeddableFrom`),
+// and it stays the general mechanism. This list is for the case where YouTube
+// does not state the flag anywhere we can read but the refusal is established
+// beyond doubt by observation.
+//
+// **Bloomberg Television** is here on direct evidence: its tile rendered "This
+// video is unavailable" through *both* embed routes — the channel embed and a
+// resolved video id — across several deploys, while Yahoo Finance played through
+// the identical code path each time, and the wall independently reported
+// Bloomberg as live throughout. That isolates it to the broadcaster's own embed
+// restriction. Without this the tile shows YouTube's bare error box, which reads
+// as a fault in the portal rather than a setting at Bloomberg.
+//
+// Remove an entry the moment a channel starts allowing embedding again — this is
+// a statement of fact about a channel, not a preference. Nothing here attempts
+// to work around the restriction; it only changes what the trader is told.
+const EMBED_RESTRICTED_CHANNELS = new Set<string>(['UCIALMKvObZNtJ6AmdCLP7Lg']);
+
 // How many channels one desk may follow. Not a quota limit — watching is free —
 // but a guard against a runaway list, and past this the LIVE badge on any one
 // channel refreshes too slowly to be worth much.
@@ -265,6 +285,7 @@ function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): Market
         handle: displayHandle(c.handle),
         live: false,
         ...live,
+        ...(EMBED_RESTRICTED_CHANNELS.has(channelId) ? { embedBlocked: true } : {}),
       };
       // Two independent routes to a playable tile, on purpose — this wall has to
       // work for a Fed press conference that happens eight times a year and
@@ -291,7 +312,7 @@ function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): Market
         liveVideoId: video.videoId ?? live?.videoId,
         upcoming: video.upcoming,
         live: video.live,
-        embedBlocked: video.embeddable === false,
+        embedBlocked: video.embeddable === false || base.embedBlocked === true,
         liveChecked: true,
         streamTitle: video.title ?? base.streamTitle,
       };

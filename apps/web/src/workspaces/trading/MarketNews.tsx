@@ -928,22 +928,24 @@ const inputStyle: CSSProperties = {
 function FedMeetingCard({ fomc, now }: { fomc: FomcSchedule; now: number }) {
   const next = nextMeetingStamp(now, fomc.meetings, fomc.meetingYear);
   const prev = prevMeetingStamp(now, fomc.meetings, fomc.meetingYear);
+  // Four tiles across leaves each one about 280px wide, so this has to fit a
+  // ~155px-tall box. Everything here is sized to survive that: no explanatory
+  // sentence (it wrapped to three lines and pushed the card over its own
+  // footer), tight gaps, and `clamp` so the countdown grows on a wide tile
+  // without blowing out a narrow one.
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, textAlign: 'center' }}>
-      <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: C.faint }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 5, padding: '10px 12px', textAlign: 'center', overflow: 'hidden' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.1px', color: C.faint, whiteSpace: 'nowrap' }}>
         Next FOMC decision
       </div>
-      <div style={{ fontFamily: C.mono, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1 }}>
+      <div style={{ fontFamily: C.mono, fontSize: 'clamp(18px, 7cqw, 28px)', fontWeight: 700, color: C.gold, lineHeight: 1.05, whiteSpace: 'nowrap' }}>
         {countdown(next - now)}
       </div>
-      <div style={{ fontSize: 11.5, color: C.muted }}>
+      <div style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>
         {etDay(next)} · 2:00 PM ET
       </div>
-      <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>
+      <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.4 }}>
         Last decision {etDay(prev)} · {agoLabel(now - prev)}
-      </div>
-      <div style={{ fontSize: 10, color: C.faint, maxWidth: 280, lineHeight: 1.5 }}>
-        This tile starts playing on its own when the Fed goes live.
       </div>
     </div>
   );
@@ -988,7 +990,10 @@ function StreamTile({
   const showFedCard = !!fomc && isFedChannel(c) && !c.live && (!canEmbed || (!liveKnown(c) && !fedWindow));
   return (
     <div style={{ background: C.panel, borderRadius: 12, overflow: 'hidden', border: `1px solid ${c.live ? tint(C.red, 0.35) : C.line}` }}>
-      <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18' }}>
+      {/* The 16:9 media box. `overflow: hidden` is load-bearing: a card inside it
+          that runs long must be clipped, not allowed to spill over the tile's own
+          caption below. `containerType` gives the card a width to size against. */}
+      <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18', overflow: 'hidden', containerType: 'inline-size' }}>
         {c.embedBlocked ? (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, textAlign: 'center' }}>
             <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: '#fff', background: C.red, borderRadius: 4, padding: '2px 6px' }}>

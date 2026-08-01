@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.05';
+export const APP_VERSION = 'Beta V 6.06';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.06',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed the Federal Reserve countdown overlapping the tile’s own name when four streams are open side by side.',
+      'Bloomberg Television’s tile now shows “Live now — this channel does not allow its stream to play outside YouTube” with a Watch on YouTube button, instead of the “This video is unavailable” box. Bloomberg blocks embedding on their end; no website can play that stream, so the tile now says so rather than looking broken.',
+    ],
+  },
   {
     version: 'Beta V 6.05',
     date: 'August 1, 2026',
