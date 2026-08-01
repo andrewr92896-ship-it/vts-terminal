@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.96';
+export const APP_VERSION = 'Beta V 5.97';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.97',
+    date: 'August 1, 2026',
+    notes: [
+      'Market News: removed the “N streams open” count from the live streams header — the open streams are right there on screen.',
+    ],
+  },
   {
     version: 'Beta V 5.96',
     date: 'August 1, 2026',
