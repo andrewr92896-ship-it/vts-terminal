@@ -8,6 +8,38 @@ longer exist) — trust this file and the code, not the README.
 > When you change how the portal works, update the relevant part of this file
 > in the same change so it never goes stale.
 
+## Before you touch anything: confirm this is the live checkout
+
+The portal is worked on from **more than one machine**, and the single most
+expensive mistake made in this repo was a session that edited a **stale clone**
+for hours while believing it was the live site. It never checked, and it could
+not find out: the clone sat in a cloud-sync folder where `git fetch` hangs
+outright, and the preview it "verified" against served those same stale files,
+so every check it ran confirmed the wrong thing.
+
+`.claude/hooks/session-start.sh` prints this automatically at the start of every
+session. If it says **STOP**, believe it — but the checks are simple enough to
+run by hand, and they are worth knowing:
+
+- **Remote** is `andrewr92896-ship-it/vts-portal`. Anything else is the wrong
+  repo.
+- **`APP_VERSION`** in `apps/web/src/meta/version.ts` reads `Beta V …`. A
+  `Pre-Alpha` or `Stage N` version means an old checkout — the live app left
+  those behind long ago.
+- **History is deep.** A real clone has dozens of commits; the bad one had one.
+- **The path is on local disk.** A checkout inside OneDrive, Dropbox, Google
+  Drive or iCloud will corrupt itself — those services rewrite files underneath
+  git. Never work in one, and never try to repair one: clone fresh to local disk.
+
+Then, before editing: `git fetch origin main && git log --oneline -1 origin/main`
+and confirm you are working from that. `main` is the only branch that deploys.
+
+**Ask rather than guess** about anything local that is not in the repo — whether
+a working `apps/api/.env` or database already exists, and how to sign in for
+testing. A previous session invented credentials and seeded its own database
+because it did not ask. There is a read-only **demo account** for looking at the
+app without creating anything.
+
 ## What the portal is
 
 VTS Portal ("Vitalis Trading Systems") is a **private, dark "pro-terminal" web

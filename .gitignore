@@ -29,5 +29,12 @@ npm-debug.log*
 .idea/
 *.swp
 
-# Local Claude Code tooling config
-.claude/
+# Claude Code config. Personal/per-machine settings stay local, but the
+# session-start guard and the settings that register it are SHARED on purpose:
+# the portal is worked on from more than one machine, and a check that only
+# exists on one of them is exactly how a session ended up editing a stale clone.
+.claude/*
+!.claude/hooks/
+!.claude/settings.json
+.claude/settings.local.json
+.claude/launch.json
