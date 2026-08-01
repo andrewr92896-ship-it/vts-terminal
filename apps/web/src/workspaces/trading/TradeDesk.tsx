@@ -4,11 +4,18 @@ import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { BrokerConnections } from './BrokerConnections';
-import { OrderTicket } from './OrderTicket';
-import { OrderJournal, TeamPositions, WorkingOrders } from './DeskPositions';
+import { OrderTicket, type TicketPrefill } from './OrderTicket';
+import { Holdings, OrderJournal, TeamPositions, WorkingOrders } from './DeskPositions';
 import { ScreenTitle } from './ScreenTitle';
 import { fmtMoney } from './TradeCard';
-import type { DeskAccount, DeskInstrument, DeskOrderRecord, DeskWorkingOrder, LiveWall } from '../../api/types';
+import type {
+  DeskAccount,
+  DeskHolding,
+  DeskInstrument,
+  DeskOrderRecord,
+  DeskWorkingOrder,
+  LiveWall,
+} from '../../api/types';
 
 // The Trade Desk — where a trade is *placed*, not reviewed. (Reviewing past
 // trades is Trade Analysis, the screen this one used to share a name with.)
@@ -71,7 +78,9 @@ export function TradeDesk() {
   const [instrument, setInstrument] = useState<string>(loadPrefs().instrument ?? 'EUR/USD');
   const [wall, setWall] = useState<LiveWall | null>(null);
   const [working, setWorking] = useState<DeskWorkingOrder[]>([]);
+  const [holdings, setHoldings] = useState<DeskHolding[]>([]);
   const [journal, setJournal] = useState<DeskOrderRecord[]>([]);
+  const [prefill, setPrefill] = useState<TicketPrefill | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [instrumentError, setInstrumentError] = useState<string | null>(null);
   const [hideMoney, setHideMoney] = useState(false);
@@ -111,9 +120,24 @@ export function TradeDesk() {
   }, []);
 
   const loadOrders = useCallback(async () => {
-    const [w, j] = await Promise.allSettled([api.deskWorkingOrders(), api.deskOrderJournal()]);
+    const [w, h, j] = await Promise.allSettled([
+      api.deskWorkingOrders(),
+      api.deskHoldings(),
+      api.deskOrderJournal(),
+    ]);
     if (w.status === 'fulfilled') setWorking(w.value.orders);
+    if (h.status === 'fulfilled') setHoldings(h.value.holdings);
     if (j.status === 'fulfilled') setJournal(j.value.orders);
+  }, []);
+
+  // Selling a holding fills the ticket in rather than sending anything: the
+  // instrument, the side and the whole free size, waiting on the same review and
+  // confirm every other order goes through.
+  const sellHolding = useCallback((h: DeskHolding) => {
+    if (!h.instrument) return;
+    setConnectionId(h.connectionId);
+    setInstrument(h.instrument);
+    setPrefill({ side: 'short', units: Math.max(0, h.units - h.onOrder), token: Date.now() });
   }, []);
 
   useEffect(() => {
@@ -208,10 +232,14 @@ export function TradeDesk() {
                 background: a.connectionId === connectionId ? 'rgba(235,203,116,.08)' : PANEL,
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: TEXT }}>{a.label}</span>
                 <span style={a.env === 'live' ? livePill : practicePill}>{a.env === 'live' ? 'LIVE' : 'PRACTICE'}</span>
               </div>
+              {/* The venue, on its own line and never abbreviated away: the desk
+                  now trades at more than one, and which one an account is at
+                  changes what the ticket beside it can do. */}
+              <div style={{ fontSize: 9, color: FAINT, letterSpacing: '.5px', marginBottom: 3 }}>{venueName(a)}</div>
               <div style={{ fontSize: 9, color: FAINT, letterSpacing: '.5px' }}>{"ACCOUNT VALUE"}</div>
               <div style={{ fontFamily: MONO, fontSize: 15, fontWeight: 700, color: a.ok ? TEXT : FAINT }}>
                 {money ? '•••' : a.nav == null ? '—' : fmtMoney(a.nav, a.currency)}
@@ -229,7 +257,10 @@ export function TradeDesk() {
         <div style={{ ...panel, marginBottom: 14 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>{"No tradeable account connected"}</div>
           <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 12 }}>
-            {"The Trade Desk places orders through your own OANDA account. Add your OANDA API token and account ID under Connections and it will appear here. Your key is encrypted on the server and never sent to the browser."}
+            {"The Trade Desk places orders through your own broker account — OANDA for forex, Kraken for crypto. Add one under Connections and it will appear here. Your keys are encrypted on the server and never sent to the browser."}
+          </div>
+          <div style={{ fontSize: 11.5, color: FAINT, lineHeight: 1.6, marginBottom: 12 }}>
+            {"A Kraken key needs the ‘Query funds’, ‘Query open orders & trades’ and ‘Create & modify orders’ permissions. It does not need margin trading, and the desk never asks Kraken for leverage."}
           </div>
           {!readOnly && <button onClick={() => setConnOpen(true)} style={goldBtn}>{"Add a connection"}</button>}
         </div>
@@ -253,6 +284,7 @@ export function TradeDesk() {
               onInstrument={setInstrument}
               readOnly={readOnly}
               onPlaced={afterAction}
+              prefill={prefill}
             />
           ) : accounts === null ? (
             <Notice tone="muted">{"Loading your accounts…"}</Notice>
@@ -272,6 +304,7 @@ export function TradeDesk() {
             onPick={setInstrument}
             onChanged={afterAction}
           />
+          <Holdings holdings={holdings} hideMoney={money} readOnly={readOnly} onSell={sellHolding} />
           <WorkingOrders orders={working} readOnly={readOnly} onChanged={afterAction} />
           <OrderJournal orders={journal} currency={currency} />
         </div>
@@ -286,14 +319,23 @@ export function TradeDesk() {
   );
 }
 
+// Which venue an account is at, in the name a trader would use for it.
+function venueName(a: DeskAccount): string {
+  if (a.broker === 'oanda') return 'OANDA · FOREX';
+  if (a.broker === 'kraken') return 'KRAKEN · CRYPTO SPOT';
+  return a.broker.toUpperCase();
+}
+
 // The line under an account's value. Free margin is only worth printing once
 // something is using margin — on a flat account it equals the account value
 // exactly, and the card read "$937.04 … $937.04 free", which looks like a bug.
+// A spot account has no open trades to count: what it has is coins.
 function accountMeta(a: DeskAccount, hideMoney: boolean): string {
-  const parts = [`••${a.accountTail}`, `${a.openTradeCount ?? 0} open`];
+  const held = a.openTradeCount ?? 0;
+  const parts = [`••${a.accountTail}`, a.spot ? `${held} held` : `${held} open`];
   const free = a.marginAvailable;
   if (!hideMoney && free != null && (a.nav == null || Math.abs(free - a.nav) >= 0.01)) {
-    parts.push(`${fmtMoney(free, a.currency)} free`);
+    parts.push(`${fmtMoney(free, a.currency)} ${a.spot ? 'cash' : 'free'}`);
   }
   return parts.join(' · ');
 }

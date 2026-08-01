@@ -1,17 +1,22 @@
 import { useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import { fmtMoney, fmtPrice } from './TradeCard';
+import { fmtMoney, fmtPrice, fmtUnits } from './TradeCard';
 import { TradeTimesCell, etSince } from './tradeTime';
-import type { DeskOrderRecord, DeskWorkingOrder, LiveTrade } from '../../api/types';
+import type { DeskHolding, DeskOrderRecord, DeskWorkingOrder, LiveTrade } from '../../api/types';
 
-// The three panels that sit beside the Trade Desk's ticket:
+// The panels that sit beside the Trade Desk's ticket:
 //
 //   • Desk right now — every open position on the trader's TEAM, theirs and
 //     their teammates', so an order is placed knowing what the desk already
 //     holds. Teammates' rows are watch-only; the trader's own carry Close and
 //     Stop/Target controls.
+//   • Holdings — what the trader's crypto accounts actually own. Spot has no
+//     position to close: a buy leaves a balance, so this is the crypto
+//     equivalent of an open trade, and selling one loads the ticket rather than
+//     firing its own order (the review step is the point).
 //   • Working orders — the resting limit/stop orders on the trader's own
-//     accounts, with cancel.
+//     accounts, with cancel. Hidden entirely when there are none, so an empty
+//     box never sits on the screen.
 //   • Sent orders — the journal, including the rejected attempts, which is the
 //     only place a refused order is visible at all.
 //
@@ -194,7 +199,7 @@ function PositionRow({
           {trade.instrument}
         </button>
         <span style={{ ...sidePill, color: long ? GREEN : RED, borderColor: long ? 'rgba(53,196,123,.4)' : 'rgba(239,84,104,.4)' }}>
-          {long ? 'LONG' : 'SHORT'} {trade.units.toLocaleString('en-US')}
+          {long ? 'LONG' : 'SHORT'} {fmtUnits(trade.units)}
         </span>
         <span style={{ flex: 1 }} />
         <span style={{ textAlign: 'right', fontFamily: MONO, fontSize: 12 }}>
@@ -283,6 +288,62 @@ function PositionRow({
   );
 }
 
+// ---- holdings (spot / crypto accounts) ----
+
+export function Holdings({
+  holdings,
+  hideMoney,
+  readOnly,
+  onSell,
+}: {
+  holdings: DeskHolding[];
+  hideMoney: boolean;
+  readOnly: boolean;
+  // Load a sale of this holding into the ticket. Deliberately not a one-click
+  // sell: it goes through the same review-and-confirm the rest of the desk does.
+  onSell: (holding: DeskHolding) => void;
+}) {
+  if (holdings.length === 0) return null;
+  const total = holdings.reduce((sum, h) => sum + (h.value ?? 0), 0);
+  const currency = holdings[0]?.currency ?? 'USD';
+
+  return (
+    <div style={panel}>
+      <PanelHead title="Holdings" hint={hideMoney ? `${holdings.length} held` : `${fmtMoney(total, currency)} held`} />
+      {holdings.map((h) => (
+        <div key={`${h.connectionId}:${h.asset}`} style={{ ...row, borderLeft: `2px solid ${GOLD}` }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 13, color: TEXT }}>{h.asset}</span>
+            <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED }}>{fmtUnits(h.units)}</span>
+            {h.staked && (
+              <span style={{ ...sidePill, color: MUTED, borderColor: BORDER2 }}>{"STAKED"}</span>
+            )}
+            <span style={{ flex: 1 }} />
+            <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 700, color: TEXT }}>
+              {hideMoney ? '•••' : h.value == null ? '—' : fmtMoney(h.value, h.currency)}
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 5, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10.5, color: FAINT, fontFamily: MONO }}>
+              {h.price == null ? h.connectionLabel : `${h.connectionLabel} · ${fmtPrice(h.price)}`}
+              {h.onOrder > 0 && ` · ${fmtUnits(h.onOrder)} on order`}
+            </span>
+            <span style={{ flex: 1 }} />
+            {!readOnly && h.instrument && (
+              <button onClick={() => onSell(h)} style={miniBtn} title="Fill the ticket in to sell this holding">
+                {"Sell"}
+              </button>
+            )}
+          </div>
+        </div>
+      ))}
+      <div style={{ fontSize: 10, color: FAINT, marginTop: 4, lineHeight: 1.5 }}>
+        {"Spot coins are held, not positioned — selling one is an ordinary order, so Sell fills the ticket in and waits for you to confirm."}
+      </div>
+    </div>
+  );
+}
+
 // ---- working (resting) orders ----
 
 export function WorkingOrders({
@@ -296,6 +357,11 @@ export function WorkingOrders({
 }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Nothing resting means nothing to manage, so the panel is not drawn at all
+  // rather than sitting there empty. It reappears the moment a limit or stop
+  // order is working — which is the only way to see or cancel one.
+  if (orders.length === 0) return null;
 
   const cancel = async (o: DeskWorkingOrder) => {
     setBusyId(o.id);
@@ -312,8 +378,7 @@ export function WorkingOrders({
 
   return (
     <div style={panel}>
-      <PanelHead title="Working orders" hint={orders.length ? `${orders.length} resting` : undefined} />
-      {orders.length === 0 && <Empty>{"No resting orders on your accounts."}</Empty>}
+      <PanelHead title="Working orders" hint={`${orders.length} resting`} />
       {orders.map((o) => {
         const long = o.units >= 0;
         return (
@@ -321,7 +386,7 @@ export function WorkingOrders({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span style={{ fontFamily: MONO, fontWeight: 700, fontSize: 12.5 }}>{o.instrument}</span>
               <span style={{ ...sidePill, color: long ? GREEN : RED, borderColor: long ? 'rgba(53,196,123,.4)' : 'rgba(239,84,104,.4)' }}>
-                {o.type} {Math.abs(o.units).toLocaleString('en-US')}
+                {o.type} {fmtUnits(Math.abs(o.units))}
               </span>
               <span style={{ fontFamily: MONO, fontSize: 12, color: MUTED }}>@ {fmtPrice(o.price)}</span>
               <span style={{ flex: 1 }} />
@@ -360,7 +425,7 @@ export function OrderJournal({ orders, currency }: { orders: DeskOrderRecord[]; 
               <span style={{ fontFamily: MONO, fontSize: 12.5, fontWeight: 700 }}>{o.instrument}</span>
               <span style={{ fontSize: 11, color: MUTED }}>
                 {o.kind === 'entry'
-                  ? `${o.side === 'long' ? 'Buy' : 'Sell'} ${o.units?.toLocaleString('en-US') ?? ''} · ${o.orderType}`
+                  ? `${o.side === 'long' ? 'Buy' : 'Sell'} ${o.units == null ? '' : fmtUnits(o.units)} · ${o.orderType}`
                   : o.kind === 'close'
                     ? 'Close'
                     : o.kind === 'modify'

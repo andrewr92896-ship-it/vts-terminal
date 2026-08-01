@@ -237,9 +237,7 @@ export async function addConnection(
   userId: string,
   input: { broker: BrokerConnectionKind; label: string; creds: Record<string, unknown> },
 ): Promise<void> {
-  const label =
-    str(input.label) ||
-    (input.broker === 'oanda' ? 'OANDA' : input.broker === 'manual' ? 'Manual' : 'Kraken');
+  const label = str(input.label) || defaultConnectionLabel('', input.broker);
   const creds = normalizeCreds(input.broker, input.creds);
   const now = new Date();
   await db.insert(brokerConnections).values({
@@ -353,11 +351,31 @@ export async function hasAnyConnection(userId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-// Seed "Andrew's Trades" from the existing global env keys for a given user, if
-// they have no connections yet. Lets the current env-based setup keep working
-// after the move to per-user connections. Idempotent.
+// A connection's default name says **whose** it is and **where** it is:
+// "Andrew's OANDA", "Andrew's Kraken". A desk carries several accounts across
+// several venues, and a label that only names the owner ("Andrew's Trades")
+// leaves two chips on the Live Wall that cannot be told apart. Keep this format
+// for any venue added later.
+export function defaultConnectionLabel(owner: string, broker: BrokerConnectionKind): string {
+  const venue = broker === 'oanda' ? 'OANDA' : broker === 'kraken' ? 'Kraken' : 'Manual';
+  const name = owner.trim();
+  if (!name) return venue;
+  // "Andrew" → "Andrew's"; "Chris" → "Chris'".
+  const possessive = name.endsWith('s') ? `${name}’` : `${name}’s`;
+  return `${possessive} ${venue}`;
+}
+
+// Seed the owner's connections from the existing global env keys, if they have
+// none yet. Lets the current env-based setup keep working after the move to
+// per-user connections. Idempotent.
 export async function seedConnectionsFromEnv(userId: string): Promise<void> {
   if (await hasAnyConnection(userId)) return;
+
+  const owner = (
+    await db.select({ name: users.displayName, username: users.username }).from(users).where(eq(users.id, userId)).limit(1)
+  )[0];
+  // Just the first name — "Andrew Roberts's OANDA" is a chip nobody can read.
+  const who = (owner?.name || owner?.username || '').trim().split(/\s+/)[0] ?? '';
 
   const env = (n: string) => {
     const v = process.env[n];
@@ -369,7 +387,7 @@ export async function seedConnectionsFromEnv(userId: string): Promise<void> {
   if (oandaToken && oandaAccount) {
     await addConnection(userId, {
       broker: 'oanda',
-      label: "Andrew's Trades",
+      label: defaultConnectionLabel(who, 'oanda'),
       creds: { token: oandaToken, accountId: oandaAccount, env: oandaEnv },
     });
   }
@@ -378,10 +396,8 @@ export async function seedConnectionsFromEnv(userId: string): Promise<void> {
   const krakenSecret = env('KRAKEN_API_SECRET');
   if (krakenKey && krakenSecret) {
     await addConnection(userId, {
-      // Distinct from the OANDA seed above so the two never render as identical
-      // "Andrew's Trades" chips on the shared Live Wall.
       broker: 'kraken',
-      label: "Andrew's Crypto",
+      label: defaultConnectionLabel(who, 'kraken'),
       creds: { apiKey: krakenKey, apiSecret: krakenSecret },
     });
   }

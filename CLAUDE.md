@@ -69,8 +69,12 @@ Agreed **lowest-liability** shape for that public launch (research done 2026-07)
     the case for **E&O / tech / cyber insurance**.
   - **Broker credential custody stops being optional to think about.** A
     read-only key can no longer be the default advice for OANDA, because the desk
-    needs a trading token. Kraken stays query-only (no order path is built for
-    it) and must stay that way unless this is revisited again.
+    needs a trading token. **Kraken now needs an order-capable key too** (owner
+    decision, 2026-08 — the crypto desk), but only a **spot** one: the connector
+    never sends `leverage`, so the key needs Query funds, Query open orders &
+    trades and Create & modify orders, and explicitly **not** margin trading.
+    Keep that narrowing — it is what bounds the worst case on a leaked key to
+    the cash and coins in the account, with no liquidation path.
   (None of this is legal advice.)
 - **Native shell = Capacitor wrap of the existing React app + a native SwiftUI
   WidgetKit extension** (widgets are always native Swift; no web/PWA widget exists
@@ -110,7 +114,7 @@ Tech:
 
 - **DB:** SQLite via **Drizzle ORM** on the **libsql** driver (`@libsql/client`);
   file at `DATABASE_URL` (default `file:./data/vts.db`; prod uses a Railway
-  volume). Schema in `apps/api/src/db/schema.ts`; ~83 SQL migrations in
+  volume). Schema in `apps/api/src/db/schema.ts`; ~86 SQL migrations in
   `apps/api/migrations` (`db:migrate`), seed with `db:seed`. Per-user deletes
   are **explicit** in `admin/service.ts` (no `ON DELETE CASCADE`) — when you add
   a per-user table, add it to that delete list too.
@@ -182,12 +186,22 @@ workspaces list** (see `theme/nav.ts` order).
   and in-app links keep working.
   - **Trade Desk** (`tradedesk`, `workspaces/trading/TradeDesk.tsx` +
     `OrderTicket.tsx` + `DeskPositions.tsx`) is where a trade is **placed**. It
-    sends real orders to the trader's **own** OANDA account: market / limit /
-    stop, with a stop-loss and take-profit attached on fill, plus closing (whole
-    or partial), amending a live trade's stop/target, and cancelling a resting
-    order. Beside the ticket sits the desk's open book — every position the
-    trader's **team** currently holds — so a trade is sized knowing what the desk
-    is already in.
+    sends real orders to the trader's **own** accounts at **two venues — OANDA
+    (forex, margin) and Kraken (crypto, spot)**: market / limit / stop, with
+    protective orders attached on fill, plus closing (whole or partial), amending
+    a live trade's stop/target, and cancelling a resting order. Beside the ticket
+    sits the desk's open book — every position the trader's **team** currently
+    holds — so a trade is sized knowing what the desk is already in.
+    - **One desk, two venue models, and the difference is declared not sniffed.**
+      OANDA's model is a *trade*: an object with an id, a stop and a target
+      attached, closed by that id. Kraken spot has no such object — a buy leaves
+      a **balance**, and a protective order is a separate order the exchange
+      places when the entry fills. `trading/deskBrokers.ts` is the adapter layer
+      that states what each venue can do (`spot`, `maxProtectiveOrders`,
+      `canAmendProtection`) and normalizes the rest; `trading/orderDesk.ts` is
+      pure policy — who may trade, what is validated, what is journalled, what is
+      refused — and is broker-agnostic. **A third venue is a new adapter, not new
+      conditionals in orderDesk.** Do not reintroduce per-broker branching there.
     - **The split in what the two halves may do is the design.** *Watching* is
       team-wide: the book is the same team-scoped `/api/trading/live` feed every
       other screen reads, so the visibility boundary stays defined once
@@ -198,28 +212,69 @@ workspaces list** (see `theme/nav.ts` order).
       "act on behalf of" path here; a desk lead editing a teammate's *settings*
       (below) is a different thing entirely from placing their trades.
     - **Server:** `trading/orderDesk.ts` (validation, journaling, the personal
-      boundary) over `trading/brokers/oandaOrders.ts` (the only file that can
-      trade — `brokers/oanda.ts` stays read-only). Routes are their own file,
+      boundary) over `trading/deskBrokers.ts` (the adapters) over the two write
+      connectors — `brokers/oandaOrders.ts` and `brokers/krakenOrders.ts`. Those
+      two are **the only files that can trade**; `brokers/oanda.ts` and
+      `brokers/kraken.ts` stay read-only, and `brokers/krakenClient.ts` holds the
+      signing/nonce/transport both Kraken files share (it knows how to sign a
+      request, not which paths exist). Routes are their own file,
       `routes/tradeDesk.ts` under `/api/trading/desk/*`: reads behind
       `requireWorkspace('trading')`, **every write behind
       `requireWorkspaceWrite`** so `trading_viewer` is read-only here too, and
       the demo refused twice (demoGuard blocks every non-GET; `refuseDemo` in the
       service is the second lock, deliberately, on the one surface that moves
       money).
-    - **OANDA answers `201 Created` even when it immediately cancels the order**
-      (insufficient margin, market halted, an unfillable FOK). Reading `res.ok`
-      as success reports a position that does not exist — so an
-      `orderCancelTransaction` in the body is raised as an error. Keep that.
+    - **Both venues lie about success in their own way, and both are handled.**
+      **OANDA answers `201 Created` even when it immediately cancels the order**
+      (insufficient margin, market halted, an unfillable FOK), so an
+      `orderCancelTransaction` in the body is raised as an error. **Kraken answers
+      HTTP `200` to a refusal**, with the reason in an `error` array — checked
+      before the status, once, in `krakenClient.ts`, so no caller can skip it —
+      **and its `AddOrder` returns a transaction id rather than a fill**, so
+      `placeKrakenOrder` asks `QueryOrders` what actually happened before it
+      reports anything. In all three cases reading the obvious success signal
+      would put a position on the desk that the account does not hold. Keep them.
     - **Every attempt is journalled** to `trading_orders` (migration `0082`),
       including the refusals with the broker's own reason — a rejected order
       never becomes a position, so this is the only record it happened. Rows are
       append-only and in the `admin/service.ts` per-user delete list.
+    - **Kraken is spot-only, deliberately, and that is a safety property rather
+      than an omission.** No request built in `krakenOrders.ts` ever sends
+      `leverage`, so the desk cannot open a margin position on Kraken, cannot be
+      liquidated there, and the API key needs no margin permission. A "sell" is a
+      sale of coins the account already holds; there is no short. Kraken **margin**
+      positions still reach the Live Wall through the read connector, but stay
+      **watch-only** on the desk — `close` and `amend` refuse them by name, and
+      `DeskPositions` only offers controls on an `oanda` row. Do not add a
+      leverage path without revisiting the liability note above.
+    - **Spot holdings are the crypto answer to "what am I in".** A spot buy leaves
+      a balance, not a position, so `GET /api/trading/desk/holdings` reports what
+      each spot account owns (priced live, with the part locked by resting orders,
+      staked balances marked and unsellable) and the **Holdings** panel renders
+      it. Selling one deliberately **loads the ticket** rather than firing its own
+      order — the review-and-confirm step is the point, and it means the desk
+      gains no second write path. Keep that.
+    - **Kraken attaches exactly one protective order to an entry** (`close[…]`,
+      its conditional close; spot REST has no bracket/OCO). A ticket carrying both
+      a stop and a target is **refused**, on the server and mirrored in the ticket.
+      The two tempting alternatives are both worse: dropping one silently leaves a
+      live position without the protection the trader thought they set, and placing
+      the second as a free-standing order leaves it working after the first
+      triggers — with nothing to cancel it, that order opens a brand-new position
+      on its own.
     - **Order validity is checked against the instrument's own spec**
-      (`/v3/accounts/{id}/instruments`: price precision, size precision, minimum
-      and maximum size), cached 10 min per connection. An over-precise price is
-      rejected outright by OANDA, so the rounding is validation, not tidying.
-      Protective levels are checked against the price the order will actually
-      transact at — the **ask** for a buy, the **bid** for a sell — not the mid.
+      (OANDA `/v3/accounts/{id}/instruments`, Kraken `/0/public/AssetPairs`: price
+      precision, size precision, tick size, minimum and maximum size), cached
+      10 min — per connection for OANDA (an entity may not offer every
+      instrument), once install-wide for Kraken (the list is public and identical
+      for everybody, with the in-flight request shared so a desk opening does not
+      fetch the whole exchange four times). An over-precise price is rejected
+      outright by both, so the rounding is validation, not tidying. Kraken also
+      enforces a minimum order **value** (`costmin`) that a size above the size
+      floor can still fall below, so that is checked too. Protective levels are
+      checked against the price the order will actually transact at — the **ask**
+      for a buy, the **bid** for a sell — not the mid, and a **stop entry** is
+      checked to be on the far side of the market (above to buy, below to sell).
     - Two guards worth keeping: identical entry tickets inside a **5-second
       window** are refused (a double-click at a broker means two positions, not
       one), and any successful action **drops the team's cached desk snapshot**
@@ -234,7 +289,7 @@ workspaces list** (see `theme/nav.ts` order).
       - A **pair** speaks pips: "$10.00 / pip", a spread in `PIPS`, stop/target
         as "money · pips". The pip's *size* comes from OANDA's own `pipLocation`,
         not a JPY-or-not guess.
-      - **Everything else** — indices, shares, metals, crypto — speaks points,
+      - **Everything else** — indices, shares, metals, **crypto** — speaks points,
         where a point is **one whole unit of price** (5,000 → 5,001; a dollar of
         share price): "$10.00 / point", a spread in `PTS`, "money · pts".
         Deliberately *not* that instrument's `pipLocation`, which OANDA reports
@@ -243,8 +298,13 @@ workspaces list** (see `theme/nav.ts` order).
       Never label a non-pair's movement in pips; never size a point from
       `pipLocation`. The quick-size chips split on a related axis — thousands for
       whole-unit instruments, fractions for anything the broker allows a
-      fractional size on, always bounded by that instrument's min/max order size.
-      Keep all of this when adding stocks or another broker.
+      fractional size on, and on a **spot** account **amounts of money** ($100 …
+      $5,000, converted at the live price when pressed), because "$500 of bitcoin"
+      is how a coin is actually bought. Always bounded by that instrument's
+      min/max order size and minimum order value. Sizes render through `fmtUnits`
+      (`TradeCard.tsx`), which keeps more decimals the smaller the size — the
+      default locale format prints 0.00042 of a bitcoin as "0". Keep all of this
+      when adding stocks or another broker.
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
@@ -701,10 +761,28 @@ control — the server is still the enforcer.
     file that can trade is one small, auditable unit — add order-placement code
     here, never to the read connector.
 
-  Kraken and TradeStation/FTP connectors exist but the self-service connection UI
-  only supports `oanda | kraken | manual`, and **only OANDA has an order path** —
-  Kraken stays read-only (query-only keys), which is a deliberate posture, not an
-  omission.
+- **Kraken — three files, split the same way.** `brokers/krakenClient.ts` is the
+  shared transport (signing, a **monotonic per-process nonce** — Kraken refuses
+  any nonce not higher than the last it saw per key, and a desk fires several
+  calls at once — timeouts, and the error decoding that reads the `error` array
+  before the HTTP status). `brokers/kraken.ts` is the **read** side: open
+  **margin** positions for the Live Wall, which is why a spot-only account shows
+  nothing there and the desk reads holdings separately. `brokers/krakenOrders.ts`
+  is the **write** side and the second file in the repo that can move money:
+  AddOrder / CancelOrder / OpenOrders / QueryOrders, plus the AssetPairs specs,
+  Ticker quotes and Balance/TradeBalance the desk needs. Add order-placement code
+  there, never to the read connector.
+
+  TradeStation/FTP connectors exist but the self-service connection UI only
+  supports `oanda | kraken | manual`. **OANDA and Kraken both have an order
+  path**; Kraken's is spot-only and must stay that way (see the Trade Desk
+  section) — that is a deliberate posture, not an omission.
+- **A connection is named whose + where** — "Andrew's OANDA", "Andrew's Kraken"
+  (`defaultConnectionLabel` in `trading/connections.ts`; migration `0085`
+  renamed the previously seeded owner-only labels). The desk now carries accounts
+  at more than one venue, and a label naming only the owner leaves two chips on
+  the Live Wall that cannot be told apart. Keep the format for any venue added
+  later; the Trade Desk's account cards also print the venue outright.
 - **TradingView webhooks — TWO endpoints, easy to misconfigure:**
   - `POST /api/webhooks/tradingview` — secret `TRADINGVIEW_WEBHOOK_SECRET` (in
     body or query). Writes `trading_alerts`; **this is the one wired to the
