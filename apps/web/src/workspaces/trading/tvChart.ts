@@ -77,10 +77,24 @@ export const SYMBOL_SUGGESTIONS: { symbol: string; label: string }[] = [
   { symbol: 'BINANCE:SOLUSDT', label: 'SOL/USD' },
 ];
 
+// Every coin the keyless crypto price feed can mark, for the price-alert symbol
+// picker. BINANCE: is the TradingView form; pricing strips the prefix and quotes
+// the coin from the public Coinbase/Kraken spot feeds, normalized to USD — so a
+// USDT-quoted symbol and its USD label are the same market for an alert level.
+// Mirrors CRYPTO_BASES in apps/api/src/trading/brokers/crypto.ts.
+export const CRYPTO_SYMBOL_SUGGESTIONS: { symbol: string; label: string }[] = [
+  'BTC', 'ETH', 'SOL', 'XRP', 'ADA', 'DOGE', 'LTC', 'BCH', 'DOT', 'LINK',
+  'AVAX', 'MATIC', 'UNI', 'ATOM', 'ETC', 'XLM', 'ALGO', 'FIL', 'APT', 'ARB',
+  'OP', 'SUI', 'SHIB', 'TRX', 'TON', 'NEAR', 'INJ', 'PEPE', 'BNB', 'AAVE',
+  'MKR', 'CRO',
+].map((base) => ({ symbol: `BINANCE:${base}USDT`, label: `${base}/USD` }));
+
 // The friendly label for a TradingView symbol, if we know it; else the bare
 // symbol after the exchange prefix (e.g. "NASDAQ:AAPL" → "AAPL").
 export function symbolLabel(symbol: string): string {
-  const hit = SYMBOL_SUGGESTIONS.find((s) => s.symbol.toUpperCase() === symbol.toUpperCase());
+  const hit = [...SYMBOL_SUGGESTIONS, ...CRYPTO_SYMBOL_SUGGESTIONS].find(
+    (s) => s.symbol.toUpperCase() === symbol.toUpperCase(),
+  );
   if (hit) return hit.label;
   const parts = symbol.split(':');
   return parts[parts.length - 1] || symbol;

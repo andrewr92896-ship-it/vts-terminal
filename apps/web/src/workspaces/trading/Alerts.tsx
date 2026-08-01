@@ -4,10 +4,11 @@ import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePushNotifications } from '../../push/usePushNotifications';
 import { ScreenTitle } from './ScreenTitle';
-import { SYMBOL_SUGGESTIONS, symbolLabel } from './tvChart';
+import { CRYPTO_SYMBOL_SUGGESTIONS, SYMBOL_SUGGESTIONS, symbolLabel } from './tvChart';
 import type {
   AlertRecord,
   AlertsData,
+  BrokerConnection,
   PriceAlert,
   PriceAlertCondition,
   PriceAlertRepeat,
@@ -187,10 +188,10 @@ function PhoneAlerts() {
 }
 
 // Strategy Session notifications: buzz me when one of my sessions opens or
-// closes, and/or a set number of minutes before it opens. Persists to the
-// server, which fires them on the session's own schedule (needs phone alerts on
-// for a device to actually buzz). Independent of the per-trade notification
-// prefs in device settings.
+// closes, and/or a set number of minutes before either. Persists to the server,
+// which fires them on the session's own schedule (needs phone alerts on for a
+// device to actually buzz). Independent of the per-trade notification prefs in
+// device settings.
 function SessionAlertSettings() {
   const [prefs, setPrefs] = useState<SessionAlertPrefs | null>(null);
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -200,7 +201,7 @@ function SessionAlertSettings() {
     let alive = true;
     api.sessionAlertPrefs()
       .then((r) => { if (alive) setPrefs(r.prefs); })
-      .catch(() => { if (alive) setPrefs({ notifyOpen: false, notifyClose: false, notifyPreOpen: false, preOpenLeadMin: 30 }); });
+      .catch(() => { if (alive) setPrefs({ notifyOpen: false, notifyClose: false, notifyPreOpen: false, preOpenLeadMin: 30, notifyPreClose: false, preCloseLeadMin: 15 }); });
     return () => { alive = false; };
   }, []);
 
@@ -219,8 +220,10 @@ function SessionAlertSettings() {
 
   if (!prefs) return null;
 
-  const anyOn = prefs.notifyOpen || prefs.notifyClose || prefs.notifyPreOpen;
+  const anyOn = prefs.notifyOpen || prefs.notifyClose || prefs.notifyPreOpen || prefs.notifyPreClose;
   const lead = prefs.preOpenLeadMin;
+  const closeLead = prefs.preCloseLeadMin;
+  const clampLead = (v: number, fallback: number) => Math.max(1, Math.min(240, Math.round(v) || fallback));
 
   return (
     <div style={{ ...card, marginBottom: 14, padding: 0, overflow: 'hidden' }}>
@@ -237,7 +240,7 @@ function SessionAlertSettings() {
       {open && (
         <div style={{ padding: '0 16px 14px' }}>
           <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
-            {"Get notified when your Strategy Sessions open and close, and ahead of time before they start. Turn on phone alerts above so a device actually buzzes."}
+            {"Get notified when your Strategy Sessions open and close, and ahead of time before each. Turn on phone alerts above so a device actually buzzes."}
           </div>
           <ToggleRow
             label={"Before a session opens"}
@@ -253,7 +256,7 @@ function SessionAlertSettings() {
                 max={240}
                 value={lead}
                 onChange={(e) => setPrefs({ ...prefs, preOpenLeadMin: Math.max(1, Math.min(240, Number(e.target.value) || 0)) })}
-                onBlur={() => persist({ ...prefs, preOpenLeadMin: Math.max(1, Math.min(240, lead || 30)) })}
+                onBlur={() => persist({ ...prefs, preOpenLeadMin: clampLead(lead, 30) })}
                 style={{ ...numInput }}
               />
               {"minutes before it opens"}
@@ -264,6 +267,26 @@ function SessionAlertSettings() {
             on={prefs.notifyOpen}
             onChange={(v) => persist({ ...prefs, notifyOpen: v })}
           />
+          <ToggleRow
+            label={"Before a session closes"}
+            on={prefs.notifyPreClose}
+            onChange={(v) => persist({ ...prefs, notifyPreClose: v })}
+          />
+          {prefs.notifyPreClose && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '2px 0 12px', paddingLeft: 4, fontSize: 12, color: MUTED }}>
+              {"Notify me"}
+              <input
+                type="number"
+                min={1}
+                max={240}
+                value={closeLead}
+                onChange={(e) => setPrefs({ ...prefs, preCloseLeadMin: Math.max(1, Math.min(240, Number(e.target.value) || 0)) })}
+                onBlur={() => persist({ ...prefs, preCloseLeadMin: clampLead(closeLead, 15) })}
+                style={{ ...numInput }}
+              />
+              {"minutes before it closes"}
+            </div>
+          )}
           <ToggleRow
             label={"When a session closes"}
             on={prefs.notifyClose}
@@ -308,12 +331,47 @@ function ToggleRow({ label, on, onChange }: { label: ReactNode; on: boolean; onC
 // each rule fires only to its creator (push + Pushover) and drops a row into
 // this same feed. Evaluated server-side against live OANDA prices, so it covers
 // forex, metals and indices; turn on phone alerts above for a device to buzz.
+// Where a price alert's market comes from: one of the trader's own connected
+// brokers, or the keyless crypto feed. The chosen source decides which symbols
+// the second dropdown offers.
+interface AlertSource {
+  id: string;
+  label: string;
+  kind: 'oanda' | 'crypto';
+  connectionId: string | null; // OANDA account whose tradable list to read
+}
+type SymbolChoice = { symbol: string; label: string };
+
+const OANDA_FALLBACK_SYMBOLS: SymbolChoice[] = SYMBOL_SUGGESTIONS.filter((s) => s.symbol.startsWith('OANDA:'));
+
+function alertSourcesFor(connections: BrokerConnection[]): AlertSource[] {
+  const out: AlertSource[] = connections
+    .filter((c) => c.active && c.broker === 'oanda')
+    .map((c) => ({ id: c.id, label: c.label, kind: 'oanda' as const, connectionId: c.id }));
+  // No OANDA account of their own: the desk still marks forex, metals and
+  // indices through the install's shared price source, so offer the standard
+  // board rather than dropping those markets from the picker entirely.
+  if (out.length === 0) {
+    out.push({ id: 'markets', label: 'Forex, metals & indices', kind: 'oanda', connectionId: null });
+  }
+  // Crypto needs no broker at all — the coin feed is keyless.
+  out.push({ id: 'crypto', label: 'Crypto', kind: 'crypto', connectionId: null });
+  return out;
+}
+
+const BASE_ALERT_SOURCES = alertSourcesFor([]);
+
 function PriceAlertSettings() {
   const [alerts, setAlerts] = useState<PriceAlert[] | null>(null);
   const [priceSource, setPriceSource] = useState(true);
   const [open, setOpen] = useState(false);
 
-  // New-rule form.
+  // New-rule form. The market is picked in two steps — which broker, then which
+  // of that broker's symbols — so a rule can only ever name a market we can mark.
+  const [sources, setSources] = useState<AlertSource[]>(BASE_ALERT_SOURCES);
+  const [sourceId, setSourceId] = useState(BASE_ALERT_SOURCES[0].id);
+  const [symbols, setSymbols] = useState<SymbolChoice[]>(OANDA_FALLBACK_SYMBOLS);
+  const [symbolsBusy, setSymbolsBusy] = useState(false);
   const [symbol, setSymbol] = useState('OANDA:EURUSD');
   const [condition, setCondition] = useState<PriceAlertCondition>('above');
   const [threshold, setThreshold] = useState('');
@@ -327,8 +385,48 @@ function PriceAlertSettings() {
     api.priceAlerts()
       .then((r) => { if (alive) { setAlerts(r.alerts); setPriceSource(r.priceSource); } })
       .catch(() => { if (alive) setAlerts([]); });
+    // The trader's own connections become the broker choices. On failure the
+    // built-in sources stay, so the form still works.
+    api.tradingConnections()
+      .then((r) => {
+        if (!alive) return;
+        const next = alertSourcesFor(r.connections);
+        setSources(next);
+        setSourceId((cur) => (next.some((s) => s.id === cur) ? cur : next[0].id));
+      })
+      .catch(() => {});
     return () => { alive = false; };
   }, []);
+
+  // Which symbols the chosen broker offers. An OANDA connection is asked for its
+  // own tradable list (what that account may actually deal in); crypto is the
+  // keyless feed's coins. If the lookup fails we fall back to the standard board
+  // rather than leaving the picker empty.
+  useEffect(() => {
+    const src = sources.find((s) => s.id === sourceId);
+    if (!src) return;
+    if (src.kind === 'crypto') { setSymbols(CRYPTO_SYMBOL_SUGGESTIONS); return; }
+    if (!src.connectionId) { setSymbols(OANDA_FALLBACK_SYMBOLS); return; }
+    let alive = true;
+    setSymbolsBusy(true);
+    api.deskInstruments(src.connectionId)
+      .then((r) => {
+        if (!alive) return;
+        const list = r.instruments
+          .map((i) => ({ symbol: `OANDA:${i.symbol.replace(/_/g, '')}`, label: i.displayName || i.instrument }))
+          .sort((a, b) => a.label.localeCompare(b.label));
+        setSymbols(list.length > 0 ? list : OANDA_FALLBACK_SYMBOLS);
+      })
+      .catch(() => { if (alive) setSymbols(OANDA_FALLBACK_SYMBOLS); })
+      .finally(() => { if (alive) setSymbolsBusy(false); });
+    return () => { alive = false; };
+  }, [sourceId, sources]);
+
+  // Keep the picked symbol inside the current broker's list.
+  useEffect(() => {
+    if (symbols.length === 0) return;
+    setSymbol((cur) => (symbols.some((s) => s.symbol === cur) ? cur : symbols[0].symbol));
+  }, [symbols]);
 
   async function add() {
     const level = Number(threshold);
@@ -400,18 +498,27 @@ function PriceAlertSettings() {
 
           {/* New-rule form */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end', marginBottom: 4 }}>
+            <div style={{ flex: '1 1 140px', minWidth: 125 }}>
+              <label style={fieldLbl}>{"Broker"}</label>
+              <select
+                value={sourceId}
+                onChange={(e) => setSourceId(e.target.value)}
+                style={{ ...fieldInput, width: '100%', cursor: 'pointer' }}
+              >
+                {sources.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+              </select>
+            </div>
             <div style={{ flex: '1 1 150px', minWidth: 130 }}>
               <label style={fieldLbl}>{"Symbol"}</label>
-              <input
+              <select
                 value={symbol}
-                list="price-alert-symbols"
-                onChange={(e) => setSymbol(e.target.value.toUpperCase())}
-                placeholder="OANDA:EURUSD"
-                style={{ ...fieldInput, width: '100%' }}
-              />
-              <datalist id="price-alert-symbols">
-                {SYMBOL_SUGGESTIONS.map((s) => <option key={s.symbol} value={s.symbol}>{s.label}</option>)}
-              </datalist>
+                onChange={(e) => setSymbol(e.target.value)}
+                disabled={symbolsBusy}
+                style={{ ...fieldInput, width: '100%', cursor: symbolsBusy ? 'progress' : 'pointer' }}
+              >
+                {symbolsBusy && <option value={symbol}>{"Loading symbols…"}</option>}
+                {!symbolsBusy && symbols.map((s) => <option key={s.symbol} value={s.symbol}>{s.label}</option>)}
+              </select>
             </div>
             <div style={{ flex: '0 0 auto' }}>
               <label style={fieldLbl}>{"When it"}</label>

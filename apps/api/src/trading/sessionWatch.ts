@@ -10,9 +10,10 @@ import { etNow, etDayStamp, etDowKey, scheduleForRow, parseHHMM } from './sessio
 
 // Background watch that fires a user's OWN Strategy Session notifications: a
 // heads-up a set number of minutes before a session opens, a buzz when it opens,
-// and a buzz when it closes. Opt-in per user (see sessionAlertPrefs) and only
-// for the events they enabled. Production-only, and only when push or Pushover
-// is configured — mirrors the desk watch.
+// a wrap-up warning a set number of minutes before it closes, and a buzz when it
+// closes. Opt-in per user (see sessionAlertPrefs) and only for the events they
+// enabled. Production-only, and only when push or Pushover is configured —
+// mirrors the desk watch.
 //
 // Dedup is in-memory and keyed by ET calendar day, so each event fires at most
 // once per session per day. The set is cleared when the ET day rolls over, so it
@@ -20,7 +21,7 @@ import { etNow, etDayStamp, etDowKey, scheduleForRow, parseHHMM } from './sessio
 // (acceptable — a missed or duplicate heads-up is harmless, and past minutes
 // won't match the firing window anyway).
 
-type SessionEvent = 'open' | 'close' | 'preOpen';
+type SessionEvent = 'open' | 'close' | 'preOpen' | 'preClose';
 
 const firedToday = new Set<string>();
 let firedDay = '';
@@ -85,6 +86,14 @@ export function dueForUser(
     }
     if (prefs.notifyOpen) {
       consider('open', openMin, 'Session open', `${label} is now active (${window.open}–${window.close} ET).`);
+    }
+    if (prefs.notifyPreClose) {
+      consider(
+        'preClose',
+        closeMin - prefs.preCloseLeadMin,
+        'Session closing soon',
+        `${label} closes in ${prefs.preCloseLeadMin} min (${window.close} ET).`,
+      );
     }
     if (prefs.notifyClose) {
       consider('close', closeMin, 'Session closed', `${label} has closed (${window.close} ET).`);

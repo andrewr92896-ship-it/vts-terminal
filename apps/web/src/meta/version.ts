@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.94';
+export const APP_VERSION = 'Beta V 5.95';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.95',
+    date: 'August 1, 2026',
+    notes: [
+      'Strategy session alerts can now warn you before a session closes, not just before one opens. Set how many minutes of notice you want — 15 by default.',
+      'Price alerts are now picked from two dropdowns instead of typed out: choose the broker, then the symbol. An OANDA connection lists everything that account can actually trade; Crypto is there whether or not you have a broker connected.',
+    ],
+  },
   {
     version: 'Beta V 5.94',
     date: 'July 31, 2026',

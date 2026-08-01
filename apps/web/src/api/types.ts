@@ -1030,6 +1030,8 @@ export interface SessionAlertPrefs {
   notifyClose: boolean;
   notifyPreOpen: boolean;
   preOpenLeadMin: number;
+  notifyPreClose: boolean;
+  preCloseLeadMin: number;
 }
 
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----

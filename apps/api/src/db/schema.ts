@@ -868,9 +868,9 @@ export type NotificationPrefRow = typeof notificationPrefs.$inferSelect;
 
 // One row per user holding their Strategy Session notification preferences: buzz
 // me when one of my sessions opens, when it closes, and/or a configurable number
-// of minutes before it opens. Defaults are all-off — a user opts in from the
-// Trading Alerts screen. The background session watch (trading/sessionWatch.ts)
-// reads these and fires the owner's own notifications.
+// of minutes before it opens or before it closes. Defaults are all-off — a user
+// opts in from the Trading Alerts screen. The background session watch
+// (trading/sessionWatch.ts) reads these and fires the owner's own notifications.
 export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
   id: text('id').primaryKey(),
   userId: text('user_id')
@@ -881,6 +881,8 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
   notifyClose: integer('notify_close', { mode: 'boolean' }).notNull().default(false),
   notifyPreOpen: integer('notify_pre_open', { mode: 'boolean' }).notNull().default(false),
   preOpenLeadMin: integer('pre_open_lead_min').notNull().default(30),
+  notifyPreClose: integer('notify_pre_close', { mode: 'boolean' }).notNull().default(false),
+  preCloseLeadMin: integer('pre_close_lead_min').notNull().default(15),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

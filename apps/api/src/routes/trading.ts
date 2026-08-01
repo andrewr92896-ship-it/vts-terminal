@@ -1340,6 +1340,8 @@ const sessionAlertPrefsSchema = z.object({
   notifyClose: z.boolean(),
   notifyPreOpen: z.boolean(),
   preOpenLeadMin: z.number().int().min(1).max(240),
+  notifyPreClose: z.boolean(),
+  preCloseLeadMin: z.number().int().min(1).max(240),
 });
 
 // Live Wall board layouts. The layout is a bounded grid of tiles; every field

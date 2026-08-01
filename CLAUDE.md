@@ -174,7 +174,8 @@ workspaces list** (see `theme/nav.ts` order).
   Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
-  Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
+  Open/close and pre-open/pre-close notifications are opt-in from Trading
+  Alerts — see below),
   Manual Trades (`funded` key, `FundedScreen`), **Funded Account**
   (`prop` key — the nested opt-in; prop-firm challenge dashboard), To Do.
   Market Data and Market News moved to **Markets**; their section keys are
@@ -739,8 +740,8 @@ control — the server is still the enforcer.
   check with `db:verify-positions` below.
 - **Session watch** (`trading/sessionWatch.ts`, prod-only, every **30 s**,
   `SESSION_WATCH_SECONDS`): fires a trader's OWN Strategy Session notifications —
-  a pre-open heads-up, an open buzz, and a close buzz — on each session's per-day
-  ET schedule. Opt-in per user (`session_alert_prefs`, `trading/sessionAlertPrefs.ts`);
+  a pre-open heads-up, an open buzz, a pre-close wrap-up warning and a close buzz
+  — on each session's per-day ET schedule. Opt-in per user (`session_alert_prefs`, `trading/sessionAlertPrefs.ts`);
   in-memory per-ET-day dedup so each event fires once. Runs only if push OR
   Pushover is configured; demo excluded; each notice goes only to its own owner.
 - **Notifications** fire (web push + Pushover together, team-scoped, demo
@@ -759,13 +760,27 @@ control — the server is still the enforcer.
   ownerId?, event? }` and apply the pref filter only when both `ownerId` and
   `event` are given — alerts pass neither (team-wide, not one trader's action).
   UI is the "Notify me about a trader" section in `DeviceSettings.tsx`.
+- **Price alerts** (`trading/priceAlerts.ts` + `priceAlertWatch.ts`, UI in the
+  "Price alerts" card on Trading Alerts): a rule's market is picked as **broker
+  then symbol**, never typed. The broker list is the trader's own **active OANDA
+  connections** (each offering that account's real tradable instruments, read
+  from `/api/trading/desk/instruments`), plus **Crypto**, which needs no
+  connection because the coin feed is keyless. A trader with no OANDA connection
+  of their own still gets a built-in "Forex, metals & indices" entry — pricing
+  borrows any active OANDA connection on the install (`priceSource.ts`), so those
+  markets stay reachable — and the same list is the fallback whenever the live
+  instrument lookup fails. The server still accepts any symbol string, so the
+  dropdowns are the guardrail, not the enforcement.
 - **Session alert prefs** (`trading/sessionAlertPrefs.ts`, `session_alert_prefs`
   table, one row per user): per-user opt-in toggles for **session open / close /
-  pre-open** plus a `preOpenLeadMin` (1–240, default 30). Routes
-  `GET|PUT /api/trading/session-alert-prefs`; UI is the collapsible "Strategy
-  session alerts" card at the top of the Trading Alerts screen (`Alerts.tsx`).
-  All default **off** (opt-in). The session watch reads these to fire a trader's
-  own session notifications.
+  pre-open / pre-close**, each lead-time toggle carrying its own notice period —
+  `preOpenLeadMin` (1–240, default 30) and `preCloseLeadMin` (1–240, default 15,
+  migration `0085`). Routes `GET|PUT /api/trading/session-alert-prefs`; UI is the
+  collapsible "Strategy session alerts" card at the top of the Trading Alerts
+  screen (`Alerts.tsx`), whose rows read in schedule order (before open → open →
+  before close → close). All default **off** (opt-in). The session watch reads
+  these to fire a trader's own session notifications; a lead time that would land
+  on the previous ET day is skipped rather than fired early.
 
 ## Employee Portal (`/employee`) — a separate, hardened surface
 
