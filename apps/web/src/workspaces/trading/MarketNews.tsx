@@ -551,10 +551,6 @@ function LiveStreams({
     }));
   const toggleNotify = (key: string) =>
     mutate((s) => ({ ...s, notify: { ...s.notify, [key]: !s.notify[key] } }));
-  const watchingLabel =
-    `${tiles.length} ${tiles.length === 1 ? 'stream' : 'streams'} open` +
-    (tiles.length > maxCols ? ` · ${maxCols} across at this width` : '');
-
   return (
     <div style={{ marginTop: 20, paddingBottom: 20, borderBottom: `1px solid ${C.line}` }}>
       {/* block header */}
@@ -567,7 +563,6 @@ function LiveStreams({
         </span>
         <span style={{ fontFamily: C.mono, fontSize: 11, color: '#3A4A6C' }}>
           {liveCount} live · {channels.length} channels
-          {tiles.length > 0 ? ` · ${watchingLabel}` : ''}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setLiveOpen(!liveOpen)} style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
