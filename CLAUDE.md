@@ -341,9 +341,17 @@ workspaces list** (see `theme/nav.ts` order).
       cheapest-first: the id straight out of a `/channel/UC…` URL (free), then the
       channel's own page (`resolveHandleKeyless`, free, no key), then the Data API
       (`forHandle`, 1 unit, only if a key is set). A channel that resolves is
-      watchable immediately; one that doesn't is still saved and the poller fills
-      the id in later — `persistResolvedIds` writes it back to the row, so it
-      survives a restart instead of living only in this process's cache.
+      watchable immediately; one that doesn't is still saved and filled in later —
+      `persistResolvedIds` writes the poller's answer back to the row so it
+      survives a restart instead of living only in this process's cache, and
+      `resolveMissingIds` retries any id-less row in the background on read.
+      **That on-read retry is what makes a keyless install work at all**: the
+      poller is production-only *and* needs `YOUTUBE_API_KEY`, and the seeded
+      starter channels never pass through the add path, so without it a desk with
+      no key sits on "channel ID is still being looked up" forever. It is
+      fire-and-forget (a screen load never waits on YouTube) and paced by a
+      30-minute per-handle cooldown, so a handle that will not resolve is tried
+      once, not on every poll.
     - **Why user-added channels are affordable, given quota used to forbid them.**
       Watching costs nothing: the embed player is keyless, plays when the channel
       is live and shows its own offline card otherwise. Quota is only spent on the
