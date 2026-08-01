@@ -39,10 +39,33 @@ export const NAV: NavWorkspace[] = [
       // The whole-life roll-up: everything you own minus everything you owe.
       { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      // Turn the optional parts of the portal on and off for yourself.
+      { key: 'my_access', label: 'Feature Access', icon: 'toggle-right' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
   },
+  // Markets — included with every account, no opt-in. Everything here reads
+  // public market data: nothing on these three screens touches a trade, a broker
+  // or a balance, which is exactly why they can sit outside the Advanced Trading
+  // opt-in. The Live Wall board is shared between the two: a Markets-only user
+  // gets the chart / watchlist / news / calendar tiles and one saved board,
+  // while opting into Advanced Trading adds the desk tiles and named presets to
+  // the same screen rather than giving them a second one.
+  {
+    key: 'markets',
+    label: 'Markets',
+    icon: 'globe',
+    accent: '#5AC8FA',
+    group: 'Markets',
+    sections: [
+      { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
+      { key: 'data', label: 'Market Data', icon: 'line-chart' },
+      { key: 'news', label: 'Market News', icon: 'newspaper' },
+    ],
+  },
+  // Advanced Trading — opt-in (My Portal ▸ Feature Access). The desk: placing
+  // trades, reviewing them, alerts, sessions, and the hand-kept manual book.
   {
     key: 'trading',
     label: 'Advanced Trading',
@@ -50,7 +73,6 @@ export const NAV: NavWorkspace[] = [
     accent: C.gold,
     group: 'Advanced Trading',
     sections: [
-      { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
       // Placing trades. The section key is `tradedesk`; `desk` (below) is the
       // review screen that used to carry this name, and keeps its key so saved
@@ -59,12 +81,13 @@ export const NAV: NavWorkspace[] = [
       { key: 'desk', label: 'Trade Analysis', icon: 'candlestick-chart' },
       { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
+      // Manual Trades is a plain Advanced Trading section — your own book, kept
+      // by hand. It is deliberately independent of the Funded opt-in below:
+      // plenty of traders keep a manual book without ever running a challenge.
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
-      // Private, role-gated: only shown to holders of the `funded` role (see
-      // FUNDED_ONLY_SECTIONS + the sidebar filter). Never shown to the demo.
-      { key: 'prop', label: 'Funded', icon: 'shield-check' },
-      { key: 'data', label: 'Market Data', icon: 'line-chart' },
-      { key: 'news', label: 'Market News', icon: 'newspaper' },
+      // The nested opt-in: shown only when Funded Account is turned on as well
+      // (see FUNDED_ONLY_SECTIONS + the sidebar filter). Never shown to the demo.
+      { key: 'prop', label: 'Funded Account', icon: 'shield-check' },
       { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
     ],
   },
@@ -170,10 +193,19 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
   return NAV.find((w) => w.key === ws);
 }
 
-// Trading sections gated behind the admin-assigned `funded` role. The sidebar
-// hides these unless the viewer holds the role (see canAccessFunded); the demo
-// and the public never see them.
+// Trading sections behind the nested Funded Account opt-in. The sidebar hides
+// these unless the viewer has turned Funded on (which itself requires Advanced
+// Trading); the demo never sees them.
 export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
+
+// Workspaces a user turns on for themselves in My Portal ▸ Feature Access, keyed
+// to the feature that reveals each. A workspace not listed here is included with
+// every account. When one is off the sidebar still draws its row — dimmed, with
+// a lock — so the feature is discoverable instead of invisible; clicking it
+// opens Feature Access rather than the workspace.
+export const OPT_IN_WORKSPACES: Record<string, 'advancedTrading'> = {
+  trading: 'advancedTrading',
+};
 
 // The Employee Portal is deliberately NOT in this nav config. It is not a
 // workspace and not a section — it is a separate website, so the sidebar renders

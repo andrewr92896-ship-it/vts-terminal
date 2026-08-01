@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireWorkspace } from '../auth/middleware.js';
 import { canAccessWorkspace, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
+import { featuresForUser } from '../features/service.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
 import { getPrompt, withStyle } from '../ai/prompts.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
@@ -81,10 +82,14 @@ export async function aiRoutes(app: FastifyInstance) {
     // Only adopt a workspace persona the caller can actually access, so a user
     // cannot target a workspace they do not have by passing its key.
     const wsKey = parsed.data.workspace;
-    const ws =
-      wsKey && wsKey in WORKSPACE_GUIDE && canAccessWorkspace(parseRoles(user), wsKey as WorkspaceKey)
-        ? wsKey
-        : undefined;
+    // Trading is opt-in, so "can access" is a feature question as well as a role
+    // one — otherwise a user who has not turned the desk on could still ask for
+    // the desk persona by passing its key.
+    const wsAllowed =
+      wsKey === 'trading'
+        ? (await featuresForUser(user)).advancedTrading
+        : canAccessWorkspace(parseRoles(user), wsKey as WorkspaceKey);
+    const ws = wsKey && wsKey in WORKSPACE_GUIDE && wsAllowed ? wsKey : undefined;
     try {
       await enforceAiLimit(user.id, 'ask');
       const text = await chatClaude(parsed.data.messages, await systemPrompt(ws, user.displayName));

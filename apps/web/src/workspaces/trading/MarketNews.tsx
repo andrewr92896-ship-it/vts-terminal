@@ -106,9 +106,12 @@ export function MarketNews() {
   // Keep the "x ago" ages fresh between the 120s data polls.
   const now = useNowTick(30_000);
   const { user } = useAuth();
-  // The channel list is desk-wide, so reshaping it needs Trading write access —
-  // a view-only role and the public demo watch the wall but can't change it.
-  const canWrite = !!user && !user.access.readOnlyWorkspaces.includes('trading');
+  // Market News lives in the always-on Markets workspace, so the wall is not
+  // gated on the Advanced Trading opt-in — mirroring the server, which puts
+  // these endpoints on `requireMarkets`. The read-only demo is the exception:
+  // it watches the wall but cannot reshape what the desk sees (demoGuard refuses
+  // every non-GET, so this only hides controls that would fail anyway).
+  const canWrite = !!user && !user.isDemo;
 
   // --- headline feed ---
   const [data, setData] = useState<MarketNewsData | null>(null);

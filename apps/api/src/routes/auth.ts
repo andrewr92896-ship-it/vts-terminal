@@ -16,11 +16,14 @@ import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { ensureDemoAccount } from '../seed.js';
 import { getTeamName } from '../teams/service.js';
+import { featuresForUser } from '../features/service.js';
 
 // Build the browser-safe user, resolving the trading-team name from the user's
-// teamId so the client can show which team they're on.
+// teamId so the client can show which team they're on, plus the optional
+// features they have turned on (which decides the workspaces the sidebar draws).
 async function publicUser(u: typeof users.$inferSelect): Promise<PublicUser> {
-  return toPublicUser(u, await getTeamName(u.teamId));
+  const [teamName, features] = await Promise.all([getTeamName(u.teamId), featuresForUser(u)]);
+  return toPublicUser(u, teamName, features);
 }
 
 // Sign-in is by email. `username` is still accepted as an optional fallback

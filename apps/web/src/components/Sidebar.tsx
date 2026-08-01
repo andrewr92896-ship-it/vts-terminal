@@ -9,6 +9,10 @@ interface SidebarProps {
   workspace: WorkspaceKey;
   screen: string;
   workspaces: WorkspaceKey[]; // the ones this user may see, in nav order
+  // Opt-in workspaces the user has NOT turned on. Drawn dimmed with a lock, and
+  // clicking one opens My Portal ▸ Feature Access instead of the workspace — so
+  // the feature is discoverable rather than invisible.
+  lockedWorkspaces?: Set<WorkspaceKey>;
   // The effective nav (workspace + section order), already reordered by any
   // founder-set sidebar layout. Falls back to the code-default NAV when absent.
   nav?: NavWorkspace[];
@@ -43,6 +47,7 @@ export function Sidebar(props: SidebarProps) {
     workspace,
     screen,
     workspaces,
+    lockedWorkspaces,
     nav,
     canFunded,
     canEmployee,
@@ -61,8 +66,11 @@ export function Sidebar(props: SidebarProps) {
   const accent = current?.accent ?? C.gold;
   // Hide the private Funded section from anyone without the `funded` role.
   const sections = (current?.sections ?? []).filter((s) => canFunded || !FUNDED_ONLY_SECTIONS.has(s.key));
-  // Show only the workspaces this user can access, in the effective nav order.
-  const visible: NavWorkspace[] = navList.filter((w) => workspaces.includes(w.key));
+  // The workspaces this user can access, plus any opt-in workspace they have not
+  // turned on (drawn locked), all in the effective nav order.
+  const visible: NavWorkspace[] = navList.filter(
+    (w) => workspaces.includes(w.key) || lockedWorkspaces?.has(w.key),
+  );
 
   return (
     <aside
@@ -141,6 +149,7 @@ export function Sidebar(props: SidebarProps) {
             icon={w.icon}
             label={w.label}
             accent={w.accent}
+            locked={lockedWorkspaces?.has(w.key)}
             dot={workspaceDots?.has(w.key)}
             onClick={() => onSelectWorkspace(w.key)}
           />
@@ -294,6 +303,7 @@ function NavRow({
   accent,
   collapsed,
   dot,
+  locked,
   onClick,
 }: {
   kind: 'ws' | 'sec';
@@ -304,6 +314,9 @@ function NavRow({
   accent: string;
   collapsed: boolean;
   dot?: boolean;
+  // A workspace the user hasn't opted into: dimmed, with a padlock in place of
+  // the usual end-of-row furniture. Still clickable — it leads to Feature Access.
+  locked?: boolean;
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
@@ -322,6 +335,7 @@ function NavRow({
     marginBottom: 2,
     position: 'relative',
     color: isSecActive ? accent : active || hover ? C.text : C.muted,
+    opacity: locked ? 0.5 : 1,
     background: isSecActive
       ? `linear-gradient(180deg, ${tint(accent, 0.16)}, ${tint(accent, 0.08)})`
       : active
@@ -337,7 +351,7 @@ function NavRow({
   };
   // The workspace icon takes its own accent when active; an active section takes
   // the current workspace accent. Everything else is faint.
-  const iconColor = isSecActive ? accent : kind === 'ws' && active ? accent : C.faint;
+  const iconColor = locked ? C.faint : isSecActive ? accent : kind === 'ws' && active ? accent : C.faint;
 
   return (
     <button
@@ -345,7 +359,7 @@ function NavRow({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={style}
-      title={collapsed ? label : undefined}
+      title={locked ? `${label} — not turned on. Open Feature Access to add it.` : collapsed ? label : undefined}
     >
       <span style={{ position: 'relative', display: 'inline-flex', flex: 'none' }}>
         <Icon name={icon} size={16} color={iconColor} />
@@ -371,6 +385,7 @@ function NavRow({
           {label}
         </span>
       )}
+      {!collapsed && locked && <Icon name="lock" size={12} color={C.faint} />}
       {!collapsed && dot && <BlinkDot />}
       {!collapsed && count != null && (
         <span style={{ fontFamily: C.mono, fontSize: 11, color: C.faint }}>{count}</span>

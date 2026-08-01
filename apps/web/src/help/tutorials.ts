@@ -16,6 +16,30 @@ export interface Tutorial {
 }
 
 export const TUTORIALS: Record<string, Tutorial> = {
+  // ---- My Portal ----
+  my_access: {
+    title: 'Turning features on and off',
+    intro:
+      'Feature Access is where you choose which optional parts of the portal you want. Markets, Investments, Studies, My Portal and Site Help are included with every account — there is nothing to switch on for those. The two optional ones are both about the trading desk.',
+    steps: [
+      {
+        title: 'Advanced Trading',
+        body: 'The trading desk: placing and managing real orders through your own broker, your trade history and performance, strategy sessions, alerts, and the manual trade book. The first time you turn it on you are shown what the desk does and asked to confirm — it places live orders, so nobody should arrive there by accident.',
+      },
+      {
+        title: 'Funded Account',
+        body: 'Sits under Advanced Trading, so turn that on first. It tracks a prop-firm challenge: equity against your target and how much daily and overall drawdown you have left. Everything is entered by hand or read off a screenshot, since prop firms do not offer account connections.',
+      },
+      {
+        title: 'Turning something off',
+        body: 'Nothing is deleted. The workspace disappears from the sidebar and the portal stops serving it, but every trade, account and setting stays exactly where it was — switch it back on and it all returns.',
+      },
+      {
+        title: 'Finding it again',
+        body: 'A feature you have not turned on still shows in the sidebar, dimmed with a small padlock. Clicking it brings you straight back to this screen.',
+      },
+    ],
+  },
   // ---- Trading ----
   live: {
     title: 'Using the Live Wall',
@@ -420,6 +444,7 @@ export function tutorialFor(screen: string): Tutorial {
 // Labels here mirror the section labels in theme/nav.ts (the source of truth)
 // so the same section reads the same everywhere.
 export const HOWTO_TOPICS: { key: string; label: string }[] = [
+  { key: 'my_access', label: 'Feature Access' },
   { key: 'live', label: 'Live Wall' },
   { key: 'alerts', label: 'Trading Alerts' },
   { key: 'tradedesk', label: 'Trade Desk' },

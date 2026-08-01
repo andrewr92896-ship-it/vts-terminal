@@ -6,7 +6,6 @@ import type {
 } from 'fastify';
 import { SESSION_COOKIE, getUserForToken } from './sessions.js';
 import {
-  canAccessFunded,
   canAccessWorkspace,
   isAdmin,
   isFounder,
@@ -15,6 +14,7 @@ import {
   type WorkspaceKey,
 } from './rbac.js';
 import { isDemoUser } from '../demo/identity.js';
+import { featuresForUser } from '../features/service.js';
 
 // Runs on every request: resolves the signed session cookie to a user
 // (or null) and attaches it to request.currentUser.
@@ -71,6 +71,11 @@ export const requireFounder: preHandlerHookHandler = async (
 };
 
 // Reject unless the logged-in user can access the given workspace.
+//
+// Trading is opt-in (My Portal ▸ Feature Access), so the workspace guard checks
+// that too — which means every endpoint already behind it inherits the gate
+// rather than each route having to remember. Market-facing endpoints that moved
+// to the always-on Markets workspace use `requireMarkets` instead.
 export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const user = request.currentUser;
@@ -80,17 +85,46 @@ export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
     if (!canAccessWorkspace(parseRoles(user), ws)) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
+    if (ws === 'trading' && !(await featuresForUser(user)).advancedTrading) {
+      return reply.code(403).send({ error: 'Advanced Trading is not turned on for your account' });
+    }
   };
 }
 
-// Reject unless the user holds the admin-assigned `funded` role (admins pass).
-// Guards the private Funded (prop-challenge) endpoints. Pair with a Trading
-// workspace guard so the caller also holds Trading access.
+// The Markets workspace — headlines, the economic calendar, market data and the
+// chart board — is included with every account, so this is just "signed in".
+// Named rather than reusing requireAuth at the call sites so the boundary is
+// legible: anything on this guard is deliberately available to a user who has
+// opted into nothing.
+export const requireMarkets: preHandlerHookHandler = requireAuth;
+
+// Reject unless the user has opted into Advanced Trading (My Portal ▸ Feature
+// Access). This is the gate on the whole desk — placing and reviewing trades,
+// broker connections, alerts, strategy sessions, the manual book. The
+// market-facing endpoints behind the Markets workspace (news, the economic
+// calendar, market data, the chart board) deliberately do NOT use this guard:
+// they are included with every account.
+export const requireAdvancedTrading: preHandlerHookHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const user = request.currentUser;
+  if (!user) {
+    return reply.code(401).send({ error: 'Not authenticated' });
+  }
+  const features = await featuresForUser(user);
+  if (!features.advancedTrading) {
+    return reply.code(403).send({ error: 'Advanced Trading is not turned on for your account' });
+  }
+};
+
+// Reject unless the user has opted into the Funded Account tracker. Funded is
+// nested under Advanced Trading — the service will not store it enabled while
+// the desk is off — so this one check covers both.
 //
-// The public demo account is hard-excluded here regardless of roles: the Funded
-// section is a private feature that must never be reachable from the demo or the
-// public, so the exclusion is baked into the guard rather than relying only on
-// the demo not being granted the role.
+// The public demo account is hard-excluded here regardless: the Funded section
+// is not part of the demo tour, so the exclusion is baked into the guard rather
+// than relying on the demo's stored features alone.
 export const requireFunded: preHandlerHookHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,
@@ -99,7 +133,8 @@ export const requireFunded: preHandlerHookHandler = async (
   if (!user) {
     return reply.code(401).send({ error: 'Not authenticated' });
   }
-  if (isDemoUser(user) || !canAccessFunded(parseRoles(user))) {
+  const features = await featuresForUser(user);
+  if (isDemoUser(user) || !features.funded) {
     return reply.code(403).send({ error: 'Forbidden' });
   }
 };
@@ -116,6 +151,9 @@ export function requireWorkspaceWrite(ws: WorkspaceKey): preHandlerHookHandler {
     const roles = parseRoles(user);
     if (!canAccessWorkspace(roles, ws)) {
       return reply.code(403).send({ error: 'Forbidden' });
+    }
+    if (ws === 'trading' && !(await featuresForUser(user)).advancedTrading) {
+      return reply.code(403).send({ error: 'Advanced Trading is not turned on for your account' });
     }
     if (isWorkspaceReadOnly(roles, ws)) {
       return reply.code(403).send({ error: 'Read-only access' });

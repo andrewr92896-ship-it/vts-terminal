@@ -1,5 +1,6 @@
 import type {
   AdminUser,
+  UserFeatures,
   EarlyAccessRequest,
   AiUsage,
   AlertsData,
@@ -201,6 +202,19 @@ export const api = {
   // and Privacy Policy. Clears `mustAcceptTerms` on the returned user.
   acceptTerms(): Promise<{ user: User }> {
     return request('/api/auth/accept-terms', { method: 'POST', body: JSON.stringify({}) });
+  },
+  // My Portal ▸ Feature Access — the optional parts of the portal this user has
+  // turned on. `me()` already carries them on user.access.features; these two are
+  // for the screen that edits them.
+  features(): Promise<{ features: UserFeatures }> {
+    return request('/api/features');
+  },
+  saveFeatures(patch: {
+    advancedTrading?: boolean;
+    funded?: boolean;
+    acknowledgeTrading?: boolean;
+  }): Promise<{ features: UserFeatures }> {
+    return request('/api/features', { method: 'PUT', body: JSON.stringify(patch) });
   },
   demoLogin(): Promise<{ user: User }> {
     return request('/api/auth/demo', { method: 'POST', body: JSON.stringify({}) });

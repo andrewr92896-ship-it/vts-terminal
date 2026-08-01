@@ -15,7 +15,7 @@ import { NewsTile } from './NewsTile';
 import { CalendarTile } from './CalendarTile';
 import { AlertsTile } from './AlertsTile';
 import { MobileScrollLockBar } from './scrollLock';
-import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input, newTile, starterTiles } from './tvChart';
+import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input, marketStarterTiles, newTile, starterTiles } from './tvChart';
 
 const RGL = WidthProvider(GridLayout);
 const COLS = 12;
@@ -40,7 +40,13 @@ function rowsForPx(px: number): number {
 // saves as named "presets" (persisted per-user via /api/trading/boards). The
 // grid is locked for interaction until "Edit layout" is on, so charts stay
 // clickable while you trade and only move when you mean to move them.
-export function ChartBoard() {
+//
+// `desk` is whether the viewer has Advanced Trading. Without it the board is
+// still fully theirs to arrange and save — what it loses is the desk half: the
+// tiles that read team positions, desk performance and the alert feed, and the
+// named presets (they keep one board rather than a switchable set). Both limits
+// are enforced server-side too; this only decides what is offered.
+export function ChartBoard({ desk = true }: { desk?: boolean }) {
   const { user } = useAuth();
   // Remember the last-opened preset per user (per device) so returning to the
   // board — after toggling to Positions, a reload, or a new session — lands on
@@ -49,7 +55,7 @@ export function ChartBoard() {
   const [boards, setBoards] = useState<TradingBoard[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null); // null → unsaved working board
   const [name, setName] = useState('New board');
-  const [tiles, setTiles] = useState<BoardTile[]>(starterTiles());
+  const [tiles, setTiles] = useState<BoardTile[]>(() => (desk ? starterTiles() : marketStarterTiles()));
   const [savedTilesJson, setSavedTilesJson] = useState<string>(''); // '' → never saved
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -66,14 +72,18 @@ export function ChartBoard() {
     (b: TradingBoard) => {
       setActiveId(b.id);
       setName(b.name);
-      setTiles(b.layout.tiles ?? []);
-      setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
+      // A board saved while the trader had the desk keeps its desk tiles in the
+      // database; drop them from what is rendered if the desk is off now, rather
+      // than mounting tiles whose every request would be refused.
+      const shown = allowedTiles(b.layout.tiles ?? [], desk);
+      setTiles(shown);
+      setSavedTilesJson(JSON.stringify(shown));
       setNamePrompt(null);
       if (lastKey) {
         try { localStorage.setItem(lastKey, b.id); } catch { /* storage unavailable — non-fatal */ }
       }
     },
-    [lastKey],
+    [lastKey, desk],
   );
 
   const load = useCallback(async () => {
@@ -199,6 +209,22 @@ export function ChartBoard() {
   const save = async () => {
     if (saving) return;
     if (isUnsaved) {
+      // Without the desk there are no named presets, so the one board saves
+      // straight through under a fixed name instead of prompting for one.
+      if (!desk) {
+        setSaving(true);
+        try {
+          const { board, boards: list } = await api.createBoard({ name: 'My board', layout: { tiles }, isDefault: true });
+          setBoards(list);
+          applyBoard(board);
+          setError(null);
+        } catch (e) {
+          setError(e instanceof ApiError ? e.message : 'Could not save the board');
+        } finally {
+          setSaving(false);
+        }
+        return;
+      }
       setNamePrompt({ mode: 'create', value: name });
       return;
     }
@@ -259,7 +285,7 @@ export function ChartBoard() {
       else {
         setActiveId(null);
         setName('New board');
-        setTiles(starterTiles());
+        setTiles(desk ? starterTiles() : marketStarterTiles());
         setSavedTilesJson('');
       }
     } catch (e) {
@@ -277,14 +303,20 @@ export function ChartBoard() {
       {/* Toolbar — the preset picker and the layout actions share one wrapping
           row, so the board starts right below it when you're just watching. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ fontSize: 9, letterSpacing: '.5px', textTransform: 'uppercase', color: FAINT, marginRight: 2 }}>Presets</span>
-        <PresetPicker
-          boards={boards}
-          activeId={activeId}
-          name={name}
-          isUnsaved={isUnsaved}
-          onPick={(b) => confirmSwitch(() => applyBoard(b))}
-        />
+        {/* Named presets are part of Advanced Trading. Without it the viewer has
+            exactly one board, so there is nothing to pick between. */}
+        {desk && (
+          <>
+            <span style={{ fontSize: 9, letterSpacing: '.5px', textTransform: 'uppercase', color: FAINT, marginRight: 2 }}>Presets</span>
+            <PresetPicker
+              boards={boards}
+              activeId={activeId}
+              name={name}
+              isUnsaved={isUnsaved}
+              onPick={(b) => confirmSwitch(() => applyBoard(b))}
+            />
+          </>
+        )}
         <button onClick={() => setEditing((v) => !v)} style={editing ? goldBtn : ghostBtn}>
           {editing ? '✓ Done editing' : '✎ Edit layout'}
         </button>
@@ -292,21 +324,26 @@ export function ChartBoard() {
           <>
             <button onClick={() => addTile('chart')} style={ghostBtn}>+ Chart</button>
             <button onClick={() => addTile('watchlist')} style={ghostBtn}>+ Watchlist</button>
-            <button onClick={() => addTile('positions')} style={ghostBtn}>+ Positions</button>
-            <button onClick={() => addTile('metrics')} style={ghostBtn}>+ Metrics</button>
             <button onClick={() => addTile('news')} style={ghostBtn}>+ News</button>
             <button onClick={() => addTile('calendar')} style={ghostBtn}>+ Calendar</button>
-            <button onClick={() => addTile('alerts')} style={ghostBtn}>+ Alerts</button>
-            {!isUnsaved && (
+            {/* The desk tiles: team positions, desk performance, the alert feed. */}
+            {desk && (
+              <>
+                <button onClick={() => addTile('positions')} style={ghostBtn}>+ Positions</button>
+                <button onClick={() => addTile('metrics')} style={ghostBtn}>+ Metrics</button>
+                <button onClick={() => addTile('alerts')} style={ghostBtn}>+ Alerts</button>
+              </>
+            )}
+            {desk && !isUnsaved && (
               <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>Rename</button>
             )}
-            {!isUnsaved && (
+            {desk && !isUnsaved && (
               <button onClick={setDefault} style={ghostBtn} title="Show this board by default">Set default</button>
             )}
-            {!isUnsaved && (
+            {desk && !isUnsaved && (
               <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>{"Delete"}</button>
             )}
-            <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>
+            {desk && <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>}
           </>
         )}
         {editing && (
@@ -519,6 +556,15 @@ function PresetPicker({
         )}
     </>
   );
+}
+
+// Tiles that read the desk rather than public market data. A viewer without
+// Advanced Trading never sees these — the same three kinds the server strips
+// from anything they save (routes/trading.ts).
+const DESK_TILE_KINDS = new Set<BoardTileKind>(['positions', 'metrics', 'alerts']);
+
+function allowedTiles(tiles: BoardTile[], desk: boolean): BoardTile[] {
+  return desk ? tiles : tiles.filter((t) => !DESK_TILE_KINDS.has(t.kind));
 }
 
 // react-grid-layout drag/resize visuals themed to the navy/gold desk.

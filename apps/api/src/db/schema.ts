@@ -886,6 +886,35 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
 });
 export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
 
+// ---- Feature Access (My Portal ▸ Feature Access) ----
+// One row per user recording which optional parts of the portal they have turned
+// on for themselves. Everything here is OFF for a new account — Markets,
+// Investments, Studies, My Portal and Site Help need no row and are never listed
+// here, because every account has them.
+//
+// `funded` is nested under `advancedTrading`: the challenge tracker is part of
+// the desk, so it can never be on while the desk is off (the service enforces
+// that, not just the UI). `tradingAckAt` stamps when the user acknowledged that
+// Advanced Trading places real orders with their own broker — the desk cannot be
+// switched on without it, and the stamp is kept after an opt-out so re-enabling
+// does not ask again.
+//
+// Turning a feature off only hides it. No trade, account or setting is touched,
+// so flipping it back on restores the workspace exactly as it was.
+export const userFeatures = sqliteTable('user_features', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  advancedTrading: integer('advanced_trading', { mode: 'boolean' }).notNull().default(false),
+  funded: integer('funded', { mode: 'boolean' }).notNull().default(false),
+  tradingAckAt: integer('trading_ack_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type UserFeatureRow = typeof userFeatures.$inferSelect;
+
 // ---- Trading — Market Data board layout ----
 // One row per trader holding how they have arranged the Market Data screen:
 // which series are pinned to the strip (ordered), which they removed from the

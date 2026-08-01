@@ -9,7 +9,7 @@ import {
   type WorkspaceKey,
   type Theme,
 } from '../theme/themes';
-import { NAV, navFor, accentFor } from '../theme/nav';
+import { NAV, navFor, accentFor, OPT_IN_WORKSPACES } from '../theme/nav';
 import { applyNavOrder } from '../theme/navOrder';
 import { C } from '../theme/tokens';
 import {
@@ -66,6 +66,7 @@ import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
 import { ComingSoon, COMING_SOON_SCREENS } from '../workspaces/investments/ComingSoon';
+import { FeatureAccess } from '../workspaces/myportal/FeatureAccess';
 
 // The Studies screens are code-split into a lazy chunk that only loads when the
 // Studies workspace is opened — keeping the initial app load lean for everyone
@@ -193,7 +194,12 @@ const SECTION_ACTIVITY: Record<string, 'suggestions' | 'support'> = {
 // still outstanding until somebody replies or closes the report.
 const BUG_DOT_SECTION = 'ad_bugs';
 
+// Where a user lands on sign-in: Markets, whose first section is the Live Wall.
+// That is the same board this has always opened on, and it is the one workspace
+// every account has — so the landing screen is identical for a trader and for
+// someone who has opted into nothing.
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
+  if (allowed.includes('markets')) return 'markets';
   if (allowed.includes('trading')) return 'trading';
   return allowed[0] ?? 'studies';
 }
@@ -214,14 +220,28 @@ export function Portal() {
   // selected role. Pure UI gating; the server still enforces real roles.
   const [actingRole, setActingRole] = useState<RoleKey | null>(null);
   const effectiveRoles: RoleKey[] = actingRole ? [actingRole] : user!.roles;
+  // The optional features this account has turned on (My Portal ▸ Feature
+  // Access). Kept alongside roles because they gate different things: a role is
+  // what you're allowed to do, a feature is what you've asked to see.
+  const features = user!.access.features;
   const allowed = useMemo(
-    () => workspacesForRoles(effectiveRoles),
+    () => workspacesForRoles(effectiveRoles, features),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [actingRole, user],
   );
+  // Opt-in workspaces this user has NOT turned on. The sidebar still draws them,
+  // dimmed and locked, so the feature is discoverable; clicking one opens
+  // Feature Access rather than the workspace.
+  const locked = useMemo(
+    () =>
+      new Set<WorkspaceKey>(
+        (Object.keys(OPT_IN_WORKSPACES) as WorkspaceKey[]).filter((ws) => !allowed.includes(ws)),
+      ),
+    [allowed],
+  );
 
   const [workspace, setWorkspace] = useState<WorkspaceKey>(() =>
-    pickInitialWorkspace(workspacesForRoles(user!.roles)),
+    pickInitialWorkspace(workspacesForRoles(user!.roles, user!.access.features)),
   );
   const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
   const [aiOpen, setAiOpen] = useState(false);
@@ -376,6 +396,14 @@ export function Portal() {
 
   const selectWorkspace = useCallback(
     (ws: WorkspaceKey) => {
+      // A locked (not-opted-into) workspace isn't a destination — it's an offer.
+      // Send the click to the screen that can actually turn it on.
+      if (locked.has(ws)) {
+        setWorkspace('myportal');
+        setScreen('my_access');
+        resetScroll();
+        return;
+      }
       setWorkspace(ws);
       setScreen(DEFAULT_SCREEN[ws]);
       // Keep the mobile nav drawer open when switching workspaces so the owner
@@ -383,7 +411,7 @@ export function Portal() {
       // (see selectScreen).
       resetScroll();
     },
-    [resetScroll],
+    [resetScroll, locked],
   );
 
   const selectScreen = useCallback(
@@ -419,7 +447,7 @@ export function Portal() {
 
   function changeActingRole(r: RoleKey | null) {
     setActingRole(r);
-    const nextAllowed = workspacesForRoles(r ? [r] : user!.roles);
+    const nextAllowed = workspacesForRoles(r ? [r] : user!.roles, user!.access.features);
     if (!nextAllowed.includes(workspace)) {
       const ws = pickInitialWorkspace(nextAllowed);
       setWorkspace(ws);
@@ -427,9 +455,8 @@ export function Portal() {
     }
   }
 
-  // The private Funded section follows the same "view as role" preview as the
-  // rest of the nav; never revealed to the demo.
-  const canFunded = !user!.isDemo && canAccessFunded(effectiveRoles);
+  // The nested Funded Account opt-in. Never revealed to the demo.
+  const canFunded = !user!.isDemo && canAccessFunded(features);
 
   // The Employee Portal row above the workspaces list. Needs the `employee` role
   // AND a company-domain sign-in email; follows the same "view as role" preview
@@ -437,16 +464,24 @@ export function Portal() {
   // that site has its own sign-in, so revealing it grants nothing on its own.
   const canEmployee = !user!.isDemo && canAccessEmployeePortal(effectiveRoles, user!.email);
 
-  // Keep the selected screen valid for the current workspace. Also bounce a
-  // non-funded viewer off the private Funded section if stale state lands there.
+  // Keep the selected workspace and screen valid. Turning a feature off from
+  // Feature Access can pull the workspace you are standing in out from under
+  // you, so bounce out of it rather than leaving a dead screen mounted; the same
+  // effect drops a viewer off the Funded section when that opt-in goes off.
   useEffect(() => {
+    if (!allowed.includes(workspace)) {
+      const ws = pickInitialWorkspace(allowed);
+      setWorkspace(ws);
+      setScreen(DEFAULT_SCREEN[ws]);
+      return;
+    }
     const nav = navFor(workspace);
     if (!nav) return;
     const fundedLocked = screen === 'prop' && !canFunded;
     if (!nav.sections.some((s) => s.key === screen) || fundedLocked) {
       setScreen(DEFAULT_SCREEN[workspace]);
     }
-  }, [workspace, screen, canFunded]);
+  }, [workspace, screen, canFunded, allowed]);
 
   // Screens that need the live user or the acting-role controls (which the
   // stateless renderScreen doesn't have): the Site Help workspace and the Admin
@@ -459,6 +494,8 @@ export function Portal() {
     switch (scr) {
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
+      case 'my_access':
+        return <FeatureAccess theme={theme} />;
       case 'my_prefs':
         return <Preferences theme={theme} />;
       case 'my_settings':
@@ -511,6 +548,7 @@ export function Portal() {
       workspace={workspace}
       screen={screen}
       workspaces={allowed}
+      lockedWorkspaces={locked}
       nav={orderedNav}
       canFunded={canFunded}
       canEmployee={canEmployee}

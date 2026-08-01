@@ -110,7 +110,7 @@ Tech:
 
 - **DB:** SQLite via **Drizzle ORM** on the **libsql** driver (`@libsql/client`);
   file at `DATABASE_URL` (default `file:./data/vts.db`; prod uses a Railway
-  volume). Schema in `apps/api/src/db/schema.ts`; ~82 SQL migrations in
+  volume). Schema in `apps/api/src/db/schema.ts`; ~83 SQL migrations in
   `apps/api/migrations` (`db:migrate`), seed with `db:seed`. Per-user deletes
   are **explicit** in `admin/service.ts` (no `ON DELETE CASCADE`) — when you add
   a per-user table, add it to that delete list too.
@@ -125,10 +125,10 @@ Tech:
 
 ### Where things live
 
-- API modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,employee,feedback,legal,messageTemplates,notifications,patchNotes,security,settings,studies,support,teams,todo,trading,userTeams}`.
+- API modules: `apps/api/src/{admin,ai,auth,badges,chat,demo,earlyAccess,employee,feedback,features,legal,messageTemplates,notifications,patchNotes,security,settings,studies,support,teams,todo,trading,userTeams}`.
   Routes in `apps/api/src/routes/*`, registered in `server.ts` (health, auth,
   admin, earlyAccess, brokers, trading, tradeDesk, webhooks, tvWebhook, todo, ai,
-  chat, feedback, studies, push, pushover, content).
+  chat, feedback, features, studies, push, pushover, content).
 - Web shell: `apps/web/src/components` (`Portal.tsx` is the router/shell,
   `Sidebar.tsx`, `TopBar.tsx`, `AskClaudePanel.tsx`, `TeamChat.tsx`,
   `UpdatePrompt.tsx`, `InstallPrompt.tsx`, …).
@@ -154,10 +154,17 @@ Tech:
 
 ## Workspaces & sections (`theme/nav.ts`)
 
-Sections a user lacks the role for are hidden. **My Portal is pinned to the very
-top of the workspaces list** (see `theme/nav.ts` order).
+Sections a user lacks the role for — or the **feature opt-in** for (see Feature
+Access below) — are hidden. **My Portal is pinned to the very top of the
+workspaces list** (see `theme/nav.ts` order).
 
-- **Advanced Trading** (gold, internal key `trading`): Live Wall, Trading Alerts (`alerts`),
+- **Markets** (sky blue, key `markets`) — **included with every account, no
+  opt-in**: Live Wall (`live`), Market Data (`data`), Market News (`news`).
+  Everything here reads public market data — no trade, no broker, no balance —
+  which is exactly why it sits outside the Advanced Trading opt-in and is the
+  portal's floor for a user who has turned nothing on. It is also the landing
+  workspace on sign-in for everybody.
+- **Advanced Trading** (gold, internal key `trading`) — **opt-in**: Trading Alerts (`alerts`),
   **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
   (`desk` — merges Trade Log + History + Live Brokers; legacy keys
   `log`/`history`/`metrics` alias into it. **The key stayed `desk` when the label
@@ -168,9 +175,11 @@ top of the workspaces list** (see `theme/nav.ts` order).
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
   Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
-  Manual Trades (`funded` key, `FundedScreen`), **Funded**
-  (`prop` key — role-gated prop-firm challenge dashboard), **Market Data**
-  (`data` key, sits directly above Market News), Market News, To Do.
+  Manual Trades (`funded` key, `FundedScreen`), **Funded Account**
+  (`prop` key — the nested opt-in; prop-firm challenge dashboard), To Do.
+  Market Data and Market News moved to **Markets**; their section keys are
+  unchanged (`data` / `news`), so saved `nav.order` overrides, `howto` wording
+  and in-app links keep working.
   - **Trade Desk** (`tradedesk`, `workspaces/trading/TradeDesk.tsx` +
     `OrderTicket.tsx` + `DeskPositions.tsx`) is where a trade is **placed**. It
     sends real orders to the trader's **own** OANDA account: market / limit /
@@ -251,7 +260,8 @@ top of the workspaces list** (see `theme/nav.ts` order).
     (`canEditDeskSettingsFor` / `editableDeskMembers`). The `DeskSettingsModal`
     "Whose settings" picker surfaces this. `getTrades` / `getHistory` /
     `getLiveWall` score each viewer's desk with the **viewer's own** settings.
-  - **Market Data** (`data`, `workspaces/trading/MarketData.tsx`) is the desk's
+  - **Market Data** (`data`, `workspaces/trading/MarketData.tsx` — now a
+    **Markets** section, files unchanged) is the desk's
     read-only board of every rate, print and price it watches: 75 series across
     ten groups (policy, inflation, labor, yields, FX, commodities, crypto,
     indices, macro, sessions), each with five changes (1D/1W/1M/YTD/1Y) and who
@@ -295,7 +305,8 @@ top of the workspaces list** (see `theme/nav.ts` order).
       also holds the session-window, countdown and "in 2h 18m" helpers. Use it
       for anything schedule-shaped; `newsFormat.ts` remains the formatter for an
       instant you already have.
-  - **Market News** (`news`, `workspaces/trading/MarketNews.tsx`) is two things:
+  - **Market News** (`news`, `workspaces/trading/MarketNews.tsx` — now a
+    **Markets** section, files unchanged) is two things:
     the **headline feed** and an embedded **YouTube live-stream wall**. The feed
     is every story the desk's feeds carry (`GET /api/trading/news` — the same
     shared `trading_news` rows; the payload's `calendar` is now read only by
@@ -402,8 +413,9 @@ top of the workspaces list** (see `theme/nav.ts` order).
   retirement providers (Fidelity, Vanguard 401k) don't expose per-user API keys
   the way OANDA/Kraken do. Every advice-flavored surface must carry an
   "informational only, not investment advice" disclaimer.
-- **My Portal** also gains two personal roll-up sections (emerald), both
-  currently "Coming Soon":
+- **My Portal** also holds **Feature Access** (`my_access`) — the per-user opt-in
+  screen, see its own section below — plus two personal roll-up sections
+  (emerald), both currently "Coming Soon":
   - **Investment Holdings** (`my_holdings`) — a combined summary of active
     Advanced Trading positions + the total long-term Investments portfolio and
     stats across both.
@@ -464,6 +476,76 @@ Removed and gone (do not reintroduce or reference): the standalone To-Do
 workspace, Vitalis Wealth Management, Personal Finance, the Vitalis LLC business
 workspace, and Kia Sales.
 
+## Feature Access — the per-user opt-in (`features/service.ts`)
+
+**My Portal ▸ Feature Access** (`my_access`, `workspaces/myportal/FeatureAccess.tsx`)
+is where a user turns the optional parts of the portal on and off for
+themselves. Self-service and immediate — there is no approval queue and no route
+that changes anyone else's account.
+
+Only two things are optional, and both are the trading desk:
+
+- **Advanced Trading** — the whole `trading` workspace.
+- **Funded Account** — **nested under** Advanced Trading. `setUserFeatures`
+  refuses `funded: true` while the desk is off, and `getUserFeatures` masks it to
+  false regardless of the row — but the user's own tick is **kept** in the row,
+  so switching the desk off and back on brings Funded back rather than silently
+  forgetting it.
+
+Everything else — **Markets, Investments, Studies, My Portal, Site Help** — is
+included with every account and deliberately has nothing to opt into: none of it
+holds money or places an order, and a portal without it is worth nothing to an
+average user. The Feature Access screen lists them as "Included with your
+account" rather than hiding them, so the screen reads as the whole picture.
+
+- **Storage:** `user_features`, one row per user (migration `0083`), in the
+  `admin/service.ts` per-user delete list. Everything defaults **off** for a new
+  account. `tradingAckAt` stamps the acknowledgement that the desk places real
+  orders with the user's own broker — **the desk cannot be enabled without it**
+  (`FeatureError`), and the stamp survives an opt-out so returning does not ask
+  twice.
+- **Turning a feature off only hides it.** No trade, account or setting is
+  touched, so re-enabling restores the workspace exactly as it was. Do not add a
+  destructive opt-out.
+- **Grandfathering:** migration `0083` gives every pre-existing account
+  Advanced Trading (everyone reached it before) plus a stamped acknowledgement,
+  and Funded to whoever passed the old role gate. `seed.ts` does the same for the
+  first-boot owner, since on a fresh install the migration has nobody to carry
+  over.
+- **Enforcement is server-side.** `requireWorkspace('trading')` /
+  `requireWorkspaceWrite('trading')` check the opt-in as well as the role, so
+  every endpoint already behind them inherits the gate. `requireFunded` checks
+  the nested opt-in. `requireMarkets` is the always-on guard for the
+  market-facing endpoints (news, calendar, market data, boards, price alerts).
+  The demo is forced to `advancedTrading: true` (so the tour is complete) and
+  `funded: false`, and its writes are refused by `demoGuard` anyway.
+- **Routes:** `GET|PUT /api/features` (`routes/features.ts`). The client reads
+  the same values off `user.access.features`; `AuthContext.refreshUser()` re-reads
+  the user after a toggle so the sidebar and routing update without a reload.
+- **The sidebar draws an un-opted workspace dimmed with a padlock** rather than
+  hiding it (`OPT_IN_WORKSPACES` in `theme/nav.ts`, `lockedWorkspaces` in
+  `Sidebar.tsx`); clicking it opens Feature Access instead of the workspace.
+  Keep that — discoverability is the point, and it is where a paid tier would
+  surface later.
+
+### One Live Wall, two audiences
+
+`live` is the Markets workspace's board and serves both kinds of user off one
+screen — deliberately, so there is no lite duplicate to keep in sync:
+
+- **Without Advanced Trading:** the market half — chart, watchlist, news and
+  calendar tiles — on **one** saved board (no named presets), and no Positions
+  view, no Connections, no desk settings. `LiveWall` never even calls
+  `/api/trading/live`.
+- **With it:** the Positions view returns, the desk tiles (`positions`,
+  `metrics`, `alerts`) join the palette, and named presets come back.
+
+Both limits are applied **server-side too** (`routes/trading.ts`): a second board
+is refused, and desk tiles are stripped from anything a non-desk user saves. The
+client mirror is `DESK_TILE_KINDS` in `ChartBoard.tsx`; a board saved while the
+user had the desk keeps its desk tiles in the database and simply doesn't render
+them while the desk is off.
+
 ## Roles & access (`auth/rbac.ts`)
 
 Granular, admin-assigned roles (JSON array in `users.roles`); a user may hold
@@ -473,8 +555,6 @@ any combination:
 - `trading` — full Trading.
 - `trading_viewer` — **read-only** Trading (the only read-only variant;
   `requireWorkspaceWrite` blocks it).
-- `funded` — reveals the private **Funded** prop-challenge section inside Trading
-  (still needs Trading access; `requireFunded`). Never the demo.
 - `employee` — reveals **My Portal ▸ Employee Portal** and permits the separate
   sign-in at `/employee`. **Not** implied by admin or founder level — it must be
   granted outright, by a founder. It unlocks nothing inside the main portal, and
@@ -482,10 +562,15 @@ any combination:
   (`canAccessEmployeePortal(roles, email)`). Never the demo.
 - `studies` — Studies.
 
+**Retired: `funded`.** The Funded tracker used to be an admin-granted role; it
+is now the nested opt-in above, so the role is gone from `ROLE_KEYS` and the
+admin pickers, and the opt-in is the only gate. Do not reintroduce it — two
+sources of truth for the same section is exactly what this removed.
+
 Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`,
-`requireWorkspace(ws)`, `requireWorkspaceWrite(ws)`, `requireFunded`. The
-legacy `users.role` string column is still populated but **unused** — real
-roles live in `users.roles`.
+`requireWorkspace(ws)`, `requireWorkspaceWrite(ws)`, `requireMarkets`,
+`requireAdvancedTrading`, `requireFunded`. The legacy `users.role` string column
+is still populated but **unused** — real roles live in `users.roles`.
 
 ## Teams (`teams/service.ts`) — scope almost everything
 
@@ -915,7 +1000,9 @@ hardcoded" below.)
   (or, if unset, a key derived from `SESSION_SECRET`) encrypts broker creds.
   Rotating either **invalidates all sessions and makes stored broker creds
   undecryptable** — re-enter creds after a rotation.
-- **Demo** (`demo/`): username `demo`, roles `['trading','studies']`, own team.
+- **Demo** (`demo/`): username `demo`, roles `['member']`, own team. Its feature
+  opt-ins are forced by `featuresForUser` — Advanced Trading **on** so the tour is
+  complete, Funded **off** — rather than read from a stored row.
   `demoGuard` allows only GET/HEAD/OPTIONS + logout, serves canned AI/brief
   responses (no real Claude spend), and 403s every other write. UI also renders
   all demo workspaces read-only.

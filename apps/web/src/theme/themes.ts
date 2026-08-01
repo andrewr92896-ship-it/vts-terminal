@@ -3,6 +3,7 @@
 // lives in theme/nav.ts, the single source of truth.)
 
 export type WorkspaceKey =
+  | 'markets'
   | 'trading'
   | 'investments'
   | 'studies'
@@ -42,6 +43,21 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent: '#EBCB74',
     accent2: '#C9A24B',
     accentText: '#0c2768',
+  },
+  // Markets: the always-on market-watching workspace — the chart/news board,
+  // headlines and the market-data board. It shares Advanced Trading's navy
+  // ground (it is the same market, read the same way) but signals with a cooler
+  // sky-blue rather than the desk's gold, so the two are never confused: gold
+  // means you can place a trade, blue means you are watching.
+  markets: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0b2a52 0%,#060f24 55%)',
+    headerBg: 'linear-gradient(90deg,#0a2350 0%,#0d3068 100%)',
+    headerBorder: '#1c4278',
+    navBg: '#0a1834',
+    navBorder: '#16294f',
+    accent: '#5AC8FA',
+    accent2: '#3AA0D8',
+    accentText: '#062033',
   },
   // Investments: a calm teal accent for the long-term, layman-friendly portfolio
   // tracker (401k / IRA / ESA / general holdings). Distinct from the Advanced
@@ -112,7 +128,8 @@ export function accentGradient(t: Theme): string {
 }
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
-  trading: 'live',
+  markets: 'live',
+  trading: 'tradedesk',
   investments: 'inv_overview',
   studies: 'st_home',
   myportal: 'my_team',
@@ -122,6 +139,7 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
+  markets: 'Markets',
   trading: 'Advanced Trading',
   investments: 'Investments',
   studies: 'Studies',

@@ -1,6 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireFunded, requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
+import {
+  requireFunded,
+  requireMarkets,
+  requireWorkspace,
+  requireWorkspaceWrite,
+} from '../auth/middleware.js';
 import { getLiveWall } from '../trading/service.js';
 import {
   addTrade,
@@ -62,6 +67,7 @@ import {
   updateConnection,
 } from '../trading/connections.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
+import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
 import {
   addManualPosition,
@@ -133,10 +139,18 @@ const restoreSchema = z.object({
 });
 
 export async function tradingRoutes(app: FastifyInstance) {
+  // The desk. `requireWorkspace('trading')` now also checks the Advanced Trading
+  // opt-in (My Portal ▸ Feature Access), so everything on these two guards is
+  // refused for a user who has not turned the desk on.
   const read = { preHandler: requireWorkspace('trading') };
   const write = { preHandler: requireWorkspaceWrite('trading') };
-  // The Funded (prop-challenge) endpoints are a private, role-gated add-on: the
-  // caller needs Trading access *and* the admin-assigned `funded` role.
+  // The market-facing endpoints — headlines, the economic calendar, market data,
+  // the chart board. These live in the always-on Markets workspace, so they are
+  // deliberately open to every signed-in user, including one who has opted into
+  // nothing. Nothing on this guard reads a trade or reaches a broker.
+  const markets = { preHandler: requireMarkets };
+  // The Funded (prop-challenge) endpoints are the nested opt-in: the caller needs
+  // Advanced Trading *and* Funded Account turned on.
   const fundedRead = { preHandler: [requireWorkspace('trading'), requireFunded] };
   const fundedWrite = { preHandler: [requireWorkspaceWrite('trading'), requireFunded] };
 
@@ -401,28 +415,44 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // ---- Live Wall boards (per-user customizable chart/watchlist presets) ----
-  app.get('/api/trading/boards', read, async (request) => ({ boards: await listBoards(request.currentUser!.id) }));
-  app.post('/api/trading/boards', write, async (request, reply) => {
+  // The board is the Markets workspace's own screen, so it is open to everyone.
+  // What differs is how much of it a user gets: without Advanced Trading they
+  // keep ONE board (no named presets to switch between) and only the tiles that
+  // read public market data. Both limits are applied here, not just in the UI.
+  app.get('/api/trading/boards', markets, async (request) => ({ boards: await listBoards(request.currentUser!.id) }));
+  app.post('/api/trading/boards', markets, async (request, reply) => {
     const parsed = createBoardSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name is required' });
+    const userId = request.currentUser!.id;
+    const full = (await featuresForUser(request.currentUser!)).advancedTrading;
+    if (!full && (await listBoards(userId)).length >= 1) {
+      return reply
+        .code(400)
+        .send({ error: 'Saved presets are part of Advanced Trading — edit your board instead' });
+    }
     try {
-      const board = await createBoard(request.currentUser!.id, parsed.data);
-      return { board, boards: await listBoards(request.currentUser!.id) };
+      const board = await createBoard(userId, { ...parsed.data, layout: allowedLayout(parsed.data.layout, full) });
+      return { board, boards: await listBoards(userId) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save board' });
     }
   });
-  app.patch('/api/trading/boards/:id', write, async (request, reply) => {
+  app.patch('/api/trading/boards/:id', markets, async (request, reply) => {
     const parsed = editBoardSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Check the board details' });
+    const userId = request.currentUser!.id;
+    const full = (await featuresForUser(request.currentUser!)).advancedTrading;
     try {
-      const board = await updateBoard(request.currentUser!.id, (request.params as { id: string }).id, parsed.data);
-      return { board, boards: await listBoards(request.currentUser!.id) };
+      const board = await updateBoard(userId, (request.params as { id: string }).id, {
+        ...parsed.data,
+        layout: allowedLayout(parsed.data.layout, full),
+      });
+      return { board, boards: await listBoards(userId) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update board' });
     }
   });
-  app.delete('/api/trading/boards/:id', write, async (request) => {
+  app.delete('/api/trading/boards/:id', markets, async (request) => {
     await removeBoard(request.currentUser!.id, (request.params as { id: string }).id);
     return { boards: await listBoards(request.currentUser!.id) };
   });
@@ -431,31 +461,34 @@ export async function tradingRoutes(app: FastifyInstance) {
   // The catalog is code-resident and identical for everyone; the layout is
   // personal. Two calls rather than one so the catalog response stays cacheable
   // and a layout save never has to round-trip 75 series.
-  app.get('/api/trading/market-data', read, async () => getMarketData());
+  app.get('/api/trading/market-data', markets, async () => getMarketData());
 
-  app.get('/api/trading/market-data/layout', read, async (request) => ({
+  app.get('/api/trading/market-data/layout', markets, async (request) => ({
     layout: await getMarketDataLayout(request.currentUser!.id),
   }));
 
-  app.put('/api/trading/market-data/layout', write, async (request, reply) => {
+  app.put('/api/trading/market-data/layout', markets, async (request, reply) => {
     const parsed = marketDataLayoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid board layout' });
     return { layout: await setMarketDataLayout(request.currentUser!.id, parsed.data) };
   });
 
   // ---- Market News live streams ----
-  // The channel catalog is code-resident and identical for everyone (see
-  // trading/marketNewsStreams.ts). The channel list belongs to the desk — any
-  // teammate can add one by pasting a link and it appears for everyone — while
-  // which tiles are open, docked and armed for alerts stays personal.
-  // `liveConfigured` tells the client whether live status is real yet, so the
-  // screen can mark it as sample when it isn't.
-  app.get('/api/trading/market-news/streams', read, async (request) => ({
+  // The channel list belongs to the desk — any teammate can add one by pasting a
+  // link and it appears for everyone — while which tiles are open, docked and
+  // armed for alerts stays personal. `liveConfigured` tells the client whether
+  // live status is real yet, so the screen can mark it as sample when it isn't.
+  //
+  // These sit on `markets`, not `write`: Market News is part of the always-on
+  // Markets workspace, so gating the wall behind the Advanced Trading opt-in
+  // would let a user see it and not shape it. The demo is still refused every
+  // non-GET by demoGuard, so it watches without reshaping the desk's wall.
+  app.get('/api/trading/market-news/streams', markets, async (request) => ({
     streams: await getMarketNewsStreams(request.currentUser!),
     liveConfigured: liveStreamsConfigured(),
   }));
 
-  app.put('/api/trading/market-news/streams', write, async (request, reply) => {
+  app.put('/api/trading/market-news/streams', markets, async (request, reply) => {
     const parsed = marketNewsStreamsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid stream setup' });
     return {
@@ -467,7 +500,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   // Add a channel to the desk's wall from a pasted YouTube link. Behind
   // requireWorkspaceWrite, so a view-only role and the demo cannot change what
   // the whole desk sees.
-  app.post('/api/trading/market-news/channels', write, async (request, reply) => {
+  app.post('/api/trading/market-news/channels', markets, async (request, reply) => {
     const parsed = addChannelSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Paste a YouTube channel link' });
     try {
@@ -482,7 +515,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     };
   });
 
-  app.patch('/api/trading/market-news/channels/:key', write, async (request, reply) => {
+  app.patch('/api/trading/market-news/channels/:key', markets, async (request, reply) => {
     const parsed = editChannelSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing to update' });
     try {
@@ -497,7 +530,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     };
   });
 
-  app.delete('/api/trading/market-news/channels/:key', write, async (request) => {
+  app.delete('/api/trading/market-news/channels/:key', markets, async (request) => {
     await removeTeamChannel(request.currentUser!, (request.params as { key: string }).key);
     return {
       streams: await getMarketNewsStreams(request.currentUser!),
@@ -506,7 +539,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // ---- Market News (shared desk feed: headlines + economic calendar) ----
-  app.get('/api/trading/news', read, async () => getMarketNews());
+  app.get('/api/trading/news', markets, async () => getMarketNews());
 
   // Mirrored Truth Social posts (populated by the background poller).
   app.get('/api/trading/truth', read, async () => ({ posts: await listTruthPosts() }));
@@ -1333,6 +1366,22 @@ const boardTileSchema = z.object({
   alertsFilter: z.enum(['active', 'new']).optional(),
 });
 const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(40) });
+
+// Board tiles that read the desk: the team's open positions, desk performance,
+// and the TradingView alert feed. Everything else on the board — charts,
+// watchlists, headlines, the economic calendar — is public market data, which is
+// exactly the split that lets one board serve both a Markets-only user and a
+// trader. A user without Advanced Trading has these dropped from anything they
+// save, so a hand-made request can't put a positions tile on their board.
+const DESK_TILE_KINDS = new Set(['positions', 'metrics', 'alerts']);
+
+function allowedLayout(
+  layout: { tiles: z.infer<typeof boardTileSchema>[] } | undefined,
+  advancedTrading: boolean,
+) {
+  if (!layout || advancedTrading) return layout;
+  return { tiles: layout.tiles.filter((t) => !DESK_TILE_KINDS.has(t.kind)) };
+}
 const createBoardSchema = z.object({
   name: z.string().trim().min(1).max(80),
   layout: boardLayoutSchema.optional(),

@@ -10,12 +10,12 @@ export interface NavOrderOverride {
 }
 
 // Granular, admin-assigned roles (mirror of backend auth/rbac.ts ROLE_KEYS).
-// A user can hold any combination.
+// A user can hold any combination. (`funded` is retired — the Funded tracker is
+// a per-user opt-in under Advanced Trading now, not a granted role.)
 export type RoleKey =
   | 'founder'
   | 'software_developer'
   | 'admin'
-  | 'funded'
   | 'employee'
   | 'member';
 
@@ -71,6 +71,18 @@ export interface TestLeaderboardEntry {
   isMe: boolean;
 }
 
+// The optional parts of the portal a user turns on for themselves in My Portal ▸
+// Feature Access. Everything else — Markets, Investments, Studies, My Portal,
+// Site Help — is included with every account and never appears here. Funded is
+// nested under Advanced Trading and cannot be on without it. Matches the
+// backend's UserFeatures (features/service.ts).
+export interface UserFeatures {
+  advancedTrading: boolean;
+  funded: boolean;
+  // When the user acknowledged what the trading desk does (ms), or null.
+  tradingAckAt: number | null;
+}
+
 // Matches the backend's PublicUser shape (auth/rbac.ts).
 export interface User {
   id: string;
@@ -98,8 +110,12 @@ export interface User {
     label: string;
     workspaces: WorkspaceKey[];
     readOnlyWorkspaces: WorkspaceKey[];
-    // Whether the private Funded (prop-challenge) section is revealed. Never true
-    // for the demo account.
+    // The optional features this user has turned on for themselves (My Portal ▸
+    // Feature Access). Drives which workspaces the sidebar draws; the server
+    // re-checks every endpoint regardless.
+    features: UserFeatures;
+    // Whether the Funded (prop-challenge) section is revealed — the Funded
+    // opt-in, nested under Advanced Trading. Never true for the demo account.
     funded: boolean;
     // Whether the Employee Portal (/employee) launch row is revealed. Reaching
     // that portal still requires a separate sign-in there. Never true for the demo.

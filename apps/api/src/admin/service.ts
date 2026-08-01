@@ -20,6 +20,7 @@ import {
   aiUsage,
   notificationPrefs,
   sessionAlertPrefs,
+  userFeatures,
   marketDataLayout,
   marketNewsStreams,
   priceAlerts,
@@ -77,12 +78,11 @@ function isOwnerRow(u: { username: string; createdUsername: string | null }): bo
 // Roles only the owner may grant/revoke (founder-level power).
 const OWNER_ONLY_ROLES: RoleKey[] = ['founder', 'software_developer'];
 // Roles only a founder-level user may grant/revoke.
-const FOUNDER_ONLY_ROLES: RoleKey[] = ['admin', 'funded', 'employee'];
+const FOUNDER_ONLY_ROLES: RoleKey[] = ['admin', 'employee'];
 
 // Human labels for the founder-only roles, used in the refusal message.
 const FOUNDER_ONLY_LABELS: Partial<Record<RoleKey, string>> = {
   admin: 'Admin',
-  funded: 'Funded',
   employee: 'Employee',
 };
 
@@ -376,6 +376,8 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingOrders).where(eq(tradingOrders.userId, targetId));
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
+    // Which optional features they had turned on (Feature Access).
+    await tx.delete(userFeatures).where(eq(userFeatures.userId, targetId));
     await tx.delete(marketDataLayout).where(eq(marketDataLayout.userId, targetId));
     await tx.delete(marketNewsStreams).where(eq(marketNewsStreams.userId, targetId));
     await tx.delete(priceAlerts).where(eq(priceAlerts.userId, targetId));
