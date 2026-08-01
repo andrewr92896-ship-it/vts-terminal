@@ -468,14 +468,32 @@ workspaces list** (see `theme/nav.ts` order).
       `sanitize`.
     - **Whether a channel is playing no longer depends on the API key.** The
       keyless `/live` read above answers that for every channel, on a short TTL
-      (90s live, 2 min dark) refreshed fire-and-forget on read, with the screen
-      polling the streams endpoint every 45s — so a channel going live reaches an
-      open tile in under about three minutes without anyone reloading. There are
+      (90s live, 2 min dark, 1 min after a failed read), with the screen polling
+      the streams endpoint every 45s — so a channel going live reaches an open
+      tile in under about three minutes without anyone reloading. There are
       deliberately **two independent routes to a playable tile**: that keyless
       read, and the Data API poller, which now records the live video's own id in
       `LiveState.videoId`. Either producing an id is enough. Do not collapse them
       into one — the wall has to work for a press conference that happens eight
       times a year and cannot be rehearsed.
+      - **Those TTLs decide when to re-read, never what to show.** The cache is
+        stale-while-revalidate (`cachedLiveRead`): the last answer stands until a
+        new one replaces it or it passes `LIVE_VIDEO_MAX_AGE_MS` (15 min). Tying
+        the two together is a bug with teeth — a stream playing perfectly well
+        drops out of the payload the moment its 90-second reading expires, so the
+        tile blanks, and a page refresh timed into that gap makes a working
+        stream vanish. That shipped once; do not re-tie them.
+      - **A failed read is not darkness.** `readLivePage` returns `{video, ok}`:
+        a page understood says either "here is the broadcast" or "this channel is
+        dark" (both `ok: true`), while a consent wall, bot check or moved markup
+        carries no canonical link at all and is `ok: false`. Only `ok: true`
+        reaches the client as `liveChecked`. Collapsing the two tells a client a
+        channel is off air on the strength of never having looked, and takes away
+        the fallback embed that would have played it — which is exactly how three
+        working tiles came to read "not live right now".
+      - A channel **never read before** is the one case the response waits on
+        (`COLD_READ_BUDGET_MS`, 2.5s), so a cold process paints real state instead
+        of a wall of empty tiles for a whole poll cycle. Steady state never waits.
     - **`YOUTUBE_API_KEY` still governs the extras** (`trading/youtube.ts` +
       `trading/youtubeWatch.ts`): viewer counts and the go-live push.
       `liveStreamsConfigured()` just reports whether that key exists. The watch is

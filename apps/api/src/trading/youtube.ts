@@ -271,8 +271,18 @@ export interface LiveVideo {
   upcoming: boolean;
 }
 
-interface LiveVideoEntry {
+// The outcome of one read, and the distinction that matters: `ok` says the page
+// was actually fetched and understood. `ok: true, video: null` is "we looked and
+// the channel is dark" — a real answer. `ok: false` is "we could not find out",
+// which must NOT be reported as darkness, or a channel the server simply cannot
+// reach gets a confident "not live right now" and loses the fallback embed that
+// would otherwise have played it.
+export interface LiveRead {
   video: LiveVideo | null;
+  ok: boolean;
+}
+
+interface LiveVideoEntry extends LiveRead {
   checkedAt: number;
 }
 
@@ -284,30 +294,54 @@ interface LiveVideoEntry {
 // quota never was.
 const LIVE_VIDEO_TTL_LIVE_MS = 90 * 1000;
 const LIVE_VIDEO_TTL_DARK_MS = 2 * 60 * 1000;
+// A failed read is retried sooner than a dark one — it carries no information,
+// and the sooner it is replaced by a real answer the better.
+const LIVE_VIDEO_TTL_FAILED_MS = 60 * 1000;
 const LIVE_PAGE_TIMEOUT_MS = 6000;
 
 const liveVideoCache = new Map<string, LiveVideoEntry>();
-// Channels with a read in flight, so a burst of readers costs one fetch.
-const liveVideoInFlight = new Set<string>();
+// Reads in flight, keyed by channel, so a burst of readers shares one fetch —
+// and so a caller that wants to wait can await the one already running.
+const liveVideoPending = new Map<string, Promise<void>>();
 
+// Past this an answer is too old to stand behind at all and the channel reads as
+// unknown again. Far longer than the refresh cadences above, because this is not
+// the "go and re-read" threshold — it is the "stop believing the last answer"
+// one.
+const LIVE_VIDEO_MAX_AGE_MS = 15 * 60 * 1000;
+
+// Whether it is time to re-read. Governs fetching only.
 function liveVideoFresh(e: LiveVideoEntry): boolean {
-  const ttl = e.video?.live ? LIVE_VIDEO_TTL_LIVE_MS : LIVE_VIDEO_TTL_DARK_MS;
+  const ttl = !e.ok
+    ? LIVE_VIDEO_TTL_FAILED_MS
+    : e.video?.live
+      ? LIVE_VIDEO_TTL_LIVE_MS
+      : LIVE_VIDEO_TTL_DARK_MS;
   return Date.now() - e.checkedAt < ttl;
 }
 
-// What we currently believe, or undefined when nothing has been read yet. Never
-// fetches — callers that want a refresh ask for one explicitly.
-export function cachedLiveVideo(channelId: string): LiveVideo | null | undefined {
+// What we currently believe — **stale-while-revalidate**, and that distinction is
+// the whole point. The TTLs above decide when to go and look again; they must not
+// decide what to show in the meantime.
+//
+// Tying the two together is a bug with teeth: a stream that is playing perfectly
+// well drops out of the payload the moment its 90-second reading expires, so the
+// tile blanks until a background read lands — and a page refresh timed into that
+// gap makes a working stream vanish. The last answer stands until a new one
+// replaces it, or until it is old enough (LIVE_VIDEO_MAX_AGE_MS) that believing
+// it would be worse than admitting we do not know.
+export function cachedLiveRead(channelId: string): LiveRead | undefined {
   const e = liveVideoCache.get(channelId);
   if (!e) return undefined;
-  return liveVideoFresh(e) ? e.video : undefined;
+  if (Date.now() - e.checkedAt > LIVE_VIDEO_MAX_AGE_MS) return undefined;
+  return { video: e.video, ok: e.ok };
 }
 
-// Read the channel's `/live` page and pull out what it is broadcasting. Returns
-// null for a dark channel, and never throws — a layout change upstream degrades
-// this to "offline", which is the same place the old embed started from.
-export async function fetchLiveVideo(channelId: string): Promise<LiveVideo | null> {
-  if (!CHANNEL_ID_RE.test(channelId)) return null;
+// Read the channel's `/live` page and report what it is broadcasting. Never
+// throws: a failure comes back as `ok: false`, which the tile treats as "unknown"
+// and falls back on, rather than as darkness.
+export async function fetchLiveVideo(channelId: string): Promise<LiveRead> {
+  if (!CHANNEL_ID_RE.test(channelId)) return { video: null, ok: false };
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), LIVE_PAGE_TIMEOUT_MS);
@@ -322,17 +356,33 @@ export async function fetchLiveVideo(channelId: string): Promise<LiveVideo | nul
       },
     });
     clearTimeout(timer);
-    if (!res.ok) return null;
-    return parseLivePage(await res.text());
+    if (!res.ok) return { video: null, ok: false };
+    return readLivePage(await res.text());
   } catch {
-    return null;
+    return { video: null, ok: false };
   }
 }
 
 // The parsing half, split out from the fetch so it can be exercised directly
-// against saved pages. Everything this reads is a fact stated in the page; when
-// upstream markup changes this returns null and the tile falls back, rather than
-// guessing.
+// against saved pages.
+//
+// The `ok` flag is the whole point of the split return. A page we understood
+// says either "here is the broadcast" or "this channel is dark" — both are
+// answers. A page we did not understand (a consent wall, a bot check, markup
+// that moved) carries no canonical link at all, and must be reported as a
+// non-answer so the tile keeps its fallback instead of being told the channel
+// is off air.
+export function readLivePage(html: string): LiveRead {
+  const canonical = html.match(
+    /<link\s+rel="canonical"\s+href="https:\/\/www\.youtube\.com\/(watch\?v=[A-Za-z0-9_-]{11}|channel\/UC[A-Za-z0-9_-]{22}|@[A-Za-z0-9._-]+)"/,
+  );
+  // No canonical link of any recognised shape: this is not a page we read.
+  if (!canonical) return { video: null, ok: false };
+  return { video: parseLivePage(html), ok: true };
+}
+
+// What the page says is playing, or null when it says nothing is. Callers that
+// need to tell "nothing" from "could not read" use readLivePage.
 export function parseLivePage(html: string): LiveVideo | null {
   try {
     // The canonical link is the reliable one: on a live (or scheduled) channel
@@ -375,27 +425,35 @@ function decodeHtml(s: string): string {
     .replace(/&gt;/g, '>');
 }
 
-// Kick off a refresh if what we hold has gone stale. Fire-and-forget by design:
-// a screen load never waits on YouTube, it just reads whatever the last answer
-// was and gets the new one on the next poll.
-export function refreshLiveVideo(channelId: string): void {
-  if (!CHANNEL_ID_RE.test(channelId)) return;
+// Refresh what we hold, if it has gone stale. Returns the promise so a caller
+// that wants to wait can — most do not.
+export function refreshLiveVideo(channelId: string): Promise<void> {
+  if (!CHANNEL_ID_RE.test(channelId)) return Promise.resolve();
   const e = liveVideoCache.get(channelId);
-  if (e && liveVideoFresh(e)) return;
-  if (liveVideoInFlight.has(channelId)) return;
-  liveVideoInFlight.add(channelId);
-  void fetchLiveVideo(channelId)
-    .then((video) => {
-      liveVideoCache.set(channelId, { video, checkedAt: Date.now() });
+  if (e && liveVideoFresh(e)) return Promise.resolve();
+  const running = liveVideoPending.get(channelId);
+  if (running) return running;
+  const p = fetchLiveVideo(channelId)
+    .then((read) => {
+      liveVideoCache.set(channelId, { ...read, checkedAt: Date.now() });
     })
     .catch(() => {
-      // Record the miss too, so a channel that keeps failing is retried on the
-      // dark cadence rather than on every single read.
-      liveVideoCache.set(channelId, { video: null, checkedAt: Date.now() });
+      // A thrown failure is still a failure, not darkness — `ok: false`, so the
+      // tile keeps its fallback and this is retried on the short cadence.
+      liveVideoCache.set(channelId, { video: null, ok: false, checkedAt: Date.now() });
     })
     .finally(() => {
-      liveVideoInFlight.delete(channelId);
+      liveVideoPending.delete(channelId);
     });
+  liveVideoPending.set(channelId, p);
+  return p;
+}
+
+// True when this channel has never been read, so the first paint of a wall can
+// afford to wait briefly for a real answer instead of showing a cold tile for a
+// whole poll cycle.
+export function liveVideoUnknown(channelId: string): boolean {
+  return CHANNEL_ID_RE.test(channelId) && !liveVideoCache.has(channelId);
 }
 
 // ---- daily quota ledger ----

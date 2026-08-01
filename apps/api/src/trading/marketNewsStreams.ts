@@ -9,9 +9,10 @@ import {
 } from '../db/schema.js';
 import {
   cachedChannelIdForHandle,
+  cachedLiveRead,
   cachedLiveState,
-  cachedLiveVideo,
   channelIdFromRef,
+  liveVideoUnknown,
   normHandle,
   parseYouTubeRef,
   refreshLiveVideo,
@@ -265,14 +266,16 @@ function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): Market
       // cannot be rehearsed. The keyless page read is the one that always
       // applies; the Data API poller is the second, and only exists when a key
       // is set. Either one producing a video id is enough.
-      const video = channelId ? cachedLiveVideo(channelId) : undefined;
-      if (video === undefined) {
-        // Nothing keyless yet — fall back to whatever the poller knows.
-        return live?.videoId ? { ...base, liveVideoId: live.videoId, liveChecked: true } : base;
-      }
+      const read = channelId ? cachedLiveRead(channelId) : undefined;
+      const video = read?.ok ? read.video : null;
+      // `liveChecked` means we know — the page was read and understood. A failed
+      // read (`ok: false`) is NOT knowledge: reporting it as darkness would tell
+      // the client a channel is off air on the strength of never having found
+      // out, and take away the fallback embed that might have played it.
+      const checked = read?.ok === true;
       if (!video) {
         if (live?.videoId) return { ...base, liveVideoId: live.videoId, liveChecked: true };
-        return { ...base, live: false, liveChecked: true };
+        return checked ? { ...base, live: false, liveChecked: true } : base;
       }
       return {
         ...base,
@@ -286,16 +289,33 @@ function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): Market
   };
 }
 
-// Ask for a fresh live reading on every channel that has an id. Fire-and-forget:
-// this never blocks the response, it only makes sure the *next* read (the
-// screen polls) has a current answer. Bounded by the cache's own TTL, so an open
-// wall costs one cheap page read per channel every 90s while live and every five
-// minutes while dark — no API key and no quota involved.
-function refreshLiveVideos(channels: CatalogChannel[]): void {
-  for (const c of channels) {
-    const id = resolvedChannelId(c);
-    if (id) refreshLiveVideo(id);
+// How long the first load of a wall will wait for a real answer. Only ever paid
+// on a channel nothing is known about yet — a cold process — and capped low
+// enough that a slow YouTube delays the screen rather than hanging it.
+const COLD_READ_BUDGET_MS = 2500;
+
+// Ask for a fresh live reading on every channel that has an id.
+//
+// Steady state is fire-and-forget: the response never waits, it serves the last
+// answer (stale-while-revalidate) and the background read updates it for the
+// next poll. The one exception is a channel that has **never** been read — on a
+// cold process every tile would otherwise sit blank for a whole poll cycle,
+// which reads as "the wall is broken" rather than "not checked yet". For those,
+// and only those, wait briefly for the truth.
+async function refreshLiveVideos(channels: CatalogChannel[]): Promise<void> {
+  const ids = channels.map((c) => resolvedChannelId(c)).filter(Boolean);
+  const cold: Promise<void>[] = [];
+  for (const id of ids) {
+    const first = liveVideoUnknown(id);
+    const p = refreshLiveVideo(id);
+    if (first) cold.push(p);
+    else void p.catch(() => {});
   }
+  if (cold.length === 0) return;
+  await Promise.race([
+    Promise.allSettled(cold).then(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, COLD_READ_BUDGET_MS)),
+  ]);
 }
 
 function parseStrings(raw: string): string[] {
@@ -397,7 +417,7 @@ export async function getMarketNewsStreams(viewer: ChannelViewer): Promise<Marke
       .then((r) => r[0]),
   ]);
   resolveMissingIds(channelScope(viewer), channels);
-  refreshLiveVideos(channels);
+  await refreshLiveVideos(channels);
   const keys = new Set(channels.map((c) => c.key));
   return withLiveState(row ? rowToView(row, keys) : defaultMarketNewsView(), channels);
 }
