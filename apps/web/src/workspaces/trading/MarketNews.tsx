@@ -105,11 +105,20 @@ function topicsOf(h: NewsItem): string[] {
   return [...set];
 }
 
-// What a tile actually plays. Two routes, and the order matters: embedding the
-// real video id is the reliable player, while `live_stream?channel=` is the
-// keyless guess that renders "This video is unavailable" often enough to have
-// left the whole wall dead. The server resolves the video id from the channel's
-// own page, so the fallback is only for a channel it hasn't read yet.
+// What a tile actually plays.
+//
+// The channel-based `live_stream?channel=` embed is the workhorse: it plays
+// these channels reliably, it needs nothing but the channel id, and it shows
+// YouTube's own card when the channel is dark. A specific video id is used only
+// when the server resolved one it trusts — worth it for a *scheduled* broadcast
+// (the Fed's waiting room, which the channel embed cannot show) and for the
+// Data API's answer.
+//
+// Deliberately not "video id first". Pointing the player at a guessed id renders
+// "This video is unavailable" on a channel that is broadcasting perfectly well,
+// which is strictly worse than the channel embed — knowing a channel is live and
+// knowing which video to play are separate facts, and only the second one breaks
+// the tile when it is wrong.
 function embedSrc(c: StreamChannel): string {
   if (c.liveVideoId) return `https://www.youtube.com/embed/${c.liveVideoId}?autoplay=1&rel=0`;
   return c.channelId ? `https://www.youtube.com/embed/live_stream?channel=${c.channelId}&autoplay=1&rel=0` : '';
@@ -180,7 +189,6 @@ export function MarketNews() {
 
   // --- live-stream setup (persisted per user) ---
   const [streams, setStreams] = useState<MarketNewsStreams | null>(null);
-  const [liveConfigured, setLiveConfigured] = useState(false);
   const [fomc, setFomc] = useState<FomcSchedule | null>(null);
 
   // --- feed filters / ephemeral UI ---
@@ -233,7 +241,6 @@ export function MarketNews() {
       .marketNewsStreams()
       .then((r) => {
         setStreams(r.streams);
-        setLiveConfigured(r.liveConfigured);
         if (r.fomc) setFomc(r.fomc);
       })
       .catch(() => setStreams(localDefaultStreams()));
@@ -250,7 +257,6 @@ export function MarketNews() {
       api
         .marketNewsStreams()
         .then((r) => {
-          setLiveConfigured(r.liveConfigured);
           if (r.fomc) setFomc(r.fomc);
           setStreams((prev) => (prev ? { ...prev, channels: r.streams.channels } : r.streams));
         })
@@ -293,7 +299,6 @@ export function MarketNews() {
     try {
       const r = await api.addMarketNewsChannel({ url, name: name || undefined });
       setStreams(r.streams);
-      setLiveConfigured(r.liveConfigured);
       return null;
     } catch (e) {
       return e instanceof ApiError ? e.message : "Couldn't add that channel.";
@@ -306,7 +311,6 @@ export function MarketNews() {
       .removeMarketNewsChannel(key)
       .then((r) => {
         setStreams(r.streams);
-        setLiveConfigured(r.liveConfigured);
       })
       .catch((e) => setErr(e instanceof ApiError ? e.message : "Couldn't remove that channel."));
   }
@@ -412,7 +416,6 @@ export function MarketNews() {
           onAddChannel={addChannel}
           onRemoveChannel={removeChannel}
           streams={streams}
-          liveConfigured={liveConfigured}
           fomc={fomc}
           now={now}
           contentW={contentW}
@@ -581,7 +584,6 @@ export function MarketNews() {
 
 function LiveStreams({
   streams,
-  liveConfigured,
   fomc,
   now,
   contentW,
@@ -593,7 +595,6 @@ function LiveStreams({
   onRemoveChannel,
 }: {
   streams: MarketNewsStreams | null;
-  liveConfigured: boolean;
   // The FOMC schedule behind the Federal Reserve tile's countdown; null until
   // the streams payload has loaded, which simply leaves the old offline card.
   fomc: FomcSchedule | null;
@@ -697,7 +698,6 @@ function LiveStreams({
                     <StreamTile
                       key={c.key}
                       c={c}
-                      liveConfigured={liveConfigured}
                       fomc={fomc}
                       now={now}
                       onDock={() => mutate((s) => ({ ...s, docked: c.key }))}
@@ -951,14 +951,12 @@ function FedMeetingCard({ fomc, now }: { fomc: FomcSchedule; now: number }) {
 
 function StreamTile({
   c,
-  liveConfigured,
   fomc,
   now,
   onDock,
   onClose,
 }: {
   c: StreamChannel;
-  liveConfigured: boolean;
   fomc: FomcSchedule | null;
   now: number;
   onDock: () => void;
@@ -973,7 +971,13 @@ function StreamTile({
   // then — a server that cannot reach youtube.com never gets an answer — fall
   // back to the old optimistic embed rather than claiming a channel is off air
   // on the strength of never having checked.
-  const canEmbed = !!c.liveVideoId || (!c.liveChecked && !!c.channelId && (c.live || !liveConfigured));
+  // Play when there is a video to play, when we know the channel is on (the
+  // channel-based embed handles that case and is proven to work), or when we
+  // simply have no reading — never claim dark on the strength of not looking.
+  // The only case that does NOT play is a channel positively established as off
+  // air, which is what the offline card is for.
+  const canEmbed =
+    !!c.liveVideoId || (!!c.channelId && (c.live || !!c.upcoming || !liveKnown(c)));
   // The Fed's countdown replaces a dead player, never a live one. It shows when
   // the tile has nothing to play, and also when the state is merely unknown —
   // the Fed is dark all but a few hours a year, so "unknown" almost always means

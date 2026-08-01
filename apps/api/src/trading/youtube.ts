@@ -279,13 +279,24 @@ export function cachedLiveState(channelId: string): LiveState | undefined {
 // nobody watching for the moment it flips.
 
 export interface LiveVideo {
-  videoId: string;
   title?: string;
   // True only while actually broadcasting. A waiting room is `false` — it may
   // be embedded, but it must never be badged LIVE.
   live: boolean;
   // A broadcast that has been scheduled but has not started.
   upcoming: boolean;
+  // The video's own id, and ONLY when it came from somewhere authoritative —
+  // the watch page's canonical link, or the Data API. Optional on purpose:
+  // knowing a channel is live and knowing *which video* to play are separate
+  // facts, and the second is the one that breaks the tile when it is wrong.
+  //
+  // The embed page tells us a channel is broadcasting (an id appears in it at
+  // all) without naming that id reliably enough to play: a tile pointed at the
+  // wrong id renders "This video is unavailable", which is worse than the
+  // channel-based embed it replaced. So that route sets `live` and leaves this
+  // empty, and the tile falls back to `live_stream?channel=` — which is proven
+  // to play these channels.
+  videoId?: string;
 }
 
 // The outcome of one read, and the distinction that matters: `ok` says the page
@@ -411,11 +422,12 @@ export function readEmbedPage(html: string): LiveRead {
     html.match(/\\"videoId\\":\\"([A-Za-z0-9_-]{11})\\"/)?.[1] ??
     html.match(/"video_id":"([A-Za-z0-9_-]{11})"/)?.[1];
   if (!id) return { video: null, ok: false };
-  // This page is only ever reached for a live_stream embed, so a video id here
-  // means the channel is broadcasting. It carries no scheduled/at-rest
-  // distinction, hence upcoming:false.
-  const title = html.match(/"title":"([^"]{1,300})"/)?.[1];
-  return { video: { videoId: id, title: title ? decodeHtml(title) : undefined, live: true, upcoming: false }, ok: true };
+  // A video id appearing in a live_stream embed page means the channel IS
+  // broadcasting — that is the useful signal, and it is reliable. The id itself
+  // is not: this page carries several, and playing the wrong one renders "This
+  // video is unavailable". So report the channel live and deliberately do NOT
+  // pass the id on; the tile plays the channel-based embed, which works.
+  return { video: { live: true, upcoming: false }, ok: true };
 }
 
 // The parsing half, split out from the fetch so it can be exercised directly

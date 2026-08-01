@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.03';
+export const APP_VERSION = 'Beta V 6.04';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.04',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed the streams showing “This video is unavailable” again. Detecting whether a channel is live now works, but the portal was using that lookup to pick which video to play and getting the wrong one — it goes back to the channel player that works, and uses a specific video only when it is certain which one.',
+      'Live status stays accurate: the header count and the LIVE badges now reflect what is actually broadcasting.',
+    ],
+  },
   {
     version: 'Beta V 6.03',
     date: 'August 1, 2026',
