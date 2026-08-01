@@ -530,6 +530,16 @@ workspaces list** (see `theme/nav.ts` order).
         keyless player the tile itself renders and is built to be served to third
         parties. Observed in production: the browser could play the embed while
         the server could read nothing, which is exactly the gap this closes.
+      - **A reading must never suppress the player.** The embedded player is the
+        one authority on whether a stream is on — it plays when the channel is
+        live and shows YouTube's own card when it is not. A server-side reading
+        is a guess by comparison: from a datacenter a consent or redirect page is
+        indistinguishable from a dark channel, so "dark" is the answer it gets
+        wrong most often. So an `alwaysOn` channel **always attempts to play**,
+        whatever the reading says; only a channel that is genuinely dark most of
+        the time (the Fed) may skip the player on a negative reading, because
+        there the countdown is the better thing to show. Letting the guess win
+        replaced a visibly-broadcasting 24/7 channel with "not live right now".
       - **Never say "Offline" about a channel whose state was not established.**
         `liveKnown(c)` (i.e. `liveChecked`) gates every status string and the
         "N live" header count. A tile can be playing via the fallback embed while
