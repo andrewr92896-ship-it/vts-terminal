@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.06';
+export const APP_VERSION = 'Beta V 6.07';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.07',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed the biggest cause of streams flicking on and off: the portal’s own status check was allowed to stop a channel from playing. A round-the-clock channel now always tries to play, and the player itself decides — it shows the stream when it is on and YouTube’s own message when it is not.',
+      'A channel that broadcasts 24/7 no longer gets labelled “Offline” on a failed check. It says the status is unconfirmed and lets the player speak for itself.',
+      'Fixed Bloomberg’s tile showing “LIVE NOW” when the channel was off air.',
+    ],
+  },
   {
     version: 'Beta V 6.06',
     date: 'August 1, 2026',
