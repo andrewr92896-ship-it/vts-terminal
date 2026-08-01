@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.96';
+export const APP_VERSION = 'Beta V 5.97';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.97',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed the trader picker on Trade Analysis: the list of traders opened leftward and disappeared behind the sidebar, so you could not read or click most of the names. It now opens to the right of the button, fully on screen.',
+    ],
+  },
   {
     version: 'Beta V 5.96',
     date: 'August 1, 2026',
