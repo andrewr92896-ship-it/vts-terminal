@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.01';
+export const APP_VERSION = 'Beta V 6.02';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.02',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed a stream disappearing when you refreshed the page. The portal re-checks whether a channel is live every 90 seconds, and a refresh landing in that gap was blanking a stream that was playing perfectly well. It now keeps showing the stream while it re-checks in the background.',
+      'Fixed streams taking a long time to appear after a refresh — the wall now waits a moment for a real answer on first load instead of showing empty tiles until the next check.',
+      'A channel the portal cannot reach no longer reads as “not live right now”. It says nothing and keeps trying to play, rather than claiming a channel is off air when it never managed to look.',
+    ],
+  },
   {
     version: 'Beta V 6.01',
     date: 'August 1, 2026',
