@@ -1212,6 +1212,17 @@ Because of that:
   owner asks for it in that session. Merging to `main` is the deploy — Railway
   auto-redeploys `main` per `railway.json` — so a merge is a production
   release, not a housekeeping step.
+- **Deploy through a pull request, always** (owner instruction, 2026-07). When
+  the owner asks to deploy: bring the branch up to date and verify (below), push
+  it, **open a PR**, then **squash-merge that PR** — do not push to `main`
+  directly and do not squash-merge locally. Same code on `main` and the same
+  Railway deploy either way; what the PR adds is the record. Each release gets a
+  numbered, searchable page describing what changed (which is why `main`'s
+  history reads "(#295)"), CI runs against the proposal rather than against
+  production, and Claude Code's session list can show the work as merged — a
+  local squash leaves the branch commits off `main` entirely, so nothing can
+  tell the session ever shipped. The PR is opened **only when the owner asks to
+  deploy**; a finished-but-unapproved branch still stops at "pushed".
 - **Ask before deploying.** End the task by saying the branch is ready and
   asking whether to deploy it, rather than deploying and reporting after the
   fact.
@@ -1226,7 +1237,7 @@ Because of that:
   any relevant API checks) and only merge when they pass.
 - If a build or verification step **fails**, do not merge — report the failure
   instead. Railway keeps the previous version live on a failed build.
-- Prefer a **squash merge** (see Deploy mechanics below).
+- **Squash-merge the PR** (see Deploy mechanics below).
 
 ## Deploy mechanics
 
@@ -1234,7 +1245,8 @@ Because of that:
   build`, then `npm run start`, health-checked at `/api/health`). There is no
   manual deploy button or Railway CLI in this environment — merging to `main`
   is the only deploy trigger.
-- Prefer **squash merges** to keep `main` history clean.
+- **Squash merges only**, and always through a PR (see above), so `main` keeps
+  one commit per release and every release has a PR page behind it.
 
 ## Frontend conventions
 
