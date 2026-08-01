@@ -68,6 +68,65 @@ function str(v: unknown): string {
   return typeof v === 'string' ? v.trim() : '';
 }
 
+// ---- naming a connection ----
+//
+// A connection's name says **whose** it is and **where** it is: "Andrew's
+// OANDA", "Andrew's Kraken". The desk trades more than one venue now, so a name
+// that only says whose ("Andrew's Trades") leaves two chips on the Live Wall
+// and two account cards on the Trade Desk that cannot be told apart.
+//
+// This used to be a one-shot SQL rename, which is exactly why it broke: a
+// migration only ever sees the rows that existed the day it ran, so the next
+// connection anybody created went back to being nameless about its venue. The
+// rule now lives in one function that **every** write goes through
+// (addConnection / updateConnection / adminUpdateConnection) and that the boot
+// pass below re-applies to whatever is already stored. There is no path left
+// that can save an OANDA or Kraken connection whose name does not say so.
+
+const VENUE_NAMES = { oanda: 'OANDA', kraken: 'Kraken', manual: 'Manual' } as const;
+
+// Words that describe an account generically rather than naming its venue.
+// Dropped before the venue is appended so "Andrew's Trades" becomes "Andrew's
+// Kraken" rather than "Andrew's Trades Kraken".
+const GENERIC_TAIL = /[\s·,-]+(trades?|trading|account|acct|crypto|coins?|forex|fx|live|practice|demo|book)$/i;
+
+function mentions(label: string, word: string): boolean {
+  return new RegExp(`\\b${word}\\b`, 'i').test(label);
+}
+
+// Force a connection's label to name its own venue. Idempotent: running it on
+// its own output changes nothing, which is what lets the boot pass re-run it
+// every start without ever churning a name.
+//
+// `manual` is deliberately left alone — a hand-entered book is named after the
+// prop firm it tracks ("FundedNext"), and it has no platform to name.
+export function venueLabel(raw: string, broker: BrokerConnectionKind): string {
+  const venue = VENUE_NAMES[broker];
+  let label = raw.trim().replace(/\s+/g, ' ');
+  if (broker === 'manual') return label || venue;
+  // Already names its own venue — leave whatever the owner chose exactly as is.
+  if (mentions(label, venue)) return label;
+  // Names a *different* venue: the actively misleading case, and the one worth
+  // overwriting rather than appending to.
+  for (const [kind, name] of Object.entries(VENUE_NAMES)) {
+    if (kind === broker) continue;
+    label = label.replace(new RegExp(`\\b${name}\\b`, 'ig'), ' ');
+  }
+  label = label.replace(/\s+/g, ' ').trim();
+  label = label.replace(GENERIC_TAIL, '').trim();
+  label = label.replace(/[·,\-–—'’]+$/, '').trim();
+  return label ? `${label} ${venue}` : venue;
+}
+
+// The name a connection gets when nobody typed one: "Andrew's Kraken".
+export function defaultConnectionLabel(owner: string, broker: BrokerConnectionKind): string {
+  const name = owner.trim();
+  if (!name) return VENUE_NAMES[broker];
+  // "Andrew" → "Andrew's"; "Chris" → "Chris'".
+  const possessive = name.endsWith('s') ? `${name}’` : `${name}’s`;
+  return venueLabel(possessive, broker);
+}
+
 // Validate + normalize the credentials for a broker. Throws on missing fields.
 export function normalizeCreds(broker: BrokerConnectionKind, raw: Record<string, unknown>): BrokerCreds {
   if (broker === 'manual') {
@@ -152,7 +211,11 @@ export async function adminUpdateConnection(
   input: { label?: string; active?: boolean; historyStartAt?: number | null },
 ): Promise<void> {
   const existing = (
-    await db.select({ id: brokerConnections.id }).from(brokerConnections).where(eq(brokerConnections.id, id)).limit(1)
+    await db
+      .select({ id: brokerConnections.id, broker: brokerConnections.broker })
+      .from(brokerConnections)
+      .where(eq(brokerConnections.id, id))
+      .limit(1)
   )[0];
   if (!existing) throw new Error('Connection not found');
 
@@ -160,7 +223,7 @@ export async function adminUpdateConnection(
   if (input.label !== undefined) {
     const l = str(input.label);
     if (!l) throw new Error('Label cannot be empty');
-    patch.label = l.slice(0, 80);
+    patch.label = venueLabel(l, existing.broker).slice(0, 80);
   }
   if (input.active !== undefined) patch.active = input.active;
   // Admins can set a teammate's "count trades since" cutoff (never their secrets).
@@ -237,7 +300,9 @@ export async function addConnection(
   userId: string,
   input: { broker: BrokerConnectionKind; label: string; creds: Record<string, unknown> },
 ): Promise<void> {
-  const label = str(input.label) || defaultConnectionLabel('', input.broker);
+  // Whatever the caller passed — a person typing in the form, or another agent
+  // calling this directly — comes out naming its venue.
+  const label = venueLabel(str(input.label) || defaultConnectionLabel('', input.broker), input.broker);
   const creds = normalizeCreds(input.broker, input.creds);
   const now = new Date();
   await db.insert(brokerConnections).values({
@@ -274,7 +339,7 @@ export async function updateConnection(
   if (input.label !== undefined) {
     const l = str(input.label);
     if (!l) throw new Error('Label cannot be empty');
-    patch.label = l.slice(0, 80);
+    patch.label = venueLabel(l, row.broker).slice(0, 80);
   }
   if (input.active !== undefined) patch.active = input.active;
   // "Count trades since": null clears it (count everything again); a ms instant
@@ -351,18 +416,29 @@ export async function hasAnyConnection(userId: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-// A connection's default name says **whose** it is and **where** it is:
-// "Andrew's OANDA", "Andrew's Kraken". A desk carries several accounts across
-// several venues, and a label that only names the owner ("Andrew's Trades")
-// leaves two chips on the Live Wall that cannot be told apart. Keep this format
-// for any venue added later.
-export function defaultConnectionLabel(owner: string, broker: BrokerConnectionKind): string {
-  const venue = broker === 'oanda' ? 'OANDA' : broker === 'kraken' ? 'Kraken' : 'Manual';
-  const name = owner.trim();
-  if (!name) return venue;
-  // "Andrew" → "Andrew's"; "Chris" → "Chris'".
-  const possessive = name.endsWith('s') ? `${name}’` : `${name}’s`;
-  return `${possessive} ${venue}`;
+// Bring every stored connection's name in line with the rule above, on boot.
+//
+// This is the half a migration cannot do. Migration 0085 renamed the labels
+// that existed the day it ran and then was finished forever, so a Kraken
+// connection created afterwards came back reading "Andrew's Trades" beside an
+// OANDA one — the exact confusion the rename existed to remove. Running the
+// same `venueLabel` the write paths use, on every start, means a row can only
+// ever be wrong until the next deploy rather than permanently.
+//
+// Safe to run repeatedly: `venueLabel` is idempotent, so a name that already
+// says its venue is not touched, and nothing is written unless it changes.
+export async function backfillConnectionLabels(): Promise<void> {
+  const rows = await db
+    .select({ id: brokerConnections.id, label: brokerConnections.label, broker: brokerConnections.broker })
+    .from(brokerConnections);
+  for (const r of rows) {
+    const fixed = venueLabel(r.label, r.broker).slice(0, 80);
+    if (fixed === r.label) continue;
+    await db
+      .update(brokerConnections)
+      .set({ label: fixed, updatedAt: new Date() })
+      .where(eq(brokerConnections.id, r.id));
+  }
 }
 
 // Seed the owner's connections from the existing global env keys, if they have

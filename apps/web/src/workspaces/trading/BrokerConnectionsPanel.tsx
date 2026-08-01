@@ -272,6 +272,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Name it whose + where (e.g. Andrew's Kraken)"
+            title="If the name you give it doesn't say which platform it is, the platform is added for you — so two accounts are never named the same thing."
             style={{ ...input, flex: '1 1 200px' }}
           />
           {broker === 'manual' ? (

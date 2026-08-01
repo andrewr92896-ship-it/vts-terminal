@@ -38,6 +38,7 @@ import { waitForDatabase } from './db/index.js';
 import { seedAdmin, seedDemo, backfillEmails } from './seed.js';
 import { seedDefaultTeam } from './teams/service.js';
 import { backfillTeamLeaders } from './userTeams/service.js';
+import { backfillConnectionLabels } from './trading/connections.js';
 import { ensureBakedInGamesAllTeams } from './studies/bakedGames.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
@@ -181,6 +182,10 @@ async function bootstrapDatabase(): Promise<void> {
   // Give every existing trading team a My Portal leader so it shows as a managed
   // team (the My Portal Trading Team is now the same team that scopes trades).
   await backfillTeamLeaders();
+  // Make sure every broker connection's name says which venue it is at
+  // ("Andrew's Kraken", not "Andrew's Trades"). Runs every boot rather than as
+  // a one-shot migration, so a connection added later cannot drift back.
+  await backfillConnectionLabels();
   // Seed the built-in example study game(s) into every team (idempotent; re-syncs
   // content when BAKED_IN_VERSION bumps). Brand-new teams created between deploys
   // get theirs lazily on their first Studies deck-list fetch (routes/studies.ts).
