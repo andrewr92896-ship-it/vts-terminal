@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.04';
+export const APP_VERSION = 'Beta V 6.05';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.05',
+    date: 'August 1, 2026',
+    notes: [
+      'Bloomberg Television blocks its live stream from playing on other websites — that is their setting, not a fault here, and no site can play it. Its tile now says so plainly and gives you a “Watch on YouTube” button, instead of showing the “This video is unavailable” box that looks like something is broken.',
+      'Any other channel that restricts embedding gets the same treatment automatically. Channels that allow it, like Yahoo Finance, are unaffected.',
+    ],
+  },
   {
     version: 'Beta V 6.04',
     date: 'August 1, 2026',

@@ -402,6 +402,15 @@ workspaces list** (see `theme/nav.ts` order).
         is dark" from "we have not looked" — two states that want opposite tiles.
         Only a positively-dark channel gets the offline card; unknown still
         plays.
+      - **A channel can be live and still refuse to play here.** Bloomberg
+        Television restricts embedding, and YouTube's way of saying so is the
+        bare "Video unavailable" box — on screen, identical to a broken tile. So
+        `playableInEmbed` is read server-side (`embeddableFrom`) and surfaced as
+        `embedBlocked`, and that tile shows "Live now · does not allow playback
+        outside YouTube" with a watch link instead of a dead player. **Absence of
+        the flag is not a refusal** — an unmentioned value leaves the tile free
+        to try. Nothing here attempts to defeat the restriction; it is the
+        broadcaster's setting to make.
       - **A scheduled broadcast is embedded too** (`upcoming: true`, never badged
         LIVE). The Fed puts its stream up as a waiting room before a press
         conference; embedding that means the tile rolls into the broadcast by

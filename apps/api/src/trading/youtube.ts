@@ -285,6 +285,12 @@ export interface LiveVideo {
   live: boolean;
   // A broadcast that has been scheduled but has not started.
   upcoming: boolean;
+  // False when the broadcaster has restricted embedding. Such a video plays on
+  // YouTube and renders "Video unavailable" in any embedded player — which is
+  // indistinguishable, on screen, from the portal being broken. It is not: it is
+  // the channel's own setting, and the only honest response is to say so and
+  // link out rather than show a dead box.
+  embeddable?: boolean;
   // The video's own id, and ONLY when it came from somewhere authoritative —
   // the watch page's canonical link, or the Data API. Optional on purpose:
   // knowing a channel is live and knowing *which video* to play are separate
@@ -409,6 +415,20 @@ export async function fetchLiveVideo(channelId: string): Promise<LiveRead> {
   return { video: null, ok: false };
 }
 
+// Whether the broadcaster allows this video to play outside YouTube. Undefined
+// when the page does not say — absence is not a refusal, so the tile goes ahead
+// and tries, exactly as before.
+//
+// Worth knowing why this is read at all: a channel can be genuinely live and
+// still refuse to play here, and the embedded player's way of saying so is the
+// bare string "Video unavailable". That is the same thing a broken tile looks
+// like, which is why it has to be distinguished server-side.
+function embeddableFrom(html: string): boolean | undefined {
+  if (/"playableInEmbed":\s*false/.test(html)) return false;
+  if (/"playableInEmbed":\s*true/.test(html)) return true;
+  return undefined;
+}
+
 // The keyless embed page for a channel's live stream. When the channel is live
 // it carries the video id it is about to play; when it is not, it says so with
 // an unplayable/error status. Anything else is a page we did not understand.
@@ -427,7 +447,7 @@ export function readEmbedPage(html: string): LiveRead {
   // is not: this page carries several, and playing the wrong one renders "This
   // video is unavailable". So report the channel live and deliberately do NOT
   // pass the id on; the tile plays the channel-based embed, which works.
-  return { video: { live: true, upcoming: false }, ok: true };
+  return { video: { live: true, upcoming: false, embeddable: embeddableFrom(html) }, ok: true };
 }
 
 // The parsing half, split out from the fetch so it can be exercised directly
@@ -476,7 +496,7 @@ export function parseLivePage(html: string): LiveVideo | null {
     if (!live && !upcoming) return null;
     const titleTag = html.match(/<meta\s+name="title"\s+content="([^"]{1,300})"/);
     const title = titleTag?.[1] ? decodeHtml(titleTag[1]) : undefined;
-    return { videoId, title, live, upcoming };
+    return { videoId, title, live, upcoming, embeddable: embeddableFrom(html) };
   } catch {
     return null;
   }

@@ -65,6 +65,11 @@ export interface StreamChannel {
   // A resolved video that has not started yet: embeddable (it is YouTube's own
   // waiting room) but deliberately not badged LIVE.
   upcoming?: boolean;
+  // The channel is broadcasting but has restricted embedding, so no player on
+  // this site can show it. Not a fault to hide: the tile says so plainly and
+  // sends the trader to YouTube, rather than rendering the bare "Video
+  // unavailable" box that looks identical to something being broken.
+  embedBlocked?: boolean;
   // True once a keyless read has actually answered for this channel. Without it
   // the client cannot tell "we looked, it is dark" from "we have not looked
   // yet", and those want opposite tiles: the honest offline card for the first,
@@ -286,6 +291,7 @@ function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): Market
         liveVideoId: video.videoId ?? live?.videoId,
         upcoming: video.upcoming,
         live: video.live,
+        embedBlocked: video.embeddable === false,
         liveChecked: true,
         streamTitle: video.title ?? base.streamTitle,
       };
