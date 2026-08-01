@@ -325,37 +325,37 @@ workspaces list** (see `theme/nav.ts` order).
       embeds the keyless `youtube.com/embed/live_stream?channel=ID` player (which
       plays when the channel is live and self-shows offline otherwise); a
       handle-only channel links out until the ID is resolved.
-    - **The channel catalog is code-resident and fixed** (`CATALOG` in
-      `trading/marketNewsStreams.ts`), identical for every user — same shape as
-      Market Data's series catalog. This is a **scaling decision, not a
-      limitation, so do not make it user-editable.** Live status costs YouTube
-      quota *per distinct channel*: the poller checks the deduped catalog and
-      every viewer reads one shared cache, so a fixed list decouples quota from
-      headcount entirely — the current 8 channels cost ~4,600 units/day whether
-      one trader or the whole public is signed up. Let users add arbitrary
-      channels and distinct-channel count grows with the user base, which the
-      10,000/day budget cannot absorb. Rough ceiling: ~15 channels at a 5-minute
-      cadence, ~20 at 10 minutes.
-      To add one, append a row with a stable `key` (saved `watching`/`notify`
-      entries reference it), a name, and **any YouTube URL or @handle** — the
-      address bar is parsed (`parseYouTubeRef` in `trading/youtube.ts`). Which
-      form you paste only changes how the id is obtained: a `/channel/UC…` URL
-      carries the id literally, so it is read for free and that tile embeds with
-      **no API key at all**, whereas an `@handle` (or a legacy `/c/`, `/user/`
-      URL) cannot embed until the poller resolves it once, for 1 unit. Filling
-      `channelId` in by hand is therefore never required — it is the same answer
-      a `/channel/` URL gives for nothing. Removing a row is safe — stale
-      references are dropped on read.
-      **Parse, never string-slice.** Reading a `/channel/` URL wrongly is worse
-      than not trying: the old parser turned it into the handle `"channel"`,
-      which spends a unit, fails, and is negative-cached for six hours.
-      `resolvedChannelId` (in `marketNewsStreams.ts`) is the one place that
-      decides which id a row means — the screen, the poller's round-robin and the
-      go-live notifier all call it, or a channel resolves one way for the wall and
-      another for the buzz. The `handle` field is an *input* that accepts a pasted
-      URL; the payload always carries the tidy `@name` form, because the client
-      prints it on the tile and builds a link from it.
-    - Catalog entries carry `alwaysOn` for the channels that **broadcast around
+    - **The channel list belongs to the desk, not to the code.** A trader pastes
+      a YouTube link and the channel appears for their whole **team** — rows in
+      `market_news_channels` scoped by `team_id` (a trader on no team gets
+      `user:<id>`, matching `scopedTraderIds`). `SEED_CHANNELS` in
+      `trading/marketNewsStreams.ts` (Yahoo Finance, Bloomberg, the Fed, Reuters)
+      is a **one-time seed per desk**, not a catalog: once seeded those are
+      ordinary rows that can be renamed or removed like any other. Adding,
+      renaming and removing are all behind `requireWorkspaceWrite`, so a
+      `trading_viewer` and the demo watch the wall but cannot reshape what the
+      desk sees. `MAX_TEAM_CHANNELS` (24) guards against a runaway list.
+    - **Any YouTube URL works** — the link is parsed server-side
+      (`parseYouTubeRef`), never by the client, so a hand-rolled request cannot
+      smuggle in an arbitrary embed target. `resolveChannelId` then goes
+      cheapest-first: the id straight out of a `/channel/UC…` URL (free), then the
+      channel's own page (`resolveHandleKeyless`, free, no key), then the Data API
+      (`forHandle`, 1 unit, only if a key is set). A channel that resolves is
+      watchable immediately; one that doesn't is still saved and the poller fills
+      the id in later — `persistResolvedIds` writes it back to the row, so it
+      survives a restart instead of living only in this process's cache.
+    - **Why user-added channels are affordable, given quota used to forbid them.**
+      Watching costs nothing: the embed player is keyless, plays when the channel
+      is live and shows its own offline card otherwise. Quota is only spent on the
+      things *around* the player — the LIVE badge, viewer counts and go-live
+      pushes — and that spend is already bounded by the round-robin
+      (`YOUTUBE_CHANNELS_PER_TICK`) and the daily ceiling: more channels lengthen
+      each one's refresh interval rather than multiplying the daily bill, and the
+      poller dedupes across every desk so cost tracks *distinct channels*, never
+      headcount. Past roughly 15–20 distinct channels what degrades is how quickly
+      a LIVE badge appears, never the ability to watch. **Keep that property** —
+      it is the whole reason this list can be user-editable.
+    - A channel carries `alwaysOn` for the ones that **broadcast around
       the clock** (Bloomberg, Yahoo Finance, Sky News, DW, Al Jazeera), shown as
       a `24/7` tag; the rest (Fed, ECB, Reuters) are dark until they cover
       something, which is what the per-channel bell is for. Keep both kinds: the

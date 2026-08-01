@@ -5,7 +5,12 @@ import { config } from '../config.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
-import { catalogChannels, listFollowedChannels, resolvedChannelId } from './marketNewsStreams.js';
+import {
+  channelsWithId,
+  listFollowedChannels,
+  persistResolvedIds,
+  resolvedChannelId,
+} from './marketNewsStreams.js';
 import {
   fetchLiveState,
   isQuotaError,
@@ -65,6 +70,11 @@ export async function tickYoutubeWatch(): Promise<void> {
       }
     }
 
+    // Write back any id resolved above. Without this a handle-only channel is
+    // embeddable only while this process's cache holds it, and goes dark again
+    // on the next deploy until the poller happens to resolve it a second time.
+    await persistResolvedIds().catch((err) => console.error('YouTube id persist error:', err));
+
     // 2) Refresh live state for the stalest channels, round-robin.
     const ids = [
       ...new Set(
@@ -111,16 +121,18 @@ export async function tickYoutubeWatch(): Promise<void> {
 // the channel resolves to a single key and each trader's row only has to be
 // checked for that key. Demo excluded; delivery is best-effort.
 async function notifyGoLive(channelId: string, state: LiveState): Promise<void> {
-  // Which catalog entry is this? Either it carries the id outright, or its
-  // handle is one the resolver has actually mapped here — never a name match.
-  const channel = catalogChannels().find((c) => resolvedChannelId(c) === channelId);
-  if (!channel) return;
+  // Which desks follow this channel? The same channel can sit on several walls
+  // under different keys, so match by resolved id and check each desk's own key.
+  const followers = await channelsWithId(channelId);
+  if (followers.length === 0) return;
+  const keyByTeam = new Map(followers.map((f) => [f.teamId, f.key]));
 
   const rows = await db
     .select({
       userId: marketNewsStreams.userId,
       notify: marketNewsStreams.notify,
       username: users.username,
+      teamId: users.teamId,
     })
     .from(marketNewsStreams)
     .innerJoin(users, eq(users.id, marketNewsStreams.userId));
@@ -128,16 +140,19 @@ async function notifyGoLive(channelId: string, state: LiveState): Promise<void> 
   const recipients: string[] = [];
   for (const r of rows) {
     if (r.username === DEMO_USERNAME) continue;
+    // The scope key mirrors channelScope(): a trader on no team has their own.
+    const key = keyByTeam.get(r.teamId ?? `user:${r.userId}`);
+    if (!key) continue;
     try {
       const notify = JSON.parse(r.notify) as Record<string, unknown>;
-      if (notify[channel.key] === true) recipients.push(r.userId);
+      if (notify[key] === true) recipients.push(r.userId);
     } catch {
       continue;
     }
   }
   if (recipients.length === 0) return;
 
-  const title = `${channel.name} is live`;
+  const title = `${followers[0].name} is live`;
   const body = state.streamTitle ?? 'Streaming now on YouTube.';
   await Promise.all([
     sendToUsers(recipients, { title, body, url: '/?screen=news', tag: `golive-${channelId}` }),

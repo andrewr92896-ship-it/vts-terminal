@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.93';
+export const APP_VERSION = 'Beta V 5.94';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.94',
+    date: 'July 31, 2026',
+    notes: [
+      'You can now add your own channels to the Market News stream wall. Paste a YouTube channel link, give it a name if you want, and it joins the wall.',
+      'Channels belong to the whole trading team \u2014 add one and every teammate sees it. Which streams you keep open, which one is docked in the corner, and which ones alert you stay your own.',
+      'Any link form works: youtube.com/@name, youtube.com/channel/..., or the older /c/ and /user/ addresses. A /channel/ link starts playing straight away; the others take a moment to look up the first time.',
+      'The wall starts with Yahoo Finance, Bloomberg, the Federal Reserve and Reuters. None of them are fixed any more \u2014 remove any you do not want with the \u00d7 beside it.',
+      'The read-only demo can watch the wall but cannot change what the desk sees.',
+    ],
+  },
   {
     version: 'Beta V 5.93',
     date: 'July 31, 2026',

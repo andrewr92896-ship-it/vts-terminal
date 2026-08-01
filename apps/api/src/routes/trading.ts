@@ -40,7 +40,11 @@ import { getMarketDataLayout, setMarketDataLayout } from '../trading/marketDataL
 import {
   getMarketNewsStreams,
   setMarketNewsStreams,
+  addTeamChannel,
+  removeTeamChannel,
+  updateTeamChannel,
   liveStreamsConfigured,
+  ChannelError,
 } from '../trading/marketNewsStreams.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
 import {
@@ -470,13 +474,17 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // ---- Market News live streams ----
-  // The channel catalog is code-resident and identical for everyone (see
-  // trading/marketNewsStreams.ts for why: a fixed catalog keeps YouTube quota
-  // independent of how many people use the portal). Only the trader's view
-  // state over it is personal. `liveConfigured` tells the client whether live
-  // status is real yet, so the screen can mark it as sample when it isn't.
+  // The channel list belongs to the desk — any teammate can add one by pasting a
+  // link and it appears for everyone — while which tiles are open, docked and
+  // armed for alerts stays personal. `liveConfigured` tells the client whether
+  // live status is real yet, so the screen can mark it as sample when it isn't.
+  //
+  // These sit on `markets`, not `write`: Market News is part of the always-on
+  // Markets workspace, so gating the wall behind the Advanced Trading opt-in
+  // would let a user see it and not shape it. The demo is still refused every
+  // non-GET by demoGuard, so it watches without reshaping the desk's wall.
   app.get('/api/trading/market-news/streams', markets, async (request) => ({
-    streams: await getMarketNewsStreams(request.currentUser!.id),
+    streams: await getMarketNewsStreams(request.currentUser!),
     liveConfigured: liveStreamsConfigured(),
   }));
 
@@ -484,7 +492,48 @@ export async function tradingRoutes(app: FastifyInstance) {
     const parsed = marketNewsStreamsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid stream setup' });
     return {
-      streams: await setMarketNewsStreams(request.currentUser!.id, parsed.data),
+      streams: await setMarketNewsStreams(request.currentUser!, parsed.data),
+      liveConfigured: liveStreamsConfigured(),
+    };
+  });
+
+  // Add a channel to the desk's wall from a pasted YouTube link. Behind
+  // requireWorkspaceWrite, so a view-only role and the demo cannot change what
+  // the whole desk sees.
+  app.post('/api/trading/market-news/channels', markets, async (request, reply) => {
+    const parsed = addChannelSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Paste a YouTube channel link' });
+    try {
+      await addTeamChannel(request.currentUser!, parsed.data);
+    } catch (err) {
+      if (err instanceof ChannelError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
+    return {
+      streams: await getMarketNewsStreams(request.currentUser!),
+      liveConfigured: liveStreamsConfigured(),
+    };
+  });
+
+  app.patch('/api/trading/market-news/channels/:key', markets, async (request, reply) => {
+    const parsed = editChannelSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Nothing to update' });
+    try {
+      await updateTeamChannel(request.currentUser!, (request.params as { key: string }).key, parsed.data);
+    } catch (err) {
+      if (err instanceof ChannelError) return reply.code(400).send({ error: err.message });
+      throw err;
+    }
+    return {
+      streams: await getMarketNewsStreams(request.currentUser!),
+      liveConfigured: liveStreamsConfigured(),
+    };
+  });
+
+  app.delete('/api/trading/market-news/channels/:key', markets, async (request) => {
+    await removeTeamChannel(request.currentUser!, (request.params as { key: string }).key);
+    return {
+      streams: await getMarketNewsStreams(request.currentUser!),
       liveConfigured: liveStreamsConfigured(),
     };
   });
@@ -1246,6 +1295,19 @@ const marketHoursSchema = z.object({ symbol: z.string().trim().min(1).max(60) })
 // Market Data board arrangement. Every field is length-capped and the arrays are
 // bounded so a saved layout can never bloat the row; unknown series ids are
 // dropped server-side in setMarketDataLayout, not here.
+// A pasted YouTube channel link, plus an optional display name. The URL is
+// parsed server-side (parseYouTubeRef) — the client never decides what a link
+// means, so a hand-rolled request cannot smuggle in an arbitrary embed target.
+const addChannelSchema = z.object({
+  url: z.string().trim().min(1).max(300),
+  name: z.string().trim().max(60).optional(),
+  alwaysOn: z.boolean().optional(),
+});
+
+const editChannelSchema = z
+  .object({ name: z.string().trim().max(60).optional(), alwaysOn: z.boolean().optional() })
+  .refine((v) => v.name !== undefined || v.alwaysOn !== undefined, { message: 'Nothing to update' });
+
 const marketDataLayoutSchema = z.object({
   pinned: z.array(z.string().trim().min(1).max(64)).max(200),
   hidden: z.array(z.string().trim().min(1).max(64)).max(200),

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useNowTick } from '../../hooks/useNowTick';
 import { Icon } from '../../components/Icon';
 import { C, tint } from '../../theme/tokens';
@@ -104,6 +105,13 @@ function channelUrl(c: StreamChannel): string {
 export function MarketNews() {
   // Keep the "x ago" ages fresh between the 120s data polls.
   const now = useNowTick(30_000);
+  const { user } = useAuth();
+  // Market News lives in the always-on Markets workspace, so the wall is not
+  // gated on the Advanced Trading opt-in — mirroring the server, which puts
+  // these endpoints on `requireMarkets`. The read-only demo is the exception:
+  // it watches the wall but cannot reshape what the desk sees (demoGuard refuses
+  // every non-GET, so this only hides controls that would fail anyway).
+  const canWrite = !!user && !user.isDemo;
 
   // --- headline feed ---
   const [data, setData] = useState<MarketNewsData | null>(null);
@@ -195,6 +203,31 @@ export function MarketNews() {
 
   const mutate = (fn: (s: MarketNewsStreams) => MarketNewsStreams) =>
     setStreams((prev) => (prev ? fn(prev) : prev));
+
+  // Adding or removing a channel changes what the whole desk sees, so it goes
+  // straight to the server rather than through the debounced view-state save,
+  // and the reply is the authoritative list (with the id it managed to resolve).
+  async function addChannel(url: string, name: string): Promise<string | null> {
+    try {
+      const r = await api.addMarketNewsChannel({ url, name: name || undefined });
+      setStreams(r.streams);
+      setLiveConfigured(r.liveConfigured);
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : "Couldn't add that channel.";
+    }
+  }
+
+  function removeChannel(key: string, name: string): void {
+    if (!window.confirm(`Remove ${name} from the desk's stream wall?`)) return;
+    api
+      .removeMarketNewsChannel(key)
+      .then((r) => {
+        setStreams(r.streams);
+        setLiveConfigured(r.liveConfigured);
+      })
+      .catch((e) => setErr(e instanceof ApiError ? e.message : "Couldn't remove that channel."));
+  }
 
   const headlines = data?.headlines ?? [];
 
@@ -296,6 +329,9 @@ export function MarketNews() {
 
         {/* ---- live streams block ---- */}
         <LiveStreams
+          canEdit={canWrite}
+          onAddChannel={addChannel}
+          onRemoveChannel={removeChannel}
           streams={streams}
           liveConfigured={liveConfigured}
           contentW={contentW}
@@ -469,6 +505,9 @@ function LiveStreams({
   liveOpen,
   setLiveOpen,
   mutate,
+  canEdit,
+  onAddChannel,
+  onRemoveChannel,
 }: {
   streams: MarketNewsStreams | null;
   liveConfigured: boolean;
@@ -476,6 +515,11 @@ function LiveStreams({
   liveOpen: boolean;
   setLiveOpen: (v: boolean) => void;
   mutate: (fn: (s: MarketNewsStreams) => MarketNewsStreams) => void;
+  // The channel list is desk-wide, so changing it needs write access — a
+  // view-only role and the demo can watch the wall but not reshape it.
+  canEdit: boolean;
+  onAddChannel: (url: string, name: string) => Promise<string | null>;
+  onRemoveChannel: (key: string, name: string) => void;
 }) {
   if (!streams) return null;
   const channels = streams.channels;
@@ -666,10 +710,20 @@ function LiveStreams({
                       >
                         <Icon name="bell" size={13} color={armed ? C.gold : '#3A4A6C'} />
                       </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => onRemoveChannel(c.key, c.name)}
+                          title="Remove this channel from the desk's wall"
+                          style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#3A4A6C', fontSize: 15, lineHeight: 1 }}
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
               })}
+              {canEdit && <AddChannelForm onAdd={onAddChannel} count={channels.length} />}
             </div>
           </div>
         </>
@@ -677,6 +731,129 @@ function LiveStreams({
     </div>
   );
 }
+
+// Paste a YouTube channel link and it joins the desk's wall. The link is parsed
+// server-side, so anything YouTube shows in the address bar works — /@handle,
+// /channel/UC…, or the older /c/ and /user/ forms.
+function AddChannelForm({
+  onAdd,
+  count,
+}: {
+  onAdd: (url: string, name: string) => Promise<string | null>;
+  count: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    if (!url.trim() || busy) return;
+    setBusy(true);
+    const problem = await onAdd(url.trim(), name.trim());
+    setBusy(false);
+    if (problem) {
+      setErr(problem);
+      return;
+    }
+    setUrl('');
+    setName('');
+    setErr(null);
+    setOpen(false);
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          marginTop: 4,
+          padding: '9px 11px',
+          background: 'none',
+          border: `1px dashed ${C.line2}`,
+          borderRadius: 8,
+          color: C.muted,
+          fontSize: 12,
+          fontWeight: 600,
+          cursor: 'pointer',
+          textAlign: 'left',
+          fontFamily: 'inherit',
+        }}
+      >
+        + Add a channel
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: 4, padding: 11, border: `1px solid ${C.line2}`, borderRadius: 8, background: 'rgba(255,255,255,.02)' }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint, marginBottom: 7 }}>
+        Add a channel
+      </div>
+      <input
+        autoFocus
+        value={url}
+        onChange={(e) => { setUrl(e.target.value); setErr(null); }}
+        onKeyDown={(e) => e.key === 'Enter' && void submit()}
+        placeholder="Paste a YouTube channel link"
+        style={inputStyle}
+      />
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && void submit()}
+        placeholder="Name it (optional)"
+        style={{ ...inputStyle, marginTop: 6 }}
+      />
+      {err && <div style={{ fontSize: 11, color: '#ffb4ab', lineHeight: 1.45, marginTop: 7 }}>{err}</div>}
+      <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.45, marginTop: 7 }}>
+        Any form works — youtube.com/@name or /channel/UC…. It joins the whole desk's wall.
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
+        <button
+          onClick={() => void submit()}
+          disabled={!url.trim() || busy}
+          style={{
+            border: 'none',
+            background: `linear-gradient(180deg, ${C.gold}, ${C.gold2})`,
+            color: C.goldText,
+            fontWeight: 700,
+            fontSize: 11.5,
+            padding: '7px 12px',
+            borderRadius: 7,
+            cursor: 'pointer',
+            opacity: !url.trim() || busy ? 0.6 : 1,
+            fontFamily: 'inherit',
+          }}
+        >
+          {busy ? 'Adding…' : 'Add'}
+        </button>
+        <button
+          onClick={() => { setOpen(false); setErr(null); }}
+          style={{ background: 'rgba(255,255,255,.05)', border: `1px solid ${C.line2}`, color: '#DFE7FA', fontSize: 11.5, fontWeight: 600, padding: '7px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          Cancel
+        </button>
+        <span style={{ marginLeft: 'auto', alignSelf: 'center', fontFamily: C.mono, fontSize: 10, color: '#3A4A6C' }}>
+          {count} on the wall
+        </span>
+      </div>
+    </div>
+  );
+}
+
+const inputStyle: CSSProperties = {
+  width: '100%',
+  background: '#091633',
+  border: `1px solid ${C.line2}`,
+  borderRadius: 7,
+  color: C.text,
+  fontSize: 12,
+  padding: '8px 10px',
+  outline: 'none',
+  fontFamily: 'inherit',
+};
 
 function StreamTile({
   c,
