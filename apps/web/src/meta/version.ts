@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.95';
+export const APP_VERSION = 'Beta V 5.96';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.96',
+    date: 'August 1, 2026',
+    notes: [
+      'Market News: tidied the screen — the description under the title and the note about live status being sample data are gone.',
+      'The stream wall no longer has a “1 up / 2 up / 3 up” layout row. How many streams play side by side is simply how many channels you open from the list on the right, fitted to your screen width.',
+    ],
+  },
   {
     version: 'Beta V 5.95',
     date: 'August 1, 2026',
