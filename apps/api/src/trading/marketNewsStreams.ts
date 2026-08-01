@@ -272,6 +272,46 @@ function rowToView(row: MarketNewsStreamsRow, keys: Set<string>): MarketNewsView
   );
 }
 
+// Handles we have recently tried to resolve, so a channel that will not resolve
+// is not refetched on every screen poll. A success is cached process-wide by
+// youtube.ts, so this only paces the failures.
+const resolveAttempts = new Map<string, number>();
+const RESOLVE_RETRY_MS = 30 * 60_000;
+
+// Fill in ids for channels that don't have one yet, in the background.
+//
+// The seeded starter channels are stored with whatever id the seed carried —
+// which for a handle-only channel is none — and pasted @handle links can fail to
+// resolve first time. Without this the only thing that ever fills those in is
+// the poller, which is production-only AND needs a YOUTUBE_API_KEY, so a desk
+// with no key would stare at "channel ID is still being looked up" forever.
+// Resolution itself is keyless (the channel's own page), so this works with no
+// API key at all.
+//
+// Deliberately not awaited: a screen load must not wait on YouTube.
+function resolveMissingIds(scope: string, channels: CatalogChannel[]): void {
+  const now = Date.now();
+  for (const c of channels) {
+    if (c.channelId || !c.handle) continue;
+    const handle = normHandle(c.handle);
+    if (!handle) continue;
+    const tried = resolveAttempts.get(handle);
+    if (tried !== undefined && now - tried < RESOLVE_RETRY_MS) continue;
+    resolveAttempts.set(handle, now);
+    void resolveChannelId(c.handle)
+      .then(async (id) => {
+        if (!id) return;
+        await db
+          .update(marketNewsChannels)
+          .set({ channelId: id, updatedAt: new Date() })
+          .where(and(eq(marketNewsChannels.teamId, scope), eq(marketNewsChannels.key, c.key)));
+      })
+      .catch(() => {
+        /* best-effort: the next read past the cooldown tries again */
+      });
+  }
+}
+
 export async function getMarketNewsStreams(viewer: ChannelViewer): Promise<MarketNewsStreams> {
   const [channels, row] = await Promise.all([
     teamChannels(channelScope(viewer)),
@@ -282,6 +322,7 @@ export async function getMarketNewsStreams(viewer: ChannelViewer): Promise<Marke
       .limit(1)
       .then((r) => r[0]),
   ]);
+  resolveMissingIds(channelScope(viewer), channels);
   const keys = new Set(channels.map((c) => c.key));
   return withLiveState(row ? rowToView(row, keys) : defaultMarketNewsView(), channels);
 }

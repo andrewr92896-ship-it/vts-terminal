@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.94';
+export const APP_VERSION = 'Beta V 5.95';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.95',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed: the four channels the stream wall starts with (Yahoo Finance, Bloomberg, the Federal Reserve, Reuters) could get stuck on \u201cchannel ID is still being looked up\u201d and never start playing.',
+      'The portal now looks up a missing channel ID on its own, in the background, whenever you open Market News \u2014 no YouTube key needed. Give it a few seconds and the stream starts playing by itself.',
+      'A channel that genuinely cannot be found is retried at most once every half hour rather than on every refresh.',
+    ],
+  },
   {
     version: 'Beta V 5.94',
     date: 'July 31, 2026',
