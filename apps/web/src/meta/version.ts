@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.00';
+export const APP_VERSION = 'Beta V 6.01';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.01',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed the stream wall showing “This video is unavailable” on tiles that should have been playing. The portal now finds the channel’s actual live video and plays that, instead of asking YouTube to guess from the channel alone.',
+      'A tile starts playing on its own within a few minutes of a channel going live — no reloading the page to catch the start of something.',
+      'The Federal Reserve tile now shows the countdown to the next FOMC rate decision and how long ago the last one was, instead of an empty player. It swaps itself for the stream when the Fed goes live, and picks up the Fed’s scheduled waiting room beforehand so it rolls straight into the press conference.',
+      'Yahoo Finance, Bloomberg and Reuters are all marked 24/7 now. The Fed is the only channel that isn’t, because it only broadcasts around meetings.',
+      'The starter channels ship with their real YouTube IDs, so a new desk’s tiles work immediately rather than waiting on a lookup.',
+    ],
+  },
   {
     version: 'Beta V 6.00',
     date: 'August 1, 2026',

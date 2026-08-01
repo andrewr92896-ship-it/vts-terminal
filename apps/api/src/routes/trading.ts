@@ -35,7 +35,12 @@ import {
 } from '../trading/funded.js';
 import { addSession, listSessions, removeSession, updateSession } from '../trading/sessions.js';
 import { getSessionAlertPrefs, setSessionAlertPrefs } from '../trading/sessionAlertPrefs.js';
-import { getMarketData, MARKET_GROUP_KEYS } from '../trading/marketData.js';
+import {
+  FOMC_MEETING_YEAR,
+  FOMC_MEETINGS_2026,
+  getMarketData,
+  MARKET_GROUP_KEYS,
+} from '../trading/marketData.js';
 import { getMarketDataLayout, setMarketDataLayout } from '../trading/marketDataLayout.js';
 import {
   getMarketNewsStreams,
@@ -486,6 +491,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   app.get('/api/trading/market-news/streams', markets, async (request) => ({
     streams: await getMarketNewsStreams(request.currentUser!),
     liveConfigured: liveStreamsConfigured(),
+    fomc: FOMC_SCHEDULE,
   }));
 
   app.put('/api/trading/market-news/streams', markets, async (request, reply) => {
@@ -494,6 +500,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return {
       streams: await setMarketNewsStreams(request.currentUser!, parsed.data),
       liveConfigured: liveStreamsConfigured(),
+      fomc: FOMC_SCHEDULE,
     };
   });
 
@@ -512,6 +519,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return {
       streams: await getMarketNewsStreams(request.currentUser!),
       liveConfigured: liveStreamsConfigured(),
+      fomc: FOMC_SCHEDULE,
     };
   });
 
@@ -527,6 +535,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return {
       streams: await getMarketNewsStreams(request.currentUser!),
       liveConfigured: liveStreamsConfigured(),
+      fomc: FOMC_SCHEDULE,
     };
   });
 
@@ -535,6 +544,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return {
       streams: await getMarketNewsStreams(request.currentUser!),
       liveConfigured: liveStreamsConfigured(),
+      fomc: FOMC_SCHEDULE,
     };
   });
 
@@ -1325,6 +1335,11 @@ const marketDataLayoutSchema = z.object({
     )
     .max(40),
 });
+// The FOMC statement dates, sent with the stream wall so the Federal Reserve
+// tile can say how long until the next meeting and how long since the last one.
+// Same list Market Data's countdown bar reads — one schedule, not two.
+const FOMC_SCHEDULE = { meetings: FOMC_MEETINGS_2026, meetingYear: FOMC_MEETING_YEAR };
+
 // This trader's Market News view state. The channel catalog is code-resident,
 // so nothing here can introduce a channel — every key is checked against the
 // catalog server-side in `sanitize`, and the schema only guards shape and size.

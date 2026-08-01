@@ -55,6 +55,11 @@ export interface LiveState {
   viewers?: string;
   lastLive?: string;
   lastTitle?: string;
+  // The live video's own id when this reading came from the Data API. The wall
+  // embeds a video id rather than the flaky live_stream endpoint, so recording
+  // it here gives a second, independent way to get a playable tile on installs
+  // that do have a key — the keyless page read is the first.
+  videoId?: string;
 }
 
 interface LiveEntry extends LiveState {
@@ -227,6 +232,172 @@ export function cachedLiveState(channelId: string): LiveState | undefined {
   return state;
 }
 
+// ---------------------------------------------------------------------------
+// The live *video*, resolved without a key — what actually makes a tile play
+// ---------------------------------------------------------------------------
+//
+// The wall used to embed `youtube.com/embed/live_stream?channel=<id>` and rely
+// on that endpoint to find the channel's current broadcast by itself. It is the
+// only keyless option that needs nothing but a channel id, but it is also
+// unreliable: it renders "This video is unavailable" for channels that are
+// plainly live, and it is the reason four tiles could sit dead at once.
+//
+// Embedding a **video id** — the ordinary `youtube.com/embed/<videoId>` player —
+// has no such problem. So the job here is to learn that id for free: a channel's
+// own `/live` page redirects to whatever it is broadcasting, and names it in the
+// canonical link. When the channel is dark the page canonicalizes back to the
+// channel itself and there is no video id to find, which is the offline answer.
+//
+// This matters most for the one channel that is dark nearly all the time. The
+// Fed streams a press conference eight times a year, and those are the hours
+// this wall exists for: the path that lights that tile up cannot be the one that
+// depends on an API key being present, because the key is optional and the
+// meeting is not repeatable. This route needs no key, no quota and no poller —
+// it is the same free channel-page read `resolveHandleKeyless` already does.
+//
+// A **scheduled** broadcast is reported too, with `live: false`. The Fed puts
+// its stream up as a waiting room before the press conference starts, and
+// embedding that is exactly right — the tile shows YouTube's own "starts in…"
+// countdown and rolls into the stream by itself at the top of the hour, with
+// nobody watching for the moment it flips.
+
+export interface LiveVideo {
+  videoId: string;
+  title?: string;
+  // True only while actually broadcasting. A waiting room is `false` — it may
+  // be embedded, but it must never be badged LIVE.
+  live: boolean;
+  // A broadcast that has been scheduled but has not started.
+  upcoming: boolean;
+}
+
+interface LiveVideoEntry {
+  video: LiveVideo | null;
+  checkedAt: number;
+}
+
+// How long an answer stands before it is re-read. The dark figure is the one
+// that decides how long after the Fed goes live the tile starts playing, so it
+// is deliberately short: worst case here plus the screen's own poll, i.e. under
+// three minutes. It costs one plain page fetch per channel, cached across every
+// desk watching it, so a tighter cadence is affordable in a way the Data API's
+// quota never was.
+const LIVE_VIDEO_TTL_LIVE_MS = 90 * 1000;
+const LIVE_VIDEO_TTL_DARK_MS = 2 * 60 * 1000;
+const LIVE_PAGE_TIMEOUT_MS = 6000;
+
+const liveVideoCache = new Map<string, LiveVideoEntry>();
+// Channels with a read in flight, so a burst of readers costs one fetch.
+const liveVideoInFlight = new Set<string>();
+
+function liveVideoFresh(e: LiveVideoEntry): boolean {
+  const ttl = e.video?.live ? LIVE_VIDEO_TTL_LIVE_MS : LIVE_VIDEO_TTL_DARK_MS;
+  return Date.now() - e.checkedAt < ttl;
+}
+
+// What we currently believe, or undefined when nothing has been read yet. Never
+// fetches — callers that want a refresh ask for one explicitly.
+export function cachedLiveVideo(channelId: string): LiveVideo | null | undefined {
+  const e = liveVideoCache.get(channelId);
+  if (!e) return undefined;
+  return liveVideoFresh(e) ? e.video : undefined;
+}
+
+// Read the channel's `/live` page and pull out what it is broadcasting. Returns
+// null for a dark channel, and never throws — a layout change upstream degrades
+// this to "offline", which is the same place the old embed started from.
+export async function fetchLiveVideo(channelId: string): Promise<LiveVideo | null> {
+  if (!CHANNEL_ID_RE.test(channelId)) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), LIVE_PAGE_TIMEOUT_MS);
+    const res = await fetch(`https://www.youtube.com/channel/${channelId}/live`, {
+      signal: ctrl.signal,
+      headers: {
+        // Same reason as resolveHandleKeyless: without a browser-ish UA YouTube
+        // serves a consent interstitial that names no video.
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    return parseLivePage(await res.text());
+  } catch {
+    return null;
+  }
+}
+
+// The parsing half, split out from the fetch so it can be exercised directly
+// against saved pages. Everything this reads is a fact stated in the page; when
+// upstream markup changes this returns null and the tile falls back, rather than
+// guessing.
+export function parseLivePage(html: string): LiveVideo | null {
+  try {
+    // The canonical link is the reliable one: on a live (or scheduled) channel
+    // it points at the watch URL, and on a dark one back at the channel.
+    const canonical = html.match(
+      /<link\s+rel="canonical"\s+href="https:\/\/www\.youtube\.com\/watch\?v=([A-Za-z0-9_-]{11})"/,
+    );
+    const videoId = canonical?.[1];
+    if (!videoId) return null;
+
+    // Distinguish "broadcasting now" from "scheduled", and both from a finished
+    // stream. This is the part to be careful with: `/live` on a dark channel
+    // sometimes lands on the *last* broadcast, whose page still says it was live
+    // content. Reading that as live would park a replay of the last press
+    // conference in the tile and badge it LIVE — worse than showing nothing.
+    //
+    // So only the two present-tense flags count. `isLiveNow` is the player's own
+    // "it is happening right now"; `liveBroadcastContent` is the same fact in the
+    // metadata. `isLiveContent` / `isLiveBroadcast` are deliberately NOT used —
+    // they stay true forever on the recording of a stream that ended.
+    const live = /"isLiveNow":\s*true/.test(html) || /"liveBroadcastContent":"live"/.test(html);
+    const upcoming =
+      !live && (/"isUpcoming":\s*true/.test(html) || /"liveBroadcastContent":"upcoming"/.test(html));
+    if (!live && !upcoming) return null;
+    const titleTag = html.match(/<meta\s+name="title"\s+content="([^"]{1,300})"/);
+    const title = titleTag?.[1] ? decodeHtml(titleTag[1]) : undefined;
+    return { videoId, title, live, upcoming };
+  } catch {
+    return null;
+  }
+}
+
+// Minimal entity decoding for the handful that show up in a YouTube title.
+function decodeHtml(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+}
+
+// Kick off a refresh if what we hold has gone stale. Fire-and-forget by design:
+// a screen load never waits on YouTube, it just reads whatever the last answer
+// was and gets the new one on the next poll.
+export function refreshLiveVideo(channelId: string): void {
+  if (!CHANNEL_ID_RE.test(channelId)) return;
+  const e = liveVideoCache.get(channelId);
+  if (e && liveVideoFresh(e)) return;
+  if (liveVideoInFlight.has(channelId)) return;
+  liveVideoInFlight.add(channelId);
+  void fetchLiveVideo(channelId)
+    .then((video) => {
+      liveVideoCache.set(channelId, { video, checkedAt: Date.now() });
+    })
+    .catch(() => {
+      // Record the miss too, so a channel that keeps failing is retried on the
+      // dark cadence rather than on every single read.
+      liveVideoCache.set(channelId, { video: null, checkedAt: Date.now() });
+    })
+    .finally(() => {
+      liveVideoInFlight.delete(channelId);
+    });
+}
+
 // ---- daily quota ledger ----
 // The budget resets each UTC day (matching Google's quota reset). A 403 with
 // reason quotaExceeded slams it shut for the rest of the day.
@@ -371,6 +542,7 @@ export async function fetchLiveState(channelId: string): Promise<LiveState | nul
   );
   const items = (vids.items as
     | {
+        id?: string;
         snippet?: { title?: string; liveBroadcastContent?: string };
         liveStreamingDetails?: { concurrentViewers?: string; actualEndTime?: string };
       }[]
@@ -387,6 +559,7 @@ export async function fetchLiveState(channelId: string): Promise<LiveState | nul
     live: true,
     streamTitle: liveVid.snippet?.title,
     viewers: Number.isFinite(cv) && cv > 0 ? abbrevViewers(cv) : undefined,
+    videoId: liveVid.id,
   });
 }
 

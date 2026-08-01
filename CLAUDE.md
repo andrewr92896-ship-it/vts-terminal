@@ -380,11 +380,32 @@ workspaces list** (see `theme/nav.ts` order).
     only, not investment advice" line sits under the feed instead. The economic
     calendar lives on Market Data now, not here.
     - The **live-stream wall** lets a trader follow YouTube channels and open
-      several at once (layout 1-up…6-up, one dockable corner mini-player), so a
-      press conference plays beside the headlines. A channel with a **channel ID**
-      embeds the keyless `youtube.com/embed/live_stream?channel=ID` player (which
-      plays when the channel is live and self-shows offline otherwise); a
-      handle-only channel links out until the ID is resolved.
+      several at once (one dockable corner mini-player), so a press conference
+      plays beside the headlines. **How many play side by side is how many the
+      trader has opened** from the channel rail, bounded by what the width fits —
+      there is deliberately no layout picker, since opening another channel is
+      already the way to add another tile.
+      - **A tile embeds a video id, not the channel.** `live_stream?channel=ID`
+        is the obvious keyless embed and it is not reliable — it renders "This
+        video is unavailable" for channels that are plainly live, which once left
+        the whole wall dead at once. So the server resolves the channel's
+        **current video** instead (`fetchLiveVideo` / `parseLivePage` in
+        `trading/youtube.ts`, reading the channel's own `/live` page, keyless and
+        free) and the tile plays `youtube.com/embed/<videoId>`. `live_stream`
+        survives only as the fallback for a channel the server has not managed to
+        read — signalled by `liveChecked` on the payload, which is what lets the
+        client tell "we looked, it is dark" from "we have not looked", two states
+        that want opposite tiles.
+      - **A scheduled broadcast is embedded too** (`upcoming: true`, never badged
+        LIVE). The Fed puts its stream up as a waiting room before a press
+        conference; embedding that means the tile rolls into the broadcast by
+        itself rather than needing someone to catch the moment it starts.
+      - `parseLivePage` reads **only present-tense flags** (`isLiveNow`,
+        `liveBroadcastContent`). `isLiveContent` / `isLiveBroadcast` stay true
+        forever on the *recording* of a stream that ended, and `/live` on a dark
+        channel sometimes lands on exactly that — reading it as live would park a
+        replay of the last press conference in the tile, badged LIVE. Keep that
+        distinction.
     - **The channel list belongs to the desk, not to the code.** A trader pastes
       a YouTube link and the channel appears for their whole **team** — rows in
       `market_news_channels` scoped by `team_id` (a trader on no team gets
@@ -424,22 +445,41 @@ workspaces list** (see `theme/nav.ts` order).
       a LIVE badge appears, never the ability to watch. **Keep that property** —
       it is the whole reason this list can be user-editable.
     - A channel carries `alwaysOn` for the ones that **broadcast around
-      the clock** (Bloomberg, Yahoo Finance, Sky News, DW, Al Jazeera), shown as
-      a `24/7` tag; the rest (Fed, ECB, Reuters) are dark until they cover
-      something, which is what the per-channel bell is for. Keep both kinds: the
-      always-on ones are what sit open beside the headlines, and the Fed is live
-      only a few hours a month but they are the hours that matter most here.
+      the clock** (Yahoo Finance, Bloomberg, Reuters), shown as a `24/7` tag.
+      **Of the starter set the Fed is the only one that is not**, and that is the
+      point of it: it is dark between meetings and live for a few hours eight
+      times a year, and those are the hours this wall exists for.
+      - Because it is dark nearly always, **its tile shows the FOMC countdown
+        instead of a dead player** — how long until the next rate decision and
+        how long since the last (`FedMeetingCard`, matched by channel id in
+        `isFedChannel`). The dates come from `FOMC_MEETINGS_2026` in
+        `trading/marketData.ts`, sent on the streams payload as `fomc`, so the
+        countdown and Market Data's bar read **one** schedule. Update that list
+        each year and both follow.
+      - The starter channels' **ids are seeded outright** rather than left to the
+        background resolver (migration `0086` backfills desks seeded before
+        that). A row with no id cannot embed at all, so the set every desk starts
+        with must not depend on a lookup that can fail.
     - Only the trader's **view state** persists per user in `market_news_streams`
       (`watching` order, `docked`, `cols`, `notify`; migration `0081` dropped the
       old per-user `channels` column). `GET|PUT /api/trading/market-news/streams`;
       in the `admin/service.ts` per-user delete list. Nothing a client sends can
       introduce a channel — every key is checked against the catalog in
       `sanitize`.
-    - **Live status is real when `YOUTUBE_API_KEY` is set** (`trading/youtube.ts`
-      + `trading/youtubeWatch.ts`). `liveStreamsConfigured()` just reports whether
-      that key exists; with no key every channel reads offline and the screen
-      marks live/viewer figures as **sample** rather than faking them (a channel
-      with an id still embeds the keyless player). The watch is production-only,
+    - **Whether a channel is playing no longer depends on the API key.** The
+      keyless `/live` read above answers that for every channel, on a short TTL
+      (90s live, 2 min dark) refreshed fire-and-forget on read, with the screen
+      polling the streams endpoint every 45s — so a channel going live reaches an
+      open tile in under about three minutes without anyone reloading. There are
+      deliberately **two independent routes to a playable tile**: that keyless
+      read, and the Data API poller, which now records the live video's own id in
+      `LiveState.videoId`. Either producing an id is enough. Do not collapse them
+      into one — the wall has to work for a press conference that happens eight
+      times a year and cannot be rehearsed.
+    - **`YOUTUBE_API_KEY` still governs the extras** (`trading/youtube.ts` +
+      `trading/youtubeWatch.ts`): viewer counts and the go-live push.
+      `liveStreamsConfigured()` just reports whether that key exists. The watch is
+      production-only,
       polls the **union of every trader's channels** deduped (so cost scales with
       distinct channels, not headcount), resolves `@handle → channelId` once and
       caches it — which is what makes a handle-only channel embeddable without the
