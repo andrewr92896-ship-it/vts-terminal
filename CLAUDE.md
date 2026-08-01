@@ -785,12 +785,30 @@ control — the server is still the enforcer.
   supports `oanda | kraken | manual`. **OANDA and Kraken both have an order
   path**; Kraken's is spot-only and must stay that way (see the Trade Desk
   section) — that is a deliberate posture, not an omission.
-- **A connection is named whose + where** — "Andrew's OANDA", "Andrew's Kraken"
-  (`defaultConnectionLabel` in `trading/connections.ts`; migration `0085`
-  renamed the previously seeded owner-only labels). The desk now carries accounts
-  at more than one venue, and a label naming only the owner leaves two chips on
-  the Live Wall that cannot be told apart. Keep the format for any venue added
-  later; the Trade Desk's account cards also print the venue outright.
+- **A connection is named whose + where** — "Andrew's OANDA", "Andrew's Kraken".
+  The desk carries accounts at more than one venue, and a label naming only the
+  owner leaves two chips on the Live Wall, and two account cards on the Trade
+  Desk, that cannot be told apart.
+  - `venueLabel(label, broker)` in `trading/connections.ts` is the **single
+    rule**, and **every** write goes through it — `addConnection`,
+    `updateConnection` and `adminUpdateConnection`. A label that already names
+    its own venue is left exactly as the owner wrote it; one that names a
+    *different* venue has it stripped; one that names none gets a generic tail
+    ("Trades", "Crypto", "Account", "book") dropped and the venue appended, so
+    "Andrew's Trades" becomes "Andrew's Kraken" rather than "Andrew's Trades
+    Kraken". It is **idempotent**. `manual` is deliberately exempt — a
+    hand-entered book is named after the prop firm it tracks and has no platform.
+  - `backfillConnectionLabels()` re-applies it to every stored row **on boot**
+    (`server.ts`, beside `backfillTeamLeaders()`).
+  - **Do not go back to doing this as a migration.** It was migration `0085`
+    first, and that is exactly why it broke: a migration only ever sees the rows
+    that existed the day it ran, so the next Kraken connection anybody created
+    came back reading "Andrew's Trades" beside an OANDA one — the confusion the
+    rename existed to remove. The write path plus the boot pass is what makes it
+    hold. `0085` is still in the tree as history; it is not the enforcement.
+  - The Trade Desk's account cards print the venue outright ("KRAKEN · CRYPTO
+    SPOT") from the connection's `broker`, so even a drifting label can never
+    leave the desk ambiguous about which venue an order would go to.
 - **TradingView webhooks — TWO endpoints, easy to misconfigure:**
   - `POST /api/webhooks/tradingview` — secret `TRADINGVIEW_WEBHOOK_SECRET` (in
     body or query). Writes `trading_alerts`; **this is the one wired to the
