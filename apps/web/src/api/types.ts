@@ -1184,6 +1184,10 @@ export interface StreamChannel {
   // A resolved video that has not started yet: embeddable (YouTube's own
   // waiting room, which rolls into the stream by itself) but not badged LIVE.
   upcoming?: boolean;
+  // Broadcasting, but the channel has restricted embedding — no player on this
+  // site can show it. The tile says so and links out instead of rendering
+  // YouTube's bare "Video unavailable", which looks like a fault and is not one.
+  embedBlocked?: boolean;
   // True once the server has actually read this channel's live state. Absent
   // means "not looked at yet", which is why the tile still falls back to the
   // optimistic embed rather than claiming the channel is dark.

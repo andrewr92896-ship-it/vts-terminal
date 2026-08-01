@@ -977,7 +977,8 @@ function StreamTile({
   // The only case that does NOT play is a channel positively established as off
   // air, which is what the offline card is for.
   const canEmbed =
-    !!c.liveVideoId || (!!c.channelId && (c.live || !!c.upcoming || !liveKnown(c)));
+    !c.embedBlocked &&
+    (!!c.liveVideoId || (!!c.channelId && (c.live || !!c.upcoming || !liveKnown(c))));
   // The Fed's countdown replaces a dead player, never a live one. It shows when
   // the tile has nothing to play, and also when the state is merely unknown —
   // the Fed is dark all but a few hours a year, so "unknown" almost always means
@@ -988,7 +989,24 @@ function StreamTile({
   return (
     <div style={{ background: C.panel, borderRadius: 12, overflow: 'hidden', border: `1px solid ${c.live ? tint(C.red, 0.35) : C.line}` }}>
       <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18' }}>
-        {showFedCard ? (
+        {c.embedBlocked ? (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, textAlign: 'center' }}>
+            <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: '#fff', background: C.red, borderRadius: 4, padding: '2px 6px' }}>
+              Live now
+            </span>
+            <div style={{ fontSize: 11.5, color: C.muted, maxWidth: 310, lineHeight: 1.5 }}>
+              {c.name} is broadcasting, but this channel does not allow its stream to play outside YouTube.
+            </div>
+            <a
+              href={channelUrl(c)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 11.5, fontWeight: 600, color: C.text, background: tint(C.red, 0.12), border: `1px solid ${tint(C.red, 0.45)}`, padding: '7px 12px', borderRadius: 7, textDecoration: 'none' }}
+            >
+              Watch on YouTube ↗
+            </a>
+          </div>
+        ) : showFedCard ? (
           <FedMeetingCard fomc={fomc!} now={now} />
         ) : canEmbed ? (
           <iframe
