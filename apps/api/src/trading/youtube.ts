@@ -143,6 +143,70 @@ export function channelIdFromRef(raw: string): string {
   return parseYouTubeRef(raw).channelId;
 }
 
+// Resolve a handle to its channel id WITHOUT the Data API, by reading the
+// channel's own page. YouTube renders the id into the HTML in several places;
+// the canonical link is the most stable, with the embedded JSON as a fallback.
+//
+// Why this exists: users paste `youtube.com/@Name` far more often than the
+// `/channel/UC…` form, and without an id a tile cannot embed at all. Going
+// through the Data API instead would mean a channel is unusable until an API key
+// is configured and the poller has run — for a link the trader just pasted and
+// expects to work. This costs no quota and needs no key.
+//
+// Best-effort by design: a layout change upstream makes this return null, which
+// simply leaves the channel handle-only until the API path (if configured)
+// resolves it. It never throws and never blocks for long.
+const CHANNEL_PAGE_TIMEOUT_MS = 6000;
+
+export async function resolveHandleKeyless(rawHandle: string): Promise<string | null> {
+  const handle = normHandle(rawHandle);
+  if (!handle) return null;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), CHANNEL_PAGE_TIMEOUT_MS);
+    const res = await fetch(`https://www.youtube.com/@${encodeURIComponent(handle)}`, {
+      signal: ctrl.signal,
+      headers: {
+        // Without a browser-ish UA YouTube serves a consent/interstitial page
+        // that carries no channel id.
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+    });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const html = await res.text();
+    const canonical = html.match(
+      /<link\s+rel="canonical"\s+href="https:\/\/www\.youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})"/,
+    );
+    if (canonical) return canonical[1];
+    const embedded = html.match(/"(?:channelId|externalId)":"(UC[A-Za-z0-9_-]{22})"/);
+    return embedded ? embedded[1] : null;
+  } catch {
+    return null;
+  }
+}
+
+// The channel id for whatever was pasted, cheapest route first: read it out of
+// the URL (free), then the channel page (free), then the Data API (1 unit, and
+// only when a key is set). Returns '' when nothing resolved.
+export async function resolveChannelId(raw: string): Promise<string> {
+  const direct = channelIdFromRef(raw);
+  if (direct) return direct;
+  const handle = normHandle(raw);
+  if (!handle) return '';
+  const cached = handleCache.get(handle);
+  if (cached) return cached;
+  const keyless = await resolveHandleKeyless(handle);
+  if (keyless) {
+    handleCache.set(handle, keyless);
+    handleMisses.delete(handle);
+    return keyless;
+  }
+  return (await resolveHandle(handle)) ?? '';
+}
+
 // The bare handle the Data API's `forHandle` expects (no @, lowercased), or ''
 // when the input names the channel some other way. Callers treat '' as "nothing
 // to look up" rather than looking up an empty handle.

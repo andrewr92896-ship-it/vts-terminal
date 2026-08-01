@@ -937,6 +937,36 @@ export const marketNewsStreams = sqliteTable('market_news_streams', {
 });
 export type MarketNewsStreamsRow = typeof marketNewsStreams.$inferSelect;
 
+// ---- Trading — Market News live-stream channels (team-owned) ----
+// The channels on the stream wall. A trader pastes a YouTube link and the
+// channel appears for their whole desk, so the list is scoped by `team_id` — the
+// same boundary trade data uses. A trader on no team gets their own scope key
+// (`user:<id>`), matching how scopedTraderIds treats a team-less viewer.
+//
+// `key` is what a saved `watching` / `notify` entry references, and is stable
+// for the life of the row: the four starter channels are seeded with their old
+// slugs ('fed', 'reuters', …) so tiles a trader already had open keep working.
+//
+// `channel_id` is the `UC…` id the keyless embed player needs. It is filled at
+// add time when the pasted URL carried it outright, otherwise resolved once
+// afterwards; '' means the tile links out until that resolution lands.
+export const marketNewsChannels = sqliteTable('market_news_channels', {
+  id: text('id').primaryKey(),
+  teamId: text('team_id').notNull(),
+  key: text('key').notNull(),
+  name: text('name').notNull(),
+  handle: text('handle').notNull().default(''),
+  channelId: text('channel_id').notNull().default(''),
+  // Marks a channel that broadcasts continuously, shown as the 24/7 tag.
+  alwaysOn: integer('always_on', { mode: 'boolean' }).notNull().default(false),
+  // Who added it; null once that account is deleted — the channel belongs to the
+  // desk, not to the person who happened to paste the link.
+  addedBy: text('added_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type MarketNewsChannelRow = typeof marketNewsChannels.$inferSelect;
+
 // ---- Trading — the Trade Desk's order journal ----
 // Every order this portal sends to a broker, and what came back. This is an
 // append-only record of *our* instructions, deliberately separate from

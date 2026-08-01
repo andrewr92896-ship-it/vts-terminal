@@ -582,6 +582,13 @@
       "when": 1782341436908,
       "tag": "0082_trade_desk_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "6",
+      "when": 1782341536908,
+      "tag": "0083_market_news_channels",
+      "breakpoints": true
     }
   ]
 }

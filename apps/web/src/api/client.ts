@@ -592,6 +592,31 @@ export const api = {
     return request('/api/trading/market-news/streams');
   },
   // Only the view state is saved — the channel catalog lives on the server.
+  // The channel list belongs to the desk: adding one shows it to every teammate.
+  addMarketNewsChannel(input: {
+    url: string;
+    name?: string;
+    alwaysOn?: boolean;
+  }): Promise<MarketNewsStreamsPayload> {
+    return request('/api/trading/market-news/channels', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  updateMarketNewsChannel(
+    key: string,
+    patch: { name?: string; alwaysOn?: boolean },
+  ): Promise<MarketNewsStreamsPayload> {
+    return request(`/api/trading/market-news/channels/${encodeURIComponent(key)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  },
+  removeMarketNewsChannel(key: string): Promise<MarketNewsStreamsPayload> {
+    return request(`/api/trading/market-news/channels/${encodeURIComponent(key)}`, {
+      method: 'DELETE',
+    });
+  },
   saveMarketNewsStreams(view: MarketNewsView): Promise<MarketNewsStreamsPayload> {
     return request('/api/trading/market-news/streams', {
       method: 'PUT',
