@@ -30,6 +30,27 @@
   --amber: #e5a43b; /* warnings, privacy banner */
   --info: #6c9eff; /* LLC workspace accent */
   --violet: #b69cff; /* Studies workspace accent */
+
+  /* ---- Portal zoom (theme/zoom.ts) ----
+     `--vts-zoom` is written onto <html> by the zoom store; everything below
+     derives from it. Default 1, so the app is correct before any script runs.
+
+     `--vh` / `--vw` exist because of one trap: inside a subtree with CSS `zoom`,
+     a screen-relative length still resolves against the FULL viewport and is
+     only THEN multiplied by the zoom factor. Measured on a 1045px-tall window at
+     zoom 1.5, a full-viewport-height box painted 1567.5px — half a screen too
+     tall — so the shell overflowed. Pre-dividing here makes `--app-h` land on
+     exactly the viewport height at every zoom level.
+
+     Widths deliberately have no equivalent: `width: auto` and `width: 100%`
+     already resolve against the unzoomed parent and are correct as written.
+     Dividing those double-compensates. `--vw` is only for lengths measured
+     against the *screen*, never against a parent. */
+  --vts-zoom: 1;
+  --vh: calc(1vh / var(--vts-zoom));
+  --vw: calc(1vw / var(--vts-zoom));
+  --app-h: calc(100 * var(--vh));
+  --app-w: calc(100 * var(--vw));
 }
 
 * {
@@ -46,8 +67,13 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* The portal scales here. `zoom` rather than `transform: scale`, so the app
+   re-lays-out at its new size instead of being drawn small and stretched.
+   The Employee Portal mounts at #employee-root and is deliberately NOT scaled —
+   separate entry point, separate design language, its own bundle. */
 #root {
-  min-height: 100vh;
+  zoom: var(--vts-zoom);
+  min-height: var(--app-h);
 }
 
 button {
@@ -184,7 +210,7 @@ a {
   }
   100% {
     opacity: 0;
-    transform: translateY(90vh) rotate(720deg);
+    transform: translateY(calc(90 * var(--vh))) rotate(720deg);
   }
 }
 

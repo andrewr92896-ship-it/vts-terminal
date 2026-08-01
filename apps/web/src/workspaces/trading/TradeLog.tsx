@@ -1047,7 +1047,7 @@ const menuButton: CSSProperties = { display: 'inline-flex', alignItems: 'center'
 // Widest the trader popup can get — kept next to the style it sets so the
 // which-edge-do-we-hang-from measurement in TraderMenu stays honest.
 const MENU_POPUP_W = 300;
-const menuPopup: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 220, maxWidth: `min(${MENU_POPUP_W}px, calc(100vw - 24px))`, background: '#0c1f43', border: `1px solid ${BORDER2}`, borderRadius: 12, padding: 6, zIndex: 40, boxShadow: '0 16px 44px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflowY: 'auto' };
+const menuPopup: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 220, maxWidth: `min(${MENU_POPUP_W}px, calc(var(--app-w) - 24px))`, background: '#0c1f43', border: `1px solid ${BORDER2}`, borderRadius: 12, padding: 6, zIndex: 40, boxShadow: '0 16px 44px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflowY: 'auto' };
 const menuItem: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: TEXT, fontSize: 13, fontWeight: 500, padding: '9px 10px', borderRadius: 8, cursor: 'pointer' };
 const menuItemActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const menuItemHot: CSSProperties = { background: 'rgba(255,255,255,.06)' };

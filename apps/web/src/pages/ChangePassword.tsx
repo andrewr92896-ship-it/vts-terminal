@@ -35,7 +35,7 @@ export function ChangePassword() {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: 'var(--app-h)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

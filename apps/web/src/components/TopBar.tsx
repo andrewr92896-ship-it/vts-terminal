@@ -1,6 +1,16 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import type { NotificationItem, RoleKey, User } from '../api/types';
 import { C, GOLD_GRADIENT, tint } from '../theme/tokens';
+import {
+  canZoomIn,
+  canZoomOut,
+  DEFAULT_ZOOM,
+  resetZoom,
+  useZoom,
+  zoomIn,
+  zoomLabel,
+  zoomOut,
+} from '../theme/zoom';
 import { rolesSummary } from '../auth/access';
 import { api } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
@@ -112,13 +122,88 @@ function Dropdown({
           boxShadow: '0 16px 40px rgba(0,0,0,.5)',
           padding: 8,
           zIndex: 41,
-          maxHeight: '72vh',
+          maxHeight: 'calc(72 * var(--vh))',
           overflowY: 'auto',
         }}
       >
         {children}
       </div>
     </>
+  );
+}
+
+// Portal zoom, in the account menu. Scales the app itself rather than relying on
+// the browser's zoom, which is per-origin, invisible to the app, and also scales
+// the browser's own chrome.
+//
+// Stepping deliberately does NOT close the menu: zoom is something you nudge
+// until it looks right, and closing after each press would mean reopening the
+// menu for every step. Buttons disable at the ends of the ladder rather than
+// silently doing nothing, and the reset row appears only when there is something
+// to reset.
+function ZoomControl() {
+  const zoom = useZoom();
+  const stepStyle = (enabled: boolean): CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 30,
+    height: 26,
+    flex: 'none',
+    borderRadius: 7,
+    background: enabled ? 'rgba(255,255,255,.04)' : 'transparent',
+    border: `1px solid ${enabled ? C.line2 : 'transparent'}`,
+    color: enabled ? C.text : C.faint,
+    cursor: enabled ? 'pointer' : 'default',
+    opacity: enabled ? 1 : 0.4,
+  });
+  return (
+    <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '2px 9px 6px' }}>
+        <span style={{ fontSize: 12.5, fontWeight: 500, color: C.text, flex: 1 }}>Zoom</span>
+        <button
+          type="button"
+          onClick={zoomOut}
+          disabled={!canZoomOut(zoom)}
+          title="Zoom out"
+          aria-label="Zoom out"
+          style={stepStyle(canZoomOut(zoom))}
+        >
+          <Icon name="zoom-out" size={15} />
+        </button>
+        <span
+          style={{
+            fontFamily: C.mono,
+            fontSize: 11.5,
+            color: C.muted,
+            minWidth: 42,
+            textAlign: 'center',
+          }}
+        >
+          {zoomLabel(zoom)}
+        </span>
+        <button
+          type="button"
+          onClick={zoomIn}
+          disabled={!canZoomIn(zoom)}
+          title="Zoom in"
+          aria-label="Zoom in"
+          style={stepStyle(canZoomIn(zoom))}
+        >
+          <Icon name="zoom-in" size={15} />
+        </button>
+      </div>
+      {zoom !== DEFAULT_ZOOM && (
+        <button
+          type="button"
+          onClick={resetZoom}
+          style={{ ...menuItem, fontSize: 11.5, color: C.muted, padding: '6px 9px' }}
+        >
+          <Icon name="refresh-cw" size={13} color={C.faint} />
+          Reset to 100%
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -412,6 +497,8 @@ export function TopBar(props: TopBarProps) {
               Roles: {rolesSummary(user.roles)}
               {actingRole && <><br />Previewing as a member role · manage in Admin → View as role</>}
             </div>
+
+            <ZoomControl />
 
             <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
               <button

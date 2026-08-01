@@ -586,7 +586,7 @@ export function Portal() {
   // slot, and remounts the whole content area — which would reset the active
   // game back to its picker (and wipe any half-filled form) on every rotate.
   const main = (
-    <div key="app-main" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh' }}>
+    <div key="app-main" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: 'var(--app-h)' }}>
       {isDemo && <DemoBanner accent={accent} onTour={() => setTourOpen(true)} onExit={logout} />}
       {topBar}
       <PrivacyBanner />
@@ -662,7 +662,7 @@ export function Portal() {
           {canAccessWorkspace(effectiveRoles, 'trading') && <AlertSoundWatcher />}
 
           {isPhone ? (
-            <div style={{ height: '100vh', overflow: 'hidden', background: C.bg, color: C.text }}>
+            <div style={{ height: 'var(--app-h)', overflow: 'hidden', background: C.bg, color: C.text }}>
               {main}
               {/* Off-canvas nav drawer */}
               {navOpen && (
@@ -692,7 +692,7 @@ export function Portal() {
               style={{
                 display: 'grid',
                 gridTemplateColumns: `${collapsed ? 72 : 248}px 1fr`,
-                height: '100vh',
+                height: 'var(--app-h)',
                 overflow: 'hidden',
                 background: C.bg,
                 color: C.text,

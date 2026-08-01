@@ -343,7 +343,7 @@ const modalWrap: CSSProperties = {
 };
 const modalCard: CSSProperties = {
   width: 'min(560px, 100%)',
-  maxHeight: '86vh',
+  maxHeight: 'calc(86 * var(--vh))',
   overflowY: 'auto',
   background: '#0C1C3C',
   border: `1px solid ${C.line2}`,
