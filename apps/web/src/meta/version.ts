@@ -11,14 +11,23 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.99';
+export const APP_VERSION = 'Beta V 6.00';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.00',
+    date: 'August 1, 2026',
+    notes: [
+      'Market News: removed the “N streams open” count from the live streams header — the open streams are right there on screen.',
+    ],
+  },
   {
     version: 'Beta V 5.99',
     date: 'August 1, 2026',
     notes: [
-      'Market News: removed the “N streams open” count from the live streams header — the open streams are right there on screen.',
+      'Fixed: the Kraken account on the Trade Desk was still called "Andrew’s Trades", sitting next to "Andrew’s OANDA" — two cards that did not say which was which.',
+      'Naming a connection after its platform is now a rule the portal keeps, not a one-off rename. Any account whose name does not say which platform it is gets it added, whenever it is created or renamed, and every name is checked again each time the portal restarts.',
+      'A name you have chosen that already says the platform is left exactly as you wrote it. Manual entries are left alone entirely — those are named after the prop firm, not a platform.',
     ],
   },
   {
