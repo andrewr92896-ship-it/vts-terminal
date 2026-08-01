@@ -10,9 +10,11 @@ import {
 import {
   cachedChannelIdForHandle,
   cachedLiveState,
+  cachedLiveVideo,
   channelIdFromRef,
   normHandle,
   parseYouTubeRef,
+  refreshLiveVideo,
   resolveChannelId,
   youtubeConfigured,
 } from './youtube.js';
@@ -55,6 +57,19 @@ export interface StreamChannel {
   viewers?: string;
   lastLive?: string;
   lastTitle?: string;
+  // The video the channel is broadcasting (or has scheduled), resolved keylessly
+  // from its own /live page. When set, the tile embeds this rather than the
+  // unreliable live_stream endpoint — see youtube.ts for why that matters.
+  liveVideoId?: string;
+  // A resolved video that has not started yet: embeddable (it is YouTube's own
+  // waiting room) but deliberately not badged LIVE.
+  upcoming?: boolean;
+  // True once a keyless read has actually answered for this channel. Without it
+  // the client cannot tell "we looked, it is dark" from "we have not looked
+  // yet", and those want opposite tiles: the honest offline card for the first,
+  // and the old optimistic embed for the second (an install whose server cannot
+  // reach youtube.com never gets an answer, and must still be able to play).
+  liveChecked?: boolean;
 }
 
 // What one trader has saved: view state only. No channel list — that is code.
@@ -79,16 +94,35 @@ type CatalogChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId
 // Keys match the slugs the old code-resident catalog used, so a tile a trader
 // already had open keeps working across this change.
 // ---------------------------------------------------------------------------
+// Channel ids are seeded outright rather than left to the resolver. A row with
+// no id cannot embed at all, so the desk that starts with these should never
+// have to wait on a lookup — and a lookup that fails (YouTube changing its page,
+// no outbound access) would otherwise leave a starter channel permanently dead.
 const SEED_CHANNELS: CatalogChannel[] = [
-  { key: 'yahoofinance', name: 'Yahoo Finance', handle: '@YahooFinance', channelId: '', alwaysOn: true },
-  { key: 'bloomberg', name: 'Bloomberg Television', handle: '@markets', channelId: '', alwaysOn: true },
+  {
+    key: 'yahoofinance',
+    name: 'Yahoo Finance',
+    handle: '@YahooFinance',
+    channelId: 'UCEAZeUIeJs0IjQiqTCdVSIg',
+    alwaysOn: true,
+  },
+  {
+    key: 'bloomberg',
+    name: 'Bloomberg Television',
+    handle: '@markets',
+    channelId: 'UCIALMKvObZNtJ6AmdCLP7Lg',
+    alwaysOn: true,
+  },
+  // The one starter channel that is NOT always on, and deliberately so: the Fed
+  // broadcasts for a few hours eight times a year. Its tile carries the FOMC
+  // countdown in place of a dead player for the rest of the time.
   {
     key: 'fed',
     name: 'Federal Reserve',
     handle: '@federalreserve',
     channelId: 'UCAzhpt9DmG6PnHXjmJTvRGQ',
   },
-  { key: 'reuters', name: 'Reuters', handle: '@Reuters', channelId: '' },
+  { key: 'reuters', name: 'Reuters', handle: '@Reuters', channelId: '', alwaysOn: true },
 ];
 
 // How many channels one desk may follow. Not a quota limit — watching is free —
@@ -219,9 +253,49 @@ function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): Market
     channels: channels.map((c) => {
       const channelId = resolvedChannelId(c);
       const live = channelId ? cachedLiveState(channelId) : undefined;
-      return { ...c, channelId, handle: displayHandle(c.handle), live: false, ...live };
+      const base: StreamChannel = {
+        ...c,
+        channelId,
+        handle: displayHandle(c.handle),
+        live: false,
+        ...live,
+      };
+      // Two independent routes to a playable tile, on purpose — this wall has to
+      // work for a Fed press conference that happens eight times a year and
+      // cannot be rehearsed. The keyless page read is the one that always
+      // applies; the Data API poller is the second, and only exists when a key
+      // is set. Either one producing a video id is enough.
+      const video = channelId ? cachedLiveVideo(channelId) : undefined;
+      if (video === undefined) {
+        // Nothing keyless yet — fall back to whatever the poller knows.
+        return live?.videoId ? { ...base, liveVideoId: live.videoId, liveChecked: true } : base;
+      }
+      if (!video) {
+        if (live?.videoId) return { ...base, liveVideoId: live.videoId, liveChecked: true };
+        return { ...base, live: false, liveChecked: true };
+      }
+      return {
+        ...base,
+        liveVideoId: video.videoId,
+        upcoming: video.upcoming,
+        live: video.live,
+        liveChecked: true,
+        streamTitle: video.title ?? base.streamTitle,
+      };
     }),
   };
+}
+
+// Ask for a fresh live reading on every channel that has an id. Fire-and-forget:
+// this never blocks the response, it only makes sure the *next* read (the
+// screen polls) has a current answer. Bounded by the cache's own TTL, so an open
+// wall costs one cheap page read per channel every 90s while live and every five
+// minutes while dark — no API key and no quota involved.
+function refreshLiveVideos(channels: CatalogChannel[]): void {
+  for (const c of channels) {
+    const id = resolvedChannelId(c);
+    if (id) refreshLiveVideo(id);
+  }
 }
 
 function parseStrings(raw: string): string[] {
@@ -323,6 +397,7 @@ export async function getMarketNewsStreams(viewer: ChannelViewer): Promise<Marke
       .then((r) => r[0]),
   ]);
   resolveMissingIds(channelScope(viewer), channels);
+  refreshLiveVideos(channels);
   const keys = new Set(channels.map((c) => c.key));
   return withLiveState(row ? rowToView(row, keys) : defaultMarketNewsView(), channels);
 }

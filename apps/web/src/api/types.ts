@@ -1175,6 +1175,17 @@ export interface StreamChannel {
   viewers?: string;
   lastLive?: string;
   lastTitle?: string;
+  // The video this channel is broadcasting (or has scheduled), resolved
+  // server-side from the channel's own page. When present the tile embeds this
+  // directly — the reliable player — instead of the live_stream endpoint.
+  liveVideoId?: string;
+  // A resolved video that has not started yet: embeddable (YouTube's own
+  // waiting room, which rolls into the stream by itself) but not badged LIVE.
+  upcoming?: boolean;
+  // True once the server has actually read this channel's live state. Absent
+  // means "not looked at yet", which is why the tile still falls back to the
+  // optimistic embed rather than claiming the channel is dark.
+  liveChecked?: boolean;
 }
 
 // A trader's personal view over the stream wall — the only part that persists
@@ -1193,9 +1204,12 @@ export interface MarketNewsStreams extends MarketNewsView {
 
 export interface MarketNewsStreamsPayload {
   streams: MarketNewsStreams;
-  // False until a server-side YouTube poller populates live status / viewers —
-  // the screen marks channel live-state as sample while this is false.
+  // False until a server-side YouTube poller populates viewer counts and go-live
+  // pushes. Whether a channel is *playing* no longer depends on it — that is
+  // resolved keylessly per channel — so this now only governs the extras.
   liveConfigured: boolean;
+  // The FOMC statement schedule, for the Federal Reserve tile's countdown.
+  fomc?: { meetings: string[]; meetingYear: number };
 }
 
 export interface NewsInput {

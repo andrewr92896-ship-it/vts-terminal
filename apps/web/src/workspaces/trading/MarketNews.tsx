@@ -7,7 +7,15 @@ import { C, tint } from '../../theme/tokens';
 import { ScreenTitle } from './ScreenTitle';
 import { newsFeeds, affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
 import { decodeEntities, fmtDayKey, fmtTime } from './newsFormat';
+import { countdown, etDay, nextMeetingStamp, prevMeetingStamp } from './etClock';
 import type { MarketNewsData, MarketNewsStreams, NewsItem, StreamChannel } from '../../api/types';
+
+// The FOMC statement schedule, as sent with the stream wall. Same list Market
+// Data's countdown bar reads — the server holds one copy of it.
+export interface FomcSchedule {
+  meetings: string[];
+  meetingYear: number;
+}
 
 // Market News — the desk's headline feed plus an embedded YouTube live-stream
 // wall (watch a press conference beside the headlines). This screen deliberately
@@ -18,6 +26,10 @@ import type { MarketNewsData, MarketNewsStreams, NewsItem, StreamChannel } from 
 const SHOW_BIAS = true;
 
 const REFRESH_MS = 120_000;
+// The stream wall re-reads faster than the headline feed: it is how a tile finds
+// out a channel went live, and a press conference starting is worth catching
+// within the minute. The read is cheap — the server answers from its own cache.
+const STREAM_REFRESH_MS = 45_000;
 const ET = 'America/New_York';
 
 // Topic pills. `rates` isn't one of newsRelevance's feed keys, so membership for
@@ -93,9 +105,35 @@ function topicsOf(h: NewsItem): string[] {
   return [...set];
 }
 
+// What a tile actually plays. Two routes, and the order matters: embedding the
+// real video id is the reliable player, while `live_stream?channel=` is the
+// keyless guess that renders "This video is unavailable" often enough to have
+// left the whole wall dead. The server resolves the video id from the channel's
+// own page, so the fallback is only for a channel it hasn't read yet.
 function embedSrc(c: StreamChannel): string {
+  if (c.liveVideoId) return `https://www.youtube.com/embed/${c.liveVideoId}?autoplay=1&rel=0`;
   return c.channelId ? `https://www.youtube.com/embed/live_stream?channel=${c.channelId}&autoplay=1&rel=0` : '';
 }
+// The Fed's own YouTube channel — the one starter tile that is dark between
+// meetings, and the reason the FOMC countdown exists. Matched on the channel id,
+// which is the identity YouTube itself agrees on; the handle is the fallback for
+// a row whose id has not been filled in yet.
+const FED_CHANNEL_ID = 'UCAzhpt9DmG6PnHXjmJTvRGQ';
+function isFedChannel(c: StreamChannel): boolean {
+  if (c.channelId) return c.channelId === FED_CHANNEL_ID;
+  return /federalreserve/i.test(c.handle);
+}
+
+// "3d 5h ago" — the mirror of etGap's "in 3d 5h", for the meeting just gone.
+function agoLabel(ms: number): string {
+  const mins = Math.max(0, Math.round(ms / 60000));
+  const h = Math.floor(mins / 60);
+  const d = Math.floor(h / 24);
+  if (d >= 1) return `${d}d ${h % 24}h ago`;
+  if (h >= 1) return `${h}h ${mins % 60}m ago`;
+  return `${mins}m ago`;
+}
+
 function channelUrl(c: StreamChannel): string {
   if (c.channelId) return `https://www.youtube.com/channel/${c.channelId}/live`;
   if (c.handle) return `https://www.youtube.com/${c.handle}/live`;
@@ -123,6 +161,7 @@ export function MarketNews() {
   // --- live-stream setup (persisted per user) ---
   const [streams, setStreams] = useState<MarketNewsStreams | null>(null);
   const [liveConfigured, setLiveConfigured] = useState(false);
+  const [fomc, setFomc] = useState<FomcSchedule | null>(null);
 
   // --- feed filters / ephemeral UI ---
   const [topic, setTopic] = useState('all');
@@ -175,8 +214,31 @@ export function MarketNews() {
       .then((r) => {
         setStreams(r.streams);
         setLiveConfigured(r.liveConfigured);
+        if (r.fomc) setFomc(r.fomc);
       })
       .catch(() => setStreams(localDefaultStreams()));
+  }, []);
+
+  // Then keep the *channels* fresh on a short poll, without touching this
+  // trader's own view state. This is what makes a tile start playing on its own
+  // when a channel goes live: the server's live reading is what changes, and a
+  // trader watching for the Fed press conference should not have to reload the
+  // page to catch it. Only the channel list is taken from the reply — watching /
+  // docked / notify stay local, or a poll landing mid-edit would stamp on it.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      api
+        .marketNewsStreams()
+        .then((r) => {
+          setLiveConfigured(r.liveConfigured);
+          if (r.fomc) setFomc(r.fomc);
+          setStreams((prev) => (prev ? { ...prev, channels: r.streams.channels } : r.streams));
+        })
+        .catch(() => {
+          /* best-effort: the wall keeps showing what it last knew */
+        });
+    }, STREAM_REFRESH_MS);
+    return () => window.clearInterval(id);
   }, []);
 
   // Derive the watchlist from the trade log once, for the instrument tags.
@@ -331,6 +393,8 @@ export function MarketNews() {
           onRemoveChannel={removeChannel}
           streams={streams}
           liveConfigured={liveConfigured}
+          fomc={fomc}
+          now={now}
           contentW={contentW}
           liveOpen={liveOpen}
           setLiveOpen={setLiveOpen}
@@ -498,6 +562,8 @@ export function MarketNews() {
 function LiveStreams({
   streams,
   liveConfigured,
+  fomc,
+  now,
   contentW,
   liveOpen,
   setLiveOpen,
@@ -508,6 +574,10 @@ function LiveStreams({
 }: {
   streams: MarketNewsStreams | null;
   liveConfigured: boolean;
+  // The FOMC schedule behind the Federal Reserve tile's countdown; null until
+  // the streams payload has loaded, which simply leaves the old offline card.
+  fomc: FomcSchedule | null;
+  now: number;
   contentW: number;
   liveOpen: boolean;
   setLiveOpen: (v: boolean) => void;
@@ -601,6 +671,8 @@ function LiveStreams({
                       key={c.key}
                       c={c}
                       liveConfigured={liveConfigured}
+                      fomc={fomc}
+                      now={now}
                       onDock={() => mutate((s) => ({ ...s, docked: c.key }))}
                       onClose={() => closeTile(c.key)}
                     />
@@ -818,22 +890,60 @@ const inputStyle: CSSProperties = {
   fontFamily: 'inherit',
 };
 
+// What the Federal Reserve tile shows while the Fed is dark, which is nearly all
+// the time: when the next rate decision lands and how long ago the last one was.
+// The Fed is the one channel on the wall worth keeping open when it is *not*
+// broadcasting, and this is the reason why.
+function FedMeetingCard({ fomc, now }: { fomc: FomcSchedule; now: number }) {
+  const next = nextMeetingStamp(now, fomc.meetings, fomc.meetingYear);
+  const prev = prevMeetingStamp(now, fomc.meetings, fomc.meetingYear);
+  return (
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, padding: 16, textAlign: 'center' }}>
+      <div style={{ fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: C.faint }}>
+        Next FOMC decision
+      </div>
+      <div style={{ fontFamily: C.mono, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1 }}>
+        {countdown(next - now)}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.muted }}>
+        {etDay(next)} · 2:00 PM ET
+      </div>
+      <div style={{ fontSize: 10.5, color: C.faint, marginTop: 2 }}>
+        Last decision {etDay(prev)} · {agoLabel(now - prev)}
+      </div>
+      <div style={{ fontSize: 10, color: C.faint, maxWidth: 280, lineHeight: 1.5 }}>
+        This tile starts playing on its own when the Fed goes live.
+      </div>
+    </div>
+  );
+}
+
 function StreamTile({
   c,
   liveConfigured,
+  fomc,
+  now,
   onDock,
   onClose,
 }: {
   c: StreamChannel;
   liveConfigured: boolean;
+  fomc: FomcSchedule | null;
+  now: number;
   onDock: () => void;
   onClose: () => void;
 }) {
-  // Embed when the channel has an id AND we don't positively know it's offline.
-  // Before the poller exists (or with no API key) live-state is unknown, so we
-  // still embed and let the keyless live_stream player self-show offline —
-  // better than claiming "not live" about a channel we never checked.
-  const canEmbed = !!c.channelId && (c.live || !liveConfigured);
+  // Play the resolved video whenever there is one — that covers a live stream
+  // and a scheduled one (YouTube's waiting room rolls into the broadcast by
+  // itself, so nobody has to catch the moment it starts).
+  //
+  // With no resolved video the question is whether we actually looked. Once the
+  // server has read the channel, "dark" is the truth and the tile says so. Until
+  // then — a server that cannot reach youtube.com never gets an answer — fall
+  // back to the old optimistic embed rather than claiming a channel is off air
+  // on the strength of never having checked.
+  const canEmbed = !!c.liveVideoId || (!c.liveChecked && !!c.channelId && (c.live || !liveConfigured));
+  const showFedCard = !canEmbed && !!fomc && isFedChannel(c);
   return (
     <div style={{ background: C.panel, borderRadius: 12, overflow: 'hidden', border: `1px solid ${c.live ? tint(C.red, 0.35) : C.line}` }}>
       <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18' }}>
@@ -846,6 +956,8 @@ function StreamTile({
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
           />
+        ) : showFedCard ? (
+          <FedMeetingCard fomc={fomc!} now={now} />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, textAlign: 'center' }}>
             <div style={{ fontSize: 11.5, color: C.muted, maxWidth: 300, lineHeight: 1.5 }}>
@@ -872,7 +984,11 @@ function StreamTile({
           </button>
         </div>
         <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 3 }}>
-          {c.live ? c.streamTitle ?? 'Live' : `Offline · last stream ${c.lastTitle ?? '—'}`}
+          {c.live
+            ? c.streamTitle ?? 'Live'
+            : c.upcoming
+              ? c.streamTitle ?? 'Scheduled — waiting to start'
+              : `Offline · last stream ${c.lastTitle ?? '—'}`}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap', marginTop: 6 }}>
           <span style={{ fontFamily: C.mono, fontSize: 10, color: C.faint }}>{c.live ? c.viewers ?? '' : c.lastLive ?? 'offline'}</span>
