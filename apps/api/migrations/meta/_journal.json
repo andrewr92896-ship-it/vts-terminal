@@ -596,6 +596,13 @@
       "when": 1782341636908,
       "tag": "0084_market_news_channels",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "6",
+      "when": 1782341736908,
+      "tag": "0085_connection_labels_name_the_venue",
+      "breakpoints": true
     }
   ]
 }
