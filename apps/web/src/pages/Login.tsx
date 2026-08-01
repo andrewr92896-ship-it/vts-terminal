@@ -40,7 +40,7 @@ export function Login() {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: 'var(--app-h)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -59,7 +59,7 @@ export function Login() {
           top: '50%',
           left: '50%',
           transform: 'translate(-50%,-50%)',
-          width: '60vw',
+          width: 'calc(60 * var(--vw))',
           maxWidth: 880,
           opacity: 0.06,
           pointerEvents: 'none',

@@ -14,7 +14,7 @@ export function App() {
     content = (
       <div
         style={{
-          minHeight: '100vh',
+          minHeight: 'var(--app-h)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',

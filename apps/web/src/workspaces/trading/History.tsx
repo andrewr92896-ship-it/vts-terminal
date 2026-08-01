@@ -562,11 +562,11 @@ const filterField: CSSProperties = { display: 'flex', flexDirection: 'column', g
 const filterLabel: CSSProperties = { fontSize: 9.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED };
 const modalCard: CSSProperties = {
   position: 'fixed',
-  top: '7vh',
+  top: 'calc(7 * var(--vh))',
   left: '50%',
   transform: 'translateX(-50%)',
-  width: 'min(620px, 94vw)',
-  maxHeight: '86vh',
+  width: 'min(620px, calc(94 * var(--vw)))',
+  maxHeight: 'calc(86 * var(--vh))',
   overflowY: 'auto',
   background: '#081226',
   border: `1px solid ${BORDER2}`,

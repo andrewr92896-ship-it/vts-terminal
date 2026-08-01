@@ -493,7 +493,7 @@ function PresetPicker({
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
-          maxWidth: 'min(72vw, 260px)',
+          maxWidth: 'min(calc(72 * var(--vw)), 260px)',
           cursor: empty ? 'default' : 'pointer',
         }}
       >
@@ -512,7 +512,7 @@ function PresetPicker({
                 top: rect.bottom + 6,
                 left: Math.max(8, Math.min(rect.left, window.innerWidth - MENU_W - 8)),
                 width: Math.min(MENU_W, window.innerWidth - 16),
-                maxHeight: '50vh',
+                maxHeight: 'calc(50 * var(--vh))',
                 overflowY: 'auto',
                 background: '#0C1C3C',
                 border: `1px solid ${BORDER2}`,

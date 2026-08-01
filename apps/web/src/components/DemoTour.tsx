@@ -173,7 +173,7 @@ const cardWrap: CSSProperties = {
 
 const card: CSSProperties = {
   pointerEvents: 'auto',
-  width: 'min(520px, 96vw)',
+  width: 'min(520px, calc(96 * var(--vw)))',
   background: 'linear-gradient(180deg,#0c1c3c,#0a1730)',
   border: '1px solid #243f74',
   borderRadius: 14,

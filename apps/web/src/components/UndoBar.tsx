@@ -21,7 +21,7 @@ export function UndoBar({
         display: 'flex',
         alignItems: 'center',
         gap: 14,
-        maxWidth: 'calc(100vw - 28px)',
+        maxWidth: 'calc(var(--app-w) - 28px)',
         background: '#0c1c3c',
         border: '1px solid #1d3560',
         borderRadius: 10,

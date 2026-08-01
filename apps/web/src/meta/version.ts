@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.08';
+export const APP_VERSION = 'Beta V 6.09';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.09',
+    date: 'August 1, 2026',
+    notes: [
+      'New Zoom control in the account menu (click your name, top right): a − and a + beside the current percentage, so you can make the whole portal bigger or smaller without touching your browser’s zoom.',
+      'It steps between 50% and 200%, remembers your choice on that device, and applies the moment the page loads. “Reset to 100%” appears whenever you are not at 100%.',
+      'Zooming re-lays-out the portal rather than magnifying a picture of it, so panels re-flow and text stays sharp — and nothing runs off the edge of the screen at any size.',
+    ],
+  },
   {
     version: 'Beta V 6.08',
     date: 'August 1, 2026',

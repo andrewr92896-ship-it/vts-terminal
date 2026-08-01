@@ -18,12 +18,12 @@ export function BrokerConnections({ open, onClose, onChanged }: { open: boolean;
         aria-modal="true"
         style={{
           position: 'fixed',
-          top: isPhone ? 0 : '5vh',
+          top: isPhone ? 0 : 'calc(5 * var(--vh))',
           left: '50%',
           transform: 'translateX(-50%)',
-          width: isPhone ? '100%' : 'min(620px, 94vw)',
+          width: isPhone ? '100%' : 'min(620px, calc(94 * var(--vw)))',
           height: isPhone ? '100%' : 'auto',
-          maxHeight: isPhone ? '100%' : '90vh',
+          maxHeight: isPhone ? '100%' : 'calc(90 * var(--vh))',
           overflowY: 'auto',
           background: PAGE,
           border: isPhone ? 'none' : `1px solid ${BORDER2}`,

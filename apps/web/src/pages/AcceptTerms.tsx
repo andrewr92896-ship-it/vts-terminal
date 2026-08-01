@@ -46,7 +46,7 @@ export function AcceptTerms() {
   return (
     <div
       style={{
-        minHeight: '100vh',
+        minHeight: 'var(--app-h)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -66,7 +66,7 @@ export function AcceptTerms() {
           animation: 'popIn .4s ease',
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: 'calc(100vh - 48px)',
+          maxHeight: 'calc(var(--app-h) - 48px)',
         }}
       >
         <h1 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#eef3ff' }}>

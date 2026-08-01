@@ -1129,7 +1129,7 @@ function MiniPlayer({ c, onUndock, onClose }: { c: StreamChannel; onUndock: () =
         right: 20,
         bottom: 20,
         width: 380,
-        maxWidth: 'calc(100vw - 40px)',
+        maxWidth: 'calc(var(--app-w) - 40px)',
         zIndex: 60,
         background: C.panel,
         border: `1px solid ${C.line2}`,

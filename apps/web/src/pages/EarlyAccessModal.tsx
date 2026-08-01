@@ -182,7 +182,7 @@ const overlayStyle: CSSProperties = {
 const dialogStyle: CSSProperties = {
   position: 'relative',
   width: 'min(440px, 100%)',
-  maxHeight: '92vh',
+  maxHeight: 'calc(92 * var(--vh))',
   overflowY: 'auto',
   background: 'linear-gradient(180deg,#0d1f44,#0b1a3a)',
   border: '1px solid rgba(62,92,152,.4)',

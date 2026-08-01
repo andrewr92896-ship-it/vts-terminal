@@ -45,8 +45,8 @@ const overlay: React.CSSProperties = {
 };
 const panel: React.CSSProperties = {
   width: 340,
-  maxWidth: '92vw',
-  maxHeight: '85vh',
+  maxWidth: 'calc(92 * var(--vw))',
+  maxHeight: 'calc(85 * var(--vh))',
   overflowY: 'auto',
   background: 'rgba(8,18,42,.99)',
   border: `1px solid ${BORDER2}`,
