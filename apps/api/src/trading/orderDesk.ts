@@ -2,25 +2,21 @@ import crypto from 'node:crypto';
 import { and, desc, eq, gte } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingOrders, type TradeOrderKind, type TradeOrderStatus, type TradeOrderType, type UserRow } from '../db/schema.js';
-import type { OandaConfig } from './config.js';
-import { getActiveDecrypted, type OandaCreds } from './connections.js';
+import { getActiveDecrypted } from './connections.js';
 import { invalidateDeskSnapshot } from './liveWallCache.js';
 import { isDemoUser } from '../demo/identity.js';
 import {
-  cancelOandaOrder,
-  closeOandaTrade,
-  fetchOandaInstrumentSpecs,
-  fetchOandaPendingOrders,
-  fetchOandaQuotes,
-  modifyOandaTradeOrders,
-  OandaOrderError,
-  placeOandaOrder,
-  toOandaSymbol,
-  type OandaInstrumentSpec,
-  type OandaQuote,
-  type OandaWorkingOrder,
-} from './brokers/oandaOrders.js';
-import { fetchOandaAccountSummary } from './brokers/oanda.js';
+  brokerErrorCode,
+  deskBrokerFor,
+  DeskError,
+  isTradeableBroker,
+  type DeskBroker,
+  type DeskCloseResponse,
+  type DeskHolding,
+  type DeskInstrumentSpec,
+  type DeskQuoteRow,
+  type DeskWorkingOrderRow,
+} from './deskBrokers.js';
 
 // The Trade Desk — placing real orders from inside the portal.
 //
@@ -31,46 +27,28 @@ import { fetchOandaAccountSummary } from './brokers/oanda.js';
 // resolves the connection through getActiveDecrypted(userId), which is keyed on
 // the caller, so there is no code path that reaches a teammate's account at all.
 //
-// Only OANDA can be traded today. Kraken and the manual/prop connectors are
-// read-or-hand-entered; a non-OANDA connection is simply absent from the desk.
+// This file is the *policy* layer — who may trade, what is validated, what gets
+// journalled, what is refused — and it is broker-agnostic. What each venue can
+// actually do (OANDA margin trades vs Kraken spot holdings) is declared in
+// trading/deskBrokers.ts, so a second venue is a new adapter rather than a new
+// set of conditionals scattered through here.
 
-export class DeskError extends Error {
-  readonly status: number;
-  readonly code: string | null;
-  constructor(message: string, status = 400, code: string | null = null) {
-    super(message);
-    this.name = 'DeskError';
-    this.status = status;
-    this.code = code;
-  }
-}
+export { DeskError } from './deskBrokers.js';
+export type { DeskHolding, DeskInstrumentSpec } from './deskBrokers.js';
 
-function oandaCfg(creds: OandaCreds): OandaConfig {
-  return {
-    token: creds.token,
-    accountId: creds.accountId,
-    base: creds.env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com',
-  };
-}
-
-interface ResolvedConnection {
-  id: string;
-  label: string;
-  env: 'practice' | 'live';
-  cfg: OandaConfig;
-}
-
-// Resolve one of the caller's own active OANDA connections. Throws rather than
-// returning null so every caller fails closed.
-async function resolveConnection(userId: string, connectionId: string): Promise<ResolvedConnection> {
+// Resolve one of the caller's own active connections into a broker adapter.
+// Throws rather than returning null so every caller fails closed.
+async function resolveConnection(userId: string, connectionId: string): Promise<DeskBroker> {
   const conns = await getActiveDecrypted(userId);
   const conn = conns.find((c) => c.id === connectionId);
   if (!conn) throw new DeskError('That broker connection is not available on your account', 404);
-  if (conn.broker !== 'oanda') {
-    throw new DeskError('Only OANDA connections can place orders from the Trade Desk', 400);
-  }
-  const creds = conn.creds as OandaCreds;
-  return { id: conn.id, label: conn.label, env: creds.env, cfg: oandaCfg(creds) };
+  return deskBrokerFor(conn);
+}
+
+// Every connection the caller can actually trade through, as adapters.
+async function tradeableBrokers(userId: string): Promise<DeskBroker[]> {
+  const conns = await getActiveDecrypted(userId);
+  return conns.filter((c) => isTradeableBroker(c.broker)).map(deskBrokerFor);
 }
 
 // The demo is a sandbox with canned data; it must never reach a broker's write
@@ -81,15 +59,18 @@ function refuseDemo(user: UserRow): void {
 }
 
 // Run a broker call and re-raise anything it throws as a DeskError, so a broker
-// refusal reaches the client as a 502 with OANDA's own reason rather than a bare
-// 500. A DeskError thrown by our own validation passes straight through.
+// refusal reaches the client as a 502 with the venue's own reason rather than a
+// bare 500. A DeskError thrown by our own validation passes straight through.
 async function viaBroker<T>(fn: () => Promise<T>): Promise<T> {
   try {
     return await fn();
   } catch (e) {
     if (e instanceof DeskError) throw e;
-    const err = e instanceof OandaOrderError ? e : null;
-    throw new DeskError(e instanceof Error ? e.message : 'The broker could not be reached', 502, err?.code ?? null);
+    throw new DeskError(
+      e instanceof Error ? e.message : 'The broker could not be reached',
+      502,
+      brokerErrorCode(e),
+    );
   }
 }
 
@@ -98,12 +79,20 @@ async function viaBroker<T>(fn: () => Promise<T>): Promise<T> {
 export interface DeskAccount {
   connectionId: string;
   label: string;
+  broker: string; // 'oanda' | 'kraken' — which venue this account is at
   env: 'practice' | 'live';
-  // The tail of the OANDA account id — enough to tell two accounts apart on a
-  // screen that gets shared, without printing the whole thing. Eight characters,
-  // because an OANDA id ends "…-1234567-001": four would show only the
-  // sub-account number, which is "001" on nearly every account.
+  // The tail of the broker account id (or, on Kraken, of the API key) — enough
+  // to tell two accounts apart on a screen that gets shared, without printing
+  // the whole thing.
   accountTail: string;
+  // True where a buy commits the full cash cost and a sell disposes of something
+  // already held (Kraken spot), false where the account posts margin (OANDA).
+  spot: boolean;
+  // How many protective orders this venue attaches to an entry. OANDA takes a
+  // stop *and* a target; Kraken spot takes exactly one.
+  maxProtectiveOrders: number;
+  // Whether a live position's stop/target can be moved after the fact.
+  canAmendProtection: boolean;
   currency: string;
   balance: number | null;
   nav: number | null;
@@ -115,22 +104,25 @@ export interface DeskAccount {
   error: string | null;
 }
 
-// Every OANDA account the caller can trade, with live capital. Best-effort per
+// Every account the caller can trade, with live capital. Best-effort per
 // account: one unreachable account reports its error and the others still load,
 // so a single bad token never blanks the desk.
 export async function listDeskAccounts(userId: string): Promise<DeskAccount[]> {
-  const conns = (await getActiveDecrypted(userId)).filter((c) => c.broker === 'oanda');
-  const out = await Promise.all(
-    conns.map(async (c): Promise<DeskAccount> => {
-      const creds = c.creds as OandaCreds;
-      const base: Omit<DeskAccount, 'ok' | 'error' | 'currency' | 'balance' | 'nav' | 'unrealizedPl' | 'marginUsed' | 'marginAvailable' | 'openTradeCount'> = {
-        connectionId: c.id,
-        label: c.label,
-        env: creds.env,
-        accountTail: creds.accountId.slice(-8),
+  const brokers = await tradeableBrokers(userId);
+  return Promise.all(
+    brokers.map(async (b): Promise<DeskAccount> => {
+      const base = {
+        connectionId: b.connectionId,
+        label: b.label,
+        broker: b.broker,
+        env: b.env,
+        accountTail: b.accountTail,
+        spot: b.spot,
+        maxProtectiveOrders: b.maxProtectiveOrders,
+        canAmendProtection: b.canAmendProtection,
       };
       try {
-        const cap = await fetchOandaAccountSummary(oandaCfg(creds));
+        const cap = await b.capital();
         return { ...base, ...cap, ok: true, error: null };
       } catch (e) {
         return {
@@ -143,36 +135,26 @@ export async function listDeskAccounts(userId: string): Promise<DeskAccount[]> {
           marginAvailable: null,
           openTradeCount: null,
           ok: false,
-          error: e instanceof Error ? e.message : 'Could not reach OANDA',
+          error: e instanceof Error ? e.message : `Could not reach ${b.broker}`,
         };
       }
     }),
   );
-  return out;
 }
 
-// ---- instruments (cached: the tradeable set and its precisions barely move) ----
+// ---- instruments ----
 
-const SPEC_TTL_MS = 10 * 60_000;
-const specCache = new Map<string, { at: number; specs: OandaInstrumentSpec[] }>();
-
-export async function deskInstruments(userId: string, connectionId: string): Promise<OandaInstrumentSpec[]> {
-  const conn = await resolveConnection(userId, connectionId);
-  const hit = specCache.get(connectionId);
-  if (hit && Date.now() - hit.at < SPEC_TTL_MS) return hit.specs;
-  const specs = await viaBroker(() => fetchOandaInstrumentSpecs(conn.cfg));
-  specCache.set(connectionId, { at: Date.now(), specs });
-  return specs;
+export async function deskInstruments(userId: string, connectionId: string): Promise<DeskInstrumentSpec[]> {
+  const broker = await resolveConnection(userId, connectionId);
+  return viaBroker(() => broker.instruments());
 }
 
-async function specFor(
-  userId: string,
-  connectionId: string,
-  instrument: string,
-): Promise<OandaInstrumentSpec> {
-  const specs = await deskInstruments(userId, connectionId);
-  const symbol = toOandaSymbol(instrument);
-  const spec = specs.find((s) => s.symbol === symbol);
+async function specFor(broker: DeskBroker, instrument: string): Promise<DeskInstrumentSpec> {
+  const specs = await viaBroker(() => broker.instruments());
+  const wanted = instrument.trim().toUpperCase();
+  const spec = specs.find(
+    (s) => s.instrument.toUpperCase() === wanted || s.symbol.toUpperCase() === wanted.replace('/', '_'),
+  );
   if (!spec) throw new DeskError(`${instrument} is not tradeable on this account`, 400);
   return spec;
 }
@@ -183,10 +165,36 @@ export async function deskQuotes(
   userId: string,
   connectionId: string,
   instruments: string[],
-): Promise<OandaQuote[]> {
-  const conn = await resolveConnection(userId, connectionId);
+): Promise<DeskQuoteRow[]> {
+  const broker = await resolveConnection(userId, connectionId);
   if (instruments.length === 0) return [];
-  return viaBroker(() => fetchOandaQuotes(conn.cfg, instruments));
+  return viaBroker(() => broker.quotes(instruments));
+}
+
+// ---- holdings (spot venues) ----
+
+export interface DeskHoldingRow extends DeskHolding {
+  connectionId: string;
+  connectionLabel: string;
+  currency: string;
+}
+
+// What the caller's spot accounts actually hold. A margin account has none —
+// there the exposure *is* the position, and it shows on the desk's book.
+// Best-effort per account, like the account strip.
+export async function listDeskHoldings(userId: string): Promise<DeskHoldingRow[]> {
+  const brokers = (await tradeableBrokers(userId)).filter((b) => b.spot);
+  const results = await Promise.all(
+    brokers.map(async (b) => {
+      try {
+        const rows = await b.holdings();
+        return rows.map((h) => ({ ...h, connectionId: b.connectionId, connectionLabel: b.label, currency: 'USD' }));
+      } catch {
+        return []; // an unreachable account shows no holdings rather than an error page
+      }
+    }),
+  );
+  return results.flat().sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
 }
 
 // ---- the order journal ----
@@ -194,6 +202,7 @@ export async function deskQuotes(
 export interface DeskOrderRecord {
   id: string;
   connectionId: string;
+  broker: string;
   kind: TradeOrderKind;
   instrument: string;
   side: 'long' | 'short' | null;
@@ -214,13 +223,13 @@ export interface DeskOrderRecord {
 
 async function journal(
   userId: string,
-  row: Omit<DeskOrderRecord, 'id' | 'createdAt'> & { broker?: string },
+  row: Omit<DeskOrderRecord, 'id' | 'createdAt'>,
 ): Promise<void> {
   await db.insert(tradingOrders).values({
     id: crypto.randomUUID(),
     userId,
     connectionId: row.connectionId,
-    broker: row.broker ?? 'oanda',
+    broker: row.broker,
     kind: row.kind,
     instrument: row.instrument,
     side: row.side,
@@ -250,6 +259,7 @@ export async function recentDeskOrders(userId: string, limit = 40): Promise<Desk
   return rows.map((r) => ({
     id: r.id,
     connectionId: r.connectionId,
+    broker: r.broker,
     kind: r.kind,
     instrument: r.instrument,
     side: r.side ?? null,
@@ -273,7 +283,7 @@ export async function recentDeskOrders(userId: string, limit = 40): Promise<Desk
 
 export interface PlaceInput {
   connectionId: string;
-  instrument: string; // display or OANDA form
+  instrument: string; // display or venue form
   side: 'long' | 'short';
   units: number; // absolute size
   type: TradeOrderType;
@@ -333,8 +343,8 @@ async function refuseDuplicate(userId: string, input: PlaceInput, instrument: st
   }
 }
 
-// Round to a broker-acceptable precision. OANDA refuses an over-precise price or
-// size outright, so this is validation, not tidying.
+// Round to a broker-acceptable precision. Every venue here refuses an
+// over-precise price or size outright, so this is validation, not tidying.
 function round(v: number, precision: number): number {
   const f = Math.pow(10, Math.max(0, Math.min(10, precision)));
   return Math.round(v * f) / f;
@@ -342,8 +352,8 @@ function round(v: number, precision: number): number {
 
 // Sanity-check the protective orders against the price the trade will open at:
 // a long's stop must sit below it and its target above (and the reverse for a
-// short). OANDA enforces this too, but catching it here means the trader is told
-// which field is wrong instead of reading a rejection code.
+// short). The venue enforces this too, but catching it here means the trader is
+// told which field is wrong instead of reading a rejection code.
 function checkProtection(
   side: 'long' | 'short',
   reference: number | null,
@@ -364,9 +374,12 @@ function checkProtection(
 
 export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<PlaceResult> {
   refuseDemo(user);
-  const conn = await resolveConnection(user.id, input.connectionId);
-  const spec = await specFor(user.id, input.connectionId, input.instrument);
+  const broker = await resolveConnection(user.id, input.connectionId);
+  const spec = await specFor(broker, input.instrument);
 
+  if (!spec.tradeable) {
+    throw new DeskError(`${spec.displayName} is not accepting new orders on this account right now`, 409, 'HALTED');
+  }
   if (!Number.isFinite(input.units) || input.units <= 0) {
     throw new DeskError('Enter a position size greater than zero');
   }
@@ -385,22 +398,62 @@ export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<
   const takeProfit = input.takeProfit == null ? null : round(input.takeProfit, spec.displayPrecision);
   const stopLoss = input.stopLoss == null ? null : round(input.stopLoss, spec.displayPrecision);
 
+  // A venue that attaches one protective order to a fill cannot honour a ticket
+  // carrying two. Refusing is the only safe answer: silently dropping one would
+  // leave a live position without the protection the trader thought they set,
+  // and placing the second as a free-standing order would leave an order behind
+  // once the first triggered — with nothing to cancel it, that order can open a
+  // brand-new position on its own.
+  if (broker.maxProtectiveOrders < 2 && takeProfit != null && stopLoss != null) {
+    throw new DeskError(
+      'This account attaches one protective order to an entry, not two — set a stop loss or a take profit, then add the other as its own order once the trade is on.',
+      400,
+      'ONE_PROTECTIVE_ORDER',
+    );
+  }
+
   // A market order is judged against the side of the book it will actually pay;
   // a resting order against its own trigger price.
   let reference = price;
+  const [quote] = await viaBroker(() => broker.quotes([spec.instrument])).catch(() => []);
   if (input.type === 'market') {
-    const [quote] = await fetchOandaQuotes(conn.cfg, [spec.symbol]).catch(() => []);
     if (quote && !quote.tradeable) {
       throw new DeskError(`${spec.displayName} is not tradeable right now (market closed or halted)`, 409, 'HALTED');
     }
     reference = input.side === 'long' ? quote?.ask ?? null : quote?.bid ?? null;
+  } else if (input.type === 'stop' && price != null) {
+    // A stop entry triggers on the way through, so it has to sit on the far side
+    // of the market: above it to buy, below it to sell. Placed on the wrong side
+    // it is really a limit order, and every venue refuses it with a terse code.
+    const market = input.side === 'long' ? quote?.ask ?? null : quote?.bid ?? null;
+    if (market != null) {
+      if (input.side === 'long' && price <= market) {
+        throw new DeskError('A buy stop has to sit above the current price — use a limit order to buy below it');
+      }
+      if (input.side === 'short' && price >= market) {
+        throw new DeskError('A sell stop has to sit below the current price — use a limit order to sell above it');
+      }
+    }
   }
   checkProtection(input.side, reference, takeProfit, stopLoss);
+
+  // Some venues refuse an order worth less than a minimum *value*, which a size
+  // above the minimum size can still fall below — a tenth of the minimum coin
+  // size clears one floor and fails the other.
+  if (spec.minimumOrderCost != null && reference != null) {
+    const cost = units * reference;
+    if (cost < spec.minimumOrderCost) {
+      throw new DeskError(
+        `${spec.displayName} orders have to be worth at least ${spec.minimumOrderCost} — that size is worth about ${cost.toFixed(2)}`,
+      );
+    }
+  }
 
   await refuseDuplicate(user.id, { ...input, units }, spec.instrument);
 
   const shared = {
-    connectionId: conn.id,
+    connectionId: broker.connectionId,
+    broker: broker.broker,
     kind: 'entry' as const,
     instrument: spec.instrument,
     side: input.side,
@@ -413,17 +466,7 @@ export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<
   };
 
   try {
-    const res = await placeOandaOrder(conn.cfg, {
-      instrument: spec.symbol,
-      // OANDA encodes direction in the sign of the size.
-      units: input.side === 'long' ? units : -units,
-      type: input.type.toUpperCase() as 'MARKET' | 'LIMIT' | 'STOP',
-      price,
-      takeProfit,
-      stopLoss,
-      displayPrecision: spec.displayPrecision,
-      tradeUnitsPrecision: spec.tradeUnitsPrecision,
-    });
+    const res = await broker.place({ spec, side: input.side, units, type: input.type, price, takeProfit, stopLoss });
     await journal(user.id, {
       ...shared,
       status: res.status,
@@ -444,10 +487,10 @@ export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<
       units: res.units == null ? units : Math.abs(res.units),
       instrument: spec.instrument,
       side: input.side,
-      env: conn.env,
+      env: broker.env,
     };
   } catch (e) {
-    const err = e instanceof OandaOrderError ? e : null;
+    if (e instanceof DeskError && e.status < 500) throw e; // our own validation, nothing was sent
     const message = e instanceof Error ? e.message : 'The order could not be placed';
     // A refusal is worth keeping: it is the record of an order that never became
     // a position, which is exactly what is missing when reconstructing a session.
@@ -457,10 +500,10 @@ export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<
       brokerOrderId: null,
       brokerTradeId: null,
       fillPrice: null,
-      errorCode: err?.code ?? null,
+      errorCode: brokerErrorCode(e),
       error: message.slice(0, 400),
     });
-    throw new DeskError(message, 502, err?.code ?? null);
+    throw new DeskError(message, 502, brokerErrorCode(e));
   }
 }
 
@@ -468,38 +511,33 @@ export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<
 
 export interface CloseInput {
   connectionId: string;
-  tradeId: string; // OANDA trade id (not the desk's namespaced position key)
+  tradeId: string; // the venue's trade id (not the desk's namespaced position key)
   instrument: string;
   units?: number | null; // omit / null = close it all
 }
 
-export interface CloseResult {
-  closedUnits: number | null;
-  price: number | null;
-  realizedPl: number | null;
-  partial: boolean;
-}
+export type CloseResult = DeskCloseResponse;
 
 export async function closeDeskPosition(user: UserRow, input: CloseInput): Promise<CloseResult> {
   refuseDemo(user);
-  const conn = await resolveConnection(user.id, input.connectionId);
-  const spec = await specFor(user.id, input.connectionId, input.instrument).catch(() => null);
-  const units = input.units == null || input.units <= 0 ? ('ALL' as const) : input.units;
+  const broker = await resolveConnection(user.id, input.connectionId);
+  const units = input.units == null || input.units <= 0 ? null : input.units;
 
   const shared = {
-    connectionId: conn.id,
+    connectionId: broker.connectionId,
+    broker: broker.broker,
     kind: 'close' as const,
-    instrument: spec?.instrument ?? input.instrument,
+    instrument: input.instrument,
     side: null,
     orderType: null,
-    units: units === 'ALL' ? null : units,
+    units,
     requestedPrice: null,
     takeProfit: null,
     stopLoss: null,
   };
 
   try {
-    const res = await closeOandaTrade(conn.cfg, input.tradeId, units, spec?.tradeUnitsPrecision ?? 0);
+    const res = await broker.close({ tradeId: input.tradeId, instrument: input.instrument, units });
     await journal(user.id, {
       ...shared,
       status: 'filled',
@@ -511,9 +549,9 @@ export async function closeDeskPosition(user: UserRow, input: CloseInput): Promi
       error: null,
     });
     invalidateDeskSnapshot(user.teamId ?? `solo:${user.id}`);
-    return { closedUnits: res.closedUnits, price: res.price, realizedPl: res.realizedPl, partial: res.partial };
+    return res;
   } catch (e) {
-    const err = e instanceof OandaOrderError ? e : null;
+    if (e instanceof DeskError && e.status < 500) throw e; // nothing was sent
     const message = e instanceof Error ? e.message : 'The position could not be closed';
     await journal(user.id, {
       ...shared,
@@ -522,10 +560,10 @@ export async function closeDeskPosition(user: UserRow, input: CloseInput): Promi
       brokerTradeId: input.tradeId,
       fillPrice: null,
       realizedPl: null,
-      errorCode: err?.code ?? null,
+      errorCode: brokerErrorCode(e),
       error: message.slice(0, 400),
     });
-    throw new DeskError(message, 502, err?.code ?? null);
+    throw new DeskError(message, 502, brokerErrorCode(e));
   }
 }
 
@@ -542,8 +580,8 @@ export interface ModifyInput {
 
 export async function modifyDeskPosition(user: UserRow, input: ModifyInput): Promise<void> {
   refuseDemo(user);
-  const conn = await resolveConnection(user.id, input.connectionId);
-  const spec = await specFor(user.id, input.connectionId, input.instrument);
+  const broker = await resolveConnection(user.id, input.connectionId);
+  const spec = await specFor(broker, input.instrument);
   const takeProfit = input.takeProfit == null ? input.takeProfit : round(input.takeProfit, spec.displayPrecision);
   const stopLoss = input.stopLoss == null ? input.stopLoss : round(input.stopLoss, spec.displayPrecision);
   if (takeProfit === undefined && stopLoss === undefined) {
@@ -551,7 +589,8 @@ export async function modifyDeskPosition(user: UserRow, input: ModifyInput): Pro
   }
 
   const shared = {
-    connectionId: conn.id,
+    connectionId: broker.connectionId,
+    broker: broker.broker,
     kind: 'modify' as const,
     instrument: spec.instrument,
     side: null,
@@ -564,11 +603,7 @@ export async function modifyDeskPosition(user: UserRow, input: ModifyInput): Pro
   };
 
   try {
-    await modifyOandaTradeOrders(conn.cfg, input.tradeId, {
-      takeProfit,
-      stopLoss,
-      displayPrecision: spec.displayPrecision,
-    });
+    await broker.amend({ tradeId: input.tradeId, spec, takeProfit, stopLoss });
     await journal(user.id, {
       ...shared,
       status: 'filled',
@@ -580,7 +615,7 @@ export async function modifyDeskPosition(user: UserRow, input: ModifyInput): Pro
     });
     invalidateDeskSnapshot(user.teamId ?? `solo:${user.id}`);
   } catch (e) {
-    const err = e instanceof OandaOrderError ? e : null;
+    if (e instanceof DeskError && e.status < 500) throw e; // nothing was sent
     const message = e instanceof Error ? e.message : 'The change could not be applied';
     await journal(user.id, {
       ...shared,
@@ -588,32 +623,28 @@ export async function modifyDeskPosition(user: UserRow, input: ModifyInput): Pro
       brokerOrderId: null,
       brokerTradeId: input.tradeId,
       fillPrice: null,
-      errorCode: err?.code ?? null,
+      errorCode: brokerErrorCode(e),
       error: message.slice(0, 400),
     });
-    throw new DeskError(message, 502, err?.code ?? null);
+    throw new DeskError(message, 502, brokerErrorCode(e));
   }
 }
 
 // ---- working (resting) orders ----
 
-export interface DeskWorkingOrder extends OandaWorkingOrder {
+export interface DeskWorkingOrder extends DeskWorkingOrderRow {
   connectionId: string;
   connectionLabel: string;
 }
 
-// Every resting order across the caller's own OANDA accounts. TP/SL orders that
-// belong to an open trade are filtered out — they are shown on the position they
-// protect, not as standalone working orders.
+// Every resting order across the caller's own accounts.
 export async function listDeskWorkingOrders(userId: string): Promise<DeskWorkingOrder[]> {
-  const conns = (await getActiveDecrypted(userId)).filter((c) => c.broker === 'oanda');
+  const brokers = await tradeableBrokers(userId);
   const results = await Promise.all(
-    conns.map(async (c) => {
+    brokers.map(async (b) => {
       try {
-        const orders = await fetchOandaPendingOrders(oandaCfg(c.creds as OandaCreds));
-        return orders
-          .filter((o) => !o.tradeId)
-          .map((o) => ({ ...o, connectionId: c.id, connectionLabel: c.label }));
+        const orders = await b.workingOrders();
+        return orders.map((o) => ({ ...o, connectionId: b.connectionId, connectionLabel: b.label }));
       } catch {
         return []; // best-effort: an unreachable account shows no working orders
       }
@@ -627,9 +658,10 @@ export async function cancelDeskOrder(
   input: { connectionId: string; orderId: string; instrument?: string },
 ): Promise<void> {
   refuseDemo(user);
-  const conn = await resolveConnection(user.id, input.connectionId);
+  const broker = await resolveConnection(user.id, input.connectionId);
   const shared = {
-    connectionId: conn.id,
+    connectionId: broker.connectionId,
+    broker: broker.broker,
     kind: 'cancel' as const,
     instrument: input.instrument ?? '—',
     side: null,
@@ -644,12 +676,16 @@ export async function cancelDeskOrder(
     fillPrice: null,
   };
   try {
-    await cancelOandaOrder(conn.cfg, input.orderId);
+    await broker.cancel(input.orderId);
     await journal(user.id, { ...shared, status: 'filled', errorCode: null, error: null });
   } catch (e) {
-    const err = e instanceof OandaOrderError ? e : null;
     const message = e instanceof Error ? e.message : 'The order could not be cancelled';
-    await journal(user.id, { ...shared, status: 'rejected', errorCode: err?.code ?? null, error: message.slice(0, 400) });
-    throw new DeskError(message, 502, err?.code ?? null);
+    await journal(user.id, {
+      ...shared,
+      status: 'rejected',
+      errorCode: brokerErrorCode(e),
+      error: message.slice(0, 400),
+    });
+    throw new DeskError(message, 502, brokerErrorCode(e));
   }
 }

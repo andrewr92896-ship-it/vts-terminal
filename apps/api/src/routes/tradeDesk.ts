@@ -9,6 +9,7 @@ import {
   deskQuotes,
   DeskError,
   listDeskAccounts,
+  listDeskHoldings,
   listDeskWorkingOrders,
   modifyDeskPosition,
   placeDeskOrder,
@@ -69,8 +70,8 @@ const cancelSchema = z.object({
 });
 
 // Turn a service refusal into its own status code (400 validation, 404 unknown
-// connection, 409 duplicate/halted, 502 broker refusal) with the broker's reason
-// attached, so the ticket can show what OANDA actually said.
+// connection, 409 duplicate/halted, 502 broker refusal) with the venue's reason
+// attached, so the ticket can show what the broker actually said.
 function fail(reply: FastifyReply, e: unknown) {
   if (e instanceof DeskError) {
     return reply.code(e.status).send({ error: e.message, code: e.code });
@@ -117,6 +118,15 @@ export async function tradeDeskRoutes(app: FastifyInstance) {
   // Resting orders across the caller's own accounts.
   app.get('/api/trading/desk/orders', read, async (request) => ({
     orders: await listDeskWorkingOrders(request.currentUser!.id),
+  }));
+
+  // What the caller's spot accounts hold. A spot buy is a balance rather than a
+  // position, so this is the crypto counterpart of an open trade — and the only
+  // place a Kraken holding is visible on the desk. Read-only by design: selling
+  // one goes through the ordinary order path, ticket and confirmation included,
+  // rather than getting a shortcut that skips the review step.
+  app.get('/api/trading/desk/holdings', read, async (request) => ({
+    holdings: await listDeskHoldings(request.currentUser!.id),
   }));
 
   // The caller's own order journal — including the attempts that were refused.

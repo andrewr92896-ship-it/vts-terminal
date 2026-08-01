@@ -11,14 +11,34 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.97';
+export const APP_VERSION = 'Beta V 5.99';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 5.99',
+    date: 'August 1, 2026',
+    notes: [
+      'Market News: removed the “N streams open” count from the live streams header — the open streams are right there on screen.',
+    ],
+  },
+  {
+    version: 'Beta V 5.98',
+    date: 'August 1, 2026',
+    notes: [
+      'The Trade Desk now trades crypto. Connect a Kraken key and it appears beside your OANDA account with its own ticket — market, limit and stop orders, a protective order attached on fill, live prices, and every attempt written to the order journal.',
+      'Kraken is spot only, on purpose. A buy commits the full cash cost and a sell disposes of coins you already hold — the desk never asks Kraken for leverage, so no order it sends can be liquidated. Your Kraken key does not need margin permission.',
+      'New Holdings panel: what your crypto accounts actually own, priced live. Spot leaves you a balance rather than a position, so pressing Sell fills the ticket in with that coin and waits for you to confirm, exactly like any other order.',
+      'Kraken attaches one protective order to an entry, not two. Set a stop or a target and the ticket says so plainly instead of quietly dropping the other at the exchange.',
+      'Size chips on a crypto ticket are amounts of money — $100, $500, $1,000 — because that is how a coin is actually bought. Sizes now print at the precision they need, so 0.00042 of a bitcoin no longer reads as zero.',
+      'Broker connections are named for whose they are and where they are: "Andrew’s OANDA", "Andrew’s Kraken". Existing ones were renamed to match, and each account card names its venue.',
+      'The Working orders panel no longer sits empty on the desk. It appears when you actually have a limit or stop order resting, which is also where you cancel one.',
+    ],
+  },
   {
     version: 'Beta V 5.97',
     date: 'August 1, 2026',
     notes: [
-      'Market News: removed the “N streams open” count from the live streams header — the open streams are right there on screen.',
+      'Fixed the trader picker on Trade Analysis: the list of traders opened leftward and disappeared behind the sidebar, so you could not read or click most of the names. It now opens to the right of the button, fully on screen.',
     ],
   },
   {

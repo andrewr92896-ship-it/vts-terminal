@@ -52,6 +52,7 @@ import type {
   EventInput,
   LiveWall,
   DeskAccount,
+  DeskHolding,
   DeskInstrument,
   DeskQuote,
   DeskWorkingOrder,
@@ -511,6 +512,11 @@ export const api = {
   },
   deskWorkingOrders(): Promise<{ orders: DeskWorkingOrder[] }> {
     return request('/api/trading/desk/orders');
+  },
+  // What the caller's spot (crypto) accounts hold. Read-only: selling a holding
+  // goes through the ordinary order ticket, review step included.
+  deskHoldings(): Promise<{ holdings: DeskHolding[] }> {
+    return request('/api/trading/desk/holdings');
   },
   deskOrderJournal(): Promise<{ orders: DeskOrderRecord[] }> {
     return request('/api/trading/desk/journal');

@@ -1,11 +1,18 @@
-import crypto from 'node:crypto';
 import type { KrakenConfig } from '../config.js';
 import { brokerMeta } from '../config.js';
+import { displayAsset, krakenPrivate } from './krakenClient.js';
 import type { LiveTrade } from '../types.js';
 
-// Kraken — open margin positions.
+// Kraken — the *read* side: open margin positions.
 // POST https://api.kraken.com/0/private/OpenPositions   (API-Key + API-Sign)
 // Docs: https://docs.kraken.com/rest/#tag/Account-Data/operation/getOpenPositions
+//
+// Signing, the shared nonce and error decoding live in brokers/krakenClient.ts;
+// placing orders lives in brokers/krakenOrders.ts. This file stays read-only.
+//
+// Note what this endpoint does and does not cover: OpenPositions reports **margin**
+// positions only. A spot buy is a balance, not a position, so it never appears
+// here — the desk reads spot holdings separately (trading/deskBrokers.ts).
 
 interface KrakenPosition {
   pair: string; // "XXBTZUSD"
@@ -20,9 +27,6 @@ interface KrakenResponse {
   result?: Record<string, KrakenPosition>;
 }
 
-const API_BASE = 'https://api.kraken.com';
-const PATH = '/0/private/OpenPositions';
-
 function num(v: string | undefined): number | null {
   if (v == null) return null;
   const n = Number(v);
@@ -30,12 +34,12 @@ function num(v: string | undefined): number | null {
 }
 
 // Tidy Kraken's internal asset codes (XXBTZUSD -> BTC/USD) for display. Best
-// effort: Kraken prefixes legacy assets with X/Z and uses XBT for BTC.
+// effort: Kraken prefixes legacy assets with X/Z and uses XBT for BTC. The
+// per-asset mapping is shared with the desk (krakenClient.displayAsset) so a
+// position reads the same on the Live Wall as it does on the Trade Desk.
 export function prettyKrakenPair(pair: string): string {
-  const fix = (s: string) => (s === 'XBT' ? 'BTC' : s);
-  const strip = (s: string) => (s.length === 4 && /^[XZ]/.test(s) ? s.slice(1) : s);
   if (pair.length === 8) {
-    return `${fix(strip(pair.slice(0, 4)))}/${fix(strip(pair.slice(4)))}`;
+    return `${displayAsset(pair.slice(0, 4))}/${displayAsset(pair.slice(4))}`;
   }
   return pair;
 }
@@ -77,30 +81,7 @@ export function mapKrakenPositions(json: KrakenResponse): LiveTrade[] {
   });
 }
 
-function sign(path: string, body: string, nonce: string, secret: string): string {
-  const secretBuf = Buffer.from(secret, 'base64');
-  const hash = crypto.createHash('sha256').update(nonce + body).digest();
-  const hmac = crypto.createHmac('sha512', secretBuf);
-  hmac.update(path);
-  hmac.update(hash);
-  return hmac.digest('base64');
-}
-
 export async function fetchKrakenPositions(cfg: KrakenConfig): Promise<LiveTrade[]> {
-  const nonce = String(Date.now() * 1000);
-  const body = new URLSearchParams({ nonce }).toString();
-  const res = await fetch(API_BASE + PATH, {
-    method: 'POST',
-    headers: {
-      'API-Key': cfg.apiKey,
-      'API-Sign': sign(PATH, body, nonce, cfg.apiSecret),
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body,
-  });
-  if (!res.ok) {
-    throw new Error(`Kraken responded ${res.status}`);
-  }
-  const json = (await res.json()) as KrakenResponse;
-  return mapKrakenPositions(json);
+  const result = await krakenPrivate<Record<string, KrakenPosition>>(cfg, 'OpenPositions');
+  return mapKrakenPositions({ result });
 }

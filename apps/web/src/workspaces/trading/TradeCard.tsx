@@ -44,6 +44,16 @@ export function fmtPips(n: number, signed = false): string {
   return `${signed && n > 0 ? '+' : ''}${s} pip${Math.abs(n) === 1 ? '' : 's'}`;
 }
 
+// A position size, at whatever precision it actually needs. Sizes span
+// 100,000 units of EUR/USD down to 0.00042 of a bitcoin, and the default
+// three-decimal locale format prints that second one as "0" — so the smaller
+// the size, the more decimals it keeps.
+export function fmtUnits(n: number): string {
+  const abs = Math.abs(n);
+  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
+  return Number(n.toFixed(digits)).toLocaleString('en-US', { maximumFractionDigits: digits });
+}
+
 // Prices span forex (1.08425), indices (38,958), and crypto (64,255). Show
 // thousands with separators and few decimals; sub-1000 prices keep precision.
 export function fmtPrice(n: number | null): string {

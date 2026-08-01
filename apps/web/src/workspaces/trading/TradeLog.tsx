@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -866,8 +866,22 @@ function TraderMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState<string | null>(null);
+  // Which edge of the button the popup hangs from. Left by default — see below.
+  const [align, setAlign] = useState<'left' | 'right'>('left');
   const ref = useRef<HTMLDivElement>(null);
-  const { isPhone } = useResponsive();
+
+  // The main column scrolls (`overflow-y: auto`, which makes the horizontal axis
+  // clip too), so anything drawn outside it is cut off rather than floating over
+  // the shell — on the left that means the popup disappears behind the sidebar.
+  // So hang the list off the button's left edge and open rightward into the
+  // content, and only flip when it's the right edge that would clip instead.
+  useLayoutEffect(() => {
+    if (!open || !ref.current) return;
+    const btn = ref.current.getBoundingClientRect();
+    const root = ref.current.closest('[data-vts-scroll-root]')?.getBoundingClientRect();
+    const limit = (root?.right ?? window.innerWidth) - 8;
+    setAlign(btn.left + MENU_POPUP_W <= limit ? 'left' : 'right');
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -902,15 +916,8 @@ function TraderMenu({
         <span style={{ color: FAINT, fontSize: 10, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>▾</span>
       </button>
       {open && (
-        // On phone the button sits at the left edge of the wrapped header, so a
-        // right-aligned popup would spill off the left of the screen. Open it
-        // rightward (left:0) there and cap the width to the viewport instead.
         <div
-          style={
-            isPhone
-              ? { ...menuPopup, left: 0, right: 'auto', maxWidth: 'min(300px, calc(100vw - 24px))' }
-              : menuPopup
-          }
+          style={align === 'left' ? { ...menuPopup, left: 0, right: 'auto' } : menuPopup}
           role="listbox"
         >
           {options.map((o) => {
@@ -1037,7 +1044,10 @@ const plCol: CSSProperties = { flex: '0 0 78px' };
 const timeCol: CSSProperties = { flex: '0 0 118px' };
 const infoBanner: CSSProperties = { fontSize: 12.5, color: '#f3e3b8', background: 'rgba(235,203,116,.08)', border: '1px solid rgba(235,203,116,.35)', borderRadius: 8, padding: '9px 12px' };
 const menuButton: CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 150, maxWidth: 240, background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 8, color: TEXT, fontSize: 12.5, fontWeight: 600, padding: '8px 12px', cursor: 'pointer' };
-const menuPopup: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 220, maxWidth: 300, background: '#0c1f43', border: `1px solid ${BORDER2}`, borderRadius: 12, padding: 6, zIndex: 40, boxShadow: '0 16px 44px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflowY: 'auto' };
+// Widest the trader popup can get — kept next to the style it sets so the
+// which-edge-do-we-hang-from measurement in TraderMenu stays honest.
+const MENU_POPUP_W = 300;
+const menuPopup: CSSProperties = { position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 220, maxWidth: `min(${MENU_POPUP_W}px, calc(100vw - 24px))`, background: '#0c1f43', border: `1px solid ${BORDER2}`, borderRadius: 12, padding: 6, zIndex: 40, boxShadow: '0 16px 44px rgba(0,0,0,.55)', display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 320, overflowY: 'auto' };
 const menuItem: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', background: 'none', border: 'none', color: TEXT, fontSize: 13, fontWeight: 500, padding: '9px 10px', borderRadius: 8, cursor: 'pointer' };
 const menuItemActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const menuItemHot: CSSProperties = { background: 'rgba(255,255,255,.06)' };

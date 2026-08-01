@@ -592,8 +592,17 @@ export type DeskOrderStatus = 'filled' | 'accepted' | 'rejected';
 export interface DeskAccount {
   connectionId: string;
   label: string;
+  broker: string; // 'oanda' | 'kraken' — which venue this account is at
   env: 'practice' | 'live';
-  accountTail: string; // tail of the broker account id, shown as "••…"
+  accountTail: string; // tail of the broker account id (or API key), shown as "••…"
+  // True where a buy commits the full cash cost and a sell disposes of something
+  // already held (crypto spot), false where the account posts margin.
+  spot: boolean;
+  // How many protective orders the venue attaches to an entry: OANDA takes a
+  // stop *and* a target, crypto spot takes exactly one.
+  maxProtectiveOrders: number;
+  // Whether a live position's stop/target can be moved after the fact.
+  canAmendProtection: boolean;
   currency: string;
   balance: number | null;
   nav: number | null;
@@ -606,16 +615,38 @@ export interface DeskAccount {
 }
 
 export interface DeskInstrument {
-  symbol: string; // "EUR_USD"
-  instrument: string; // "EUR/USD"
+  symbol: string; // "EUR_USD", "XBTUSD"
+  instrument: string; // "EUR/USD", "BTC/USD"
   displayName: string;
-  type: string; // CURRENCY / CFD / METAL
+  type: string; // CURRENCY / CFD / METAL / CRYPTO
   pipSize: number;
   displayPrecision: number; // max decimals a price may carry
   tradeUnitsPrecision: number; // max decimals a size may carry
   minimumTradeSize: number;
   maximumOrderUnits: number | null;
   marginRate: number | null;
+  // Minimum order *value* in the quote currency, where the venue has one — a
+  // size above the minimum size can still be worth too little to accept.
+  minimumOrderCost: number | null;
+  // False when the venue has restricted the instrument (a crypto pair in
+  // cancel-only or post-only). A closed market is a property of the quote.
+  tradeable: boolean;
+}
+
+// A coin a spot account holds. Spot has no position to close: what you own is a
+// balance, and selling it is an ordinary order placed from the ticket.
+export interface DeskHolding {
+  connectionId: string;
+  connectionLabel: string;
+  currency: string;
+  asset: string; // "BTC", or "BTC.S" when staked
+  instrument: string | null; // the pair it can be priced and sold through
+  units: number;
+  onOrder: number; // already committed to a resting order
+  price: number | null;
+  value: number | null;
+  staked: boolean; // staked balances cannot be sold without unstaking first
+  minimumTradeSize: number | null;
 }
 
 export interface DeskQuote {
@@ -649,6 +680,7 @@ export interface DeskWorkingOrder {
 export interface DeskOrderRecord {
   id: string;
   connectionId: string;
+  broker: string;
   kind: DeskOrderKind;
   instrument: string;
   side: TradeSide | null;

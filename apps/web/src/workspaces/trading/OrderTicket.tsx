@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import { fmtMoney } from './TradeCard';
+import { fmtMoney, fmtUnits } from './TradeCard';
 import { forexPair } from './pips';
 import type { DeskAccount, DeskInstrument, DeskOrderType, DeskQuote, TradeSide } from '../../api/types';
 
@@ -48,6 +48,11 @@ const TYPES: { key: DeskOrderType; label: string; hint: string }[] = [
 const WHOLE_UNIT_CHIPS = [1000, 5000, 10_000, 25_000, 100_000];
 const FRACTIONAL_CHIPS = [0.01, 0.05, 0.1, 0.5, 1];
 
+// On a spot account the chips are amounts of money instead, because that is how
+// a coin is actually bought: "$500 of bitcoin", never "0.005 of it". The size
+// they set is worked out from the live price at the moment they are pressed.
+const SPOT_COST_CHIPS = [100, 250, 500, 1000, 5000];
+
 // The ladder for one instrument, bounded by what the broker will actually
 // accept. A chip the broker would reject is worse than no chip.
 function sizeChipsFor(spec: DeskInstrument | null): number[] {
@@ -61,6 +66,24 @@ function sizeChipsFor(spec: DeskInstrument | null): number[] {
   return usable.length > 0 ? usable : [spec.minimumTradeSize];
 }
 
+// The cost chips worth offering: one that cannot clear the venue's minimum
+// order value, or that buys less than its minimum size, would only ever be
+// refused.
+function costChipsFor(spec: DeskInstrument | null, price: number | null): number[] {
+  if (!spec || price == null || price <= 0) return [];
+  return SPOT_COST_CHIPS.filter(
+    (cost) => cost / price >= spec.minimumTradeSize && (spec.minimumOrderCost == null || cost >= spec.minimumOrderCost),
+  );
+}
+
+// A sale loaded in from the Holdings panel. `token` changes on every press, so
+// picking the same holding twice re-fills the ticket instead of doing nothing.
+export interface TicketPrefill {
+  side: TradeSide;
+  units: number;
+  token: number;
+}
+
 interface Props {
   account: DeskAccount;
   instruments: DeskInstrument[];
@@ -68,11 +91,12 @@ interface Props {
   onInstrument: (instrument: string) => void;
   readOnly: boolean;
   onPlaced: () => void; // refresh the wall / working orders / journal
+  prefill?: TicketPrefill | null;
 }
 
 type Placed = { kind: 'ok'; message: string } | { kind: 'error'; message: string };
 
-export function OrderTicket({ account, instruments, instrument, onInstrument, readOnly, onPlaced }: Props) {
+export function OrderTicket({ account, instruments, instrument, onInstrument, readOnly, onPlaced, prefill }: Props) {
   const [side, setSide] = useState<TradeSide>('long');
   const [type, setType] = useState<DeskOrderType>('market');
   const [unitsText, setUnitsText] = useState('1000');
@@ -128,6 +152,18 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   }, []);
   useEffect(resetPrices, [instrument, resetPrices]);
 
+  // A holding picked in the Holdings panel arrives here as a filled-in ticket,
+  // not as a placed order — the review step is exactly what makes selling from
+  // a list safe.
+  useEffect(() => {
+    if (!prefill) return;
+    setSide(prefill.side);
+    setType('market');
+    setUnitsText(String(prefill.units));
+    setResult(null);
+    setConfirming(false);
+  }, [prefill]);
+
   const units = Number(unitsText.replace(/[, ]/g, ''));
   const limitPrice = priceText.trim() === '' ? null : Number(priceText);
   const stopLoss = slText.trim() === '' ? null : Number(slText);
@@ -180,6 +216,29 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const notional = reference != null && factor != null && Number.isFinite(units) ? units * reference * factor : null;
   const marginEstimate = notional != null && spec?.marginRate != null ? notional * spec.marginRate : null;
 
+  // A spot account buys the asset outright: the whole cost leaves the balance,
+  // there is no margin, and a sell disposes of coins already held. A margin
+  // account posts a fraction and can be short without owning anything. The two
+  // read differently on the ticket because they *are* different.
+  const spot = account.spot;
+  const baseAsset = instrument.split('/')[0] ?? '';
+  // Some venues attach one protective order to a fill rather than two (crypto
+  // spot has no bracket). Setting both would silently lose one, so the ticket
+  // asks for one and says why.
+  const oneProtectiveOrder = account.maxProtectiveOrders < 2;
+  const costChips = spot ? costChipsFor(spec, quote?.ask ?? quote?.bid ?? null) : [];
+
+  // Size from cost, for a spot account: "$500 of bitcoin" is the sizing a crypto
+  // trader actually does. Priced off the side of the book the order will pay,
+  // and never allowed below the venue's minimum size.
+  const setUnitsFromCost = (cost: number) => {
+    const price = side === 'long' ? quote?.ask ?? quote?.bid : quote?.bid ?? quote?.ask;
+    if (!spec || price == null || price <= 0) return;
+    const step = Math.pow(10, spec.tradeUnitsPrecision);
+    const sized = Math.max(spec.minimumTradeSize, Math.floor((cost / price) * step) / step);
+    setUnitsText(String(Number(sized.toFixed(spec.tradeUnitsPrecision))));
+  };
+
   // Size from risk: given a stop and an amount to risk, how many units is that.
   // Rounded to the instrument's own size precision — whole units for FX, but a
   // fractional size for the CFDs that allow one, where rounding to an integer
@@ -199,14 +258,26 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const problem = ((): string | null => {
     if (!spec) return 'Pick an instrument';
     if (!Number.isFinite(units) || units <= 0) return 'Enter a size';
-    if (units < spec.minimumTradeSize) return `Minimum size is ${spec.minimumTradeSize.toLocaleString('en-US')} units`;
+    if (units < spec.minimumTradeSize) {
+      return `Minimum size is ${fmtUnits(spec.minimumTradeSize)}${spot ? ` ${baseAsset}` : ' units'}`;
+    }
     if (spec.maximumOrderUnits != null && units > spec.maximumOrderUnits) {
       return `Maximum size is ${spec.maximumOrderUnits.toLocaleString('en-US')} units`;
+    }
+    if (oneProtectiveOrder && stopLoss != null && takeProfit != null) {
+      return 'This account takes one protective order — a stop or a target';
     }
     if (type !== 'market' && (limitPrice == null || !Number.isFinite(limitPrice) || limitPrice <= 0)) {
       return 'Enter a trigger price';
     }
     if (quote && !quote.tradeable) return `${instrument} is closed right now`;
+    // A minimum order *value*, where the venue has one: a size above the size
+    // floor can still be worth too little to accept.
+    if (spec.minimumOrderCost != null && reference != null && units * reference < spec.minimumOrderCost) {
+      // Stated in the pair's own quote currency, which is what the venue's rule
+      // is denominated in — not necessarily the account's.
+      return `Orders here have to be worth at least ${spec.minimumOrderCost} ${instrument.split('/')[1] ?? ''}`.trim();
+    }
     if (reference != null) {
       const long = side === 'long';
       if (stopLoss != null) {
@@ -242,8 +313,8 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         kind: 'ok',
         message:
           res.status === 'filled'
-            ? `${verb} ${(res.units ?? units).toLocaleString('en-US')} ${res.instrument} at ${px(res.fillPrice)}`
-            : `${type === 'limit' ? 'Limit' : 'Stop'} order working: ${side === 'long' ? 'buy' : 'sell'} ${units.toLocaleString('en-US')} ${res.instrument} at ${px(limitPrice)}`,
+            ? `${verb} ${fmtUnits(res.units ?? units)} ${res.instrument}${res.fillPrice == null ? '' : ` at ${px(res.fillPrice)}`}`
+            : `${type === 'market' ? 'Market' : type === 'limit' ? 'Limit' : 'Stop'} order working: ${side === 'long' ? 'buy' : 'sell'} ${fmtUnits(units)} ${res.instrument}${type === 'market' ? '' : ` at ${px(limitPrice)}`}`,
       });
       setConfirming(false);
       onPlaced();
@@ -334,11 +405,11 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           used to fill the first. */}
       <div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-          <Field label="Size (units)">
+          <Field label={spot ? `Size (${baseAsset})` : 'Size (units)'}>
             <input
               value={unitsText}
               onChange={(e) => setUnitsText(e.target.value)}
-              inputMode="numeric"
+              inputMode="decimal"
               style={{ ...input, width: '100%', boxSizing: 'border-box' }}
             />
             {/* What this size is worth per unit of price movement: per pip on a
@@ -372,16 +443,26 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             </div>
           </Field>
         </div>
+        {/* On a spot account the shortcuts are amounts of money, because that is
+            how a coin is bought — "$500 of bitcoin", not "0.0047 of it". The
+            size is worked out from the live price when the chip is pressed. */}
         <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
-          {sizeChipsFor(spec).map((n) => (
-            <button key={n} onClick={() => setUnitsText(String(n))} style={chip}>
-              {n >= 1000 ? `${n / 1000}k` : n}
-            </button>
-          ))}
+          {costChips.length > 0
+            ? costChips.map((cost) => (
+                <button key={cost} onClick={() => setUnitsFromCost(cost)} style={chip} title={`Buy about ${fmtMoney(cost, account.currency)} of ${baseAsset}`}>
+                  {`$${cost.toLocaleString('en-US')}`}
+                </button>
+              ))
+            : sizeChipsFor(spec).map((n) => (
+                <button key={n} onClick={() => setUnitsText(String(n))} style={chip}>
+                  {n >= 1000 ? `${n / 1000}k` : n}
+                </button>
+              ))}
         </div>
       </div>
 
-      {/* Stop / target */}
+      {/* Stop / target. A venue that attaches only one of them to a fill says so
+          here rather than silently dropping the other at the exchange. */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <Field label="Stop loss">
           <input value={slText} onChange={(e) => setSlText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
@@ -405,14 +486,26 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         </Field>
       </div>
 
+      {oneProtectiveOrder && (
+        <div style={{ fontSize: 10.5, color: FAINT, lineHeight: 1.5, marginTop: -4 }}>
+          {"This venue attaches one protective order to an entry, not two. Set a stop or a target here; the other goes on as its own order once the trade is running."}
+        </div>
+      )}
+
       {/* What this order actually is, in money */}
       <div style={summaryBox}>
         <SummaryCell label="Entry" value={reference == null ? '—' : px(reference)} />
-        <SummaryCell label="Position value" value={notional == null ? '—' : fmtMoney(notional, account.currency)} />
+        <SummaryCell label={spot ? 'Order value' : 'Position value'} value={notional == null ? '—' : fmtMoney(notional, account.currency)} />
         <SummaryCell
-          label="Margin (est.)"
+          // Spot commits the whole cost rather than posting a fraction of it, so
+          // calling that figure "margin" would be wrong in both directions.
+          label={spot ? 'Cost (est.)' : 'Margin (est.)'}
           value={marginEstimate == null ? '—' : fmtMoney(marginEstimate, account.currency)}
-          hint={account.marginAvailable != null ? `of ${fmtMoney(account.marginAvailable, account.currency)} free` : undefined}
+          hint={
+            account.marginAvailable != null
+              ? `of ${fmtMoney(account.marginAvailable, account.currency)} ${spot ? 'cash' : 'free'}`
+              : undefined
+          }
         />
         <SummaryCell
           label="Risk / reward"
@@ -437,18 +530,29 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           <div style={{ fontSize: 12.5, color: TEXT, lineHeight: 1.5 }}>
             {type === 'market' ? (
               <>
-                {side === 'long' ? 'Buy' : 'Sell'} <b style={{ color: sideColor }}>{units.toLocaleString('en-US')}</b> {instrument} at
+                {side === 'long' ? 'Buy' : 'Sell'} <b style={{ color: sideColor }}>{fmtUnits(units)}</b> {instrument} at
                 market{reference != null ? ` (~${px(reference)})` : ''}
               </>
             ) : (
               <>
                 {type === 'limit' ? 'Limit' : 'Stop'} {side === 'long' ? 'buy' : 'sell'}{' '}
-                <b style={{ color: sideColor }}>{units.toLocaleString('en-US')}</b> {instrument} at {px(limitPrice)}
+                <b style={{ color: sideColor }}>{fmtUnits(units)}</b> {instrument} at {px(limitPrice)}
               </>
             )}
             {stopLoss != null && <> · stop {px(stopLoss)}</>}
             {takeProfit != null && <> · target {px(takeProfit)}</>}
           </div>
+          {/* Spot has no short: a sell disposes of coins the account already
+              holds, and one that does not hold them is simply refused. Saying so
+              here is the difference between an obvious no-op and a confusing
+              "insufficient funds" a second later. */}
+          {spot && (
+            <div style={{ fontSize: 11, color: MUTED, marginTop: 6 }}>
+              {side === 'long'
+                ? `Buying ${baseAsset} outright${notional != null ? ` — about ${fmtMoney(notional, account.currency)} leaves the account` : ''}.`
+                : `Selling ${baseAsset} you already hold. There is no short here — a sell of coins you do not hold is refused.`}
+            </div>
+          )}
           <div style={{ fontSize: 11, color: live ? RED : FAINT, marginTop: 6 }}>
             {live
               ? `This is a live account (${account.label} ••${account.accountTail}). Real money moves.`
@@ -473,7 +577,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             disabled={!!problem}
             style={{ ...placeBtn, width: '100%', background: problem ? 'rgba(255,255,255,.06)' : `linear-gradient(180deg,${sideColor},${side === 'long' ? '#22935a' : '#c23a4c'})`, color: problem ? FAINT : '#fff', cursor: problem ? 'not-allowed' : 'pointer' }}
           >
-            {problem ?? `Review ${side === 'long' ? 'buy' : 'sell'} ${Number.isFinite(units) ? units.toLocaleString('en-US') : ''} ${instrument}`}
+            {problem ?? `Review ${side === 'long' ? 'buy' : 'sell'} ${Number.isFinite(units) ? fmtUnits(units) : ''} ${instrument}`}
           </button>
           <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8, lineHeight: 1.5 }}>
             {"Orders go straight to your own broker account. Nothing here is investment advice."}
