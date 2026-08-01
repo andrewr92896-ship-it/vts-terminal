@@ -411,6 +411,18 @@ workspaces list** (see `theme/nav.ts` order).
         the flag is not a refusal** — an unmentioned value leaves the tile free
         to try. Nothing here attempts to defeat the restriction; it is the
         broadcaster's setting to make.
+      - YouTube does not always state that flag where it can be read, so
+        `EMBED_RESTRICTED_CHANNELS` (`marketNewsStreams.ts`) carries the ones
+        established by observation instead. Bloomberg is in it on direct
+        evidence: it failed through *both* embed routes across several deploys
+        while Yahoo Finance played through the identical path each time. Treat
+        the list as a statement of fact about a channel — remove an entry as soon
+        as it starts allowing embedding.
+      - The 16:9 media box is `overflow: hidden` and a container query root, and
+        `FedMeetingCard` is sized to fit the ~155px-tall box left by **four tiles
+        across**. It once carried an explanatory sentence that wrapped to three
+        lines and pushed the card over the tile's own caption. Anything added to
+        a card in that box has to survive the narrowest tile.
       - **A scheduled broadcast is embedded too** (`upcoming: true`, never badged
         LIVE). The Fed puts its stream up as a waiting room before a press
         conference; embedding that means the tile rolls into the broadcast by
