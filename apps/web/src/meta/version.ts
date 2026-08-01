@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.02';
+export const APP_VERSION = 'Beta V 6.03';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.03',
+    date: 'August 1, 2026',
+    notes: [
+      'A stream that is playing no longer says “Offline” underneath it. When the portal cannot confirm a channel’s status it now says so plainly instead of claiming the channel is off air — the player itself is the answer.',
+      'The “0 live” count is hidden when the portal has not managed to check any channel, rather than reading as “nothing is on” next to a stream that is visibly playing.',
+      'Added a second way of finding a channel’s live stream, using the same player page the browser uses. The first method appears to be refused by YouTube from the server, which is why status was coming back blank.',
+      'The Federal Reserve tile keeps its countdown when the Fed’s status is unknown — but on meeting day it tries to play instead, so the press conference is never hidden behind the countdown.',
+    ],
+  },
   {
     version: 'Beta V 6.02',
     date: 'August 1, 2026',
