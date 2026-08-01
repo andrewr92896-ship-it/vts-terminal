@@ -304,9 +304,6 @@ export function MarketNews() {
         <div style={{ display: 'flex', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
           <div style={{ minWidth: 0 }}>
             <ScreenTitle>Market News</ScreenTitle>
-            <div style={subtitle}>
-              {"Every headline the desk's feeds carry, newest first, with the instruments each story mentions. All times Eastern."}
-            </div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -526,13 +523,16 @@ function LiveStreams({
   const watching = streams.watching;
   const liveCount = channels.filter((c) => c.live).length;
 
-  const maxCols = contentW >= 1500 ? 6 : contentW >= 1240 ? 4 : contentW >= 900 ? 3 : 1;
-  const cols = Math.min(streams.cols, maxCols);
-
   const tiles = watching
     .map((k) => channels.find((c) => c.key === k))
     .filter((c): c is StreamChannel => !!c && c.key !== streams.docked);
   const dockedChan = streams.docked ? channels.find((c) => c.key === streams.docked) : null;
+
+  // How many play side by side is simply how many the trader has opened from the
+  // channel rail — bounded by what this width can actually show. There is no
+  // layout picker: clicking another channel is the way to add another tile.
+  const maxCols = contentW >= 1500 ? 6 : contentW >= 1240 ? 4 : contentW >= 900 ? 3 : 1;
+  const cols = Math.min(Math.max(1, tiles.length), maxCols);
 
   const toggleWatch = (key: string) =>
     mutate((s) => {
@@ -553,7 +553,7 @@ function LiveStreams({
     mutate((s) => ({ ...s, notify: { ...s.notify, [key]: !s.notify[key] } }));
   const watchingLabel =
     `${tiles.length} ${tiles.length === 1 ? 'stream' : 'streams'} open` +
-    (streams.cols > maxCols ? ` · ${maxCols} across at this width` : '');
+    (tiles.length > maxCols ? ` · ${maxCols} across at this width` : '');
 
   return (
     <div style={{ marginTop: 20, paddingBottom: 20, borderBottom: `1px solid ${C.line}` }}>
@@ -567,6 +567,7 @@ function LiveStreams({
         </span>
         <span style={{ fontFamily: C.mono, fontSize: 11, color: '#3A4A6C' }}>
           {liveCount} live · {channels.length} channels
+          {tiles.length > 0 ? ` · ${watchingLabel}` : ''}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setLiveOpen(!liveOpen)} style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
@@ -577,11 +578,6 @@ function LiveStreams({
 
       {liveOpen && (
         <>
-          {!liveConfigured && (
-            <div style={{ fontSize: 10.5, color: C.faint, lineHeight: 1.5, marginBottom: 12 }}>
-              Live status and viewer counts aren't wired up yet (sample) — channels read as offline. Any channel with a channel ID still plays here when it goes live.
-            </div>
-          )}
           <div
             style={{
               display: 'grid',
@@ -590,36 +586,8 @@ function LiveStreams({
               alignItems: 'start',
             }}
           >
-            {/* left column: layout controls + tiles */}
+            {/* left column: tiles */}
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint }}>
-                  LAYOUT
-                </span>
-                {[1, 2, 3, 4, 5, 6].map((n) => {
-                  const active = streams.cols === n;
-                  return (
-                    <button
-                      key={n}
-                      onClick={() => mutate((s) => ({ ...s, cols: n }))}
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 600,
-                        padding: '5px 10px',
-                        borderRadius: 6,
-                        cursor: 'pointer',
-                        color: active ? C.gold : C.muted,
-                        background: active ? GOLD_TINT_GRADIENT : 'rgba(255,255,255,.02)',
-                        border: `1px solid ${active ? tint(C.gold, 0.35) : C.line2}`,
-                      }}
-                    >
-                      {n} up
-                    </button>
-                  );
-                })}
-                <span style={{ marginLeft: 'auto', fontSize: 10.5, color: C.faint }}>{watchingLabel}</span>
-              </div>
-
               {dockedChan && (
                 <div style={{ ...noticePanel, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 12, color: C.muted }}>{dockedChan.name} is playing in the corner.</span>
@@ -632,7 +600,7 @@ function LiveStreams({
               {tiles.length === 0 && !dockedChan ? (
                 <StreamsEmpty channels={channels} onWatch={(k) => toggleWatch(k)} />
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(cols, Math.max(1, tiles.length))}, minmax(0,1fr))`, gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 12 }}>
                   {tiles.map((c) => (
                     <StreamTile
                       key={c.key}
@@ -1133,7 +1101,6 @@ function EmptyCard({ children }: { children: ReactNode }) {
 // ---------------------------------------------------------------------------
 
 const rootStyle: CSSProperties = { color: C.text, animation: 'fadeIn .25s ease', padding: '22px 32px 8px' };
-const subtitle: CSSProperties = { fontSize: 12.5, color: C.muted, margin: '6px 0 0', maxWidth: 640 };
 const card: CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, overflow: 'hidden' };
 const noticePanel: CSSProperties = { background: C.panel2, border: `1px solid ${C.line}`, borderRadius: 10, padding: '10px 13px' };
 const emptyCard: CSSProperties = { background: C.panel, border: `1px solid ${C.line}`, borderRadius: 12, padding: '32px 18px', textAlign: 'center' };
