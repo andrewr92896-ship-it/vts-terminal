@@ -279,7 +279,11 @@ function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): Market
       }
       return {
         ...base,
-        liveVideoId: video.videoId,
+        // Only an authoritative id reaches the tile. A read that established the
+        // channel is live without naming a trustworthy video leaves this unset,
+        // and the tile plays the channel-based embed instead — knowing it is on
+        // and knowing what to play are separate facts.
+        liveVideoId: video.videoId ?? live?.videoId,
         upcoming: video.upcoming,
         live: video.live,
         liveChecked: true,

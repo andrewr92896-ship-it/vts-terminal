@@ -385,17 +385,23 @@ workspaces list** (see `theme/nav.ts` order).
       trader has opened** from the channel rail, bounded by what the width fits —
       there is deliberately no layout picker, since opening another channel is
       already the way to add another tile.
-      - **A tile embeds a video id, not the channel.** `live_stream?channel=ID`
-        is the obvious keyless embed and it is not reliable — it renders "This
-        video is unavailable" for channels that are plainly live, which once left
-        the whole wall dead at once. So the server resolves the channel's
-        **current video** instead (`fetchLiveVideo` / `parseLivePage` in
-        `trading/youtube.ts`, reading the channel's own `/live` page, keyless and
-        free) and the tile plays `youtube.com/embed/<videoId>`. `live_stream`
-        survives only as the fallback for a channel the server has not managed to
-        read — signalled by `liveChecked` on the payload, which is what lets the
-        client tell "we looked, it is dark" from "we have not looked", two states
-        that want opposite tiles.
+      - **Knowing a channel is live and knowing what to play are separate facts,
+        and the tile treats them separately.** `live_stream?channel=ID` — the
+        keyless channel embed — is the **workhorse player**: it plays these
+        channels reliably, needs only the channel id, and shows YouTube's own
+        card when the channel is dark. A specific `youtube.com/embed/<videoId>`
+        is used **only when the server resolved an id it trusts** (the watch
+        page's canonical link, or the Data API), which is what makes a *scheduled*
+        broadcast playable — the channel embed cannot show a waiting room.
+      - **Never point the player at a guessed id.** That renders "This video is
+        unavailable" on a channel broadcasting perfectly well, which is strictly
+        worse than the channel embed. It shipped once, from the embed-page route
+        below: that page proves a channel is live but carries several ids, so it
+        deliberately reports `live: true` with **no** `videoId`.
+      - `liveChecked` on the payload is what lets the client tell "we looked, it
+        is dark" from "we have not looked" — two states that want opposite tiles.
+        Only a positively-dark channel gets the offline card; unknown still
+        plays.
       - **A scheduled broadcast is embedded too** (`upcoming: true`, never badged
         LIVE). The Fed puts its stream up as a waiting room before a press
         conference; embedding that means the tile rolls into the broadcast by

@@ -1175,9 +1175,11 @@ export interface StreamChannel {
   viewers?: string;
   lastLive?: string;
   lastTitle?: string;
-  // The video this channel is broadcasting (or has scheduled), resolved
-  // server-side from the channel's own page. When present the tile embeds this
-  // directly — the reliable player — instead of the live_stream endpoint.
+  // The video this channel is broadcasting (or has scheduled), but only when the
+  // server resolved it from somewhere authoritative. Absent does NOT mean the
+  // channel is dark — the server can establish that a channel is live without
+  // naming a video id it trusts, and the tile then plays the channel-based
+  // embed. Playing a wrongly-guessed id renders "This video is unavailable".
   liveVideoId?: string;
   // A resolved video that has not started yet: embeddable (YouTube's own
   // waiting room, which rolls into the stream by itself) but not badged LIVE.
