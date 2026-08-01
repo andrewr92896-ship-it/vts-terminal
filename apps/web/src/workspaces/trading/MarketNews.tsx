@@ -124,6 +124,26 @@ function isFedChannel(c: StreamChannel): boolean {
   return /federalreserve/i.test(c.handle);
 }
 
+// Whether the server actually established this channel's state. When it did not,
+// the screen must not say "Offline" — a tile can be playing perfectly well via
+// the fallback embed while we have no reading, and calling that offline is
+// simply false. Say nothing instead.
+function liveKnown(c: StreamChannel): boolean {
+  return c.liveChecked === true;
+}
+
+// The window around a Fed decision when the tile should try to play rather than
+// show the countdown. The Fed is dark all but a few hours a year, so the
+// countdown is right almost always — but on the day itself the stream is the
+// whole point, and it must not be hidden behind the countdown just because the
+// server could not confirm the channel is live.
+function inFedMeetingWindow(fomc: FomcSchedule, now: number): boolean {
+  const next = nextMeetingStamp(now, fomc.meetings, fomc.meetingYear);
+  const prev = prevMeetingStamp(now, fomc.meetings, fomc.meetingYear);
+  const near = (t: number) => now >= t - 2 * 3600_000 && now <= t + 8 * 3600_000;
+  return near(next) || near(prev);
+}
+
 // "3d 5h ago" — the mirror of etGap's "in 3d 5h", for the meeting just gone.
 function agoLabel(ms: number): string {
   const mins = Math.max(0, Math.round(ms / 60000));
@@ -592,6 +612,9 @@ function LiveStreams({
   const channels = streams.channels;
   const watching = streams.watching;
   const liveCount = channels.filter((c) => c.live).length;
+  // Whether any channel's state was actually established. Drives whether the
+  // live count is worth showing at all.
+  const anyKnown = channels.some(liveKnown);
 
   const tiles = watching
     .map((k) => channels.find((c) => c.key === k))
@@ -632,7 +655,11 @@ function LiveStreams({
           LIVE STREAMS
         </span>
         <span style={{ fontFamily: C.mono, fontSize: 11, color: '#3A4A6C' }}>
-          {liveCount} live · {channels.length} channels
+          {/* "0 live" is only worth saying when the count means something. With
+              no reading on any channel it is not a count of anything, and it read
+              as "nothing is on" beside a tile that was visibly playing. */}
+          {anyKnown ? `${liveCount} live · ` : ''}
+          {channels.length} channels
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
           <button onClick={() => setLiveOpen(!liveOpen)} style={{ background: 'none', border: 'none', fontSize: 11, fontWeight: 600, color: C.muted, cursor: 'pointer' }}>
@@ -733,7 +760,11 @@ function LiveStreams({
                         )}
                       </div>
                       <div style={{ fontSize: 11, color: c.live ? C.muted : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-                        {c.live ? c.streamTitle ?? 'Live' : c.lastLive ?? 'Offline'}
+                        {c.live
+                          ? c.streamTitle ?? 'Live'
+                          : liveKnown(c)
+                            ? c.lastLive ?? 'Offline'
+                            : 'Status unconfirmed'}
                       </div>
                       {c.handle && <div style={{ fontFamily: C.mono, fontSize: 9.5, color: '#3A4A6C', marginTop: 2 }}>{c.handle}</div>}
                     </button>
@@ -943,11 +974,19 @@ function StreamTile({
   // back to the old optimistic embed rather than claiming a channel is off air
   // on the strength of never having checked.
   const canEmbed = !!c.liveVideoId || (!c.liveChecked && !!c.channelId && (c.live || !liveConfigured));
-  const showFedCard = !canEmbed && !!fomc && isFedChannel(c);
+  // The Fed's countdown replaces a dead player, never a live one. It shows when
+  // the tile has nothing to play, and also when the state is merely unknown —
+  // the Fed is dark all but a few hours a year, so "unknown" almost always means
+  // dark. The exception is the meeting window itself, where the stream matters
+  // more than the countdown and the tile should attempt to play regardless.
+  const fedWindow = !!fomc && inFedMeetingWindow(fomc, now);
+  const showFedCard = !!fomc && isFedChannel(c) && !c.live && (!canEmbed || (!liveKnown(c) && !fedWindow));
   return (
     <div style={{ background: C.panel, borderRadius: 12, overflow: 'hidden', border: `1px solid ${c.live ? tint(C.red, 0.35) : C.line}` }}>
       <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#050B18' }}>
-        {canEmbed ? (
+        {showFedCard ? (
+          <FedMeetingCard fomc={fomc!} now={now} />
+        ) : canEmbed ? (
           <iframe
             title={c.name}
             src={embedSrc(c)}
@@ -956,8 +995,6 @@ function StreamTile({
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
           />
-        ) : showFedCard ? (
-          <FedMeetingCard fomc={fomc!} now={now} />
         ) : (
           <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 16, textAlign: 'center' }}>
             <div style={{ fontSize: 11.5, color: C.muted, maxWidth: 300, lineHeight: 1.5 }}>
@@ -988,7 +1025,11 @@ function StreamTile({
             ? c.streamTitle ?? 'Live'
             : c.upcoming
               ? c.streamTitle ?? 'Scheduled — waiting to start'
-              : `Offline · last stream ${c.lastTitle ?? '—'}`}
+              : liveKnown(c)
+                ? `Offline · last stream ${c.lastTitle ?? '—'}`
+                : // No reading — and the tile above may well be playing. Saying
+                  // "Offline" here is the one thing that is certainly wrong.
+                  'Live status unconfirmed — the player above shows whether it is on'}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap', marginTop: 6 }}>
           <span style={{ fontFamily: C.mono, fontSize: 10, color: C.faint }}>{c.live ? c.viewers ?? '' : c.lastLive ?? 'offline'}</span>

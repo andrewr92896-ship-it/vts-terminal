@@ -494,6 +494,25 @@ workspaces list** (see `theme/nav.ts` order).
       - A channel **never read before** is the one case the response waits on
         (`COLD_READ_BUDGET_MS`, 2.5s), so a cold process paints real state instead
         of a wall of empty tiles for a whole poll cycle. Steady state never waits.
+      - **Two pages are tried, and the headers are load-bearing.** A datacenter
+        address gets handed YouTube's consent interstitial far more often than a
+        laptop does, and that interstitial parses as "could not read" — so the
+        keyless fetches send `Cookie: CONSENT=YES+cb; SOCS=CAI` alongside the
+        browser-ish UA. If the watch page is still refused, `fetchLiveVideo` falls
+        through to the **embed** page (`readEmbedPage`), which is the same
+        keyless player the tile itself renders and is built to be served to third
+        parties. Observed in production: the browser could play the embed while
+        the server could read nothing, which is exactly the gap this closes.
+      - **Never say "Offline" about a channel whose state was not established.**
+        `liveKnown(c)` (i.e. `liveChecked`) gates every status string and the
+        "N live" header count. A tile can be playing via the fallback embed while
+        the server has no reading — labelling that "Offline" is the one thing
+        that is certainly false, and it shipped once.
+      - The Fed tile keeps its countdown when its state is merely *unknown* (dark
+        is the overwhelmingly likely truth), **except inside the meeting window**
+        (`inFedMeetingWindow`, −2h/+8h around a statement), where it attempts to
+        play instead. The countdown must never be what hides the press
+        conference.
     - **`YOUTUBE_API_KEY` still governs the extras** (`trading/youtube.ts` +
       `trading/youtubeWatch.ts`): viewer counts and the go-live push.
       `liveStreamsConfigured()` just reports whether that key exists. The watch is

@@ -106,6 +106,23 @@ const liveCache = new Map<string, LiveEntry>();
 // trusted, so a malformed path segment can never be passed off as an id.
 const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
 
+// What we send when reading a YouTube page directly (no API key involved).
+//
+// The UA is not decoration: without a browser-ish one YouTube serves a page that
+// names no video. The **cookie matters just as much and is easy to miss** — from
+// a datacenter address (which is what a hosting provider is) YouTube frequently
+// answers with the EU consent interstitial instead of the page, and that
+// interstitial parses as "no canonical link", i.e. as a channel we could not
+// read. Pre-accepting consent is the documented way past it and is what makes
+// this work from a server at all, as opposed to from a laptop.
+const BROWSERISH_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  Cookie: 'CONSENT=YES+cb; SOCS=CAI',
+};
+
 export interface YouTubeRef {
   // Set when the input names the channel by id — nothing to resolve.
   channelId: string;
@@ -337,30 +354,68 @@ export function cachedLiveRead(channelId: string): LiveRead | undefined {
   return { video: e.video, ok: e.ok };
 }
 
-// Read the channel's `/live` page and report what it is broadcasting. Never
-// throws: a failure comes back as `ok: false`, which the tile treats as "unknown"
-// and falls back on, rather than as darkness.
-export async function fetchLiveVideo(channelId: string): Promise<LiveRead> {
-  if (!CHANNEL_ID_RE.test(channelId)) return { video: null, ok: false };
+async function getText(url: string): Promise<string | null> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), LIVE_PAGE_TIMEOUT_MS);
-    const res = await fetch(`https://www.youtube.com/channel/${channelId}/live`, {
-      signal: ctrl.signal,
-      headers: {
-        // Same reason as resolveHandleKeyless: without a browser-ish UA YouTube
-        // serves a consent interstitial that names no video.
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-    });
+    const res = await fetch(url, { signal: ctrl.signal, headers: BROWSERISH_HEADERS });
     clearTimeout(timer);
-    if (!res.ok) return { video: null, ok: false };
-    return readLivePage(await res.text());
+    if (!res.ok) return null;
+    return await res.text();
   } catch {
-    return { video: null, ok: false };
+    return null;
   }
+}
+
+// Report what a channel is broadcasting. Never throws: a failure comes back as
+// `ok: false`, which the tile treats as "unknown" and falls back on, rather than
+// as darkness.
+//
+// **Two pages are tried, because the first one can be refused.** The channel's
+// `/live` page is the richer answer (it distinguishes live from scheduled), but
+// it is an ordinary watch page and is the one a datacenter address is most
+// likely to be handed a consent wall or a bot check for. The keyless *embed*
+// page is the same one the browser plays in the tile — it is built to be served
+// to third parties, so it is the more permissive of the two — and it names the
+// video id when the channel is live. Falling through to it means a server that
+// cannot read watch pages still resolves a playable video.
+export async function fetchLiveVideo(channelId: string): Promise<LiveRead> {
+  if (!CHANNEL_ID_RE.test(channelId)) return { video: null, ok: false };
+
+  const livePage = await getText(`https://www.youtube.com/channel/${channelId}/live`);
+  if (livePage) {
+    const read = readLivePage(livePage);
+    // A confident answer either way ends it. Only an unreadable page falls
+    // through — a page that says "dark" is an answer, not a failure.
+    if (read.ok) return read;
+  }
+
+  const embedPage = await getText(
+    `https://www.youtube.com/embed/live_stream?channel=${channelId}`,
+  );
+  if (embedPage) return readEmbedPage(embedPage);
+
+  return { video: null, ok: false };
+}
+
+// The keyless embed page for a channel's live stream. When the channel is live
+// it carries the video id it is about to play; when it is not, it says so with
+// an unplayable/error status. Anything else is a page we did not understand.
+export function readEmbedPage(html: string): LiveRead {
+  // The embed refusing to play is a real answer: the channel is dark.
+  if (/"status":"(?:ERROR|UNPLAYABLE|LOGIN_REQUIRED)"/.test(html)) {
+    return { video: null, ok: true };
+  }
+  const id =
+    html.match(/"videoId":"([A-Za-z0-9_-]{11})"/)?.[1] ??
+    html.match(/\\"videoId\\":\\"([A-Za-z0-9_-]{11})\\"/)?.[1] ??
+    html.match(/"video_id":"([A-Za-z0-9_-]{11})"/)?.[1];
+  if (!id) return { video: null, ok: false };
+  // This page is only ever reached for a live_stream embed, so a video id here
+  // means the channel is broadcasting. It carries no scheduled/at-rest
+  // distinction, hence upcoming:false.
+  const title = html.match(/"title":"([^"]{1,300})"/)?.[1];
+  return { video: { videoId: id, title: title ? decodeHtml(title) : undefined, live: true, upcoming: false }, ok: true };
 }
 
 // The parsing half, split out from the fetch so it can be exercised directly
