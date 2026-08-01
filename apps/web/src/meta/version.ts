@@ -11,11 +11,11 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 5.95';
+export const APP_VERSION = 'Beta V 5.98';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 5.95',
+    version: 'Beta V 5.98',
     date: 'August 1, 2026',
     notes: [
       'The Trade Desk now trades crypto. Connect a Kraken key and it appears beside your OANDA account with its own ticket — market, limit and stop orders, a protective order attached on fill, live prices, and every attempt written to the order journal.',
@@ -25,6 +25,30 @@ export const PATCH_NOTES: PatchNote[] = [
       'Size chips on a crypto ticket are amounts of money — $100, $500, $1,000 — because that is how a coin is actually bought. Sizes now print at the precision they need, so 0.00042 of a bitcoin no longer reads as zero.',
       'Broker connections are named for whose they are and where they are: "Andrew’s OANDA", "Andrew’s Kraken". Existing ones were renamed to match, and each account card names its venue.',
       'The Working orders panel no longer sits empty on the desk. It appears when you actually have a limit or stop order resting, which is also where you cancel one.',
+    ],
+  },
+  {
+    version: 'Beta V 5.97',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed the trader picker on Trade Analysis: the list of traders opened leftward and disappeared behind the sidebar, so you could not read or click most of the names. It now opens to the right of the button, fully on screen.',
+    ],
+  },
+  {
+    version: 'Beta V 5.96',
+    date: 'August 1, 2026',
+    notes: [
+      'Market News: tidied the screen — the description under the title and the note about live status being sample data are gone.',
+      'The stream wall no longer has a “1 up / 2 up / 3 up” layout row. How many streams play side by side is simply how many channels you open from the list on the right, fitted to your screen width.',
+    ],
+  },
+  {
+    version: 'Beta V 5.95',
+    date: 'August 1, 2026',
+    notes: [
+      'Fixed: the four channels the stream wall starts with (Yahoo Finance, Bloomberg, the Federal Reserve, Reuters) could get stuck on \u201cchannel ID is still being looked up\u201d and never start playing.',
+      'The portal now looks up a missing channel ID on its own, in the background, whenever you open Market News \u2014 no YouTube key needed. Give it a few seconds and the stream starts playing by itself.',
+      'A channel that genuinely cannot be found is retried at most once every half hour rather than on every refresh.',
     ],
   },
   {
