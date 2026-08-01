@@ -622,19 +622,23 @@ function LiveStreams({
     .filter((c): c is StreamChannel => !!c && c.key !== streams.docked);
   const dockedChan = streams.docked ? channels.find((c) => c.key === streams.docked) : null;
 
-  // How many play side by side is simply how many the trader has opened from the
-  // channel rail — bounded by what this width can actually show. There is no
-  // layout picker: clicking another channel is the way to add another tile.
-  const maxCols = contentW >= 1500 ? 6 : contentW >= 1240 ? 4 : contentW >= 900 ? 3 : 1;
-  const cols = Math.min(Math.max(1, tiles.length), maxCols);
+  // One stream at a time, so there is no grid to compute and no layout to
+  // choose: the single tile takes the full width of the column, which is the
+  // whole benefit of the limit — a readable player instead of four small ones.
 
+  // One stream at a time. Picking a channel **replaces** whatever is playing
+  // rather than adding to it, so the rail reads as a channel selector — the way
+  // a television does — instead of a set of checkboxes. Picking the open one
+  // again closes it.
   const toggleWatch = (key: string) =>
     mutate((s) => {
       const open = s.watching.includes(key);
       return {
         ...s,
-        watching: open ? s.watching.filter((k) => k !== key) : [...s.watching, key],
-        docked: open && s.docked === key ? null : s.docked,
+        watching: open ? [] : [key],
+        // Switching channels retires whatever was docked: the docked player was
+        // the previous channel, and leaving it running would be a second stream.
+        docked: null,
       };
     });
   const closeTile = (key: string) =>
@@ -693,7 +697,7 @@ function LiveStreams({
               {tiles.length === 0 && !dockedChan ? (
                 <StreamsEmpty channels={channels} onWatch={(k) => toggleWatch(k)} />
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))`, gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
                   {tiles.map((c) => (
                     <StreamTile
                       key={c.key}
@@ -747,7 +751,7 @@ function LiveStreams({
                         </span>
                         {isWatching && (
                           <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', color: C.gold, border: `1px solid ${tint(C.gold, 0.4)}`, borderRadius: 4, padding: '1px 5px' }}>
-                            OPEN
+                            PLAYING
                           </span>
                         )}
                         {c.alwaysOn && (
@@ -1102,7 +1106,7 @@ function StreamsEmpty({ channels, onWatch }: { channels: StreamChannel[]; onWatc
   return (
     <div style={{ background: C.panel, border: `1px dashed ${C.line2}`, borderRadius: 12, padding: '34px 20px', textAlign: 'center' }}>
       <div style={{ fontSize: 13, color: C.muted, maxWidth: 430, margin: '0 auto', lineHeight: 1.55 }}>
-        Open as many channels as you want — they play side by side here, so a press conference runs beside the headlines instead of in another tab.
+        Pick a channel to watch it here beside the headlines instead of in another tab. One plays at a time — choosing another switches to it.
       </div>
       {firstLive && (
         <button

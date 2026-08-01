@@ -377,7 +377,10 @@ function parseNotify(raw: string): Record<string, boolean> {
 // to the 1–6 the layout pills offer. This is also what quietly cleans up after a
 // channel is removed: a row still referencing it simply loses that reference.
 function sanitize(view: MarketNewsView, keys: Set<string>): MarketNewsView {
-  const watching = [...new Set(view.watching.filter((k) => keys.has(k)))];
+  // One stream at a time. Enforced here as well as in the client, so a saved
+  // view from before the limit — or a hand-rolled request — collapses to a
+  // single channel rather than reopening a wall of them.
+  const watching = [...new Set(view.watching.filter((k) => keys.has(k)))].slice(0, 1);
   const docked = view.docked && keys.has(view.docked) ? view.docked : null;
   const cols = Math.min(6, Math.max(1, Math.round(view.cols) || 2));
   const notify: Record<string, boolean> = {};

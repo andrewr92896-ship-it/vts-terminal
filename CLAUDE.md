@@ -379,12 +379,14 @@ workspaces list** (see `theme/nav.ts` order).
     "Most mentioned" rail, and the Trump/Truth Social tab — an "informational
     only, not investment advice" line sits under the feed instead. The economic
     calendar lives on Market Data now, not here.
-    - The **live-stream wall** lets a trader follow YouTube channels and open
-      several at once (one dockable corner mini-player), so a press conference
-      plays beside the headlines. **How many play side by side is how many the
-      trader has opened** from the channel rail, bounded by what the width fits —
-      there is deliberately no layout picker, since opening another channel is
-      already the way to add another tile.
+    - The **live-stream wall** lets a trader follow YouTube channels and watch
+      **one at a time** (plus a dockable corner mini-player), so a press
+      conference plays beside the headlines. The channel rail is a **selector,
+      not a set of checkboxes**: picking a channel replaces whatever is playing,
+      picking the playing one again closes it, and the single tile takes the full
+      column width — a readable player rather than four small ones. There is no
+      layout picker and no grid to size. Enforced in `sanitize` server-side too,
+      so a view saved before the limit collapses to one channel.
       - **Knowing a channel is live and knowing what to play are separate facts,
         and the tile treats them separately.** `live_stream?channel=ID` — the
         keyless channel embed — is the **workhorse player**: it plays these

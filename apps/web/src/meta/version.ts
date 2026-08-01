@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.07';
+export const APP_VERSION = 'Beta V 6.08';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.08',
+    date: 'August 1, 2026',
+    notes: [
+      'Market News now plays one live stream at a time. Picking a channel switches to it rather than adding another tile, and picking the one that is playing closes it.',
+      'The single stream takes the full width, so it is a readable player instead of several small ones. The channel list marks the one playing.',
+    ],
+  },
   {
     version: 'Beta V 6.07',
     date: 'August 1, 2026',
