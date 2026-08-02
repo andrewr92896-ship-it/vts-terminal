@@ -16,16 +16,36 @@ import type { InvestmentAccountKind } from '../db/schema.js';
 //      about the user.
 //
 // UPDATE THIS EVERY YEAR. The IRS publishes the following year's figures in
-// late October/November. Anything shown from here carries an "informational
-// only — verify against irs.gov" line on the Contributions screen, because a
-// contribution limit is the one number in this workspace where being out of
-// date has a real cost.
+// late October/November.
+//
+// Every figure below was checked against the IRS announcements on 2026-08-02:
+// Notice 2025-67 (2026 retirement plan limits), the equivalent notices for 2025
+// and 2024, and the Revenue Procedures carrying the HSA amounts. One entry was
+// wrong when checked — the 2026 SIMPLE catch-up — and is flagged at its entry.
+//
+// Anything shown from here carries an "informational only — verify against
+// irs.gov" line on the Contributions screen, because a contribution limit is the
+// one number in this workspace where being out of date has a real cost.
 
 export interface ContributionLimit {
   /** The elective-deferral / annual contribution cap for this kind. */
   limit: number;
-  /** Additional amount allowed at 50+, or null where the kind has no catch-up. */
-  catchUp50: number | null;
+  /** Additional amount allowed once catch-up age is reached, or null if none. */
+  catchUp: number | null;
+  /**
+   * The age catch-up starts at. **This is not always 50.** An HSA's extra
+   * $1,000 begins at 55, and a screen that says "age 50+" beside it tells a
+   * 52-year-old they have a thousand dollars of room they do not have. The
+   * field exists because that mislabelling shipped once.
+   */
+  catchUpFromAge: number | null;
+  /**
+   * SECURE 2.0's higher catch-up for ages 60–63, from tax year 2025 onward.
+   * It REPLACES the ordinary catch-up for those four years rather than adding
+   * to it, which is why the screen must never show the two summed. Null where
+   * the year or the plan kind has none.
+   */
+  catchUp60to63?: number | null;
   /** Note shown beside the figure — the family/self split for an HSA, etc. */
   note?: string;
 }
@@ -66,32 +86,41 @@ export function limitGroupFor(kind: InvestmentAccountKind): LimitGroup | null {
   return null;
 }
 
+// A SIMPLE plan at an employer with 25 or fewer employees can run a higher
+// limit under SECURE 2.0, and some larger employers may elect it. The stored
+// figure is the standard one, so the note tells anyone at a small employer to
+// check rather than trust it.
+const SIMPLE_NOTE = 'standard limit; a small employer may allow a higher one';
+
 // Figures by tax year. SEP is a percentage-of-compensation cap in practice, so
 // only its dollar ceiling is stored and the note says what it is.
 const LIMITS: Record<number, Partial<Record<LimitGroup, ContributionLimit>>> = {
   2024: {
-    workplace: { limit: 23000, catchUp50: 7500 },
-    ira: { limit: 7000, catchUp50: 1000 },
-    sep: { limit: 69000, catchUp50: null, note: 'or 25% of compensation, whichever is less' },
-    simple: { limit: 16000, catchUp50: 3500 },
-    hsa: { limit: 4150, catchUp50: 1000, note: 'self-only; $8,300 for family coverage' },
-    esa: { limit: 2000, catchUp50: null, note: 'per beneficiary, per year' },
+    // No 60-63 band in 2024 — SECURE 2.0's higher catch-up starts in 2025.
+    workplace: { limit: 23000, catchUp: 7500, catchUpFromAge: 50 },
+    ira: { limit: 7000, catchUp: 1000, catchUpFromAge: 50 },
+    sep: { limit: 69000, catchUp: null, catchUpFromAge: null, note: 'or 25% of compensation, whichever is less' },
+    simple: { limit: 16000, catchUp: 3500, catchUpFromAge: 50, note: SIMPLE_NOTE },
+    hsa: { limit: 4150, catchUp: 1000, catchUpFromAge: 55, note: 'self-only; $8,300 for family coverage' },
+    esa: { limit: 2000, catchUp: null, catchUpFromAge: null, note: 'per beneficiary, per year' },
   },
   2025: {
-    workplace: { limit: 23500, catchUp50: 7500 },
-    ira: { limit: 7000, catchUp50: 1000 },
-    sep: { limit: 70000, catchUp50: null, note: 'or 25% of compensation, whichever is less' },
-    simple: { limit: 16500, catchUp50: 3500 },
-    hsa: { limit: 4300, catchUp50: 1000, note: 'self-only; $8,550 for family coverage' },
-    esa: { limit: 2000, catchUp50: null, note: 'per beneficiary, per year' },
+    workplace: { limit: 23500, catchUp: 7500, catchUpFromAge: 50, catchUp60to63: 11250 },
+    ira: { limit: 7000, catchUp: 1000, catchUpFromAge: 50 },
+    sep: { limit: 70000, catchUp: null, catchUpFromAge: null, note: 'or 25% of compensation, whichever is less' },
+    simple: { limit: 16500, catchUp: 3500, catchUpFromAge: 50, catchUp60to63: 5250, note: SIMPLE_NOTE },
+    hsa: { limit: 4300, catchUp: 1000, catchUpFromAge: 55, note: 'self-only; $8,550 for family coverage' },
+    esa: { limit: 2000, catchUp: null, catchUpFromAge: null, note: 'per beneficiary, per year' },
   },
   2026: {
-    workplace: { limit: 24500, catchUp50: 8000 },
-    ira: { limit: 7500, catchUp50: 1100 },
-    sep: { limit: 72000, catchUp50: null, note: 'or 25% of compensation, whichever is less' },
-    simple: { limit: 17000, catchUp50: 3500 },
-    hsa: { limit: 4400, catchUp50: 1000, note: 'self-only; $8,750 for family coverage' },
-    esa: { limit: 2000, catchUp50: null, note: 'per beneficiary, per year' },
+    workplace: { limit: 24500, catchUp: 8000, catchUpFromAge: 50, catchUp60to63: 11250 },
+    ira: { limit: 7500, catchUp: 1100, catchUpFromAge: 50 },
+    sep: { limit: 72000, catchUp: null, catchUpFromAge: null, note: 'or 25% of compensation, whichever is less' },
+    // The SIMPLE catch-up rose to $4,000 for 2026. It was stored as $3,500 —
+    // 2025's figure — until the whole table was checked against Notice 2025-67.
+    simple: { limit: 17000, catchUp: 4000, catchUpFromAge: 50, catchUp60to63: 5250, note: SIMPLE_NOTE },
+    hsa: { limit: 4400, catchUp: 1000, catchUpFromAge: 55, note: 'self-only; $8,750 for family coverage' },
+    esa: { limit: 2000, catchUp: null, catchUpFromAge: null, note: 'per beneficiary, per year' },
   },
 };
 

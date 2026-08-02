@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.26';
+export const APP_VERSION = 'Beta V 6.27';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.27',
+    date: 'August 2, 2026',
+    notes: [
+      'Checked all 33 contribution limits in Contributions & Goals against the IRS announcements. One was wrong: the 2026 SIMPLE IRA catch-up was showing $3,500, which was last year\u2019s figure. It is $4,000. Everything else \u2014 the 401(k), IRA, SEP, HSA and ESA limits for 2024, 2025 and 2026 \u2014 was correct.',
+      'Fixed a more subtle error: every catch-up was labelled \u201cAge 50+\u201d, but an HSA\u2019s extra $1,000 only starts at 55. Anyone aged 50 to 54 was being shown a thousand dollars of room they did not have. Each limit now states its own starting age.',
+      'Added the higher catch-up for ages 60 to 63 introduced by SECURE 2.0 \u2014 $11,250 on a 401(k), $5,250 on a SIMPLE. It replaces the ordinary catch-up rather than adding to it, and the screen says so.',
+      'The footnote now also flags that a SIMPLE plan at a small employer can allow a higher limit than the published one.',
+    ],
+  },
   {
     version: 'Beta V 6.26',
     date: 'August 2, 2026',
