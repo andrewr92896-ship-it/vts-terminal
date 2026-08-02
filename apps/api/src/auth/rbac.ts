@@ -11,6 +11,26 @@ import { membershipBadgeKey } from '../badges/service.js';
 // The company email domain that gates the Employee Portal (EMPLOYEE_EMAIL_DOMAIN).
 export const COMPANY_EMAIL_DOMAIN = config.EMPLOYEE_EMAIL_DOMAIN;
 
+// The clock an account reads the terminal on when it has never chosen one. It is
+// Eastern because every stamp in the terminal was Eastern before the setting
+// existed — the default has to leave those accounts reading exactly as they did.
+// Mirrored by DEFAULT_ZONE in apps/web/src/lib/timezone.ts.
+export const DEFAULT_DISPLAY_TIMEZONE = 'America/New_York';
+
+// Whether a stored/submitted zone is one this runtime can actually format in.
+// Zone names drift between ICU builds (Europe/Frankfurt is an alias Node rejects
+// outright), so a name the server cannot format is refused at the door rather
+// than stored and discovered later by every screen at once.
+export function isUsableTimezone(zone: string): boolean {
+  if (zone === 'auto') return true;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: zone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export type WorkspaceKey = 'trading' | 'studies';
 
 // The optional features a user turns on for themselves. Which parts of the
@@ -180,6 +200,11 @@ export interface PublicUser {
   // these with any auto badges (e.g. the Admin shield) from the badge registry
   // when rendering the icons next to the name.
   badges: string[];
+  // The clock this user reads the terminal on — 'auto' (follow the device) or an
+  // IANA zone name. Never null: an account that has never chosen gets the
+  // Eastern default, so the client has one value to format with and no
+  // "unset" state to reason about.
+  displayTimezone: string;
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards; the name is resolved from trading_teams by the caller.
   teamId: string | null;
@@ -255,6 +280,7 @@ export function toPublicUser(
     // one place — and so it can never be out of step with the tier, since both
     // come off the same payload.
     badges: withMembershipBadge(parseBadges(u), membership.tier),
+    displayTimezone: u.displayTimezone ?? DEFAULT_DISPLAY_TIMEZONE,
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,
     viewBrokerage: u.viewBrokerage,

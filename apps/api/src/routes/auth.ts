@@ -10,7 +10,7 @@ import {
   createSession,
   destroySession,
 } from '../auth/sessions.js';
-import { toPublicUser, type PublicUser } from '../auth/rbac.js';
+import { isUsableTimezone, toPublicUser, type PublicUser } from '../auth/rbac.js';
 import { LEGAL_VERSION } from '../legal/version.js';
 import { requireAuth } from '../auth/middleware.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
@@ -67,9 +67,24 @@ const profileSchema = z
       })
       .nullable()
       .optional(),
+    // The clock the user reads the terminal on: 'auto' to follow whichever
+    // device they are on, or an IANA zone name. Checked against this runtime's
+    // own Intl rather than a list, so a name the server could not format can
+    // never be stored — that would blank every timestamp at once.
+    displayTimezone: z
+      .string()
+      .trim()
+      .max(64)
+      .refine(isUsableTimezone, { message: 'Unknown time zone' })
+      .optional(),
   })
   .refine(
-    (v) => v.username != null || v.displayName != null || v.email != null || v.avatar !== undefined,
+    (v) =>
+      v.username != null ||
+      v.displayName != null ||
+      v.email != null ||
+      v.avatar !== undefined ||
+      v.displayTimezone != null,
     { message: 'Nothing to update' },
   );
 
@@ -203,6 +218,7 @@ export async function authRoutes(app: FastifyInstance) {
       displayName?: string;
       email?: string;
       avatar?: string | null;
+      displayTimezone?: string;
       updatedAt: Date;
     } = {
       updatedAt: new Date(),
@@ -211,6 +227,10 @@ export async function authRoutes(app: FastifyInstance) {
     if (parsed.data.avatar !== undefined) {
       // An empty string clears the picture; a data URL sets it.
       patch.avatar = parsed.data.avatar ? parsed.data.avatar : null;
+    }
+
+    if (parsed.data.displayTimezone != null) {
+      patch.displayTimezone = parsed.data.displayTimezone;
     }
 
     if (parsed.data.username != null) {

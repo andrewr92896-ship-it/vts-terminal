@@ -247,6 +247,8 @@ export const api = {
     email?: string;
     // A data URL to set the profile picture, or '' to remove it.
     avatar?: string;
+    // 'auto', or an IANA zone name. The server refuses a name it cannot format.
+    displayTimezone?: string;
   }): Promise<{ user: User }> {
     return request('/api/auth/profile', {
       method: 'PATCH',

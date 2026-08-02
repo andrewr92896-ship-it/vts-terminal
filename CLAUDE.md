@@ -2146,11 +2146,24 @@ this module rather than formatting a date locally.
 ### Display time zone (`lib/timezone.ts`)
 
 The clock the terminal **displays** times on. Set from **My Terminal ▸
-Preferences**, stored per device in localStorage beside the Trade Log layout
-(`vts.display.timezone`; `'auto'` follows the device, anything else is an IANA
-name). **The default is Eastern and must stay Eastern** — every stamp read ET
-before this existed, so anything short of an explicit choice by the user has to
-render exactly as it did.
+Preferences** and stored **on the account** (`users.display_timezone`, migration
+`0092`; `'auto'` follows whichever device, anything else is an IANA name, null =
+never chosen), so it follows the person between devices. **The default is
+Eastern and must stay Eastern** — every stamp read ET before this existed, so
+anything short of an explicit choice by the user has to render exactly as it did.
+
+`lib/timezone.ts` **holds no storage of its own.** `setAccountZone` is fed from
+the signed-in user by a single effect in `AuthContext` (which covers sign-in,
+the session check and a profile save alike), and every formatter reads that
+module-level value — module-level rather than React state because `zoneFmt` is
+called from plain functions all over the terminal, not just components. Signing
+out returns it to the default. Saving goes through `PATCH /api/auth/profile`,
+which already returns the refreshed user, so there is one write path and no
+second refresh to keep in step. The server validates the name against **its own**
+`Intl` (`isUsableTimezone` in `auth/rbac.ts`) rather than a list — a name it
+could not format would blank every timestamp at once. `takeLegacyDeviceZone` is
+the one localStorage read left: a one-time carry-over of the per-device value
+this replaced, read and cleared together so it runs at most once per browser.
 
 `zoneFmt(options)` is the single seam: a cached `Intl.DateTimeFormat` bound to
 the zone in force, keyed on zone + options. Callers used to hoist a formatter to
