@@ -389,7 +389,9 @@ workspaces list** (see `theme/nav.ts` order).
         metals, energy and the index CFDs all come back unavailable on it. The
         account's `/instruments` list is checked first, so a symbol it lacks keeps
         its sample figure instead of 400-ing the whole pricing request; crypto
-        spot falls back to the keyless coin feed (changes then stay sample).
+        falls back to the keyless coin feed for spot **and Kraken's public OHLC
+        for daily closes**, so BTC/ETH keep real change columns on the entities
+        (most of them) that carry no crypto at all.
         **Never assume an OANDA symbol is reachable because the instrument
         exists** — that assumption shipped once and left nine rows sample. The
         indices and energy rows are sourced from FRED as well for exactly this
@@ -429,6 +431,12 @@ workspaces list** (see `theme/nav.ts` order).
       the freshness legend on each placeholder row. Keep that marking accurate when
       you wire a provider. The calendar, the session Open/Closed readings and the
       Fed countdown *are* real.
+    - **A live row restates its review cycle, not just its publisher.**
+      `LiveQuote.reviewLast` exists because the catalog gives every price group
+      `"continuous"`, which is true of an exchange tape and false of a published
+      daily close — leaving it made the S&P and VIX rows say "close" and
+      "continuous" at once. Restate the cycle whenever a source publishes on a
+      different rhythm than the catalog assumed.
     - **The Fed decision bar reads its target range from the `ffr` series**, never
       from a literal. It carried a hardcoded "4.25–4.50" in two places, which
       became a visible lie the moment that row went live off FRED — the bar

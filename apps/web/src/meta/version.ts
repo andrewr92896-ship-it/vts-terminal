@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.11';
+export const APP_VERSION = 'Beta V 6.12';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.12',
+    date: 'August 2, 2026',
+    notes: [
+      'Bitcoin and Ethereum now show their five change columns instead of dashes. Their prices were already live, but nothing behind them carried any history — the daily closes now come from Kraken’s public data, so 1D through 1Y read like every other row.',
+      'Fixed rows that described themselves two ways at once. The S&P 500 and VIX said “close” on one side and “continuous” on the other; a published daily close is not a continuous tape, and the rows now say the one true thing.',
+    ],
+  },
   {
     version: 'Beta V 6.11',
     date: 'August 2, 2026',
