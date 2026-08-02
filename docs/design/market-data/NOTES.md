@@ -197,6 +197,20 @@ catalog through the same `applyLiveQuotes` seam. Points worth knowing:
   `changeMode: 'pct'` — percent columns with the extra 1-day decimal, exactly as
   `marketQuotes.ts` renders them. A `+18` in the S&P's 1-day column would match
   nothing else on the board. Everything else here stays on differences.
+- **A spread is derived from the two legs the board already shows**
+  (`fredMinus`), not read from FRED's ready-made `T10Y2Y` / `T10Y3M`. FRED
+  refreshes those on their own clock, so the spread row could reach a day the
+  yield rows had not and print `+47` where the two rows beside it implied `+45`.
+  The inner join on date pins the spread to the last day *both* legs published,
+  so the three rows reconcile by construction — at no cost in accuracy, since
+  FRED defines those series as exactly this subtraction.
+- **Rows on the Fed's schedule resolve their dates from it.** `review.last`
+  takes the sentinel `'fomc-prev'` (alongside the existing `next: 'fomc'`), so
+  the Fed funds and primary-credit rows read the live meeting list rather than a
+  literal that goes stale — they were claiming a June review while the Fed bar
+  above them correctly said July. The **dot plot keeps its literal**: it is
+  published quarterly with the SEP, not at every meeting, so the live
+  previous-meeting date would be wrong for it.
 - **Where the two providers overlap, OANDA wins** (`getMarketData` merges macro
   first, then prices). FRED's published close makes those rows live for every
   install; OANDA's real-time quote is better when the account can see it.

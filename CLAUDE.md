@@ -431,6 +431,17 @@ workspaces list** (see `theme/nav.ts` order).
       the freshness legend on each placeholder row. Keep that marking accurate when
       you wire a provider. The calendar, the session Open/Closed readings and the
       Fed countdown *are* real.
+    - **Two consistency rules the board learned the hard way.** A **spread** is
+      derived from the two legs the board already shows (`fredMinus`), not read
+      from FRED's ready-made `T10Y2Y`/`T10Y3M` — those refresh on their own clock,
+      so the spread could reach a day the yield rows had not and print `+47` where
+      the rows beside it implied `+45`; the inner join on date makes the three
+      reconcile by construction. And a row on the **Fed's schedule** resolves its
+      dates from that schedule (`review.last: 'fomc-prev'` beside the existing
+      `next: 'fomc'`) rather than a literal, which had the Fed funds row claiming
+      a June review while the Fed bar above it correctly said July. The **dot plot
+      keeps its literal** — it is published quarterly with the SEP, not at every
+      meeting.
     - **A live row restates its review cycle, not just its publisher.**
       `LiveQuote.reviewLast` exists because the catalog gives every price group
       `"continuous"`, which is true of an exchange tape and false of a published

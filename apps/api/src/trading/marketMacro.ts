@@ -77,6 +77,13 @@ interface MacroDef {
   // `ffr` uses it: the Fed publishes the target as two bounds and the board
   // shows "4.25–4.50", with the change columns tracking the upper bound.
   fredLower?: string;
+  // Second FRED series to SUBTRACT, for a spread. FRED publishes the curve
+  // spreads ready-made (`T10Y2Y`), but it updates them on its own clock — so the
+  // spread row could show a day the two yield rows beside it had not reached,
+  // and the three numbers on screen would not add up. Deriving it from the same
+  // two series the board already displays makes them reconcile by construction,
+  // at no cost in accuracy: FRED defines T10Y2Y as exactly this subtraction.
+  fredMinus?: string;
   transform: Transform;
   cadence: Cadence;
   decimals: number;
@@ -154,8 +161,8 @@ const MACRO: MacroDef[] = [
   { id: 'y30', fred: 'DGS30', transform: 'level', cadence: 'daily', decimals: 2 },
   // FRED publishes both spreads the same way round the board shows them
   // (10-year minus the short leg), in percent — so ×100 into basis points.
-  { id: 's2s10', fred: 'T10Y2Y', transform: 'level', cadence: 'daily', decimals: 0, scale: 100, signed: true },
-  { id: 's3m10', fred: 'T10Y3M', transform: 'level', cadence: 'daily', decimals: 0, scale: 100, signed: true },
+  { id: 's2s10', fred: 'DGS10', fredMinus: 'DGS2', transform: 'level', cadence: 'daily', decimals: 0, scale: 100, signed: true },
+  { id: 's3m10', fred: 'DGS10', fredMinus: 'DGS3MO', transform: 'level', cadence: 'daily', decimals: 0, scale: 100, signed: true },
   { id: 'real10', fred: 'DFII10', transform: 'level', cadence: 'daily', decimals: 2 },
   { id: 'mtg30', fred: 'MORTGAGE30US', transform: 'level', cadence: 'weekly', decimals: 2 },
 
@@ -434,7 +441,9 @@ function historyStart(now: number): string {
 // requests at a public endpoint.
 async function loadObservations(now: number): Promise<Map<string, FredObservation[]>> {
   const ids = [
-    ...new Set(MACRO.flatMap((d) => (d.fredLower ? [d.fred, d.fredLower] : [d.fred]))),
+    ...new Set(
+      MACRO.flatMap((d) => [d.fred, ...(d.fredLower ? [d.fredLower] : []), ...(d.fredMinus ? [d.fredMinus] : [])]),
+    ),
   ];
   const start = historyStart(now);
   const out = new Map<string, FredObservation[]>();
@@ -454,13 +463,39 @@ async function loadObservations(now: number): Promise<Map<string, FredObservatio
   return out;
 }
 
+// One series minus another, keeping only the dates BOTH published. The inner
+// join is the point: it pins a spread to the last day both its legs are known
+// for, so the spread and the two yield rows beside it always show the same date
+// and always add up. A left join would let the spread run a day ahead of a leg
+// and print a figure the board's own two rows contradict.
+function subtractSeries(a: FredObservation[], b: FredObservation[]): FredObservation[] {
+  const rhs = new Map(b.map((o) => [o.date, o.value]));
+  const out: FredObservation[] = [];
+  for (const o of a) {
+    const sub = rhs.get(o.date);
+    if (sub == null) continue;
+    out.push({ date: o.date, timeMs: o.timeMs, value: o.value - sub });
+  }
+  return out;
+}
+
 function quoteFor(
   def: MacroDef,
   observations: Map<string, FredObservation[]>,
   now: number,
 ): LiveQuote | null {
-  const obs = observations.get(def.fred);
+  let obs = observations.get(def.fred);
   if (!obs || obs.length === 0) return null;
+
+  if (def.fredMinus) {
+    const minus = observations.get(def.fredMinus);
+    // Without the second leg there is no spread. Falling back to the first leg
+    // alone would print a 10-year yield in a row labelled as a spread.
+    if (!minus || minus.length === 0) return null;
+    obs = subtractSeries(obs, minus);
+    if (obs.length === 0) return null;
+  }
+
   const points = derive(obs, def);
   if (points.length === 0) return null;
   const latest = points[points.length - 1];

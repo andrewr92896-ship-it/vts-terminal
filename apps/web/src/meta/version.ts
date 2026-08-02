@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.12';
+export const APP_VERSION = 'Beta V 6.13';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.13',
+    date: 'August 2, 2026',
+    notes: [
+      'The Fed funds and primary credit rows said they were last reviewed in June while the Fed bar right above them said July. Both now read the same live meeting schedule, so they cannot disagree. The dot plot keeps its own date — it only comes out four times a year, with the projections.',
+      'The 2y–10y and 3m–10y spread rows now come straight from the two yield rows on the board rather than being read separately, so the three numbers always add up. Before, the spread could be a day fresher than the yields and show +47 where the yields implied +45.',
+    ],
+  },
   {
     version: 'Beta V 6.12',
     date: 'August 2, 2026',

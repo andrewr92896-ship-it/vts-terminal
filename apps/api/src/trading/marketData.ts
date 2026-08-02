@@ -67,10 +67,17 @@ export const MARKET_DATA_GROUPS: { key: MarketGroupKey; label: string }[] = MARK
 // Freshness, rendered as the coloured dot on a tile / row.
 export type MarketFreshness = 'live' | 'manual' | 'stale';
 
-// Who publishes a series and when it is next revised. `last` is either an ISO
-// date or a cadence phrase ('continuous', 'daily · 3:30 PM'); a cadence renders
-// verbatim with no arrow. `next` is an ISO date, the literal 'fomc' (resolve to
-// the next Fed meeting), or '' for "to be confirmed".
+// Who publishes a series and when it is next revised. `last` is an ISO date, a
+// cadence phrase ('continuous', 'daily · 3:30 PM') which renders verbatim with
+// no arrow, or the literal 'fomc-prev' (resolve to the Fed's PREVIOUS meeting).
+// `next` is an ISO date, the literal 'fomc' (resolve to the next Fed meeting),
+// or '' for "to be confirmed".
+//
+// The two 'fomc' sentinels keep a row that moves on the Fed's own schedule
+// reading that schedule instead of a date typed in here, which goes stale the
+// moment the calendar advances. Use 'fomc-prev' only for something decided at
+// *every* meeting — the dot plot comes with the quarterly SEP, so its literal
+// is the true date and must stay.
 export interface MarketReview {
   body: string;
   last: string;
@@ -168,14 +175,14 @@ const NO_CHANGE: [string, string, string, string, string] = ['—', '—', '—'
 
 const DEFS: SeriesDef[] = [
   // ---- Policy & rates ----
-  { g: 'policy', id: 'ffr', l: 'Fed funds target', v: '4.25–4.50', u: '%', a: 'held since Dec 2025', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['FOMC', '2026-06-17', 'fomc'] },
+  { g: 'policy', id: 'ffr', l: 'Fed funds target', v: '4.25–4.50', u: '%', a: 'held since Dec 2025', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['FOMC', 'fomc-prev', 'fomc'] },
   { g: 'policy', id: 'effr', l: 'Effective fed funds', v: '4.33', u: '%', a: 'Jul 28 · NY Fed', c: ['0.00', '0.00', '−0.01', '−0.25', '−0.49'], rev: ['NY Fed', 'daily · 9:00 AM', ''] },
   { g: 'policy', id: 'iorb', l: 'Interest on reserves', v: '4.40', u: '%', a: 'Jul 28', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['Fed Board', 'daily', ''] },
   { g: 'policy', id: 'sofr', l: 'SOFR', v: '4.31', u: '%', a: 'Jul 28', c: ['−0.01', '+0.01', '−0.02', '−0.26', '−0.52'], rev: ['NY Fed', 'daily · 8:00 AM', ''] },
   { g: 'policy', id: 'cut9', l: 'Next meeting cut odds', v: '78', u: '%', a: 'implied · 1-week change', c: ['+2', '+6', '+18', '+41', '+63'], rev: ['CME FedWatch', 'continuous', ''] },
   { g: 'policy', id: 'hold7', l: 'Hold priced · next meeting', v: '96', u: '%', a: 'implied · futures', c: ['−1', '−2', '−7', '−22', '−38'], rev: ['CME FedWatch', 'continuous', ''] },
   { g: 'policy', id: 'dots', l: '2026 dot-plot median', v: '3.875', u: '%', a: 'June SEP', s: 'manual', c: ['0.00', '0.00', '0.00', '−0.13', '−0.38'], rev: ['FOMC · SEP', '2026-06-17', 'fomc'] },
-  { g: 'policy', id: 'disc', l: 'Primary credit rate', v: '4.50', u: '%', a: 'Jun 17', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['Fed Board', '2026-06-17', 'fomc'] },
+  { g: 'policy', id: 'disc', l: 'Primary credit rate', v: '4.50', u: '%', a: 'Jun 17', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['Fed Board', 'fomc-prev', 'fomc'] },
   { g: 'policy', id: 'ecb', l: 'ECB deposit rate', v: '2.00', u: '%', a: 'held · next Sep 10', c: ['0.00', '0.00', '0.00', '−0.25', '−1.00'], rev: ['ECB Governing Council', '2026-07-23', '2026-09-10'] },
   { g: 'policy', id: 'boe', l: 'BoE bank rate', v: '3.75', u: '%', a: 'cut Jun 19 · next Aug 6', c: ['0.00', '0.00', '−0.25', '−0.50', '−1.25'], rev: ['BoE MPC', '2026-06-19', '2026-08-06'] },
   { g: 'policy', id: 'boj', l: 'BoJ policy rate', v: '0.75', u: '%', a: 'raised Mar 19', c: ['0.00', '0.00', '0.00', '+0.25', '+0.50'], rev: ['BoJ Policy Board', '2026-06-17', '2026-07-31'] },

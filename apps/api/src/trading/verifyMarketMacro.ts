@@ -216,6 +216,35 @@ console.log('Market Data · macro transform check\n');
   check('csv · last reading parsed', `${rows[1].date}=${rows[1].value}`, '2026-07-31=4.02');
 }
 
+// ---- a curve spread is derived from the two yields the board displays ----
+// The three rows have to add up on screen, so the spread is pinned to the last
+// day BOTH legs published — not to whichever leg FRED refreshed first.
+{
+  const now = Date.parse('2026-08-02T12:00:00Z');
+  const y10 = obs([
+    ['2026-07-30', 4.68],
+    // A day the 2-year has not published yet. Using it would print a spread the
+    // two yield rows beside it contradict.
+    ['2026-07-31', 4.71],
+  ]);
+  const y2 = obs([
+    ['2026-07-29', 4.2],
+    ['2026-07-30', 4.23],
+  ]);
+  const both = new Map([
+    ['DGS10', y10],
+    ['DGS2', y2],
+  ]);
+  const q = quoteFor(def('s2s10'), both, now);
+  check('s2s10 · derived, in bps, signed', q?.value ?? '', '+45');
+  check('s2s10 · pinned to the day both legs have', q?.asOf ?? '', 'Jul 30');
+  check(
+    's2s10 · a missing leg yields no quote',
+    String(quoteFor(def('s2s10'), new Map([['DGS10', y10]]), now)),
+    'null',
+  );
+}
+
 // ---- Kraken's daily candles, for the crypto rows OANDA cannot quote ----
 {
   const now = Date.parse('2026-08-02T12:00:00Z');

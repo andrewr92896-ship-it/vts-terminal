@@ -134,11 +134,22 @@ interface ReviewInfo {
 }
 
 // "BLS · Jul 14 → Aug 12", or a cadence phrase verbatim ("Interbank ·
-// continuous"). `next: 'fomc'` resolves to the live next-meeting date.
-function reviewInfo(m: BoardMetric, now: number, fomc: number): ReviewInfo {
+// continuous"). `next: 'fomc'` resolves to the live next-meeting date, and
+// `last: 'fomc-prev'` to the live previous one.
+//
+// Both sentinels exist so a row that moves on the Fed's own schedule reads that
+// schedule rather than a date written into the catalog. A literal goes stale the
+// moment the calendar advances: the Fed funds row claimed it was last reviewed
+// in June while the Fed bar directly above it correctly said July, which is the
+// same class of contradiction the bar's own hardcoded target range caused.
+// Deliberately NOT used by the dot plot, which is published quarterly with the
+// SEP rather than at every meeting — there the June literal is the true date.
+function reviewInfo(m: BoardMetric, now: number, fomc: number, fomcPrev: number): ReviewInfo {
   const { body, last, next } = m.review;
-  if (!ISO_DATE_RE.test(last)) return { body, text: last, soon: false };
-  const lastLabel = etMonthDay(isoStamp(last));
+  const lastStamp =
+    last === 'fomc-prev' ? (fomcPrev > 0 ? fomcPrev : null) : ISO_DATE_RE.test(last) ? isoStamp(last) : null;
+  if (lastStamp === null) return { body, text: last === 'fomc-prev' ? '' : last, soon: false };
+  const lastLabel = etMonthDay(lastStamp);
   const nextStamp = next === 'fomc' ? fomc : next ? isoStamp(next) : null;
   if (nextStamp === null) return { body, text: `${lastLabel} → tbc`, soon: false };
   const days = Math.ceil((nextStamp - now) / 86400000);
@@ -282,6 +293,13 @@ export function MarketData() {
   const fomc = useMemo(
     () => (meetings.length ? nextMeetingStamp(now, meetings, meetingYear) : 0),
     [now, meetings, meetingYear],
+  );
+  // The meeting before that one — what "last reviewed" means for anything on the
+  // Fed's schedule. The Fed bar already derives it this way; sharing it is what
+  // keeps the bar and the rows beneath it telling the same story.
+  const fomcPrev = useMemo(
+    () => (fomc > 0 ? prevMeetingStamp(fomc, meetings, meetingYear) : 0),
+    [fomc, meetings, meetingYear],
   );
 
   // ---- board filtering ----
@@ -525,6 +543,7 @@ export function MarketData() {
               m={m}
               now={now}
               fomc={fomc}
+              fomcPrev={fomcPrev}
               privacy={privacy}
               editing={editing && canWrite}
               dragging={dragId === m.id}
@@ -572,6 +591,7 @@ export function MarketData() {
           width={wellWidth}
           now={now}
           fomc={fomc}
+          fomcPrev={fomcPrev}
           privacy={privacy}
           editing={editing && canWrite}
           canWrite={canWrite}
@@ -719,6 +739,7 @@ function Tile({
   m,
   now,
   fomc,
+  fomcPrev,
   privacy,
   editing,
   dragging,
@@ -731,6 +752,7 @@ function Tile({
   m: BoardMetric;
   now: number;
   fomc: number;
+  fomcPrev: number;
   privacy: boolean;
   editing: boolean;
   dragging: boolean;
@@ -741,7 +763,7 @@ function Tile({
   onRemove: () => void;
 }) {
   const fresh = freshnessOf(m);
-  const rev = reviewInfo(m, now, fomc);
+  const rev = reviewInfo(m, now, fomc, fomcPrev);
   const masked = m.money && privacy;
   const open = m.session ? sessionOpen(now, m.session) : false;
   const context = m.session
@@ -860,6 +882,7 @@ function BoardView({
   width,
   now,
   fomc,
+  fomcPrev,
   privacy,
   editing,
   canWrite,
@@ -883,6 +906,7 @@ function BoardView({
   width: number;
   now: number;
   fomc: number;
+  fomcPrev: number;
   privacy: boolean;
   editing: boolean;
   canWrite: boolean;
@@ -972,6 +996,7 @@ function BoardView({
                   cols={cols}
                   now={now}
                   fomc={fomc}
+                  fomcPrev={fomcPrev}
                   privacy={privacy}
                   editing={editing}
                   canWrite={canWrite}
@@ -1015,6 +1040,7 @@ function Row({
   cols,
   now,
   fomc,
+  fomcPrev,
   privacy,
   editing,
   canWrite,
@@ -1026,6 +1052,7 @@ function Row({
   cols: BoardCols;
   now: number;
   fomc: number;
+  fomcPrev: number;
   privacy: boolean;
   editing: boolean;
   canWrite: boolean;
@@ -1034,7 +1061,7 @@ function Row({
   onRemove: () => void;
 }) {
   const fresh = freshnessOf(m);
-  const rev = reviewInfo(m, now, fomc);
+  const rev = reviewInfo(m, now, fomc, fomcPrev);
   const masked = m.money && privacy;
   const open = m.session ? sessionOpen(now, m.session) : false;
 
