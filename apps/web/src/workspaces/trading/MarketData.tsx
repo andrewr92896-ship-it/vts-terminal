@@ -153,6 +153,13 @@ function reviewInfo(m: BoardMetric, now: number, fomc: number, fomcPrev: number)
   const nextStamp = next === 'fomc' ? fomc : next ? isoStamp(next) : null;
   if (nextStamp === null) return { body, text: `${lastLabel} → tbc`, soon: false };
   const days = Math.ceil((nextStamp - now) / 86400000);
+  // A next-review date that has already been and gone is not a schedule, it is
+  // a stale literal — and the catalog's are hand-entered, so they expire on
+  // their own as the calendar advances. Seven rows were pointing at dates in the
+  // past. Show the same "tbc" a row with no date shows, which is true and
+  // self-correcting, rather than a date that has demonstrably passed. The FOMC
+  // sentinels never reach this: they resolve off the live meeting list.
+  if (days < 0) return { body, text: `${lastLabel} → tbc`, soon: false };
   return {
     body,
     text: `${lastLabel} → ${etMonthDay(nextStamp)}`,
