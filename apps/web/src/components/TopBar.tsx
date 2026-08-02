@@ -11,7 +11,7 @@ import {
   zoomLabel,
   zoomOut,
 } from '../theme/zoom';
-import { rolesSummary } from '../auth/access';
+import { rolesSummary, TIER_GLYPHS, tierOfFeature } from '../auth/access';
 import { api } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { Clock } from './Clock';
@@ -225,6 +225,11 @@ export function TopBar(props: TopBarProps) {
 
   const { isPhone } = useResponsive();
 
+  // The glyph on the Ask VTS AI button — the marker of whichever tier `ai` sits
+  // in. Falls back to the sparkles if the feature ever stops being paid.
+  const aiTier = tierOfFeature('ai', user.access.membership);
+  const aiGlyph = (aiTier && TIER_GLYPHS[aiTier]) || 'sparkles';
+
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -389,7 +394,13 @@ export function TopBar(props: TopBarProps) {
             whiteSpace: 'nowrap',
           }}
         >
-          <Icon name="sparkles" size={14} />
+          {/* The tier's own glyph, so the button says what VTS AI costs — the gem
+              while `ai` is a Max feature, and the star by itself if it is ever
+              moved to Premium. Read from the tier map the server sent rather than
+              hardcoded, for the same reason the sidebar markers are. Drawn in the
+              button's own text colour: the diamond blue would be washed out on
+              gold, and the glyph is what carries the meaning. */}
+          <Icon name={aiGlyph} size={14} />
           {!isPhone && 'Ask VTS AI'}
         </button>
 

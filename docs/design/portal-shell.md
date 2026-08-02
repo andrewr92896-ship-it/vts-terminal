@@ -100,9 +100,9 @@ Collapsed (72px): icons only, centred, label shown as a dark tooltip on hover.
 - **Search** (desktop) — 240px, panel background, `⌘K` chip. Visual affordance
   only; the shortcut is not wired yet.
 - **Clock** — live time + date, Eastern, mono.
-- **`Ask VTS AI`** — the one gold-gradient button in the shell (`sparkles` icon,
-  dark `#241A05` text). Opens a slide-over panel. On a phone it collapses to the
-  icon alone.
+- **`Ask VTS AI`** — the one gold-gradient button in the shell (`gem` icon —
+  the Max tier's own glyph, since VTS AI is a Max feature — dark `#241A05`
+  text). Opens a slide-over panel. On a phone it collapses to the icon alone.
 - **Bell** — 36×36 icon button with a red count bubble for unread in-terminal
   notifications.
 - **Avatar** — 32px circle, ringed in the current workspace accent; opens the
