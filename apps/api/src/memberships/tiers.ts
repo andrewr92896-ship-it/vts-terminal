@@ -52,7 +52,10 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // user who cannot reach help is a user who cannot tell you their payment
   // failed, and locking the complaints channel behind the thing being complained
   // about is how a paid product loses an account permanently.
-  ai: 'premium',
+  //
+  // Max rather than Premium (owner decision, 2026-08): AI is the one feature here
+  // with a real per-use cost to run, so it sits at the top tier.
+  ai: 'max',
   // Connecting a broker, or any other API, with the user's own credentials.
   brokerConnections: 'premium',
   // The prop-firm challenge tracker.
