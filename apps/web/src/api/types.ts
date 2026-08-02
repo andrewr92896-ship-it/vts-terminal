@@ -2085,6 +2085,12 @@ export interface Membership {
 
 export interface MembershipView extends Membership {
   entitlements: Record<PremiumFeature, boolean>;
+  /**
+   * Which tier each paid feature needs — what the feature COSTS, as opposed to
+   * `entitlements`, which is what this account can reach. The sidebar colours a
+   * section by this, so a Max member still sees which sections are paid.
+   */
+  featureTiers: Record<PremiumFeature, MembershipTier>;
 }
 
 // ---- Administrator Log ----

@@ -187,11 +187,14 @@ export async function seedBadges(): Promise<void> {
     // The two membership badges. Assigned by tier rather than by hand — see
     // membershipBadgeKeys() below — so they cannot be handed out as decoration
     // to somebody who has not got the tier.
+    // These two colours are the terminal's tier language and are mirrored in
+    // TIER_COLORS (web auth/access.ts), which paints the sidebar rows. Change one
+    // and change the other, or a Premium section stops matching the Premium star.
     {
       key: 'premium',
       label: 'Premium',
       icon: 'star',
-      color: '#EBCB74', // gold
+      color: '#EBCB74', // gold/yellow
       description: 'Premium member.',
       autoRole: null as string | null,
       position: 5,
@@ -200,7 +203,9 @@ export async function seedBadges(): Promise<void> {
       key: 'max',
       label: 'Max',
       icon: 'diamond',
-      color: '#7DD3FC',
+      // Diamond blue — icier than the Markets accent (#5AC8FA) on purpose, so a
+      // Max marker is never read as a Markets one.
+      color: '#B9F2FF',
       description: 'Max member — the full terminal.',
       autoRole: null as string | null,
       position: 6,

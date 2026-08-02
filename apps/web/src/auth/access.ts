@@ -1,6 +1,7 @@
 import type {
   Membership,
   MembershipTier,
+  MembershipView,
   PremiumFeature,
   RoleKey,
   User,
@@ -176,6 +177,58 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   premiumBadges: 'Badges',
   strategySessions: 'Strategy Sessions',
 };
+
+// The colour a tier is drawn in across the terminal — the sidebar rows, the
+// membership card, the badges.
+//
+// Free is null rather than a colour: an unpaid section takes the workspace's own
+// accent like everything else, so the colours mark what COSTS something instead
+// of painting the whole sidebar.
+export const TIER_COLORS: Record<MembershipTier, string | null> = {
+  free: null,
+  // Gold — the same yellow as the Premium star badge.
+  premium: '#EBCB74',
+  // Diamond blue, matching the Max diamond badge. Deliberately icier than the
+  // Markets workspace accent (#5AC8FA) so a Max section is not mistaken for a
+  // Markets one.
+  max: '#B9F2FF',
+};
+
+// Which paid feature gates each sidebar SECTION, by screen key.
+//
+// Only sections that are wholly gated appear here. Three paid features are
+// absent on purpose because no section maps to them: `ai` is the top-bar button,
+// `brokerConnections` lives inside My Terminal ▸ Settings, and `premiumBadges` is
+// a per-member setting. `customBoards` is absent too, and that one is the
+// interesting case — the Live Wall itself is free (a free account gets the preset
+// boards, a working screen), and only SAVING your own arrangement is paid. So
+// colouring the whole section would overstate the paywall.
+export const SECTION_FEATURE: Record<string, PremiumFeature> = {
+  sessions: 'strategySessions',
+  prop: 'funded',
+  st_decks: 'studyCreation',
+  my_team: 'teams',
+};
+
+// The same, for a whole WORKSPACE. Empty today — no workspace is entirely paid,
+// and marking one that is not would be a false claim about every free section
+// inside it (Advanced Trading holds the Trade Desk, Trade Analysis, alerts and
+// the manual book, none of which cost anything beyond the opt-in). It is the
+// seam for when one is: add a key here and its row colours automatically.
+export const WORKSPACE_FEATURE: Record<string, PremiumFeature> = {};
+
+// The colour a sidebar row should take, or null for the default treatment.
+// Reads the tier off the membership payload the SERVER computed, so moving a
+// feature between tiers recolours the sidebar with nothing here to update.
+export function tierColorFor(
+  key: string,
+  map: Record<string, PremiumFeature>,
+  membership: MembershipView | undefined,
+): string | null {
+  const feature = map[key];
+  if (!feature || !membership) return null;
+  return TIER_COLORS[membership.featureTiers[feature]] ?? null;
+}
 
 // Whether this user reaches a paid feature. Reads the entitlement map the server
 // computed rather than comparing tiers here, so moving a feature between tiers

@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.31';
+export const APP_VERSION = 'Beta V 6.32';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.32',
+    date: 'August 2, 2026',
+    notes: [
+      'The sidebar is now colour-coded by membership. A section that needs Premium is yellow; one that needs Max is diamond blue; everything else keeps its workspace colour.',
+      'The Premium badge star is yellow and the Max badge diamond is diamond blue — the same two colours the sidebar uses, so the nav reads without needing a key.',
+      'Premium Features lists what tier each paid feature needs, in that tier’s colour.',
+    ],
+  },
   {
     version: 'Beta V 6.31',
     date: 'August 2, 2026',

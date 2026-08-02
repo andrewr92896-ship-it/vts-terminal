@@ -1015,9 +1015,43 @@ cycle.
   decoration. Free has **no** badge — a badge meaning "has not paid" is a mark, not
   recognition.
 - **The web mirror** is `auth/access.ts` (`hasEntitlement`, `TIER_LABELS`,
-  `FEATURE_LABELS`) reading the entitlement map the **server** computed, rather
+  `FEATURE_LABELS`, `TIER_COLORS`) reading the maps the **server** computed, rather
   than comparing tiers itself — so moving a feature between tiers never leaves the
   client stale. `components/UpgradeNotice.tsx` is the one upgrade prompt.
+- **The sidebar is colour-coded by tier** (owner decision, 2026-08): a section
+  needing **Premium is yellow** (`#EBCB74`), one needing **Max is diamond blue**
+  (`#B9F2FF`), and one needing nothing keeps the workspace's own accent. Free is
+  deliberately `null` rather than a colour, so the palette marks what **costs**
+  something instead of repainting the whole sidebar.
+  - The colour **replaces** the workspace accent on that row — icon, label and the
+    active highlight — so a paid section reads the same whether or not it happens
+    to be selected.
+  - `SECTION_FEATURE` / `WORKSPACE_FEATURE` (`auth/access.ts`) map a nav key to the
+    paid feature gating it; `tierColorFor` resolves the colour through
+    `membership.featureTiers`, which the **server** sends. That is why
+    `MembershipView` carries `featureTiers` as well as `entitlements`: the two
+    answer different questions — what this account can REACH, versus what a
+    feature COSTS. The sidebar needs the second, so a Max member still sees which
+    sections are paid rather than a uniformly default nav.
+  - **Only wholly-gated sections are listed.** Three paid features have no section
+    (`ai` is the top-bar button, `brokerConnections` lives in Settings,
+    `premiumBadges` is a per-member setting), and `customBoards` is left out on
+    purpose: the Live Wall itself is free — a free account gets the preset boards,
+    a working screen — and only *saving your own* arrangement is paid, so
+    colouring the whole section would overstate the paywall.
+  - `WORKSPACE_FEATURE` is **empty**, and that is correct rather than unfinished:
+    no workspace is entirely paid, and marking one that is not would be a false
+    claim about every free section inside it (Advanced Trading holds the Trade
+    Desk, Trade Analysis, alerts and the manual book). It is the seam for when one
+    is — add a key and the row colours itself.
+  - The **badge colours are the same two values** (`badges/service.ts`): the
+    Premium star is `#EBCB74`, the Max diamond `#B9F2FF`. Change one and change
+    the other, or a Premium section stops matching the Premium star. Both are
+    kept icier/warmer than the Markets accent (`#5AC8FA`) so a tier marker is
+    never read as a workspace one.
+  - **Consequence worth knowing:** with every feature currently at `premium`,
+    nothing renders blue. The first entry moved to `'max'` in `FEATURE_TIER` is
+    what makes blue appear — no other change is needed.
 - **The Ask VTS AI button stays in the top bar for everyone** (owner instruction).
   Hiding it would leave a free account unable to discover the feature exists, so
   the panel opens as normal and the composer is replaced by the upgrade notice.

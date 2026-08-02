@@ -100,6 +100,17 @@ export interface Membership {
 
 export interface MembershipView extends Membership {
   entitlements: Record<PremiumFeature, boolean>;
+  /**
+   * Which tier each paid feature needs. Sent alongside the entitlements because
+   * the two answer different questions: entitlements say what THIS account can
+   * reach, while this says what the feature COSTS — which is what the sidebar
+   * needs to colour a section by its tier for everyone, including a Max member
+   * who is not locked out of anything.
+   *
+   * Sent rather than mirrored client-side so moving a feature between tiers in
+   * FEATURE_TIER above recolours the sidebar with no second list to update.
+   */
+  featureTiers: Record<PremiumFeature, MembershipTier>;
 }
 
 export const FREE_MEMBERSHIP: Membership = {
@@ -123,7 +134,11 @@ export function entitlementsFor(tier: MembershipTier): Record<PremiumFeature, bo
 }
 
 export function viewOf(membership: Membership): MembershipView {
-  return { ...membership, entitlements: entitlementsFor(membership.tier) };
+  return {
+    ...membership,
+    entitlements: entitlementsFor(membership.tier),
+    featureTiers: FEATURE_TIER,
+  };
 }
 
 // The default put on a public user when no membership was resolved. Free rather

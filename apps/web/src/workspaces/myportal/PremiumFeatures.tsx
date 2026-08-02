@@ -1,7 +1,7 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { FEATURE_LABELS, TIER_LABELS, isStaffMembership } from '../../auth/access';
+import { FEATURE_LABELS, TIER_COLORS, TIER_LABELS, isStaffMembership } from '../../auth/access';
 import { PREMIUM_FEATURES } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { C } from '../../theme/tokens';
@@ -177,7 +177,8 @@ function MembershipCard({ theme }: { theme: Theme }) {
   if (!membership) return null;
 
   const staff = isStaffMembership(membership);
-  const tint = membership.tier === 'max' ? '#7DD3FC' : membership.tier === 'premium' ? C.gold : C.faint;
+  // The one tier palette — the same values the sidebar rows and the badges use.
+  const tint = TIER_COLORS[membership.tier] ?? C.faint;
   // The same glyphs the badges use — diamond for Max, gold star for Premium —
   // so the icon beside your name and the icon on this card are the one language.
   const glyph = membership.tier === 'max' ? 'diamond' : membership.tier === 'premium' ? 'star' : 'user';
@@ -206,13 +207,35 @@ function MembershipCard({ theme }: { theme: Theme }) {
         {!staff && membership.grantedByName ? ` Granted by ${membership.grantedByName}.` : ''}
       </div>
 
+      {/* Every paid feature carries the colour of the tier it needs — the same
+          yellow and diamond blue the sidebar paints those sections in, so the
+          colours in the nav are readable without anything having to explain
+          them. */}
       <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
         {PREMIUM_FEATURES.map((f) => {
           const on = membership.entitlements[f];
+          const needs = membership.featureTiers[f];
+          const color = TIER_COLORS[needs] ?? C.faint;
           return (
             <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Icon name={on ? 'check' : 'lock'} size={14} color={on ? C.green : C.faint} />
-              <span style={{ fontSize: 13, color: on ? C.text : C.faint }}>{FEATURE_LABELS[f]}</span>
+              <span style={{ fontSize: 13, color: on ? C.text : C.faint, flex: 1, minWidth: 0 }}>
+                {FEATURE_LABELS[f]}
+              </span>
+              <span
+                style={{
+                  flex: 'none',
+                  fontSize: 10,
+                  fontFamily: C.mono,
+                  color,
+                  border: `1px solid ${color}55`,
+                  background: `${color}14`,
+                  borderRadius: 999,
+                  padding: '1px 8px',
+                }}
+              >
+                {TIER_LABELS[needs]}
+              </span>
             </div>
           );
         })}
