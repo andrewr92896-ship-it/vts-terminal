@@ -1,6 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware.js';
+import { hasEntitlement } from '../memberships/service.js';
+import {
+  FEATURE_LABELS,
+  FEATURE_TIER,
+  TIER_LABELS,
+  type PremiumFeature,
+} from '../memberships/tiers.js';
 import {
   supportTurn,
   listSupportRequests,
@@ -32,6 +39,22 @@ export async function supportRoutes(app: FastifyInstance) {
     const parsed = turnSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Type a message to continue' });
     const u = request.currentUser!;
+    // Gated by KIND rather than by a preHandler, because one endpoint serves all
+    // three intake types. Reporting a BUG is free on every account, deliberately
+    // and permanently: a bug report is the user doing you a favour, and charging
+    // for it means never hearing about the bug. Suggestions and general support
+    // are paid.
+    const paidFor: Partial<Record<typeof parsed.data.kind, PremiumFeature>> = {
+      suggestion: 'suggestions',
+      support: 'supportChat',
+    };
+    const needed = paidFor[parsed.data.kind];
+    if (needed && !(await hasEntitlement(u, needed))) {
+      return reply.code(402).send({
+        error: `${FEATURE_LABELS[needed]} needs a ${TIER_LABELS[FEATURE_TIER[needed]]} membership`,
+        upgrade: { feature: needed, requiredTier: FEATURE_TIER[needed] },
+      });
+    }
     try {
       const result = await supportTurn(u, parsed.data.kind, parsed.data.messages);
       return result;

@@ -40,13 +40,18 @@ export const NAV: NavWorkspace[] = [
       // module behind it, myportal/holdings.ts, is still very much alive: Net
       // Worth reads the portfolio and trading equity through it.)
       { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
-      { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      // Moved here from Advanced Trading (owner decision, 2026-08): a to-do list
+      // is personal, not a desk instrument. The key stays `td_trading` so saved
+      // nav.order overrides and in-app links keep working.
+      { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
       // Memberships and the optional parts of the terminal. The key stays
       // `my_access` though the label is now Premium Features, so a founder's
       // saved nav.order override keeps pointing at it.
       { key: 'my_access', label: 'Premium Features', icon: 'gem' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
+      // Max — last, per the free → Premium → Max stacking below.
+      { key: 'my_team', label: 'Trading Team', icon: 'users' },
     ],
   },
   // Markets — included with every account, no opt-in. Everything here reads
@@ -64,8 +69,10 @@ export const NAV: NavWorkspace[] = [
     group: 'Markets',
     sections: [
       { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
-      { key: 'data', label: 'Market Data', icon: 'line-chart' },
       { key: 'news', label: 'Market News', icon: 'newspaper' },
+      // Premium — the series board. The economic calendar and FOMC countdown on
+      // that screen stay free.
+      { key: 'data', label: 'Market Data', icon: 'line-chart' },
     ],
   },
   // Advanced Trading — opt-in (My Terminal ▸ Premium Features). The desk: placing
@@ -77,22 +84,23 @@ export const NAV: NavWorkspace[] = [
     accent: C.gold,
     group: 'Advanced Trading',
     sections: [
+      // Free with the desk opt-in.
       { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
-      // Placing trades. The section key is `tradedesk`; `desk` (below) is the
-      // review screen that used to carry this name, and keeps its key so saved
-      // sidebar orders, how-to wording and in-app links stay pointed at it.
-      { key: 'tradedesk', label: 'Trade Desk', icon: 'zap' },
       { key: 'desk', label: 'Trade Analysis', icon: 'candlestick-chart' },
-      { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
-      { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
       // Manual Trades is a plain Advanced Trading section — your own book, kept
       // by hand. It is deliberately independent of the Funded opt-in below:
       // plenty of traders keep a manual book without ever running a challenge.
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
+      { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
+      // Premium.
+      { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
       // The nested opt-in: shown only when Funded Account is turned on as well
       // (see FUNDED_ONLY_SECTIONS + the sidebar filter). Never shown to the demo.
       { key: 'prop', label: 'Funded Account', icon: 'shield-check' },
-      { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
+      // Max — placing an order. The section key is `tradedesk`; `desk` above is
+      // the review screen that used to carry this name, and keeps its key so
+      // saved sidebar orders, how-to wording and in-app links stay pointed at it.
+      { key: 'tradedesk', label: 'Trade Desk', icon: 'zap' },
     ],
   },
   // Investments (teal) — a read-only, long-term portfolio tracker for the layman:

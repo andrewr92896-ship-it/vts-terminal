@@ -11,9 +11,22 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.33';
+export const APP_VERSION = 'Beta V 6.34';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.34',
+    date: 'August 2, 2026',
+    notes: [
+      'The sidebar keeps its workspace colours. A section that costs something now carries a small star (Premium) or diamond (Max) at the right of the row instead, and sections are stacked free first, then Premium, then Max.',
+      'To Do moved to My Terminal.',
+      'Now Max: the Trade Desk, trading teams, team chat, and adding your own live stream. Now Premium: the Market Data board, the live streams beyond Yahoo Finance, suggestions, and general support. Reporting a bug stays free for everyone.',
+      'Market Data’s economic calendar and Fed countdown stay free — only the series board is Premium.',
+      'The study screens now finish with a "Browse" and a "Create" tile instead of buttons in the corner, each showing the membership it needs.',
+      'Premium Features has a box for each tier listing what it includes, with "Your membership" over the one you hold.',
+      'The Max badge is a proper cut diamond rather than a tilted square.',
+    ],
+  },
   {
     version: 'Beta V 6.33',
     date: 'August 2, 2026',

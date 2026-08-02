@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireAdmin, requireFounder } from '../auth/middleware.js';
+import { requireAuth, requireAdmin, requireFounder, requirePremium } from '../auth/middleware.js';
 import {
   addSuggestion,
   adminReplyToBugReport,
@@ -21,6 +21,10 @@ const bodySchema = z.object({ body: z.string().trim().min(1).max(4000) });
 
 export async function feedbackRoutes(app: FastifyInstance) {
   const auth = { preHandler: requireAuth };
+  // Sending a suggestion is paid; reporting a BUG is not, and never should be —
+  // a bug report is the user doing you a favour, and charging for it means never
+  // hearing about the bug.
+  const suggest = { preHandler: [requireAuth, requirePremium('suggestions')] };
   const admin = { preHandler: requireAdmin };
   // Suggestion triage lives in the Developer Terminal, not the Admin Terminal, so
   // its management routes are founder-level. Anyone signed in can still *send*
@@ -29,7 +33,7 @@ export async function feedbackRoutes(app: FastifyInstance) {
   const founder = { preHandler: requireFounder };
 
   // ---- Suggestions ----
-  app.post('/api/feedback/suggestions', auth, async (request, reply) => {
+  app.post('/api/feedback/suggestions', suggest, async (request, reply) => {
     const parsed = bodySchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Type your suggestion to send it' });
     const u = request.currentUser!;

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { useResponsive } from '../hooks/useMediaQuery';
 import { accentGradient, type Theme } from '../theme/themes';
 import { api, ApiError } from '../api/client';
-import { isAdmin, isFounder } from '../auth/access';
+import { hasEntitlement, isAdmin, isFounder } from '../auth/access';
+import { UpgradeNotice } from './UpgradeNotice';
 import type { ChatMessage, TeamChatReason, User } from '../api/types';
 import { Icon } from './Icon';
 import { Avatar } from './Avatar';
@@ -38,6 +39,10 @@ export function TeamChat({
   const { isPhone } = useResponsive();
   const accentGrad = accentGradient(theme);
   const canModerate = isAdmin(user.roles);
+  // Team chat travels with Trading teams at Max. The tab still opens for
+  // everyone — the upgrade notice replaces the feed rather than the tab
+  // vanishing, so the feature stays discoverable.
+  const canTeamChat = hasEntitlement(user, 'teamChat');
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [eligible, setEligible] = useState<boolean | null>(null);
@@ -357,6 +362,10 @@ export function TeamChat({
                 onSend={() => void sendAdmin()}
                 onDelete={(id) => void delAdmin(id)}
               />
+            ) : !canTeamChat ? (
+              <div style={{ padding: 14 }}>
+                <UpgradeNotice feature="teamChat" />
+              </div>
             ) : eligible === false ? (
               <NotOnTeam reason={reason} accent={theme.accent} />
             ) : (

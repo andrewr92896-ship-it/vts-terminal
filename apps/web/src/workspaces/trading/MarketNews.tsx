@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
+import { hasEntitlement } from '../../auth/access';
 import { useAuth } from '../../auth/AuthContext';
 import { useNowTick } from '../../hooks/useNowTick';
 import { Icon } from '../../components/Icon';
@@ -178,7 +179,11 @@ export function MarketNews() {
   // these endpoints on `requireMarkets`. The read-only demo is the exception:
   // it watches the wall but cannot reshape what the desk sees (demoGuard refuses
   // every non-GET, so this only hides controls that would fail anyway).
-  const canWrite = !!user && !user.isDemo;
+  // Adding, renaming and removing a channel is Max (owner decision, 2026-08:
+  // Yahoo Finance is free, the rest of the seeded wall is Premium, and bringing
+  // your own channel is Max). The server refuses the writes regardless; this
+  // just stops the control offering something that would come back 402.
+  const canWrite = !!user && !user.isDemo && hasEntitlement(user, 'customStreams');
 
   // --- headline feed ---
   const [data, setData] = useState<MarketNewsData | null>(null);

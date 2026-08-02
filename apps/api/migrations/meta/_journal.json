@@ -631,6 +631,13 @@
       "when": 1782342136908,
       "tag": "0090_memberships_admin_log_dev_blog",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "6",
+      "when": 1782342236908,
+      "tag": "0091_max_badge_is_a_gem",
+      "breakpoints": true
     }
   ]
 }

@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { TeamStudyGame } from './TeamStudyGame';
 import { DeckTestMode } from './DeckTestMode';
 import { DeckProgress } from './DeckProgress';
+import { ActionTile } from './ActionTile';
 import { StudyDisclaimer } from './StudyDisclaimer';
 import { consumeStudyDeck } from './studiesNav';
 import { loadAddedSamples, saveAddedSamples } from './sampleGames';
@@ -187,14 +188,6 @@ export function StudyGameHub({
             <h3 style={sectionHeading}>
               {"Your study games"}
             </h3>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button onClick={() => setMode('browse')} style={ghostBtn(theme)}>
-                {"Browse Study Games"}
-              </button>
-              <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-                {"✦ Create a study game"}
-              </button>
-            </div>
           </div>
 
           {myGames.length === 0 ? (
@@ -206,32 +199,41 @@ export function StudyGameHub({
               <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
                 {copy.empty}
               </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap', marginTop: 16 }}>
-                {builtIn.length > 0 && (
-                  <button onClick={() => setMode('browse')} style={accentBtn(BUILTIN_ACCENT)}>
-                    {"Browse Study Games"}
-                  </button>
-                )}
-                <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-                  {"Open Study Creation"}
-                </button>
-              </div>
             </div>
-          ) : (
-            <div style={grid(isPhone)}>
-              {myGames.map((d) => (
-                <GameCard
-                  key={d.id}
-                  deck={d}
-                  theme={theme}
-                  muted={muted}
-                  accent={accentFor(d)}
-                  action={copy.action}
-                  onPick={() => openGame(d.id)}
-                />
-              ))}
-            </div>
-          )}
+          ) : null}
+
+          {/* The two action tiles close the grid — browse, then create. They are
+              shown even when the list is empty, so an empty launcher still
+              offers both ways forward. */}
+          <div style={grid(isPhone)}>
+            {myGames.map((d) => (
+              <GameCard
+                key={d.id}
+                deck={d}
+                theme={theme}
+                muted={muted}
+                accent={accentFor(d)}
+                action={copy.action}
+                onPick={() => openGame(d.id)}
+              />
+            ))}
+            <ActionTile
+              theme={theme}
+              icon="layers"
+              title="Browse Study Games"
+              subtitle="Ready-made games built into the terminal. Add the ones you want."
+              onClick={() => setMode('browse')}
+            />
+            <ActionTile
+              theme={theme}
+              icon="sparkles"
+              title="Create a study game"
+              subtitle="Write your own questions, generate them with VTS AI, or upload a file."
+              feature="studyCreation"
+              onClick={() => onNavigate('st_decks')}
+              onLockedClick={() => onNavigate('my_access')}
+            />
+          </div>
         </>
       )}
 

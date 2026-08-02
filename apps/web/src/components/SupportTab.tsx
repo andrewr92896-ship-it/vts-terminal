@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { accentGradient, type Theme } from '../theme/themes';
 import { api, ApiError } from '../api/client';
-import type { SupportKind } from '../api/types';
+import type { PremiumFeature, SupportKind } from '../api/types';
 import {
   loadThreads,
   saveThreads,
@@ -12,6 +12,8 @@ import {
   type SupportThread,
 } from '../lib/supportThreads';
 import { Icon } from './Icon';
+import { useAuth } from '../auth/AuthContext';
+import { TIER_COLORS, TIER_GLYPHS, TIER_LABELS, tierOfFeature } from '../auth/access';
 
 // The Support tab inside the corner chat bubble. The user picks a category — a
 // bug, a suggestion, or a general question — and an AI assistant collects the
@@ -23,6 +25,14 @@ import { Icon } from './Icon';
 // closing the bubble no longer throws away an in-progress request, previous
 // requests are listed at the top so they can be reopened, and anything typed but
 // not sent is restored as a draft.
+
+// Which paid feature each intake kind needs. `bug` is deliberately absent and
+// free on every account: charging to report a bug means never hearing about the
+// bug.
+const CATEGORY_FEATURE: Partial<Record<SupportKind, PremiumFeature>> = {
+  suggestion: 'suggestions',
+  support: 'supportChat',
+};
 
 const CATEGORIES: { kind: SupportKind; label: string; icon: string; blurb: string; greeting: string }[] = [
   {
@@ -64,6 +74,8 @@ function whenLabel(ms: number): string {
 
 export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: boolean; userId: string }) {
   const accentGrad = accentGradient(theme);
+  const { user } = useAuth();
+  const membership = user?.access.membership;
 
   const [threads, setThreads] = useState<SupportThread[]>(() => (isDemo ? [] : loadThreads(userId)));
   const [activeId, setActiveId] = useState<string | null>(() => (isDemo ? null : loadActiveId(userId)));
@@ -276,10 +288,21 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         <p style={{ margin: '2px 2px 4px', fontSize: 12.5, color: '#aebcd8', lineHeight: 1.55 }}>
           {"What can we help with?"}
         </p>
-        {CATEGORIES.map((c) => (
+        {CATEGORIES.map((c) => {
+          // Reporting a bug is free on every account and always will be — a bug
+          // report is the user doing you a favour. Suggestions and general
+          // support are paid, and are shown locked rather than hidden so a free
+          // account can see what a membership would open up.
+          const feature = CATEGORY_FEATURE[c.kind];
+          const tier = feature ? tierOfFeature(feature, membership) : null;
+          const locked = !!feature && !membership?.entitlements[feature];
+          const tierColor = tier ? TIER_COLORS[tier] : null;
+          const tierGlyph = tier ? TIER_GLYPHS[tier] : null;
+          return (
           <button
             key={c.kind}
-            onClick={() => startThread(c.kind)}
+            onClick={() => (locked ? undefined : startThread(c.kind))}
+            title={locked && tier ? `Needs a ${TIER_LABELS[tier]} membership` : undefined}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -317,8 +340,30 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
                 {c.blurb}
               </span>
             </span>
+            {tierGlyph && tierColor && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  marginLeft: 'auto',
+                  flex: 'none',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  color: tierColor,
+                  border: `1px solid ${tierColor}55`,
+                  background: `${tierColor}14`,
+                  borderRadius: 999,
+                  padding: '2px 8px',
+                }}
+              >
+                <Icon name={tierGlyph} size={11} color={tierColor} />
+                {TIER_LABELS[tier!]}
+              </span>
+            )}
           </button>
-        ))}
+          );
+        })}
       </div>
     );
   }

@@ -1,4 +1,5 @@
 import { useEffect, useState, type CSSProperties } from 'react';
+import { ActionTile } from './ActionTile';
 import { api } from '../../api/client';
 import type { TeamFlashcardSet, TeamFlashcardSetDetail } from '../../api/types';
 import type { Theme } from '../../theme/themes';
@@ -18,7 +19,6 @@ export function FlashcardsHub({ theme, onNavigate }: { theme: Theme; onNavigate:
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
-  const accentGrad = accentGradient(theme);
 
   const [sets, setSets] = useState<TeamFlashcardSet[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,11 +63,6 @@ export function FlashcardsHub({ theme, onNavigate }: { theme: Theme; onNavigate:
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#fff' }}>
           {"Your team’s flashcard sets"}
         </h3>
-        {!readOnly && (
-          <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-            {"✦ Create a flashcard set"}
-          </button>
-        )}
       </div>
 
       {loading ? (
@@ -78,26 +73,24 @@ export function FlashcardsHub({ theme, onNavigate }: { theme: Theme; onNavigate:
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
           {"Couldn’t load your team’s flashcard sets. Try again in a moment."}
         </div>
-      ) : sets.length === 0 ? (
-        <div style={{ ...card(theme), textAlign: 'center' }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>🃏</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-            {"No flashcard sets yet"}
-          </div>
-          <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>
-            {"Build one in Study Creation — type the cards in, generate them from a topic with AI, or upload a text file — and it shows up here to study."}
-          </div>
-          {!readOnly && (
-            <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGrad), marginTop: 16 }}>
-              {"Open Study Creation"}
-            </button>
-          )}
-        </div>
       ) : (
+        // The create tile closes the grid, so an empty launcher still offers the
+        // way forward without a separate empty-state block.
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 12 }}>
           {sets.map((s) => (
             <SetCard key={s.id} set={s} theme={theme} onStudy={() => setPlaying(s.id)} />
           ))}
+          {!readOnly && (
+            <ActionTile
+              theme={theme}
+              icon="sparkles"
+              title="Create a flashcard set"
+              subtitle="Type the cards in, generate them from a topic with VTS AI, or upload a file."
+              feature="studyCreation"
+              onClick={() => onNavigate('st_decks')}
+              onLockedClick={() => onNavigate('my_access')}
+            />
+          )}
         </div>
       )}
     </div>

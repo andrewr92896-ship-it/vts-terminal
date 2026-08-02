@@ -217,7 +217,10 @@ workspaces list** (see `theme/nav.ts` order).
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
   Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
   Manual Trades (`funded` key, `FundedScreen`), **Funded Account**
-  (`prop` key — the nested opt-in; prop-firm challenge dashboard), To Do.
+  (`prop` key — the nested opt-in; prop-firm challenge dashboard). **To Do moved
+  to My Terminal** (owner decision, 2026-08 — a to-do list is personal, not a
+  desk instrument); its key is still `td_trading`, so saved `nav.order`
+  overrides and in-app links keep working.
   Market Data and Market News moved to **Markets**; their section keys are
   unchanged (`data` / `news`), so saved `nav.order` overrides, `howto` wording
   and in-app links keep working.
@@ -966,9 +969,10 @@ needs the membership *type* for the public user — importing each other would b
 cycle.
 
 - **`FEATURE_TIER` is the entire paywall, in one object.** Eight paid features
-  (owner decision, 2026-08): `ai` (**Max**), plus `brokerConnections`, `funded`,
-  `studyCreation`, `customBoards`, `teams`, `premiumBadges` and
-  `strategySessions` at **Premium**. Everything absent
+  (owner decisions, 2026-08). **Max:** `ai`, `tradeDesk`, `teams`, `teamChat`,
+  `customStreams`. **Premium:** `brokerConnections`, `funded`, `studyCreation`,
+  `customBoards`, `premiumBadges`, `strategySessions`, `marketData`,
+  `presetStreams`, `suggestions`, `supportChat`. Everything absent
   from that map is included with every account. **Moving a feature between tiers
   is a one-word edit there** and every guard, lock icon and upgrade prompt
   follows — that is the whole reason features ask `hasEntitlement(user, 'ai')` and
@@ -1019,42 +1023,59 @@ cycle.
   `FEATURE_LABELS`, `TIER_COLORS`) reading the maps the **server** computed, rather
   than comparing tiers itself — so moving a feature between tiers never leaves the
   client stale. `components/UpgradeNotice.tsx` is the one upgrade prompt.
-- **The sidebar is colour-coded by tier** (owner decision, 2026-08): a section
-  needing **Premium is yellow** (`#EBCB74`), one needing **Max is diamond blue**
-  (`#B9F2FF`), and one needing nothing keeps the workspace's own accent. Free is
-  deliberately `null` rather than a colour, so the palette marks what **costs**
-  something instead of repainting the whole sidebar.
-  - The colour **replaces** the workspace accent on that row — icon, label and the
-    active highlight — so a paid section reads the same whether or not it happens
-    to be selected.
-  - `SECTION_FEATURE` / `WORKSPACE_FEATURE` (`auth/access.ts`) map a nav key to the
-    paid feature gating it; `tierColorFor` resolves the colour through
+- **The sidebar is MARKED by tier, not coloured by it** (owner decision,
+  2026-08 — colouring the rows was tried first and reverted). Every row keeps its
+  workspace accent; a section that costs something carries a small **star**
+  (Premium, `#EBCB74`) or **diamond** (Max, `#B9F2FF`) at the **right** of the
+  row. Shown to **everyone**, including a Max member — the nav's job here is to
+  say what each part costs, not to act purely as a lock.
+  - `SECTION_FEATURE` / `WORKSPACE_FEATURE` (`auth/access.ts`) map a nav key to
+    the paid feature gating it; `tierForKey` resolves the tier through
     `membership.featureTiers`, which the **server** sends. That is why
     `MembershipView` carries `featureTiers` as well as `entitlements`: the two
     answer different questions — what this account can REACH, versus what a
-    feature COSTS. The sidebar needs the second, so a Max member still sees which
-    sections are paid rather than a uniformly default nav.
-  - **Only wholly-gated sections are listed.** Three paid features have no section
-    (`ai` is the top-bar button, `brokerConnections` lives in Settings,
-    `premiumBadges` is a per-member setting), and `customBoards` is left out on
-    purpose: the Live Wall itself is free — a free account gets the preset boards,
-    a working screen — and only *saving your own* arrangement is paid, so
-    colouring the whole section would overstate the paywall.
+    feature COSTS. The badge needs the second.
+  - **Sections stack free → Premium → Max** inside each workspace, in the `NAV`
+    array itself, so a founder's saved `nav.order` override still wins over it.
+  - **Only wholly-gated sections are marked.** Several paid features have no
+    section (`ai` is the top-bar button, `brokerConnections` lives in Settings,
+    `premiumBadges` is a per-member setting, and `teamChat` / `suggestions` /
+    `supportChat` are chat-bubble tabs). `customBoards` is left out on purpose:
+    the Live Wall itself is free — a free account gets the preset boards, a
+    working screen — and only *saving your own* arrangement is paid, so marking
+    the whole section would overstate the paywall.
   - `WORKSPACE_FEATURE` is **empty**, and that is correct rather than unfinished:
     no workspace is entirely paid, and marking one that is not would be a false
-    claim about every free section inside it (Advanced Trading holds the Trade
-    Desk, Trade Analysis, alerts and the manual book). It is the seam for when one
-    is — add a key and the row colours itself.
+    claim about every free section inside it.
+  - **`gem`, not `diamond`.** In this icon set `diamond` is a rounded tilted
+    square; `gem` is the brilliant-cut jewel. Migration `0091` corrects the badge
+    row seeded with the wrong one, guarded on the old value so an admin's own
+    choice from Admin ▸ Badges is not overwritten.
   - The **badge colours are the same two values** (`badges/service.ts`): the
-    Premium star is `#EBCB74`, the Max diamond `#B9F2FF`. Change one and change
-    the other, or a Premium section stops matching the Premium star. Both are
-    kept icier/warmer than the Markets accent (`#5AC8FA`) so a tier marker is
-    never read as a workspace one.
-  - **`ai` is the only feature at `max` today** (owner decision, 2026-08 — it is
-    the one paid feature with a real per-use cost to run). It has no section of
-    its own, so nothing in the sidebar renders blue yet; the blue shows up on the
-    Premium Features card and on the Ask VTS AI prompt. Moving a feature that
-    *does* own a section to `'max'` is what puts blue in the nav.
+    Premium star is `#EBCB74`, the Max gem `#B9F2FF`. Change one and change the
+    other. Both are kept icier/warmer than the Markets accent (`#5AC8FA`) so a
+    tier marker is never read as a workspace one.
+- **Three splits worth keeping**, each of which exists so a free account is a
+  working product rather than a teaser:
+  - **Market Data** — the series board is Premium; the **economic calendar and
+    the FOMC countdown on that same screen are free**. A free account renders the
+    calendar on its own return path in `MarketData.tsx` rather than threading a
+    null payload through every board computation.
+  - **Market News streams** — **Yahoo Finance is free**, the rest of the seeded
+    wall is Premium (`presetStreams`, filtered in `routes/trading.ts` by
+    `FREE_CHANNEL_KEYS`), and adding your own channel is Max (`customStreams`).
+  - **The chat bubble** — **reporting a bug is free on every account and must
+    stay that way**: a bug report is the user doing you a favour, and charging
+    for it means never hearing about the bug. Suggestions and general support are
+    Premium, gated **by kind inside** `/api/support/message` rather than by a
+    preHandler, since one endpoint serves all three intake types.
+- **Studies: making is paid, playing is not.** A free account works through every
+  built-in game, flashcard set and guide and keeps its progress, streak and
+  level; authoring is `studyCreation`. Each launcher ends with a **Browse tile**
+  and a **Create tile** in the grid rather than buttons in the corner (owner
+  decision, 2026-08), and a locked tile is **shown with its tier badge, never
+  hidden** — somebody on a free account has to be able to see what upgrading
+  would let them do. `workspaces/studies/ActionTile.tsx` is that tile.
 - **The Ask VTS AI button stays in the top bar for everyone** (owner instruction).
   Hiding it would leave a free account unable to discover the feature exists, so
   the panel opens as normal and the composer is replaced by the upgrade notice.
