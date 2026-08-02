@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.35';
+export const APP_VERSION = 'Beta V 6.36';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.36',
+    date: 'August 2, 2026',
+    notes: [
+      'The first badge beside a name is now the account status — founder, software developer, admin, Max or Premium — and only one of them shows. A founder, software developer or admin no longer also carries a Max or Premium badge, since those accounts reach everything Max does anyway.',
+      'The Ask VTS AI button carries the Max diamond, so the button says what the feature costs.',
+    ],
+  },
   {
     version: 'Beta V 6.35',
     date: 'August 2, 2026',

@@ -7,7 +7,7 @@ import type { AdminUser, MembershipTier, RoleKey, Team } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { Icon } from '../../components/Icon';
-import { UserBadges, useBadgeRegistry } from '../../components/UserBadges';
+import { MEMBERSHIP_BADGE_KEYS, UserBadges, useBadgeRegistry } from '../../components/UserBadges';
 import {
   Badge,
   SectionHeader,
@@ -53,8 +53,13 @@ export function AdminUsers({ theme }: { theme: Theme }) {
     me ? canGrantRole({ owner: me.access.owner, founder: me.access.founder }, r) : false,
   );
   const badgeRegistry = useBadgeRegistry();
-  // Only non-auto badges are hand-assigned; auto badges (e.g. Admin) come from roles.
-  const assignableBadges = badgeRegistry.filter((b) => !b.autoRole);
+  // Only non-auto badges are hand-assigned; auto badges (e.g. Admin) come from
+  // roles, and the two membership badges from the tier. Mirrors the server's
+  // assignableBadgeKeys(), which drops anything else silently — so offering
+  // Premium/Max here was a toggle that did nothing.
+  const assignableBadges = badgeRegistry.filter(
+    (b) => !b.autoRole && !MEMBERSHIP_BADGE_KEYS.includes(b.key),
+  );
 
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);

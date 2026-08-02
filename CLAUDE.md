@@ -1027,7 +1027,22 @@ cycle.
   excluded from `assignableBadgeKeys()` and appended on read in `toPublicUser`, so
   they appear and disappear with the membership and no admin can hand one out as
   decoration. Free has **no** badge — a badge meaning "has not paid" is a mark, not
-  recognition.
+  recognition. The admin picker in `AdminUsers` mirrors that exclusion; before it
+  did, Premium and Max were offered as toggles the server then dropped in silence.
+- **One account-status badge, and it leads the row** (owner decision, 2026-08).
+  `STATUS_ORDER` in `components/UserBadges.tsx` ranks founder → software developer
+  → admin → Max → Premium, and `effectiveBadges` shows **only the highest** of
+  them, first, with the recognition badges (Early Release, the designations)
+  after. A rung is matched on a badge's `autoRole` where it has one and its `key`
+  otherwise — the role badges are the only rows carrying an `autoRole`, and
+  `premium`/`max` are the two membership keys, neither of which an admin can edit.
+  - **A role badge replaces a tier badge**, because `getMembership` resolves
+    admins, software developers and founders to Max without a stored grant — so a
+    crown beside a gem states the same fact twice. For the same reason a founder
+    shows no admin shield: founder-level is a superset of admin.
+  - The tier badge is still **appended server-side** and only suppressed for
+    display, so nothing about who holds what changes — this is which of the
+    earned badges gets drawn.
 - **The web mirror** is `auth/access.ts` (`hasEntitlement`, `TIER_LABELS`,
   `FEATURE_LABELS`, `TIER_COLORS`) reading the maps the **server** computed, rather
   than comparing tiers itself — so moving a feature between tiers never leaves the
