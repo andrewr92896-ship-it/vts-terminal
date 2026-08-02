@@ -2,20 +2,15 @@ import type { Theme } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { Icon } from '../../components/Icon';
 
-// The Investments workspace foundation. Every section here is a themed
-// "Coming Soon" placeholder describing what the section will do once its data is
-// wired. The workspace is a read-only, layman-friendly long-term portfolio
-// tracker (401k / IRA / ESA / general holdings): it displays and educates, it
-// never executes trades or moves money, and it carries no personalized
-// buy/sell/rebalance advice — hence the "informational only" note on every card.
+// Themed "Coming Soon" placeholders for the sections that are not built yet.
 //
-// The same component also backs the My Terminal ▸ Investment Holdings summary,
-// which will combine active Advanced Trading positions with the long-term
-// Investments portfolio.
+// The Investments workspace itself IS built — see workspaces/investments/. What
+// is left here are the two My Terminal roll-ups, and they are last for a reason:
+// each one summarises across workspaces (Advanced Trading positions plus the
+// long-term Investments portfolio; then every asset and liability on top of
+// that), so neither can be right until the thing it summarises exists.
 
 interface SectionInfo {
-  /** EditableText id stem — `<stem>.title` / `<stem>.blurb`. */
-  id: string;
   icon: string;
   title: string;
   blurb: string;
@@ -25,75 +20,16 @@ const SECTIONS: Record<string, SectionInfo> = {
   // My Terminal — the combined views across trading, long-term investing, and your
   // whole financial life.
   my_holdings: {
-    id: 'myportal.holdings',
     icon: 'gem',
     title: 'Investment Holdings',
     blurb:
       'Your whole picture in one place — active Advanced Trading positions merged with your long-term Investments portfolio, plus the combined value, day change, and all-time performance across both.',
   },
   my_networth: {
-    id: 'myportal.networth',
     icon: 'scale',
     title: 'Net Worth',
     blurb:
       'Your complete financial picture in one number, tracked over time — everything you own (cash, investments, real estate, crypto, vehicles) minus everything you owe (loans, cards, mortgage). Add assets and liabilities by hand or pull them in read-only.',
-  },
-  // Investments workspace sections.
-  inv_overview: {
-    id: 'inv.overview',
-    icon: 'layout-dashboard',
-    title: 'Portfolio Overview',
-    blurb:
-      "A single dashboard for every connected account: total value, today's move, all-time gain, and your top movers at a glance.",
-  },
-  inv_accounts: {
-    id: 'inv.accounts',
-    icon: 'building-2',
-    title: 'Accounts',
-    blurb:
-      'Connect your 401(k), IRA, ESA, and brokerage accounts read-only through a secure aggregator (Plaid / SnapTrade), or add holdings by hand. Balances and positions only — never trade access.',
-  },
-  inv_holdings: {
-    id: 'inv.holdings',
-    icon: 'layers',
-    title: 'Holdings',
-    blurb:
-      "Every security you own across all accounts, with cost basis, unrealized gain/loss, and each position's weight in your portfolio.",
-  },
-  inv_allocation: {
-    id: 'inv.allocation',
-    icon: 'gauge',
-    title: 'Allocation',
-    blurb:
-      "See how you're diversified — by asset class, sector, and region — with plain-English flags when any one holding gets too concentrated.",
-  },
-  inv_performance: {
-    id: 'inv.performance',
-    icon: 'trending-up',
-    title: 'Performance',
-    blurb:
-      'Your returns over time next to a benchmark like the S&P 500, split into what you contributed versus what the market did.',
-  },
-  inv_dividends: {
-    id: 'inv.dividends',
-    icon: 'banknote',
-    title: 'Dividends & Income',
-    blurb:
-      'Track the income your portfolio pays — dividend history, forward yield, and an ex-dividend / payout calendar.',
-  },
-  inv_contributions: {
-    id: 'inv.contributions',
-    icon: 'piggy-bank',
-    title: 'Contributions & Goals',
-    blurb:
-      'Follow your 401(k) and IRA contributions against the annual limits and watch progress toward your savings goals for retirement or education.',
-  },
-  inv_projections: {
-    id: 'inv.projections',
-    icon: 'sparkles',
-    title: 'Projections',
-    blurb:
-      'Estimate where your portfolio could land over the years with simple compound-growth projections. Estimates only — informational, not investment advice.',
   },
 };
 

@@ -24,6 +24,11 @@ import {
   marketDataLayout,
   marketNewsStreams,
   priceAlerts,
+  investmentAccounts,
+  investmentHoldings,
+  investmentTransactions,
+  investmentSnapshots,
+  investmentGoals,
   widgetTokens,
   supportRequests,
   supportRequestMessages,
@@ -381,6 +386,17 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(marketDataLayout).where(eq(marketDataLayout.userId, targetId));
     await tx.delete(marketNewsStreams).where(eq(marketNewsStreams.userId, targetId));
     await tx.delete(priceAlerts).where(eq(priceAlerts.userId, targetId));
+    // The Investments workspace — accounts, the holdings inside them, the money
+    // in and out, the dated portfolio readings, and the savings goals. Every one
+    // is owner-scoped and personal (nothing here is ever team-visible), so a
+    // deleted account takes all of it. Ordered children-first: the foreign keys
+    // would cascade these anyway, but the convention in this list is to state
+    // every table explicitly rather than depend on that.
+    await tx.delete(investmentTransactions).where(eq(investmentTransactions.userId, targetId));
+    await tx.delete(investmentHoldings).where(eq(investmentHoldings.userId, targetId));
+    await tx.delete(investmentGoals).where(eq(investmentGoals.userId, targetId));
+    await tx.delete(investmentSnapshots).where(eq(investmentSnapshots.userId, targetId));
+    await tx.delete(investmentAccounts).where(eq(investmentAccounts.userId, targetId));
     await tx.delete(widgetTokens).where(eq(widgetTokens.userId, targetId));
     await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));
     await tx.delete(tradingChallenges).where(eq(tradingChallenges.userId, targetId));

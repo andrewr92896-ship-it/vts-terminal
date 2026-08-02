@@ -603,6 +603,13 @@
       "when": 1782341736908,
       "tag": "0085_connection_labels_name_the_venue",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "6",
+      "when": 1782341836908,
+      "tag": "0087_investments",
+      "breakpoints": true
     }
   ]
 }

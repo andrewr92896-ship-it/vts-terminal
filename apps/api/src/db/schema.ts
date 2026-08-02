@@ -1080,6 +1080,197 @@ export const priceAlerts = sqliteTable('price_alerts', {
 });
 export type PriceAlertRow = typeof priceAlerts.$inferSelect;
 
+// ---- Investments — the long-term portfolio tracker ----
+// Everything below belongs to the Investments workspace: a read-only tracker for
+// 401(k), IRA, ESA and brokerage money. It displays and educates; it never places
+// an order and never moves money, so there is deliberately no credential column
+// anywhere in here and no table that could carry one. Every row is owner-scoped
+// by `user_id` — unlike Trading, an investment account is personal and is never
+// shown to a teammate.
+
+export const INVESTMENT_ACCOUNT_KINDS = [
+  '401k',
+  'roth_401k',
+  '403b',
+  'ira',
+  'roth_ira',
+  'sep_ira',
+  'simple_ira',
+  'hsa',
+  'esa',
+  '529',
+  'brokerage',
+  'other',
+] as const;
+export type InvestmentAccountKind = (typeof INVESTMENT_ACCOUNT_KINDS)[number];
+
+// How an account's data got here. Only `manual` exists today — the aggregator
+// paths (Plaid / SnapTrade) are the planned read-only connection and are named
+// now so wiring one later is a new value rather than a new column.
+export const INVESTMENT_ACCOUNT_SOURCES = ['manual', 'plaid', 'snaptrade'] as const;
+export type InvestmentAccountSource = (typeof INVESTMENT_ACCOUNT_SOURCES)[number];
+
+// One row per account the user tracks. `cash_balance` is the uninvested cash
+// sitting in the account, which counts toward its value but is not a holding.
+export const investmentAccounts = sqliteTable('investment_accounts', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: INVESTMENT_ACCOUNT_KINDS }).notNull().default('brokerage'),
+  label: text('label').notNull(), // the user's own name for it, e.g. "Fidelity 401(k)"
+  institution: text('institution'), // e.g. "Fidelity" — free text, optional
+  source: text('source', { enum: INVESTMENT_ACCOUNT_SOURCES }).notNull().default('manual'),
+  cashBalance: real('cash_balance').notNull().default(0),
+  note: text('note'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type InvestmentAccountRow = typeof investmentAccounts.$inferSelect;
+
+// What a holding is, for the Allocation screen. Deliberately coarse and
+// self-declared: without a data provider nothing here can be looked up, so the
+// user states it and the screen reports what they stated rather than guessing a
+// classification and presenting it as fact.
+export const INVESTMENT_ASSET_CLASSES = [
+  'us_stock',
+  'intl_stock',
+  'bond',
+  'cash',
+  'real_estate',
+  'commodity',
+  'crypto',
+  'target_date',
+  'other',
+] as const;
+export type InvestmentAssetClass = (typeof INVESTMENT_ASSET_CLASSES)[number];
+
+// A position inside an account. `symbol` is nullable on purpose: plenty of 401(k)
+// menus hold collective trusts and target-date funds that have a name but no
+// public ticker, and refusing those would make the tracker useless for exactly
+// the accounts it exists to track. `name` is what always renders.
+//
+// `manual_price` is the per-share mark the user entered, with `manual_price_at`
+// stamping when. A live quote overlays it when one can be fetched; when none can
+// be, this is what the holding is worth and every surface says so rather than
+// implying the figure is live.
+export const investmentHoldings = sqliteTable('investment_holdings', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => investmentAccounts.id, { onDelete: 'cascade' }),
+  symbol: text('symbol'), // uppercase ticker, or null for an unlisted fund
+  name: text('name').notNull(),
+  assetClass: text('asset_class', { enum: INVESTMENT_ASSET_CLASSES }).notNull().default('other'),
+  quantity: real('quantity').notNull().default(0),
+  costBasis: real('cost_basis'), // total dollars paid, not per share; null if unknown
+  manualPrice: real('manual_price'),
+  manualPriceAt: integer('manual_price_at', { mode: 'timestamp_ms' }),
+  sector: text('sector'), // optional, user-stated
+  region: text('region'), // optional, user-stated
+  note: text('note'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type InvestmentHoldingRow = typeof investmentHoldings.$inferSelect;
+
+export const INVESTMENT_TX_KINDS = [
+  'contribution',
+  'employer_match',
+  'dividend',
+  'interest',
+  'buy',
+  'sell',
+  'fee',
+  'withdrawal',
+] as const;
+export type InvestmentTxKind = (typeof INVESTMENT_TX_KINDS)[number];
+
+// Money moving into, out of, or around an account. This is what makes
+// Contributions & Goals and Dividends & Income real rather than estimated.
+//
+// `symbol` is denormalized rather than derived through `holding_id` so a
+// dividend keeps naming what paid it after the holding is sold and deleted —
+// income history that vanishes when you close a position is worse than none.
+// `tax_year` is stored separately from `occurred_at` because a contribution made
+// in January can be designated to the previous tax year, and the annual limit is
+// scored on the designation, not the calendar date.
+export const investmentTransactions = sqliteTable('investment_transactions', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id')
+    .notNull()
+    .references(() => investmentAccounts.id, { onDelete: 'cascade' }),
+  holdingId: text('holding_id').references(() => investmentHoldings.id, { onDelete: 'set null' }),
+  kind: text('kind', { enum: INVESTMENT_TX_KINDS }).notNull(),
+  amount: real('amount').notNull(), // dollars, always positive; `kind` gives direction
+  quantity: real('quantity'), // shares, for buy/sell
+  symbol: text('symbol'),
+  occurredAt: integer('occurred_at', { mode: 'timestamp_ms' }).notNull(),
+  taxYear: integer('tax_year'), // the year this counts against, for contributions
+  note: text('note'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type InvestmentTransactionRow = typeof investmentTransactions.$inferSelect;
+
+// One dated reading of the whole portfolio, which is what Performance is drawn
+// from. Deliberately whole-portfolio rather than per-account: an account opened
+// last month would otherwise leave a hole in the history the day it appeared.
+//
+// Keyed on an ET calendar date (`on_date`, "YYYY-MM-DD") rather than a timestamp
+// so a day has exactly one reading no matter how often the screen is opened, and
+// so the series means the same thing to a user in any timezone — the same reason
+// trade stamps are Eastern everywhere else in the terminal.
+//
+// `contributed_to_date` is what makes the "what you put in vs. what the market
+// did" split honest: without it, a rising line cannot be told from a line that
+// rose only because money was added.
+export const investmentSnapshots = sqliteTable(
+  'investment_snapshots',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    onDate: text('on_date').notNull(), // ET calendar date, "YYYY-MM-DD"
+    value: real('value').notNull(),
+    costBasis: real('cost_basis'),
+    contributedToDate: real('contributed_to_date'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ userDate: unique('investment_snapshots_user_date').on(t.userId, t.onDate) }),
+);
+export type InvestmentSnapshotRow = typeof investmentSnapshots.$inferSelect;
+
+export const INVESTMENT_GOAL_KINDS = ['retirement', 'education', 'general'] as const;
+export type InvestmentGoalKind = (typeof INVESTMENT_GOAL_KINDS)[number];
+
+// A savings target. `account_id` is nullable — a goal either tracks one account
+// or the whole portfolio.
+export const investmentGoals = sqliteTable('investment_goals', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  accountId: text('account_id').references(() => investmentAccounts.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: INVESTMENT_GOAL_KINDS }).notNull().default('general'),
+  label: text('label').notNull(),
+  targetAmount: real('target_amount').notNull(),
+  targetDate: text('target_date'), // "YYYY-MM-DD", or null for no deadline
+  note: text('note'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type InvestmentGoalRow = typeof investmentGoals.$inferSelect;
+
 // One row per user holding the serialized Study Game state (per-category levels,
 // scores, and answer history), so quiz progress follows the learner across
 // devices instead of living only in that browser's localStorage.

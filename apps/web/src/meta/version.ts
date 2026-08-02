@@ -11,9 +11,22 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.22';
+export const APP_VERSION = 'Beta V 6.23';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.23',
+    date: 'August 2, 2026',
+    notes: [
+      'The Investments workspace is open. It was eight “Coming Soon” cards; all eight are now real screens — Portfolio Overview, Accounts, Holdings, Allocation, Performance, Dividends & Income, Contributions & Goals, and Projections.',
+      'Add your accounts — 401(k), IRA, Roth, ESA, HSA, brokerage — and what each one holds, and the rest fills itself in: total value, what you have gained, how you are spread across stocks, bonds and cash, and what each account is worth on its own.',
+      'Contributions are tracked against the annual IRS limits, so you can see how much room you have left this tax year. Employer match is shown beside your own figure rather than counted against your limit. Savings goals track alongside, either against one account or your whole portfolio.',
+      'Where a holding cannot be priced automatically, you enter the price and the terminal says so plainly — every holding is labelled “live price” or “your price”, and anything with no price at all is left out of the totals and flagged rather than quietly counted as zero.',
+      'Performance separates what you paid in from what the market actually did, so a balance that only grew because you kept contributing does not read as a gain. It starts recording the day you first open the workspace and builds from there — it cannot show history from before that, because there is no way to look up what your funds were worth last year.',
+      'Accounts are entered by hand for now. Connecting them automatically needs a paid read-only service (Plaid or SnapTrade), which is a decision rather than a build — the Accounts screen explains where that stands.',
+      'Investments is a tracker. It never places a trade, never moves money, and nothing in it is investment, tax or financial advice.',
+    ],
+  },
   {
     version: 'Beta V 6.22',
     date: 'August 2, 2026',

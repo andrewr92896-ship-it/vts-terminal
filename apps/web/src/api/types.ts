@@ -1692,3 +1692,270 @@ export interface TradeInput {
   closedAt?: number | null;
   notes?: string | null;
 }
+
+// ---- Investments — the long-term portfolio tracker ----
+// Mirrors apps/api/src/investments/*. Every figure here is per-user: this
+// workspace has no team scope, unlike Trading.
+
+export type InvestmentAccountKind =
+  | '401k'
+  | 'roth_401k'
+  | '403b'
+  | 'ira'
+  | 'roth_ira'
+  | 'sep_ira'
+  | 'simple_ira'
+  | 'hsa'
+  | 'esa'
+  | '529'
+  | 'brokerage'
+  | 'other';
+
+export type InvestmentAssetClass =
+  | 'us_stock'
+  | 'intl_stock'
+  | 'bond'
+  | 'cash'
+  | 'real_estate'
+  | 'commodity'
+  | 'crypto'
+  | 'target_date'
+  | 'other';
+
+export type InvestmentTxKind =
+  | 'contribution'
+  | 'employer_match'
+  | 'dividend'
+  | 'interest'
+  | 'buy'
+  | 'sell'
+  | 'fee'
+  | 'withdrawal';
+
+export type InvestmentGoalKind = 'retirement' | 'education' | 'general';
+
+// Where a holding's price came from. `none` means no price exists at all — such
+// a holding is excluded from every total rather than counted as zero, which is
+// why the screens report `unpricedCount` beside any figure.
+export type InvestmentPriceSource = 'live' | 'manual' | 'none';
+
+export interface InvestmentAccount {
+  id: string;
+  kind: InvestmentAccountKind;
+  label: string;
+  institution: string | null;
+  source: 'manual' | 'plaid' | 'snaptrade';
+  cashBalance: number;
+  note: string | null;
+  active: boolean;
+  sortOrder: number;
+  value: number;
+  holdingsCount: number;
+  unpricedCount: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface InvestmentHolding {
+  id: string;
+  accountId: string;
+  accountLabel: string;
+  symbol: string | null;
+  name: string;
+  assetClass: InvestmentAssetClass;
+  quantity: number;
+  costBasis: number | null;
+  price: number | null;
+  priceSource: InvestmentPriceSource;
+  previousClose: number | null;
+  sector: string | null;
+  region: string | null;
+  value: number | null;
+  gain: number | null;
+  gainPct: number | null;
+  dayChange: number | null;
+  dayChangePct: number | null;
+  manualPrice: number | null;
+  manualPriceAt: number | null;
+  note: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface InvestmentTotals {
+  value: number;
+  cash: number;
+  costBasis: number;
+  gain: number;
+  gainPct: number | null;
+  dayChange: number;
+  /** 0..1 — the share of holding value the day move actually covers. */
+  dayChangeCoverage: number;
+  unpricedCount: number;
+  manualCount: number;
+  livePricedCount: number;
+}
+
+export interface InvestmentBucket {
+  key: string;
+  label: string;
+  value: number;
+  pct: number;
+}
+
+export interface InvestmentFlag {
+  severity: 'note' | 'watch';
+  text: string;
+}
+
+export interface InvestmentPortfolio {
+  accounts: InvestmentAccount[];
+  holdings: InvestmentHolding[];
+  totals: InvestmentTotals;
+  allocation: {
+    byClass: InvestmentBucket[];
+    bySector: InvestmentBucket[];
+    byRegion: InvestmentBucket[];
+    flags: InvestmentFlag[];
+  };
+  livePricesConfigured: boolean;
+  asOf: number;
+}
+
+export interface InvestmentAccountInput {
+  kind: InvestmentAccountKind;
+  label: string;
+  institution?: string | null;
+  cashBalance?: number;
+  note?: string | null;
+  active?: boolean;
+  sortOrder?: number;
+}
+
+export interface InvestmentHoldingInput {
+  accountId: string;
+  symbol?: string | null;
+  name: string;
+  assetClass: InvestmentAssetClass;
+  quantity: number;
+  costBasis?: number | null;
+  manualPrice?: number | null;
+  sector?: string | null;
+  region?: string | null;
+  note?: string | null;
+}
+
+export interface InvestmentTransaction {
+  id: string;
+  accountId: string;
+  accountLabel: string;
+  holdingId: string | null;
+  kind: InvestmentTxKind;
+  amount: number;
+  quantity: number | null;
+  symbol: string | null;
+  occurredAt: number;
+  taxYear: number | null;
+  note: string | null;
+}
+
+export interface InvestmentTransactionInput {
+  accountId: string;
+  holdingId?: string | null;
+  kind: InvestmentTxKind;
+  amount: number;
+  quantity?: number | null;
+  symbol?: string | null;
+  occurredAt: number;
+  taxYear?: number | null;
+  note?: string | null;
+}
+
+export interface InvestmentContributionGroup {
+  group: string;
+  label: string;
+  contributed: number;
+  employerMatch: number;
+  /** Null when the catalog has no IRS figures for that tax year. */
+  limit: number | null;
+  catchUp50: number | null;
+  limitNote?: string;
+  remaining: number | null;
+  pct: number | null;
+}
+
+export interface InvestmentGoal {
+  id: string;
+  accountId: string | null;
+  accountLabel: string | null;
+  kind: InvestmentGoalKind;
+  label: string;
+  targetAmount: number;
+  targetDate: string | null;
+  note: string | null;
+  current: number;
+  pct: number;
+}
+
+export interface InvestmentGoalInput {
+  accountId?: string | null;
+  kind: InvestmentGoalKind;
+  label: string;
+  targetAmount: number;
+  targetDate?: string | null;
+  note?: string | null;
+}
+
+export interface InvestmentContributions {
+  taxYear: number;
+  limitsKnown: boolean;
+  latestLimitYear: number;
+  groups: InvestmentContributionGroup[];
+  goals: InvestmentGoal[];
+  uncappedContributed: number;
+}
+
+export interface InvestmentSnapshotPoint {
+  onDate: string;
+  value: number;
+  contributedToDate: number | null;
+}
+
+export interface InvestmentPerformanceSummary {
+  startValue: number;
+  endValue: number;
+  contributed: number;
+  marketGain: number;
+  marketGainPct: number | null;
+  days: number;
+}
+
+export interface InvestmentPerformance {
+  points: InvestmentSnapshotPoint[];
+  summary: InvestmentPerformanceSummary | null;
+  totalDays: number;
+  rangeDays: number;
+}
+
+export interface InvestmentDividends {
+  entries: InvestmentTransaction[];
+  monthly: { month: string; amount: number }[];
+  totalLast12: number;
+  totalAllTime: number;
+  trailingYieldPct: number | null;
+  bySymbol: { symbol: string; amount: number }[];
+}
+
+export interface InvestmentProjectionPoint {
+  year: number;
+  value: number;
+  contributed: number;
+}
+
+export interface InvestmentProjection {
+  points: InvestmentProjectionPoint[];
+  startValue: number;
+  monthlyContribution: number;
+  annualRatePct: number;
+  years: number;
+}
