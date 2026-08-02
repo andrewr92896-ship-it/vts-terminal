@@ -123,6 +123,13 @@ entity that carries metals; see the entity note below and the Stooq note under
   - A release happening **today counts as the last one, not the next** — the
     figure is out, and calling today the "next review" recreates the past-date
     problem the column just escaped.
+  - **Four rows carry a third-party licence.** `us500`, `us100`, `us30` and
+    `vix` come through FRED from S&P Dow Jones Indices, Nasdaq OMX and Cboe,
+    who license their index values — unlike the government series around them,
+    which are public domain. Fine for a private install; a **paid public**
+    launch needs this checked (see the launch-blocker list in `CLAUDE.md`). It
+    is also why FRED's release calendar has no forward dates for them, so those
+    rows keep `daily · close` rather than real review dates.
   - **The gold "due soon" highlight only fires on a monthly or quarterly
     print.** A daily series is always due tomorrow and a weekly one always
     within the week, so once the dates became real every yield, TIPS and VIX row
@@ -172,7 +179,7 @@ quoted from OANDA at request time and overlaid onto the catalog by
   so the fallback below is the normal path for BTC and ETH rather than an edge
   case. The account's `/instruments` list is checked first, so a symbol the
   entity does not carry is skipped instead of failing the whole pricing request.
-  Spot then comes from the portal's existing keyless coin feed (Coinbase, Kraken
+  Spot then comes from the terminal's existing keyless coin feed (Coinbase, Kraken
   behind it) and the **daily closes from Kraken's public OHLC**
   (`interval=1440`, ~720 candles), so these rows get the same five real change
   columns as everything else. Two traps in that response, both covered by

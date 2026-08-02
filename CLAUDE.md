@@ -126,6 +126,20 @@ Agreed **lowest-liability** shape for that public launch (research done 2026-07)
   **securities/fintech attorney** review of those advice-flavored features
   (potential RIA/CFTC-CTA exposure). Consider E&O/tech/cyber **insurance** to
   transfer residual liability. (None of this is legal advice.)
+- **Market-data redistribution is a separate licensing question from the advice
+  one, and it is easy to miss** because the data arrives free and keyless. Most
+  of the Market Data board is **US government output** (BLS, BEA, Census, the
+  Federal Reserve) — public domain, no permission needed, no exposure. But four
+  rows are **not**: `us500`, `us100`, `us30` and `vix` reach the board through
+  FRED from **S&P Dow Jones Indices, Nasdaq OMX and Cboe**, who license their
+  index values. FRED's own terms pass those third-party restrictions through
+  rather than waiving them, which is exactly why the **ISM** surveys were pulled
+  from FRED and remain sample here. Displaying them inside a **paid, public**
+  product may need permission from those index owners, not just from FRED — a
+  question for the same attorney review, and one with three cheap answers if it
+  goes badly (drop the four rows, license them, or source them from a vendor
+  whose licence already covers redistribution). Free and private today is not
+  the same posture as paid and public. (None of this is legal advice.)
 
 ## Architecture
 
