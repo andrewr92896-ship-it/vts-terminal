@@ -546,7 +546,11 @@ export interface ContributionGroupView {
   contributed: number;
   employerMatch: number;
   limit: number | null;
-  catchUp50: number | null;
+  catchUp: number | null;
+  /** The age catch-up starts at — 55 for an HSA, 50 for everything else. */
+  catchUpFromAge: number | null;
+  /** SECURE 2.0's ages 60–63 amount, which REPLACES the ordinary catch-up. */
+  catchUp60to63: number | null;
   limitNote?: string;
   remaining: number | null;
   pct: number | null;
@@ -625,7 +629,9 @@ export async function getContributions(userId: string, taxYear: number): Promise
       contributed: totals.contributed,
       employerMatch: totals.employerMatch,
       limit: lim?.limit ?? null,
-      catchUp50: lim?.catchUp50 ?? null,
+      catchUp: lim?.catchUp ?? null,
+      catchUpFromAge: lim?.catchUpFromAge ?? null,
+      catchUp60to63: lim?.catchUp60to63 ?? null,
       limitNote: lim?.note,
       remaining: lim ? Math.max(0, lim.limit - totals.contributed) : null,
       pct: lim && lim.limit > 0 ? Math.min(100, (totals.contributed / lim.limit) * 100) : null,

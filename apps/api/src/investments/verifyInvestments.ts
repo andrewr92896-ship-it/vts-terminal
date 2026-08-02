@@ -279,7 +279,25 @@ console.log('\nContribution limits');
   // The rule that matters: never substitute a neighbouring year's number.
   check('an unknown year reports no limit rather than a guess', contributionLimit('ira', 2030), null);
   check('hasLimitsFor agrees', [hasLimitsFor(2026), hasLimitsFor(2030)], [true, false]);
-  check('catch-up is reported separately, never folded in', contributionLimit('workplace', 2026)?.catchUp50, 8000);
+  check('catch-up is reported separately, never folded in', contributionLimit('workplace', 2026)?.catchUp, 8000);
+
+  // The 2026 SIMPLE catch-up rose to $4,000. It sat at $3,500 — 2025's figure —
+  // until the whole table was checked against the IRS notices.
+  check('2026 SIMPLE catch-up is 4,000, not 2025\'s 3,500', contributionLimit('simple', 2026)?.catchUp, 4000);
+  check('2025 SIMPLE catch-up is still 3,500', contributionLimit('simple', 2025)?.catchUp, 3500);
+
+  // An HSA's extra $1,000 starts at 55, not 50. Labelling it "50+" tells a
+  // 52-year-old they have room they do not have.
+  check('HSA catch-up starts at 55', contributionLimit('hsa', 2026)?.catchUpFromAge, 55);
+  check('workplace catch-up starts at 50', contributionLimit('workplace', 2026)?.catchUpFromAge, 50);
+
+  // SECURE 2.0's higher band exists from 2025 only, and replaces rather than
+  // adds to the ordinary catch-up.
+  check('no 60-63 band in 2024', contributionLimit('workplace', 2024)?.catchUp60to63 ?? null, null);
+  check('workplace 60-63 band from 2025', contributionLimit('workplace', 2025)?.catchUp60to63, 11250);
+  check('workplace 60-63 band in 2026', contributionLimit('workplace', 2026)?.catchUp60to63, 11250);
+  check('SIMPLE 60-63 band in 2026', contributionLimit('simple', 2026)?.catchUp60to63, 5250);
+  check('an IRA has no 60-63 band', contributionLimit('ira', 2026)?.catchUp60to63 ?? null, null);
 }
 
 console.log('');

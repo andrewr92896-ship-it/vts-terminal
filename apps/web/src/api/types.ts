@@ -1878,7 +1878,11 @@ export interface InvestmentContributionGroup {
   employerMatch: number;
   /** Null when the catalog has no IRS figures for that tax year. */
   limit: number | null;
-  catchUp50: number | null;
+  catchUp: number | null;
+  /** The age catch-up starts at — 55 for an HSA, 50 for everything else. */
+  catchUpFromAge: number | null;
+  /** SECURE 2.0's ages 60–63 amount. It REPLACES the ordinary catch-up. */
+  catchUp60to63: number | null;
   limitNote?: string;
   remaining: number | null;
   pct: number | null;

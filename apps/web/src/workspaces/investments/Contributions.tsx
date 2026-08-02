@@ -173,9 +173,18 @@ export function InvestmentContributionsScreen() {
                           Employer match <Money value={g.employerMatch} /> — does not count against your own limit
                         </span>
                       )}
-                      {g.catchUp50 != null && (
+                      {g.catchUp != null && g.catchUpFromAge != null && (
                         <span style={{ fontSize: 11.5, color: C.faint }}>
-                          Age 50+ may add a further {usd(g.catchUp50)}
+                          {/* The age is NOT always 50 — an HSA's extra $1,000
+                              starts at 55, and saying "50+" beside it hands a
+                              52-year-old room they do not have. */}
+                          Age {g.catchUpFromAge}+ may add a further {usd(g.catchUp)}
+                          {g.catchUp60to63 != null && (
+                            <>
+                              {' · '}
+                              {usd(g.catchUp60to63)} instead at ages 60–63
+                            </>
+                          )}
                         </span>
                       )}
                     </div>
@@ -226,10 +235,12 @@ export function InvestmentContributionsScreen() {
             </div>
 
             <div style={{ fontSize: 11.5, color: C.faint, marginTop: 18, lineHeight: 1.65, fontFamily: C.mono }}>
-              Annual limits are the published IRS figures for the tax year shown, stored in this terminal and updated
-              by hand each year. Check them against irs.gov before you rely on one — limits change annually, and
-              your own cap can differ (income phase-outs on a Roth IRA, a plan-specific ceiling, catch-up
-              eligibility).
+              Annual limits are the published IRS figures for the tax year shown, stored in this terminal and
+              checked by hand each year. Check them against irs.gov before you rely on one — your own cap can
+              differ from the published figure: income phase-outs on a Roth IRA, a plan that sets a lower ceiling,
+              a SIMPLE plan at a small employer that allows a higher one, and whether you are eligible for a
+              catch-up at all. The ages 60–63 amount replaces the ordinary catch-up rather than adding to it, and
+              your plan does not have to offer it.
             </div>
           </>
         )

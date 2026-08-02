@@ -755,10 +755,21 @@ workspaces list** (see `theme/nav.ts` order).
     `snaptrade` values for it; the client can never set `source` (a manual
     account must not be able to claim it is a verified connection).
   - **Contribution limits are a hand-maintained catalog** (`investments/
-    limits.ts`) keyed by tax year. A year not in the table reports **no limit**
-    rather than borrowing a neighbouring year's, and catch-up amounts are a
-    separate line because the terminal has no birthdate. **Update it every year**
-    — it is the one figure here where being stale has a real cost.
+    limits.ts`) keyed by tax year, last checked against the IRS notices on
+    2026-08-02. A year not in the table reports **no limit** rather than
+    borrowing a neighbouring year's, and catch-up amounts are a separate line
+    because the terminal has no birthdate. **Update it every year** — it is the
+    one figure here where being stale has a real cost. Three traps the checking
+    turned up, all asserted by `verify:investments`:
+    - a catch-up's starting age is **not always 50** — an HSA's extra $1,000
+      begins at **55**, so `catchUpFromAge` is stored per entry rather than
+      baked into a field name (it was `catchUp50`, and the screen duly told
+      52-year-olds they had room they did not have);
+    - SECURE 2.0's **ages 60–63** amount exists from tax year **2025** and
+      **replaces** the ordinary catch-up rather than adding to it, so the two
+      must never be shown summed;
+    - a **SIMPLE** plan at a small employer may run a higher limit than the
+      published standard one, which is why that entry carries a note.
   - **Performance history is built forward, never back-filled**: one whole-
     portfolio reading per ET day, written on portfolio read (skipped for the
     demo, which must not accumulate rows). Nothing available can price a 401(k)
