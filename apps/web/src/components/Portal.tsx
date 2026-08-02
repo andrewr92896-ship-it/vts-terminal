@@ -77,9 +77,6 @@ import { PremiumFeatures } from '../workspaces/myportal/PremiumFeatures';
 const StudyGameHub = lazy(() =>
   import('../workspaces/studies/StudyGameHub').then((m) => ({ default: m.StudyGameHub })),
 );
-const StudyHub = lazy(() =>
-  import('../workspaces/studies/StudyHub').then((m) => ({ default: m.StudyHub })),
-);
 const FlashcardsHub = lazy(() =>
   import('../workspaces/studies/FlashcardsHub').then((m) => ({ default: m.FlashcardsHub })),
 );
@@ -153,8 +150,6 @@ function renderScreen(
       return <MarketNews />;
     case 'td_trading':
       return <TradingTodo />;
-    case 'st_home':
-      return <StudyHub theme={theme} onNavigate={onNavigate} />;
     // The Study Game, Test Mode, and Progress sections are all deck launchers
     // over the team's own study games. Keyed distinctly so switching between them
     // remounts with the right target instead of React reusing the instance.

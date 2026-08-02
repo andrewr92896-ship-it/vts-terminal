@@ -318,20 +318,6 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
   // ---- Studies ----
-  st_home: {
-    title: 'Study Hub',
-    intro: 'Your study home. Everything here is built by your team in Study Creation — study games, flashcard sets, and study guides — and studied from their own sections.',
-    steps: [
-      {
-        title: 'Build, then study',
-        body: 'Start in Study Creation to make a study game, a flashcard set, or a guide. Then use the Study Game, Test Mode, and Progress sections to play, test, and track any game your team built.',
-      },
-      {
-        title: 'Your progress is saved',
-        body: 'Your level and accuracy for each game are saved to your account, so you can close the tab and pick up where you left off — on any device.',
-      },
-    ],
-  },
   st_game: {
     title: 'Study Game',
     intro: 'Pick one of your team’s study games to play — answer questions, level up as you go, and climb your team’s leaderboard.',
@@ -454,7 +440,6 @@ export const HOWTO_TOPICS: { key: string; label: string }[] = [
   { key: 'news', label: 'Market News' },
   { key: 'td_trading', label: 'To Do' },
   { key: 'st_game', label: 'Study Game' },
-  { key: 'st_home', label: 'Subjects' },
 ];
 
 // Parse an admin override (stored JSON) into a Tutorial, keeping only the fields

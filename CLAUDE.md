@@ -854,10 +854,14 @@ workspaces list** (see `theme/nav.ts` order).
     - History is built forward, one ET-dated reading per day (last of the day
       stands), never back-filled — nothing can know what a house or a fund was
       worth last year. Skipped for the demo.
-- **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
-  (`st_cards`), Practice Tests (`st_test`), Study Presentations (`st_guides`),
-  Progress (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
-  team-built** — there is no hardcoded subject. **Study Game / Test Mode /
+- **Studies** (violet): Study Game (`st_game`), Flashcards (`st_cards`),
+  Practice Tests (`st_test`), Study Presentations (`st_guides`), Progress
+  (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
+  team-built** — there is no hardcoded subject. **Removed: Subjects** (`st_home`,
+  `StudyHub.tsx`) — owner decision, 2026-08: with six sections in the workspace a
+  landing page listing them was redundant. The screen, its nav entry, its route,
+  its how-to entry and the file are gone, and `DEFAULT_SCREEN.studies` is now
+  `st_game`. **Study Game / Test Mode /
   Progress** are the same launcher (`StudyGameHub`, parameterized by `target` =
   `play` | `test` | `progress`): each lists the study games in your list and, when
   you pick one, opens the chosen experience — the quiz+leaderboard player
@@ -865,18 +869,23 @@ workspaces list** (see `theme/nav.ts` order).
   or a progress summary (`DeckProgress`). The list separates games by source with
   two colors — your team's own games (violet) vs. the terminal's built-in example
   games (blue, `isSample`). Built-in games are **not** shown by default: a **Browse
-  Study Games** gallery (toggled in `StudyGameHub`) lists them, and the learner adds
+  Study Games** tile in the grid opens a gallery of them, and the learner adds
   the ones they want into their own list. That add/remove set is a personal,
   device-local preference in localStorage (`sampleGames.ts`, keyed by user id),
   never team data. **Flashcards** (`FlashcardsHub`) is the
   matching launcher for flashcard sets — pick one and study it with the auto-rotate
   `FlashcardSetPlayer`. **Study Creation** (`StudyCreation`) is the make/manage-only
-  section (no playing/studying inline): it stacks the study-game maker+editor
-  (`TeamStudyDecks` → `DeckEditor`, plus combine-games), the **flashcard-set maker**
-  (`TeamFlashcards` — type cards in, AI-generate from a topic, or upload a `.txt`),
-  and the study-guide builder (`StudyGuideCreator` — build with VTS AI or upload a
-  `.pptx`, parsed client-side in `lib/pptx.ts`). **Study Guides**
-  (`StudyGuidesLibrary`) is the present/manage side — the finished guides only.
+  section (no playing/studying inline), and is a **chooser**: three tiles — study
+  games, flashcard sets, study presentations — each opening one maker with a way
+  back. Stacked down one page (as it was) every maker's list and form loaded at
+  once, so the screen opened three feet long with the thing you came to build
+  somewhere in the middle. The makers themselves are unchanged: the study-game
+  maker+editor (`TeamStudyDecks` → `DeckEditor`, plus combine-games), the
+  **flashcard-set maker** (`TeamFlashcards` — type cards in, AI-generate from a
+  topic, or upload a `.txt`), and the study-guide builder (`StudyGuideCreator` —
+  build with VTS AI or upload a `.pptx`, parsed client-side in `lib/pptx.ts`).
+  **Study Presentations** (`StudyGuidesLibrary`) is the present/manage side — the
+  finished guides only, ending with a **Build a presentation** tile.
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.
