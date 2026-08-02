@@ -36,14 +36,31 @@ export interface StooqDailyClose {
   close: number;
 }
 
+// Stooq serves a datacenter address differently from a browser — the first
+// attempt returned nothing usable in production while the parsers were correct
+// against recorded CSV. Same lesson the YouTube reads learned: send
+// browser-ish headers or be handed something that is not the document you asked
+// for. Nothing here defeats a restriction; it just asks the way a browser does.
+const BROWSERISH_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+  'Accept-Language': 'en-US,en;q=0.9',
+  Accept: 'text/csv,text/plain,*/*',
+};
+
 async function getText(url: string): Promise<string | null> {
   try {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    const res = await fetch(url, { signal: ctrl.signal, headers: { Accept: 'text/csv,*/*' } });
+    const res = await fetch(url, { signal: ctrl.signal, headers: BROWSERISH_HEADERS });
     clearTimeout(timer);
     if (!res.ok) return null;
-    return await res.text();
+    const body = await res.text();
+    // A block or a rate-limit notice comes back as HTML or prose with a 200, not
+    // as an error. Anything that is not CSV is refused here rather than being
+    // fed to a parser that might find a number in it.
+    if (/^\s*</.test(body) || /exceeded|limit/i.test(body.slice(0, 200))) return null;
+    return body;
   } catch {
     return null;
   }
@@ -65,18 +82,22 @@ function parsePrice(raw: string): number | null {
 // know with "N/D" in the price columns, which fails `parsePrice` and so is
 // refused like any other unusable row.
 export function parseStooqQuote(body: string, now: number): number | null {
-  const lines = body.split('\n').filter((l) => l.trim() !== '');
-  if (lines.length < 2) return null;
-  // Symbol,Date,Time,Open,High,Low,Close,Volume
-  const cells = lines[1].split(',');
-  if (cells.length < 7) return null;
-  const at = parseDate(cells[1] ?? '');
-  const close = parsePrice(cells[6] ?? '');
-  if (at == null || close == null) return null;
-  // A frozen feed is the failure mode this exists to catch: without the age
-  // check a months-old price would render as live, with no Sample dot to warn.
-  if (now - at > MAX_QUOTE_AGE_MS) return null;
-  return close;
+  // Scans for the first row that parses rather than assuming the data sits on
+  // line 1: the header is requested but a header that is absent, doubled or
+  // reworded must not cost the quote.
+  for (const line of body.split('\n')) {
+    // Symbol,Date,Time,Open,High,Low,Close,Volume
+    const cells = line.split(',');
+    if (cells.length < 7) continue;
+    const at = parseDate(cells[1] ?? '');
+    const close = parsePrice(cells[6] ?? '');
+    if (at == null || close == null) continue;
+    // A frozen feed is the failure mode this exists to catch: without the age
+    // check a months-old price would render as live, with no Sample dot to warn.
+    if (now - at > MAX_QUOTE_AGE_MS) return null;
+    return close;
+  }
+  return null;
 }
 
 // Daily closes, oldest first, dropping the header and any unparseable row.

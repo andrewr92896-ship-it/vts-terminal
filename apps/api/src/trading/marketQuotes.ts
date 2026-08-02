@@ -125,6 +125,8 @@ let history: { closes: Map<string, OandaDailyClose[]>; at: number } | null = nul
 let historyInFlight: Promise<Map<string, OandaDailyClose[]>> | null = null;
 
 const DAY_MS = 86400_000;
+// Mirrors the staleness rule in `brokers/stooq.ts`, for the history fallback.
+const STOOQ_MAX_AGE_MS = 5 * DAY_MS;
 
 // ---- formatting ----
 
@@ -352,10 +354,19 @@ async function refresh(): Promise<Snapshot> {
     await Promise.all(
       missingMetals.map(async (q) => {
         const sym = q.stooq as string;
-        const [px, closes] = await Promise.all([
+        const [quoted, closes] = await Promise.all([
           fetchStooqQuote(sym).catch(() => null),
           fetchStooqDailyCloses(sym).catch(() => []),
         ]);
+        // Two endpoints, and either alone is enough. They are separate paths on
+        // the vendor and are not always reachable together, so the last bar of
+        // the history stands in when the quote endpoint gives nothing. The
+        // staleness rule still applies to it — a history that stops months back
+        // must not become a price presented as current.
+        const lastBar = closes.length > 0 ? closes[closes.length - 1] : null;
+        const px =
+          quoted ??
+          (lastBar && now - lastBar.timeMs <= STOOQ_MAX_AGE_MS ? lastBar.close : null);
         if (px == null) return;
         quotes.set(q.id, {
           value: fmtValue(px, q.decimals),
