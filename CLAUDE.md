@@ -1125,7 +1125,9 @@ control — the server is still the enforcer.
   - Applied to: `global` (+ workspace guidance), `tutor`, `market_overview`,
     `metrics_coach`, `support`, `support_intake`, the study-guide builder
     (`chatStudyGuide`, which takes the style as an argument so `claude.ts` stays
-    free of the settings/DB layer), and the To Do command bar (`todo/command.ts`).
+    free of the settings/DB layer), and the To Do command bar (`todo/command.ts`
+    — wired server-side but **not reachable from any screen**; see "Server
+    surface no screen reaches").
   - `withStyle(system, { structured: true })` appends a reminder that the reply
     is still JSON-only — use it for every prompt whose output is parsed, or the
     intake/builder parsers break.
@@ -1700,6 +1702,44 @@ is unreadable, and it forces a judgment call the owner has no way to make. So:
 - `themes.ts` `TABS`/`TabDef` — superseded by `theme/nav.ts`.
 - `tokens.ts` `info` comment ("LLC workspace accent") and `nav.ts`/`access.ts`
   "wealth/finance deep link" fallbacks — reference removed workspaces.
+
+### Server surface no screen reaches (audited 2026-08-02)
+
+About 35 endpoints are live and registered with **no caller anywhere in the
+web app**, each with a matching dead wrapper in `api/client.ts`. They compile,
+they ship, and they read exactly like working features — which is the danger:
+**a method existing in `client.ts` is not evidence a feature works.** Check for
+a caller before believing one. (That cuts both ways —
+`updateMarketNewsChannel` sat in this same list until Beta V 6.28, and the
+right answer there was to *build the missing UI*, not to delete it.)
+
+Three groups, and they want different treatment:
+
+- **Superseded (~21 endpoints, `/api/studies/{learned,game,leaderboard,tests,vocab,starred,sections}`).**
+  The pre-team-decks Studies implementation. The giveaway is the near-miss
+  naming: the live screens call `saveStudyDeckGame` / `archiveStudyDeckGame`,
+  while `saveStudyGame` / `archiveStudyGame` are the old ones. **Do not wire
+  these back** — team-built decks (`studyEngine.ts`, `gameStats.ts`) are the
+  model now, and reviving a second one is how a leaderboard ends up with two
+  disagreeing sources.
+- **Removed on purpose (~9 endpoints).** The manual news/calendar CRUD
+  (`/api/trading/news`, `/api/trading/calendar` writes) dropped in the Market
+  News rebuild, plus `/api/trading/feed/brief` and `/api/trading/truth` — the
+  AI overview brief and the Truth Social tab, which that section already says
+  are **not to be reintroduced**. The GET on `/api/trading/news` is still very
+  much live; it is the shared feed. Only the writes are orphaned.
+- **Built but never wired (4 endpoints).** `GET /api/investments/transactions`
+  (the screens read transactions off the portfolio payload instead), and the
+  To Do trio `POST /api/todo/sections`, `POST /api/todo/items/:id/state` and
+  **`POST /api/todo/command`** — the natural-language command bar in
+  `todo/command.ts`. That last one is a complete AI feature, metered against
+  the AI cap, with **no UI at all**; the AI section above lists it as a place
+  the response style is applied, which overstates it. `TradingTodo.tsx` adds
+  items to the first trading-tagged section and does nothing else.
+
+Deleting any of it is a real cleanup and an owner decision, not a tidy-up to
+slip into an unrelated change — the routes are registered, so removing them is
+a behaviour change for anything calling the API directly.
 
 ## Verifying changes
 
