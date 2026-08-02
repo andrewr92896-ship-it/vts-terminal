@@ -343,7 +343,7 @@ export function TeamChat({
                 )}
                 {user.isDemo ? (
                   <div style={{ padding: '10px 12px', borderTop: '1px solid #16294f', fontSize: 11.5, color: '#7488b5' }}>
-                    Read-only demo. Sign in to the live portal to chat.
+                    Read-only demo. Sign in to the live terminal to chat.
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: 6, padding: 10, borderTop: '1px solid #16294f' }}>

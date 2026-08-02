@@ -134,7 +134,7 @@ export function Alerts({ onNavigate }: { onNavigate: (screen: string) => void })
 
 // The opt-in control for phone push. Each device enables it once; after that
 // the desk's alerts and trade open/close events buzz the phone even when the
-// app is closed. On iOS this only works once the portal is installed to the
+// app is closed. On iOS this only works once the terminal is installed to the
 // Home Screen (Share → Add to Home Screen), so we surface that hint.
 function PhoneAlerts() {
   const { state, busy, error, enable, disable, sendTest } = usePushNotifications();

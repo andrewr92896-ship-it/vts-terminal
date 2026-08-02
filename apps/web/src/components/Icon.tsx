@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 
-// Inline Lucide-style icons. The portal is deliberately CDN-free (self-hosted
+// Inline Lucide-style icons. The terminal is deliberately CDN-free (self-hosted
 // fonts, no external requests), so instead of pulling in `lucide-react` we
 // render a curated set of the Lucide glyphs the redesign uses as inline SVG.
 // Each entry is the icon's inner markup (paths/lines/circles) on a 24×24 grid;
@@ -20,7 +20,7 @@ const ICONS: Record<string, string> = {
   'list-tree':
     '<path d="M21 12h-8"/><path d="M21 6H8"/><path d="M21 18h-8"/><path d="M3 6v4c0 1.1.9 2 2 2h3"/><path d="M3 10v6c0 1.1.9 2 2 2h3"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
-  // Magnifier with a + / − in the lens — the portal zoom control.
+  // Magnifier with a + / − in the lens — the terminal zoom control.
   'zoom-in':
     '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6"/><path d="M8 11h6"/>',
   'zoom-out':

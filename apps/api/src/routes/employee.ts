@@ -96,7 +96,7 @@ import {
 // The employee portal's API. Registered as its own Fastify plugin so the
 // security-header hook below is scoped to exactly these routes and nothing else.
 //
-// Nothing in this file reads `request.currentUser` — the main portal's session
+// Nothing in this file reads `request.currentUser` — the main terminal's session
 // grants no authority here. Every route resolves the separate employee session
 // through the guard instead.
 
@@ -238,7 +238,7 @@ async function issueOtp(
   return { delivered, sentTo: maskEmail(address) };
 }
 
-// Look the account up the same way the main portal does (email, then username),
+// Look the account up the same way the main terminal does (email, then username),
 // but never resolve the demo account.
 async function findLoginUser(identifier: string): Promise<UserRow | undefined> {
   const id = identifier.toLowerCase();

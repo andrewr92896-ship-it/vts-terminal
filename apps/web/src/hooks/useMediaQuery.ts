@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-// Shared responsive breakpoints. Everything in the portal styles inline, so
+// Shared responsive breakpoints. Everything in the terminal styles inline, so
 // CSS media queries can't reach those styles — instead we read the viewport
 // here and branch the inline style objects. Keeping the thresholds in one
 // place means workspaces built later inherit the same phone/tablet behaviour.

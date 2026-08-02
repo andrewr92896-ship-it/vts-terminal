@@ -119,7 +119,7 @@ const envSchema = z.object({
   // loosening any of them is an explicit, deliberate act.
   //
   // Sessions here are short-lived on purpose: an absolute cap plus an idle
-  // timeout, both far tighter than the 14-day main-portal session.
+  // timeout, both far tighter than the 14-day main-terminal session.
   EMPLOYEE_SESSION_HOURS: z.coerce.number().positive().max(24).default(8),
   EMPLOYEE_IDLE_MINUTES: z.coerce.number().int().positive().max(480).default(30),
   // Require an emailed sign-in code as a second factor. On by default — every

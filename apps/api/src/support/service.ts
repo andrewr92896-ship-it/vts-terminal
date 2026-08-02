@@ -54,7 +54,7 @@ function fallbackReply(kind: SupportKind, needMore: boolean): { needMore: boolea
           ? 'Thanks for flagging this. Could you add a bit more — what were you doing right before it happened, and what did you expect to see instead?'
           : kind === 'suggestion'
             ? 'Could you say a little more about the problem it would solve or how you picture it working?'
-            : 'Happy to help. Could you add a little more detail about what you need and where in the portal you ran into it?',
+            : 'Happy to help. Could you add a little more detail about what you need and where in the terminal you ran into it?',
     };
   }
   return {

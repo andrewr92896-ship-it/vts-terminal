@@ -16,11 +16,11 @@ export interface Tutorial {
 }
 
 export const TUTORIALS: Record<string, Tutorial> = {
-  // ---- My Portal ----
+  // ---- My Terminal ----
   my_access: {
     title: 'Turning features on and off',
     intro:
-      'Feature Access is where you choose which optional parts of the portal you want. Markets, Investments, Studies, My Portal and Site Help are included with every account — there is nothing to switch on for those. The two optional ones are both about the trading desk.',
+      'Feature Access is where you choose which optional parts of the terminal you want. Markets, Investments, Studies, My Terminal and Site Help are included with every account — there is nothing to switch on for those. The two optional ones are both about the trading desk.',
     steps: [
       {
         title: 'Advanced Trading',
@@ -32,7 +32,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Turning something off',
-        body: 'Nothing is deleted. The workspace disappears from the sidebar and the portal stops serving it, but every trade, account and setting stays exactly where it was — switch it back on and it all returns.',
+        body: 'Nothing is deleted. The workspace disappears from the sidebar and the terminal stops serving it, but every trade, account and setting stays exactly where it was — switch it back on and it all returns.',
       },
       {
         title: 'Finding it again',
@@ -402,7 +402,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Choose the right role',
-        body: 'Every signed-in user is a Member with full access to Trading, Studies, My Portal, and Site Help. Add Admin for user and team management, and Funded to reveal the private prop-challenge section in Trading. Founder / Software Developer (Developer Portal) are granted only by the owner.',
+        body: 'Every signed-in user is a Member with full access to Trading, Studies, My Terminal, and Site Help. Add Admin for user and team management, and Funded to reveal the private prop-challenge section in Trading. Founder / Software Developer (Developer Terminal) are granted only by the owner.',
       },
       {
         title: 'Manage existing users',

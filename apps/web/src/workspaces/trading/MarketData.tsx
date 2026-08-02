@@ -232,7 +232,7 @@ export function MarketData() {
       setLoadedAt(Date.now());
       setErr(null);
     } catch (e) {
-      // Keep whatever is on screen and say what still works — the portal's
+      // Keep whatever is on screen and say what still works — the terminal's
       // convention for a failed refresh over live data.
       setErr(
         e instanceof ApiError

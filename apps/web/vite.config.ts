@@ -8,7 +8,7 @@ const root = path.dirname(fileURLToPath(import.meta.url));
 
 // vite-plugin-pwa injects the web-app manifest into every HTML entry it finds.
 // The employee portal must not be one: it is a network-only, non-installable
-// page, and an install prompt there would launch the *main* portal (the
+// page, and an install prompt there would launch the *main* terminal (the
 // manifest's start_url is "/"). Strip the injected tag from that entry only.
 // The hook uses the object form with order: 'post' so it lands in the same late
 // bucket as the PWA plugin's own injection and, being registered after it, runs
@@ -33,11 +33,11 @@ function stripPwaFromEmployeeEntry() {
 export default defineConfig({
   plugins: [
     react(),
-    // Make the portal installable as a home screen app on iOS and Android.
+    // Make the terminal installable as a home screen app on iOS and Android.
     // This is additive: it only adds a manifest, icons, and a service worker,
     // and never touches app features, layout, or the desktop experience.
     VitePWA({
-      // The portal deploys often. We surface a visible "Update available"
+      // The terminal deploys often. We surface a visible "Update available"
       // prompt (see UpdatePrompt) rather than swapping the worker silently:
       // in prompt mode the new worker waits until the user clicks Relaunch,
       // so the running page keeps serving its own chunks (no broken lazy
@@ -48,9 +48,9 @@ export default defineConfig({
       // virtual module is imported.
       injectRegister: 'auto',
       manifest: {
-        name: 'VTS Portal',
+        name: 'VTS Terminal',
         short_name: 'VTS',
-        description: 'Vitalis Trading Systems portal',
+        description: 'Vitalis Trading Systems terminal',
         display: 'standalone',
         start_url: '/',
         scope: '/',
@@ -97,8 +97,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Two independent entry points, not one app with two routes. The employee
-      // portal ships as its own HTML page and its own bundle, so none of its
-      // code is ever downloaded by (or reachable from) the main portal.
+      // terminal ships as its own HTML page and its own bundle, so none of its
+      // code is ever downloaded by (or reachable from) the main terminal.
       input: {
         main: path.resolve(root, 'index.html'),
         employee: path.resolve(root, 'employee.html'),

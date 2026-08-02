@@ -157,7 +157,7 @@ function GrantForm({
     return (
       <Card style={{ marginBottom: 18 }}>
         <Banner tone="warn">
-          {"Every active portal account already has employee access. Create the account in the main portal's Admin ▸ Users first."}
+          {"Every active terminal account already has employee access. Create the account in the main terminal's Admin ▸ Users first."}
         </Banner>
       </Card>
     );

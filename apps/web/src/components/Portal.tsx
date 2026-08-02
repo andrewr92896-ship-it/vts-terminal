@@ -220,7 +220,7 @@ export function Portal() {
   // selected role. Pure UI gating; the server still enforces real roles.
   const [actingRole, setActingRole] = useState<RoleKey | null>(null);
   const effectiveRoles: RoleKey[] = actingRole ? [actingRole] : user!.roles;
-  // The optional features this account has turned on (My Portal ▸ Feature
+  // The optional features this account has turned on (My Terminal ▸ Feature
   // Access). Kept alongside roles because they gate different things: a role is
   // what you're allowed to do, a feature is what you've asked to see.
   const features = user!.access.features;
@@ -272,7 +272,7 @@ export function Portal() {
   const [navOpen, setNavOpen] = useState(false);
 
   // Founder-set sidebar ordering, applied over the code-default nav for every
-  // user. Loaded once; the Developer Portal's Sidebar Layout editor updates it
+  // user. Loaded once; the Developer Terminal's Sidebar Layout editor updates it
   // live (via setNavOverride) so a save re-orders the real sidebar immediately.
   const [navOverride, setNavOverride] = useState<NavOrderOverride | null>(null);
   useEffect(() => {
@@ -370,7 +370,7 @@ export function Portal() {
 
   // Light up whichever workspace actually contains the section with unseen
   // activity — derived from the nav rather than hardcoded, so moving a section
-  // between workspaces (e.g. Suggestions to the Developer Portal) keeps its dot
+  // between workspaces (e.g. Suggestions to the Developer Terminal) keeps its dot
   // pointing at the right row.
   const workspaceDots = useMemo(() => {
     const dots = new Set<WorkspaceKey>();
@@ -488,7 +488,7 @@ export function Portal() {
   // View-as / Suggestions / Bug Reports sections. Returns null for anything else
   // so it falls through to renderScreen and then the placeholder.
   function renderExtra(scr: string): React.ReactNode {
-    // The Investments workspace sections and the My Portal ▸ Investment Holdings
+    // The Investments workspace sections and the My Terminal ▸ Investment Holdings
     // summary are all themed "Coming Soon" placeholders for now (the foundation).
     if (COMING_SOON_SCREENS.has(scr)) return <ComingSoon screen={scr} theme={theme} />;
     switch (scr) {
@@ -772,7 +772,7 @@ function DemoBanner({ accent, onTour, onExit }: { accent: string; onTour: () => 
     >
       <span style={{ color: C.text }}>
         <strong style={{ color: accent }}>Demo mode</strong>
-        <span style={{ color: C.muted }}> · read-only · simulated data. The live portal is available on request.</span>
+        <span style={{ color: C.muted }}> · read-only · simulated data. The live terminal is available on request.</span>
       </span>
       <div style={{ display: 'flex', gap: 8 }}>
         <button

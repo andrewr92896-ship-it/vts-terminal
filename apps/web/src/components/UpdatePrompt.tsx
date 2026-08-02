@@ -39,7 +39,7 @@ export function UpdatePrompt() {
           <span style={{ fontSize: 20, lineHeight: 1 }}>✨</span>
           <div>
             <div id="vts-update-title" style={title}>Update available</div>
-            <div style={body}>A new version of the portal is ready.</div>
+            <div style={body}>A new version of the terminal is ready.</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>

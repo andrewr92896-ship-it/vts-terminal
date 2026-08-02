@@ -317,7 +317,7 @@ export function AccountSettings({ open, theme, onClose }: AccountSettingsProps) 
               style={inputStyle}
             />
             <p style={hintStyle}>
-              A short handle shown around the portal. Changing it won't affect how your
+              A short handle shown around the terminal. Changing it won't affect how your
               account appears to the admin.
             </p>
             {profileMsg && (

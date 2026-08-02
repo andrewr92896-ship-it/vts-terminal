@@ -6,7 +6,7 @@ import { C } from '../../theme/tokens';
 import { Icon } from '../../components/Icon';
 import { SectionHeader, panel, panelLabel } from '../admin/adminUi';
 
-// My Portal ▸ Feature Access. The optional parts of the portal, turned on and
+// My Terminal ▸ Feature Access. The optional parts of the terminal, turned on and
 // off by the person who uses them — no admin approval, no waiting.
 //
 // Only two things are optional, and both are about the trading desk. Everything
@@ -69,7 +69,7 @@ export function FeatureAccess({ theme }: { theme: Theme }) {
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 20px 40px' }}>
       <SectionHeader
         title="Feature Access"
-        subtitle="Choose which parts of the portal you want. Turning one off only hides it — nothing you have saved is deleted, and turning it back on restores it."
+        subtitle="Choose which parts of the terminal you want. Turning one off only hides it — nothing you have saved is deleted, and turning it back on restores it."
       />
 
       {isDemo && (
@@ -135,7 +135,7 @@ export function FeatureAccess({ theme }: { theme: Theme }) {
           <IncludedRow icon="graduation-cap" title="Studies">
             Study games, flashcards, practice tests and study guides.
           </IncludedRow>
-          <IncludedRow icon="briefcase" title="My Portal">
+          <IncludedRow icon="briefcase" title="My Terminal">
             Your own summary, your trading team, and your settings.
           </IncludedRow>
           <IncludedRow icon="life-buoy" title="Site Help">
@@ -181,7 +181,7 @@ function TradingAcknowledgement({
             live position.
           </li>
           <li>
-            You connect your own broker account. The portal never holds your money
+            You connect your own broker account. The terminal never holds your money
             — it can't deposit, withdraw, or move funds anywhere.
           </li>
           <li>

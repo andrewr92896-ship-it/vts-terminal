@@ -10,7 +10,7 @@ import {
 
 // The shared admin copy library. Software developers (founder-level) author the
 // templates; every admin can read and copy them. Templates are site-wide, not
-// per-user, so there is no scoping here — one list for the whole portal.
+// per-user, so there is no scoping here — one list for the whole terminal.
 
 const MAX_TITLE = 160;
 const MAX_SUBJECT = 200;

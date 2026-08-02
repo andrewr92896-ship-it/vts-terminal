@@ -3,9 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>VTS Portal — current shell reference</title>
+    <title>VTS Terminal — current shell reference</title>
     <!--
-      A static, self-contained mock of the VTS Portal shell AS IT IS TODAY.
+      A static, self-contained mock of the VTS Terminal shell AS IT IS TODAY.
       Hand this (or a screenshot of it) to a design tool alongside
       docs/design/portal-shell.md so it designs inside the real chrome.
 
@@ -21,7 +21,7 @@
       Two deliberate differences from the running app:
         1. The app renders IBM Plex Sans/Mono, self-hosted via @fontsource. This
            file names them first and falls back to system fonts, so it looks
-           right without a CDN (the portal never calls one).
+           right without a CDN (the terminal never calls one).
         2. The brand mark is /brand/vitalis-wordmark.png in the app; it is drawn
            as text here so the file stays self-contained.
 
@@ -57,7 +57,7 @@
         --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
         /* The active workspace's accent. Swap this one value to preview another
-           workspace: My Portal #34D399 · Investments #2DD4BF · Studies #B69CFF ·
+           workspace: My Terminal #34D399 · Investments #2DD4BF · Studies #B69CFF ·
            Admin #E0708F · Developer #F5A524 · Site Help #6C9EFF */
         --accent: #ebcb74;
       }
@@ -435,13 +435,13 @@
         </a>
 
         <!-- Tier 1: the workspaces this user may see, in nav order.
-             My Portal is pinned to the top. -->
+             My Terminal is pinned to the top. -->
         <nav>
           <div class="nav-label">Workspaces</div>
 
           <button class="row">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="7" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-            <span class="label">My Portal</span>
+            <span class="label">My Terminal</span>
           </button>
 
           <button class="row ws-active">
@@ -462,14 +462,14 @@
           <!-- Admin-only -->
           <button class="row">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>
-            <span class="label">Admin Portal</span>
+            <span class="label">Admin Terminal</span>
             <span class="dot" title="unseen activity"></span>
           </button>
 
           <!-- Founder-level only -->
           <button class="row">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294z"/><path d="M5 21h14"/></svg>
-            <span class="label">Developer Portal</span>
+            <span class="label">Developer Terminal</span>
           </button>
 
           <button class="row">
@@ -541,7 +541,7 @@
         </nav>
 
         <div class="rail-foot">
-          <span class="name">VTS Portal</span>
+          <span class="name">VTS Terminal</span>
           <span class="version">Beta V 5.78</span>
         </div>
       </aside>

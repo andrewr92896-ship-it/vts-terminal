@@ -4,7 +4,7 @@ import { Icon } from '../components/Icon';
 
 // The small set of shared presentational pieces the employee screens are built
 // from. Kept local to the employee bundle so this surface never depends on the
-// main portal's component tree.
+// main terminal's component tree.
 
 export const label: CSSProperties = {
   fontSize: 10.5,

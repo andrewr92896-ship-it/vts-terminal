@@ -4,12 +4,12 @@ import { db } from '../db/index.js';
 import { userFeatures } from '../db/schema.js';
 import { isDemoUser } from '../demo/identity.js';
 
-// Feature Access — the optional parts of the portal a user turns on for
-// themselves from My Portal ▸ Feature Access.
+// Feature Access — the optional parts of the terminal a user turns on for
+// themselves from My Terminal ▸ Feature Access.
 //
-// Only the optional ones live here. Markets, Investments, Studies, My Portal and
+// Only the optional ones live here. Markets, Investments, Studies, My Terminal and
 // Site Help are included with every account: they hold no money, place no
-// orders, and a portal without them is worth nothing to an average user, so
+// orders, and a terminal without them is worth nothing to an average user, so
 // there is deliberately nothing to opt into.
 //
 // Two rules are enforced here rather than in the UI, because the UI is not the

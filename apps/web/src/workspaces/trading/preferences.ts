@@ -1,5 +1,5 @@
 // Small per-user UI preferences persisted in localStorage — cosmetic view
-// choices that need no server round-trip. Set from My Portal ▸ Preferences and
+// choices that need no server round-trip. Set from My Terminal ▸ Preferences and
 // read by the screens they affect (e.g. the Trade Log's deck/tape layout).
 
 export type Layout = 'deck' | 'tape';

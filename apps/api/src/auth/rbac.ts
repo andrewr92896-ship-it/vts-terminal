@@ -10,11 +10,11 @@ export const COMPANY_EMAIL_DOMAIN = config.EMPLOYEE_EMAIL_DOMAIN;
 export type WorkspaceKey = 'trading' | 'studies';
 
 // The optional features a user turns on for themselves. Which parts of the
-// portal are optional at all lives in features/service.ts; roles and features
+// terminal are optional at all lives in features/service.ts; roles and features
 // are separate axes — a role says what you are allowed to do, a feature says
 // what you have asked to see.
 
-// The portal owner's account, identified by the immutable created username
+// The terminal owner's account, identified by the immutable created username
 // (matches the first-boot seed, ADMIN_USERNAME). Only the owner may grant the
 // founder / software_developer roles.
 const OWNER_USERNAME = (process.env.ADMIN_USERNAME || 'andrew').trim().toLowerCase();
@@ -25,21 +25,21 @@ export function isOwnerUser(u: Pick<UserRow, 'username' | 'createdUsername'>): b
 
 // Granular, assigned roles. A user can hold any combination. The model is a
 // ladder of trust:
-//   • founder            — sits above admin; the portal's owners. Founder-level
+//   • founder            — sits above admin; the terminal's owners. Founder-level
 //                          also carries every admin capability plus the
-//                          founder-only tools (Founder Portal: AI Instructions,
+//                          founder-only tools (Founder Terminal: AI Instructions,
 //                          Site Wording, View as role, the site-wording editor).
 //   • software_developer — permission-equivalent to founder (same access).
-//   • admin              — user/team management and the Admin Portal.
+//   • admin              — user/team management and the Admin Terminal.
 //   • employee           — grants access to the separate, hardened Employee
 //                          Portal at /employee. It unlocks nothing inside the
-//                          main portal; it only makes the employee sign-in at
+//                          main terminal; it only makes the employee sign-in at
 //                          that URL possible (a second, independent
 //                          authentication). Only a founder-level user can grant
 //                          it, and the demo can never hold it.
 //   • member             — the baseline. Every signed-in user is at least a
 //                          member and sees every non-admin workspace (Trading,
-//                          Studies, My Portal, Site Help).
+//                          Studies, My Terminal, Site Help).
 //
 // Retired: `funded`. The Funded (prop-challenge) tracker used to be revealed by
 // an admin-granted role; it is now a per-user opt-in under Advanced Trading (see
@@ -79,7 +79,7 @@ export function parseRoles(u: Pick<UserRow, 'roles'>): RoleKey[] {
 }
 
 // Founder-level access: the founder role itself or the permission-equivalent
-// software_developer role. Founder-level is the gate for the Founder Portal and
+// software_developer role. Founder-level is the gate for the Founder Terminal and
 // every founder-only tool.
 export function isFounder(roles: RoleKey[]): boolean {
   return roles.includes('founder') || roles.includes('software_developer');
@@ -108,8 +108,8 @@ export function parseBadges(u: { badges?: string | null }): string[] {
 
 // Workspace access by ROLE. No role stands between a member and Trading or
 // Studies — what gates Trading now is the per-user opt-in (Feature Access),
-// checked by requireWorkspace in the middleware, not a role. The Admin Portal
-// and Founder Portal are gated separately (isAdmin / isFounder).
+// checked by requireWorkspace in the middleware, not a role. The Admin Terminal
+// and Founder Terminal are gated separately (isAdmin / isFounder).
 export function canAccessWorkspace(_roles: RoleKey[], _ws: WorkspaceKey): boolean {
   return true;
 }
@@ -133,8 +133,8 @@ export function isCompanyEmail(email: string | null | undefined): boolean {
 //   2. a sign-in email on the company domain, so an outside collaborator on a
 //      personal address can never enter it whatever roles they hold.
 //
-// Holding both grants nothing inside the main portal — it only reveals the
-// launch section in My Portal and lets the separate sign-in at /employee
+// Holding both grants nothing inside the main terminal — it only reveals the
+// launch section in My Terminal and lets the separate sign-in at /employee
 // succeed (which additionally requires an active employee profile and a second
 // factor). Never true for the demo.
 export function canAccessEmployeePortal(
@@ -184,7 +184,7 @@ export interface PublicUser {
   mustChangePassword: boolean;
   // The user has not yet accepted the currently-effective Terms of Service and
   // Privacy Policy (their stored version differs from LEGAL_VERSION). When true,
-  // the client gates them into the acceptance screen before the portal loads.
+  // the client gates them into the acceptance screen before the terminal loads.
   // Never true for the read-only demo (it operates on nothing to consent to).
   mustAcceptTerms: boolean;
   isDemo: boolean; // the public, read-only demo account
@@ -192,7 +192,7 @@ export interface PublicUser {
     label: string;
     workspaces: WorkspaceKey[];
     readOnlyWorkspaces: WorkspaceKey[];
-    // The optional features this user has turned on for themselves (My Portal ▸
+    // The optional features this user has turned on for themselves (My Terminal ▸
     // Feature Access). Drives which workspaces the sidebar draws; the server is
     // still the enforcer on every endpoint.
     features: UserFeatures;
@@ -200,14 +200,14 @@ export interface PublicUser {
     // opt-in, which is nested under Advanced Trading. Never true for the demo.
     funded: boolean;
     // Whether the separate Employee Portal (/employee) launch link is revealed.
-    // Only says the link is shown — reaching the portal still requires a fresh,
+    // Only says the link is shown — reaching the terminal still requires a fresh,
     // independent sign-in there. Never true for the demo.
     employee: boolean;
     // Whether the user carries admin capability (admin or founder-level).
     admin: boolean;
     // Whether the user is founder-level (founder or software_developer).
     founder: boolean;
-    // Whether this is the portal owner account (the only account that can grant
+    // Whether this is the terminal owner account (the only account that can grant
     // the Founder / Software Developer roles).
     owner: boolean;
   };

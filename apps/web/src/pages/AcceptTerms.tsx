@@ -6,7 +6,7 @@ import { LegalDocBody, RulesBody } from '../workspaces/help/LegalScreens';
 import { TERMS, PRIVACY, LEGAL_EFFECTIVE_DATE, LEGAL_VERSION, COMPANY } from '../legal/content';
 
 // Shown once after login (and again whenever the documents are updated) before
-// the portal loads: the user must review and accept the Terms of Service and
+// the terminal loads: the user must review and accept the Terms of Service and
 // Privacy Policy to operate the platform. Records acceptance server-side, which
 // clears `mustAcceptTerms`. The read-only demo never reaches this screen.
 export function AcceptTerms() {

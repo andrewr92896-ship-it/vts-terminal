@@ -22,7 +22,7 @@ const SUGGESTIONS_BY_WS: Record<string, string[]> = {
   trading: ['How do I log a trade by hand?', 'What’s a healthy daily drawdown buffer?', 'How do I read slippage in my trade log?'],
   studies: ['Explain a concept from my study set', 'Quiz me on a topic', 'Give me a memory hook for a term'],
 };
-const DEFAULT_SUGGESTIONS = ['Summarize what this portal can do', 'What can you help me with here?'];
+const DEFAULT_SUGGESTIONS = ['Summarize what this terminal can do', 'What can you help me with here?'];
 
 export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose }: AskClaudePanelProps) {
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -124,7 +124,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
           {messages.length === 0 && !busy && (
             <div style={{ color: '#aebcd8', fontSize: 13, lineHeight: 1.6 }}>
-              <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the portal.` : 'Ask anything about the portal, your workflow, trading, or finances.'} Powered by VTS AI.</p>
+              <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the terminal.` : 'Ask anything about the terminal, your workflow, trading, or finances.'} Powered by VTS AI.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
                 {suggestions.map((s) => (
                   <button key={s} onClick={() => void send(s)} style={chip(theme)}>{s}</button>

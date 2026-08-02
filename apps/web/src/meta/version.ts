@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.20';
+export const APP_VERSION = 'Beta V 6.21';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.21',
+    date: 'August 2, 2026',
+    notes: [
+      'The site is now called VTS Terminal rather than VTS Portal. The name has changed everywhere it appeared — the sidebar, the browser tab, the installed app on your phone, notifications, the legal documents and the help pages.',
+      'The workspaces renamed with it: My Portal is now My Terminal, Admin Portal is Admin Terminal, and Developer Portal is Developer Terminal. Nothing moved and nothing was lost — only the wording changed.',
+      'The Employee Portal keeps its name. It is a separate site with its own sign-in, and it is meant to read as a different tool.',
+      'Older patch notes below still say “portal”. They are a dated record of what shipped at the time and have been left as written.',
+    ],
+  },
   {
     version: 'Beta V 6.20',
     date: 'August 2, 2026',

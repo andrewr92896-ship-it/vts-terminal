@@ -18,7 +18,7 @@ import {
   type DeskWorkingOrderRow,
 } from './deskBrokers.js';
 
-// The Trade Desk — placing real orders from inside the portal.
+// The Trade Desk — placing real orders from inside the terminal.
 //
 // The hard boundary here, and the one thing not to relax: a trader may only ever
 // trade **their own** broker connections. Everything else on the desk is

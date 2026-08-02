@@ -8,7 +8,7 @@ import { buildNavOrder, isDefaultOrder } from '../../theme/navOrder';
 import { Icon } from '../../components/Icon';
 import { SectionHeader, panel, ghostBtn, primaryBtn, msgStyle } from './adminUi';
 
-// Developer Portal ▸ Sidebar Layout. A founder-only tool to reorder the
+// Developer Terminal ▸ Sidebar Layout. A founder-only tool to reorder the
 // sidebar — the workspaces list and each workspace's sections — for everyone.
 // The order is persisted as a single override (app_settings `nav.order`) that
 // the whole app applies over its code-default nav (see theme/navOrder.ts). This

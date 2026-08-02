@@ -47,7 +47,7 @@ function DocHeader({ title, theme }: { title: string; theme: Theme }) {
           lineHeight: 1.5,
         }}
       >
-        This document is provided for transparency and is not legal advice. VTS Portal is an informational
+        This document is provided for transparency and is not legal advice. VTS Terminal is an informational
         and educational tool only — not financial, investment, or trading advice.
       </div>
     </div>

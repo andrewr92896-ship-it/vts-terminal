@@ -10,7 +10,7 @@ interface SidebarProps {
   screen: string;
   workspaces: WorkspaceKey[]; // the ones this user may see, in nav order
   // Opt-in workspaces the user has NOT turned on. Drawn dimmed with a lock, and
-  // clicking one opens My Portal ▸ Feature Access instead of the workspace — so
+  // clicking one opens My Terminal ▸ Feature Access instead of the workspace — so
   // the feature is discoverable rather than invisible.
   lockedWorkspaces?: Set<WorkspaceKey>;
   // The effective nav (workspace + section order), already reordered by any
@@ -130,7 +130,7 @@ export function Sidebar(props: SidebarProps) {
 
       {/* Employee Portal — pinned above the workspaces list because it is not
           one. It leaves this app entirely for /employee, a separate site with
-          its own sign-in, and opens in a new tab so the portal stays put. */}
+          its own sign-in, and opens in a new tab so the terminal stays put. */}
       {canEmployee && <EmployeePortalLink collapsed={collapsed} />}
 
       {/* Workspaces */}
@@ -208,7 +208,7 @@ export function Sidebar(props: SidebarProps) {
           }}
         >
           <span style={{ fontFamily: C.mono, fontSize: 10, color: C.faint, letterSpacing: '0.5px' }}>
-            VTS Portal
+            VTS Terminal
           </span>
           <span
             style={{
@@ -230,13 +230,13 @@ export function Sidebar(props: SidebarProps) {
 }
 
 // The Employee Portal row. A plain anchor with target="_blank", so the browser
-// opens the separate employee site in a new tab and this portal stays where it
+// opens the separate employee site in a new tab and this terminal stays where it
 // is. rel="noopener noreferrer" matters here beyond the usual hygiene: it denies
-// the new tab a window.opener handle back into the signed-in portal, and stops
+// the new tab a window.opener handle back into the signed-in terminal, and stops
 // the employee site's URL leaking as a referrer.
 //
 // The accent is the employee site's own terracotta, so the row previews where it
-// leads rather than borrowing one of this portal's workspace colours.
+// leads rather than borrowing one of this terminal's workspace colours.
 const EMPLOYEE_ACCENT = '#C25A38';
 
 function EmployeePortalLink({ collapsed }: { collapsed: boolean }) {

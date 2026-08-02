@@ -144,7 +144,7 @@ const SEED_CHANNELS: CatalogChannel[] = [
 // the identical code path each time, and the wall independently reported
 // Bloomberg as live throughout. That isolates it to the broadcaster's own embed
 // restriction. Without this the tile shows YouTube's bare error box, which reads
-// as a fault in the portal rather than a setting at Bloomberg.
+// as a fault in the terminal rather than a setting at Bloomberg.
 //
 // Remove an entry the moment a channel starts allowing embedding again — this is
 // a statement of fact about a channel, not a preference. Nothing here attempts

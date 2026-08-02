@@ -50,7 +50,7 @@ import { startYoutubeWatch } from './trading/youtubeWatch.js';
 import { startPriceAlertWatch } from './trading/priceAlertWatch.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
-// so the whole portal runs as one service.
+// so the whole terminal runs as one service.
 const WEB_DIST = path.resolve(config.apiRoot, '..', 'web', 'dist');
 
 export async function buildServer() {
@@ -180,8 +180,8 @@ async function bootstrapDatabase(): Promise<void> {
   // (the admin/demo users are seeded after migrations, so they need this on a
   // fresh database).
   await seedDefaultTeam();
-  // Give every existing trading team a My Portal leader so it shows as a managed
-  // team (the My Portal Trading Team is now the same team that scopes trades).
+  // Give every existing trading team a My Terminal leader so it shows as a managed
+  // team (the My Terminal Trading Team is now the same team that scopes trades).
   await backfillTeamLeaders();
   // Make sure every broker connection's name says which venue it is at
   // ("Andrew's Kraken", not "Andrew's Trades"). Runs every boot rather than as
@@ -209,7 +209,7 @@ async function main() {
   const app = await buildServer();
   try {
     await app.listen({ port: config.PORT, host: '0.0.0.0' });
-    app.log.info(`VTS portal listening on port ${config.PORT}`);
+    app.log.info(`VTS terminal listening on port ${config.PORT}`);
     // Start the background market-news pollers (production only). Best-effort
     // and non-blocking: failures are contained and never affect serving.
     startFeeds();

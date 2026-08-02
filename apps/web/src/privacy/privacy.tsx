@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
-// "Demo / privacy mode" — a global toggle for showing the portal to others
+// "Demo / privacy mode" — a global toggle for showing the terminal to others
 // without exposing real customer information. When on, components mask
 // customer/client names, contact details, and dollar amounts. It only affects
 // what's rendered (no data changes) and persists across reloads so a live demo

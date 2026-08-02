@@ -287,7 +287,7 @@ export interface LiveVideo {
   upcoming: boolean;
   // False when the broadcaster has restricted embedding. Such a video plays on
   // YouTube and renders "Video unavailable" in any embedded player — which is
-  // indistinguishable, on screen, from the portal being broken. It is not: it is
+  // indistinguishable, on screen, from the terminal being broken. It is not: it is
   // the channel's own setting, and the only honest response is to say so and
   // link out rather than show a dead box.
   embeddable?: boolean;
