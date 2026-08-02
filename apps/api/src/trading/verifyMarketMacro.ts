@@ -245,6 +245,24 @@ console.log('Market Data · macro transform check\n');
   );
 }
 
+// ---- a big percent move drops a decimal rather than being clipped ----
+{
+  const now = Date.parse('2026-08-02T12:00:00Z');
+  // The VIX at 17.09 after a 20.66 close: −17.28%, which rendered as "−17.28%"
+  // and was clipped on screen to "−17.2…".
+  const vix = obs([
+    ['2026-07-24', 16.5],
+    ['2026-07-30', 20.66],
+    ['2026-07-31', 17.09],
+  ]);
+  const r = render('vix', vix, now);
+  check('vix · percent, not points', r.changes[0], '−17.3%');
+  check('vix · small move keeps both decimals', render('vix', obs([
+    ['2026-07-30', 17.04],
+    ['2026-07-31', 17.09],
+  ]), now).changes[0], '+0.29%');
+}
+
 // ---- Kraken's daily candles, for the crypto rows OANDA cannot quote ----
 {
   const now = Date.parse('2026-08-02T12:00:00Z');
