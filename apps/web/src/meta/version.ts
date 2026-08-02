@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.36';
+export const APP_VERSION = 'Beta V 6.37';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.37',
+    date: 'August 2, 2026',
+    notes: [
+      'My Terminal ▸ Preferences has a time zone. Pick a city or follow your device, and the top-bar clock, trade stamps, alert times, headline times and the chart axis all move to it. Eastern stays the default.',
+      'Market hours, strategy sessions and the Fed schedule stay on Eastern whatever you pick — those are the market’s hours, not yours.',
+    ],
+  },
   {
     version: 'Beta V 6.36',
     date: 'August 2, 2026',

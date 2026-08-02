@@ -4,6 +4,7 @@ import { usePrivacy } from '../../privacy/privacy';
 import type { DeletedTradeRecord } from '../../api/types';
 import { ScreenTitle } from './ScreenTitle';
 import { etStamp, etStampFull } from './tradeTime';
+import { zoneFmt } from '../../lib/timezone';
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -16,9 +17,9 @@ const BORDER = '#16294f';
 const MONO = "'IBM Plex Mono', monospace";
 
 const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
-const ET = 'America/New_York';
+// When the trade was deleted, on the reader's chosen clock (Eastern by default).
 function etDateTime(ms: number): string {
-  return new Date(ms).toLocaleString('en-US', { timeZone: ET, month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  return zoneFmt({ month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(ms);
 }
 function fmtPrice(n: number | null): string {
   if (n == null) return '—';

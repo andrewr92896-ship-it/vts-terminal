@@ -2133,9 +2133,8 @@ for a dense row; `showHeld` adds the held time as a third line, which History
 uses since every row there is closed). A **held** time rolls past a day into
 "4d 3h" — a swing hold reading "96h" is unparseable — while the live "x ago"
 reading deliberately keeps counting in hours, as it always has.
-Everything is **Eastern Time**, matching session windows,
-market hours and trade codes, so a stamp means the same instant to every
-teammate. Current call sites: `TradeCard` (Live Wall + the Master board's
+Stamps render in the reader's chosen zone — **Eastern unless they changed it**
+in My Terminal ▸ Preferences (see Display time zone below). Current call sites: `TradeCard` (Live Wall + the Master board's
 Positions tile), `TradeLog` (deck cards + tape rows), `History`, `Funded`,
 `FundedLiveTrades`, `DeletedTrades`, `PositionsTile`'s compact list,
 `DeskPositions` (the Trade Desk's team book),
@@ -2143,6 +2142,53 @@ Positions tile), `TradeLog` (deck cards + tape rows), `History`, `Funded`,
 script in `DeviceSettings.tsx` (which carries its own copy of the formatter, since
 it is a standalone script). **A new position surface must show them too** — use
 this module rather than formatting a date locally.
+
+### Display time zone (`lib/timezone.ts`)
+
+The clock the terminal **displays** times on. Set from **My Terminal ▸
+Preferences**, stored per device in localStorage beside the Trade Log layout
+(`vts.display.timezone`; `'auto'` follows the device, anything else is an IANA
+name). **The default is Eastern and must stay Eastern** — every stamp read ET
+before this existed, so anything short of an explicit choice by the user has to
+render exactly as it did.
+
+`zoneFmt(options)` is the single seam: a cached `Intl.DateTimeFormat` bound to
+the zone in force, keyed on zone + options. Callers used to hoist a formatter to
+module scope for cost; they can't now the zone is a runtime value, so they go
+through the cache instead. `zoneAbbr(ms)` gives the label beside a time —
+"ET"/"CT"/"PT" come from a small map so the US zones keep the terminal's own
+wording, everything else falls through to Intl's DST-aware short name.
+
+**What follows the setting** — the "when did this happen" readings: the top-bar
+clock, a position's opened/closed stamps (`tradeTime.tsx`), an alert's arrival,
+a headline's time, the Live Wall's "Updated …", the chart's own axis, and the
+Scriptable widget script (stamped in at copy time, like its token).
+
+**What deliberately does not**, because it is a fact about the market or about
+the desk rather than about the reader:
+
+- **Session windows, market hours, the FOMC schedule** — `etClock.ts`, Market
+  Data's Fed bar and calendar, and `TradeCard`'s `etTime` which those two use.
+  2:00 PM ET is when the statement lands wherever you are.
+- **Anything bucketed by trading day** — History's day/month grouping,
+  `newsFormat`'s `fmtDayKey`, the trade code. A trading day is an Eastern
+  concept (a 6pm Sunday forex open belongs to Monday), so grouping on the
+  reader's calendar day would move trades between buckets, and between two
+  teammates' buckets.
+- **The Trade Log's CSV export**, which is a shared artifact and says ET in the
+  file so it reads the same for whoever opens it.
+
+Consequence worth stating plainly: once a trader moves off Eastern, they and a
+teammate read the same trade at different wall-clock times. The top-bar clock
+names the zone in force continuously, and every compact stamp carries the full
+form with its abbreviation in the hover title — which is why the stamps
+themselves can stay zone-free without becoming ambiguous. **A new time surface
+should use `zoneFmt`** unless it falls in one of the three categories above.
+
+A zone the browser's ICU build cannot format is filtered out of the picker
+(`usableZoneGroups`) and refused on read, so it can never silently fall back
+mid-use. `Europe/Frankfurt` is the live example — an alias Node rejects
+outright — which is why the list says `Europe/Berlin`.
 
 ### Mobile input zoom (iOS)
 

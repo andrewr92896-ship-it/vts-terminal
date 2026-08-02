@@ -5,6 +5,7 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePushNotifications } from '../../push/usePushNotifications';
 import { ScreenTitle } from './ScreenTitle';
 import { SYMBOL_SUGGESTIONS, symbolLabel } from './tvChart';
+import { zoneAbbr, zoneFmt } from '../../lib/timezone';
 import type {
   AlertRecord,
   AlertsData,
@@ -28,15 +29,9 @@ const INPUT_BG = '#091633';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
-const ET = 'America/New_York';
+// When the alert landed, on the reader's chosen clock (Eastern by default).
 function etTime(ms: number): string {
-  return new Date(ms).toLocaleString('en-US', {
-    timeZone: ET,
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return zoneFmt({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(ms);
 }
 function fmtPrice(n: number | null): string {
   if (n == null) return '—';
@@ -572,7 +567,7 @@ function AlertCard({
             {analyzed ? 'ANALYZED' : 'NEW'}
           </span>
         </div>
-        <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etTime(alert.receivedAt)} ET</span>
+        <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>{etTime(alert.receivedAt)} {zoneAbbr(alert.receivedAt)}</span>
       </div>
 
       {/* Alert meta */}

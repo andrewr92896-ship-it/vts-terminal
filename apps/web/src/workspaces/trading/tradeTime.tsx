@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { zoneAbbr, zoneFmt } from '../../lib/timezone';
 
 // When a position opened, and when it closed — the one place those stamps are
 // formatted. Every surface that shows a position (the Live Wall cards and the
@@ -6,43 +7,47 @@ import type { CSSProperties } from 'react';
 // book, Manual Trades, Deleted Trades) renders them from here, so a trade reads
 // the same wherever you look at it.
 //
-// Everything is in Eastern Time — the clock the desk already runs on for
-// session windows, market hours and the trade code — so a stamp means the same
-// instant to every teammate regardless of where they are. DST is Intl's problem.
+// Stamps render in the zone the reader has chosen (My Terminal ▸ Preferences),
+// which is Eastern unless they changed it — the clock the desk runs on for
+// session windows, market hours and the trade code. DST is Intl's problem.
+//
+// The compact stamp deliberately carries no zone label: the top-bar clock names
+// the zone in force continuously, and the full form below — with its
+// abbreviation — is the hover title on every one of these, so the instant is
+// always one hover away. Adding it to the stamp itself would print the same
+// three characters twice in every stacked open/close cell.
 
 const MUTED = '#9fb0d6';
 const FAINT = '#6f84b0';
 const MONO = "'IBM Plex Mono', monospace";
-const ET = 'America/New_York';
 
-const stampFmt = new Intl.DateTimeFormat('en-US', {
-  timeZone: ET,
+const STAMP_OPTS: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
-});
-const fullFmt = new Intl.DateTimeFormat('en-US', {
-  timeZone: ET,
+};
+const FULL_OPTS: Intl.DateTimeFormatOptions = {
   year: 'numeric',
   month: 'short',
   day: 'numeric',
   hour: 'numeric',
   minute: '2-digit',
   second: '2-digit',
-});
+};
 
 // "Jul 29, 9:31 AM" — the compact stamp shown on a card or in a table cell.
 export function etStamp(ms: number | null | undefined): string {
   if (ms == null) return '—';
-  return stampFmt.format(new Date(ms));
+  return zoneFmt(STAMP_OPTS).format(new Date(ms));
 }
 
 // "Jul 29, 2026, 9:31:05 AM ET" — the unambiguous form, used as the tooltip on
-// every compact stamp so the year and the seconds are always one hover away.
+// every compact stamp so the year, the seconds and the zone are always one
+// hover away.
 export function etStampFull(ms: number | null | undefined): string {
   if (ms == null) return '';
-  return `${fullFmt.format(new Date(ms))} ET`;
+  return `${zoneFmt(FULL_OPTS).format(new Date(ms))} ${zoneAbbr(ms)}`;
 }
 
 // "18m" / "5h 18m" — the gap between two instants, rounded to the minute.

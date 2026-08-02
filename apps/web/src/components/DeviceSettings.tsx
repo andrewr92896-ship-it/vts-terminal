@@ -5,6 +5,7 @@ import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
 import { ownerHandle } from '../workspaces/trading/TradeCard';
 import { usePushNotifications } from '../push/usePushNotifications';
+import { getDisplayZone } from '../lib/timezone';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 
@@ -416,13 +417,15 @@ function PerUserNotificationsSection({ accent, accentText }: { accent: string; a
   );
 }
 
-// Build the ready-to-paste Scriptable script, with the caller's terminal origin
-// and their freshly-generated read-only token baked in. The script itself uses
-// only string concatenation (no template literals), so the two ${...} below are
-// the only interpolations. It renders one teammate's open positions styled like
+// Build the ready-to-paste Scriptable script, with the caller's terminal origin,
+// their freshly-generated read-only token, and the clock they read the terminal
+// on baked in. The script itself uses only string concatenation (no template
+// literals), so the three ${...} below are the only interpolations. The zone is
+// stamped in at generation time the same way the token is — change it in
+// Preferences and the widget needs re-copying to follow. It renders one teammate's open positions styled like
 // the Live Wall TradeCard; each home-screen widget instance picks whose via its
 // Scriptable "Parameter" (a teammate handle; blank = the whole team).
-function buildScriptableScript(origin: string, token: string): string {
+function buildScriptableScript(origin: string, token: string, zone: string): string {
   return `// VTS Terminal — Open Positions widget
 // One widget = one person: long-press → "Edit Widget" → set Parameter to a
 // teammate's handle (e.g. dale). Leave it blank for the whole team.
@@ -430,6 +433,7 @@ function buildScriptableScript(origin: string, token: string): string {
 //   • Medium — a compact row for everyone (or the chosen person)
 //   • Small  — just your own top position, clean (or the chosen person's)
 const BASE = "${origin}";
+const TZ = "${zone}";
 const TOKEN = "${token}";
 const PARAM = (args.widgetParameter||"").trim();
 
@@ -442,9 +446,9 @@ function money(n){ const s = Math.abs(n).toLocaleString("en-US",{minimumFraction
 function pips(n){ const s = Math.abs(n).toFixed(1); return (n>0?"+":n<0?"-":"")+s+" pip"+(Math.abs(n)===1?"":"s"); }
 function price(n){ if(n===null||n===undefined) return "—"; if(Math.abs(n)>=1000) return n.toLocaleString("en-US",{maximumFractionDigits:2}); return String(Number(n.toFixed(5))); }
 function since(ms){ if(!ms) return ""; let m = Math.max(0, Math.round((Date.now()-ms)/60000)); if(m<60) return m+"m ago"; const h=Math.floor(m/60); m=m%60; return m? h+"h "+m+"m ago" : h+"h ago"; }
-// When the position opened, on the desk's Eastern clock — same stamp the site
-// shows beside "5h 18m ago" on every position.
-function stamp(ms){ if(!ms) return ""; return new Date(ms).toLocaleString("en-US",{timeZone:"America/New_York",month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); }
+// When the position opened, on the clock the site was set to when this script
+// was copied — same stamp it shows beside "5h 18m ago" on every position.
+function stamp(ms){ if(!ms) return ""; return new Date(ms).toLocaleString("en-US",{timeZone:TZ,month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); }
 
 async function loadData(){
   let url = BASE + "/api/widget/positions";
@@ -591,7 +595,7 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
     return () => { alive = false; };
   }, []);
 
-  const script = token ? buildScriptableScript(window.location.origin, token) : '';
+  const script = token ? buildScriptableScript(window.location.origin, token, getDisplayZone()) : '';
 
   async function copy(what: 'token' | 'script', text: string) {
     try {

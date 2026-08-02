@@ -6,8 +6,9 @@ import { usePrivacy } from '../../privacy/privacy';
 import { BrokerConnections } from './BrokerConnections';
 import { DeskSettingsModal } from './DeskSettingsModal';
 import { configFrom } from './outcome';
-import { TradeCard, etTime } from './TradeCard';
+import { TradeCard } from './TradeCard';
 import { ScreenTitle } from './ScreenTitle';
+import { zoneAbbr, zoneFmt } from '../../lib/timezone';
 import type { LiveWall as LiveWallData } from '../../api/types';
 
 // Trading workspace palette — navy/gold "pro-terminal" theme. Hard-coded here
@@ -23,6 +24,13 @@ const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
 const REFRESH_MS = 10_000;
+
+// When the wall last refreshed, on the reader's chosen clock (Eastern by
+// default). Not Market Data's `etTime`, which stays fixed to Eastern because it
+// states market schedule rather than the reader's own time.
+function refreshedAt(ms: number): string {
+  return zoneFmt({ hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(ms);
+}
 
 // The chart board pulls in react-grid-layout and the TradingView embeds, so it
 // is code-split — it only loads when the trader opens the Charts view, keeping
@@ -113,7 +121,7 @@ export function LiveWall() {
         {showPositions && data && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>
-              Updated {etTime(data.generatedAt)} ET
+              Updated {refreshedAt(data.generatedAt)} {zoneAbbr(data.generatedAt)}
             </span>
             {data.canSeeBalances && (
               <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>
@@ -156,7 +164,7 @@ export function LiveWall() {
           <>
             {staleError && (
               <div style={warnBanner}>
-                Showing the last positions from {etTime(data.generatedAt)} ET. Couldn't refresh: {staleError}
+                Showing the last positions from {refreshedAt(data.generatedAt)} {zoneAbbr(data.generatedAt)}. Couldn't refresh: {staleError}
               </div>
             )}
 
