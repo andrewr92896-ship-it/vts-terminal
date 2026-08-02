@@ -602,9 +602,11 @@ workspaces list** (see `theme/nav.ts` order).
         countdown and Market Data's bar read **one** schedule. Update that list
         each year and both follow.
       - The starter channels' **ids are seeded outright** rather than left to the
-        background resolver (migration `0086` backfills desks seeded before
+        background resolver (migration `0088` backfills desks seeded before
         that). A row with no id cannot embed at all, so the set every desk starts
-        with must not depend on a lookup that can fail.
+        with must not depend on a lookup that can fail. *(`0086` was written to do
+        that backfill and was never registered in the drizzle journal, so it never
+        ran; its file is gone and `0088` carries the work.)*
     - Only the trader's **view state** persists per user in `market_news_streams`
       (`watching` order, `docked`, `cols`, `notify`; migration `0081` dropped the
       old per-user `channels` column). `GET|PUT /api/trading/market-news/streams`;
@@ -1597,15 +1599,30 @@ Run before merging (both must pass):
 
 - Typecheck: `npm run typecheck` (root; api + web). Single workspace:
   `npm --workspace @vts/api run typecheck` / `@vts/web`.
-- **A migration is not verified by `db:migrate` printing "Migrations applied."**
-  Two things silently stop one from running, and both have bitten this repo:
-  it must be registered in `migrations/meta/_journal.json` (adding the `.sql`
-  file is not enough), and its statements must be separated by
-  `--> statement-breakpoint` or **only the first statement is applied**. After
-  adding one, run it against a scratch database and then list the tables:
-  `DATABASE_URL="file:/tmp/x.db" npm run db:migrate` and check what actually
-  exists. See `docs/design/investments/NOTES.md` for the audit of which existing
-  migrations are affected.
+- **Migrations: `npm run verify:migrations`.** A migration is *not* verified by
+  `db:migrate` printing "Migrations applied." Three things silently stop one from
+  running, and all three have bitten this repo:
+  - it must be registered in `migrations/meta/_journal.json` — adding the `.sql`
+    file is not enough, drizzle iterates the journal and never reads the folder;
+  - its statements must be separated by the statement-breakpoint marker, or the
+    whole file is handed over as one statement and **only the first is applied**;
+  - that marker must sit on **its own line** (or straight after a `;`). It is
+    matched as plain text anywhere in the file, so merely *mentioning* it in a
+    comment splits the migration at that sentence and hands the driver a broken
+    half-statement — which surfaces as an unhelpful `SQLITE_OK: not an error`.
+
+  `verify:migrations` checks all three and is the thing to run after adding one.
+  Migrations already applied to production with the breakpoint fault are listed
+  in `APPLIED_WITH_KNOWN_FAULT` in `db/verifyMigrations.ts`, each naming the later
+  migration that repaired it; **never add a new file to that list** — a new one
+  can just be written correctly.
+
+  **Never repair an applied migration by editing it.** Drizzle records a
+  migration as done by its journal timestamp, so an edit changes nothing on any
+  database that has already seen it. Write a new migration (see `0088`).
+
+  It is still worth applying a new one to a scratch database and listing what
+  actually exists: `DATABASE_URL="file:/tmp/x.db" npm run db:migrate`.
 - Build: `npm run build` (api `tsc` + web `vite build`). The web build emits
   **two** HTML entries — `dist/index.html` and `dist/employee.html`; if the
   latter is missing, `/employee` serves a plain "not built" 404.

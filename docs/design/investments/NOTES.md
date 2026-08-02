@@ -119,11 +119,11 @@ metals and does not answer a server.
   paid keys, and (for Plaid) a production access request. Nothing here can be
   built past manual entry without that. The `source` column is ready for it.
 - **Market data provider.** Same shape of decision for fund and equity prices.
-- **Pre-existing migration defects found while working here, deliberately not
-  touched.** They are unrelated to Investments, and fixing them means running
-  unreviewed data migrations on production in the middle of the night. Audited
-  every migration in the tree; exactly four are affected, and only the first two
-  have consequences that are still live:
+- **Pre-existing migration defects found while working here — now repaired by
+  `0088_repair_skipped_migrations`** (owner asked for the fix the next morning).
+  They were unrelated to Investments and were left alone on the night, because
+  repairing them means running a data migration on production. Audited every
+  migration in the tree; exactly four were affected:
 
   | migration | what did not run | consequence |
   |---|---|---|
@@ -132,6 +132,37 @@ metals and does not answer a server.
   | `0085_connection_labels_name_the_venue` | 3 of 4 statements | **Harmless.** CLAUDE.md already states this migration is not the enforcement — `backfillConnectionLabels()` re-applies it on every boot, which is why the labels are correct anyway. |
   | `0086_market_news_channel_repair` | all of it (not in the journal) | **Superseded.** The starter channel ids it would have backfilled are now seeded outright, and the background resolver fills any gap. Worth deleting the file or registering it, but nothing is broken. |
 
-  Recommended fix, when the owner wants it, is a **new** migration rather than
-  editing these: the old ones are recorded as applied, so amending them changes
-  nothing on a database that has already seen them.
+  The repair is a **new** migration rather than edits to these: drizzle records a
+  migration as applied by its journal timestamp, so amending one changes nothing
+  on a database that has already seen it.
+
+  What `0088` does, and the care each part needed:
+
+  - **Grandfathering** is deliberately narrow. A user is given the desk back only
+    if they have no `user_features` row *and* either were created before Feature
+    Access shipped (Beta V 5.93, 31 July 2026) or own data that can only exist if
+    they had the desk — a broker connection, a trade, a position, a hand-kept
+    book, a session, a board, a challenge. Neither clause can fire for a genuinely
+    new account, because silently switching the trading desk on for somebody who
+    never asked is worse than the bug being fixed. A row that already exists is
+    never touched, so a **deliberate opt-out stays opted out**.
+  - **The unique index needed a dedupe first**, or `CREATE UNIQUE INDEX` would
+    fail on existing duplicates and take the migration down. The earliest row per
+    `(team_id, key)` survives — it is the one saved tiles point at. Duplicates
+    were genuinely plausible: `teamChannels()` says in its own comment that its
+    `onConflictDoNothing()` relies on that index for idempotency, and it has had
+    no constraint to conflict on.
+  - **`0086`'s file is deleted**, not registered. It never ran anywhere and never
+    would; its work is folded into `0088`. An orphan migration that looks applied
+    is what made this take so long to spot in the first place.
+
+  Verified by migrating a scratch database to *exactly* the pre-fix state (0088
+  removed from the journal, so 0083/0084 land broken the same way they did in
+  production), seeding all six user situations plus duplicate and half-resolved
+  channel rows, then applying 0088 and asserting each outcome.
+
+- **`npm run verify:migrations`** now fails on any of the three ways a migration
+  can silently do nothing. The third was found by writing `0088` itself: quoting
+  the statement-breakpoint marker inside a comment splits the file at that
+  sentence, because drizzle matches it as plain text anywhere — which surfaces as
+  a bare `SQLITE_OK: not an error`.

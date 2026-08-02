@@ -610,6 +610,13 @@
       "when": 1782341836908,
       "tag": "0087_investments",
       "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "6",
+      "when": 1782341936908,
+      "tag": "0088_repair_skipped_migrations",
+      "breakpoints": true
     }
   ]
 }
