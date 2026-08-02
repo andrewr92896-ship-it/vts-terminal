@@ -65,7 +65,6 @@ import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
-import { ComingSoon, COMING_SOON_SCREENS } from '../workspaces/investments/ComingSoon';
 import { INVESTMENT_SCREENS } from '../workspaces/investments/screens';
 import { FeatureAccess } from '../workspaces/myportal/FeatureAccess';
 
@@ -108,6 +107,9 @@ const InvestmentsWorkspace = lazy(() =>
 // Investments UI kit.
 const InvestmentHoldingsScreen = lazy(() =>
   import('../workspaces/myportal/InvestmentHoldings').then((m) => ({ default: m.InvestmentHoldingsScreen })),
+);
+const NetWorthScreen = lazy(() =>
+  import('../workspaces/myportal/NetWorth').then((m) => ({ default: m.NetWorthScreen })),
 );
 
 // Screens that have real implementations; everything else falls back to the
@@ -518,12 +520,11 @@ export function Portal() {
   function renderExtra(scr: string): React.ReactNode {
     // The Investments workspace — the long-term portfolio tracker.
     if (INVESTMENT_SCREENS.has(scr)) return <InvestmentsWorkspace screen={scr} onNavigate={selectScreen} />;
-    // What is left on the placeholder: Net Worth, which summarises everything
-    // the other screens show plus every asset and liability on top.
-    if (COMING_SOON_SCREENS.has(scr)) return <ComingSoon screen={scr} theme={theme} />;
     switch (scr) {
       case 'my_holdings':
         return <InvestmentHoldingsScreen onNavigate={goToSection} />;
+      case 'my_networth':
+        return <NetWorthScreen onNavigate={goToSection} />;
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
       case 'my_access':

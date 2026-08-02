@@ -16,9 +16,19 @@ All eight sections are built and routed. What is **not** built, and why:
   build. `investment_accounts.source` is ready for it.
 - **Live prices for funds** — no free provider covers mutual funds or collective
   trusts. Owner decision.
-- **My Terminal ▸ Net Worth** — still Coming Soon. It summarises everything the
-  other screens show and then adds every asset and liability on top, so it comes
-  last.
+- Nothing. **Every section is built**, including both My Terminal roll-ups, and
+  the "Coming Soon" placeholder component has been deleted rather than left in
+  the tree saying that about shipped features.
+
+**My Terminal ▸ Net Worth is built** (`myportal/netWorth.ts`). Most of the number
+is not stored: the portfolio and the trading account are read live through
+`getMyHoldings`, the same function Investment Holdings uses, because two
+definitions of "what my portfolio is worth" would drift and show two totals with
+no way to say which was right. There is deliberately no hand-entry category for
+"brokerage" or "investments" — offering one invites double-counting the largest
+figure on the screen. And when the tracked side cannot be totalled the screen
+shows **no** net worth rather than one quietly missing a piece, and records no
+snapshot in that state, or the trend line keeps a dip that never happened.
 
 **My Terminal ▸ Investment Holdings is built** (`myportal/holdings.ts` →
 `GET /api/my-portal/holdings`). The one thing it had to get right is what may be

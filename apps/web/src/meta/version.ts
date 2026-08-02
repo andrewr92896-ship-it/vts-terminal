@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.25';
+export const APP_VERSION = 'Beta V 6.26';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.26',
+    date: 'August 2, 2026',
+    notes: [
+      'New: My Terminal \u25b8 Net Worth. Everything you own minus everything you owe, in one number, recorded once a day so you can watch it move.',
+      'Your investment portfolio and trading account are counted automatically \u2014 you do not enter them, and the screen marks them so you do not add them a second time by mistake. Everything else goes in by hand: a house, a car, savings, a mortgage, a card balance.',
+      'Debts are entered as plain positive amounts and subtracted for you. A negative net worth shows honestly rather than being hidden.',
+      'If part of the picture cannot be read \u2014 say a broker is not answering \u2014 no total is shown at all, and that day is not recorded. A net worth with a piece missing looks complete when it is not.',
+      'That completes the build: every section in Investments and both My Terminal summaries are now live.',
+    ],
+  },
   {
     version: 'Beta V 6.25',
     date: 'August 2, 2026',

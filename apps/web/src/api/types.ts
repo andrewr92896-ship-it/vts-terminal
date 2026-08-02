@@ -2014,3 +2014,81 @@ export interface MyHoldings {
   top: CombinedHoldingRow[];
   asOf: number;
 }
+
+// ---- My Terminal ▸ Net Worth ----
+// Everything you own minus everything you owe. Mirrors
+// apps/api/src/myportal/netWorth.ts.
+
+export type NetWorthKind = 'asset' | 'liability';
+
+export type NetWorthCategory =
+  | 'cash'
+  | 'real_estate'
+  | 'vehicle'
+  | 'crypto'
+  | 'business'
+  | 'valuables'
+  | 'retirement_other'
+  | 'other_asset'
+  | 'mortgage'
+  | 'auto_loan'
+  | 'student_loan'
+  | 'credit_card'
+  | 'personal_loan'
+  | 'other_debt';
+
+export interface NetWorthItem {
+  id: string;
+  kind: NetWorthKind;
+  category: NetWorthCategory;
+  label: string;
+  /** Always positive; `kind` carries which side of the ledger it is on. */
+  value: number;
+  note: string | null;
+  active: boolean;
+  sortOrder: number;
+  updatedAt: number;
+}
+
+export interface NetWorthItemInput {
+  kind: NetWorthKind;
+  category: NetWorthCategory;
+  label: string;
+  value: number;
+  note?: string | null;
+  active?: boolean;
+  sortOrder?: number;
+}
+
+export interface NetWorthTracked {
+  investments: number;
+  trading: number;
+  tradingEnabled: boolean;
+  /** False when the tracked side could not be totalled; `note` says why. */
+  available: boolean;
+  note: string | null;
+}
+
+export interface NetWorthPoint {
+  onDate: string;
+  assets: number;
+  liabilities: number;
+  netWorth: number;
+}
+
+export interface NetWorth {
+  tracked: NetWorthTracked;
+  assets: NetWorthItem[];
+  liabilities: NetWorthItem[];
+  totals: {
+    assets: number;
+    liabilities: number;
+    /** Null when the tracked side is incomplete — a total with a hole in it
+     *  is worse than none, because it looks complete. */
+    netWorth: number | null;
+    manualAssets: number;
+  };
+  history: NetWorthPoint[];
+  totalDays: number;
+  asOf: number;
+}
