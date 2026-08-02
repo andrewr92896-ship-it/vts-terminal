@@ -1,6 +1,7 @@
 import { config } from '../config.js';
 import { fetchFredSeries, type FredObservation } from './brokers/fred.js';
 import type { LiveQuote } from './marketQuotes.js';
+import { pctDecimals } from './marketFormat.js';
 
 // Live values for the Market Data board's MACRO series, from FRED.
 //
@@ -361,8 +362,11 @@ function fmtDelta(diff: number | null, def: MacroDef): string {
 // it.
 function fmtPct(pct: number | null, decimals: number): string {
   if (pct == null || !Number.isFinite(pct)) return '—';
-  const rounded = Number(pct.toFixed(decimals));
-  const body = `${Math.abs(rounded).toFixed(decimals)}%`;
+  // Same width rule as the price side, so a row reads identically whichever
+  // provider filled it — see `pctDecimals` in marketFormat.ts.
+  const dp = pctDecimals(pct, decimals);
+  const rounded = Number(pct.toFixed(dp));
+  const body = `${Math.abs(rounded).toFixed(dp)}%`;
   if (rounded === 0) return body;
   return withSign(rounded, body, true);
 }

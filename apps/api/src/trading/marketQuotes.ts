@@ -10,6 +10,7 @@ import {
   type CryptoDailyClose,
 } from './brokers/crypto.js';
 import { resolveOandaPricingConfig } from './priceSource.js';
+import { pctDecimals } from './marketFormat.js';
 
 // Live values for the Market Data board's price series, from OANDA.
 //
@@ -134,8 +135,9 @@ function fmtValue(n: number, decimals: number): string {
 // catalog uses for a period that has no reading.
 function fmtPct(pct: number | null, decimals: number): string {
   if (pct == null || !Number.isFinite(pct)) return '—';
-  const rounded = Number(pct.toFixed(decimals));
-  const body = Math.abs(rounded).toFixed(decimals);
+  const dp = pctDecimals(pct, decimals);
+  const rounded = Number(pct.toFixed(dp));
+  const body = Math.abs(rounded).toFixed(dp);
   if (rounded === 0) return `${body}%`;
   return `${rounded > 0 ? '+' : '−'}${body}%`;
 }

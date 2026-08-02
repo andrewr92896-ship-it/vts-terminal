@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.14';
+export const APP_VERSION = 'Beta V 6.15';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.15',
+    date: 'August 2, 2026',
+    notes: [
+      'Fixed a change figure getting cut off mid-number. A double-digit percentage move was too wide for its column, so the VIX read “−17.2…” instead of “−17.3%”. Large moves now drop one decimal so they always fit; small moves keep their precision.',
+    ],
+  },
   {
     version: 'Beta V 6.14',
     date: 'August 2, 2026',
