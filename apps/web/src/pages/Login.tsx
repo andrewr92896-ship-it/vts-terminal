@@ -111,7 +111,6 @@ export function Login() {
           autoComplete="email"
           autoCapitalize="none"
           autoCorrect="off"
-          placeholder="you@vitalistradingsystems.com"
           autoFocus
           style={inputStyle}
         />
