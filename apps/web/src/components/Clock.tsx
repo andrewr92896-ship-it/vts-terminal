@@ -15,10 +15,16 @@ const DATE_OPTS: Intl.DateTimeFormatOptions = {
 };
 
 // Ticking clock, AM/PM, in the zone the user reads the terminal in (Eastern
-// unless they have changed it in My Terminal ▸ Preferences). It names its zone
-// beside the time, and it is the terminal's continuous statement of which clock
-// every other stamp is on — which is why the compact stamps elsewhere can stay
-// zone-free without becoming ambiguous.
+// unless they have changed it in My Terminal ▸ Preferences). It is the
+// terminal's continuous statement of which clock every other stamp is on —
+// which is why the compact stamps elsewhere can stay zone-free without becoming
+// ambiguous.
+//
+// BOTH lines name the zone. The date rolls with it too (at 11:30 PM Eastern it
+// already reads the next day in London), and on the zones a US reader is most
+// likely to pick that is the only visible difference for most of the day — so
+// the date line saying which clock it is on is what makes it checkable rather
+// than something to be taken on trust.
 //
 // It subscribes to the setting because it stays mounted while the setting is
 // changed; without that it would keep ticking in the old zone.
@@ -51,7 +57,7 @@ export function Clock({ compact = false }: { compact?: boolean }) {
         {timeFmt.format(now)} {zoneAbbr(now.getTime())}
       </div>
       <div style={{ fontSize: compact ? 8.5 : 10, color: '#7488b5', letterSpacing: '0.3px' }}>
-        {dateFmt.format(now)}
+        {dateFmt.format(now)} {zoneAbbr(now.getTime())}
       </div>
     </div>
   );

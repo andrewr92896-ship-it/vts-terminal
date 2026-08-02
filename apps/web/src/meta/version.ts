@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.38';
+export const APP_VERSION = 'Beta V 6.39';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.39',
+    date: 'August 2, 2026',
+    notes: [
+      'The date under the top-bar clock now names its time zone, the way the time above it already did.',
+    ],
+  },
   {
     version: 'Beta V 6.38',
     date: 'August 2, 2026',
