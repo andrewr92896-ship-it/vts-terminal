@@ -250,7 +250,7 @@ export function Portal() {
   );
   // Opt-in workspaces this user has NOT turned on. The sidebar still draws them,
   // dimmed and locked, so the feature is discoverable; clicking one opens
-  // Feature Access rather than the workspace.
+  // Premium Features rather than the workspace.
   const locked = useMemo(
     () =>
       new Set<WorkspaceKey>(
@@ -501,7 +501,7 @@ export function Portal() {
   const canEmployee = !user!.isDemo && canAccessEmployeePortal(effectiveRoles, user!.email);
 
   // Keep the selected workspace and screen valid. Turning a feature off from
-  // Feature Access can pull the workspace you are standing in out from under
+  // Premium Features can pull the workspace you are standing in out from under
   // you, so bounce out of it rather than leaving a dead screen mounted; the same
   // effect drops a viewer off the Funded section when that opt-in goes off.
   useEffect(() => {

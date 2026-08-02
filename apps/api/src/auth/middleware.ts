@@ -74,7 +74,7 @@ export const requireFounder: preHandlerHookHandler = async (
 
 // Reject unless the logged-in user can access the given workspace.
 //
-// Trading is opt-in (My Terminal ▸ Feature Access), so the workspace guard checks
+// Trading is opt-in (My Terminal ▸ Premium Features), so the workspace guard checks
 // that too — which means every endpoint already behind it inherits the gate
 // rather than each route having to remember. Market-facing endpoints that moved
 // to the always-on Markets workspace use `requireMarkets` instead.
@@ -100,8 +100,8 @@ export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
 // opted into nothing.
 export const requireMarkets: preHandlerHookHandler = requireAuth;
 
-// Reject unless the user has opted into Advanced Trading (My Terminal ▸ Feature
-// Access). This is the gate on the whole desk — placing and reviewing trades,
+// Reject unless the user has opted into Advanced Trading (My Terminal ▸ Premium
+// Features). This is the gate on the whole desk — placing and reviewing trades,
 // broker connections, alerts, strategy sessions, the manual book. The
 // market-facing endpoints behind the Markets workspace (news, the economic
 // calendar, market data, the chart board) deliberately do NOT use this guard:
@@ -177,9 +177,11 @@ export function requirePremium(feature: PremiumFeature): preHandlerHookHandler {
 // currently fire: the read-only role variants (`trading_viewer` and friends) are
 // retired, so isWorkspaceReadOnly() is false for everyone and the only read-only
 // account is the demo, which demoGuard stops before this runs. Keep using this
-// on writes anyway — it is the single place a paid/read-only tier's check lands
-// if one returns, and putting writes on requireWorkspace instead would silently
-// remove that seam.
+// on writes anyway — it is where a read-only tier's check would land if one is
+// ever introduced, and putting writes on requireWorkspace instead would silently
+// remove that seam. (The PAID tier's check is separate: requirePremium above,
+// composed alongside this rather than folded into it, because "has not paid" and
+// "may not write" are different refusals with different answers.)
 export function requireWorkspaceWrite(ws: WorkspaceKey): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const user = request.currentUser;

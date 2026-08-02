@@ -146,7 +146,7 @@ const restoreSchema = z.object({
 
 export async function tradingRoutes(app: FastifyInstance) {
   // The desk. `requireWorkspace('trading')` now also checks the Advanced Trading
-  // opt-in (My Terminal ▸ Feature Access), so everything on these two guards is
+  // opt-in (My Terminal ▸ Premium Features), so everything on these two guards is
   // refused for a user who has not turned the desk on.
   const read = { preHandler: requireWorkspace('trading') };
   const write = { preHandler: requireWorkspaceWrite('trading') };

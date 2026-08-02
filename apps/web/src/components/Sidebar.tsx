@@ -10,7 +10,7 @@ interface SidebarProps {
   screen: string;
   workspaces: WorkspaceKey[]; // the ones this user may see, in nav order
   // Opt-in workspaces the user has NOT turned on. Drawn dimmed with a lock, and
-  // clicking one opens My Terminal ▸ Feature Access instead of the workspace — so
+  // clicking one opens My Terminal ▸ Premium Features instead of the workspace — so
   // the feature is discoverable rather than invisible.
   lockedWorkspaces?: Set<WorkspaceKey>;
   // The effective nav (workspace + section order), already reordered by any
@@ -315,7 +315,7 @@ function NavRow({
   collapsed: boolean;
   dot?: boolean;
   // A workspace the user hasn't opted into: dimmed, with a padlock in place of
-  // the usual end-of-row furniture. Still clickable — it leads to Feature Access.
+  // the usual end-of-row furniture. Still clickable — it leads to Premium Features.
   locked?: boolean;
   onClick: () => void;
 }) {
@@ -359,7 +359,7 @@ function NavRow({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={style}
-      title={locked ? `${label} — not turned on. Open Feature Access to add it.` : collapsed ? label : undefined}
+      title={locked ? `${label} — not turned on. Open Premium Features to add it.` : collapsed ? label : undefined}
     >
       <span style={{ position: 'relative', display: 'inline-flex', flex: 'none' }}>
         <Icon name={icon} size={16} color={iconColor} />

@@ -130,6 +130,11 @@ export async function seedAdmin(): Promise<void> {
   // install migration 0083 has nothing to grandfather (the users table is empty
   // until this runs), so without this the owner would find their own desk
   // switched off on the very first sign-in.
+  //
+  // No membership row is written, and none is needed: the owner holds `founder`,
+  // and getMembership() answers Max on roles before it ever looks for a row. The
+  // same is true of migration 0090's grandfathering — it has nobody to carry over
+  // on a fresh install either, and does not need to.
   await db.insert(userFeatures).values({
     id: crypto.randomUUID(),
     userId: adminId,

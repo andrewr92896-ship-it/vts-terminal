@@ -11,9 +11,25 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.30';
+export const APP_VERSION = 'Beta V 6.31';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.31',
+    date: 'August 2, 2026',
+    notes: [
+      'Memberships. The terminal now has paid tiers — Free, Premium and Max — ahead of opening to the public. Eight things sit behind them: VTS AI, broker and API connections, Funded Account tracking, making your own study games, custom Live Wall boards, trading teams, badges and Strategy Sessions. Everyone already on the terminal keeps everything, permanently.',
+      'My Terminal ▸ Premium Features is now Premium Features, and shows what your membership includes.',
+      'Administrator Log (Admin Terminal). Every membership an admin grants is recorded with who granted it and why — a reason is required. Bug reports, support requests and Early Access requests appear here too: red while they need somebody, green once closed.',
+      'Admin Guidelines (Admin Terminal). The rules admins work to, and how to handle the situations that come up.',
+      'Administrator chat. A third tab in the corner chat, for founders, developers and admins.',
+      'Developer Blog (Developer Terminal). An idea board. Posts marked VTS Development come from Claude Code.',
+      'Fixed: phone notifications, Pushover, the positions widget, broker connections and the trade alert sound were invisible for every account. Phone alerts and Pushover now work without the trading desk turned on, since price alerts are included with every account.',
+      'Investment Holdings has been removed from My Terminal — the Investments workspace already tracks your portfolio.',
+      'Early Release is now a rocket. A gold star means Premium; a diamond means Max.',
+      'Trimmed the redundant how-to tips that had built up across the terminal.',
+    ],
+  },
   {
     version: 'Beta V 6.30',
     date: 'August 2, 2026',

@@ -111,7 +111,7 @@ export function parseBadges(u: { badges?: string | null }): string[] {
 }
 
 // Workspace access by ROLE. No role stands between a member and Trading or
-// Studies — what gates Trading now is the per-user opt-in (Feature Access),
+// Studies — what gates Trading now is the per-user opt-in (Premium Features),
 // checked by requireWorkspace in the middleware, not a role. The Admin Terminal
 // and Founder Terminal are gated separately (isAdmin / isFounder).
 export function canAccessWorkspace(_roles: RoleKey[], _ws: WorkspaceKey): boolean {

@@ -68,7 +68,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'news', label: 'Market News', icon: 'newspaper' },
     ],
   },
-  // Advanced Trading — opt-in (My Terminal ▸ Feature Access). The desk: placing
+  // Advanced Trading — opt-in (My Terminal ▸ Premium Features). The desk: placing
   // trades, reviewing them, alerts, sessions, and the hand-kept manual book.
   {
     key: 'trading',
@@ -214,11 +214,11 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
 // Trading); the demo never sees them.
 export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
 
-// Workspaces a user turns on for themselves in My Terminal ▸ Feature Access, keyed
+// Workspaces a user turns on for themselves in My Terminal ▸ Premium Features, keyed
 // to the feature that reveals each. A workspace not listed here is included with
 // every account. When one is off the sidebar still draws its row — dimmed, with
 // a lock — so the feature is discoverable instead of invisible; clicking it
-// opens Feature Access rather than the workspace.
+// opens Premium Features rather than the workspace.
 export const OPT_IN_WORKSPACES: Record<string, 'advancedTrading'> = {
   trading: 'advancedTrading',
 };

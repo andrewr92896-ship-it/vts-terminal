@@ -887,7 +887,7 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
 });
 export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
 
-// ---- Feature Access (My Terminal ▸ Feature Access) ----
+// ---- Feature Access (My Terminal ▸ Premium Features) ----
 // One row per user recording which optional parts of the terminal they have turned
 // on for themselves. Everything here is OFF for a new account — Markets,
 // Investments, Studies, My Terminal and Site Help need no row and are never listed

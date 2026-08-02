@@ -219,7 +219,7 @@ export const api = {
   acceptTerms(): Promise<{ user: User }> {
     return request('/api/auth/accept-terms', { method: 'POST', body: JSON.stringify({}) });
   },
-  // My Terminal ▸ Feature Access — the optional parts of the terminal this user has
+  // My Terminal ▸ Premium Features — the optional parts of the terminal this user has
   // turned on. `me()` already carries them on user.access.features; these two are
   // for the screen that edits them.
   features(): Promise<{ features: UserFeatures }> {
