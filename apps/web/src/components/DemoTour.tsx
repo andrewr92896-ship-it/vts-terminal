@@ -44,7 +44,7 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'trading',
     screen: 'desk',
     title: 'Trade Analysis',
-    body: 'The Trade Log, Live Brokers, and History views in one place — a full journal of every fill with slippage and realized P/L, live broker capital, and closed-trade breakdowns by strategy and instrument. Log trades in plain English and get recaps from VTS AI.',
+    body: 'The Trade Log and Live Brokers in one place — a full journal of every fill with slippage and realized P/L, breakdowns by strategy and instrument, and live broker capital. Log trades in plain English and get recaps from VTS AI.',
   },
   {
     workspace: 'trading',

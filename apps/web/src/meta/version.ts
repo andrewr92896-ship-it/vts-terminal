@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.39';
+export const APP_VERSION = 'Beta V 6.40';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.40',
+    date: 'August 2, 2026',
+    notes: [
+      'Yahoo Finance now leads the live-stream list — it is the one channel a free account can play, so it should not sit last under three it cannot open.',
+      'Premium and above can watch up to four live streams at once instead of one; free accounts still play one at a time.',
+      'A free account now sees the whole channel list with a Premium star on the ones it cannot open yet, and the Max diamond on "Add a channel", instead of them being hidden.',
+      'Live Brokers is now Max, marked with the diamond. Connecting a broker moves up with it.',
+      'Trade Analysis dropped the History tab. It showed the same closed trades the Trade Log already had — the day and month filters, the By Strategy and By Instrument breakdowns, the held time, the strategy column, and correcting a closed broker trade all moved into the Trade Log.',
+    ],
+  },
   {
     version: 'Beta V 6.39',
     date: 'August 2, 2026',

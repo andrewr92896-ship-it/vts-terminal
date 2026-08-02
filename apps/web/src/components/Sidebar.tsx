@@ -3,10 +3,11 @@ import type { WorkspaceKey } from '../theme/themes';
 import type { MembershipTier } from '../api/types';
 import { NAV, navFor, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
-import { SECTION_FEATURE, TIER_COLORS, TIER_GLYPHS, TIER_LABELS, WORKSPACE_FEATURE, tierForKey } from '../auth/access';
+import { SECTION_FEATURE, WORKSPACE_FEATURE, tierForKey } from '../auth/access';
 import { useAuth } from '../auth/AuthContext';
 import { APP_VERSION } from '../meta/version';
 import { Icon } from './Icon';
+import { TierMark } from './TierMark';
 
 interface SidebarProps {
   workspace: WorkspaceKey;
@@ -372,8 +373,6 @@ function NavRow({
   // the current workspace accent. Everything else is faint. The tier badge on the
   // right carries the paywall marking, so nothing here changes colour for it.
   const iconColor = locked ? C.faint : isSecActive ? accent : kind === 'ws' && active ? accent : C.faint;
-  const tierColor = tier ? TIER_COLORS[tier] : null;
-  const tierGlyph = tier ? TIER_GLYPHS[tier] : null;
 
   return (
     <button
@@ -408,16 +407,9 @@ function NavRow({
         </span>
       )}
       {/* The tier badge, at the right of the row. Drawn for everyone — a Max
-          member still wants to see which parts of the terminal are paid. */}
-      {!collapsed && tierGlyph && tierColor && (
-        <span
-          title={`${TIER_LABELS[tier!]} membership`}
-          aria-label={`${TIER_LABELS[tier!]} membership`}
-          style={{ display: 'inline-flex', flex: 'none', opacity: locked ? 0.6 : 1 }}
-        >
-          <Icon name={tierGlyph} size={13} color={tierColor} />
-        </span>
-      )}
+          member still wants to see which parts of the terminal are paid. Shared
+          with the Market News rail so a star means one thing terminal-wide. */}
+      {!collapsed && <TierMark tier={tier} dim={locked} />}
       {!collapsed && locked && <Icon name="lock" size={12} color={C.faint} />}
       {!collapsed && dot && <BlinkDot />}
       {!collapsed && count != null && (

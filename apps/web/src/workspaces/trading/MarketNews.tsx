@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
-import { hasEntitlement } from '../../auth/access';
+import { hasEntitlement, tierOfFeature } from '../../auth/access';
 import { useAuth } from '../../auth/AuthContext';
 import { useNowTick } from '../../hooks/useNowTick';
 import { zoneAbbr } from '../../lib/timezone';
 import { Icon } from '../../components/Icon';
+import { TierMark } from '../../components/TierMark';
+import { UpgradeNotice } from '../../components/UpgradeNotice';
 import { C, tint } from '../../theme/tokens';
 import { ScreenTitle } from './ScreenTitle';
 import { newsFeeds, affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
 import { decodeEntities, fmtDayKey, fmtTime } from './newsFormat';
 import { countdown, etDay, nextMeetingStamp, prevMeetingStamp } from './etClock';
-import type { MarketNewsData, MarketNewsStreams, NewsItem, StreamChannel } from '../../api/types';
+import type { MarketNewsData, MarketNewsStreams, MembershipTier, NewsItem, StreamChannel } from '../../api/types';
 
 // The FOMC statement schedule, as sent with the stream wall. Same list Market
 // Data's countdown bar reads — the server holds one copy of it.
@@ -59,23 +61,36 @@ const CATEGORY_LABEL: Record<string, string> = {
 // A default matching the server's, so the screen still works if the streams
 // call fails (or on a read-only demo that can't persist).
 function localDefaultStreams(): MarketNewsStreams {
-  const mk = (key: string, name: string, handle: string, channelId: string): StreamChannel => ({
+  const mk = (
+    key: string,
+    name: string,
+    handle: string,
+    channelId: string,
+    free = false,
+  ): StreamChannel => ({
     key,
     name,
     handle,
     channelId,
+    free,
     live: false,
   });
+  // The same starter set the server seeds, in the same order — the free channel
+  // first. A fallback that named channels the desk does not have would offer
+  // tiles that can never play.
   return {
     channels: [
+      mk('yahoofinance', 'Yahoo Finance', '@YahooFinance', 'UCEAZeUIeJs0IjQiqTCdVSIg', true),
+      mk('bloomberg', 'Bloomberg Television', '@markets', 'UCIALMKvObZNtJ6AmdCLP7Lg'),
       mk('fed', 'Federal Reserve', '@federalreserve', 'UCAzhpt9DmG6PnHXjmJTvRGQ'),
       mk('reuters', 'Reuters', '@Reuters', ''),
-      mk('cnbc', 'CNBC Television', '@CNBCtelevision', ''),
-      mk('ecb', 'European Central Bank', '@ecbeuro', ''),
     ],
     watching: [],
     docked: null,
     cols: 2,
+    // The cautious answer while the server has not said: one at a time. The real
+    // limit arrives with the first successful read.
+    maxWatching: 1,
     notify: {},
   };
 }
@@ -171,7 +186,7 @@ function channelUrl(c: StreamChannel): string {
   return 'https://www.youtube.com';
 }
 
-export function MarketNews() {
+export function MarketNews({ onOpenMembership }: { onOpenMembership?: () => void } = {}) {
   // Keep the "x ago" ages fresh between the 120s data polls.
   const now = useNowTick(30_000);
   const { user } = useAuth();
@@ -436,6 +451,10 @@ export function MarketNews() {
         {/* ---- live streams block ---- */}
         <LiveStreams
           canEdit={canWrite}
+          canAddTier={tierOfFeature('customStreams', user?.access.membership)}
+          paidTier={tierOfFeature('presetStreams', user?.access.membership)}
+          canWatchPaid={!!user && hasEntitlement(user, 'presetStreams')}
+          onOpenMembership={onOpenMembership}
           onAddChannel={addChannel}
           onEditChannel={editChannel}
           onRemoveChannel={removeChannel}
@@ -615,6 +634,10 @@ function LiveStreams({
   setLiveOpen,
   mutate,
   canEdit,
+  canAddTier,
+  paidTier,
+  canWatchPaid,
+  onOpenMembership,
   onAddChannel,
   onEditChannel,
   onRemoveChannel,
@@ -631,10 +654,24 @@ function LiveStreams({
   // The channel list is desk-wide, so changing it needs write access — a
   // view-only role and the demo can watch the wall but not reshape it.
   canEdit: boolean;
+  // What adding your own channel costs, and what the rest of the wall costs.
+  // Drawn on every reader's rail including a Max member's, so the list says what
+  // each row is worth rather than looking identical to a free account's.
+  canAddTier: MembershipTier | null;
+  paidTier: MembershipTier | null;
+  // Whether this reader may actually play a non-free channel. The server
+  // enforces it too (sanitize drops what the account cannot watch).
+  canWatchPaid: boolean;
+  onOpenMembership?: () => void;
   onAddChannel: (url: string, name: string, alwaysOn: boolean) => Promise<string | null>;
   onEditChannel: (key: string, patch: { name?: string; alwaysOn?: boolean }) => Promise<string | null>;
   onRemoveChannel: (key: string, name: string) => void;
 }) {
+  // Raised when a reader clicks something their tier does not carry. Shown
+  // where the player would be, so the answer to "why did nothing happen" is in
+  // the place they were already looking.
+  const [lockedNotice, setLockedNotice] = useState(false);
+
   if (!streams) return null;
   const channels = streams.channels;
   const watching = streams.watching;
@@ -648,24 +685,44 @@ function LiveStreams({
     .filter((c): c is StreamChannel => !!c && c.key !== streams.docked);
   const dockedChan = streams.docked ? channels.find((c) => c.key === streams.docked) : null;
 
-  // One stream at a time, so there is no grid to compute and no layout to
-  // choose: the single tile takes the full width of the column, which is the
-  // whole benefit of the limit — a readable player instead of four small ones.
+  // The grid is COMPUTED, never chosen — the layout picker was deliberately
+  // removed and is not coming back. One tile takes the full column, which is the
+  // readable player; beyond that it is two across and wraps, so four streams are
+  // a 2×2 rather than a row of thumbnails. Two is the ceiling for the same
+  // reason the wall was cut to one in the first place: a quarter-width tile is
+  // not a player.
+  const tileCols = tiles.length <= 1 || contentW < 720 ? 1 : 2;
 
-  // One stream at a time. Picking a channel **replaces** whatever is playing
-  // rather than adding to it, so the rail reads as a channel selector — the way
-  // a television does — instead of a set of checkboxes. Picking the open one
-  // again closes it.
+  // How many may play at once, as the SERVER answered it — one on a free
+  // account, a wall on Premium and above. sanitize() enforces the same number,
+  // so this only decides what the rail offers.
+  const maxWatching = Math.max(1, streams.maxWatching || 1);
+  const multi = maxWatching > 1;
+
+  // Picking a channel ADDS it when several may play, and REPLACES what is
+  // playing when only one may. The single-stream case still reads as a channel
+  // selector — the way a television does — rather than a set of checkboxes;
+  // picking the open one again closes it either way.
+  //
+  // At the cap, the longest-open tile makes way rather than the click being
+  // refused. Silently doing nothing on a click is the worse failure: there is
+  // nothing on screen to explain it.
   const toggleWatch = (key: string) =>
     mutate((s) => {
       const open = s.watching.includes(key);
-      return {
-        ...s,
-        watching: open ? [] : [key],
-        // Switching channels retires whatever was docked: the docked player was
-        // the previous channel, and leaving it running would be a second stream.
-        docked: null,
-      };
+      if (open) return { ...s, watching: s.watching.filter((k) => k !== key), docked: s.docked === key ? null : s.docked };
+      if (!multi) {
+        return {
+          ...s,
+          watching: [key],
+          // With one stream allowed, switching channels retires whatever was
+          // docked — the docked player was the previous channel, and leaving it
+          // running would be a second stream.
+          docked: null,
+        };
+      }
+      const next = [...s.watching.filter((k) => k !== key), key];
+      return { ...s, watching: next.slice(Math.max(0, next.length - maxWatching)) };
     });
   const closeTile = (key: string) =>
     mutate((s) => ({
@@ -720,10 +777,16 @@ function LiveStreams({
                 </div>
               )}
 
+              {lockedNotice && (
+                <div style={{ marginBottom: 12 }}>
+                  <UpgradeNotice feature="presetStreams" onOpenMembership={onOpenMembership} compact />
+                </div>
+              )}
+
               {tiles.length === 0 && !dockedChan ? (
                 <StreamsEmpty channels={channels} onWatch={(k) => toggleWatch(k)} />
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: `repeat(${tileCols}, minmax(0,1fr))`, gap: 12 }}>
                   {tiles.map((c) => (
                     <StreamTile
                       key={c.key}
@@ -748,13 +811,24 @@ function LiveStreams({
                   isWatching={watching.includes(c.key)}
                   armed={!!streams.notify[c.key]}
                   canEdit={canEdit}
-                  onWatch={() => toggleWatch(c.key)}
+                  // Every channel that is not included with every account is
+                  // marked, for every reader. Locked is the narrower question —
+                  // whether THIS reader may open it.
+                  tier={c.free ? null : paidTier}
+                  locked={!c.free && !canWatchPaid}
+                  onWatch={() => (!c.free && !canWatchPaid ? setLockedNotice(true) : toggleWatch(c.key))}
                   onNotify={() => toggleNotify(c.key)}
                   onEdit={onEditChannel}
                   onRemove={() => onRemoveChannel(c.key, c.name)}
                 />
               ))}
-              {canEdit && <AddChannelForm onAdd={onAddChannel} count={channels.length} />}
+              <AddChannelForm
+                onAdd={onAddChannel}
+                count={channels.length}
+                canEdit={canEdit}
+                tier={canAddTier}
+                onLocked={() => setLockedNotice(true)}
+              />
             </div>
           </div>
         </>
@@ -773,6 +847,8 @@ function ChannelRow({
   isWatching,
   armed,
   canEdit,
+  tier,
+  locked,
   onWatch,
   onNotify,
   onEdit,
@@ -783,6 +859,13 @@ function ChannelRow({
   isWatching: boolean;
   armed: boolean;
   canEdit: boolean;
+  // What this channel costs, or null when it is included with every account.
+  // Drawn for every reader — a Max member sees the star too, so the rail states
+  // what each row is worth instead of looking the same as a free account's.
+  tier: MembershipTier | null;
+  // Whether THIS reader is short of that tier. Only dims the row and diverts the
+  // click to the upgrade prompt; the mark above shows either way.
+  locked: boolean;
   onWatch: () => void;
   onNotify: () => void;
   onEdit: (key: string, patch: { name?: string; alwaysOn?: boolean }) => Promise<string | null>;
@@ -811,6 +894,7 @@ function ChannelRow({
         padding: '11px 13px',
         borderTop: `1px solid ${first ? 'transparent' : C.line}`,
         background: isWatching ? tint(C.gold, 0.04) : 'transparent',
+        opacity: locked ? 0.75 : 1,
       }}
     >
       <span
@@ -830,9 +914,10 @@ function ChannelRow({
         style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: isWatching ? C.gold : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: isWatching ? C.gold : locked ? C.muted : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {c.name}
           </span>
+          <TierMark tier={tier} size={12} dim={locked} />
           {isWatching && (
             <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', color: C.gold, border: `1px solid ${tint(C.gold, 0.4)}`, borderRadius: 4, padding: '1px 5px' }}>
               PLAYING
@@ -1000,9 +1085,20 @@ function AlwaysOnToggle({ checked, onChange }: { checked: boolean; onChange: (v:
 function AddChannelForm({
   onAdd,
   count,
+  canEdit,
+  tier,
+  onLocked,
 }: {
   onAdd: (url: string, name: string, alwaysOn: boolean) => Promise<string | null>;
   count: number;
+  // Whether this reader may actually add one. The button is drawn either way —
+  // hiding it left a free account with no way to learn the wall takes its own
+  // channels at all, which is the same reason a locked Studies tile is shown
+  // rather than removed.
+  canEdit: boolean;
+  // What adding costs. Drawn for everyone, including somebody who holds it.
+  tier: MembershipTier | null;
+  onLocked: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
@@ -1027,10 +1123,10 @@ function AddChannelForm({
     setOpen(false);
   }
 
-  if (!open) {
+  if (!open || !canEdit) {
     return (
       <button
-        onClick={() => setOpen(true)}
+        onClick={() => (canEdit ? setOpen(true) : onLocked())}
         style={{
           marginTop: 4,
           padding: '9px 11px',
@@ -1043,9 +1139,14 @@ function AddChannelForm({
           cursor: 'pointer',
           textAlign: 'left',
           fontFamily: 'inherit',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          opacity: canEdit ? 1 : 0.75,
         }}
       >
-        + Add a channel
+        <span>+ Add a channel</span>
+        <TierMark tier={tier} size={12} dim={!canEdit} />
       </button>
     );
   }

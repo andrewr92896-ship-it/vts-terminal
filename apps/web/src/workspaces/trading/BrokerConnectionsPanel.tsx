@@ -181,7 +181,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
       <div style={{ fontSize: 12.5, color: MUTED, marginBottom: 14, lineHeight: 1.55 }}>
         Connect your own broker accounts. Pick the API your broker uses, then name the connection
         anything you like. Keys are encrypted on the server and never shown again. Your Live Wall and
-        History stream from your active connections.
+        trade history from your active connections.
       </div>
 
       {error && <div style={banner}>{error}</div>}
@@ -729,7 +729,7 @@ function ManualPositions({ connectionId, onChanged }: { connectionId: string; on
 
 // The always-visible "count trades since" control on a non-manual connection —
 // pick the date your real trading on that account began and everything earlier
-// drops out of your Trade Log / History (and never re-imports). This is the
+// drops out of your Trade Log (and never re-imports). This is the
 // discoverable home for the cutoff; no need to open the edit form.
 function CutoffRow({
   c,
@@ -765,7 +765,7 @@ function CutoffRow({
         </>
       )}
       <span style={{ fontSize: 10.5, color: FAINT, flex: '1 1 100%', lineHeight: 1.45 }}>
-        {"Only trades opened on or after this date count in the Trade Log and History — earlier trades are left out and never re-imported. Blank counts everything."}
+        {"Only trades opened on or after this date count in the Trade Log — earlier trades are left out and never re-imported. Blank counts everything."}
       </span>
     </div>
   );

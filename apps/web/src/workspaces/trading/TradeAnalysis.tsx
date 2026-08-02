@@ -1,45 +1,60 @@
 import { useState, type CSSProperties } from 'react';
 import { TradeLog } from './TradeLog';
 import { LiveBrokers } from './LiveBrokers';
-import { History } from './History';
 import { DeskSettingsModal } from './DeskSettingsModal';
+import { TierMark } from '../../components/TierMark';
+import { tierOfFeature } from '../../auth/access';
 import { useAuth } from '../../auth/AuthContext';
+import type { PremiumFeature } from '../../api/types';
 
-// Trading navy/gold palette — matches the Live Wall / Trade Log / History.
+// Trading navy/gold palette — matches the Live Wall and the Trade Log.
 const GOLD = '#EBCB74';
 const TEXT = '#eef3ff';
 const MUTED = '#9fb0d6';
-const FAINT = '#6f84b0';
 const PANEL = 'rgba(11,26,58,.5)';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
-// Trade Analysis — reviewing what has already been traded. The Trade Log, Live
-// Brokers, and History screens all cover the same ground (the desk's trades and
-// the capital behind them), so they live together here under one tab, switched
-// with the segmented control instead of three separate tabs. Each view is the
-// original screen, rendered verbatim.
+// Trade Analysis — reviewing what has already been traded: the desk's trades and
+// the capital behind them, switched with the segmented control.
+//
+// **History was removed** (owner decision, 2026-08). It listed the same closed
+// trades the Trade Log already carried, from the same rows, so two screens
+// answered one question and could disagree about it. Everything it had that the
+// Trade Log did not was folded into the Trade Log rather than dropped: the
+// day-of-week and month filters, the By Strategy / By Instrument breakdowns, the
+// strategy column, the held time, and editing a closed trade you own even when
+// the broker imported it. `history` still resolves as a view key so a saved
+// `nav.order`, an in-app link or a stale bookmark lands on the log instead of
+// nothing.
 //
 // Placing a trade is the other screen: Trade Desk (TradeDesk.tsx). This one was
 // called "Trade Desk" until that screen existed; its section key is still `desk`
 // so saved sidebar orders, how-to wording and links keep pointing at it.
 export type DeskView = 'log' | 'brokers' | 'history';
 
-const VIEWS: { key: DeskView; label: string; hint: string }[] = [
-  { key: 'log', label: 'Trade Log', hint: 'Every fill across your team — slippage and realized P/L' },
-  { key: 'brokers', label: 'Live Brokers', hint: 'Live account capital, pulled from the broker API' },
-  { key: 'history', label: 'History', hint: 'Closed trades with per-strategy and per-instrument breakdowns' },
+// The tabs actually drawn. `history` is deliberately absent — it is still an
+// accepted `initialView` and folds into the log.
+const VIEWS: { key: Exclude<DeskView, 'history'>; label: string; feature?: PremiumFeature }[] = [
+  { key: 'log', label: 'Trade Log' },
+  // Live account capital only exists for a connected broker, so the tab carries
+  // the mark of whatever tier `brokerConnections` sits in — read from the map the
+  // server sent, so moving the feature moves the mark with it.
+  { key: 'brokers', label: 'Live Brokers', feature: 'brokerConnections' },
 ];
 
 export function TradeAnalysis({ initialView = 'log' }: { initialView?: DeskView }) {
   const { user } = useAuth();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
-  const [view, setView] = useState<DeskView>(initialView);
+  // `history` folds into the log — the tab is gone, the key still resolves.
+  const [view, setView] = useState<Exclude<DeskView, 'history'>>(
+    initialView === 'brokers' ? 'brokers' : 'log',
+  );
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Bumped when desk settings are saved, to remount the active view so it
   // refetches with the new break-even band applied.
   const [rev, setRev] = useState(0);
-  const active = VIEWS.find((v) => v.key === view) ?? VIEWS[0];
+  const membership = user?.access.membership;
 
   return (
     <div style={{ color: TEXT, animation: 'fadeIn .25s ease' }}>
@@ -54,14 +69,13 @@ export function TradeAnalysis({ initialView = 'log' }: { initialView?: DeskView 
                 role="tab"
                 aria-selected={view === v.key}
                 onClick={() => setView(v.key)}
-                title={v.hint}
                 style={{ ...segBtn, ...(view === v.key ? segActive : {}) }}
               >
                 {v.label}
+                {v.feature && <TierMark tier={tierOfFeature(v.feature, membership)} size={12} />}
               </button>
             ))}
           </div>
-          <div style={{ fontSize: 11.5, color: FAINT, marginTop: 8, paddingLeft: 2 }}>{active.hint}</div>
         </div>
         <button onClick={() => setSettingsOpen(true)} style={gearBtn} title="Trade analysis settings">
           <span aria-hidden style={{ fontSize: 14 }}>⚙</span> {"Settings"}
@@ -70,7 +84,6 @@ export function TradeAnalysis({ initialView = 'log' }: { initialView?: DeskView 
 
       {view === 'log' && <TradeLog key={`log-${rev}`} />}
       {view === 'brokers' && <LiveBrokers key={`brokers-${rev}`} />}
-      {view === 'history' && <History key={`history-${rev}`} />}
 
       <DeskSettingsModal
         open={settingsOpen}
@@ -91,6 +104,9 @@ const segWrap: CSSProperties = {
   flexWrap: 'wrap',
 };
 const segBtn: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
   background: 'none',
   border: 'none',
   color: MUTED,

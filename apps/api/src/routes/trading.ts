@@ -9,7 +9,12 @@ import {
 } from '../auth/middleware.js';
 import type { UserRow } from '../db/schema.js';
 import { hasEntitlement } from '../memberships/service.js';
-import { FREE_CHANNEL_KEYS } from '../trading/marketNewsStreams.js';
+import {
+  FREE_CHANNEL_KEYS,
+  MAX_WATCHING_FREE,
+  MAX_WATCHING_PAID,
+  type WatchLimits,
+} from '../trading/marketNewsStreams.js';
 import { getLiveWall } from '../trading/service.js';
 import {
   addTrade,
@@ -523,14 +528,26 @@ export async function tradingRoutes(app: FastifyInstance) {
   // Markets workspace, so gating the wall behind the Advanced Trading opt-in
   // would let a user see it and not shape it. The demo is still refused every
   // non-GET by demoGuard, so it watches without reshaping the desk's wall.
-  // What a free account sees on the wall: Yahoo Finance only. The filter is here
-  // rather than in the service because it is an entitlement question, not a
-  // question about what the desk owns — the team's channels are unchanged, they
-  // are simply not all served to an account that has not paid for them.
+  //
+  // What the wall costs, resolved here rather than in the service because it is
+  // an entitlement question, not a question about what the desk owns.
+  //
+  // A free account is sent the whole channel list and may only PLAY Yahoo
+  // Finance. It used to be sent Yahoo alone, and hiding the rest was the wrong
+  // shape: the terminal marks what costs something rather than concealing it
+  // (the sidebar's tier badges, the Studies tiles), so somebody on a free
+  // account can see what upgrading would give them. The gate is `watchable`,
+  // enforced by sanitize on every read and write.
+  async function watchLimitsFor(user: UserRow): Promise<WatchLimits> {
+    const paid = await hasEntitlement(user, 'presetStreams');
+    return {
+      watchable: (key) => paid || FREE_CHANNEL_KEYS.has(key),
+      maxWatching: paid ? MAX_WATCHING_PAID : MAX_WATCHING_FREE,
+    };
+  }
+
   async function streamsFor(user: UserRow) {
-    const streams = await getMarketNewsStreams(user);
-    if (await hasEntitlement(user, 'presetStreams')) return streams;
-    return { ...streams, channels: streams.channels.filter((c) => FREE_CHANNEL_KEYS.has(c.key)) };
+    return getMarketNewsStreams(user, await watchLimitsFor(user));
   }
 
   app.get('/api/trading/market-news/streams', markets, async (request) => ({
@@ -543,7 +560,11 @@ export async function tradingRoutes(app: FastifyInstance) {
     const parsed = marketNewsStreamsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid stream setup' });
     return {
-      streams: await setMarketNewsStreams(request.currentUser!, parsed.data),
+      streams: await setMarketNewsStreams(
+        request.currentUser!,
+        parsed.data,
+        await watchLimitsFor(request.currentUser!),
+      ),
       liveConfigured: liveStreamsConfigured(),
       fomc: FOMC_SCHEDULE,
     };

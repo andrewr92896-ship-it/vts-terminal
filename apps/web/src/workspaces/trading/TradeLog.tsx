@@ -6,6 +6,17 @@ import { useUndo } from '../../hooks/useUndo';
 import { UndoBar } from '../../components/UndoBar';
 import { usePrivacy } from '../../privacy/privacy';
 import { classifyOutcome, configFrom, configActive, type BreakEvenBand, type BreakEvenConfig } from './outcome';
+import {
+  Breakdown,
+  WEEKDAYS,
+  etMonthKey,
+  etMonthLabel,
+  etWeekday,
+  filterField,
+  filterLabel,
+  filterSelect,
+  groupTrades,
+} from './tradeBreakdown';
 import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { getTradeLayout, type Layout } from './preferences';
@@ -201,6 +212,15 @@ export function TradeLog() {
   const [exporting, setExporting] = useState(false);
   // Per-trader filter: '' = the whole desk; otherwise an ownerId.
   const [trader, setTrader] = useState('');
+  // Day-of-week and month filters, folded in from the removed History screen.
+  // 'all' = no filter; a day is a full weekday name ("Monday"), a month an ET
+  // month key ("2026-01"). They select on the CLOSE day, so an open position —
+  // which has no close day — drops out while a filter is on.
+  const [dayFilter, setDayFilter] = useState('all');
+  const [monthFilter, setMonthFilter] = useState('all');
+  // The closed trade being corrected, from the pencil on a closed row.
+  const [editingClosed, setEditingClosed] = useState<TradeRecord | null>(null);
+  const [savingClosed, setSavingClosed] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -227,6 +247,25 @@ export function TradeLog() {
       }
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Correcting a closed trade — the pencil History used to carry. It saves
+  // through PATCH /api/trading/history/:id, which is the only route that will
+  // touch a broker-imported row, then re-reads the log (that route answers with
+  // the History shape, not this screen's).
+  async function saveClosedEdit(patch: Partial<TradeInput>) {
+    if (!editingClosed) return;
+    setSavingClosed(true);
+    try {
+      await api.updateHistoryTrade(editingClosed.id, patch);
+      setData(await api.tradeLog());
+      setActionError(null);
+      setEditingClosed(null);
+    } catch (e) {
+      setActionError(e instanceof ApiError ? e.message : 'Could not save that trade');
+    } finally {
+      setSavingClosed(false);
     }
   }
 
@@ -274,8 +313,30 @@ export function TradeLog() {
     .map(([id, name]) => ({ id, name }))
     .sort((a, b) => a.name.localeCompare(b.name));
   const config = configFrom(data);
-  const shownTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
-  const s = trader ? summarizeTrades(shownTrades, config) : data.summary;
+  const traderTrades = trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades;
+
+  // Only closed rows can answer "which weekday" / "which month", so the pickers
+  // are built from them and the filter selects among them.
+  const closedTrades = traderTrades.filter(
+    (t): t is TradeRecord & { closedAt: number } => t.status === 'closed' && t.closedAt != null,
+  );
+  const filterActive = dayFilter !== 'all' || monthFilter !== 'all';
+  const dayOptions = WEEKDAYS.filter((d) => closedTrades.some((t) => etWeekday(t.closedAt) === d));
+  const monthOptions = [
+    ...new Map(closedTrades.map((t) => [etMonthKey(t.closedAt), etMonthLabel(t.closedAt)])).entries(),
+  ].sort((x, y) => y[0].localeCompare(x[0]));
+  const shownTrades = filterActive
+    ? closedTrades.filter(
+        (t) =>
+          (dayFilter === 'all' || etWeekday(t.closedAt) === dayFilter) &&
+          (monthFilter === 'all' || etMonthKey(t.closedAt) === monthFilter),
+      )
+    : traderTrades;
+
+  // The server's summary only describes the whole desk unfiltered, so any
+  // narrowing recomputes it here — the same rule History followed, so a filtered
+  // selection scores exactly the way the unfiltered one does.
+  const s = trader || filterActive ? summarizeTrades(shownTrades, config) : data.summary;
   const pf = profitFactorStats(shownTrades, config);
   // "If I closed everything right now" — realized closed trades with each open
   // position's live P/L folded in as though it were just realized.
@@ -285,6 +346,11 @@ export function TradeLog() {
   const showPips = hasAnyPips(shownTrades);
   const netClosedPips = netPips(shownTrades);
   const beActive = configActive(config);
+  // By Strategy / By Instrument, folded in from History. Computed over the CLOSED
+  // rows on screen — an open trade has no realized result to attribute.
+  const shownClosed = shownTrades.filter((t) => t.status === 'closed');
+  const byStrategy = groupTrades(shownClosed, (t) => t.strategy, canSeeBalances, config);
+  const byInstrument = groupTrades(shownClosed, (t) => t.instrument, canSeeBalances, config);
   const selectedTraderName = traders.find((t) => t.id === trader)?.name ?? null;
   // Export scope follows the on-screen trader filter: whole desk, or one trader.
   const scopeLabel = selectedTraderName ? `@${selectedTraderName}` : 'Whole desk';
@@ -355,9 +421,6 @@ export function TradeLog() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
           <ScreenTitle>Trade Log</ScreenTitle>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6 }}>
-            {"Your team’s trade log — every teammate’s fills, tagged by trader, with slippage and realized P/L. Trades from a connected broker (e.g. OANDA) show up here automatically; hand-kept trades stay on the Manual Trades tab."}
-          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {traders.length > 1 && (
@@ -396,9 +459,55 @@ export function TradeLog() {
         />
       )}
 
+      {/* Day / month filters, folded in from the removed History screen. Only
+          drawn once there is a closed trade to narrow. */}
+      {closedTrades.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          <label style={filterField}>
+            <span style={filterLabel}>{"Day of week"}</span>
+            <select
+              value={dayFilter}
+              onChange={(e) => setDayFilter(e.target.value)}
+              style={filterSelect}
+              aria-label="Filter by day of week"
+              disabled={dayOptions.length === 0}
+            >
+              <option value="all">All days</option>
+              {dayOptions.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </label>
+          <label style={filterField}>
+            <span style={filterLabel}>{"Month"}</span>
+            <select
+              value={monthFilter}
+              onChange={(e) => setMonthFilter(e.target.value)}
+              style={filterSelect}
+              aria-label="Filter by month"
+              disabled={monthOptions.length === 0}
+            >
+              <option value="all">All months</option>
+              {monthOptions.map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <div style={{ flex: 1 }} />
+          <span style={{ fontSize: 11.5, color: MUTED, fontFamily: "'IBM Plex Mono', monospace" }}>
+            {filterActive ? `${shownTrades.length} of ${traderTrades.length}` : `${traderTrades.length}`} trade
+            {traderTrades.length === 1 ? '' : 's'}
+          </span>
+          {filterActive && (
+            <button onClick={() => { setDayFilter('all'); setMonthFilter('all'); }} style={ghostBtn}>{"Clear"}</button>
+          )}
+        </div>
+      )}
+
       {/* Summary */}
       <div style={{ fontSize: 11, color: FAINT, marginBottom: 8, letterSpacing: '0.3px' }}>
         {selectedTraderName ? `Individual stats — @${selectedTraderName}` : 'Whole desk — combined stats'}
+        {filterActive ? ' · closed trades only, for the selected day/month' : ''}
       </div>
       {data.minTradeUnits > 0 && (
         <div
@@ -420,6 +529,16 @@ export function TradeLog() {
           </div>
         ))}
       </div>
+
+      {/* Per-strategy / per-instrument breakdown, folded in from History. Only
+          drawn once something has closed — before that both panels say "no data"
+          twice over. */}
+      {shownClosed.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : '1fr 1fr', gap: 13, marginBottom: 16 }}>
+          <Breakdown title="By Strategy" groups={byStrategy} money={(n) => (n == null ? '—' : showMoney ? usd(n) : '•••')} showPips={showPips} />
+          <Breakdown title="By Instrument" groups={byInstrument} money={(n) => (n == null ? '—' : showMoney ? usd(n) : '•••')} showPips={showPips} />
+        </div>
+      )}
 
       {!readOnly && adding && (
         <TradeForm
@@ -454,6 +573,7 @@ export function TradeLog() {
               busy={busy}
               onRemove={() => removeWithUndo(t.id)}
               onSave={(patch) => run(api.updateTrade(t.id, patch))}
+              onEditClosed={() => setEditingClosed(t)}
             />
           ))}
         </div>
@@ -468,6 +588,19 @@ export function TradeLog() {
           busy={busy}
           isPhone={isPhone}
           onRemove={removeWithUndo}
+          onEditClosed={setEditingClosed}
+        />
+      )}
+
+      {/* Correcting a closed trade — the one thing History could do that this
+          screen could not, since a broker-imported row is not `editable`. */}
+      {editingClosed && (
+        <ClosedTradeEditModal
+          key={editingClosed.id}
+          t={editingClosed}
+          busy={savingClosed}
+          onSave={saveClosedEdit}
+          onClose={() => setEditingClosed(null)}
         />
       )}
 
@@ -487,6 +620,7 @@ function DeckCard({
   busy,
   onRemove,
   onSave,
+  onEditClosed,
 }: {
   t: TradeRecord;
   config: BreakEvenConfig;
@@ -497,6 +631,10 @@ function DeckCard({
   busy: boolean;
   onRemove: () => void;
   onSave: (patch: TradeInput) => void;
+  // A closed row you own opens the closed-trade editor instead of the inline
+  // form: a broker-imported trade is not `editable`, so the inline form cannot
+  // touch it, and correcting one is what History existed for.
+  onEditClosed: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   if (editing) {
@@ -623,10 +761,17 @@ function DeckCard({
           <span style={{ fontSize: 10.5, color: FAINT, fontFamily: "'IBM Plex Mono', monospace", whiteSpace: 'nowrap' }}>
             {ageLabel(t.openedAt, isOpen ? null : t.closedAt)}
           </span>
-          {!readOnly && ((t.isMine && t.editable) || canRemove) && (
+          {!readOnly && ((t.isMine && (t.editable || t.status === 'closed')) || canRemove) && (
             <div style={{ display: 'flex', gap: 6 }}>
-              {t.isMine && t.editable && (
-                <button onClick={() => !busy && setEditing(true)} title="Edit trade" aria-label="Edit trade" style={iconBtn}>✏️</button>
+              {t.isMine && (t.editable || t.status === 'closed') && (
+                <button
+                  onClick={() => !busy && (t.status === 'closed' ? onEditClosed() : setEditing(true))}
+                  title="Edit trade"
+                  aria-label="Edit trade"
+                  style={iconBtn}
+                >
+                  ✏️
+                </button>
               )}
               {canRemove && (
                 <button onClick={() => !busy && onRemove()} title="Delete trade" aria-label="Delete trade" style={{ ...iconBtn, color: '#52668f', fontSize: 16 }}>×</button>
@@ -650,6 +795,7 @@ function Tape({
   busy,
   isPhone,
   onRemove,
+  onEditClosed,
 }: {
   trades: TradeRecord[];
   config: BreakEvenConfig;
@@ -660,6 +806,7 @@ function Tape({
   busy: boolean;
   isPhone: boolean;
   onRemove: (id: string) => void;
+  onEditClosed: (t: TradeRecord) => void;
 }) {
   return (
     <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
@@ -672,9 +819,10 @@ function Tape({
           <span style={col}>Exit</span>
           <span style={col}>Slip</span>
           <span style={col}>Size</span>
+          <span style={{ flex: '1 1 80px' }}>Strategy</span>
           <span style={{ ...plCol, textAlign: 'right' }}>P/L</span>
           <span style={{ ...timeCol, textAlign: 'right' }}>Opened / Closed</span>
-          {!readOnly && <span style={{ width: 24 }} />}
+          {!readOnly && <span style={{ width: 48 }} />}
         </div>
       )}
       {trades.map((t) => {
@@ -707,6 +855,7 @@ function Tape({
             <span style={col}>{fmtPrice(t.exitPrice)}</span>
             <span style={{ ...col, color: slipColor }}>{t.slippage == null ? '—' : `${t.slippage > 0 ? '+' : ''}${fmtPrice(t.slippage)}`}</span>
             <span style={col}>{t.units}</span>
+            <span style={{ flex: '1 1 80px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.strategy ?? '—'}</span>
             <span style={{ ...plCol, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <span style={{ fontWeight: 700, color: plColor }}>
                 {!canSeeBalances ? '·' : plVal == null ? '—' : showMoney ? `${isBreakeven ? '' : plUp ? '+' : ''}${usd(plVal)}` : '•••'}
@@ -714,14 +863,26 @@ function Tape({
               {rowPips != null && <span style={{ fontSize: 9.5, color: MUTED }}>{`(${fmtPips(rowPips, true)})`}</span>}
             </span>
             <span style={{ ...timeCol, display: 'flex', justifyContent: 'flex-end' }}>
-              <TradeTimesCell openedAt={t.openedAt} closedAt={t.status === 'open' ? null : t.closedAt} />
+              <TradeTimesCell
+                openedAt={t.openedAt}
+                closedAt={t.status === 'open' ? null : t.closedAt}
+                showHeld={t.status === 'closed'}
+              />
             </span>
-            {!readOnly &&
-              (t.isMine || canRemoveAny ? (
-                <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
-              ) : (
-                <span style={{ width: 24 }} />
-              ))}
+            {!readOnly && (
+              <span style={{ display: 'flex', width: 48, justifyContent: 'flex-end', gap: 2 }}>
+                {t.status === 'closed' && t.isMine ? (
+                  <button onClick={() => !busy && onEditClosed(t)} title="Edit this trade" aria-label="Edit trade" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 12, cursor: 'pointer' }}>✏️</button>
+                ) : (
+                  <span style={{ width: 24 }} />
+                )}
+                {t.isMine || canRemoveAny ? (
+                  <button onClick={() => !busy && onRemove(t.id)} title="Remove" style={{ width: 24, background: 'none', border: 'none', color: '#52668f', fontSize: 15, cursor: 'pointer' }}>×</button>
+                ) : (
+                  <span style={{ width: 24 }} />
+                )}
+              </span>
+            )}
           </div>
         );
       })}
@@ -1054,3 +1215,110 @@ const menuItemHot: CSSProperties = { background: 'rgba(255,255,255,.06)' };
 const exportField: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 5 };
 const exportFieldLabel: CSSProperties = { fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED };
 const warnBanner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };
+
+
+// Modal editor for a closed trade — the pencil on a closed row opens this. It
+// edits the trade's own facts (levels, size, P/L, tags, dates) and saves through
+// PATCH /api/trading/history/:id, which is the one route that will touch a
+// broker-imported row. Ported verbatim from History when that screen was
+// removed; without it there is no way to put a strategy on a broker trade, and
+// the By Strategy breakdown would only ever have one bucket.
+function ClosedTradeEditModal({ t, busy, onSave, onClose }: { t: TradeRecord; busy: boolean; onSave: (patch: Partial<TradeInput>) => void; onClose: () => void }) {
+  const [instrument, setInstrument] = useState(t.instrument);
+  const [side, setSide] = useState<TradeSide>(t.side);
+  const [units, setUnits] = useState(t.units?.toString() ?? '');
+  const [entry, setEntry] = useState(t.entryPrice?.toString() ?? '');
+  const [exit, setExit] = useState(t.exitPrice?.toString() ?? '');
+  const [pl, setPl] = useState(t.realizedPl?.toString() ?? '');
+  const [strategy, setStrategy] = useState(t.strategy ?? '');
+  const [timeframe, setTimeframe] = useState(t.timeframe ?? '');
+  const [closedAt, setClosedAt] = useState(msToDateInput(t.closedAt ?? t.openedAt));
+
+  const optNum = (v: string): number | null | undefined => {
+    if (v.trim() === '') return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+  };
+
+  function submit() {
+    if (!instrument.trim()) return;
+    const e = Number(entry);
+    if (!Number.isFinite(e)) return;
+    const closedMs = dateToMs(closedAt);
+    onSave({
+      instrument: instrument.trim(),
+      side,
+      units: optNum(units) ?? 0,
+      entryPrice: e,
+      exitPrice: optNum(exit),
+      realizedPl: optNum(pl),
+      strategy: strategy.trim() || null,
+      timeframe: timeframe.trim() || null,
+      ...(closedMs != null ? { closedAt: closedMs } : {}),
+    });
+  }
+
+  const disabled = busy || !instrument.trim() || !Number.isFinite(Number(entry));
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 60, animation: 'fadeIn .2s ease' }} />
+      <div role="dialog" aria-modal="true" aria-label="Edit closed trade" style={modalCard}>
+        <div style={modalHeader}>
+          <strong style={{ fontSize: 15, color: '#fff' }}>{"Edit trade"}{t.code ? ` · ${t.code}` : ''}</strong>
+          <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: MUTED, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>×</button>
+        </div>
+        <div style={{ padding: 18 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={instrument} onChange={(e) => setInstrument(e.target.value)} placeholder="Instrument" style={{ ...inputBase, flex: '1 1 150px' }} />
+            <select value={side} onChange={(e) => setSide(e.target.value as TradeSide)} style={{ ...inputBase, flex: '0 0 110px' }}>
+              <option value="long">Long</option>
+              <option value="short">Short</option>
+            </select>
+            <input value={entry} onChange={(e) => setEntry(e.target.value)} type="number" step="any" placeholder="Entry price *" style={{ ...inputBase, flex: '0 0 130px' }} />
+            <input value={exit} onChange={(e) => setExit(e.target.value)} type="number" step="any" placeholder="Exit price" style={{ ...inputBase, flex: '0 0 130px' }} />
+            <input value={units} onChange={(e) => setUnits(e.target.value)} type="number" step="any" placeholder="Size / lots" style={{ ...inputBase, flex: '0 0 130px' }} />
+            <input value={pl} onChange={(e) => setPl(e.target.value)} type="number" step="any" placeholder="Realized P/L $" style={{ ...inputBase, flex: '0 0 130px' }} />
+            <input value={timeframe} onChange={(e) => setTimeframe(e.target.value)} placeholder="Timeframe (M15)" style={{ ...inputBase, flex: '0 0 120px' }} />
+            <input value={strategy} onChange={(e) => setStrategy(e.target.value)} placeholder="Strategy" style={{ ...inputBase, flex: '1 1 150px' }} />
+            <input value={closedAt} onChange={(e) => setClosedAt(e.target.value)} type="date" style={{ ...inputBase, flex: '0 0 150px' }} />
+          </div>
+          <div style={{ fontSize: 11, color: FAINT, marginTop: 10 }}>
+            {"Win / loss / break-even is decided by the entry → exit price move, so correcting the exit updates how this trade is scored."}
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            <button onClick={submit} disabled={disabled} style={{ ...goldBtn, opacity: disabled ? 0.6 : 1 }}>{busy ? "Saving…" : "Save"}</button>
+            <button onClick={onClose} style={ghostBtn}>{"Cancel"}</button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+const modalCard: CSSProperties = {
+  position: 'fixed',
+  top: 'calc(7 * var(--vh))',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  width: 'min(620px, calc(94 * var(--vw)))',
+  maxHeight: 'calc(86 * var(--vh))',
+  overflowY: 'auto',
+  background: '#081226',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 14,
+  boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+  zIndex: 61,
+  animation: 'popIn .25s ease',
+  color: TEXT,
+};
+const modalHeader: CSSProperties = {
+  position: 'sticky',
+  top: 0,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  padding: '14px 18px',
+  background: 'linear-gradient(90deg,#0a1f4d,#0c2768)',
+  borderBottom: `1px solid ${BORDER2}`,
+};

@@ -1186,6 +1186,11 @@ export interface StreamChannel {
   // Broadcasts continuously (a 24/7 stream) rather than only when there is
   // something to cover. A catalog fact, not a live reading.
   alwaysOn?: boolean;
+  // Included with every account (Yahoo Finance) versus part of the paid wall. A
+  // fact about the CHANNEL, not the viewer — every paid row is marked for
+  // everybody, including a Max member, so the rail says what each row costs.
+  // Whether this viewer may open it is their entitlement, checked separately.
+  free?: boolean;
   live: boolean;
   streamTitle?: string;
   viewers?: string;
@@ -1222,6 +1227,10 @@ export interface MarketNewsView {
 // What the screen receives: the catalog with live-state, plus that view state.
 export interface MarketNewsStreams extends MarketNewsView {
   channels: StreamChannel[];
+  // How many channels this account may play at once — one on free, a wall on
+  // Premium and above. Sent by the server rather than derived here, so moving
+  // the limit never leaves the client stale (same rule as `featureTiers`).
+  maxWatching: number;
 }
 
 export interface MarketNewsStreamsPayload {

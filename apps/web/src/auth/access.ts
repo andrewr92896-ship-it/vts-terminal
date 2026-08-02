@@ -199,7 +199,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   premiumBadges: 'Recognition badges beside your name.',
   strategySessions: 'Session windows with a bias, and open/close notifications.',
   marketData: '75 rates, prints and prices with five change columns each.',
-  presetStreams: 'Bloomberg, Reuters and the Fed alongside Yahoo Finance.',
+  presetStreams: 'Bloomberg, Reuters and the Fed alongside Yahoo Finance, and up to four playing at once.',
   suggestions: 'Send ideas straight to the developers.',
   supportChat: 'Talk to a person about anything that is not a bug.',
 };

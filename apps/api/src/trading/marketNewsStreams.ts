@@ -53,6 +53,9 @@ export interface StreamChannel {
   // glance which tiles will actually be playing versus which sit dark until
   // there is something to cover. Catalog fact, not a live reading.
   alwaysOn?: boolean;
+  // Included with every account (Yahoo Finance) versus part of the paid wall.
+  // A fact about the channel; the viewer's own tier decides what they may open.
+  free?: boolean;
   live: boolean;
   streamTitle?: string;
   viewers?: string;
@@ -86,9 +89,13 @@ export interface MarketNewsView {
   notify: Record<string, boolean>;
 }
 
-// What the screen receives: the catalog with live-state, plus that view state.
+// What the screen receives: the catalog with live-state, plus that view state,
+// plus how many of them this account may play at once. `maxWatching` is sent
+// rather than derived on the client for the same reason `featureTiers` is —
+// so moving the limit is a server-side change and the client never goes stale.
 export interface MarketNewsStreams extends MarketNewsView {
   channels: StreamChannel[];
+  maxWatching: number;
 }
 
 type CatalogChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId' | 'alwaysOn'>;
@@ -109,6 +116,24 @@ type CatalogChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId
 // an empty tease — the rest of the seeded channels are Premium, and adding your
 // own is Max (owner decision, 2026-08).
 export const FREE_CHANNEL_KEYS = new Set(['yahoofinance']);
+
+// How many channels may play at once. A free account gets one — it only has one
+// channel to play, so the cap is not really the limit there. Premium and above
+// get a wall (owner decision, 2026-08: watching several at once is part of what
+// the paid wall is). Four is the ceiling because the tiles are 16:9 and the Fed
+// countdown card is sized to survive four across; past that a "player" is a
+// thumbnail.
+export const MAX_WATCHING_FREE = 1;
+export const MAX_WATCHING_PAID = 4;
+
+// What one viewer may do with the desk's wall. Resolved from their entitlement
+// by the route — the same reason the free/paid channel split lives there: it is
+// a question about what this ACCOUNT has paid for, not about what the desk owns.
+export interface WatchLimits {
+  // The channel keys this viewer may actually play.
+  watchable: (key: string) => boolean;
+  maxWatching: number;
+}
 
 const SEED_CHANNELS: CatalogChannel[] = [
   {
@@ -186,12 +211,26 @@ function rowToChannel(r: MarketNewsChannelRow): CatalogChannel {
 // A desk's channels, seeding the starter set the first time it is asked for.
 // The seed is idempotent: the unique (team_id, key) index means a concurrent
 // first load cannot double-insert, and an ignored conflict leaves the winner.
+// The order the rail draws them in. The channel a FREE account can actually
+// play leads, so the one stream it has is the first thing it sees rather than
+// the last row under three it cannot open. Everything after that is by name, so
+// the list is stable — the table has no ordering of its own, and the seeded four
+// share a createdAt (one batch insert), so without this the rail's order was
+// whatever SQLite happened to return.
+function inRailOrder(channels: CatalogChannel[]): CatalogChannel[] {
+  return [...channels].sort((x, y) => {
+    const fx = FREE_CHANNEL_KEYS.has(x.key) ? 0 : 1;
+    const fy = FREE_CHANNEL_KEYS.has(y.key) ? 0 : 1;
+    return fx - fy || x.name.localeCompare(y.name);
+  });
+}
+
 export async function teamChannels(scope: string): Promise<CatalogChannel[]> {
   const rows = await db
     .select()
     .from(marketNewsChannels)
     .where(eq(marketNewsChannels.teamId, scope));
-  if (rows.length > 0) return rows.map(rowToChannel);
+  if (rows.length > 0) return inRailOrder(rows.map(rowToChannel));
 
   const now = new Date();
   await db
@@ -215,7 +254,7 @@ export async function teamChannels(scope: string): Promise<CatalogChannel[]> {
     .select()
     .from(marketNewsChannels)
     .where(eq(marketNewsChannels.teamId, scope));
-  return seeded.map(rowToChannel);
+  return inRailOrder(seeded.map(rowToChannel));
 }
 
 // True once the YouTube Data API is wired up (a YOUTUBE_API_KEY is set), which
@@ -279,14 +318,25 @@ function displayHandle(raw: string): string {
 
 // Attach live-state to each of the desk's channels, and fill in a channelId the
 // poller resolved from a handle after the row was saved.
-function withLiveState(view: MarketNewsView, channels: CatalogChannel[]): MarketNewsStreams {
+function withLiveState(
+  view: MarketNewsView,
+  channels: CatalogChannel[],
+  limits: WatchLimits,
+): MarketNewsStreams {
   return {
     ...view,
+    maxWatching: Math.max(1, limits.maxWatching),
     channels: channels.map((c) => {
       const channelId = resolvedChannelId(c);
       const live = channelId ? cachedLiveState(channelId) : undefined;
       const base: StreamChannel = {
         ...c,
+        // Whether this channel is included with every account, or costs
+        // something. A fact about the CHANNEL, not about the viewer — the client
+        // marks every paid row for everybody (a Max member sees the star too, so
+        // the rail says what each row costs) and applies its own entitlement to
+        // decide what it may open. The server still refuses the write.
+        free: FREE_CHANNEL_KEYS.has(c.key),
         channelId,
         handle: displayHandle(c.handle),
         live: false,
@@ -382,19 +432,23 @@ function parseNotify(raw: string): Record<string, boolean> {
 // Drop anything that doesn't name one of this desk's channels and clamp `cols`
 // to the 1–6 the layout pills offer. This is also what quietly cleans up after a
 // channel is removed: a row still referencing it simply loses that reference.
-function sanitize(view: MarketNewsView, keys: Set<string>): MarketNewsView {
-  // One stream at a time. Enforced here as well as in the client, so a saved
-  // view from before the limit — or a hand-rolled request — collapses to a
-  // single channel rather than reopening a wall of them.
-  const watching = [...new Set(view.watching.filter((k) => keys.has(k)))].slice(0, 1);
-  const docked = view.docked && keys.has(view.docked) ? view.docked : null;
+function sanitize(view: MarketNewsView, keys: Set<string>, limits: WatchLimits): MarketNewsView {
+  // How many play at once, and which this account may play at all. Enforced here
+  // as well as in the client, so a hand-rolled request — or a view saved while
+  // the account held a higher tier — collapses to what it is entitled to rather
+  // than reopening a wall of paid channels.
+  const watching = [...new Set(view.watching.filter((k) => keys.has(k) && limits.watchable(k)))].slice(
+    0,
+    Math.max(1, limits.maxWatching),
+  );
+  const docked = view.docked && keys.has(view.docked) && limits.watchable(view.docked) ? view.docked : null;
   const cols = Math.min(6, Math.max(1, Math.round(view.cols) || 2));
   const notify: Record<string, boolean> = {};
   for (const [k, v] of Object.entries(view.notify)) if (keys.has(k) && v) notify[k] = true;
   return { watching, docked, cols, notify };
 }
 
-function rowToView(row: MarketNewsStreamsRow, keys: Set<string>): MarketNewsView {
+function rowToView(row: MarketNewsStreamsRow, keys: Set<string>, limits: WatchLimits): MarketNewsView {
   return sanitize(
     {
       watching: parseStrings(row.watching),
@@ -403,6 +457,7 @@ function rowToView(row: MarketNewsStreamsRow, keys: Set<string>): MarketNewsView
       notify: parseNotify(row.notify),
     },
     keys,
+    limits,
   );
 }
 
@@ -446,7 +501,10 @@ function resolveMissingIds(scope: string, channels: CatalogChannel[]): void {
   }
 }
 
-export async function getMarketNewsStreams(viewer: ChannelViewer): Promise<MarketNewsStreams> {
+export async function getMarketNewsStreams(
+  viewer: ChannelViewer,
+  limits: WatchLimits,
+): Promise<MarketNewsStreams> {
   const [channels, row] = await Promise.all([
     teamChannels(channelScope(viewer)),
     db
@@ -459,16 +517,17 @@ export async function getMarketNewsStreams(viewer: ChannelViewer): Promise<Marke
   resolveMissingIds(channelScope(viewer), channels);
   await refreshLiveVideos(channels);
   const keys = new Set(channels.map((c) => c.key));
-  return withLiveState(row ? rowToView(row, keys) : defaultMarketNewsView(), channels);
+  return withLiveState(row ? rowToView(row, keys, limits) : defaultMarketNewsView(), channels, limits);
 }
 
 export async function setMarketNewsStreams(
   viewer: ChannelViewer,
   view: MarketNewsView,
+  limits: WatchLimits,
 ): Promise<MarketNewsStreams> {
   const userId = viewer.id;
   const channels = await teamChannels(channelScope(viewer));
-  const clean = sanitize(view, new Set(channels.map((c) => c.key)));
+  const clean = sanitize(view, new Set(channels.map((c) => c.key)), limits);
   const now = new Date();
   const values = {
     watching: JSON.stringify(clean.watching),
@@ -480,7 +539,7 @@ export async function setMarketNewsStreams(
     .insert(marketNewsStreams)
     .values({ id: crypto.randomUUID(), userId, ...values, createdAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: marketNewsStreams.userId, set: { ...values, updatedAt: now } });
-  return withLiveState(clean, channels);
+  return withLiveState(clean, channels, limits);
 }
 
 // Every desk row that resolves to this channel id, so the go-live push can find

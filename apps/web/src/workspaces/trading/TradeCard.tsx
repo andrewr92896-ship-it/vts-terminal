@@ -263,7 +263,7 @@ export function TradeCard({
         </div>
         {/* The clock time this position opened, sitting to the left of how long
             ago that was. A live position has no close time yet — the closed
-            stamp shows on the Trade Log / History card for the same trade. */}
+            stamp shows on the Trade Log card for the same trade. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <TradeTimes openedAt={t.openedAt} />
           <span style={{ fontSize: 10.5, color: FAINT, fontFamily: MONO, whiteSpace: 'nowrap' }}>{etSince(t.openedAt)}</span>

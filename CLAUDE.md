@@ -207,11 +207,25 @@ workspaces list** (see `theme/nav.ts` order).
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
   its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
   **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
-  (`desk` — merges Trade Log + History + Live Brokers; legacy keys
+  (`desk` — **two tabs, Trade Log + Live Brokers**; legacy keys
   `log`/`history`/`metrics` alias into it. **The key stayed `desk` when the label
   changed** from "Trade Desk" to "Trade Analysis", so saved `nav.order`
   overrides, the `howto.desk` wording and every in-app link keep pointing at the
-  review screen; the new placement screen took the *new* key `tradedesk`),
+  review screen; the new placement screen took the *new* key `tradedesk`.
+  **History was removed** — owner decision, 2026-08: it listed the same closed
+  trades the Trade Log already carried, from the same rows, so two screens
+  answered one question and were free to disagree about it. Everything it had
+  that the Trade Log did not was **folded in rather than dropped** — the
+  day-of-week and month filters, the By Strategy / By Instrument breakdowns
+  (`tradeBreakdown.tsx`), the strategy column, the held time, and **editing a
+  closed trade you own even when the broker imported it** (a broker row is not
+  `editable`, so the inline form cannot touch it; the pencil saves through
+  `PATCH /api/trading/history/:id`, which is the only route that will, and the
+  Trade Log re-reads afterwards because that route answers with the History
+  shape). Any narrowing recomputes the summary client-side, the same rule History
+  followed, so a filtered selection scores exactly as the unfiltered one does.
+  The `history` view key still resolves — to the log — so a stale link lands
+  somewhere. Do not rebuild the screen),
   Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
@@ -503,14 +517,26 @@ workspaces list** (see `theme/nav.ts` order).
     "Most mentioned" rail, and the Trump/Truth Social tab — an "informational
     only, not investment advice" line sits under the feed instead. The economic
     calendar lives on Market Data now, not here.
-    - The **live-stream wall** lets a trader follow YouTube channels and watch
-      **one at a time** (plus a dockable corner mini-player), so a press
-      conference plays beside the headlines. The channel rail is a **selector,
-      not a set of checkboxes**: picking a channel replaces whatever is playing,
-      picking the playing one again closes it, and the single tile takes the full
-      column width — a readable player rather than four small ones. There is no
-      layout picker and no grid to size. Enforced in `sanitize` server-side too,
-      so a view saved before the limit collapses to one channel.
+    - The **live-stream wall** lets a trader follow YouTube channels (plus a
+      dockable corner mini-player), so a press conference plays beside the
+      headlines. **How many play at once is a tier question** (owner decision,
+      2026-08): a free account plays **one**, Premium and above up to **four**
+      (`MAX_WATCHING_FREE` / `MAX_WATCHING_PAID`). At one the rail is a
+      **selector rather than a set of checkboxes** — picking a channel replaces
+      what is playing, the way a television does; above one it adds, and at the
+      cap the longest-open tile makes way rather than the click doing nothing.
+      Picking the playing one again closes it either way. **The grid is computed,
+      never chosen** — one tile takes the full column, more go two across and
+      wrap, and two is the ceiling because a quarter-width tile is not a player.
+      Do not reintroduce the layout picker. `sanitize` enforces both the count
+      and *which* channels the account may play, so a hand-rolled request — or a
+      view saved while the account held a higher tier — collapses to what it is
+      entitled to.
+      - **Yahoo Finance leads the rail** (`inRailOrder`): the one channel a free
+        account can play should not sit last under three it cannot open. The
+        table has no ordering of its own and the seeded four share a `createdAt`
+        (one batch insert), so without that sort the order was whatever SQLite
+        happened to return.
       - **Knowing a channel is live and knowing what to play are separate facts,
         and the tile treats them separately.** `live_stream?channel=ID` — the
         keyless channel embed — is the **workhorse player**: it plays these
@@ -979,7 +1005,10 @@ cycle.
 
 - **`FEATURE_TIER` is the entire paywall, in one object.** Eight paid features
   (owner decisions, 2026-08). **Max:** `ai`, `tradeDesk`, `teams`, `teamChat`,
-  `customStreams`. **Premium:** `brokerConnections`, `funded`, `studyCreation`,
+  `customStreams`, `brokerConnections` (moved up from Premium — it is the one
+  feature holding a trading credential, and it sits beside the Trade Desk that
+  spends it; **Trade Analysis ▸ Live Brokers carries its diamond**).
+  **Premium:** `funded`, `studyCreation`,
   `customBoards`, `premiumBadges`, `strategySessions`, `marketData`,
   `presetStreams`, `suggestions`, `supportChat`. Everything absent
   from that map is included with every account. **Moving a feature between tiers
@@ -1086,8 +1115,15 @@ cycle.
     calendar on its own return path in `MarketData.tsx` rather than threading a
     null payload through every board computation.
   - **Market News streams** — **Yahoo Finance is free**, the rest of the seeded
-    wall is Premium (`presetStreams`, filtered in `routes/trading.ts` by
-    `FREE_CHANNEL_KEYS`), and adding your own channel is Max (`customStreams`).
+    wall is Premium (`presetStreams`), and adding your own channel is Max
+    (`customStreams`). A free account is sent the **whole** channel list and may
+    only play Yahoo: the paid rows are **marked with their tier, not hidden**
+    (`FREE_CHANNEL_KEYS` sets each channel's `free` flag, the rail draws a
+    `TierMark`, and "+ Add a channel" carries the Max diamond) — the same rule
+    the sidebar rows and the Studies tiles follow. Filtering them out of the
+    payload was the old behaviour and the wrong shape: somebody on a free account
+    could not see what upgrading would give them. The gate is `watchable` in
+    `routes/trading.ts`, enforced by `sanitize` on every read and write.
   - **The chat bubble** — **reporting a bug is free on every account and must
     stay that way**: a bug report is the user doing you a favour, and charging
     for it means never hearing about the bug. Suggestions and general support are
