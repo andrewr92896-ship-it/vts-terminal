@@ -1,5 +1,4 @@
 import type {
-  Membership,
   MembershipTier,
   MembershipView,
   PremiumFeature,
@@ -169,65 +168,111 @@ export const TIER_LABELS: Record<MembershipTier, string> = {
 // feature is, never instructions for using it.
 export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   ai: 'VTS AI',
+  tradeDesk: 'Trade Desk',
+  teams: 'Trading teams',
+  teamChat: 'Team chat',
+  customStreams: 'Your own live streams',
   brokerConnections: 'Broker connections',
   funded: 'Funded Account tracking',
   studyCreation: 'Study creation',
   customBoards: 'Custom Live Wall boards',
-  teams: 'Trading teams',
   premiumBadges: 'Badges',
   strategySessions: 'Strategy Sessions',
+  marketData: 'Market Data board',
+  presetStreams: 'Live stream wall',
+  suggestions: 'Suggestions',
+  supportChat: 'General support',
 };
 
-// The colour a tier is drawn in across the terminal — the sidebar rows, the
-// membership card, the badges.
+// One line on what each buys, for the tier boxes on the Premium Features screen.
+// States what the feature IS — never how to use it.
+export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
+  ai: 'Ask VTS AI anywhere in the terminal, and the study tutor.',
+  tradeDesk: 'Place, close and amend real orders through your own broker.',
+  teams: 'Share a desk: one book, one leaderboard, one set of study content.',
+  teamChat: 'The private conversation with your desk.',
+  customStreams: 'Add any YouTube channel to the live-stream wall.',
+  brokerConnections: 'Connect OANDA and Kraken to stream your positions and balances.',
+  funded: 'Track a prop-firm challenge: equity, target, and drawdown left.',
+  studyCreation: 'Build your own study games, flashcard sets and guides.',
+  customBoards: 'Save your own Live Wall arrangements instead of the presets.',
+  premiumBadges: 'Recognition badges beside your name.',
+  strategySessions: 'Session windows with a bias, and open/close notifications.',
+  marketData: '75 rates, prints and prices with five change columns each.',
+  presetStreams: 'Bloomberg, Reuters and the Fed alongside Yahoo Finance.',
+  suggestions: 'Send ideas straight to the developers.',
+  supportChat: 'Talk to a person about anything that is not a bug.',
+};
+
+// The colour and glyph each tier is marked with across the terminal — the badge
+// at the right of a sidebar row, the membership card, the recognition badges.
 //
-// Free is null rather than a colour: an unpaid section takes the workspace's own
-// accent like everything else, so the colours mark what COSTS something instead
-// of painting the whole sidebar.
+// Free is null: an unpaid section is marked with nothing at all, so the markers
+// say what COSTS something rather than decorating every row.
 export const TIER_COLORS: Record<MembershipTier, string | null> = {
   free: null,
   // Gold — the same yellow as the Premium star badge.
   premium: '#EBCB74',
-  // Diamond blue, matching the Max diamond badge. Deliberately icier than the
-  // Markets workspace accent (#5AC8FA) so a Max section is not mistaken for a
+  // Diamond blue, matching the Max gem badge. Deliberately icier than the
+  // Markets workspace accent (#5AC8FA) so a Max marker is never read as a
   // Markets one.
   max: '#B9F2FF',
 };
 
+// `gem` is the brilliant-cut diamond, NOT `diamond` — which in this icon set is
+// a rounded tilted square and reads as a rhombus rather than a jewel.
+export const TIER_GLYPHS: Record<MembershipTier, string | null> = {
+  free: null,
+  premium: 'star',
+  max: 'gem',
+};
+
 // Which paid feature gates each sidebar SECTION, by screen key.
 //
-// Only sections that are wholly gated appear here. Three paid features are
-// absent on purpose because no section maps to them: `ai` is the top-bar button,
-// `brokerConnections` lives inside My Terminal ▸ Settings, and `premiumBadges` is
-// a per-member setting. `customBoards` is absent too, and that one is the
-// interesting case — the Live Wall itself is free (a free account gets the preset
-// boards, a working screen), and only SAVING your own arrangement is paid. So
-// colouring the whole section would overstate the paywall.
+// Only sections that are wholly gated appear here. Several paid features have no
+// section of their own and are absent on purpose: `ai` is the top-bar button,
+// `brokerConnections` lives inside My Terminal ▸ Settings, `premiumBadges` is a
+// per-member setting, and the chat-bubble features (`teamChat`, `suggestions`,
+// `supportChat`) are tabs rather than nav rows. `customBoards` is absent too, and
+// that one is the interesting case — the Live Wall itself is free (a free account
+// gets the preset boards, a working screen) and only SAVING your own arrangement
+// is paid, so marking the whole section would overstate the paywall.
 export const SECTION_FEATURE: Record<string, PremiumFeature> = {
+  // Max
+  tradedesk: 'tradeDesk',
+  my_team: 'teams',
+  // Premium
+  data: 'marketData',
   sessions: 'strategySessions',
   prop: 'funded',
   st_decks: 'studyCreation',
-  my_team: 'teams',
 };
 
 // The same, for a whole WORKSPACE. Empty today — no workspace is entirely paid,
 // and marking one that is not would be a false claim about every free section
-// inside it (Advanced Trading holds the Trade Desk, Trade Analysis, alerts and
-// the manual book, none of which cost anything beyond the opt-in). It is the
-// seam for when one is: add a key here and its row colours automatically.
+// inside it (Advanced Trading holds Trade Analysis, alerts and the manual book).
+// It is the seam for when one is: add a key here and its row is marked.
 export const WORKSPACE_FEATURE: Record<string, PremiumFeature> = {};
 
-// The colour a sidebar row should take, or null for the default treatment.
-// Reads the tier off the membership payload the SERVER computed, so moving a
-// feature between tiers recolours the sidebar with nothing here to update.
-export function tierColorFor(
+// The tier a nav row needs, or null when it needs none. Reads the tier off the
+// membership payload the SERVER computed, so moving a feature between tiers
+// re-marks the sidebar with nothing here to update.
+export function tierForKey(
   key: string,
   map: Record<string, PremiumFeature>,
   membership: MembershipView | undefined,
-): string | null {
+): MembershipTier | null {
   const feature = map[key];
   if (!feature || !membership) return null;
-  return TIER_COLORS[membership.featureTiers[feature]] ?? null;
+  return membership.featureTiers[feature] ?? null;
+}
+
+// The tier a paid feature needs, for marking a control that is not a nav row.
+export function tierOfFeature(
+  feature: PremiumFeature,
+  membership: MembershipView | undefined,
+): MembershipTier | null {
+  return membership?.featureTiers[feature] ?? null;
 }
 
 // Whether this user reaches a paid feature. Reads the entitlement map the server
@@ -235,12 +280,4 @@ export function tierColorFor(
 // is a server-side change alone and this file never goes stale.
 export function hasEntitlement(user: User | null, feature: PremiumFeature): boolean {
   return !!user?.access.membership.entitlements[feature];
-}
-
-// Whether the membership is a real paid grant rather than something the account
-// gets for being staff. Used where the screen should say "you hold Max because
-// you are an administrator" instead of showing a renewal date that does not
-// exist.
-export function isStaffMembership(membership: Membership): boolean {
-  return membership.source === 'role' || membership.source === 'demo';
 }

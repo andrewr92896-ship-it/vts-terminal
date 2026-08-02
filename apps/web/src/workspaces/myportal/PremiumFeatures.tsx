@@ -1,8 +1,14 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { FEATURE_LABELS, TIER_COLORS, TIER_LABELS, isStaffMembership } from '../../auth/access';
-import { PREMIUM_FEATURES } from '../../api/types';
+import {
+  FEATURE_BLURBS,
+  FEATURE_LABELS,
+  TIER_COLORS,
+  TIER_GLYPHS,
+  TIER_LABELS,
+} from '../../auth/access';
+import { PREMIUM_FEATURES, type MembershipTier, type PremiumFeature } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { C } from '../../theme/tokens';
 import { Icon } from '../../components/Icon';
@@ -164,78 +170,86 @@ export function PremiumFeatures({ theme }: { theme: Theme }) {
   );
 }
 
-// The membership card: which tier this account holds, until when, and which of
-// the paid features it reaches.
+// The two tier boxes: one for Premium, one for Max, each listing what it buys.
 //
-// Every paid feature is listed whether or not it is held, ticked or locked. A
-// screen that hid what you do not have would leave a Free member unable to tell
-// what upgrading would actually get them — and would make the locks they hit
-// elsewhere in the terminal look like faults rather than a tier.
+// Separate boxes rather than one combined list (owner decision, 2026-08) so the
+// tiers read as two things you could buy rather than one ladder with locks on
+// it. The box for the tier you hold is captioned "Your membership"; the other is
+// captioned with what it would add.
+//
+// Every feature is listed whether or not you have it. A screen that hid what you
+// do not hold would leave a Free member unable to tell what upgrading gets them,
+// and would make the badges they see in the sidebar look like faults.
 function MembershipCard({ theme }: { theme: Theme }) {
   const { user } = useAuth();
   const membership = user?.access.membership;
   if (!membership) return null;
 
-  const staff = isStaffMembership(membership);
-  // The one tier palette — the same values the sidebar rows and the badges use.
-  const tint = TIER_COLORS[membership.tier] ?? C.faint;
-  // The same glyphs the badges use — diamond for Max, gold star for Premium —
-  // so the icon beside your name and the icon on this card are the one language.
-  const glyph = membership.tier === 'max' ? 'diamond' : membership.tier === 'premium' ? 'star' : 'user';
+  const held = membership.tier;
+  const byTier = (t: MembershipTier) =>
+    PREMIUM_FEATURES.filter((f) => membership.featureTiers[f] === t);
 
   return (
-    <section style={{ ...panel(theme), marginBottom: 16 }}>
-      <div style={panelLabel}>{"Your membership"}</div>
+    <div style={{ display: 'grid', gap: 14, marginBottom: 16 }}>
+      <TierBox theme={theme} tier="premium" held={held} features={byTier('premium')} />
+      <TierBox theme={theme} tier="max" held={held} features={byTier('max')} />
+      {held !== 'free' && membership.expiresAt != null && (
+        <div style={{ fontSize: 11.5, color: C.faint }}>
+          {`Your ${TIER_LABELS[held]} membership runs until ${new Date(
+            membership.expiresAt,
+          ).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`}
+        </div>
+      )}
+    </div>
+  );
+}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-        <Icon name={glyph} size={20} color={tint} />
-        <span style={{ fontSize: 20, fontWeight: 700, color: C.text }}>
-          {TIER_LABELS[membership.tier]}
-        </span>
+function TierBox({
+  theme,
+  tier,
+  held,
+  features,
+}: {
+  theme: Theme;
+  tier: MembershipTier;
+  held: MembershipTier;
+  features: readonly PremiumFeature[];
+}) {
+  const color = TIER_COLORS[tier] ?? C.faint;
+  const glyph = TIER_GLYPHS[tier] ?? 'hexagon';
+  const isYours = held === tier;
+  // Held by a higher tier: a Max member reaches everything Premium buys, so the
+  // Premium box reads as included rather than as something to go and get.
+  const included = !isYours && TIER_RANK[held] > TIER_RANK[tier];
+
+  return (
+    <section style={{ ...panel(theme), borderLeft: `2px solid ${color}` }}>
+      {isYours && <div style={{ ...panelLabel, color, marginBottom: 8 }}>{"Your membership"}</div>}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <Icon name={glyph} size={19} color={color} />
+        <span style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{TIER_LABELS[tier]}</span>
+        {included && (
+          <span style={{ fontSize: 11.5, color: C.faint }}>{"included with your membership"}</span>
+        )}
       </div>
 
-      <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
-        {staff
-          ? 'Included with your role — it does not expire.'
-          : membership.expiresAt == null
-            ? membership.tier === 'free'
-              ? 'Upgrade to reach the features below.'
-              : 'Does not expire.'
-            : `${membership.tier === 'free' ? 'Ended' : 'Runs until'} ${new Date(
-                membership.expiresAt,
-              ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`}
-        {!staff && membership.grantedByName ? ` Granted by ${membership.grantedByName}.` : ''}
-      </div>
-
-      {/* Every paid feature carries the colour of the tier it needs — the same
-          yellow and diamond blue the sidebar paints those sections in, so the
-          colours in the nav are readable without anything having to explain
-          them. */}
-      <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
-        {PREMIUM_FEATURES.map((f) => {
-          const on = membership.entitlements[f];
-          const needs = membership.featureTiers[f];
-          const color = TIER_COLORS[needs] ?? C.faint;
+      <div style={{ display: 'grid', gap: 9, marginTop: 13 }}>
+        {features.map((f) => {
+          const on = isYours || included;
           return (
-            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Icon name={on ? 'check' : 'lock'} size={14} color={on ? C.green : C.faint} />
-              <span style={{ fontSize: 13, color: on ? C.text : C.faint, flex: 1, minWidth: 0 }}>
-                {FEATURE_LABELS[f]}
+            <div key={f} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <span style={{ flex: 'none', marginTop: 2 }}>
+                <Icon name={on ? 'check' : 'lock'} size={13} color={on ? C.green : C.faint} />
               </span>
-              <span
-                style={{
-                  flex: 'none',
-                  fontSize: 10,
-                  fontFamily: C.mono,
-                  color,
-                  border: `1px solid ${color}55`,
-                  background: `${color}14`,
-                  borderRadius: 999,
-                  padding: '1px 8px',
-                }}
-              >
-                {TIER_LABELS[needs]}
-              </span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: on ? C.text : C.muted }}>
+                  {FEATURE_LABELS[f]}
+                </div>
+                <div style={{ fontSize: 12, color: C.faint, lineHeight: 1.5, marginTop: 1 }}>
+                  {FEATURE_BLURBS[f]}
+                </div>
+              </div>
             </div>
           );
         })}
@@ -243,6 +257,10 @@ function MembershipCard({ theme }: { theme: Theme }) {
     </section>
   );
 }
+
+// Local copy of the tier ranking, so a box can tell "you hold this" from "this is
+// below what you hold". Mirrors tierRank server-side.
+const TIER_RANK: Record<MembershipTier, number> = { free: 0, premium: 1, max: 2 };
 
 // The one thing standing between the switch and a live order ticket: a plain
 // statement of what the desk does, confirmed once. Not a legal wall — an honest

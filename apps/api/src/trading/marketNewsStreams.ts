@@ -104,6 +104,12 @@ type CatalogChannel = Pick<StreamChannel, 'key' | 'name' | 'handle' | 'channelId
 // no id cannot embed at all, so the desk that starts with these should never
 // have to wait on a lookup — and a lookup that fails (YouTube changing its page,
 // no outbound access) would otherwise leave a starter channel permanently dead.
+// The one live stream a free account gets. Yahoo Finance is always-on and
+// general-market, so a free wall still plays something all day rather than being
+// an empty tease — the rest of the seeded channels are Premium, and adding your
+// own is Max (owner decision, 2026-08).
+export const FREE_CHANNEL_KEYS = new Set(['yahoofinance']);
+
 const SEED_CHANNELS: CatalogChannel[] = [
   {
     key: 'yahoofinance',

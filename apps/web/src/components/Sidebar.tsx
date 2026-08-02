@@ -1,8 +1,9 @@
 import { useState, type CSSProperties } from 'react';
 import type { WorkspaceKey } from '../theme/themes';
+import type { MembershipTier } from '../api/types';
 import { NAV, navFor, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
-import { SECTION_FEATURE, WORKSPACE_FEATURE, tierColorFor } from '../auth/access';
+import { SECTION_FEATURE, TIER_COLORS, TIER_GLYPHS, TIER_LABELS, WORKSPACE_FEATURE, tierForKey } from '../auth/access';
 import { useAuth } from '../auth/AuthContext';
 import { APP_VERSION } from '../meta/version';
 import { Icon } from './Icon';
@@ -155,7 +156,7 @@ export function Sidebar(props: SidebarProps) {
             icon={w.icon}
             label={w.label}
             accent={w.accent}
-            tierColor={tierColorFor(w.key, WORKSPACE_FEATURE, membership)}
+            tier={tierForKey(w.key, WORKSPACE_FEATURE, membership)}
             locked={lockedWorkspaces?.has(w.key)}
             dot={workspaceDots?.has(w.key)}
             onClick={() => onSelectWorkspace(w.key)}
@@ -181,10 +182,11 @@ export function Sidebar(props: SidebarProps) {
               label={s.label}
               count={s.count}
               accent={accent}
-              // Yellow for a Premium section, diamond blue for a Max one, and
-              // nothing at all for a section that costs nothing — so the colour
-              // marks the paywall rather than repainting the sidebar.
-              tierColor={tierColorFor(s.key, SECTION_FEATURE, membership)}
+              // A star for a Premium section, a diamond for a Max one, drawn at
+              // the right of the row. Shown to everyone including a Max member,
+              // so the nav says what each part costs rather than looking
+              // identical to a free account's.
+              tier={tierForKey(s.key, SECTION_FEATURE, membership)}
               dot={sectionDots?.has(s.key)}
               onClick={() => onSelectScreen(s.key)}
             />
@@ -312,7 +314,7 @@ function NavRow({
   label,
   count,
   accent,
-  tierColor,
+  tier,
   collapsed,
   dot,
   locked,
@@ -324,11 +326,11 @@ function NavRow({
   label: string;
   count?: number;
   accent: string;
-  // The colour of the membership tier this row needs, or null when it needs
-  // none. When set it REPLACES the workspace accent for this row — icon, label
-  // and the active highlight — so a paid section reads the same colour whether
-  // or not it happens to be the one selected.
-  tierColor?: string | null;
+  // The membership tier this row needs, or null when it needs none. Drawn as a
+  // small star (Premium) or diamond (Max) at the right of the row. It marks the
+  // row WITHOUT recolouring it — the workspace accent still signals where you
+  // are, which is what the accent is for.
+  tier?: MembershipTier | null;
   collapsed: boolean;
   dot?: boolean;
   // A workspace the user hasn't opted into: dimmed, with a padlock in place of
@@ -338,8 +340,6 @@ function NavRow({
 }) {
   const [hover, setHover] = useState(false);
   const isSecActive = kind === 'sec' && active;
-  // A tier colour outranks the workspace accent for this row.
-  const rowAccent = tierColor ?? accent;
 
   const style: CSSProperties = {
     display: 'flex',
@@ -353,10 +353,10 @@ function NavRow({
     cursor: 'pointer',
     marginBottom: 2,
     position: 'relative',
-    color: isSecActive ? rowAccent : tierColor ?? (active || hover ? C.text : C.muted),
+    color: isSecActive ? accent : active || hover ? C.text : C.muted,
     opacity: locked ? 0.5 : 1,
     background: isSecActive
-      ? `linear-gradient(180deg, ${tint(rowAccent, 0.16)}, ${tint(rowAccent, 0.08)})`
+      ? `linear-gradient(180deg, ${tint(accent, 0.16)}, ${tint(accent, 0.08)})`
       : active
         ? 'rgba(255,255,255,.045)'
         : hover
@@ -368,12 +368,12 @@ function NavRow({
     border: 'none',
     fontFamily: 'inherit',
   };
-  // A tier-gated row is always its tier's colour. Otherwise: the workspace icon
-  // takes its own accent when active, an active section takes the current
-  // workspace accent, and everything else is faint.
-  const iconColor = locked
-    ? C.faint
-    : (tierColor ?? (isSecActive ? accent : kind === 'ws' && active ? accent : C.faint));
+  // The workspace icon takes its own accent when active; an active section takes
+  // the current workspace accent. Everything else is faint. The tier badge on the
+  // right carries the paywall marking, so nothing here changes colour for it.
+  const iconColor = locked ? C.faint : isSecActive ? accent : kind === 'ws' && active ? accent : C.faint;
+  const tierColor = tier ? TIER_COLORS[tier] : null;
+  const tierGlyph = tier ? TIER_GLYPHS[tier] : null;
 
   return (
     <button
@@ -405,6 +405,17 @@ function NavRow({
       {!collapsed && (
         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {label}
+        </span>
+      )}
+      {/* The tier badge, at the right of the row. Drawn for everyone — a Max
+          member still wants to see which parts of the terminal are paid. */}
+      {!collapsed && tierGlyph && tierColor && (
+        <span
+          title={`${TIER_LABELS[tier!]} membership`}
+          aria-label={`${TIER_LABELS[tier!]} membership`}
+          style={{ display: 'inline-flex', flex: 'none', opacity: locked ? 0.6 : 1 }}
+        >
+          <Icon name={tierGlyph} size={13} color={tierColor} />
         </span>
       )}
       {!collapsed && locked && <Icon name="lock" size={12} color={C.faint} />}

@@ -2061,15 +2061,24 @@ export interface NetWorth {
 export const MEMBERSHIP_TIERS = ['free', 'premium', 'max'] as const;
 export type MembershipTier = (typeof MEMBERSHIP_TIERS)[number];
 
+// Ordered Max first, then Premium — matching how the sidebar stacks its sections
+// and how the tier boxes read on the Premium Features screen.
 export const PREMIUM_FEATURES = [
   'ai',
+  'tradeDesk',
+  'teams',
+  'teamChat',
+  'customStreams',
   'brokerConnections',
   'funded',
   'studyCreation',
   'customBoards',
-  'teams',
   'premiumBadges',
   'strategySessions',
+  'marketData',
+  'presetStreams',
+  'suggestions',
+  'supportChat',
 ] as const;
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 

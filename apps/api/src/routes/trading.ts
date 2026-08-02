@@ -7,6 +7,9 @@ import {
   requireWorkspaceWrite,
   requirePremium,
 } from '../auth/middleware.js';
+import type { UserRow } from '../db/schema.js';
+import { hasEntitlement } from '../memberships/service.js';
+import { FREE_CHANNEL_KEYS } from '../trading/marketNewsStreams.js';
 import { getLiveWall } from '../trading/service.js';
 import {
   addTrade,
@@ -181,6 +184,11 @@ export async function tradingRoutes(app: FastifyInstance) {
   // NOT gated: a free account still gets the preset boards, which is a working
   // screen rather than a teaser, and the read is what serves them.
   const boardWrite = { preHandler: [requireMarkets, requirePremium('customBoards')] };
+  // The Market Data series board — paid. The economic calendar and the FOMC
+  // countdown that share that screen are NOT on this guard: they arrive with
+  // /api/trading/news and stay free, so a free account keeps a real reason to
+  // open the terminal daily.
+  const marketData = { preHandler: [requireMarkets, requirePremium('marketData')] };
 
   // Every endpoint here is behind the `trading` workspace guard, so any caller
   // holds a trading role (full or view-only). Trade data is scoped to the
@@ -493,13 +501,13 @@ export async function tradingRoutes(app: FastifyInstance) {
   // The catalog is code-resident and identical for everyone; the layout is
   // personal. Two calls rather than one so the catalog response stays cacheable
   // and a layout save never has to round-trip 75 series.
-  app.get('/api/trading/market-data', markets, async () => getMarketData());
+  app.get('/api/trading/market-data', marketData, async () => getMarketData());
 
-  app.get('/api/trading/market-data/layout', markets, async (request) => ({
+  app.get('/api/trading/market-data/layout', marketData, async (request) => ({
     layout: await getMarketDataLayout(request.currentUser!.id),
   }));
 
-  app.put('/api/trading/market-data/layout', markets, async (request, reply) => {
+  app.put('/api/trading/market-data/layout', marketData, async (request, reply) => {
     const parsed = marketDataLayoutSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid board layout' });
     return { layout: await setMarketDataLayout(request.currentUser!.id, parsed.data) };
@@ -515,8 +523,18 @@ export async function tradingRoutes(app: FastifyInstance) {
   // Markets workspace, so gating the wall behind the Advanced Trading opt-in
   // would let a user see it and not shape it. The demo is still refused every
   // non-GET by demoGuard, so it watches without reshaping the desk's wall.
+  // What a free account sees on the wall: Yahoo Finance only. The filter is here
+  // rather than in the service because it is an entitlement question, not a
+  // question about what the desk owns — the team's channels are unchanged, they
+  // are simply not all served to an account that has not paid for them.
+  async function streamsFor(user: UserRow) {
+    const streams = await getMarketNewsStreams(user);
+    if (await hasEntitlement(user, 'presetStreams')) return streams;
+    return { ...streams, channels: streams.channels.filter((c) => FREE_CHANNEL_KEYS.has(c.key)) };
+  }
+
   app.get('/api/trading/market-news/streams', markets, async (request) => ({
-    streams: await getMarketNewsStreams(request.currentUser!),
+    streams: await streamsFor(request.currentUser!),
     liveConfigured: liveStreamsConfigured(),
     fomc: FOMC_SCHEDULE,
   }));
@@ -531,13 +549,15 @@ export async function tradingRoutes(app: FastifyInstance) {
     };
   });
 
-  // Add / rename / remove a channel on the desk's wall. All three are on
-  // `markets` — signed in — deliberately, and NOT on the trading write guard:
-  // Market News is a Markets section included with every account, so requiring
-  // the Advanced Trading opt-in here would lock a Markets-only user out of their
-  // own team's stream wall. The demo is still refused, by demoGuard, which
-  // rejects every non-GET before these handlers run.
-  app.post('/api/trading/market-news/channels', markets, async (request, reply) => {
+  // Add / rename / remove a channel on the desk's wall — Max (owner decision,
+  // 2026-08: watching the seeded channels is Premium, bringing your own is Max).
+  //
+  // Deliberately NOT on the trading write guard: Market News is a Markets section
+  // included with every account, so requiring the Advanced Trading opt-in here
+  // would lock a paying Markets-only user out of their own team's wall. The demo
+  // is still refused by demoGuard, which rejects every non-GET first.
+  const ownStreams = { preHandler: [requireMarkets, requirePremium('customStreams')] };
+  app.post('/api/trading/market-news/channels', ownStreams, async (request, reply) => {
     const parsed = addChannelSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Paste a YouTube channel link' });
     try {
@@ -547,13 +567,13 @@ export async function tradingRoutes(app: FastifyInstance) {
       throw err;
     }
     return {
-      streams: await getMarketNewsStreams(request.currentUser!),
+      streams: await streamsFor(request.currentUser!),
       liveConfigured: liveStreamsConfigured(),
       fomc: FOMC_SCHEDULE,
     };
   });
 
-  app.patch('/api/trading/market-news/channels/:key', markets, async (request, reply) => {
+  app.patch('/api/trading/market-news/channels/:key', ownStreams, async (request, reply) => {
     const parsed = editChannelSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing to update' });
     try {
@@ -563,16 +583,16 @@ export async function tradingRoutes(app: FastifyInstance) {
       throw err;
     }
     return {
-      streams: await getMarketNewsStreams(request.currentUser!),
+      streams: await streamsFor(request.currentUser!),
       liveConfigured: liveStreamsConfigured(),
       fomc: FOMC_SCHEDULE,
     };
   });
 
-  app.delete('/api/trading/market-news/channels/:key', markets, async (request) => {
+  app.delete('/api/trading/market-news/channels/:key', ownStreams, async (request) => {
     await removeTeamChannel(request.currentUser!, (request.params as { key: string }).key);
     return {
-      streams: await getMarketNewsStreams(request.currentUser!),
+      streams: await streamsFor(request.currentUser!),
       liveConfigured: liveStreamsConfigured(),
       fomc: FOMC_SCHEDULE,
     };

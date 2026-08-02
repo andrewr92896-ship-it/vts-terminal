@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireAdmin } from '../auth/middleware.js';
+import { requireAuth, requireAdmin, requirePremium } from '../auth/middleware.js';
 import { canAccessWorkspace, isAdmin, isFounder, parseRoles } from '../auth/rbac.js';
 import { getTeamName } from '../teams/service.js';
 import {
@@ -49,6 +49,11 @@ function teamChatEligibility(u: {
 export async function chatRoutes(app: FastifyInstance) {
   const auth = { preHandler: requireAuth };
   const admin = { preHandler: requireAdmin };
+  // Team chat travels with Trading teams at Max — a tier that let you build a
+  // team but not message it would be a feature that half-works. The GET stays on
+  // plain `auth` so the panel can still render the "not on a team" explanation
+  // and the upgrade notice rather than erroring.
+  const teamChat = { preHandler: [requireAuth, requirePremium('teamChat')] };
 
   // The team chat feed. Always 200: a non-eligible user gets an empty feed plus
   // the reason, so the client can render the trading-team explanation instead.
@@ -60,7 +65,7 @@ export async function chatRoutes(app: FastifyInstance) {
     return { eligible: elig.eligible, reason: elig.reason, teamName, messages };
   });
 
-  app.post('/api/chat/team', auth, async (request, reply) => {
+  app.post('/api/chat/team', teamChat, async (request, reply) => {
     const u = request.currentUser!;
     const elig = teamChatEligibility(u);
     if (!elig.eligible) return reply.code(403).send({ error: 'You are not on a trading team yet' });
@@ -73,7 +78,7 @@ export async function chatRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete('/api/chat/team/:id', auth, async (request, reply) => {
+  app.delete('/api/chat/team/:id', teamChat, async (request, reply) => {
     const u = request.currentUser!;
     const elig = teamChatEligibility(u);
     if (!elig.eligible) return reply.code(403).send({ error: 'You are not on a trading team yet' });

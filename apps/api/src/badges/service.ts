@@ -202,7 +202,10 @@ export async function seedBadges(): Promise<void> {
     {
       key: 'max',
       label: 'Max',
-      icon: 'diamond',
+      // `gem` is the brilliant-cut diamond. NOT `diamond`, which in this icon
+      // set is a rounded tilted square and reads as a rhombus rather than a
+      // jewel — migration 0091 corrects the rows seeded before this.
+      icon: 'gem',
       // Diamond blue — icier than the Markets accent (#5AC8FA) on purpose, so a
       // Max marker is never read as a Markets one.
       color: '#B9F2FF',

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
+import { requireWorkspace, requireWorkspaceWrite, requirePremium } from '../auth/middleware.js';
 import { TRADE_ORDER_TYPES, TRADE_SIDES } from '../db/schema.js';
 import {
   cancelDeskOrder,
@@ -82,8 +82,13 @@ function fail(reply: FastifyReply, e: unknown) {
 }
 
 export async function tradeDeskRoutes(app: FastifyInstance) {
-  const read = { preHandler: requireWorkspace('trading') };
-  const write = { preHandler: requireWorkspaceWrite('trading') };
+  // Trade Desk is Max (owner decision, 2026-08): the ladder is Premium TRACKS
+  // and Max EXECUTES, so connecting a broker and reviewing trades is Premium
+  // while sending an order is the top tier. Reads are gated too — the desk's
+  // book and holdings are the placement screen, not the review one, which lives
+  // on its own key (`desk`) and is unaffected.
+  const read = { preHandler: [requireWorkspace('trading'), requirePremium('tradeDesk')] };
+  const write = { preHandler: [requireWorkspaceWrite('trading'), requirePremium('tradeDesk')] };
 
   // The caller's own tradeable accounts, with live capital.
   app.get('/api/trading/desk/accounts', read, async (request) => ({
