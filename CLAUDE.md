@@ -966,8 +966,9 @@ needs the membership *type* for the public user — importing each other would b
 cycle.
 
 - **`FEATURE_TIER` is the entire paywall, in one object.** Eight paid features
-  (owner decision, 2026-08): `ai`, `brokerConnections`, `funded`, `studyCreation`,
-  `customBoards`, `teams`, `premiumBadges`, `strategySessions`. Everything absent
+  (owner decision, 2026-08): `ai` (**Max**), plus `brokerConnections`, `funded`,
+  `studyCreation`, `customBoards`, `teams`, `premiumBadges` and
+  `strategySessions` at **Premium**. Everything absent
   from that map is included with every account. **Moving a feature between tiers
   is a one-word edit there** and every guard, lock icon and upgrade prompt
   follows — that is the whole reason features ask `hasEntitlement(user, 'ai')` and
@@ -1049,9 +1050,11 @@ cycle.
     the other, or a Premium section stops matching the Premium star. Both are
     kept icier/warmer than the Markets accent (`#5AC8FA`) so a tier marker is
     never read as a workspace one.
-  - **Consequence worth knowing:** with every feature currently at `premium`,
-    nothing renders blue. The first entry moved to `'max'` in `FEATURE_TIER` is
-    what makes blue appear — no other change is needed.
+  - **`ai` is the only feature at `max` today** (owner decision, 2026-08 — it is
+    the one paid feature with a real per-use cost to run). It has no section of
+    its own, so nothing in the sidebar renders blue yet; the blue shows up on the
+    Premium Features card and on the Ask VTS AI prompt. Moving a feature that
+    *does* own a section to `'max'` is what puts blue in the nav.
 - **The Ask VTS AI button stays in the top bar for everyone** (owner instruction).
   Hiding it would leave a free account unable to discover the feature exists, so
   the panel opens as normal and the composer is replaced by the upgrade notice.
