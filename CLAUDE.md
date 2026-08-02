@@ -557,10 +557,23 @@ workspaces list** (see `theme/nav.ts` order).
       `user:<id>`, matching `scopedTraderIds`). `SEED_CHANNELS` in
       `trading/marketNewsStreams.ts` (Yahoo Finance, Bloomberg, the Fed, Reuters)
       is a **one-time seed per desk**, not a catalog: once seeded those are
-      ordinary rows that can be renamed or removed like any other. Adding,
-      renaming and removing are all behind `requireWorkspaceWrite`, so a
-      `trading_viewer` and the demo watch the wall but cannot reshape what the
-      desk sees. `MAX_TEAM_CHANNELS` (24) guards against a runaway list.
+      ordinary rows that can be renamed or removed like any other — the pencil on
+      a rail row opens `ChannelEditForm` (rename + the 24/7 tick), and the add
+      form carries the same tick. Adding, editing and removing are all on
+      `requireMarkets` — **signed in**, deliberately not the trading write guard,
+      since Market News is a Markets section included with every account and
+      demanding the Advanced Trading opt-in would lock a Markets-only user out of
+      their own team's wall. The demo is refused by `demoGuard` (every non-GET),
+      which is what `canWrite` mirrors on the client.
+      `MAX_TEAM_CHANNELS` (24) guards against a runaway list.
+    - **`alwaysOn` has to be settable, or it only ever describes the seed.** It
+      is what makes a tile keep playing when the server's own live reading says
+      dark — the reading a datacenter gets wrong most often (see the player rules
+      below). It shipped reachable on the three seeded 24/7 rows and unreachable
+      on everything a trader added, so a user-added round-the-clock channel was
+      stuck on the "not live right now" card with no remedy. Renaming leaves
+      `key` alone (it is derived from the handle and id), so `watching`,
+      `docked` and `notify` survive an edit.
     - **Any YouTube URL works** — the link is parsed server-side
       (`parseYouTubeRef`), never by the client, so a hand-rolled request cannot
       smuggle in an arbitrary embed target. `resolveChannelId` then goes

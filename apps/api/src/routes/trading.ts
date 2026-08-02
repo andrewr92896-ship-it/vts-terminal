@@ -504,9 +504,12 @@ export async function tradingRoutes(app: FastifyInstance) {
     };
   });
 
-  // Add a channel to the desk's wall from a pasted YouTube link. Behind
-  // requireWorkspaceWrite, so a view-only role and the demo cannot change what
-  // the whole desk sees.
+  // Add / rename / remove a channel on the desk's wall. All three are on
+  // `markets` — signed in — deliberately, and NOT on the trading write guard:
+  // Market News is a Markets section included with every account, so requiring
+  // the Advanced Trading opt-in here would lock a Markets-only user out of their
+  // own team's stream wall. The demo is still refused, by demoGuard, which
+  // rejects every non-GET before these handlers run.
   app.post('/api/trading/market-news/channels', markets, async (request, reply) => {
     const parsed = addChannelSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Paste a YouTube channel link' });

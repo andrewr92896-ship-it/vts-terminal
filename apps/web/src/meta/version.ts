@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.27';
+export const APP_VERSION = 'Beta V 6.28';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.28',
+    date: 'August 2, 2026',
+    notes: [
+      'Market News: you can now rename a channel on the stream wall. The pencil beside a channel opens it — the name is the desk’s, so everyone on your team sees the change.',
+      'You can also mark a channel as broadcasting 24/7, both when you add it and afterwards. This was already how the four starter channels worked, but there was no way to set it on one you added yourself.',
+      'That tick does real work: a 24/7 channel keeps its player up even when we cannot confirm the stream is on. Without it, your own round-the-clock channel could sit reading “not live right now” while it was plainly broadcasting.',
+      'Renaming keeps everything else about the channel — what you are watching, and whether the bell is armed — exactly where it was.',
+    ],
+  },
   {
     version: 'Beta V 6.27',
     date: 'August 2, 2026',
