@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.28';
+export const APP_VERSION = 'Beta V 6.29';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.29',
+    date: 'August 2, 2026',
+    notes: [
+      'The login screen no longer shows a sample company email in the box. The label and the line under it already say what goes there, and a company address is the wrong hint for anyone signing in from outside the company.',
+    ],
+  },
   {
     version: 'Beta V 6.28',
     date: 'August 2, 2026',
