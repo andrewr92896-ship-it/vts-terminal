@@ -1959,3 +1959,58 @@ export interface InvestmentProjection {
   annualRatePct: number;
   years: number;
 }
+
+// ---- My Terminal ▸ Investment Holdings ----
+// The cross-workspace roll-up: the long-term Investments portfolio beside the
+// trading desk. Mirrors apps/api/src/myportal/holdings.ts.
+
+export interface CombinedHoldingRow {
+  key: string;
+  name: string;
+  symbol: string | null;
+  detail: string;
+  /**
+   * Null for an open trading position, deliberately: its notional is not a
+   * value that belongs in a column beside a fund's worth. Its P/L is in `gain`.
+   */
+  value: number | null;
+  gain: number | null;
+  gainPct: number | null;
+  side: 'investment' | 'position' | 'spot';
+}
+
+export interface MyHoldingsInvestments {
+  value: number;
+  costBasis: number;
+  gain: number;
+  gainPct: number | null;
+  dayChange: number;
+  dayChangeCoverage: number;
+  accountsCount: number;
+  holdingsCount: number;
+  unpricedCount: number;
+}
+
+export interface MyHoldingsTrading {
+  enabled: boolean;
+  brokerConfigured: boolean;
+  accountValue: number | null;
+  currency: string | null;
+  unrealizedPl: number | null;
+  realizedToday: number | null;
+  spotValue: number;
+  openPositionCount: number;
+  positions: CombinedHoldingRow[];
+  /** What is left out of the total, in words, so the screen can say why. */
+  excluded: string[];
+}
+
+export interface MyHoldings {
+  investments: MyHoldingsInvestments;
+  trading: MyHoldingsTrading;
+  /** Null when the two halves cannot honestly be added; `combinedNote` says why. */
+  combinedValue: number | null;
+  combinedNote: string | null;
+  top: CombinedHoldingRow[];
+  asOf: number;
+}

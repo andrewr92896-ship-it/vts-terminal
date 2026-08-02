@@ -104,6 +104,11 @@ const DeletedTrades = lazy(() =>
 const InvestmentsWorkspace = lazy(() =>
   import('../workspaces/investments').then((m) => ({ default: m.InvestmentsWorkspace })),
 );
+// My Terminal's cross-workspace roll-up — lazy, since it pulls in the shared
+// Investments UI kit.
+const InvestmentHoldingsScreen = lazy(() =>
+  import('../workspaces/myportal/InvestmentHoldings').then((m) => ({ default: m.InvestmentHoldingsScreen })),
+);
 
 // Screens that have real implementations; everything else falls back to the
 // branded placeholder. `onNavigate` lets a screen jump to another tab.
@@ -433,6 +438,23 @@ export function Portal() {
   // Demo mode: a one-click, read-only showcase with a guided tour.
   const isDemo = !!user?.isDemo;
   const [tourOpen, setTourOpen] = useState(false);
+  // Jump to a section wherever it lives, resolving its workspace from the nav.
+  // `selectScreen` alone cannot do this: it only sets the screen, so a key
+  // belonging to another workspace is bounced straight back by the effect that
+  // keeps the two consistent.
+  const goToSection = useCallback(
+    (scr: string) => {
+      const owner = NAV.find((w) => w.sections.some((sec) => sec.key === scr));
+      if (owner && owner.key !== workspace) {
+        setWorkspace(owner.key);
+      }
+      setScreen(scr);
+      setNavOpen(false);
+      resetScroll();
+    },
+    [workspace, resetScroll],
+  );
+
   const goTo = useCallback((ws: WorkspaceKey, scr: string) => {
     setWorkspace(ws);
     setScreen(scr);
@@ -496,10 +518,12 @@ export function Portal() {
   function renderExtra(scr: string): React.ReactNode {
     // The Investments workspace — the long-term portfolio tracker.
     if (INVESTMENT_SCREENS.has(scr)) return <InvestmentsWorkspace screen={scr} onNavigate={selectScreen} />;
-    // What is left on the placeholder: the two My Terminal roll-ups, which
-    // summarise across workspaces and so come after the things they summarise.
+    // What is left on the placeholder: Net Worth, which summarises everything
+    // the other screens show plus every asset and liability on top.
     if (COMING_SOON_SCREENS.has(scr)) return <ComingSoon screen={scr} theme={theme} />;
     switch (scr) {
+      case 'my_holdings':
+        return <InvestmentHoldingsScreen onNavigate={goToSection} />;
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
       case 'my_access':
