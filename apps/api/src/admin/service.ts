@@ -29,6 +29,8 @@ import {
   investmentTransactions,
   investmentSnapshots,
   investmentGoals,
+  netWorthItems,
+  netWorthSnapshots,
   widgetTokens,
   supportRequests,
   supportRequestMessages,
@@ -397,6 +399,10 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(investmentGoals).where(eq(investmentGoals.userId, targetId));
     await tx.delete(investmentSnapshots).where(eq(investmentSnapshots.userId, targetId));
     await tx.delete(investmentAccounts).where(eq(investmentAccounts.userId, targetId));
+    // Net Worth — the hand-entered assets and debts, and the dated readings of
+    // the whole picture. As personal as anything in the terminal.
+    await tx.delete(netWorthItems).where(eq(netWorthItems.userId, targetId));
+    await tx.delete(netWorthSnapshots).where(eq(netWorthSnapshots.userId, targetId));
     await tx.delete(widgetTokens).where(eq(widgetTokens.userId, targetId));
     await tx.delete(brokerConnections).where(eq(brokerConnections.userId, targetId));
     await tx.delete(tradingChallenges).where(eq(tradingChallenges.userId, targetId));

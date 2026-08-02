@@ -109,6 +109,8 @@ import type {
   InvestmentDividends,
   InvestmentProjection,
   MyHoldings,
+  NetWorth,
+  NetWorthItemInput,
 } from './types';
 
 // A flashcard the user added to their own personal deck (a term, a definition,
@@ -891,6 +893,20 @@ export const api = {
   // portfolio in one payload.
   myHoldings(): Promise<MyHoldings> {
     return request('/api/my-portal/holdings');
+  },
+  // My Terminal ▸ Net Worth. Every write returns the recomputed picture, so the
+  // screen can never render a stale total beside a fresh list.
+  netWorth(days = 365): Promise<NetWorth> {
+    return request(`/api/my-portal/net-worth?days=${days}`);
+  },
+  createNetWorthItem(input: NetWorthItemInput): Promise<NetWorth & { id: string }> {
+    return request('/api/my-portal/net-worth/items', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateNetWorthItem(id: string, patch: Partial<NetWorthItemInput>): Promise<NetWorth> {
+    return request(`/api/my-portal/net-worth/items/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  deleteNetWorthItem(id: string): Promise<NetWorth> {
+    return request(`/api/my-portal/net-worth/items/${id}`, { method: 'DELETE' });
   },
   // ---- Team chat ----
   teamChat(): Promise<TeamChatFeed> {

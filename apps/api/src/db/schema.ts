@@ -1271,6 +1271,80 @@ export const investmentGoals = sqliteTable('investment_goals', {
 });
 export type InvestmentGoalRow = typeof investmentGoals.$inferSelect;
 
+// ---- Net Worth — everything you own minus everything you owe ----
+// My Terminal's whole-life roll-up. What is stored here is only the part nothing
+// else in the terminal knows about: a house, a car, a mortgage, a card balance.
+// The investment portfolio and the trading account are read live at request time
+// from the tables that already own them, because copying those figures into a
+// row here would give the terminal two answers to the same question and the
+// stale one would win about half the time.
+
+export const NET_WORTH_KINDS = ['asset', 'liability'] as const;
+export type NetWorthKind = (typeof NET_WORTH_KINDS)[number];
+
+// Deliberately no "investments" or "brokerage" category: those are pulled in
+// automatically, and offering a category for them would invite double-counting
+// the largest number on the screen.
+export const NET_WORTH_CATEGORIES = [
+  'cash',
+  'real_estate',
+  'vehicle',
+  'crypto',
+  'business',
+  'valuables',
+  'retirement_other',
+  'other_asset',
+  'mortgage',
+  'auto_loan',
+  'student_loan',
+  'credit_card',
+  'personal_loan',
+  'other_debt',
+] as const;
+export type NetWorthCategory = (typeof NET_WORTH_CATEGORIES)[number];
+
+// `value` is always POSITIVE; `kind` says which side of the ledger it falls on.
+// Storing a debt as a negative reads fine right up until something sums the
+// column without checking `kind`, and then the mistake is invisible.
+export const netWorthItems = sqliteTable('net_worth_items', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: NET_WORTH_KINDS }).notNull(),
+  category: text('category', { enum: NET_WORTH_CATEGORIES }).notNull().default('other_asset'),
+  label: text('label').notNull(),
+  value: real('value').notNull().default(0),
+  note: text('note'),
+  active: integer('active', { mode: 'boolean' }).notNull().default(true),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type NetWorthItemRow = typeof netWorthItems.$inferSelect;
+
+// One dated reading of the whole picture — what the trend line is drawn from.
+// Assets and liabilities are stored separately rather than only their
+// difference: a net worth that moved because a debt was paid down is a different
+// story from one that moved because a house was revalued, and a single column
+// cannot tell them apart afterwards.
+export const netWorthSnapshots = sqliteTable(
+  'net_worth_snapshots',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    onDate: text('on_date').notNull(), // ET calendar date, "YYYY-MM-DD"
+    assets: real('assets').notNull(),
+    liabilities: real('liabilities').notNull(),
+    netWorth: real('net_worth').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ userDate: unique('net_worth_snapshots_user_date').on(t.userId, t.onDate) }),
+);
+export type NetWorthSnapshotRow = typeof netWorthSnapshots.$inferSelect;
+
 // One row per user holding the serialized Study Game state (per-category levels,
 // scores, and answer history), so quiz progress follows the learner across
 // devices instead of living only in that browser's localStorage.

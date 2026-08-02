@@ -797,12 +797,34 @@ workspaces list** (see `theme/nav.ts` order).
       what someone actually owns.
     - With Advanced Trading off the screen still works, showing the investments
       half and offering Feature Access; no broker call is made at all.
-  - **Net Worth** (`my_networth`) — still **"Coming Soon"**. The whole-life
-    picture: every asset (cash,
-    investments, real estate, crypto, vehicles) minus every liability (loans,
-    cards, mortgage), tracked over time as a single number. Lives in My Terminal
-    (not Investments) as a personal cross-workspace summary, keeping the
-    Investments workspace focused as a pure investment-portfolio tracker.
+  - **Net Worth** (`my_networth`, `workspaces/myportal/NetWorth.tsx` over
+    `myportal/netWorth.ts` → `/api/my-portal/net-worth`) — everything you own
+    minus everything you owe, tracked over time. **Built.** Lives in My Terminal
+    rather than Investments as a personal cross-workspace summary, keeping the
+    Investments workspace a pure portfolio tracker. Tables (migration `0089`):
+    `net_worth_items`, `net_worth_snapshots`, both in the `admin/service.ts`
+    per-user delete list.
+    - **Most of the number is not stored.** The portfolio and the trading
+      account are read live through `getMyHoldings` — the *same* function the
+      Investment Holdings screen uses — rather than recomputed or copied into a
+      row. Two definitions of "what my portfolio is worth" would drift and show
+      two different totals on two screens with no way to say which was right.
+    - **There is deliberately no category for "brokerage" or "investments"**
+      among the hand-entered assets. Offering one invites somebody to type the
+      biggest number on the screen in a second time, and nothing could detect
+      that afterwards. The screen says outright which parts are automatic.
+    - **`value` is always stored POSITIVE**; `kind` (`asset` | `liability`)
+      carries the sign. A debt stored negative reads fine until something sums
+      the column without checking `kind`, and then the mistake is invisible.
+    - **An incomplete total is refused, not approximated.** When the tracked side
+      cannot be totalled — a broker that will not answer, an account in another
+      currency — `netWorth` is `null` and the screen shows no headline figure. A
+      net worth missing a chunk looks complete when it is not. **No snapshot is
+      recorded in that state either**, or the history gets a permanent dip that
+      never happened.
+    - History is built forward, one ET-dated reading per day (last of the day
+      stands), never back-filled — nothing can know what a house or a fund was
+      worth last year. Skipped for the demo.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
   (`st_cards`), Practice Tests (`st_test`), Study Presentations (`st_guides`),
   Progress (`st_progress`), Study Creation (`st_decks` — **last**). **All study content is
