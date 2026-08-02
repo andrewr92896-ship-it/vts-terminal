@@ -99,7 +99,10 @@ Collapsed (72px): icons only, centred, label shown as a dark tooltip on hover.
   section. This is the bar's only navigational content — no tabs.
 - **Search** (desktop) — 240px, panel background, `⌘K` chip. Visual affordance
   only; the shortcut is not wired yet.
-- **Clock** — live time + date, Eastern, mono.
+- **Clock** — live time + date, mono, both lines ending in the zone
+  abbreviation. Eastern by default; it follows the reader's own zone once they
+  set one in My Terminal ▸ Preferences, so treat "ET" here as an example rather
+  than a constant.
 - **`Ask VTS AI`** — the one gold-gradient button in the shell (`gem` icon —
   the Max tier's own glyph, since VTS AI is a Max feature — dark `#241A05`
   text). Opens a slide-over panel. On a phone it collapses to the icon alone.
