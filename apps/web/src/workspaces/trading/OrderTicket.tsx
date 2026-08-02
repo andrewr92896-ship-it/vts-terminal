@@ -4,7 +4,7 @@ import { fmtMoney, fmtUnits } from './TradeCard';
 import { forexPair } from './pips';
 import type { DeskAccount, DeskInstrument, DeskOrderType, DeskQuote, TradeSide } from '../../api/types';
 
-// The order ticket — the one component in the portal that sends a real order to
+// The order ticket — the one component in the terminal that sends a real order to
 // a real broker. Everything on it is built around not placing a trade the trader
 // did not mean to place:
 //
@@ -179,7 +179,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
 
   // Is this a genuine currency pair? A pip is an FX convention — gold, indices,
   // crypto and (later) shares have no pip, and labelling their price moves in
-  // pips would be inventing a unit. `forexPair` is the portal's single test for
+  // pips would be inventing a unit. `forexPair` is the terminal's single test for
   // this (mirrored server-side in trading/forex.ts), so the ticket agrees with
   // how the Live Wall, Trade Log and History already score a trade.
   const isForex = forexPair(instrument) != null;

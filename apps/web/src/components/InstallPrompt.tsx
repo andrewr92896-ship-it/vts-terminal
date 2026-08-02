@@ -3,7 +3,7 @@ import { type Theme, accentGradient } from '../theme/themes';
 import { useResponsive } from '../hooks/useMediaQuery';
 
 // The browser fires this before showing its own install prompt. We capture it
-// so the portal can offer a one-tap "Install" button at the moment of our
+// so the terminal can offer a one-tap "Install" button at the moment of our
 // choosing (Android, desktop Chrome and Edge). iOS Safari never fires it.
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -13,7 +13,7 @@ interface BeforeInstallPromptEvent extends Event {
 // Remember a dismissal so the banner never nags after the user closes it.
 const DISMISS_KEY = 'vts-install-dismissed';
 
-// True when the portal is already running as an installed app, so there is
+// True when the terminal is already running as an installed app, so there is
 // nothing to offer. Covers Android/desktop (display-mode) and iOS (standalone).
 function isInstalled(): boolean {
   if (typeof window === 'undefined') return false;
@@ -113,7 +113,7 @@ export function InstallPrompt({ theme }: { theme: Theme }) {
           style={{ width: 40, height: 40, borderRadius: 9, flex: 'none' }}
         />
         <div style={{ minWidth: 0, flex: '1 1 auto' }}>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eef3ff' }}>Install VTS Portal</div>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eef3ff' }}>Install VTS Terminal</div>
           <div style={{ fontSize: 11.5, color: '#9fb0d6', marginTop: 2 }}>
             Add it to your home screen to open it full screen, like an app.
           </div>
@@ -194,7 +194,7 @@ export function InstallPrompt({ theme }: { theme: Theme }) {
                 Scroll down and tap <strong>Add to Home Screen</strong>.
               </li>
               <li>
-                Tap <strong>Add</strong>, then open VTS Portal from your home screen.
+                Tap <strong>Add</strong>, then open VTS Terminal from your home screen.
               </li>
             </ol>
           )}

@@ -33,7 +33,7 @@ function initials(name: string): string {
   return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
 }
 
-// My Portal ▸ Trading Team. A user creates and leads at most one small (≤5)
+// My Terminal ▸ Trading Team. A user creates and leads at most one small (≤5)
 // Trading Team, invites teammates by username, hands off leadership, assigns
 // cosmetic badges, and sets each member's permissions. The server is the
 // enforcer; this screen mirrors those rules for the UI.

@@ -1,8 +1,8 @@
-// Portal zoom — scaling the app itself, independent of the browser's own zoom.
+// Terminal zoom — scaling the app itself, independent of the browser's own zoom.
 //
 // Why this exists rather than telling people to press ⌘+: browser zoom is per
 // origin and per device, invisible to the app, and it also scales the browser's
-// own chrome. This is a portal control that lives in the account menu, reads
+// own chrome. This is a terminal control that lives in the account menu, reads
 // back as a percentage, and survives a reload.
 //
 // **The mechanism is CSS `zoom`, deliberately not `transform: scale`.** `zoom`

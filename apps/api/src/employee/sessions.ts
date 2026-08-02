@@ -10,7 +10,7 @@ import {
 } from '../db/schema.js';
 import { config } from '../config.js';
 
-// Sessions for the employee portal — deliberately NOT the main portal's
+// Sessions for the employee portal — deliberately NOT the main terminal's
 // `sessions` table or `vts_session` cookie. Signing into vitalistradingsystems.com
 // grants nothing at /employee and vice versa: the two surfaces share an origin
 // and a user table, and nothing else.

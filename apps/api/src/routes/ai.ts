@@ -27,7 +27,7 @@ const WORKSPACE_GUIDE: Record<string, { label: string; promptId: string }> = {
 // Short, friendly context so the assistant knows what app it lives in, plus
 // focused guidance for the current workspace. The base persona and each
 // workspace's guidance are admin-editable (ai/prompts.ts); "{workspace}" and
-// "{name}" in the base persona are filled in here, and the portal-wide response
+// "{name}" in the base persona are filled in here, and the terminal-wide response
 // style is composed on last.
 async function systemPrompt(workspaceKey: string | undefined, displayName: string): Promise<string> {
   const ws = workspaceKey ? WORKSPACE_GUIDE[workspaceKey] : undefined;

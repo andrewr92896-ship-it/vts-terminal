@@ -264,7 +264,7 @@ function utcYear(t: number): number {
 }
 
 // The year it is RIGHT NOW on the desk. Deliberately Eastern, matching the price
-// side (`marketQuotes.ts`) and every other clock in the portal: between 7pm and
+// side (`marketQuotes.ts`) and every other clock in the terminal: between 7pm and
 // midnight ET on 31 December the UTC year has already turned, so measuring
 // year-to-date against it would have the macro rows jump into the new year
 // while the price rows beside them were still in the old one.

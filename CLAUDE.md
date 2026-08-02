@@ -1,16 +1,16 @@
 # CLAUDE.md
 
 Project guidance for Claude Code working in this repo. This file is the
-**current source of truth** for how the portal is built and how it behaves.
+**current source of truth** for how the terminal is built and how it behaves.
 `README.md` is outdated (it still describes "Stage 1" and workspaces that no
 longer exist) — trust this file and the code, not the README.
 
-> When you change how the portal works, update the relevant part of this file
+> When you change how the terminal works, update the relevant part of this file
 > in the same change so it never goes stale.
 
 ## Before you touch anything: confirm this is the live checkout
 
-The portal is worked on from **more than one machine**, and the single most
+The terminal is worked on from **more than one machine**, and the single most
 expensive mistake made in this repo was a session that edited a **stale clone**
 for hours while believing it was the live site. It never checked, and it could
 not find out: the clone sat in a cloud-sync folder where `git fetch` hangs
@@ -40,9 +40,9 @@ testing. A previous session invented credentials and seeded its own database
 because it did not ask. There is a read-only **demo account** for looking at the
 app without creating anything.
 
-## What the portal is
+## What the terminal is
 
-VTS Portal ("Vitalis Trading Systems") is a **private, dark "pro-terminal" web
+VTS Terminal ("Vitalis Trading Systems") is a **private, dark "pro-terminal" web
 app** for the owner (Andrew) and a few invited users. One login leads to a
 sidebar of workspaces, each with its own sections. It is a PWA (installable,
 web push). There is no public sign-up; there is a single read-only **demo
@@ -50,7 +50,7 @@ account** and a public **Early Access** request form on the login screen.
 
 ## Product direction (owner goal)
 
-The portal is **currently** private/invite-only, but the **stated goal is to launch
+The terminal is **currently** private/invite-only, but the **stated goal is to launch
 it publicly as a paid, subscription-based product** — an official iOS app on the
 App Store, under the legal entity **Vitalis Trading Systems LLC**. It will be
 **opened to the general public and monetized via a recurring subscription** (not
@@ -83,7 +83,7 @@ architecture decisions.
 Agreed **lowest-liability** shape for that public launch (research done 2026-07):
 
 - **~~Read-only tracker, not a trading platform.~~ Superseded (owner decision,
-  2026-07): the web portal now places real orders** — see **Advanced Trading ▸
+  2026-07): the web terminal now places real orders** — see **Advanced Trading ▸
   Trade Desk** below. The app still never *moves money* (no deposits, withdrawals
   or custody: it sends an order to the trader's own broker under the trader's own
   credentials), but it does now **execute trades**, which is the line App Review
@@ -137,7 +137,7 @@ Monorepo, **npm workspaces**:
   origin, so the API and site share a host.
 - `apps/web` — **Vite + React 18 + TypeScript** frontend. Styling is
   inline-style / theme-token based (`src/theme`), **not** a CSS framework.
-  **Two build entries, not one:** `index.html` → the main portal, and
+  **Two build entries, not one:** `index.html` → the main terminal, and
   `employee.html` → the separate **Employee Portal** at `/employee` (see its own
   section below). They share design tokens and the `Icon` component and nothing
   else — no employee code ships in the main bundle, and vice versa.
@@ -178,7 +178,7 @@ Tech:
   truth for workspaces, sidebar sections, order, icons, and role gates. Section
   `key`s are the screen keys switched in `Portal.tsx` (`renderScreen` /
   `renderExtra`).
-- **Sidebar order is founder-overridable:** the **Developer Portal ▸ Sidebar
+- **Sidebar order is founder-overridable:** the **Developer Terminal ▸ Sidebar
   Layout** editor (`AdminSidebarLayout`) saves a single order override to
   `app_settings` under `nav.order` (routes: `GET /api/nav-layout` for everyone,
   founder-only `PUT|DELETE /api/admin/nav-layout`). `theme/navOrder.ts`
@@ -191,14 +191,14 @@ Tech:
 ## Workspaces & sections (`theme/nav.ts`)
 
 Sections a user lacks the role for — or the **feature opt-in** for (see Feature
-Access below) — are hidden. **My Portal is pinned to the very top of the
+Access below) — are hidden. **My Terminal is pinned to the very top of the
 workspaces list** (see `theme/nav.ts` order).
 
 - **Markets** (sky blue, key `markets`) — **included with every account, no
   opt-in**: Live Wall (`live`), Market Data (`data`), Market News (`news`).
   Everything here reads public market data — no trade, no broker, no balance —
   which is exactly why it sits outside the Advanced Trading opt-in and is the
-  portal's floor for a user who has turned nothing on. It is also the landing
+  terminal's floor for a user who has turned nothing on. It is also the landing
   workspace on sign-in for everybody.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in**: Trading Alerts (`alerts`),
   **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
@@ -316,7 +316,7 @@ workspaces list** (see `theme/nav.ts` order).
       unit that instrument is actually read in** — the figure a trader sizes by.
       One switch decides which: `forexPair(instrument)`
       (`workspaces/trading/pips.ts`, mirrored server-side in `trading/forex.ts`)
-      is the portal's single test for a genuine currency pair, so the desk agrees
+      is the terminal's single test for a genuine currency pair, so the desk agrees
       with how the Live Wall, Trade Log and History already score a trade.
       - A **pair** speaks pips: "$10.00 / pip", a spread in `PIPS`, stop/target
         as "money · pips". The pip's *size* comes from OANDA's own `pipLocation`,
@@ -713,7 +713,7 @@ workspaces list** (see `theme/nav.ts` order).
   retirement providers (Fidelity, Vanguard 401k) don't expose per-user API keys
   the way OANDA/Kraken do. Every advice-flavored surface must carry an
   "informational only, not investment advice" disclaimer.
-- **My Portal** also holds **Feature Access** (`my_access`) — the per-user opt-in
+- **My Terminal** also holds **Feature Access** (`my_access`) — the per-user opt-in
   screen, see its own section below — plus two personal roll-up sections
   (emerald), both currently "Coming Soon":
   - **Investment Holdings** (`my_holdings`) — a combined summary of active
@@ -721,7 +721,7 @@ workspaces list** (see `theme/nav.ts` order).
     stats across both.
   - **Net Worth** (`my_networth`) — the whole-life picture: every asset (cash,
     investments, real estate, crypto, vehicles) minus every liability (loans,
-    cards, mortgage), tracked over time as a single number. Lives in My Portal
+    cards, mortgage), tracked over time as a single number. Lives in My Terminal
     (not Investments) as a personal cross-workspace summary, keeping the
     Investments workspace focused as a pure investment-portfolio tracker.
 - **Studies** (violet): Subjects (`st_home`), Study Game (`st_game`), Flashcards
@@ -733,7 +733,7 @@ workspaces list** (see `theme/nav.ts` order).
   you pick one, opens the chosen experience — the quiz+leaderboard player
   (`TeamStudyGame`), a graded test (`DeckTestMode`, configurable size + pass line),
   or a progress summary (`DeckProgress`). The list separates games by source with
-  two colors — your team's own games (violet) vs. the portal's built-in example
+  two colors — your team's own games (violet) vs. the terminal's built-in example
   games (blue, `isSample`). Built-in games are **not** shown by default: a **Browse
   Study Games** gallery (toggled in `StudyGameHub`) lists them, and the learner adds
   the ones they want into their own list. That add/remove set is a personal,
@@ -764,12 +764,12 @@ workspaces list** (see `theme/nav.ts` order).
   the clipboard. Templates are site-wide, not per-user — `created_by` is set
   null on author deletion, so they are **not** in the `admin/service.ts`
   per-user delete list.
-- **Developer Portal** (`founder` key/role, amber): AI Instructions, Site Wording,
+- **Developer Terminal** (`founder` key/role, amber): AI Instructions, Site Wording,
   Sidebar Layout (`ad_sidebar` — reorder the whole sidebar, see below),
-  **Suggestions** (`ad_suggestions` — moved out of the Admin Portal; the
+  **Suggestions** (`ad_suggestions` — moved out of the Admin Terminal; the
   `/api/admin/suggestions` read/patch/delete routes are `requireFounder` to
   match, while *sending* a suggestion from Site Help stays open to everyone),
-  View as role. **Founder-level only** (`isFounder`). Displayed as "Developer Portal";
+  View as role. **Founder-level only** (`isFounder`). Displayed as "Developer Terminal";
   the internal key and role are still `founder` (unchanged gating).
 
 Removed and gone (do not reintroduce or reference): the standalone To-Do
@@ -778,8 +778,8 @@ workspace, and Kia Sales.
 
 ## Feature Access — the per-user opt-in (`features/service.ts`)
 
-**My Portal ▸ Feature Access** (`my_access`, `workspaces/myportal/FeatureAccess.tsx`)
-is where a user turns the optional parts of the portal on and off for
+**My Terminal ▸ Feature Access** (`my_access`, `workspaces/myportal/FeatureAccess.tsx`)
+is where a user turns the optional parts of the terminal on and off for
 themselves. Self-service and immediate — there is no approval queue and no route
 that changes anyone else's account.
 
@@ -792,9 +792,9 @@ Only two things are optional, and both are the trading desk:
   so switching the desk off and back on brings Funded back rather than silently
   forgetting it.
 
-Everything else — **Markets, Investments, Studies, My Portal, Site Help** — is
+Everything else — **Markets, Investments, Studies, My Terminal, Site Help** — is
 included with every account and deliberately has nothing to opt into: none of it
-holds money or places an order, and a portal without it is worth nothing to an
+holds money or places an order, and a terminal without it is worth nothing to an
 average user. The Feature Access screen lists them as "Included with your
 account" rather than hiding them, so the screen reads as the whole picture.
 
@@ -855,9 +855,9 @@ any combination:
 - `trading` — full Trading.
 - `trading_viewer` — **read-only** Trading (the only read-only variant;
   `requireWorkspaceWrite` blocks it).
-- `employee` — reveals **My Portal ▸ Employee Portal** and permits the separate
+- `employee` — reveals **My Terminal ▸ Employee Portal** and permits the separate
   sign-in at `/employee`. **Not** implied by admin or founder level — it must be
-  granted outright, by a founder. It unlocks nothing inside the main portal, and
+  granted outright, by a founder. It unlocks nothing inside the main terminal, and
   on its own it is not enough: a **company-domain sign-in email** is required too
   (`canAccessEmployeePortal(roles, email)`). Never the demo.
 - `studies` — Studies.
@@ -891,9 +891,9 @@ act on the same team:
 
 - **Admin ▸ Teams** (`teams/service.ts`) — admins create teams, rename them, and
   assign/move members (`users.team_id`).
-- **My Portal ▸ Trading Team** (`userTeams/service.ts`) — the self-service surface
+- **My Terminal ▸ Trading Team** (`userTeams/service.ts`) — the self-service surface
   over the **same** team the user is in. Membership is read straight from
-  `users.team_id`; My-Portal-only metadata is layered on top:
+  `users.team_id`; My-Terminal-only metadata is layered on top:
   - `user_teams` — one row per team naming its **leader** (`leaderId`).
   - `user_team_members` — optional per-user **badge** + **permission flags**
     (`canCreateStudyGuides / canInvite / canManageBadges / canRemoveMembers /
@@ -905,7 +905,7 @@ act on the same team:
   A leader is auto-picked (founder → admin → earliest member) by `ensureTeamMeta`
   and repaired if the stored one leaves; `backfillTeamLeaders()` runs on boot to
   give every existing team a leader row. Demo/inactive users never appear.
-  Because membership is `team_id`, the My Portal team **is** the trade-scoping
+  Because membership is `team_id`, the My Terminal team **is** the trade-scoping
   team — the two are one. (Consequence: the Studies delete gate, keyed on team
   leadership, is now live — non-leader members can't delete team study content.)
 
@@ -913,7 +913,7 @@ act on the same team:
 
 A trader always removes their own. Beyond that it is a **team grant**: the
 **leader** holds it implicitly, and they can hand the **Delete trades**
-permission (`canDeleteTrades`, set from My Portal ▸ Trading Team) to any member.
+permission (`canDeleteTrades`, set from My Terminal ▸ Trading Team) to any member.
 Admins keep their install-wide reach. `tradeDeleteScope(actor)` resolves this
 once per request into `{ any, ownerIds, others }`, which `removeTrade`,
 `removePosition` and `restoreDeleted` turn into the owner filter on their `WHERE`
@@ -1108,8 +1108,8 @@ control — the server is still the enforcer.
 The company's internal staff site. Unlike everything else in this repo it is
 **not a workspace**: it is a second website served from the same origin, with its
 own URL, its own bundle, its own API namespace and — the point of the whole
-design — **its own sessions**. Signing in to the main portal grants nothing at
-`/employee`, and an employee session grants nothing in the main portal. They
+design — **its own sessions**. Signing in to the main terminal grants nothing at
+`/employee`, and an employee session grants nothing in the main terminal. They
 share an account table and nothing else.
 
 **Where it lives**
@@ -1125,8 +1125,8 @@ share an account table and nothing else.
   Workspaces list** (`EmployeePortalLink` in `Sidebar.tsx`) — deliberately not a
   workspace and not a section, because it is a different website. It is a plain
   `<a href="/employee" target="_blank" rel="noopener noreferrer">`: a real page
-  load in a **new tab**, so the portal stays where it was, the new tab gets no
-  `window.opener` handle back into the signed-in portal, and no referrer leaks.
+  load in a **new tab**, so the terminal stays where it was, the new tab gets no
+  `window.opener` handle back into the signed-in terminal, and no referrer leaks.
   Shown only when `canAccessEmployeePortal(roles, email)` holds; never to the demo.
 - `server.ts` serves `/employee`, `/employee/`, and `/employee/*` from the built
   `employee.html`, read into memory and sent directly (**not** via
@@ -1153,7 +1153,7 @@ next request. The demo is hard-excluded regardless of roles.
 1. **Network** — optional `EMPLOYEE_IP_ALLOWLIST` (IPv4/IPv6 addresses or CIDRs).
    When set, the page load and every API call from outside it are refused before
    authentication. **Fails closed**: an unparseable client address is refused. The
-   main portal is unaffected.
+   main terminal is unaffected.
 2. **Origin** — `Sec-Fetch-Site` (or `Origin`) must be this site on every write.
 3. **Session** — cookie `__Host-vts_employee` in production (plain
    `vts_employee` in dev, since `__Host-` requires Secure), `SameSite=Strict`,
@@ -1228,7 +1228,7 @@ them too.
 **Brute force.** `employee_login_attempts` tracks failures per **account** and
 per **source address**, with a progressive lockout (5 fails → 1 min, 8 → 5 min,
 10 → 15 min, 12 → 1 h) that decays after a quiet hour. Counters live in the
-database so a restart does not hand out a fresh budget. The main portal still has
+database so a restart does not hand out a fresh budget. The main terminal still has
 no login throttle; this surface does.
 
 **Audit.** `employee_audit_log` is append-only: every sign-in, failure, lockout,
@@ -1262,7 +1262,7 @@ employee's tasks. Assignments are audited (`task.assigned`).
 on Overview holds two things that belong to the person rather than to HR. A
 headshot is dropped or picked, cropped square and re-encoded to a **400px JPEG in
 the browser** (`src/employee/image.ts`) before `PUT /api/employee/photo` stores it
-in **`users.avatar`** — the same column the main portal uses, so one person has
+in **`users.avatar`** — the same column the main terminal uses, so one person has
 one face on both surfaces; the route caps the body at 400 KB and refuses anything
 that is not an image data URL. Beside it, a roster shows who has a photo
 (`DirectoryEntry.hasPhoto`) with the design's "N still need a photo" nudge. A
@@ -1288,7 +1288,7 @@ remembered devices. Granting refuses a non-company address up front rather than
 creating an account that would fail at the door.
 
 **Navigation is a top bar, not a side rail** (`EmployeeApp.tsx`). The forest
-masthead carries the brand on the left, the signed-in name / main-portal link /
+masthead carries the brand on the left, the signed-in name / main-terminal link /
 sign-out on the right, and a second row of screen buttons beneath it. There is
 **no sidebar and no collapse toggle** — the screens get the full window width.
 Every row is `flexWrap: 'wrap'`, and that is the whole design: the bar **never
@@ -1302,7 +1302,7 @@ as a unit rather than splitting; the signed-in name is the one exception
 to break somewhere and an ellipsis is not the answer.
 
 **Its own design language.** The employee portal does **not** use the main
-portal's theme. `src/employee/theme.ts` stands alone — a warm-sand page
+terminal's theme. `src/employee/theme.ts` stands alone — a warm-sand page
 (`#f5f2ec`), white cards, a forest masthead (`#0f3d3a`), terracotta for action
 (`#c25a38`), Source Sans for UI and Source Serif for headings (self-hosted in
 `employee/fonts.css`, since the CSP blocks font CDNs). It also exports `SHADOW`
@@ -1314,7 +1314,7 @@ Full spec and implementation status in `docs/design/employee-portal/`.
 editor — every developer-authored string is a normal string literal in the
 `.tsx` file it lives in. There is no `copy.<id>` override store, no floating
 pencil, and no founder-only edit mode on this surface. To reword anything,
-edit the source and deploy. (This mirrors the main portal — see "Coded copy is
+edit the source and deploy. (This mirrors the main terminal — see "Coded copy is
 hardcoded" below.)
 
 ## Auth & security specifics
@@ -1331,7 +1331,7 @@ hardcoded" below.)
   `sameSite: 'lax'` + signed httpOnly cookie. AI usage cap and the broker poll
   throttle are the only rate limits. (The **Employee Portal** has all of these —
   lockout, CSRF token, idle timeout, emailed-code 2FA — on its own separate session; see its
-  section above. None of it applies to the main portal's `vts_session`.)
+  section above. None of it applies to the main terminal's `vts_session`.)
 - **Key rotation caveat:** `SESSION_SECRET` signs cookies; `CREDENTIALS_KEY`
   (or, if unset, a key derived from `SESSION_SECRET`) encrypts broker creds.
   Rotating either **invalidates all sessions and makes stored broker creds
@@ -1445,7 +1445,7 @@ defaults; the app runs locally with almost nothing set.
   `EMPLOYEE_REMEMBER_DEVICE_DAYS` (30), `EMPLOYEE_EMAIL_DOMAIN`
   (`vitalistradingsystems.com`), `EMPLOYEE_IP_ALLOWLIST` (unset = no network
   fence; **fails closed** when set, so a wrong value locks you out of `/employee`
-  — the main portal is unaffected). Every default is the strict value.
+  — the main terminal is unaffected). Every default is the strict value.
 - **First-boot admin seed** (read directly via `process.env`, not in the schema):
   `ADMIN_USERNAME` (default `andrew`), `ADMIN_DISPLAY_NAME`, `ADMIN_EMAIL`,
   `ADMIN_PASSWORD` (blank = random, printed once to logs), `APP_EMAIL_DOMAIN`.
@@ -1455,13 +1455,13 @@ some documented vars aren't in the schema and vice-versa.
 
 ## Reporting back to the owner
 
-The owner drives this portal through Claude Code but is **not a developer** and
+The owner drives this terminal through Claude Code but is **not a developer** and
 does not read the code. A long technical write-up is not thoroughness here — it
 is unreadable, and it forces a judgment call the owner has no way to make. So:
 
 - **One short paragraph when a job is done.** Not a section-by-section account,
   not a file-by-file diff summary, not a bulleted list of every step taken.
-- **Say what changed and what it means for using the portal**, in plain
+- **Say what changed and what it means for using the terminal**, in plain
   language. Skip file paths, function names, commit SHAs, PR numbers and
   implementation detail unless the owner asks for them.
 - **Do surface the things only the owner can decide or must know:** a failure, a
@@ -1471,7 +1471,7 @@ is unreadable, and it forces a judgment call the owner has no way to make. So:
   which to take when one is clearly right; make the call, say so in a sentence,
   and move on. Ask only when the answer is genuinely the owner's (what to build,
   whether to deploy).
-- Same voice as the rest of the portal: plain and terminal-style, no filler.
+- Same voice as the rest of the terminal: plain and terminal-style, no filler.
 
 ## Conventions
 
@@ -1488,7 +1488,7 @@ is unreadable, and it forces a judgment call the owner has no way to make. So:
   DB-backed wording.)
 - **Coded copy is hardcoded — no in-app text editor.** Every other site-coded
   string (screen titles, subtitles, blurbs, button labels, empty/loading/error
-  states, static captions, on both the main portal and the Employee Portal) is
+  states, static captions, on both the main terminal and the Employee Portal) is
   a plain string literal in its `.tsx` file. There used to be a floating-icon
   mechanism (`<EditableText>` / the employee portal's `<T>`) that let a founder
   rewrite any of this live from the browser, backed by `copy.<id>` overrides in
@@ -1501,8 +1501,30 @@ is unreadable, and it forces a judgment call the owner has no way to make. So:
   anything that resembles that old mechanism either — those were never eligible
   for it and still aren't.
 - Keep the plain, terminal-style voice in UI copy and AI prompts.
+- **Naming the product — always "Terminal", never "portal":** the app is **VTS
+  Terminal**, and its workspaces are **My Terminal**, **Admin Terminal** and
+  **Developer Terminal** (owner decision, 2026-08 — it was "portal" throughout
+  until then). Anything a user reads — labels, blurbs, legal documents, push
+  titles, the PWA manifest, AI prompts, study-game content — says terminal.
+  **Three exemptions, all deliberate:**
+  - **The Employee Portal keeps its name.** It is a separate site with its own
+    sign-in and its own design language, and reading as a different tool is the
+    point. So do its own HR admins ("portal admins") and its files/tables.
+  - **Internal identifiers stay `portal`** — the `myportal` workspace key, the
+    `/api/my-portal` routes, `MyPortalData`, `Portal.tsx`, `MyPortalSettings.tsx`,
+    `workspaces/myportal/`. A saved `nav.order` override is keyed on the
+    workspace key, so renaming it would silently drop a founder's sidebar layout
+    — the same reason `desk` stayed `desk` when Trade Desk became Trade Analysis.
+    Rename the label, never the key.
+  - **React's `createPortal`** is a DOM concept, not the product.
+  Two things carry the old name in stored data and are repaired on boot rather
+  than in code: the seeded welcome announcement (`chat/announcements.ts`) and the
+  built-in study game "VTS Portal 101" (`RENAMED_GAMES` in `studies/bakedGames.ts`,
+  which renames the deck in place so progress survives). Patch notes published
+  before the rename still say "portal" — they are a dated record and were left as
+  written.
 - **Naming the AI — always "VTS AI":** in all user-facing copy (labels, blurbs,
-  buttons, empty/loading states, prompts the user reads), refer to the portal's
+  buttons, empty/loading states, prompts the user reads), refer to the terminal's
   AI as **"VTS AI"** (with the space), never "Claude", "Anthropic", or a raw
   model name. The visible UI already follows this ("Ask VTS AI", "Powered by VTS
   AI"). **Exempt:** internal code identifiers (`AskClaudePanel`, `onOpenClaude`,
@@ -1541,7 +1563,7 @@ prod after any change to the reconcile/backfill writers.
 
 ## Deployment workflow (owner preference)
 
-This is a **private web portal** for a single owner, but work is often split
+This is a **private web terminal** for a single owner, but work is often split
 across **several Claude Code sessions running at once**, each on its own
 branch. Whether a finished branch should go live — and in what order relative
 to the other branches in flight — is the owner's call, not the session's.

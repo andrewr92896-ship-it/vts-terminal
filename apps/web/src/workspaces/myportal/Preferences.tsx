@@ -4,7 +4,7 @@ import { C } from '../../theme/tokens';
 import { SectionHeader, panel, panelLabel } from '../admin/adminUi';
 import { getTradeLayout, setTradeLayout, type Layout } from '../trading/preferences';
 
-// My Portal ▸ Preferences. Per-user, per-device view choices that persist
+// My Terminal ▸ Preferences. Per-user, per-device view choices that persist
 // locally (no server round-trip). Today it holds the Trade Log's deck-vs-tape
 // layout, moved off the Trade Log header so the toolbar stays lean.
 export function Preferences({ theme }: { theme: Theme }) {

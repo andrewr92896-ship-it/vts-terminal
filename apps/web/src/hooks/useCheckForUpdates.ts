@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 
-// A one-click "check for updates" for the PWA. The portal is a service-worker
+// A one-click "check for updates" for the PWA. The terminal is a service-worker
 // PWA in prompt mode, so a new deploy normally surfaces on its own (see
 // UpdatePrompt). This lets a user force the check now: it asks the browser for a
 // fresh build and, if one is found (or already waiting), applies it and reloads

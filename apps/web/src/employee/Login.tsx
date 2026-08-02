@@ -6,7 +6,7 @@ import { Icon } from '../components/Icon';
 
 // The employee portal's front door.
 //
-// This is a *second* sign-in, not a continuation of the main portal's. Someone
+// This is a *second* sign-in, not a continuation of the main terminal's. Someone
 // already signed in at vitalistradingsystems.com arrives here signed out, on
 // purpose: the two surfaces share an account and nothing else.
 //
@@ -323,7 +323,7 @@ function Shell({ children, title }: { children: ReactNode; title?: string }) {
               fontFamily: EMP.sans,
             }}
           >
-            {"← Back to the main portal"}
+            {"← Back to the main terminal"}
           </a>
         </div>
       </div>

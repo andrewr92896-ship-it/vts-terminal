@@ -141,7 +141,7 @@ export async function sendPushoverTest(userId: string): Promise<boolean> {
   const key = await getPushoverKey(userId);
   if (!key) return false;
   const result = await sendOne(key, {
-    title: 'VTS Portal',
+    title: 'VTS Terminal',
     message: 'Pushover is connected. Trades and alerts will buzz here — set the sound in the Pushover app.',
     priority: 1,
   });

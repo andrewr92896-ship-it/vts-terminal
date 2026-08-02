@@ -24,7 +24,7 @@ function brokerDotColor(status: BrokerStatus['status']): string {
   }
 }
 
-// My Portal ▸ Settings. Home of the personal device/account controls that used
+// My Terminal ▸ Settings. Home of the personal device/account controls that used
 // to live under the top-bar settings cog: privacy mode, the trade-alert sound,
 // broker status, notifications & connections, and the "check for updates"
 // action. All of these are per-user / per-device and persist locally, so they
@@ -142,7 +142,7 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
             </span>
           </button>
           <p style={{ margin: '10px 0 0', fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
-            {"When on, names and dollar amounts are masked across the portal — useful when sharing your screen. Nothing is changed, only what's shown."}
+            {"When on, names and dollar amounts are masked across the terminal — useful when sharing your screen. Nothing is changed, only what's shown."}
           </p>
         </section>
 

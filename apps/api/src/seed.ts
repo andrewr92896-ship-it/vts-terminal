@@ -89,7 +89,7 @@ export async function seedAdmin(): Promise<void> {
     console.log(`Admin user "${username}" already exists.`);
     // Promote the owner to founder if they aren't already founder-level. This
     // covers the migration from the old admin-only model: the seeded owner
-    // account becomes the portal's founder on the next boot, idempotently.
+    // account becomes the terminal's founder on the next boot, idempotently.
     const roles = parseRoles(existing[0]);
     if (!roles.includes('founder') && !roles.includes('software_developer')) {
       const nextRoles = [...new Set([...roles.filter((r) => r !== 'admin'), 'founder'])];
@@ -117,7 +117,7 @@ export async function seedAdmin(): Promise<void> {
     email,
     passwordHash: await hashPassword(password),
     role: 'Admin', // legacy column, unused; kept populated for back-compat
-    // The seeded owner is the portal's founder (top of the role ladder).
+    // The seeded owner is the terminal's founder (top of the role ladder).
     roles: JSON.stringify(['founder']),
     viewBrokerage: true,
     active: true,
@@ -158,7 +158,7 @@ export async function seedAdmin(): Promise<void> {
 }
 
 // Creates the public, read-only demo user and fills every workspace with
-// simulated data so a reviewer lands in a portal that looks alive. The account
+// simulated data so a reviewer lands in a terminal that looks alive. The account
 // holds no password worth guessing (entry is the one-click demo button) and the
 // demo guard blocks all writes. The applied seed version is stored in the demo
 // user's (otherwise unused) email column; when DEMO_SEED_VERSION changes, the

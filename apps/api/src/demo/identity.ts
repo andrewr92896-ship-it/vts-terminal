@@ -17,8 +17,8 @@ export const DEMO_TEAM_ID = 'team-demo';
 export const DEMO_TEAM_NAME = 'Demo Team';
 
 // The roles the demo account holds: a plain member, so a reviewer sees every
-// standard workspace (Trading, Studies, My Portal, Site Help) but never the
-// Admin or Founder portals. It never holds `funded` — the Funded section is
+// standard workspace (Trading, Studies, My Terminal, Site Help) but never the
+// Admin or Founder terminals. It never holds `funded` — the Funded section is
 // private and must stay hidden in the demo — nor any admin/founder role.
 export const DEMO_ROLES = ['member'] as const;
 

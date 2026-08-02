@@ -132,7 +132,7 @@ function Dropdown({
   );
 }
 
-// Portal zoom, in the account menu. Scales the app itself rather than relying on
+// Terminal zoom, in the account menu. Scales the app itself rather than relying on
 // the browser's zoom, which is per-origin, invisible to the app, and also scales
 // the browser's own chrome.
 //
@@ -228,7 +228,7 @@ export function TopBar(props: TopBarProps) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // In-portal notifications (new team chat + admin suggestions/bugs). Unread is
+  // In-terminal notifications (new team chat + admin suggestions/bugs). Unread is
   // computed from a locally stored last-seen timestamp so it survives reloads.
   const [notifs, setNotifs] = useState<NotificationItem[]>([]);
   const [notifSeen, setNotifSeen] = useState<number>(() => {

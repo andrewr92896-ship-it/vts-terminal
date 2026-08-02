@@ -83,7 +83,7 @@ export async function chatRoutes(app: FastifyInstance) {
     }
   });
 
-  // In-portal notifications: recent team chat from teammates (a new chat shows
+  // In-terminal notifications: recent team chat from teammates (a new chat shows
   // here), plus recent suggestions and bug reports for admins. The client
   // computes "unread" from a locally stored last-seen timestamp.
   app.get('/api/notifications', auth, async (request) => {

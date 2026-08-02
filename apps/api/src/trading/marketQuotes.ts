@@ -302,7 +302,7 @@ async function refresh(): Promise<Snapshot> {
   for (const [display, px] of spotByDisplay) spot.set(display.replace('/', '_'), px);
 
   // Crypto that this entity does not carry still has a live spot available from
-  // the portal's keyless coin feed — and most OANDA entities carry no crypto at
+  // the terminal's keyless coin feed — and most OANDA entities carry no crypto at
   // all, so this is the path BTC and ETH normally take rather than an edge case.
   //
   // The daily closes come from Kraken's public OHLC alongside it, so these rows

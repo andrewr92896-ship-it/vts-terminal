@@ -19,7 +19,7 @@ import {
 import { Icon } from '../../components/Icon';
 
 // Admin ▸ Message Templates — a shared library of reusable text-message and
-// email templates admins copy out of the portal. Every admin can read and copy;
+// email templates admins copy out of the terminal. Every admin can read and copy;
 // only software developers (founder-level) can add, edit, or delete a template.
 // The headline interaction is a right-click context menu on any template with a
 // "Copy" option (a visible Copy button covers touch devices, where there is no

@@ -28,7 +28,7 @@ export const BAKED_IN_SOURCE = 'baked_in';
 // Bump whenever the CONTENT of a baked-in game below changes, so the next deploy
 // re-syncs every team's copy to match. Creating a fresh copy for a team that
 // lacks one does not need a bump.
-export const BAKED_IN_VERSION = 2;
+export const BAKED_IN_VERSION = 3;
 
 // Where the last-applied content version is remembered (app_settings key).
 const VERSION_KEY = 'seed.bakedInGames.version';
@@ -45,12 +45,12 @@ export function isBakedInSource(source: string | null | undefined): boolean {
 }
 
 // A plain-English glossary game covering the vocabulary a user runs into around
-// the portal. STRICTLY definitional — every question asks "what does this term
+// the terminal. STRICTLY definitional — every question asks "what does this term
 // mean", never what to do with it — so it carries no financial/investment advice.
 const MARKET_TERMINOLOGY_101: BakedGame = {
   name: 'Market Terminology 101',
   description:
-    'A quick, plain-English glossary game — orders, quotes, and the common trading vocabulary you’ll see around the portal. A built-in example so you can see how Study Games work. Educational only — not financial advice.',
+    'A quick, plain-English glossary game — orders, quotes, and the common trading vocabulary you’ll see around the terminal. A built-in example so you can see how Study Games work. Educational only — not financial advice.',
   categories: ['Orders & Execution', 'Prices & Quotes', 'Market Structure', 'Positions & Risk', 'Instruments'],
   questions: [
     // ---- Orders & Execution ----
@@ -425,7 +425,7 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
     // ---- Playing ----
     {
       topic: 'Playing',
-      stem: 'What is a Study Game on this portal?',
+      stem: 'What is a Study Game on this terminal?',
       options: [
         { label: 'A', text: 'A quiz your team builds and plays together' },
         { label: 'B', text: 'A single-player arcade game' },
@@ -628,7 +628,7 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
         { label: 'A', text: 'Study Creation' },
         { label: 'B', text: 'Live Wall' },
         { label: 'C', text: 'Market News' },
-        { label: 'D', text: 'Admin Portal' },
+        { label: 'D', text: 'Admin Terminal' },
       ],
       answer: 'A',
       explanation: 'Study Creation is the make-and-manage section for games, flashcard sets, and study guides.',
@@ -672,18 +672,18 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
   ],
 };
 
-// An onboarding game about the portal itself — the workspaces, the key sections,
+// An onboarding game about the terminal itself — the workspaces, the key sections,
 // and how VTS is meant to be used. Section names match theme/nav.ts exactly.
 const VTS_PORTAL_101: BakedGame = {
-  name: 'VTS Portal 101',
+  name: 'VTS Terminal 101',
   description:
-    'Get oriented: the workspaces, the sections you’ll use most, and how the portal is meant to be used. A built-in tour so new members can find their way around.',
+    'Get oriented: the workspaces, the sections you’ll use most, and how the terminal is meant to be used. A built-in tour so new members can find their way around.',
   categories: ['Getting Around', 'Trading Workspace', 'Studies Workspace', 'Help & Account'],
   questions: [
     // ---- Getting Around ----
     {
       topic: 'Getting Around',
-      stem: 'How is the portal organized?',
+      stem: 'How is the terminal organized?',
       options: [
         { label: 'A', text: 'Into workspaces, each with its own sections in the sidebar' },
         { label: 'B', text: 'As one long single page' },
@@ -697,13 +697,13 @@ const VTS_PORTAL_101: BakedGame = {
       topic: 'Getting Around',
       stem: 'Which workspace is pinned to the very top of the sidebar?',
       options: [
-        { label: 'A', text: 'My Portal' },
+        { label: 'A', text: 'My Terminal' },
         { label: 'B', text: 'Trading' },
-        { label: 'C', text: 'Admin Portal' },
+        { label: 'C', text: 'Admin Terminal' },
         { label: 'D', text: 'Site Help' },
       ],
       answer: 'A',
-      explanation: 'My Portal — your personal workspace — sits at the top of the list.',
+      explanation: 'My Terminal — your personal workspace — sits at the top of the list.',
     },
     {
       topic: 'Getting Around',
@@ -715,11 +715,11 @@ const VTS_PORTAL_101: BakedGame = {
         { label: 'D', text: 'Only from the App Store today' },
       ],
       answer: 'A',
-      explanation: 'The portal is a PWA — installable, with web push notifications.',
+      explanation: 'The terminal is a PWA — installable, with web push notifications.',
     },
     {
       topic: 'Getting Around',
-      stem: 'How does the portal send you trade and alert notifications?',
+      stem: 'How does the terminal send you trade and alert notifications?',
       options: [
         { label: 'A', text: 'Web push and Pushover' },
         { label: 'B', text: 'Fax' },
@@ -731,7 +731,7 @@ const VTS_PORTAL_101: BakedGame = {
     },
     {
       topic: 'Getting Around',
-      stem: 'Need a quick answer about the portal? You can…',
+      stem: 'Need a quick answer about the terminal? You can…',
       options: [
         { label: 'A', text: 'Ask the built-in Ask Claude assistant' },
         { label: 'B', text: 'Call a phone hotline' },
@@ -739,7 +739,7 @@ const VTS_PORTAL_101: BakedGame = {
         { label: 'D', text: 'Only wait for an email reply' },
       ],
       answer: 'A',
-      explanation: 'The Ask Claude panel answers questions about the portal.',
+      explanation: 'The Ask Claude panel answers questions about the terminal.',
     },
 
     // ---- Trading Workspace ----
@@ -801,7 +801,7 @@ const VTS_PORTAL_101: BakedGame = {
         { label: 'D', text: 'Yes, automatically from alerts' },
       ],
       answer: 'A',
-      explanation: 'The portal is a read-only tracker — it shows positions and P&L, it doesn’t move money or place orders.',
+      explanation: 'The terminal is a read-only tracker — it shows positions and P&L, it doesn’t move money or place orders.',
     },
 
     // ---- Studies Workspace ----
@@ -873,8 +873,8 @@ const VTS_PORTAL_101: BakedGame = {
       options: [
         { label: 'A', text: 'Site Help' },
         { label: 'B', text: 'Market News' },
-        { label: 'C', text: 'My Portal' },
-        { label: 'D', text: 'Admin Portal' },
+        { label: 'C', text: 'My Terminal' },
+        { label: 'D', text: 'Admin Terminal' },
       ],
       answer: 'A',
       explanation: 'Site Help is available to every signed-in user.',
@@ -883,13 +883,13 @@ const VTS_PORTAL_101: BakedGame = {
       topic: 'Help & Account',
       stem: 'Where do you manage your own preferences and account settings?',
       options: [
-        { label: 'A', text: 'My Portal' },
-        { label: 'B', text: 'Admin Portal' },
+        { label: 'A', text: 'My Terminal' },
+        { label: 'B', text: 'Admin Terminal' },
         { label: 'C', text: 'Trade Desk' },
         { label: 'D', text: 'Market News' },
       ],
       answer: 'A',
-      explanation: 'My Portal holds your Trading Team, Preferences, and Settings.',
+      explanation: 'My Terminal holds your Trading Team, Preferences, and Settings.',
     },
     {
       topic: 'Help & Account',
@@ -913,7 +913,7 @@ const VTS_PORTAL_101: BakedGame = {
         { label: 'D', text: 'Your study level' },
       ],
       answer: 'A',
-      explanation: 'It shows which build of the portal you’re on.',
+      explanation: 'It shows which build of the terminal you’re on.',
     },
   ],
 };
@@ -1599,6 +1599,26 @@ export async function ensureBakedInGamesForTeam(
   }
 }
 
+// Built-in games whose NAME has changed in code. A copy is matched to its game
+// by name, so a rename would otherwise look like a brand-new game: every team
+// would get a second deck created beside the old one, and the old one — which
+// holds everyone's progress — would sit there forever with the retired name.
+// Renaming the existing rows first keeps the deck id, so a rename re-syncs in
+// place like any other content change. Idempotent: after the first pass no row
+// carries the old name, so it matches nothing.
+const RENAMED_GAMES: { from: string; to: string }[] = [
+  { from: 'VTS Portal 101', to: 'VTS Terminal 101' },
+];
+
+async function applyBakedInRenames(): Promise<void> {
+  for (const { from, to } of RENAMED_GAMES) {
+    await db
+      .update(studyDecks)
+      .set({ name: to })
+      .where(and(eq(studyDecks.source, BAKED_IN_SOURCE), eq(studyDecks.name, from)));
+  }
+}
+
 // Seed the built-in games into EVERY team. Runs on boot. Content is re-synced
 // across all teams only when BAKED_IN_VERSION has advanced past what was last
 // applied; otherwise it just fills in any team that is missing a copy. Each team
@@ -1606,6 +1626,8 @@ export async function ensureBakedInGamesForTeam(
 export async function ensureBakedInGamesAllTeams(): Promise<void> {
   const applied = Number((await getSetting(VERSION_KEY)) ?? '0') || 0;
   const forceSync = applied < BAKED_IN_VERSION;
+
+  await applyBakedInRenames();
 
   const teams = await db.select({ id: tradingTeams.id }).from(tradingTeams);
   for (const t of teams) {

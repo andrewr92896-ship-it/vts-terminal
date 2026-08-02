@@ -65,7 +65,7 @@ function msToDateInput(ms: number): string {
 
 // Format a ms epoch as an Eastern-Time date + time, e.g. "2026-07-23 09:31:05 ET".
 // Times are rendered in ET (America/New_York) — the same clock the rest of the
-// portal uses for session windows and market hours — so an exported time reads
+// terminal uses for session windows and market hours — so an exported time reads
 // the same for everyone regardless of the exporter's own timezone. DST is
 // handled by Intl. A null/undefined ms (e.g. a still-open trade's close time)
 // yields an empty cell.
@@ -194,7 +194,7 @@ export function TradeLog() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
-  // Deck vs tape is a saved preference now (My Portal ▸ Preferences), read once
+  // Deck vs tape is a saved preference now (My Terminal ▸ Preferences), read once
   // on mount rather than toggled from the header.
   const [layout] = useState<Layout>(() => getTradeLayout());
   const [adding, setAdding] = useState(false);

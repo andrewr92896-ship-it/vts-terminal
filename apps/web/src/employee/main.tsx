@@ -8,7 +8,7 @@ import { EmployeeApp } from './EmployeeApp';
 // (employee.html), not a route inside the main single-page app.
 //
 // Note what is deliberately absent compared to src/main.tsx: no AuthProvider
-// (the main portal's session has no authority here), no service-worker
+// (the main terminal's session has no authority here), no service-worker
 // registration, no PWA install prompt, no push subscription. This surface is
 // always served fresh from the network and holds nothing on the device.
 

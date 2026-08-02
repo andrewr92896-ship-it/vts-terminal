@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { type Theme, type WorkspaceKey, accentGradient } from '../theme/themes';
 
 // A guided, slideshow-style walkthrough for the public demo. Each step can drive
-// the portal to a real screen (and optionally open the VTS AI panel) so the
+// the terminal to a real screen (and optionally open the VTS AI panel) so the
 // reviewer sees the actual product while the card explains it. It is non-modal:
 // there is no backdrop, so the app stays fully visible and clickable behind it.
 
@@ -19,7 +19,7 @@ export const DEMO_STEPS: TourStep[] = [
   {
     workspace: 'markets',
     screen: 'live',
-    title: 'Welcome to VTS Portal',
+    title: 'Welcome to VTS Terminal',
     body: 'A private trading and operations hub: live trading across any broker with an API, a hand-kept trade book, a build-your-own study game, a shared to-do list, and a built-in VTS AI assistant. This is a read-only demo with simulated data — click around freely.',
   },
   {
@@ -75,7 +75,7 @@ export const DEMO_STEPS: TourStep[] = [
     screen: 'live',
     openClaude: true,
     title: 'VTS AI, on every screen',
-    body: 'The assistant is one click away anywhere and knows which workspace you’re in — ask about a trade, a task, or a study question. In this demo the replies are scripted; the live portal answers with VTS AI.',
+    body: 'The assistant is one click away anywhere and knows which workspace you’re in — ask about a trade, a task, or a study question. In this demo the replies are scripted; the live terminal answers with VTS AI.',
   },
   {
     workspace: 'trading',
@@ -87,7 +87,7 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'markets',
     screen: 'live',
     title: 'That’s the tour',
-    body: 'Everything here is simulated and read-only, so explore freely. The real, live portal — built end to end with VTS AI — is available on request. Thanks for looking.',
+    body: 'Everything here is simulated and read-only, so explore freely. The real, live terminal — built end to end with VTS AI — is available on request. Thanks for looking.',
   },
 ];
 
@@ -103,7 +103,7 @@ export function DemoTour({ theme, onGo, onOpenClaude, onClose }: DemoTourProps) 
   const step = DEMO_STEPS[index];
   const last = index === DEMO_STEPS.length - 1;
 
-  // Drive the portal to this step's screen (and optionally open the VTS AI panel).
+  // Drive the terminal to this step's screen (and optionally open the VTS AI panel).
   useEffect(() => {
     if (step.workspace && step.screen) onGo(step.workspace, step.screen);
     if (step.openClaude) onOpenClaude();

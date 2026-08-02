@@ -12,7 +12,7 @@ import { Icon } from '../components/Icon';
 
 // The employee portal's shell.
 //
-// Routing is state-based, matching the main portal's convention — the URL stays
+// Routing is state-based, matching the main terminal's convention — the URL stays
 // /employee. That is the point: /employee is one hardened surface with one
 // entry, not a set of addressable pages. What *is* URL-separated is the portal
 // itself, which is a different bundle served from a different HTML entry with a
@@ -261,7 +261,7 @@ export function EmployeeApp() {
             </span>
             <a
               href="/"
-              title="Main portal"
+              title="Main terminal"
               style={{
                 display: 'flex',
                 alignItems: 'center',

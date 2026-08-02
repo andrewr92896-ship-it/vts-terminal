@@ -20,7 +20,7 @@ import { audit } from './audit.js';
 // The layers, in the order they are applied:
 //   1. network  — optional IP allowlist (fails closed when configured)
 //   2. origin   — Sec-Fetch-Site / Origin must be this site, on every write
-//   3. session  — the employee cookie only; the main portal's session is not
+//   3. session  — the employee cookie only; the main terminal's session is not
 //                 consulted anywhere in this file
 //   4. identity — active account, not the demo, holds the `employee` role, and
 //                 has an `active` employee profile

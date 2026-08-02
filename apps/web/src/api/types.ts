@@ -71,8 +71,8 @@ export interface TestLeaderboardEntry {
   isMe: boolean;
 }
 
-// The optional parts of the portal a user turns on for themselves in My Portal ▸
-// Feature Access. Everything else — Markets, Investments, Studies, My Portal,
+// The optional parts of the terminal a user turns on for themselves in My Terminal ▸
+// Feature Access. Everything else — Markets, Investments, Studies, My Terminal,
 // Site Help — is included with every account and never appears here. Funded is
 // nested under Advanced Trading and cannot be on without it. Matches the
 // backend's UserFeatures (features/service.ts).
@@ -102,7 +102,7 @@ export interface User {
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   // The user has not yet accepted the current Terms of Service / Privacy Policy.
-  // When true, App gates them into the acceptance screen before the portal
+  // When true, App gates them into the acceptance screen before the terminal
   // renders. Never true for the read-only demo.
   mustAcceptTerms: boolean;
   isDemo: boolean; // the public, read-only demo account
@@ -110,7 +110,7 @@ export interface User {
     label: string;
     workspaces: WorkspaceKey[];
     readOnlyWorkspaces: WorkspaceKey[];
-    // The optional features this user has turned on for themselves (My Portal ▸
+    // The optional features this user has turned on for themselves (My Terminal ▸
     // Feature Access). Drives which workspaces the sidebar draws; the server
     // re-checks every endpoint regardless.
     features: UserFeatures;
@@ -118,13 +118,13 @@ export interface User {
     // opt-in, nested under Advanced Trading. Never true for the demo account.
     funded: boolean;
     // Whether the Employee Portal (/employee) launch row is revealed. Reaching
-    // that portal still requires a separate sign-in there. Never true for the demo.
+    // that terminal still requires a separate sign-in there. Never true for the demo.
     employee: boolean;
     // Whether the user carries admin capability (admin or founder-level).
     admin: boolean;
     // Whether the user is founder-level (founder or software_developer).
     founder: boolean;
-    // Whether this is the portal owner account (only the owner can grant the
+    // Whether this is the terminal owner account (only the owner can grant the
     // Founder / Software Developer roles).
     owner: boolean;
   };
@@ -139,7 +139,7 @@ export interface TeamMember {
   active: boolean;
 }
 
-// ---- My Portal: user-created Trading Teams (mirror of userTeams/service.ts) ----
+// ---- My Terminal: user-created Trading Teams (mirror of userTeams/service.ts) ----
 export interface TeamMemberPermissions {
   canCreateStudyGuides: boolean;
   canInvite: boolean;
@@ -1524,7 +1524,7 @@ export interface TeamChatFeed {
   messages: ChatMessage[];
 }
 
-// One in-portal notification (shown in the top-bar bell). Chat notifications
+// One in-terminal notification (shown in the top-bar bell). Chat notifications
 // carry the teammate's avatar; suggestion/bug notifications are admin-only.
 export type NotificationKind = 'chat' | 'suggestion' | 'bug' | 'support';
 export interface NotificationItem {

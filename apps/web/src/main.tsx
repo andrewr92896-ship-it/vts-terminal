@@ -11,7 +11,7 @@ applyStoredZoom();
 
 // Force the tab/window title at runtime so it stays correct even when a stale
 // service-worker-cached index.html shell loads with an older <title>.
-document.title = 'VTS Portal';
+document.title = 'VTS Terminal';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

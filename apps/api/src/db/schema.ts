@@ -6,7 +6,7 @@ export type Role = (typeof ROLES)[number];
 
 // ---- Trading teams ----
 // Admin-managed groups a trader belongs to. Each user is a member of at most one
-// team (users.team_id below). Teams partition the shared portal into competing
+// team (users.team_id below). Teams partition the shared terminal into competing
 // desks: the Studies leaderboards rank a learner only against their own team,
 // while the Trading data (Live Wall presets, Trade Desk, alerts, sessions,
 // funded, etc.) stays shared across every team. Only admins create/rename/delete
@@ -31,7 +31,7 @@ export const users = sqliteTable('users', {
   email: text('email'),
   // Optional profile picture, stored as a small data URL (a client-resized
   // JPEG/PNG, ~128px). Null when the user has not set one — the UI then falls
-  // back to their initial. Kept inline (no object store) since the portal is a
+  // back to their initial. Kept inline (no object store) since the terminal is a
   // single-service deploy with no blob storage configured.
   avatar: text('avatar'),
   passwordHash: text('password_hash').notNull(),
@@ -63,7 +63,7 @@ export const users = sqliteTable('users', {
   // Legal acceptance. `termsAcceptedVersion` records the version string of the
   // Terms of Service / Privacy Policy the user last accepted (see LEGAL_VERSION
   // in legal/version.ts). When it does not equal the current LEGAL_VERSION, the
-  // user is gated into the acceptance screen before they can operate the portal
+  // user is gated into the acceptance screen before they can operate the terminal
   // (so bumping the docs re-prompts everyone). Null = never accepted.
   termsAcceptedVersion: text('terms_accepted_version'),
   termsAcceptedAt: integer('terms_accepted_at', { mode: 'timestamp_ms' }),
@@ -88,7 +88,7 @@ export type UserRow = typeof users.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
 
 // Per-user, revocable bearer tokens for the read-only mobile/home-screen widget
-// (`GET /api/widget/positions`). The portal's own API is otherwise httpOnly
+// (`GET /api/widget/positions`). The terminal's own API is otherwise httpOnly
 // cookie-only, which a native iOS widget extension / Scriptable can't present.
 // Like sessions, we store only the SHA-256 hash of the token; the raw token is
 // shown to the user exactly once when generated. A token grants read-only access
@@ -886,10 +886,10 @@ export const sessionAlertPrefs = sqliteTable('session_alert_prefs', {
 });
 export type SessionAlertPrefRow = typeof sessionAlertPrefs.$inferSelect;
 
-// ---- Feature Access (My Portal ▸ Feature Access) ----
-// One row per user recording which optional parts of the portal they have turned
+// ---- Feature Access (My Terminal ▸ Feature Access) ----
+// One row per user recording which optional parts of the terminal they have turned
 // on for themselves. Everything here is OFF for a new account — Markets,
-// Investments, Studies, My Portal and Site Help need no row and are never listed
+// Investments, Studies, My Terminal and Site Help need no row and are never listed
 // here, because every account has them.
 //
 // `funded` is nested under `advancedTrading`: the challenge tracker is part of
@@ -947,7 +947,7 @@ export type MarketDataLayoutRow = typeof marketDataLayout.$inferSelect;
 // The channel catalog itself is NOT here: it lives in code
 // (trading/marketNewsStreams.ts) and is identical for everyone, because live
 // status costs API quota per distinct channel and a fixed catalog is what keeps
-// that cost independent of how many people use the portal. These columns only
+// that cost independent of how many people use the terminal. These columns only
 // ever hold catalog keys; anything else is dropped on read. `watching` is a
 // JSON string array, `notify` a JSON map of channel-key → boolean, and `docked`
 // a single channel key or null.
@@ -997,7 +997,7 @@ export const marketNewsChannels = sqliteTable('market_news_channels', {
 export type MarketNewsChannelRow = typeof marketNewsChannels.$inferSelect;
 
 // ---- Trading — the Trade Desk's order journal ----
-// Every order this portal sends to a broker, and what came back. This is an
+// Every order this terminal sends to a broker, and what came back. This is an
 // append-only record of *our* instructions, deliberately separate from
 // `trading_positions` (which mirrors what the broker says exists): a rejected or
 // cancelled order never becomes a position, and those are exactly the rows worth
@@ -1044,7 +1044,7 @@ export const tradingOrders = sqliteTable('trading_orders', {
 export type TradingOrderRow = typeof tradingOrders.$inferSelect;
 
 // ---- Trading — user-authored price alerts ----
-// A personal "notify me when X crosses a level" rule, created in-portal (the
+// A personal "notify me when X crosses a level" rule, created in-terminal (the
 // closest thing to a TradingView alert we can offer, since the embedded chart is
 // a sandboxed iframe we can't drive). The price-alert watch evaluates each rule
 // against live OANDA prices; on a genuine CROSS through `threshold` it buzzes
@@ -1187,7 +1187,7 @@ export type StudyDeckRunRow = typeof studyDeckRuns.$inferSelect;
 // A team builds its own flashcard set: term/definition cards typed in by hand,
 // AI-generated from a topic, or parsed by Claude from an uploaded text file. A
 // set is team-SHARED — any member builds it, the whole team studies it — and is
-// played with the same auto-rotate flashcard experience the portal has always
+// played with the same auto-rotate flashcard experience the terminal has always
 // had. All rows are scoped by teamId.
 export const studyFlashcardSets = sqliteTable('study_flashcard_sets', {
   id: text('id').primaryKey(),
@@ -1330,8 +1330,8 @@ export const patchNotes = sqliteTable('patch_notes', {
 });
 export type PatchNoteRow = typeof patchNotes.$inferSelect;
 
-// ---- My Portal: user-created Trading Teams ----
-// A "Trading Team" is a small, user-owned group created from the My Portal
+// ---- My Terminal: user-created Trading Teams ----
+// A "Trading Team" is a small, user-owned group created from the My Terminal
 // workspace — distinct from the admin-managed trading_teams above. Any signed-in
 // user can create ONE (becoming its leader); a user belongs to at most one
 // (enforced by the unique userId on user_team_members). The leader assigns
@@ -1426,7 +1426,7 @@ export type BadgeTypeRow = typeof badgeTypes.$inferSelect;
 
 // ---- Message templates (admin copy library) ----
 // A shared library of reusable text-message (SMS) and email templates that
-// admins copy out of the portal (e.g. an onboarding text, a follow-up email).
+// admins copy out of the terminal (e.g. an onboarding text, a follow-up email).
 // Authoring is founder-level only (software developers), but every admin can
 // read and copy them. Templates are site-wide (not per-user): `createdBy` is set
 // to null if the author's account is later deleted, so a template survives its
@@ -1454,7 +1454,7 @@ export type MessageTemplateRow = typeof messageTemplates.$inferSelect;
 //
 // The employee portal is a deliberately separate, hardened surface: its own URL,
 // its own bundle, its own API namespace and — critically — its own sessions.
-// A main-portal login grants nothing here; an employee re-authenticates at
+// A main-terminal login grants nothing here; an employee re-authenticates at
 // /employee and that session is tracked in `employee_sessions` below, never in
 // `sessions`. Everything in this block exists to keep that boundary auditable.
 
@@ -1470,7 +1470,7 @@ export type EmployeeStatus = (typeof EMPLOYEE_STATUSES)[number];
 export const WORKING_STATUSES = ['in_office', 'remote', 'away'] as const;
 export type WorkingStatus = (typeof WORKING_STATUSES)[number];
 
-// One row per portal user granted employee-portal access. Presence of the row is
+// One row per terminal user granted employee-portal access. Presence of the row is
 // the HR record; the `employee` role on the user is the access grant. Both must
 // line up (role + an `active` profile) for a sign-in to succeed, so revoking
 // either one locks the person out immediately.
@@ -1492,7 +1492,7 @@ export const employeeProfiles = sqliteTable('employee_profiles', {
   // Set by the employee themselves; see WORKING_STATUSES.
   workingStatus: text('working_status', { enum: WORKING_STATUSES }).notNull().default('in_office'),
   // HR/administrator *of the employee portal* — may manage people, announcements
-  // and documents in it. Distinct from the main portal's admin role; founder-level
+  // and documents in it. Distinct from the main terminal's admin role; founder-level
   // users are treated as portal admins implicitly.
   isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
   lastLoginAt: integer('last_login_at', { mode: 'timestamp_ms' }),
@@ -1591,7 +1591,7 @@ export const employeeAuditLog = sqliteTable('employee_audit_log', {
 export type EmployeeAuditRow = typeof employeeAuditLog.$inferSelect;
 
 // Internal announcements, posted by an employee-portal admin and visible to
-// every employee. Separate from the main portal's `announcements` table so
+// every employee. Separate from the main terminal's `announcements` table so
 // internal staff communication never leaks into the member-facing site.
 export const employeeAnnouncements = sqliteTable('employee_announcements', {
   id: text('id').primaryKey(),

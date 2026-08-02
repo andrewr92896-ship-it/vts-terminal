@@ -158,7 +158,7 @@ export async function sendToTradingDesk(payload: PushPayload, opts: DeskSendOpts
 // Used by tests / a manual "send test" so a user can confirm a device works.
 export async function sendTest(userId: string): Promise<void> {
   await sendToUsers([userId], {
-    title: 'VTS Portal',
+    title: 'VTS Terminal',
     body: 'Phone alerts are on. You’ll get a buzz when trades and alerts fire.',
     url: '/',
     tag: 'vts-test',

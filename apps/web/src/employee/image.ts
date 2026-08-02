@@ -1,10 +1,10 @@
 // Turn a picked image file into a compact, square data URL.
 //
-// A local copy rather than an import from the main portal's AccountSettings —
-// the employee bundle stays independent of the main portal's component tree, and
+// A local copy rather than an import from the main terminal's AccountSettings —
+// the employee bundle stays independent of the main terminal's component tree, and
 // this is thirty lines. The size differs too: the design asks for headshots at
 // 400px so they hold up in the directory's 84px roster tiles on a retina screen,
-// where the main portal's 256px avatar would soften.
+// where the main terminal's 256px avatar would soften.
 //
 // Doing the crop and downscale here, before upload, is what keeps the stored
 // data URL small enough to sit inline in the users table. The server still

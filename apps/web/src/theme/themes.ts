@@ -61,7 +61,7 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
   },
   // Investments: a calm teal accent for the long-term, layman-friendly portfolio
   // tracker (401k / IRA / ESA / general holdings). Distinct from the Advanced
-  // Trading gold and My Portal's greener emerald — teal signals steady, long-hold
+  // Trading gold and My Terminal's greener emerald — teal signals steady, long-hold
   // growth rather than active-desk urgency.
   investments: {
     pageBg: 'radial-gradient(1200px 600px at 70% -10%,#052e33 0%,#04141a 60%)',
@@ -97,7 +97,7 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#4b7fe0',
     accentText: '#06122c',
   },
-  // My Portal: an emerald accent for the user's personal workspace (Trading
+  // My Terminal: an emerald accent for the user's personal workspace (Trading
   // Team). Distinct from every other workspace signal.
   myportal: {
     pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0b3026 0%,#06160f 60%)',
@@ -109,7 +109,7 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#12a374',
     accentText: '#052018',
   },
-  // Founder Portal: a distinguished amber accent that signals the elevated,
+  // Founder Terminal: a distinguished amber accent that signals the elevated,
   // founder-only area sitting above Admin.
   founder: {
     pageBg: 'radial-gradient(1200px 600px at 70% -10%,#2e2410 0%,#161206 60%)',
@@ -143,8 +143,8 @@ export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   trading: 'Advanced Trading',
   investments: 'Investments',
   studies: 'Studies',
-  myportal: 'My Portal',
-  admin: 'Admin Portal',
-  founder: 'Developer Portal',
+  myportal: 'My Terminal',
+  admin: 'Admin Terminal',
+  founder: 'Developer Terminal',
   help: 'Site Help',
 };

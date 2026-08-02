@@ -56,7 +56,7 @@ export function AdminViewAs({
     <div style={{ maxWidth: 720, margin: '0 auto' }}>
       <SectionHeader
         title="View as role"
-        subtitle="Preview the portal as a member with only the selected role. This changes what you see in the app; your real admin access is unchanged."
+        subtitle="Preview the terminal as a member with only the selected role. This changes what you see in the app; your real admin access is unchanged."
       />
 
       {actingRole && (

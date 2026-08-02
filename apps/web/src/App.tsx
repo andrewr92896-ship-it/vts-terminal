@@ -25,7 +25,7 @@ export function App() {
           letterSpacing: '0.5px',
         }}
       >
-        Loading portal...
+        Loading terminal...
       </div>
     );
   } else if (!user) {
@@ -35,7 +35,7 @@ export function App() {
     content = <ChangePassword />;
   } else if (user.mustAcceptTerms) {
     // Everyone must review and accept the current Terms of Service and Privacy
-    // Policy before operating the portal (re-prompted when the docs are updated).
+    // Policy before operating the terminal (re-prompted when the docs are updated).
     content = <AcceptTerms />;
   } else {
     content = <Portal />;

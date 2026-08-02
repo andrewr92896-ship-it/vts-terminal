@@ -5,20 +5,20 @@ import { users, tradingTeams, userTeams, userTeamMembers, userTeamInvites } from
 import { isAdmin, isFounder, parseRoles, type RoleKey } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
 
-// My Portal — Trading Teams.
+// My Terminal — Trading Teams.
 //
 // A user's Trading Team is the SAME team that scopes their trade sharing: their
 // `users.team_id` (a `trading_teams` row). This service is the self-service
 // surface over that team — it reads its membership from `users.team_id` (the
 // single source of truth, shared with the admin Teams panel and the trade-scope
-// boundary) and layers on the My-Portal-only metadata:
+// boundary) and layers on the My-Terminal-only metadata:
 //   • `user_teams`        — one row per team holding the leader (leaderId).
 //   • `user_team_members` — optional per-user cosmetic badge + permission flags.
 //   • `user_team_invites` — pending invitations; accepting sets the invitee's
 //                           team_id, i.e. moves them onto the team's desk.
 // Because membership lives in `team_id`, everything that scopes to a team (Live
 // Wall, Trade Log, History, capital, chat, leaderboards, notifications) follows
-// the My Portal team automatically — the two are now one team.
+// the My Terminal team automatically — the two are now one team.
 
 export class UserTeamError extends Error {}
 
@@ -280,7 +280,7 @@ export async function getEffectivePermissions(userId: string): Promise<MemberPer
 
 // The current user's team (or null) plus any pending invitations addressed to
 // them. Invites only matter when the user is on no team — once they have one,
-// their My Portal shows that team.
+// their My Terminal shows that team.
 export async function getMyPortal(
   userId: string,
 ): Promise<{ team: MyTeamView | null; incomingInvites: IncomingInviteView[] }> {
@@ -601,7 +601,7 @@ export async function renameTeam(actingUserId: string, rawName: string): Promise
   return view;
 }
 
-// Boot backfill: give every existing trading team a My Portal leader row so it
+// Boot backfill: give every existing trading team a My Terminal leader row so it
 // shows up as a managed team (picking a founder/admin/earliest member). Cheap
 // and idempotent — ensureTeamMeta creates/repairs one row per team with members.
 export async function backfillTeamLeaders(): Promise<void> {

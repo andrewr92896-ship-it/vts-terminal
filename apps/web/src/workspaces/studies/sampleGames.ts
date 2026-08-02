@@ -1,5 +1,5 @@
 // Which built-in ("baked in", isSample) study games a learner has added into
-// their own "Your study games" list. The portal seeds a handful of example
+// their own "Your study games" list. The terminal seeds a handful of example
 // games per team; rather than showing them all at once, they live in the
 // Browse Study Games gallery until the learner adds the ones they want. This is
 // a personal, device-local preference (kept in localStorage, keyed by the

@@ -79,7 +79,7 @@ export function HelpHowTo({ theme }: { theme: Theme }) {
     <>
       <Header
         title={"How to"}
-        subtitle={"Step-by-step walkthroughs for the main areas of the portal."}
+        subtitle={"Step-by-step walkthroughs for the main areas of the terminal."}
       />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
         {HOWTO_TOPICS.map((tp) => {
@@ -164,7 +164,7 @@ export function HelpPatchNotes({ theme }: { theme: Theme }) {
     <>
       <Header
         title={"Patch notes"}
-        subtitle={"What changed in each release of the portal."}
+        subtitle={"What changed in each release of the terminal."}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         {all.map((p) => (
@@ -353,7 +353,7 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
           subtitle={"Tell us what went wrong and our assistant will help file it."}
         />
         <div style={panel(theme)}>
-          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>{"Read-only demo. Sign in to the live portal to report a bug."}</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>{"Read-only demo. Sign in to the live terminal to report a bug."}</p>
         </div>
       </>,
     );
@@ -546,11 +546,11 @@ export function HelpSuggestion({ theme, user }: { theme: Theme; user: User }) {
     <>
       <Header
         title={"Suggestion"}
-        subtitle={"Have an idea to improve the portal? Send it straight to the admins."}
+        subtitle={"Have an idea to improve the terminal? Send it straight to the admins."}
       />
       <div style={panel(theme)}>
         {user.isDemo ? (
-          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>{"Read-only demo. Sign in to the live portal to send a suggestion."}</p>
+          <p style={{ margin: 0, fontSize: 12.5, color: '#9fb0d6' }}>{"Read-only demo. Sign in to the live terminal to send a suggestion."}</p>
         ) : (
           <>
             <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.4px', textTransform: 'uppercase', color: '#8ea3cc', marginBottom: 8 }}>
@@ -559,7 +559,7 @@ export function HelpSuggestion({ theme, user }: { theme: Theme; user: User }) {
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              placeholder="What would make the portal better? A feature, a tweak, anything."
+              placeholder="What would make the terminal better? A feature, a tweak, anything."
               rows={5}
               maxLength={4000}
               style={{ ...inputStyle, resize: 'vertical', fontFamily: 'inherit' }}

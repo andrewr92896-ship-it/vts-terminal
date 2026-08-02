@@ -15,11 +15,11 @@ import { loadAddedSamples, saveAddedSamples } from './sampleGames';
 export type StudyTarget = 'play' | 'test' | 'progress';
 type Selection = { id: string; view: StudyTarget } | null;
 // The two views this hub toggles between: your own picked list, or the gallery
-// of built-in portal games you can add to it.
+// of built-in terminal games you can add to it.
 type Mode = 'list' | 'browse';
 
 // Two distinct card colors so the source of a game reads at a glance: games your
-// team made (violet) vs. games built into the portal (sky blue).
+// team made (violet) vs. games built into the terminal (sky blue).
 const CUSTOM_ACCENT = '#a78bfa';
 const BUILTIN_ACCENT = '#38bdf8';
 const accentFor = (deck: TeamDeck) => (deck.isSample ? BUILTIN_ACCENT : CUSTOM_ACCENT);
@@ -48,7 +48,7 @@ const COPY: Record<StudyTarget, { title: string; blurb: string; action: string; 
 // The launcher shared by the Study Game, Test Mode, and Progress sections: a
 // picker of the study games in the learner's list. Games your team builds in
 // Study Creation show up here automatically; the example games built into the
-// portal live in the Browse gallery until you add them. Picking a game opens the
+// terminal live in the Browse gallery until you add them. Picking a game opens the
 // chosen experience (play / test / progress). A deep-link (a deck's Play button
 // in Study Creation) skips the picker and opens its game directly.
 export function StudyGameHub({
@@ -158,7 +158,7 @@ export function StudyGameHub({
             </button>
           </div>
           <p style={{ margin: '0 0 12px', fontSize: 12.5, color: muted, maxWidth: 560, lineHeight: 1.5 }}>
-            {"Ready-made games built into the portal. Add the ones you want and they’ll show up in your study games."}
+            {"Ready-made games built into the terminal. Add the ones you want and they’ll show up in your study games."}
           </p>
           {builtIn.length === 0 ? (
             <div style={{ ...card(theme), color: muted, fontSize: 13, textAlign: 'center' }}>
