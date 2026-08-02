@@ -366,25 +366,63 @@ workspaces list** (see `theme/nav.ts` order).
     no advice-flavoured copy** anywhere on it, plus an "informational only"
     footer line.
     - The **catalog lives in code** (`trading/marketData.ts`), identical for
-      everyone, and is **partly live**. `trading/marketQuotes.ts` quotes the **FX
-      majors, the dollar index and the two crypto majors from OANDA** at request
-      time — spot from `/pricing`, and the 1D/1W/1M/YTD/1Y changes computed from
-      `/v3/instruments/{sym}/candles` daily closes — and `applyLiveQuotes` overlays
-      them. Two subtleties: a look-back matches on a candle's **close** (`time +
-      24h`), never its start, or the change reads a close that had not happened
-      yet; and **DXY is computed** from the six ICE components (it is not an OANDA
-      instrument), so that row restates its publisher rather than claiming ICE.
-      Crypto availability differs per OANDA entity, so the account's
-      `/instruments` list is checked first and spot falls back to the keyless coin
-      feed (changes then stay sample). Quotes are cached stale-while-revalidate
-      (60s spot / 30min candles) and a failed refresh keeps the last good figures.
-    - Every other series' `value` / `changes` are still **design fixtures** — no
-      macro-data provider covers CPI, payrolls, the curve or the balance sheet — so
-      each series carries `sample: true|false`, the payload's `sampleValues` means
-      "any of it is sample", and the screen names which groups read live plus a
-      **Sample** dot in the freshness legend on each placeholder row. Keep that
-      marking accurate when you wire a provider. The calendar, the session
-      Open/Closed readings and the Fed countdown *are* real.
+      everyone, and is **mostly live** — **54 of the 71** non-session series, from
+      **two providers** that both overlay the catalog through the one
+      `applyLiveQuotes` seam and never key the same series. Adding a third is more
+      entries handed to that seam, not a branch in the catalog.
+      - **Prices — `trading/marketQuotes.ts`, from OANDA.** The FX majors, the
+        dollar index, the crypto majors, the commodities and the three US index
+        CFDs: spot from `/pricing`, and the 1D/1W/1M/YTD/1Y changes computed from
+        `/v3/instruments/{sym}/candles` daily closes. Three subtleties: a
+        look-back matches on a candle's **close** (`time + 24h`), never its start,
+        or the change reads a close that had not happened yet; **DXY is computed**
+        from the six ICE components (it is not an OANDA instrument), so that row
+        restates its publisher rather than claiming ICE; and OANDA does not quote
+        the **exchange contract** for the metals, energy, copper or indices — they
+        are OTC spot and CFDs — so those rows restate the publisher too
+        (`OANDA · spot` / `OANDA · CFD`) rather than claiming NYMEX or Cboe.
+        Instrument availability differs per OANDA entity, so the account's
+        `/instruments` list is checked first (a symbol it lacks keeps its sample
+        figure) and crypto spot falls back to the keyless coin feed (changes then
+        stay sample). Cached stale-while-revalidate (60s spot / 30min candles);
+        a failed refresh keeps the last good figures.
+      - **Macro — `trading/marketMacro.ts` over `brokers/fred.ts`, from FRED.**
+        Policy rates, inflation, the labor prints, the Treasury curve, the VIX and
+        the balance sheet. **It needs no API key**: FRED's chart-download CSV
+        (`fredgraph.csv`) is keyless and is the fallback, with the documented JSON
+        API used when `FRED_API_KEY` is set — and a **rejected** key falls through
+        to the keyless read, so a typo degrades to the no-key behaviour instead of
+        blanking the board. Four rules carry the design, and each is invisible
+        until it is wrong in production: the published number is **transformed**
+        into the displayed one (`yoy`, `delta`, `qoqSaar`, … — FRED serves CPI as
+        an index and payrolls as a running total); the change columns **subtract**
+        rather than percent (a yield 4.05 → 4.02 is `−0.03`, not `−0.74%`);
+        a period **shorter than the series' cadence reads a flat zero**, because a
+        date look-back from a monthly series' 1-day column otherwise prints the
+        previous *month's* move as a one-day move; and look-backs **anchor on the
+        latest reading**, not the wall clock, since a June print is still current
+        in August (YTD is the exception and anchors on the calendar). `asOf` names
+        the period — `Jun`, `wk to Jul 25`, `Q2` — and never says "live". Cached
+        30 min, SWR, never replaced by an empty result.
+        **`npm run verify:market-macro`** checks all of it offline against
+        hand-computed fixtures; run it after touching a transform, a scale or the
+        cadence gate.
+    - **17 rows are still design fixtures, and they are the ones no free provider
+      covers** — CME FedWatch meeting odds, the SEP dot plot, BoE/BoJ rates, the
+      1-year breakeven, the Cleveland nowcast, the GDP forecast, the ISM surveys
+      (licensed, pulled from FRED), the MOVE index, blended EPS, the Citi surprise
+      index and the three crypto flow/funding rows. Each series carries
+      `sample: true|false`, the payload's `sampleValues` means "any of it is
+      sample", and the screen names which groups read live plus a **Sample** dot in
+      the freshness legend on each placeholder row. Keep that marking accurate when
+      you wire a provider. The calendar, the session Open/Closed readings and the
+      Fed countdown *are* real.
+    - **The `review` column ("Last → next review") stays catalog data even on a
+      live row.** Neither provider reports a release schedule — a FRED observation
+      is dated for the period it *measures*, not the day it was published — so
+      that column keeps its hand-entered dates. Do not wire the observation date
+      into it: "last reviewed Jun 1" for a June CPI print released in July is a
+      worse claim than the schedule it replaces.
     - The **arrangement is per user** (`trading/marketDataLayout.ts`,
       `market_data_layout`): the ordered pinned strip, removed series, and
       user-authored "custom metrics". `GET /api/trading/market-data`,
@@ -1313,6 +1351,10 @@ defaults; the app runs locally with almost nothing set.
   `TRADESTATION_*`, `FTP_API_URL/TOKEN/ACCOUNT_ID`.
 - **Feeds:** `FINNHUB_API_KEY`, `RSS_NEWS_ENABLED`, `NEWS_AI_SUMMARY_ENABLED`,
   `FOREX_FACTORY_ENABLED`, `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`.
+- **FRED (Market Data macro series):** `FRED_API_KEY` — **optional, and the board
+  reads live without it** (the keyless chart-download CSV is the fallback).
+  Setting it switches to the documented JSON API; a rejected key falls back to
+  keyless rather than blanking the board.
 - **YouTube (Market News live streams):** `YOUTUBE_API_KEY` (unset = poller off,
   every channel reads offline and live figures are marked sample),
   `YOUTUBE_WATCH_SECONDS` (300), `YOUTUBE_CHANNELS_PER_TICK` (8),

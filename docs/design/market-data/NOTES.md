@@ -9,6 +9,9 @@ Implemented in `Beta V 5.77`:
 | Piece | Where |
 | --- | --- |
 | Series catalog + FOMC schedule | `apps/api/src/trading/marketData.ts` |
+| Live prices (OANDA) | `apps/api/src/trading/marketQuotes.ts` |
+| Live macro (FRED), added `Beta V 6.10` | `apps/api/src/trading/marketMacro.ts`, `apps/api/src/trading/brokers/fred.ts` |
+| Offline check of the macro math | `apps/api/src/trading/verifyMarketMacro.ts` (`npm run verify:market-macro`) |
 | Per-user board layout (pinned / hidden / custom) | `apps/api/src/trading/marketDataLayout.ts`, table `market_data_layout` (migration `0078`) |
 | Routes | `GET /api/trading/market-data`, `GET|PUT /api/trading/market-data/layout` in `routes/trading.ts` |
 | Screen | `apps/web/src/workspaces/trading/MarketData.tsx` |
@@ -59,18 +62,42 @@ Implemented in `Beta V 5.77`:
 
 ## What is real and what is not
 
-- **Real:** the **FX & dollar** and **Crypto** groups (see below), the economic
-  calendar (the live Forex Factory rows out of `trading_calendar`, the same feed
-  Market News reads), session Open/Closed computed against the ET clock, the FOMC
-  countdown and meeting dates, and the trader's saved board layout.
-- **Sample:** every other series' `value` and `changes`, the Fed bar's two odds
-  bars, and its "held at 4.25–4.50%" sub-line. Nothing available to the portal
-  covers CPI, payrolls, the Treasury curve or the Fed balance sheet.
+As of `Beta V 6.10`, **54 of the 71 non-session series read live** (it was 8).
+
+- **Real:** **FX & dollar**, **Crypto**, **Commodities** and **Indices** from
+  OANDA (`marketQuotes.ts`); **Policy & rates**, **Inflation**, **Labor &
+  growth**, **Yields & curve**, the VIX and **Macro & liquidity** from FRED
+  (`marketMacro.ts`). Plus the economic calendar (the live Forex Factory rows out
+  of `trading_calendar`, the same feed Market News reads), session Open/Closed
+  computed against the ET clock, the FOMC countdown and meeting dates, and the
+  trader's saved board layout.
+- **Sample:** 17 rows, and they are the ones **no free provider covers** rather
+  than ones nobody has got to yet —
+  `cut9`, `hold7` (CME FedWatch), `dots` (the SEP), `boe`, `boj`, `be1` (FRED has
+  no 1-year breakeven), `nowcast`, `gdpq2` (a forecast), `ismm`, `isms` (ISM is
+  licensed and was pulled from FRED), `btcetf`, `funding`, `dom`, `move` (ICE
+  BofA), `eps` (FactSet), `recprob`, `citi`. Also still sample: the Fed bar's two
+  odds bars and its "held at 4.25–4.50%" sub-line.
+- **Catalog data even on a live row:** the **`review` column** ("Last → next
+  review"). Neither provider reports a release schedule — FRED's observations
+  carry the date a reading is *for*, not the date it was published — so that
+  column keeps the catalog's hand-entered dates. See "Next" below.
 
 ## The live price path (`apps/api/src/trading/marketQuotes.ts`)
 
-FX, the dollar index and crypto are quoted from OANDA at request time and overlaid
-onto the catalog by `applyLiveQuotes`. Points worth knowing before changing it:
+FX, the dollar index, crypto, the commodities and the three US index CFDs are
+quoted from OANDA at request time and overlaid onto the catalog by
+`applyLiveQuotes`. Points worth knowing before changing it:
+
+- **OANDA does not quote the exchange contract for most of these**, so the rows
+  that would otherwise claim the wrong publisher restate it: metals are OTC spot
+  rather than an LBMA fixing or a COMEX future (`OANDA · spot`), and energy,
+  copper and the indices are CFDs tracking a future (`OANDA · CFD`). Same rule as
+  DXY below — the number is the right one to trade off, the row simply must not
+  say NYMEX or Cboe published it.
+- **A wrong symbol degrades to sample, not to an outage.** Every symbol is
+  checked against the account's `/instruments` list first, so an instrument this
+  OANDA entity does not carry is skipped and its row keeps the catalog figures.
 
 - **Changes come from daily candles, not spot.** A spot price gives no change
   columns and the five of them are the board's point, so each symbol gets one
@@ -100,14 +127,75 @@ onto the catalog by `applyLiveQuotes`. Points worth knowing before changing it:
   a snapshot that is never replaced by an empty result. A transient OANDA failure
   leaves the last good figures on screen rather than blanking the board.
 
+## The live macro path (`apps/api/src/trading/marketMacro.ts` + `brokers/fred.ts`)
+
+The other half of the board — policy rates, inflation, the labor prints, the
+Treasury curve, the VIX, the balance sheet — comes from FRED and overlays the
+catalog through the same `applyLiveQuotes` seam. Points worth knowing:
+
+- **It works with no API key, and that is deliberate.** FRED's documented JSON
+  API needs a free key; the CSV behind the download button on every FRED chart
+  (`fredgraph.csv?id=…`) needs nothing. `fetchFredSeries` prefers the API when
+  `FRED_API_KEY` is set and falls back to the CSV when it is not, so the board
+  reads live on a fresh install with no signup — the same shape as the Market
+  News wall, which watches keylessly and spends a key only on the extras. A key
+  that is set but **rejected** also falls through to the keyless read, so a
+  typo'd key degrades to the no-key behaviour rather than blanking the board.
+- **The published number is rarely the number on the board.** FRED serves CPI as
+  an index level and payrolls as a running job total; the board wants a y/y rate
+  and a monthly print. Each row declares a `transform` (`level` / `yoy` / `mom` /
+  `delta` / `delta3` / `qoqSaar` / `ytdIndex`) that derives the displayed series,
+  and value *and* all five change columns read that derived series.
+- **The change columns subtract; they do not percent.** A yield going 4.05 → 4.02
+  is `−0.03` here, not `−0.74%`. That is what the catalog's fixtures show and
+  what a desk means by the move in a rate. (The price side is the opposite —
+  percent moves — which is why the two files do not share the change math.)
+- **A period shorter than the publication cadence reads a flat zero.** CPI prints
+  monthly, so a date look-back from its 1-day column lands on the *previous
+  month's* reading and would print that monthly move as a one-day move. Every row
+  declares a `cadence` and the gate is applied per period. Zero is right and
+  blank is wrong here: the figure genuinely has not moved over that window.
+- **Look-backs anchor on the latest reading, not on the wall clock.** A June CPI
+  print released in July is still the current reading in August, and its 1-month
+  change means against May. Anchoring on `now` would compare June against June
+  and report a flat month. Year-to-date is the exception and anchors on the
+  calendar — the last reading before this year began.
+- **Two units on one row.** The balance sheet reads `6.42` T but moves in
+  billions a week, so `changeScale` / `changeSuffix` let the change column use a
+  coarser unit than the value. Same mechanism scales a curve spread from percent
+  into basis points and jobless claims from persons into thousands.
+- **`asOf` names the period, never "live".** `Jun`, `wk to Jul 25`, `Q2`,
+  `Jul 31` — so a monthly figure is never read as today's.
+- Cached 30 min, stale-while-revalidate, never replaced by an empty result, and
+  fetched with a concurrency cap of 6 so a refresh is a trickle rather than 40
+  simultaneous requests at a public endpoint.
+- **A cold read is seconds, so it is budgeted.** ~40 reads six-at-a-time cannot
+  be allowed to hang `GET /api/trading/market-data`, so the first caller waits at
+  most `COLD_READ_BUDGET_MS` (5s) and otherwise gets a catalog board — every
+  macro row honestly flagged Sample — while the refresh finishes into the
+  snapshot for the next poll. `warmMarketMacro()` runs at boot in **production
+  only** so nobody normally pays it; dev is excluded because `tsx watch` restarts
+  on every save and would fire forty requests each time.
+
+**`npm run verify:market-macro`** checks all of the above offline, against
+fixtures whose answers are known by hand. It reads no network and no database.
+Every one of those behaviours is invisible until it is wrong in production, so
+run it after touching a transform, a scale or the cadence gate.
+
 ## Next
 
-- **Wire a macro provider** for the remaining groups. `applyLiveQuotes` is the
-  seam: hand it more entries and the `sample` flags fall on their own.
-- **Commodities are the cheapest next group** — `XAU_USD`, `XAG_USD`, `WTICO_USD`,
-  `BCO_USD` and copper are all OANDA instruments, so adding them is five rows in
-  `QUOTES` with no new vendor. Indices (`NAS100_USD`, `SPX500_USD`, `US30_USD`) are
-  the same, though OANDA quotes the CFD rather than the index itself.
+- **A real release schedule for the `review` column.** It is the one part of a
+  live macro row still carrying catalog data (see above). FRED can answer it —
+  `fred/series/release` then `fred/release/dates` — but only through the keyed
+  API, so wiring it would make the column work on a keyed install and not on a
+  keyless one. Decide whether that asymmetry is acceptable before building it.
+- **The 17 sample rows all need a paid or licensed vendor**, so none of them is
+  a small job: CME FedWatch for meeting odds, ISM for the surveys, ICE BofA for
+  MOVE, FactSet for EPS, Citi for the surprise index. `applyLiveQuotes` remains
+  the seam — hand it more entries and the `sample` flags fall on their own.
+- **BoE and BoJ policy rates** were left out for a smaller reason: the FRED
+  series ids for them could not be confirmed, and a wrong id is worse than an
+  honest Sample dot. Confirm the ids and they are two rows in `MACRO`.
 - **Real last/next review inputs on the custom-metric form** (flagged in the
   handoff's own "next" list). Custom metrics currently read "Manual entry · when
   you update it".

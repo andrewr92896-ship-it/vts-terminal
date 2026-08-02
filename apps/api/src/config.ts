@@ -63,6 +63,14 @@ const envSchema = z.object({
   // channel per sweep, so the watch refreshes a few channels per tick and stops
   // for the day once YOUTUBE_DAILY_QUOTA units are spent.
   YOUTUBE_API_KEY: blankAsUnset,
+  // FRED (St. Louis Fed) API key, for the macro half of the Market Data board —
+  // policy rates, CPI, payrolls, the Treasury curve, the Fed balance sheet.
+  // OPTIONAL, and the board reads live without it: the FRED chart-download CSV
+  // is keyless, so an unset key costs reliability rather than the feature. Set
+  // it (free, instant, from fred.stlouisfed.org/docs/api/api_key.html) to use
+  // the documented JSON API instead. A key that is set but rejected falls back
+  // to the keyless read rather than blanking the board.
+  FRED_API_KEY: blankAsUnset,
   // Pushover application token (one per app, from pushover.net/apps/build). Each
   // trader connects their own Pushover "user key" in settings. When unset,
   // Pushover features report "not configured". Optional per-event sound name

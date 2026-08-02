@@ -2,22 +2,33 @@
 // flat list of series grouped into ten sections, plus the FOMC meeting schedule
 // the screen's Fed decision bar counts down to.
 //
-// PARTLY LIVE. The **price** series — the FX majors, the dollar index and the two
-// crypto majors — are quoted from OANDA at request time (`marketQuotes.ts`),
-// including real 1D/1W/1M/YTD/1Y changes computed from daily candles. Everything
-// else needs a macro-data provider the portal does not have (nothing covers CPI,
-// payrolls, the Treasury curve or the Fed balance sheet), so those `value` /
-// `changes` entries below are still fixtures lifted from the design prototype.
+// MOSTLY LIVE, from two providers that overlay this catalog through the same
+// `applyLiveQuotes` seam:
+//
+// - **Prices** (`marketQuotes.ts`) — the FX majors, the dollar index, the crypto
+//   majors, the commodities and the US index CFDs, quoted from OANDA at request
+//   time with real 1D/1W/1M/YTD/1Y changes computed from daily candles.
+// - **Macro** (`marketMacro.ts`) — policy rates, inflation, the labor prints,
+//   the Treasury curve, the VIX and the Fed balance sheet, from FRED.
+//
+// What is left is the handful of rows no free provider covers: CME FedWatch
+// meeting odds, the SEP dot plot, BoE/BoJ policy rates, the 1-year breakeven,
+// the Cleveland nowcast, the GDP forecast, the ISM surveys, the MOVE index,
+// blended EPS, the Citi surprise index, and the three crypto flow/funding rows.
+// Those `value` / `changes` entries below are still fixtures lifted from the
+// design prototype.
 //
 // Each series therefore carries `sample: true|false` and the payload's
 // `sampleValues` is just "is any of it sample" — the screen names which groups
 // are live rather than disclaiming the whole board. Per the design's copy
 // conventions a figure that is not real must be marked as sample data, so when
-// you wire a new provider, overlay it the way `applyLiveQuotes` does and let the
-// flag fall to false on its own. `review` and `session` are structural and always
-// live here.
+// you wire another provider, overlay it the way `applyLiveQuotes` does and let
+// the flag fall to false on its own. `session` is structural and always live
+// here; `review` is a published release schedule and stays catalog data even on
+// a live row (neither provider reports one).
 
 import { getMarketQuotes, type LiveQuote } from './marketQuotes.js';
+import { getMarketMacro } from './marketMacro.js';
 
 // Group order is the board's section order. Kept as a tuple so it doubles as the
 // Zod enum for a saved custom metric's group.
@@ -313,9 +324,13 @@ export function applyLiveQuotes(
 }
 
 export async function getMarketData(): Promise<MarketDataPayload> {
-  // Best-effort: with no OANDA credentials anywhere on the install this returns
-  // an empty map and the board renders entirely from the catalog.
-  const series = applyLiveQuotes(MARKET_SERIES, await getMarketQuotes());
+  // Both providers are best-effort and independent: with no OANDA credentials
+  // anywhere on the install the price half returns an empty map, and if FRED
+  // cannot be reached the macro half does — either way the rows that source
+  // could not fill simply keep the catalog's sample figures. They never key the
+  // same series, so the merge order does not matter.
+  const [prices, macro] = await Promise.all([getMarketQuotes(), getMarketMacro()]);
+  const series = applyLiveQuotes(MARKET_SERIES, new Map([...prices, ...macro]));
   return {
     groups: MARKET_DATA_GROUPS,
     series,

@@ -48,11 +48,14 @@ import type {
 // How real the figures are, by region:
 //   • the calendar is the live Forex Factory feed (the same rows Market News
 //     shows), so those figures are real;
-//   • the FX, dollar-index and crypto rows are quoted live from OANDA, changes
-//     included (see api trading/marketQuotes.ts);
-//   • every other series still carries the design's placeholder figures until a
-//     macro-data provider is wired. Those rows arrive with `sample: true`, show a
-//     distinct freshness dot, and are counted in the notice under the header.
+//   • the FX, dollar-index, crypto, commodity and index rows are quoted live
+//     from OANDA, changes included (see api trading/marketQuotes.ts);
+//   • the policy, inflation, labor, yield, VIX and liquidity rows come live from
+//     FRED (see api trading/marketMacro.ts);
+//   • what is left carries the design's placeholder figures — the rows no free
+//     provider covers (meeting odds, the ISM surveys, the MOVE index and a few
+//     more). Those arrive with `sample: true`, show a distinct freshness dot,
+//     and are counted in the notice under the header.
 
 const REFRESH_MS = 120_000;
 const TICK_MS = 1000;
@@ -382,9 +385,16 @@ export function MarketData() {
   // Which groups carry at least one real figure, and how many rows are still
   // placeholders. Drives the notice above.
   const sampleCount = visible.filter((m) => m.sample).length;
-  const liveGroupLabels = groups
-    .filter((g) => visible.some((m) => m.group === g.key && !m.sample))
-    .map((g) => g.label);
+  const liveGroups = groups.filter((g) => visible.some((m) => m.group === g.key && !m.sample));
+  const liveGroupLabels = liveGroups.map((g) => g.label);
+  // Whether the macro provider is demonstrably answering. The notice explains
+  // the leftovers as "rows no free provider covers", and that is only true when
+  // the providers are actually up — with FRED unreachable the same rows are
+  // placeholders for an entirely different reason, and saying otherwise would
+  // blame the data instead of the outage.
+  const macroLive = liveGroups.some((g) =>
+    (['policy', 'inflation', 'labor', 'yields', 'macro'] as MarketGroupKey[]).includes(g.key),
+  );
 
   return (
     <div ref={wellRef} style={wellStyle(isPhone)}>
@@ -448,9 +458,11 @@ export function MarketData() {
           hardcoded, so this stops overstating the moment a provider lands. */}
       {data.sampleValues && (
         <div style={sampleNotice}>
-          <b style={{ fontWeight: 700 }}>Partly live.</b>{' '}
+          <b style={{ fontWeight: 700 }}>{macroLive ? 'Mostly live.' : 'Partly live.'}</b>{' '}
           {liveGroupLabels.length > 0 && `${listWords(liveGroupLabels)} read live. `}
-          {`The other ${sampleCount} still show the design's placeholder figures until a macro-data provider is wired — they carry the grey Sample dot.`}{' '}
+          {`The other ${sampleCount} still show the design's placeholder figures — they carry the grey Sample dot.`}{' '}
+          {macroLive &&
+            'Those are the rows no free data provider covers: meeting odds, the dot plot, the ISM surveys, the MOVE index, blended EPS and the crypto flow rows. '}
           The economic calendar and the Fed countdown are real.
         </div>
       )}
