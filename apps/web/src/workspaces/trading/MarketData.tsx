@@ -160,10 +160,18 @@ function reviewInfo(m: BoardMetric, now: number, fomc: number, fomcPrev: number)
   // self-correcting, rather than a date that has demonstrably passed. The FOMC
   // sentinels never reach this: they resolve off the live meeting list.
   if (days < 0) return { body, text: `${lastLabel} → tbc`, soon: false };
+  // "Due soon" is only information when the release is an EVENT. A daily series
+  // is always due tomorrow and a weekly one always within the week, so once the
+  // dates became real (a FRED key) every yield, TIPS and VIX row lit up gold
+  // permanently and drowned out the payrolls and CPI prints the highlight exists
+  // to flag. Highlight only where the gap between releases is longer than a
+  // week — the monthly and quarterly prints.
+  const interval = nextStamp - lastStamp;
+  const isEvent = interval > 8 * 86400000;
   return {
     body,
     text: `${lastLabel} → ${etMonthDay(nextStamp)}`,
-    soon: days >= 0 && days <= 7,
+    soon: isEvent && days >= 0 && days <= 7,
   };
 }
 

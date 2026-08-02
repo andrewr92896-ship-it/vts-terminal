@@ -123,6 +123,12 @@ entity that carries metals; see the entity note below and the Stooq note under
   - A release happening **today counts as the last one, not the next** — the
     figure is out, and calling today the "next review" recreates the past-date
     problem the column just escaped.
+  - **The gold "due soon" highlight only fires on a monthly or quarterly
+    print.** A daily series is always due tomorrow and a weekly one always
+    within the week, so once the dates became real every yield, TIPS and VIX row
+    lit up permanently and drowned out the payrolls and CPI releases the
+    highlight exists to flag. `reviewInfo` requires the gap between releases to
+    exceed a week before it will highlight.
   - **The FOMC rows are never overwritten.** `next: 'fomc'` resolves off the live
     meeting list, which describes a rate decided at a meeting better than
     whichever statistical release happens to carry the series.
