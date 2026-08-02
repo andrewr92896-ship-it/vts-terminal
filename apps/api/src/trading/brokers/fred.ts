@@ -123,3 +123,68 @@ export async function fetchFredSeries(
   }
   return readViaCsv(seriesId, start);
 }
+
+// ---- release schedules ----
+//
+// When a figure was actually PUBLISHED, and when it is published next. This is
+// the one thing the observations cannot answer: a FRED observation is dated for
+// the period it *measures* — June CPI is dated 2026-06-01 and released in July —
+// so the board's "Last → next review" column has always carried hand-entered
+// catalog dates instead.
+//
+// **Keyed only.** There is no keyless equivalent of these two endpoints, so an
+// install with no `FRED_API_KEY` keeps the catalog's dates. That asymmetry is
+// the deliberate cost of having the column be real where it can be.
+//
+//   /fred/series/release?series_id=CPIAUCSL   -> which release publishes it
+//   /fred/release/dates?release_id=10         -> that release's dates
+//
+// `include_release_dates_with_no_data=true` is what makes FUTURE dates appear —
+// without it the response stops at the last release that actually carried data,
+// which is exactly the half we already had.
+
+const FRED_RELEASE_OF_SERIES = 'https://api.stlouisfed.org/fred/series/release';
+const FRED_RELEASE_DATES = 'https://api.stlouisfed.org/fred/release/dates';
+
+async function getJson<T>(url: string): Promise<T | null> {
+  const body = await getText(url);
+  if (!body) return null;
+  try {
+    return JSON.parse(body) as T;
+  } catch {
+    return null;
+  }
+}
+
+// Which release publishes a series. Stable forever in practice, so the caller
+// caches it for the life of the process.
+export async function fetchFredReleaseId(seriesId: string): Promise<number | null> {
+  if (!config.FRED_API_KEY) return null;
+  const json = await getJson<{ releases?: { id?: number }[] }>(
+    `${FRED_RELEASE_OF_SERIES}?series_id=${encodeURIComponent(seriesId)}` +
+      `&api_key=${encodeURIComponent(config.FRED_API_KEY)}&file_type=json`,
+  );
+  const id = json?.releases?.[0]?.id;
+  return typeof id === 'number' ? id : null;
+}
+
+// Every date a release publishes on, within a window, oldest first.
+export async function fetchFredReleaseDates(
+  releaseId: number,
+  from: string,
+  to: string,
+): Promise<string[]> {
+  if (!config.FRED_API_KEY) return [];
+  const json = await getJson<{ release_dates?: { date?: string }[] }>(
+    `${FRED_RELEASE_DATES}?release_id=${releaseId}` +
+      `&api_key=${encodeURIComponent(config.FRED_API_KEY)}&file_type=json` +
+      `&realtime_start=${from}&realtime_end=${to}` +
+      `&include_release_dates_with_no_data=true&sort_order=asc`,
+  );
+  const out: string[] = [];
+  for (const d of json?.release_dates ?? []) {
+    const date = (d.date ?? '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) out.push(date);
+  }
+  return out;
+}

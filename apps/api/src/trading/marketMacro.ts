@@ -1,5 +1,11 @@
 import { config } from '../config.js';
-import { fetchFredSeries, type FredObservation } from './brokers/fred.js';
+import {
+  fetchFredReleaseDates,
+  fetchFredReleaseId,
+  fetchFredSeries,
+  fredConfigured,
+  type FredObservation,
+} from './brokers/fred.js';
 import type { LiveQuote } from './marketQuotes.js';
 import { pctDecimals } from './marketFormat.js';
 
@@ -503,6 +509,7 @@ function quoteFor(
   def: MacroDef,
   observations: Map<string, FredObservation[]>,
   now: number,
+  schedule?: ReleaseWindow,
 ): LiveQuote | null {
   let obs = observations.get(def.fred);
   if (!obs || obs.length === 0) return null;
@@ -539,7 +546,113 @@ function quoteFor(
     asOf: asOfLabel(latest, def.cadence, now),
     ...(def.review ? { reviewBody: def.review } : {}),
     ...(def.reviewLast ? { reviewLast: def.reviewLast } : {}),
+    ...(schedule?.last ? { reviewLast: schedule.last } : {}),
+    ...(schedule?.next ? { reviewNext: schedule.next } : {}),
   };
+}
+
+// ---- release schedules (keyed FRED only) ----
+
+// When a series was last published and when it publishes next. Real publication
+// dates, which is what the board's "Last → next review" column has always meant
+// and never had: a FRED observation is dated for the period it *measures*, so
+// June CPI is dated 2026-06-01 and released in July.
+export interface ReleaseWindow {
+  last?: string;
+  next?: string;
+}
+
+// Release ids never change for a series, so this is cached for the life of the
+// process. A series whose release cannot be resolved is cached as null so it is
+// not retried on every refresh.
+const releaseIdBySeries = new Map<string, number | null>();
+
+// Dates per release, on their own slow clock — a publication calendar moves at
+// most daily, and one entry serves every series on that release (all the BLS CPI
+// series share one, so this collapses ~45 series into a handful of reads).
+const RELEASE_TTL_MS = 12 * 60 * 60_000;
+let releaseDates: { at: number; byRelease: Map<number, string[]> } | null = null;
+
+function isoDay(t: number): string {
+  return new Date(t).toISOString().slice(0, 10);
+}
+
+// Split a release's dates into the most recent one and the next one.
+//
+// Dates are ISO and already sorted, so string comparison is date comparison. A
+// release happening TODAY counts as the last one rather than the next: the
+// figure is out, and pointing at today as the "next review" would be the same
+// past-date problem the column already had.
+export function splitReleaseDates(dates: string[], today: string): ReleaseWindow {
+  let last: string | undefined;
+  let next: string | undefined;
+  for (const d of dates) {
+    if (d <= today) last = d;
+    else {
+      next = d;
+      break;
+    }
+  }
+  return { ...(last ? { last } : {}), ...(next ? { next } : {}) };
+}
+
+// Resolve each series' last and next publication date. Empty without a key —
+// there is no keyless equivalent of these endpoints, so a keyless install keeps
+// the catalog's hand-entered dates.
+async function loadReleaseWindows(now: number): Promise<Map<string, ReleaseWindow>> {
+  const out = new Map<string, ReleaseWindow>();
+  if (!fredConfigured()) return out;
+
+  const ids = [...new Set(MACRO.map((d) => d.fred))];
+  const unresolved = ids.filter((id) => !releaseIdBySeries.has(id));
+  let cursor = 0;
+  const worker = async (): Promise<void> => {
+    for (;;) {
+      const i = cursor;
+      cursor += 1;
+      if (i >= unresolved.length) return;
+      const seriesId = unresolved[i];
+      releaseIdBySeries.set(seriesId, await fetchFredReleaseId(seriesId));
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, unresolved.length) }, worker));
+
+  const releases = [...new Set([...releaseIdBySeries.values()].filter((v): v is number => v != null))];
+  if (releases.length === 0) return out;
+
+  if (!releaseDates || now - releaseDates.at >= RELEASE_TTL_MS) {
+    // A window either side of today: back far enough to find the last release of
+    // a quarterly series, forward far enough to carry a year of schedule.
+    const from = isoDay(now - 200 * DAY_MS);
+    const to = isoDay(now + 400 * DAY_MS);
+    const byRelease = new Map<number, string[]>();
+    let rc = 0;
+    const rworker = async (): Promise<void> => {
+      for (;;) {
+        const i = rc;
+        rc += 1;
+        if (i >= releases.length) return;
+        const id = releases[i];
+        const dates = await fetchFredReleaseDates(id, from, to);
+        if (dates.length > 0) byRelease.set(id, dates);
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(CONCURRENCY, releases.length) }, rworker));
+    // Never replace a working calendar with an empty one.
+    if (byRelease.size > 0 || !releaseDates) releaseDates = { byRelease, at: now };
+    else releaseDates = { byRelease: releaseDates.byRelease, at: now };
+  }
+
+  const today = isoDay(now);
+  for (const seriesId of ids) {
+    const rid = releaseIdBySeries.get(seriesId);
+    if (rid == null) continue;
+    const dates = releaseDates.byRelease.get(rid);
+    if (!dates || dates.length === 0) continue;
+    const w = splitReleaseDates(dates, today);
+    if (w.last || w.next) out.set(seriesId, w);
+  }
+  return out;
 }
 
 // ---- cache ----
@@ -554,10 +667,15 @@ let inFlight: Promise<Snapshot> | null = null;
 
 async function refresh(): Promise<Snapshot> {
   const now = Date.now();
-  const observations = await loadObservations(now);
+  // The schedule read is keyed-only and independent of the figures, so it runs
+  // alongside them and simply contributes nothing when there is no key.
+  const [observations, windows] = await Promise.all([
+    loadObservations(now),
+    loadReleaseWindows(now).catch(() => new Map<string, ReleaseWindow>()),
+  ]);
   const quotes = new Map<string, LiveQuote>();
   for (const def of MACRO) {
-    const q = quoteFor(def, observations, now);
+    const q = quoteFor(def, observations, now, windows.get(def.fred));
     if (q) quotes.set(def.id, q);
   }
   return { quotes, at: now };
@@ -627,4 +745,4 @@ export function resetMarketMacro(): void {
 }
 
 // Internals, exported for the offline math check in `verifyMarketMacro.ts`.
-export const __macroInternals = { MACRO, derive, changesFor, fmtValue, fmtDelta, asOfLabel, quoteFor };
+export const __macroInternals = { MACRO, derive, changesFor, fmtValue, fmtDelta, asOfLabel, quoteFor, splitReleaseDates };

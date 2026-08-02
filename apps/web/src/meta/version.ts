@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.19';
+export const APP_VERSION = 'Beta V 6.20';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.20',
+    date: 'August 2, 2026',
+    notes: [
+      'The “Last → next review” dates on the economic rows can now be real rather than typed in by hand. They show when a figure was actually published and when it is published next, straight from the St. Louis Fed’s release calendar, and they keep themselves up to date.',
+      'This needs a free FRED API key set on the server — it is the one part of the board that cannot work without one. Until the key is set, those dates stay as they are today.',
+      'The Fed funds and primary credit rows keep reading the Fed’s own meeting schedule, which is a better answer for them than a statistics release date.',
+    ],
+  },
   {
     version: 'Beta V 6.19',
     date: 'August 2, 2026',

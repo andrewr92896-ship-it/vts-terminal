@@ -314,6 +314,26 @@ export interface MarketDataPayload {
 // Overlay live quotes onto the catalog. A series the quote source priced loses
 // its `sample` flag and takes the real value, changes and as-of label; every
 // other row is returned untouched.
+// The review a live row should show. A provider may restate the publisher, the
+// cycle, and — with a keyed FRED schedule behind it — the real last and next
+// publication dates, which is the one thing the observations cannot answer.
+//
+// The FOMC sentinels are never overwritten: a rate decided at a meeting is
+// better described by the live meeting list than by whichever statistical
+// release happens to carry the series.
+function reviewFor(s: MarketSeries, q: LiveQuote): MarketReview {
+  if (s.review.next === 'fomc') {
+    return q.reviewBody ? { ...s.review, body: q.reviewBody } : s.review;
+  }
+  if (!q.reviewBody && !q.reviewLast && !q.reviewNext) return s.review;
+  return {
+    ...s.review,
+    ...(q.reviewBody ? { body: q.reviewBody } : {}),
+    ...(q.reviewLast ? { last: q.reviewLast } : {}),
+    ...(q.reviewNext ? { next: q.reviewNext } : {}),
+  };
+}
+
 export function applyLiveQuotes(
   series: MarketSeries[],
   quotes: Map<string, LiveQuote>,
@@ -328,14 +348,10 @@ export function applyLiveQuotes(
       changes: q.changes,
       asOf: q.asOf,
       // Only a source that computes the figure itself restates the publisher.
-      review:
-        q.reviewBody || q.reviewLast
-          ? {
-              ...s.review,
-              ...(q.reviewBody ? { body: q.reviewBody } : {}),
-              ...(q.reviewLast ? { last: q.reviewLast } : {}),
-            }
-          : s.review,
+      // A row on the FOMC's own schedule keeps it: `next: 'fomc'` resolves to
+      // the live meeting list client-side, which is a better answer than a
+      // publication calendar for something decided at a meeting.
+      review: reviewFor(s, q),
       sample: false,
     };
   });

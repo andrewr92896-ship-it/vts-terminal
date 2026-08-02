@@ -99,11 +99,16 @@ export interface LiveQuote {
   changes: [string, string, string, string, string];
   asOf: string;
   reviewBody?: string;
-  // Restates the review *cycle* ("continuous", "daily · 3:30 PM"). Needed
-  // wherever a source publishes on a different rhythm than the catalog assumed:
-  // an index read as a published daily close is not "continuous", and a row
-  // saying both at once contradicts itself on screen.
+  // Restates the review *cycle* ("continuous", "daily · 3:30 PM"), or — on a
+  // macro row with a keyed FRED schedule behind it — the ISO date the figure was
+  // last published. Needed wherever a source publishes on a different rhythm
+  // than the catalog assumed: an index read as a published daily close is not
+  // "continuous", and a row saying both at once contradicts itself on screen.
   reviewLast?: string;
+  // The ISO date the figure is next published. Only a keyed FRED schedule can
+  // answer this, so it is absent on a keyless install and the row keeps the
+  // catalog's hand-entered date.
+  reviewNext?: string;
 }
 
 interface Snapshot {
