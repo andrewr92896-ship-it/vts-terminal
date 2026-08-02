@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.10';
+export const APP_VERSION = 'Beta V 6.11';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.11',
+    date: 'August 2, 2026',
+    notes: [
+      'The S&P 500, Nasdaq 100, Dow, WTI, Brent and natural gas now read live. They had stayed on sample figures because your OANDA account cannot quote indices or commodities — it is a forex-only account — so they now come from the St. Louis Fed and the EIA instead, as published daily closes. If you ever connect an OANDA account that does carry them, the live real-time quote takes over automatically.',
+      'That takes the board to 51 of the 71 rows live, up from 45.',
+      'Fixed the Fed decision bar showing an out-of-date target range. It said the Fed was “held at 4.25–4.50%” while the row directly below it correctly read 3.50–3.75%. The bar now reads the same live figure as the row, so the two can never disagree again.',
+      'Gold, silver and copper are the last price rows still on sample figures — no free source publishes them daily, and your OANDA account does not carry metals. They keep the grey Sample dot.',
+    ],
+  },
   {
     version: 'Beta V 6.10',
     date: 'August 2, 2026',

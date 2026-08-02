@@ -93,6 +93,16 @@ interface MacroDef {
   // Render the value with an explicit leading '+' when positive. Used where the
   // sign is the point of the figure (a curve spread, a payrolls print).
   signed?: boolean;
+  // How the change columns read. Macro figures are rates and levels, where the
+  // move that matters is the difference (`delta`, the default) — a yield 4.05 →
+  // 4.02 is "−0.03", not "−0.74%". A **price** is the opposite: the S&P moving
+  // 6,724 → 6,742 is "+0.28%", and a row showing "+18" would not match the other
+  // price rows on the board or what anyone means by an index's move.
+  changeMode?: 'delta' | 'pct';
+  // Restates who the figure came from, where the catalog's publisher would now
+  // be wrong. An index read off FRED is a published daily close, not the
+  // exchange's continuous tape.
+  review?: string;
 }
 
 const MACRO: MacroDef[] = [
@@ -148,6 +158,22 @@ const MACRO: MacroDef[] = [
   // ---- Indices & volatility ----
   // The VIX close. The MOVE index and blended EPS are licensed and stay sample.
   { id: 'vix', fred: 'VIXCLS', transform: 'level', cadence: 'daily', decimals: 2 },
+  // The three US indices as published daily closes. OANDA quotes a CFD on each
+  // and is preferred where the account can see them (it is real-time, and it is
+  // what the desk actually trades) — but most OANDA entities do not offer index
+  // CFDs at all, so these are what make the rows live for everyone. Percent
+  // changes, like every other price row on the board.
+  { id: 'us500', fred: 'SP500', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'S&P Dow Jones · close' },
+  { id: 'us100', fred: 'NASDAQ100', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'Nasdaq OMX · close' },
+  { id: 'us30', fred: 'DJIA', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'S&P Dow Jones · close' },
+
+  // ---- Commodities ----
+  // Energy spot, published daily by the EIA. Same reasoning as the indices: the
+  // OANDA CFDs are preferred when the account carries them, and these keep the
+  // rows live when it does not.
+  { id: 'wti', fred: 'DCOILWTICO', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA · daily' },
+  { id: 'brent', fred: 'DCOILBRENTEU', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA · daily' },
+  { id: 'natgas', fred: 'DHHNGSP', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA · Henry Hub' },
 
   // ---- Macro & liquidity ----
   // H.4.1 total assets: millions on the wire, trillions on the board, and it
@@ -302,6 +328,18 @@ function fmtDelta(diff: number | null, def: MacroDef): string {
   return withSign(rounded, body, true);
 }
 
+// A percent change, in the board's own style — and deliberately identical to the
+// price side's (`marketQuotes.ts`): two decimals on the 1-day column, one on the
+// longer periods. A price row must read the same whether OANDA or FRED filled
+// it.
+function fmtPct(pct: number | null, decimals: number): string {
+  if (pct == null || !Number.isFinite(pct)) return '—';
+  const rounded = Number(pct.toFixed(decimals));
+  const body = `${Math.abs(rounded).toFixed(decimals)}%`;
+  if (rounded === 0) return body;
+  return withSign(rounded, body, true);
+}
+
 // How the board labels when a reading is *for*. Not when it was released —
 // FRED's observations carry no release date, so the row's "Last → next review"
 // column keeps the catalog's published schedule.
@@ -344,10 +382,14 @@ function changesFor(
 ): [string, string, string, string, string] {
   const latest = points[points.length - 1];
   const cadenceDays = CADENCE_DAYS[def.cadence];
+  const pct = def.changeMode === 'pct';
 
-  const diffAt = (at: number): number | null => {
+  // The move over a window, in whichever way this row measures one.
+  const moveAt = (at: number): number | null => {
     const ref = atOrBefore(points, at);
-    return ref ? latest.v - ref.v : null;
+    if (!ref) return null;
+    if (!pct) return latest.v - ref.v;
+    return ref.v > 0 ? (latest.v / ref.v - 1) * 100 : null;
   };
 
   // A period shorter than the publication cadence cannot contain a move, so it
@@ -355,19 +397,24 @@ function changesFor(
   // here and blank is not: the figure genuinely has not changed over that
   // window, which is a different statement from having no reading for it.
   const gated = (periodDays: number, at: number): number | null =>
-    periodDays < cadenceDays ? 0 : diffAt(at);
+    periodDays < cadenceDays ? 0 : moveAt(at);
 
   const yearStart = Date.UTC(utcYear(now), 0, 1);
 
-  return [
+  const moves = [
     gated(1, latest.timeMs - DAY_MS),
     gated(7, latest.timeMs - 7 * DAY_MS),
     gated(30, minusMonths(latest.timeMs, 1)),
     // Ungated: the previous year's final reading is a real base in every month,
     // including January.
-    diffAt(yearStart - 1),
+    moveAt(yearStart - 1),
     gated(365, minusYears(latest.timeMs, 1)),
-  ].map((d) => fmtDelta(d, def)) as [string, string, string, string, string];
+  ];
+
+  // Percent columns carry more precision on the 1-day reading than on the
+  // longer ones, matching the price side exactly.
+  if (pct) return moves.map((m, i) => fmtPct(m, i === 0 ? 2 : 1)) as [string, string, string, string, string];
+  return moves.map((m) => fmtDelta(m, def)) as [string, string, string, string, string];
 }
 
 // ---- fetching ----
@@ -431,6 +478,7 @@ function quoteFor(
     value,
     changes: changesFor(points, def, now),
     asOf: asOfLabel(latest, def.cadence, now),
+    ...(def.review ? { reviewBody: def.review } : {}),
   };
 }
 
