@@ -137,11 +137,18 @@ quoted from OANDA at request time and overlaid onto the catalog by
   leg invalidates the index rather than producing a wrong number, and the row's
   "Reviewed by" is restated to `Computed · ICE weights` so it never claims ICE
   published the figure on screen.
-- **Crypto availability varies by OANDA entity.** The account's `/instruments`
-  list is checked first, so a symbol the entity does not carry is skipped instead
-  of failing the whole pricing request. Where OANDA has no crypto, spot falls back
-  to the portal's existing keyless coin feed and the change columns stay sample —
-  that feed has no history behind it.
+- **Crypto availability varies by OANDA entity, and most entities carry none**,
+  so the fallback below is the normal path for BTC and ETH rather than an edge
+  case. The account's `/instruments` list is checked first, so a symbol the
+  entity does not carry is skipped instead of failing the whole pricing request.
+  Spot then comes from the portal's existing keyless coin feed (Coinbase, Kraken
+  behind it) and the **daily closes from Kraken's public OHLC**
+  (`interval=1440`, ~720 candles), so these rows get the same five real change
+  columns as everything else. Two traps in that response, both covered by
+  `parseKrakenOhlc`: `result` carries a **`last` cursor beside the candle
+  array**, so the array is found by shape rather than key order; and the final
+  candle is **still forming**, so it is dropped — counting it would make
+  "yesterday's close" mean "the price a moment ago".
 - **Caching is stale-while-revalidate**, 60s for spot and 30min for candles, with
   a snapshot that is never replaced by an empty result. A transient OANDA failure
   leaves the last good figures on screen rather than blanking the board.
@@ -193,6 +200,12 @@ catalog through the same `applyLiveQuotes` seam. Points worth knowing:
 - **Where the two providers overlap, OANDA wins** (`getMarketData` merges macro
   first, then prices). FRED's published close makes those rows live for every
   install; OANDA's real-time quote is better when the account can see it.
+- **A live row may restate its review cycle as well as its publisher.**
+  `LiveQuote.reviewLast` exists because the catalog gives every price group
+  `"continuous"` — true of an exchange tape, false of a published daily close.
+  Without it the S&P and VIX rows read "close" on one side and "continuous" on
+  the other. Restate the cycle whenever a source publishes on a different rhythm
+  than the catalog assumed.
 - Cached 30 min, stale-while-revalidate, never replaced by an empty result, and
   fetched with a concurrency cap of 6 so a refresh is a trickle rather than 40
   simultaneous requests at a public endpoint.

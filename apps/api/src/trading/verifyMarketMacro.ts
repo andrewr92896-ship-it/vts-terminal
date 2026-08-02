@@ -1,5 +1,6 @@
 import { __macroInternals } from './marketMacro.js';
 import { parseFredCsv, type FredObservation } from './brokers/fred.js';
+import { parseKrakenOhlc } from './brokers/crypto.js';
 
 // Offline check of the Market Data macro math (`marketMacro.ts`).
 //
@@ -213,6 +214,31 @@ console.log('Market Data · macro transform check\n');
   const rows = parseFredCsv(csv);
   check('csv · header, "." and blank lines dropped', String(rows.length), '2');
   check('csv · last reading parsed', `${rows[1].date}=${rows[1].value}`, '2026-07-31=4.02');
+}
+
+// ---- Kraken's daily candles, for the crypto rows OANDA cannot quote ----
+{
+  const now = Date.parse('2026-08-02T12:00:00Z');
+  const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 1000;
+  const json = {
+    error: [],
+    result: {
+      XXBTZUSD: [
+        [day('2026-07-30'), '61000', '62000', '60500', '61800', '0', '0', 1],
+        [day('2026-07-31'), '61800', '63000', '61500', '62762', '0', '0', 1],
+        // Today's candle is still forming and must not count as a close.
+        [day('2026-08-02'), '62762', '63500', '62700', '63100', '0', '0', 1],
+      ],
+      // Kraken returns this cursor beside the candles; reading it as the candle
+      // array is the trap this parser exists to avoid.
+      last: 1_785_000_000,
+    },
+  };
+  const closes = parseKrakenOhlc(json, now);
+  check('kraken ohlc · forming candle dropped', String(closes.length), '2');
+  check('kraken ohlc · last completed close', String(closes[1].close), '62762');
+  check('kraken ohlc · `last` cursor not read as candles', String(parseKrakenOhlc({ error: [], result: { last: 1 } }, now).length), '0');
+  check('kraken ohlc · an error array yields nothing', String(parseKrakenOhlc({ error: ['EGeneral:Invalid arguments'], result: {} }, now).length), '0');
 }
 
 console.log('');

@@ -93,6 +93,88 @@ async function cryptoSpot(base: string): Promise<number | null> {
   return krakenSpot(base);
 }
 
+const KRAKEN_OHLC = 'https://api.kraken.com/0/public/OHLC';
+const DAY_MS = 86400_000;
+
+// One completed daily candle, reduced to when it started and where it closed —
+// the same shape `OandaDailyClose` uses, so the Market Data board's change math
+// works on either source unchanged.
+export interface CryptoDailyClose {
+  timeMs: number;
+  close: number;
+}
+
+// Daily closes for one coin from Kraken's public OHLC endpoint (keyless, and the
+// same host the spot fallback above already uses):
+//   GET /0/public/OHLC?pair=XBTUSD&interval=1440
+//     -> { error: [], result: { XXBTZUSD: [[time, o, h, l, c, ...], …], last } }
+// It returns up to 720 daily candles (~2 years), which covers every look-back
+// the board asks for including year-to-date.
+// Pure normalizer, exported so it can be checked against recorded JSON without
+// any network access.
+export function parseKrakenOhlc(
+  json: { error?: string[]; result?: Record<string, unknown> } | null,
+  now: number,
+): CryptoDailyClose[] {
+  if (!json || (json.error && json.error.length > 0) || !json.result) return [];
+
+  // `result` holds the candle array under Kraken's normalized pair key
+  // ("XXBTZUSD") *and* a `last` cursor alongside it — so pick the entry that is
+  // actually an array rather than trusting key order. Reading `last` as candles
+  // would yield nothing at best and garbage at worst.
+  const rows = Object.values(json.result).find((v): v is unknown[] => Array.isArray(v));
+  if (!rows) return [];
+
+  const out: CryptoDailyClose[] = [];
+  for (const row of rows) {
+    if (!Array.isArray(row)) continue;
+    const timeMs = Number(row[0]) * 1000;
+    const close = Number(row[4]);
+    if (!Number.isFinite(timeMs) || !Number.isFinite(close)) continue;
+    // Drop the candle still forming — an incomplete day is not a close, and
+    // using it would make "yesterday's close" mean "the price a moment ago".
+    if (timeMs + DAY_MS > now) continue;
+    out.push({ timeMs, close });
+  }
+  out.sort((a, b) => a.timeMs - b.timeMs);
+  return out;
+}
+
+async function krakenDailyCloses(base: string): Promise<CryptoDailyClose[]> {
+  const kb = KRAKEN_BASE_ALIASES[base] ?? base;
+  const json = await getJson<{ error?: string[]; result?: Record<string, unknown> }>(
+    `${KRAKEN_OHLC}?pair=${encodeURIComponent(`${kb}USD`)}&interval=1440`,
+  );
+  return parseKrakenOhlc(json, Date.now());
+}
+
+// Daily closes for the given crypto instruments (display form), keyed by that
+// same display form. Best-effort: a coin Kraken cannot chart is simply absent,
+// and the caller leaves that row's change columns blank rather than guessing.
+export async function fetchCryptoDailyCloses(
+  instruments: string[],
+): Promise<Map<string, CryptoDailyClose[]>> {
+  const out = new Map<string, CryptoDailyClose[]>();
+  if (instruments.length === 0) return out;
+
+  const baseToKeys = new Map<string, string[]>();
+  for (const inst of instruments) {
+    const b = baseOf(inst);
+    if (!b) continue;
+    const list = baseToKeys.get(b) ?? [];
+    list.push(inst);
+    baseToKeys.set(b, list);
+  }
+
+  await Promise.all(
+    [...baseToKeys.entries()].map(async ([base, keys]) => {
+      const closes = await krakenDailyCloses(base);
+      if (closes.length > 0) for (const k of keys) out.set(k, closes);
+    }),
+  );
+  return out;
+}
+
 // Live spot for the given crypto instruments (display form, e.g. "BTC/USDT"),
 // keyed by that same display form. Deduped by base — one Coinbase call backs
 // every display key sharing a coin (BTC/USD and BTC/USDT both read BTC-USD).

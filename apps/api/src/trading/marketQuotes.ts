@@ -4,7 +4,11 @@ import {
   fetchOandaTradeableInstruments,
   type OandaDailyClose,
 } from './brokers/oanda.js';
-import { fetchCryptoPrices } from './brokers/crypto.js';
+import {
+  fetchCryptoDailyCloses,
+  fetchCryptoPrices,
+  type CryptoDailyClose,
+} from './brokers/crypto.js';
 import { resolveOandaPricingConfig } from './priceSource.js';
 
 // Live values for the Market Data board's price series, from OANDA.
@@ -94,6 +98,11 @@ export interface LiveQuote {
   changes: [string, string, string, string, string];
   asOf: string;
   reviewBody?: string;
+  // Restates the review *cycle* ("continuous", "daily · 3:30 PM"). Needed
+  // wherever a source publishes on a different rhythm than the catalog assumed:
+  // an index read as a published daily close is not "continuous", and a row
+  // saying both at once contradicts itself on screen.
+  reviewLast?: string;
 }
 
 interface Snapshot {
@@ -286,19 +295,28 @@ async function refresh(): Promise<Snapshot> {
   for (const [display, px] of spotByDisplay) spot.set(display.replace('/', '_'), px);
 
   // Crypto that this entity does not carry still has a live spot available from
-  // the portal's keyless coin feed. Its change columns stay sample — that feed
-  // has no history behind it — so only the value is replaced.
+  // the portal's keyless coin feed — and most OANDA entities carry no crypto at
+  // all, so this is the path BTC and ETH normally take rather than an edge case.
+  //
+  // The daily closes come from Kraken's public OHLC alongside it, so these rows
+  // get the same five real change columns as everything else. They read as five
+  // em dashes without it, which on a pinned row looks like a broken feed rather
+  // than a missing history.
   const missingCrypto = QUOTES.filter((q) => q.group === 'crypto' && spot.get(q.symbol) == null);
   if (missingCrypto.length > 0) {
-    const fallback = await fetchCryptoPrices(
-      missingCrypto.map((q) => q.symbol.replace('_', '/')),
-    ).catch(() => new Map<string, number>());
+    const wantedCrypto = missingCrypto.map((q) => q.symbol.replace('_', '/'));
+    const [fallback, cryptoCloses] = await Promise.all([
+      fetchCryptoPrices(wantedCrypto).catch(() => new Map<string, number>()),
+      fetchCryptoDailyCloses(wantedCrypto).catch(() => new Map<string, CryptoDailyClose[]>()),
+    ]);
     for (const q of missingCrypto) {
-      const px = fallback.get(q.symbol.replace('_', '/'));
+      const display = q.symbol.replace('_', '/');
+      const px = fallback.get(display);
       if (px != null) {
+        const closes = cryptoCloses.get(display) ?? [];
         quotes.set(q.id, {
           value: fmtValue(px, q.decimals),
-          changes: ['—', '—', '—', '—', '—'],
+          changes: closes.length > 0 ? changesFor(px, closes, now) : ['—', '—', '—', '—', '—'],
           asOf: 'live · coin feed',
         });
       }

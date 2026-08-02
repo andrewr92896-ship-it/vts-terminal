@@ -317,7 +317,14 @@ export function applyLiveQuotes(
       changes: q.changes,
       asOf: q.asOf,
       // Only a source that computes the figure itself restates the publisher.
-      review: q.reviewBody ? { ...s.review, body: q.reviewBody } : s.review,
+      review:
+        q.reviewBody || q.reviewLast
+          ? {
+              ...s.review,
+              ...(q.reviewBody ? { body: q.reviewBody } : {}),
+              ...(q.reviewLast ? { last: q.reviewLast } : {}),
+            }
+          : s.review,
       sample: false,
     };
   });

@@ -103,6 +103,10 @@ interface MacroDef {
   // be wrong. An index read off FRED is a published daily close, not the
   // exchange's continuous tape.
   review?: string;
+  // Restates the review *cycle* alongside it. The catalog gives every price
+  // group "continuous", which is true of a live tape and false of a daily
+  // close — leaving it made the row say "close" and "continuous" at once.
+  reviewLast?: string;
 }
 
 const MACRO: MacroDef[] = [
@@ -157,23 +161,23 @@ const MACRO: MacroDef[] = [
 
   // ---- Indices & volatility ----
   // The VIX close. The MOVE index and blended EPS are licensed and stay sample.
-  { id: 'vix', fred: 'VIXCLS', transform: 'level', cadence: 'daily', decimals: 2 },
+  { id: 'vix', fred: 'VIXCLS', transform: 'level', cadence: 'daily', decimals: 2, reviewLast: 'daily · close' },
   // The three US indices as published daily closes. OANDA quotes a CFD on each
   // and is preferred where the account can see them (it is real-time, and it is
   // what the desk actually trades) — but most OANDA entities do not offer index
   // CFDs at all, so these are what make the rows live for everyone. Percent
   // changes, like every other price row on the board.
-  { id: 'us500', fred: 'SP500', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'S&P Dow Jones · close' },
-  { id: 'us100', fred: 'NASDAQ100', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'Nasdaq OMX · close' },
-  { id: 'us30', fred: 'DJIA', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'S&P Dow Jones · close' },
+  { id: 'us500', fred: 'SP500', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'S&P Dow Jones', reviewLast: 'daily · close' },
+  { id: 'us100', fred: 'NASDAQ100', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'Nasdaq OMX', reviewLast: 'daily · close' },
+  { id: 'us30', fred: 'DJIA', transform: 'level', cadence: 'daily', decimals: 0, changeMode: 'pct', review: 'S&P Dow Jones', reviewLast: 'daily · close' },
 
   // ---- Commodities ----
   // Energy spot, published daily by the EIA. Same reasoning as the indices: the
   // OANDA CFDs are preferred when the account carries them, and these keep the
   // rows live when it does not.
-  { id: 'wti', fred: 'DCOILWTICO', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA · daily' },
-  { id: 'brent', fred: 'DCOILBRENTEU', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA · daily' },
-  { id: 'natgas', fred: 'DHHNGSP', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA · Henry Hub' },
+  { id: 'wti', fred: 'DCOILWTICO', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA', reviewLast: 'daily · close' },
+  { id: 'brent', fred: 'DCOILBRENTEU', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA', reviewLast: 'daily · close' },
+  { id: 'natgas', fred: 'DHHNGSP', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', review: 'EIA · Henry Hub', reviewLast: 'daily · close' },
 
   // ---- Macro & liquidity ----
   // H.4.1 total assets: millions on the wire, trillions on the board, and it
@@ -479,6 +483,7 @@ function quoteFor(
     changes: changesFor(points, def, now),
     asOf: asOfLabel(latest, def.cadence, now),
     ...(def.review ? { reviewBody: def.review } : {}),
+    ...(def.reviewLast ? { reviewLast: def.reviewLast } : {}),
   };
 }
 
