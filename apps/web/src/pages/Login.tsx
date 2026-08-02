@@ -114,7 +114,6 @@ export function Login() {
           autoFocus
           style={inputStyle}
         />
-        <p style={helpStyle}>Your email is what you sign in with.</p>
 
         <label style={{ ...labelStyle, marginTop: 16 }}>Password</label>
         <input
@@ -228,7 +227,7 @@ export function Login() {
             letterSpacing: '0.3px',
           }}
         >
-          © 2026 Vitalis Trading Systems LLC. All rights reserved. Confidential.
+          © 2026 Vitalis Trading Systems LLC. All rights reserved.
         </p>
         <p
           style={{
@@ -259,13 +258,6 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'uppercase',
   color: '#8ea3cc',
   marginBottom: 7,
-};
-
-const helpStyle: React.CSSProperties = {
-  margin: '7px 0 0',
-  fontSize: 10.5,
-  color: '#6f84b2',
-  letterSpacing: '0.2px',
 };
 
 const inputStyle: React.CSSProperties = {

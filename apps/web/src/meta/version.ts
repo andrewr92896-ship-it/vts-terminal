@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.29';
+export const APP_VERSION = 'Beta V 6.30';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.30',
+    date: 'August 2, 2026',
+    notes: [
+      'The login screen is tidier: the note under the email box is gone, and the footer no longer calls the terminal confidential.',
+    ],
+  },
   {
     version: 'Beta V 6.29',
     date: 'August 2, 2026',
