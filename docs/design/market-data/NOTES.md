@@ -86,17 +86,26 @@ carries metals; see the entity note below.
   Forex Factory rows out of `trading_calendar`, the same feed Market News reads),
   session Open/Closed computed against the ET clock, the FOMC countdown and
   meeting dates, and the trader's saved board layout.
-- **Sample:** 20 rows. Seventeen are the ones **no free provider covers** rather
+- **Sample:** 18 rows. Seventeen are the ones **no free provider covers** rather
   than ones nobody has got to yet —
   `cut9`, `hold7` (CME FedWatch), `dots` (the SEP), `boe`, `boj`, `be1` (FRED has
   no 1-year breakeven), `nowcast`, `gdpq2` (a forecast), `ismm`, `isms` (ISM is
   licensed and was pulled from FRED), `btcetf`, `funding`, `dom`, `move` (ICE
-  BofA), `eps` (FactSet), `recprob`, `citi`. The other three are **`gold`,
-  `silver` and `copper`**: OANDA would quote all three, but only from an entity
-  that carries metals, and no free feed publishes them daily (FRED's LBMA series
-  were withdrawn, and IMF copper is monthly and priced per tonne rather than per
-  pound). They go live by themselves the moment a metals-carrying OANDA
+  BofA), `eps` (FactSet), `recprob`, `citi`. The eighteenth is **`copper`**:
+  OANDA would quote it, but only from an entity that carries metals, and no free
+  feed publishes it daily (IMF copper is monthly and priced per tonne rather than
+  per pound). It goes live by itself the moment a metals-carrying OANDA
   connection exists. Also still sample: the Fed bar's two odds bars.
+- **`gold` and `silver` are live from Stooq** (`brokers/stooq.ts`) — keyless CSV,
+  used only when OANDA cannot quote them, so a metals-carrying connection still
+  wins. Being an **unofficial endpoint, the guards are the safety story**, and
+  they matter more here than anywhere else on the board: a row that goes live
+  loses the Sample dot that would otherwise warn the reader. A quote is used only
+  if it parses to a positive finite price **and** is dated within five days —
+  long enough for a holiday weekend, short enough that a feed which quietly froze
+  is refused rather than rendered as current. Stooq answers an unknown symbol
+  with `N/D` rather than an error, which fails the same parse. The row restates
+  its source as `Stooq · daily close` rather than claiming an LBMA fixing.
 - **Catalog data even on a live row:** the **`review` column** ("Last → next
   review"). Neither provider reports a release schedule — FRED's observations
   carry the date a reading is *for*, not the date it was published — so that

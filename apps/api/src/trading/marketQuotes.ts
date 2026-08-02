@@ -11,6 +11,7 @@ import {
 } from './brokers/crypto.js';
 import { resolveOandaPricingConfig } from './priceSource.js';
 import { pctDecimals } from './marketFormat.js';
+import { fetchStooqDailyCloses, fetchStooqQuote } from './brokers/stooq.js';
 
 // Live values for the Market Data board's price series, from OANDA.
 //
@@ -53,6 +54,11 @@ interface QuoteDef {
   decimals: number;
   group: 'fx' | 'crypto' | 'commod' | 'equity';
   review?: string;
+  // Keyless Stooq symbol, for a row OANDA may not be able to quote at all. Only
+  // the metals carry one: every other row already has a second source (FRED for
+  // the indices and energy, the coin feed for crypto), and gold and silver had
+  // none.
+  stooq?: string;
 }
 
 const QUOTES: QuoteDef[] = [
@@ -63,8 +69,8 @@ const QUOTES: QuoteDef[] = [
   { id: 'audusd', symbol: 'AUD_USD', decimals: 4, group: 'fx' },
   { id: 'btc', symbol: 'BTC_USD', decimals: 0, group: 'crypto' },
   { id: 'eth', symbol: 'ETH_USD', decimals: 0, group: 'crypto' },
-  { id: 'gold', symbol: 'XAU_USD', decimals: 2, group: 'commod', review: 'OANDA · spot' },
-  { id: 'silver', symbol: 'XAG_USD', decimals: 2, group: 'commod', review: 'OANDA · spot' },
+  { id: 'gold', symbol: 'XAU_USD', decimals: 2, group: 'commod', review: 'OANDA · spot', stooq: 'xauusd' },
+  { id: 'silver', symbol: 'XAG_USD', decimals: 2, group: 'commod', review: 'OANDA · spot', stooq: 'xagusd' },
   { id: 'wti', symbol: 'WTICO_USD', decimals: 2, group: 'commod', review: 'OANDA · CFD' },
   { id: 'brent', symbol: 'BCO_USD', decimals: 2, group: 'commod', review: 'OANDA · CFD' },
   { id: 'copper', symbol: 'XCU_USD', decimals: 2, group: 'commod', review: 'OANDA · CFD' },
@@ -334,6 +340,32 @@ async function refresh(): Promise<Snapshot> {
       asOf: 'live',
       ...(q.review ? { reviewBody: q.review } : {}),
     });
+  }
+
+  // Metals, when this OANDA entity does not carry them — which is most of them.
+  // Stooq is keyless and serves both the last close and the daily history, so
+  // these rows get real change columns rather than a bare price. The row says
+  // where the figure came from: it is a published daily close, not OANDA's
+  // real-time spot, and must not claim to be an LBMA fixing either.
+  const missingMetals = QUOTES.filter((q) => q.stooq && spot.get(q.symbol) == null);
+  if (missingMetals.length > 0) {
+    await Promise.all(
+      missingMetals.map(async (q) => {
+        const sym = q.stooq as string;
+        const [px, closes] = await Promise.all([
+          fetchStooqQuote(sym).catch(() => null),
+          fetchStooqDailyCloses(sym).catch(() => []),
+        ]);
+        if (px == null) return;
+        quotes.set(q.id, {
+          value: fmtValue(px, q.decimals),
+          changes: closes.length > 0 ? changesFor(px, closes, now) : ['—', '—', '—', '—', '—'],
+          asOf: 'daily close',
+          reviewBody: 'Stooq',
+          reviewLast: 'daily · close',
+        });
+      }),
+    );
   }
 
   const dxy = dxyFrom(spot);

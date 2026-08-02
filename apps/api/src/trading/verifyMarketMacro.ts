@@ -1,6 +1,7 @@
 import { __macroInternals } from './marketMacro.js';
 import { parseFredCsv, type FredObservation } from './brokers/fred.js';
 import { parseKrakenOhlc } from './brokers/crypto.js';
+import { parseStooqDaily, parseStooqQuote } from './brokers/stooq.js';
 
 // Offline check of the Market Data macro math (`marketMacro.ts`).
 //
@@ -286,6 +287,37 @@ console.log('Market Data · macro transform check\n');
   check('kraken ohlc · last completed close', String(closes[1].close), '62762');
   check('kraken ohlc · `last` cursor not read as candles', String(parseKrakenOhlc({ error: [], result: { last: 1 } }, now).length), '0');
   check('kraken ohlc · an error array yields nothing', String(parseKrakenOhlc({ error: ['EGeneral:Invalid arguments'], result: {} }, now).length), '0');
+}
+
+// ---- Stooq, the keyless metals source ----
+// A wrong number here loses the Sample dot that would have warned the reader,
+// so the guards matter more than the happy path.
+{
+  const now = Date.parse('2026-08-02T12:00:00Z');
+  const head = 'Symbol,Date,Time,Open,High,Low,Close,Volume\n';
+  check(
+    'stooq · last close parsed',
+    String(parseStooqQuote(head + 'XAUUSD,2026-07-31,21:00:00,3470.0,3492.1,3465.0,3486.40,0\n', now)),
+    '3486.4',
+  );
+  // A feed that quietly froze is the failure this exists to catch: without the
+  // age check a months-old price renders as live, with nothing marking it.
+  check(
+    'stooq · a stale quote is refused',
+    String(parseStooqQuote(head + 'XAUUSD,2026-05-02,21:00:00,3470.0,3492.1,3465.0,3486.40,0\n', now)),
+    'null',
+  );
+  // Stooq answers an unknown symbol with N/D rather than an error.
+  check(
+    'stooq · an unknown symbol is refused',
+    String(parseStooqQuote(head + 'ZZZZZZ,N/D,N/D,N/D,N/D,N/D,N/D,N/D\n', now)),
+    'null',
+  );
+  const daily = parseStooqDaily(
+    'Date,Open,High,Low,Close,Volume\n2026-07-30,3460,3470,3455,3465.10,0\n2026-07-31,3465,3492,3460,3486.40,0\n',
+  );
+  check('stooq · daily closes parsed', String(daily.length), '2');
+  check('stooq · last daily close', String(daily[1].close), '3486.4');
 }
 
 console.log('');

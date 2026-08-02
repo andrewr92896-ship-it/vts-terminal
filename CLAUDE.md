@@ -366,7 +366,7 @@ workspaces list** (see `theme/nav.ts` order).
     no advice-flavoured copy** anywhere on it, plus an "informational only"
     footer line.
     - The **catalog lives in code** (`trading/marketData.ts`), identical for
-      everyone, and is **mostly live** — **51 of the 71** non-session series, from
+      everyone, and is **mostly live** — **53 of the 71** non-session series, from
       **two providers** that both overlay the catalog through the one
       `applyLiveQuotes` seam. Adding a third is more entries handed to that seam,
       not a branch in the catalog. They **do** overlap (the indices and the energy
@@ -418,14 +418,18 @@ workspaces list** (see `theme/nav.ts` order).
         **`npm run verify:market-macro`** checks all of it offline against
         hand-computed fixtures; run it after touching a transform, a scale or the
         cadence gate.
-    - **20 rows are still design fixtures.** Seventeen are the ones **no free
+    - **18 rows are still design fixtures.** Seventeen are the ones **no free
       provider covers** — CME FedWatch meeting odds, the SEP dot plot, BoE/BoJ
       rates, the 1-year breakeven, the Cleveland nowcast, the GDP forecast, the
       ISM surveys (licensed, pulled from FRED), the MOVE index, blended EPS, the
-      Citi surprise index and the three crypto flow/funding rows. The other three
-      are **gold, silver and copper**, which need an OANDA entity that carries
-      metals (no free feed publishes them daily) and go live on their own once one
-      is connected. Each series carries
+      Citi surprise index and the three crypto flow/funding rows. The other is
+      **copper**, which needs an OANDA entity that carries metals (no free feed
+      publishes it daily) and goes live on its own once one is connected. **Gold
+      and silver come from Stooq** (`brokers/stooq.ts`, keyless CSV) when OANDA
+      cannot quote them; it is an unofficial endpoint, so a quote is refused
+      unless it is a positive finite price dated within five days — a row that
+      goes live loses the Sample dot that would have warned the reader, so a
+      frozen feed must never pass as current. Each series carries
       `sample: true|false`, the payload's `sampleValues` means "any of it is
       sample", and the screen names which groups read live plus a **Sample** dot in
       the freshness legend on each placeholder row. Keep that marking accurate when
