@@ -327,10 +327,15 @@ export async function getMarketData(): Promise<MarketDataPayload> {
   // Both providers are best-effort and independent: with no OANDA credentials
   // anywhere on the install the price half returns an empty map, and if FRED
   // cannot be reached the macro half does — either way the rows that source
-  // could not fill simply keep the catalog's sample figures. They never key the
-  // same series, so the merge order does not matter.
+  // could not fill simply keep the catalog's sample figures.
+  //
+  // **Order matters: OANDA wins.** The two overlap on the indices and the energy
+  // rows, deliberately — FRED's published daily close makes them live for every
+  // install, while OANDA quotes them in real time but only for the entities that
+  // carry index and commodity CFDs (a great many, including OANDA's US entity,
+  // do not). Where both can answer, the real-time quote is the better one.
   const [prices, macro] = await Promise.all([getMarketQuotes(), getMarketMacro()]);
-  const series = applyLiveQuotes(MARKET_SERIES, new Map([...prices, ...macro]));
+  const series = applyLiveQuotes(MARKET_SERIES, new Map([...macro, ...prices]));
   return {
     groups: MARKET_DATA_GROUPS,
     series,

@@ -385,6 +385,10 @@ export function MarketData() {
   // Which groups carry at least one real figure, and how many rows are still
   // placeholders. Drives the notice above.
   const sampleCount = visible.filter((m) => m.sample).length;
+  // The Fed bar's target range comes from the `ffr` series, so the bar and the
+  // row beneath it can never disagree. Read off the whole catalog rather than
+  // `visible` — removing the row from your board must not blank the bar.
+  const fedTarget = data.series.find((m) => m.id === 'ffr')?.value || '4.25–4.50';
   const liveGroups = groups.filter((g) => visible.some((m) => m.group === g.key && !m.sample));
   const liveGroupLabels = liveGroups.map((g) => g.label);
   // Whether the macro provider is demonstrably answering. The notice explains
@@ -468,7 +472,9 @@ export function MarketData() {
       )}
 
       {/* ---- Fed decision bar ---- */}
-      {fomc > 0 && <FedBar now={now} fomc={fomc} meetings={meetings} year={meetingYear} />}
+      {fomc > 0 && (
+        <FedBar now={now} fomc={fomc} meetings={meetings} year={meetingYear} targetRange={fedTarget} />
+      )}
 
       {/* ---- pinned strip ---- */}
       <div style={stripHead}>
@@ -626,11 +632,17 @@ function FedBar({
   fomc,
   meetings,
   year,
+  targetRange,
 }: {
   now: number;
   fomc: number;
   meetings: string[];
   year: number;
+  // The current target range, read from the `ffr` series rather than written
+  // here. It used to be the literal "4.25–4.50" in two places, which silently
+  // became a lie the moment that row went live off FRED — the bar claimed the
+  // Fed was holding at a range the row beneath it disagreed with.
+  targetRange: string;
 }) {
   const presser = fomc + 1800_000;
   // Between the statement and the press conference the countdown re-targets.
@@ -661,12 +673,12 @@ function FedBar({
 
       <Stat label="Last reviewed">
         <span style={fedFigure}>{etMonthDay(prev)}</span>
-        <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>held at 4.25–4.50%</div>
+        <div style={{ fontSize: 10, color: C.faint, marginTop: 2 }}>{`held at ${targetRange}%`}</div>
       </Stat>
 
       <Stat label="Target range">
         <span style={fedFigure}>
-          4.25–4.50
+          {targetRange}
           <span style={{ fontSize: 11, color: C.faint, marginLeft: 3 }}>%</span>
         </span>
       </Stat>

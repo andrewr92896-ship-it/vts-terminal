@@ -62,22 +62,41 @@ Implemented in `Beta V 5.77`:
 
 ## What is real and what is not
 
-As of `Beta V 6.10`, **54 of the 71 non-session series read live** (it was 8).
+As of `Beta V 6.11`, **51 of the 71 non-session series read live** on the owner's
+install (it was 8). The ceiling is 54 — three of those need an OANDA entity that
+carries metals; see the entity note below.
 
-- **Real:** **FX & dollar**, **Crypto**, **Commodities** and **Indices** from
-  OANDA (`marketQuotes.ts`); **Policy & rates**, **Inflation**, **Labor &
-  growth**, **Yields & curve**, the VIX and **Macro & liquidity** from FRED
-  (`marketMacro.ts`). Plus the economic calendar (the live Forex Factory rows out
-  of `trading_calendar`, the same feed Market News reads), session Open/Closed
-  computed against the ET clock, the FOMC countdown and meeting dates, and the
-  trader's saved board layout.
-- **Sample:** 17 rows, and they are the ones **no free provider covers** rather
+> **The OANDA entity decides how much of the price half works, and most entities
+> are narrower than the design assumed.** This file used to say "commodities are
+> the cheapest next group — `XAU_USD`, `XAG_USD`, `WTICO_USD`, `BCO_USD` and
+> copper are all OANDA instruments". They are instruments OANDA *lists*, but not
+> ones every account may quote: the owner's is forex-only, so on first deploy all
+> six commodities and all three index CFDs came back sample while FX and DXY were
+> live. `fetchOandaTradeableInstruments` is what makes that degrade quietly
+> (a symbol the account cannot see is skipped rather than 400-ing the whole
+> pricing request), which is why the failure looked like "nine rows are still
+> sample" and not like an outage. **Do not assume an OANDA symbol is reachable
+> because it exists** — the indices and the energy rows are now sourced from FRED
+> as well, so they are live regardless, with OANDA preferred where available.
+
+- **Real:** **FX & dollar** and **Crypto** from OANDA (`marketQuotes.ts`);
+  **Policy & rates**, **Inflation**, **Labor & growth**, **Yields & curve**,
+  **Indices & volatility**, the energy rows of **Commodities** and **Macro &
+  liquidity** from FRED (`marketMacro.ts`). Plus the economic calendar (the live
+  Forex Factory rows out of `trading_calendar`, the same feed Market News reads),
+  session Open/Closed computed against the ET clock, the FOMC countdown and
+  meeting dates, and the trader's saved board layout.
+- **Sample:** 20 rows. Seventeen are the ones **no free provider covers** rather
   than ones nobody has got to yet —
   `cut9`, `hold7` (CME FedWatch), `dots` (the SEP), `boe`, `boj`, `be1` (FRED has
   no 1-year breakeven), `nowcast`, `gdpq2` (a forecast), `ismm`, `isms` (ISM is
   licensed and was pulled from FRED), `btcetf`, `funding`, `dom`, `move` (ICE
-  BofA), `eps` (FactSet), `recprob`, `citi`. Also still sample: the Fed bar's two
-  odds bars and its "held at 4.25–4.50%" sub-line.
+  BofA), `eps` (FactSet), `recprob`, `citi`. The other three are **`gold`,
+  `silver` and `copper`**: OANDA would quote all three, but only from an entity
+  that carries metals, and no free feed publishes them daily (FRED's LBMA series
+  were withdrawn, and IMF copper is monthly and priced per tonne rather than per
+  pound). They go live by themselves the moment a metals-carrying OANDA
+  connection exists. Also still sample: the Fed bar's two odds bars.
 - **Catalog data even on a live row:** the **`review` column** ("Last → next
   review"). Neither provider reports a release schedule — FRED's observations
   carry the date a reading is *for*, not the date it was published — so that
@@ -166,6 +185,14 @@ catalog through the same `applyLiveQuotes` seam. Points worth knowing:
   into basis points and jobless claims from persons into thousands.
 - **`asOf` names the period, never "live".** `Jun`, `wk to Jul 25`, `Q2`,
   `Jul 31` — so a monthly figure is never read as today's.
+- **A price row read off FRED still reads as a price.** The indices and the
+  energy rows can be filled by either provider, so they set
+  `changeMode: 'pct'` — percent columns with the extra 1-day decimal, exactly as
+  `marketQuotes.ts` renders them. A `+18` in the S&P's 1-day column would match
+  nothing else on the board. Everything else here stays on differences.
+- **Where the two providers overlap, OANDA wins** (`getMarketData` merges macro
+  first, then prices). FRED's published close makes those rows live for every
+  install; OANDA's real-time quote is better when the account can see it.
 - Cached 30 min, stale-while-revalidate, never replaced by an empty result, and
   fetched with a concurrency cap of 6 so a refresh is a trickle rather than 40
   simultaneous requests at a public endpoint.

@@ -366,10 +366,13 @@ workspaces list** (see `theme/nav.ts` order).
     no advice-flavoured copy** anywhere on it, plus an "informational only"
     footer line.
     - The **catalog lives in code** (`trading/marketData.ts`), identical for
-      everyone, and is **mostly live** — **54 of the 71** non-session series, from
+      everyone, and is **mostly live** — **51 of the 71** non-session series, from
       **two providers** that both overlay the catalog through the one
-      `applyLiveQuotes` seam and never key the same series. Adding a third is more
-      entries handed to that seam, not a branch in the catalog.
+      `applyLiveQuotes` seam. Adding a third is more entries handed to that seam,
+      not a branch in the catalog. They **do** overlap (the indices and the energy
+      rows are sourced from both), and `getMarketData` merges macro first so
+      **OANDA wins where it can answer** — its quote is real-time, FRED's is a
+      published close.
       - **Prices — `trading/marketQuotes.ts`, from OANDA.** The FX majors, the
         dollar index, the crypto majors, the commodities and the three US index
         CFDs: spot from `/pricing`, and the 1D/1W/1M/YTD/1Y changes computed from
@@ -381,11 +384,17 @@ workspaces list** (see `theme/nav.ts` order).
         the **exchange contract** for the metals, energy, copper or indices — they
         are OTC spot and CFDs — so those rows restate the publisher too
         (`OANDA · spot` / `OANDA · CFD`) rather than claiming NYMEX or Cboe.
-        Instrument availability differs per OANDA entity, so the account's
-        `/instruments` list is checked first (a symbol it lacks keeps its sample
-        figure) and crypto spot falls back to the keyless coin feed (changes then
-        stay sample). Cached stale-while-revalidate (60s spot / 30min candles);
-        a failed refresh keeps the last good figures.
+        **Instrument availability differs per OANDA entity, and most entities are
+        narrower than you would guess** — the owner's is **forex-only**, so
+        metals, energy and the index CFDs all come back unavailable on it. The
+        account's `/instruments` list is checked first, so a symbol it lacks keeps
+        its sample figure instead of 400-ing the whole pricing request; crypto
+        spot falls back to the keyless coin feed (changes then stay sample).
+        **Never assume an OANDA symbol is reachable because the instrument
+        exists** — that assumption shipped once and left nine rows sample. The
+        indices and energy rows are sourced from FRED as well for exactly this
+        reason. Cached stale-while-revalidate (60s spot / 30min candles); a
+        failed refresh keeps the last good figures.
       - **Macro — `trading/marketMacro.ts` over `brokers/fred.ts`, from FRED.**
         Policy rates, inflation, the labor prints, the Treasury curve, the VIX and
         the balance sheet. **It needs no API key**: FRED's chart-download CSV
@@ -407,16 +416,24 @@ workspaces list** (see `theme/nav.ts` order).
         **`npm run verify:market-macro`** checks all of it offline against
         hand-computed fixtures; run it after touching a transform, a scale or the
         cadence gate.
-    - **17 rows are still design fixtures, and they are the ones no free provider
-      covers** — CME FedWatch meeting odds, the SEP dot plot, BoE/BoJ rates, the
-      1-year breakeven, the Cleveland nowcast, the GDP forecast, the ISM surveys
-      (licensed, pulled from FRED), the MOVE index, blended EPS, the Citi surprise
-      index and the three crypto flow/funding rows. Each series carries
+    - **20 rows are still design fixtures.** Seventeen are the ones **no free
+      provider covers** — CME FedWatch meeting odds, the SEP dot plot, BoE/BoJ
+      rates, the 1-year breakeven, the Cleveland nowcast, the GDP forecast, the
+      ISM surveys (licensed, pulled from FRED), the MOVE index, blended EPS, the
+      Citi surprise index and the three crypto flow/funding rows. The other three
+      are **gold, silver and copper**, which need an OANDA entity that carries
+      metals (no free feed publishes them daily) and go live on their own once one
+      is connected. Each series carries
       `sample: true|false`, the payload's `sampleValues` means "any of it is
       sample", and the screen names which groups read live plus a **Sample** dot in
       the freshness legend on each placeholder row. Keep that marking accurate when
       you wire a provider. The calendar, the session Open/Closed readings and the
       Fed countdown *are* real.
+    - **The Fed decision bar reads its target range from the `ffr` series**, never
+      from a literal. It carried a hardcoded "4.25–4.50" in two places, which
+      became a visible lie the moment that row went live off FRED — the bar
+      claimed a hold at a range the row directly beneath it contradicted. Anything
+      the bar states about current policy must come from the payload.
     - **The `review` column ("Last → next review") stays catalog data even on a
       live row.** Neither provider reports a release schedule — a FRED observation
       is dated for the period it *measures*, not the day it was published — so

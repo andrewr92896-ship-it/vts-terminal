@@ -163,6 +163,25 @@ console.log('Market Data · macro transform check\n');
   check('cpiytd · vs the previous year-end reading', r.value, '1.4');
 }
 
+// ---- a price row read off FRED still reads as a price ----
+// The indices and the energy rows can come from either provider, so their
+// change columns must be percent (and carry the extra 1-day decimal) no matter
+// which one filled them — a "+18" on the S&P would match nothing else on the
+// board.
+{
+  const spx = obs([
+    ['2026-07-24', 6_600],
+    ['2026-07-29', 6_650],
+    ['2026-07-30', 6_724.16],
+    ['2026-07-31', 6_743.0],
+  ]);
+  const now = Date.parse('2026-08-02T12:00:00Z');
+  const r = render('us500', spx, now);
+  check('us500 · index level with separators', r.value, '6,743');
+  check('us500 · 1D is a percent, 2dp', r.changes[0], '+0.28%');
+  check('us500 · 1W is a percent, 1dp', r.changes[1], '+2.2%');
+}
+
 // ---- the Fed target range reads off two series ----
 {
   const now = Date.parse('2026-08-02T12:00:00Z');
