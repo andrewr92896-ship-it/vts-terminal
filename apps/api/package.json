@@ -15,6 +15,7 @@
     "db:verify-positions": "tsx src/trading/verifyPositions.ts",
     "verify:market-macro": "tsx src/trading/verifyMarketMacro.ts",
     "verify:investments": "tsx src/investments/verifyInvestments.ts",
+    "verify:migrations": "tsx src/db/verifyMigrations.ts",
     "setup": "npm run db:migrate && npm run db:seed"
   },
   "dependencies": {

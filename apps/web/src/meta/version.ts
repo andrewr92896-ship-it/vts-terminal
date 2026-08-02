@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.23';
+export const APP_VERSION = 'Beta V 6.24';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.24',
+    date: 'August 2, 2026',
+    notes: [
+      'Fixed: anyone invited before Feature Access arrived on July 31 lost the Advanced Trading workspace instead of keeping it. The update that was meant to carry every existing account across silently did nothing, so those accounts were treated as brand new and had the trading desk switched off. They have it back now, along with the Funded Account tracker if they had it before.',
+      'If you had deliberately turned Advanced Trading off, it stays off — this only restores accounts that never chose anything.',
+      'Fixed: a Market News channel could be listed twice on the same desk, because the rule preventing it was never applied to the database. Duplicates have been merged, keeping the original, and the rule is in place now.',
+      'The starter channels on the Market News wall now carry their real YouTube IDs on every desk. Ones set up a while ago could be left with tiles that never played.',
+    ],
+  },
   {
     version: 'Beta V 6.23',
     date: 'August 2, 2026',
