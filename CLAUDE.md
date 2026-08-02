@@ -157,7 +157,11 @@ Tech:
 - **AI:** Claude via `@anthropic-ai/sdk`, server-side only (`apps/api/src/ai`).
 - **Secrets at rest:** broker credentials are AES-256-GCM encrypted
   (`security/secretbox.ts`).
-- **Notifications:** web push (VAPID, `web-push`) and **Pushover**.
+- **Notifications:** web push (VAPID, `web-push`) and **Pushover**. Both are on
+  `requireMarkets` (**signed in**), deliberately **not** the Advanced Trading
+  opt-in: price alerts are a Markets feature included with every account, and
+  gating the delivery channel behind the desk left a Markets-only user able to set
+  an alert and never be told it fired.
 
 ### Where things live
 
@@ -200,7 +204,8 @@ workspaces list** (see `theme/nav.ts` order).
   which is exactly why it sits outside the Advanced Trading opt-in and is the
   terminal's floor for a user who has turned nothing on. It is also the landing
   workspace on sign-in for everybody.
-- **Advanced Trading** (gold, internal key `trading`) — **opt-in**: Trading Alerts (`alerts`),
+- **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
+  its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
   **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
   (`desk` — merges Trade Log + History + Live Brokers; legacy keys
   `log`/`history`/`metrics` alias into it. **The key stayed `desk` when the label
@@ -790,37 +795,35 @@ workspaces list** (see `theme/nav.ts` order).
   - `npm run verify:investments` checks the portfolio math offline against
     hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
     touching `math.ts` or `limits.ts`.
-- **My Terminal** also holds **Feature Access** (`my_access`) — the per-user opt-in
-  screen, see its own section below — plus two personal roll-up sections
-  (emerald):
-  - **Investment Holdings** (`my_holdings`,
-    `workspaces/myportal/InvestmentHoldings.tsx` over
-    `myportal/holdings.ts` → `GET /api/my-portal/holdings`) — the long-term
-    Investments portfolio beside what is live on the trading desk. **Built.**
+- **My Terminal** also holds **Premium Features** (`my_access`) — memberships and
+  the per-user opt-ins, see its own section below — plus one personal roll-up
+  section (emerald):
+  - **Removed: Investment Holdings** (`my_holdings`). Owner decision, 2026-08 —
+    the Investments workspace already tracks the portfolio, so a second screen
+    saying the same thing was duplication rather than a roll-up. The screen, its
+    nav entry, `GET /api/my-portal/holdings` and the client method are all gone.
+    **`myportal/holdings.ts` is NOT dead** and must not be deleted: `getNetWorth`
+    reads the portfolio and trading equity through `getMyHoldings`, deliberately
+    via that one function so two screens can never disagree about what a
+    portfolio is worth. The rules it enforces still matter and still apply:
     - **What may be added together is the whole design.** A trading position's
       **notional is not money anyone owns** — 100,000 units of EUR/USD is a
       leveraged exposure, not $100k of savings — so adding it to a portfolio
       value would overstate by an order of magnitude while looking entirely
       plausible. The combined figure is portfolio value **+ trading account
       equity (NAV) + coins held outright on a spot account**, and nothing else.
-      Open positions are listed as exposure with their P/L and are **never**
-      summed into the total (their `value` is deliberately `null`). Do not
-      "fix" that by populating it.
+      Open positions are exposure and are **never** summed into the total (their
+      `value` is deliberately `null`). Do not "fix" that by populating it.
     - **Everything is the caller's own**, not the team's: every trading read
-      passes `teamId: null` so `scopedTraderIds` resolves to just this user. The
-      Live Wall is a team board by design; this screen is one person's money.
+      passes `teamId: null` so `scopedTraderIds` resolves to just this user.
     - **Nothing is silently dropped.** A hand-kept Manual Trades book (no balance
       to read) and a **funded challenge account** (whose balance is the *firm's*
-      capital — counting it would be the most flattering error this screen could
-      make) are excluded and *named on screen*. Those are checked against the
-      tables, never against the opt-in flag: claiming a challenge is excluded
-      when the user has none is a false statement about their money.
+      capital — counting it would be the most flattering error possible) are
+      excluded and named. Checked against the tables, never the opt-in flag.
     - A trading account reporting a **non-USD** currency makes `combinedValue`
       null with a note, rather than adding currencies. `getLiveWall`'s **sample**
-      fallback is ignored — a made-up position has no place on a screen about
+      fallback is ignored — a made-up position has no place in a figure about
       what someone actually owns.
-    - With Advanced Trading off the screen still works, showing the investments
-      half and offering Feature Access; no broker call is made at all.
   - **Net Worth** (`my_networth`, `workspaces/myportal/NetWorth.tsx` over
     `myportal/netWorth.ts` → `/api/my-portal/net-worth`) — everything you own
     minus everything you owe, tracked over time. **Built.** Lives in My Terminal
@@ -829,9 +832,8 @@ workspaces list** (see `theme/nav.ts` order).
     `net_worth_items`, `net_worth_snapshots`, both in the `admin/service.ts`
     per-user delete list.
     - **Most of the number is not stored.** The portfolio and the trading
-      account are read live through `getMyHoldings` — the *same* function the
-      Investment Holdings screen uses — rather than recomputed or copied into a
-      row. Two definitions of "what my portfolio is worth" would drift and show
+      account are read live through `getMyHoldings` — the one function that
+      knows how to total them — rather than recomputed or copied into a row. Two definitions of "what my portfolio is worth" would drift and show
       two different totals on two screens with no way to say which was right.
     - **There is deliberately no category for "brokerage" or "investments"**
       among the hand-entered assets. Offering one invites somebody to type the
@@ -877,8 +879,35 @@ workspaces list** (see `theme/nav.ts` order).
   `gameStats.ts`). Studies is lazy-loaded.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion. Available to **every** signed-in user.
-- **Admin** (rose): Users, Teams, Badges, Message Templates, Patch Notes, Early
-  Access, Bug Reports, Support. **Admins only.** **Message Templates** (`ad_templates`,
+- **Admin** (rose): Users, **Administrator Log**, **Admin Guidelines**, Teams,
+  Badges, Message Templates, Patch Notes, Early Access, Bug Reports, Support.
+  **Admins only.**
+  - **Administrator Log** (`ad_log`, `AdminLog.tsx` over `admin/adminLog.ts`) —
+    what administrators have done, and what is waiting on one. **Red = open**
+    (still needs somebody), **green = resolved**, **gray = a record that asks
+    nothing of anyone**. Grouped into collapsible lists with the open one expanded,
+    since the only question the screen exists to answer at a glance is "is anything
+    waiting on me".
+    - **Two storage models, deliberately.** Administrative **actions** (a manual
+      membership grant and its stated reason) are **stored** in `admin_log` — they
+      have no other home and the point is that they cannot be un-recorded.
+      **Tickets are projected, not copied**: bug reports, support requests and
+      early-access leads are read from their own tables at request time. Closing a
+      bug report in Bug Reports turns its entry green here **by itself**. Copying
+      them in would mean two rows both claiming to know whether a ticket is open,
+      and no way to say which is right the day they disagree. Only a stored entry
+      has a Close button; a projected one names the section that closes it.
+    - **Suggestions are deliberately absent** — they go to the software developers
+      (Developer Terminal ▸ Suggestions), not to admins. Owner decision, 2026-08.
+    - `early_access_requests.status` (`new` | `handled`, migration `0090`) exists
+      for this: before it, the only way to clear a lead was to delete the person's
+      contact details.
+  - **Admin Guidelines** (`ad_guidelines`, `AdminGuidelines.tsx`) — the rules
+    admins work to and how to handle common situations. **Hardcoded text**, and
+    that is the point on this screen in particular: the rules an administrator is
+    held to should not be editable from inside the running app by the people they
+    govern. Anything stated there as a hard rule (the six-month cap, the required
+    note) **is** enforced in `memberships/service.ts` — keep the two in step. **Message Templates** (`ad_templates`,
   `AdminMessageTemplates`) is a shared copy library of reusable text-message
   (SMS) and email templates (`message_templates` table,
   `messageTemplates/service.ts`, routes in `routes/messageTemplates.ts`).
@@ -889,24 +918,162 @@ workspaces list** (see `theme/nav.ts` order).
   the clipboard. Templates are site-wide, not per-user — `created_by` is set
   null on author deletion, so they are **not** in the `admin/service.ts`
   per-user delete list.
-- **Developer Terminal** (`founder` key/role, amber): AI Instructions, Site Wording,
+- **Developer Terminal** (`founder` key/role, amber): **Developer Blog**,
+  AI Instructions, Site Wording,
   Sidebar Layout (`ad_sidebar` — reorder the whole sidebar, see below),
   **Suggestions** (`ad_suggestions` — moved out of the Admin Terminal; the
   `/api/admin/suggestions` read/patch/delete routes are `requireFounder` to
   match, while *sending* a suggestion from Site Help stays open to everyone),
   View as role. **Founder-level only** (`isFounder`). Displayed as "Developer Terminal";
   the internal key and role are still `founder` (unchanged gating).
+  - **Developer Blog** (`ad_blog`, `workspaces/admin/DevBlog.tsx` over
+    `devBlog/service.ts`, routes `/api/dev-blog/*`) — the idea board. Posts with
+    replies, founder-level throughout including reads. Tables `dev_blog_posts` /
+    `dev_blog_replies` (migration `0090`).
+    - **"VTS Development" is an `authorKind`, not a user row.** There is no account
+      to sign in as, so nothing can authenticate as it and there is no password to
+      leak — it is a label plus the `/brand/vts-development.svg` avatar, and the
+      authority to write a post still comes from a real founder-level session or
+      from a checked-in seed entry. A post attributed to it still records who
+      actually wrote it, so the attribution is a display choice rather than
+      anonymity.
+    - **How Claude Code posts here.** It edits the repository; it has no session
+      and no runtime route into production. So a post it writes is an entry in
+      **`devBlog/seeded.ts`**, and the deploy that carries the entry publishes it
+      (`seedDevBlog` on boot). Keyed on `seedKey`, so a restart **updates** that
+      post rather than stacking duplicates, and editing the title or body updates
+      the live post next deploy. Deleting a seeded post from the screen means the
+      next boot brings it back — remove its entry to be rid of it.
+    - **Posts must be brief.** A few sentences. See the brevity rule under
+      Reporting back to the owner — it applies to everything Claude Code writes,
+      and this board most of all.
 
 Removed and gone (do not reintroduce or reference): the standalone To-Do
 workspace, Vitalis Wealth Management, Personal Finance, the Vitalis LLC business
 workspace, and Kia Sales.
 
-## Feature Access — the per-user opt-in (`features/service.ts`)
+## Memberships — the paywall (`memberships/`)
 
-**My Terminal ▸ Feature Access** (`my_access`, `workspaces/myportal/FeatureAccess.tsx`)
-is where a user turns the optional parts of the terminal on and off for
-themselves. Self-service and immediate — there is no approval queue and no route
-that changes anyone else's account.
+The terminal is invite-only today and is **being opened to the public as a paid
+product** (see Product direction). This is the layer that makes that possible, and
+it landed before billing did — deliberately, so every feature is already asking
+the right question by the time money is involved.
+
+**Three tiers: `free` → `premium` → `max`.** `memberships/tiers.ts` is pure data
+(no DB, no roles) and holds all of it; `memberships/service.ts` is the DB half.
+They are split because `service.ts` asks `rbac.ts` who is an admin and `rbac.ts`
+needs the membership *type* for the public user — importing each other would be a
+cycle.
+
+- **`FEATURE_TIER` is the entire paywall, in one object.** Eight paid features
+  (owner decision, 2026-08): `ai`, `brokerConnections`, `funded`, `studyCreation`,
+  `customBoards`, `teams`, `premiumBadges`, `strategySessions`. Everything absent
+  from that map is included with every account. **Moving a feature between tiers
+  is a one-word edit there** and every guard, lock icon and upgrade prompt
+  follows — that is the whole reason features ask `hasEntitlement(user, 'ai')` and
+  never "is this user premium". The owner is still deciding what belongs where, so
+  keep it editable like this.
+- **AI is paid except customer support.** Support intake (`routes/support.ts`,
+  `routes/feedback.ts`) stays free on purpose: a user who cannot reach help is a
+  user who cannot tell you their payment failed. Never put the complaints channel
+  behind the thing being complained about.
+- **Roles win over rows.** `getMembership` checks `isAdmin(roles)` **first** —
+  admins, software developers and founders are **always Max** and never have a
+  stored grant. So a missing row does **not** mean Free, and anything listing
+  memberships has to resolve the same way (`membershipForRow` in
+  `admin/service.ts`). The demo is forced to Max so the tour is complete.
+- **`requirePremium(feature)` answers 402, not 403**, and the distinction is
+  load-bearing: the client shows an upgrade prompt on a 402 and an error on a 403.
+  A paid feature answering 403 would tell a would-be customer they are forbidden
+  instead of offering them the thing they would buy. Guards **compose** —
+  the Funded tracker is `requireWorkspaceWrite('trading')` + `requireFunded` +
+  `requirePremium('funded')`, three different questions.
+- **Three axes, and confusing them is the classic mistake here:** a **role** says
+  what you are trusted with, a **Premium Features opt-in** says what you have asked
+  to see, a **membership** says what you have paid for. A Max member can have
+  Advanced Trading switched off; a Free member can have it on and still find the
+  paid parts locked. Both are correct.
+- **Granting** (`assertCanGrantMembership`): founder-level may grant any tier for
+  any length **including indefinitely**; a plain **admin is capped at six months**;
+  nobody else may grant at all. **A note saying why is required** — enforced by the
+  Zod schema, the service, and the Admin Guidelines screen. `grantMembership` in
+  `admin/service.ts` writes the grant **and** its Administrator Log entry in one
+  function, so the rule cannot quietly become optional by somebody forgetting the
+  second call. Granting to an admin/developer is refused outright rather than
+  stored and never read.
+- **Storage:** `user_memberships`, one row per user (migration `0090`), in the
+  `admin/service.ts` per-user delete list. `expiresAt` null = indefinite; a lapsed
+  row is **kept**, not deleted (it is the record of what was granted and by whom),
+  so every read checks the date rather than trusting the row exists.
+- **Grandfathering:** migration `0090` gives every active account **Max,
+  indefinitely**, sourced `grandfather`. Nothing locks up for anyone who was on the
+  terminal before it became a paid product. To see what a paying user sees, drop
+  your own account's tier from **Admin ▸ Users**.
+- **Badges by tier, not by hand.** `premium` (gold star) and `max` (diamond) are
+  excluded from `assignableBadgeKeys()` and appended on read in `toPublicUser`, so
+  they appear and disappear with the membership and no admin can hand one out as
+  decoration. Free has **no** badge — a badge meaning "has not paid" is a mark, not
+  recognition.
+- **The web mirror** is `auth/access.ts` (`hasEntitlement`, `TIER_LABELS`,
+  `FEATURE_LABELS`, `TIER_COLORS`) reading the maps the **server** computed, rather
+  than comparing tiers itself — so moving a feature between tiers never leaves the
+  client stale. `components/UpgradeNotice.tsx` is the one upgrade prompt.
+- **The sidebar is colour-coded by tier** (owner decision, 2026-08): a section
+  needing **Premium is yellow** (`#EBCB74`), one needing **Max is diamond blue**
+  (`#B9F2FF`), and one needing nothing keeps the workspace's own accent. Free is
+  deliberately `null` rather than a colour, so the palette marks what **costs**
+  something instead of repainting the whole sidebar.
+  - The colour **replaces** the workspace accent on that row — icon, label and the
+    active highlight — so a paid section reads the same whether or not it happens
+    to be selected.
+  - `SECTION_FEATURE` / `WORKSPACE_FEATURE` (`auth/access.ts`) map a nav key to the
+    paid feature gating it; `tierColorFor` resolves the colour through
+    `membership.featureTiers`, which the **server** sends. That is why
+    `MembershipView` carries `featureTiers` as well as `entitlements`: the two
+    answer different questions — what this account can REACH, versus what a
+    feature COSTS. The sidebar needs the second, so a Max member still sees which
+    sections are paid rather than a uniformly default nav.
+  - **Only wholly-gated sections are listed.** Three paid features have no section
+    (`ai` is the top-bar button, `brokerConnections` lives in Settings,
+    `premiumBadges` is a per-member setting), and `customBoards` is left out on
+    purpose: the Live Wall itself is free — a free account gets the preset boards,
+    a working screen — and only *saving your own* arrangement is paid, so
+    colouring the whole section would overstate the paywall.
+  - `WORKSPACE_FEATURE` is **empty**, and that is correct rather than unfinished:
+    no workspace is entirely paid, and marking one that is not would be a false
+    claim about every free section inside it (Advanced Trading holds the Trade
+    Desk, Trade Analysis, alerts and the manual book). It is the seam for when one
+    is — add a key and the row colours itself.
+  - The **badge colours are the same two values** (`badges/service.ts`): the
+    Premium star is `#EBCB74`, the Max diamond `#B9F2FF`. Change one and change
+    the other, or a Premium section stops matching the Premium star. Both are
+    kept icier/warmer than the Markets accent (`#5AC8FA`) so a tier marker is
+    never read as a workspace one.
+  - **Consequence worth knowing:** with every feature currently at `premium`,
+    nothing renders blue. The first entry moved to `'max'` in `FEATURE_TIER` is
+    what makes blue appear — no other change is needed.
+- **The Ask VTS AI button stays in the top bar for everyone** (owner instruction).
+  Hiding it would leave a free account unable to discover the feature exists, so
+  the panel opens as normal and the composer is replaced by the upgrade notice.
+- **Not built yet:** billing. There is no Stripe and no StoreKit — a tier is
+  granted by an administrator. `user_memberships.source` already carries
+  `'billing'` for when there is. See Product direction for why iOS must use
+  StoreKit and the web a separate path.
+
+## Premium Features — the per-user opt-in (`features/service.ts`)
+
+**My Terminal ▸ Premium Features** (`my_access`,
+`workspaces/myportal/PremiumFeatures.tsx`) is where a user sees what their
+membership includes and turns the optional parts of the terminal on and off for
+themselves. The opt-ins are self-service and immediate — there is no approval
+queue and no route that changes anyone else's account.
+
+> **The label changed, the key did not.** It was "Feature Access" until 2026-08;
+> the section key is still `my_access`, so saved `nav.order` overrides and in-app
+> links keep working — the same reason `desk` stayed `desk`. The screen now covers
+> **two different things** and keeps them visibly apart: the **membership** (what
+> you are allowed to use — see Memberships above) and the **opt-ins** (what you
+> have asked to see). Holding Max does not switch an opt-in on for you.
 
 Only two things are optional, and both are the trading desk:
 
@@ -920,7 +1087,7 @@ Only two things are optional, and both are the trading desk:
 Everything else — **Markets, Investments, Studies, My Terminal, Site Help** — is
 included with every account and deliberately has nothing to opt into: none of it
 holds money or places an order, and a terminal without it is worth nothing to an
-average user. The Feature Access screen lists them as "Included with your
+average user. The Premium Features screen lists them as "Included with every
 account" rather than hiding them, so the screen reads as the whole picture.
 
 - **Storage:** `user_features`, one row per user (migration `0083`), in the
@@ -949,7 +1116,7 @@ account" rather than hiding them, so the screen reads as the whole picture.
   the user after a toggle so the sidebar and routing update without a reload.
 - **The sidebar draws an un-opted workspace dimmed with a padlock** rather than
   hiding it (`OPT_IN_WORKSPACES` in `theme/nav.ts`, `lockedWorkspaces` in
-  `Sidebar.tsx`); clicking it opens Feature Access instead of the workspace.
+  `Sidebar.tsx`); clicking it opens Premium Features instead of the workspace.
   Keep that — discoverability is the point, and it is where a paid tier would
   surface later.
 
@@ -1002,7 +1169,7 @@ likely to be misremembered:
 
 - **Retired: `trading`, `trading_viewer`, `studies`, `funded`.** All four are
   gone from `ROLE_KEYS` and the admin pickers. What gates Advanced Trading and
-  Funded Account is the per-user **Feature Access opt-in** (see above), and
+  Funded Account is the per-user **Premium Features opt-in** (see above), and
   Markets / Investments / Studies / My Terminal / Site Help are included with
   every account.
 - `canAccessWorkspace()` therefore returns **true** for everyone, and
@@ -1030,14 +1197,25 @@ legacy `users.role` string column is still populated but **unused** — real rol
 live in `users.roles`.
 
 The web mirror is `apps/web/src/auth/access.ts` (`ALL_ROLES`, `ROLE_LABELS`,
-`ROLE_DESCRIPTIONS`, `isFounder`, `isAdmin`) and is already in step with the
-above; the **server is the enforcer**.
+`ROLE_DESCRIPTIONS`, `isFounder`, `isAdmin`, plus the membership helpers) and is
+already in step with the above; the **server is the enforcer**.
+
+**`canAccessWorkspace(roles, ws, features)`'s third argument is required, and must
+stay required.** It was optional, and a caller that omitted it silently got
+`false` for Advanced Trading — no error, no warning, just a workspace that read as
+switched off. Four call sites forgot it, which is how phone notifications,
+Pushover, the per-trader notification prefs, the Home-Screen widget, broker
+connections **and** the trade alert sound all went invisible for every account at
+once, and stayed that way until the owner noticed Pushover was missing. Making it
+required is what turns the next one into a compile error. Same for
+`workspacesForRoles` and `canAccessFunded`.
 
 ## Teams (`teams/service.ts`) — scope almost everything
 
 A **trading team** is a group a user belongs to at most one of (`users.team_id`).
 Teams scope **all trade data** (Live Wall, Trade Log, History, broker capital),
-Studies **leaderboards**, **team chat**, and notification recipients — a trader
+Studies **leaderboards**, **team chat** (but *not* the Administrator chat — see
+below), and notification recipients — a trader
 only ever sees their own team's data (or just their own if team-less). Default
 team `team-vitalis` / "Vitalis Trading Team" (seeded on boot; team-less users are
 adopted into it). Study games, flashcard sets, and guides are all team-scoped —
@@ -1242,6 +1420,26 @@ control — the server is still the enforcer.
   ET schedule. Opt-in per user (`session_alert_prefs`, `trading/sessionAlertPrefs.ts`);
   in-memory per-ET-day dedup so each event fires once. Runs only if push OR
   Pushover is configured; demo excluded; each notice goes only to its own owner.
+### The corner chat has three tabs
+
+`TeamChat.tsx` (the lower-right bubble) carries **Team chat**, **Support**, and —
+for founders, software developers and admins — **Administrator chat**.
+
+- The admin room is **one install-wide conversation**, deliberately **not**
+  team-scoped: administration is not a desk activity, and an admin on one team
+  needs to reach an admin on another. Its rows carry `channel: 'admin'` and
+  `teamId: null`, so it needed **no migration** — `chat_messages.team_id` was
+  already nullable for the legacy channels.
+- Routes `GET|POST /api/chat/admin`, `DELETE /api/chat/admin/:id`, all on
+  `requireAdmin` (founder-level passes, being a superset).
+- **Delete rights differ from the team chat on purpose.** There, an admin may
+  remove anyone's message. Here, only a **founder-level** user can — this room is
+  where decisions about people's accounts get discussed, so the record should not
+  be editable by everyone standing in it.
+- `ChatFeed` in `TeamChat.tsx` is the shared feed+composer the admin tab renders;
+  the team chat still has its own inline copy, which is where that markup came
+  from.
+
 - **Notifications** fire (web push + Pushover together, team-scoped, demo
   excluded, best-effort) on: a new TradingView alert, and per-trade events during
   reconcile — **opened**, **closed**, and a stop/target change split into
@@ -1635,6 +1833,39 @@ is unreadable, and it forces a judgment call the owner has no way to make. So:
   and move on. Ask only when the answer is genuinely the owner's (what to build,
   whether to deploy).
 - Same voice as the rest of the terminal: plain and terminal-style, no filler.
+
+**This applies to everything Claude Code writes, not just the closing report.**
+A Developer Blog post, a patch note, a commit body, a reply in the terminal — all
+of it is **brief: a few sentences where a few sentences will do.** Say what
+changed and what it means. Do not explain the implementation, restate the request
+back, list the files touched, or write a summary of a summary. Length is not
+evidence of care here; it is the thing that makes the writing unreadable.
+
+## Never write tips, tricks, or how-to-use-this copy in the UI
+
+Owner instruction, 2026-08. The terminal had accumulated explanatory captions all
+over it — "Use the arrows to move a workspace up or down", "Tip: while previewing
+the sidebar updates to match that role", "Click a slide to select it, then add a
+screenshot". They restate what the control in front of the user plainly does, and
+together they are clutter. **Stop adding them.**
+
+The test is not "is this sentence true" or "could this help someone" — almost any
+such sentence passes both. It is: **does this carry something the control cannot
+say itself?**
+
+- **Keep** what genuinely cannot be discovered from the screen: where to find a
+  Pushover user key, the column names a CSV import expects, which brokers the
+  desk can reach, that a key is encrypted server-side, that a figure is a sample.
+- **Do not write** instructions for a visible control, a walkthrough of a flow
+  the user is already in, a restatement of a button's label, or a "you can also…"
+  aside.
+- An **empty state** naming the action available ("No sessions yet. Add one.") is
+  not a tip — it is the screen's only content, and it stays.
+- A **disclaimer** required for legal reasons ("informational only, not
+  investment advice") is not a tip either. Those stay wherever they already are.
+
+The How-to guides in Site Help are where a walkthrough belongs, if one is wanted
+at all. Nowhere else.
 
 ## Conventions
 

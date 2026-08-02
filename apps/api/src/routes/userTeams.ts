@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth } from '../auth/middleware.js';
+import { requireAuth, requirePremium } from '../auth/middleware.js';
 import {
   UserTeamError,
   BADGE_PRESETS,
@@ -37,6 +37,14 @@ const permsSchema = z.object({
 // the global demo guard already refuses demo writes.
 export async function userTeamRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireAuth };
+  // Running a team is paid; being ON one is not. The team's owner pays, and the
+  // people they invite join for free — so `team` guards creating, renaming,
+  // inviting and moving members around, while responding to an invite and
+  // leaving stay on `guard`. Leaving is never gated on purpose: a lapsed
+  // membership must not be able to trap somebody on a desk they want off.
+  const team = { preHandler: [requireAuth, requirePremium('teams')] };
+  // The cosmetic member badges are their own paid feature.
+  const badges = { preHandler: [requireAuth, requirePremium('premiumBadges')] };
 
   const fail = (reply: import('fastify').FastifyReply, err: unknown) => {
     if (err instanceof UserTeamError) return reply.code(400).send({ error: err.message });
@@ -52,7 +60,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     return getMyPortal(request.currentUser!.id);
   });
 
-  app.post('/api/my-portal/team', guard, async (request, reply) => {
+  app.post('/api/my-portal/team', team, async (request, reply) => {
     const parsed = nameSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A team name is required' });
     try {
@@ -63,7 +71,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/rename', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/rename', team, async (request, reply) => {
     const parsed = nameSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A team name is required' });
     try {
@@ -74,7 +82,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/invite', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/invite', team, async (request, reply) => {
     const parsed = inviteSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Enter a username to invite' });
     const ctx = await getUserTeamContext(request.currentUser!.id);
@@ -87,7 +95,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/invites/:id/cancel', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/invites/:id/cancel', team, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     try {
       const team = await cancelInvite(request.currentUser!.id, id);
@@ -119,7 +127,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/members/:userId/remove', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/members/:userId/remove', team, async (request, reply) => {
     const memberUserId = (request.params as { userId: string }).userId;
     try {
       const team = await removeMember(request.currentUser!.id, memberUserId);
@@ -129,7 +137,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/transfer', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/transfer', team, async (request, reply) => {
     const parsed = transferSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Pick a member' });
     try {
@@ -140,7 +148,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/members/:userId/badge', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/members/:userId/badge', badges, async (request, reply) => {
     const memberUserId = (request.params as { userId: string }).userId;
     const parsed = badgeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid badge' });
@@ -152,7 +160,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/members/:userId/permissions', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/members/:userId/permissions', team, async (request, reply) => {
     const memberUserId = (request.params as { userId: string }).userId;
     const parsed = permsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid permissions' });

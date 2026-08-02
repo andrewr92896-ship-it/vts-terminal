@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireWorkspace } from '../auth/middleware.js';
+import { requireAuth, requireWorkspace, requirePremium } from '../auth/middleware.js';
 import { canAccessWorkspace, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
 import { featuresForUser } from '../features/service.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
@@ -70,7 +70,11 @@ export async function aiRoutes(app: FastifyInstance) {
     return getAiUsage(request.currentUser!.id);
   });
 
-  app.post('/api/ai/ask', { preHandler: requireAuth }, async (request, reply) => {
+  // Ask VTS AI — paid. Customer support is deliberately NOT on this guard (see
+  // routes/support.ts and routes/feedback.ts): a user who cannot reach help is a
+  // user who cannot tell you their payment failed, so the complaints channel can
+  // never sit behind the thing being complained about.
+  app.post('/api/ai/ask', { preHandler: [requireAuth, requirePremium('ai')] }, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }
@@ -101,7 +105,7 @@ export async function aiRoutes(app: FastifyInstance) {
   });
 
   // Study tutor — explain a question or answer a study question.
-  app.post('/api/ai/tutor', { preHandler: requireWorkspace('studies') }, async (request, reply) => {
+  app.post('/api/ai/tutor', { preHandler: [requireWorkspace('studies'), requirePremium('ai')] }, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }

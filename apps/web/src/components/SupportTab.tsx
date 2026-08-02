@@ -274,7 +274,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         )}
 
         <p style={{ margin: '2px 2px 4px', fontSize: 12.5, color: '#aebcd8', lineHeight: 1.55 }}>
-          {"What can we help with? Pick one and the assistant will ask a couple of quick questions, then send it to the admins."}
+          {"What can we help with?"}
         </p>
         {CATEGORIES.map((c) => (
           <button

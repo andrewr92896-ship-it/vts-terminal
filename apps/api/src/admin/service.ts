@@ -21,6 +21,7 @@ import {
   notificationPrefs,
   sessionAlertPrefs,
   userFeatures,
+  userMemberships,
   marketDataLayout,
   marketNewsStreams,
   priceAlerts,
@@ -72,6 +73,17 @@ import { destroyUserSessions } from '../auth/sessions.js';
 import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } from '../auth/rbac.js';
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
+import {
+  FREE_MEMBERSHIP,
+  MembershipError,
+  TIER_LABELS,
+  assertCanGrantMembership,
+  membershipsByUserId,
+  setMembership,
+  type Membership,
+  type MembershipTier,
+} from '../memberships/service.js';
+import { recordAdminAction } from './adminLog.js';
 
 // The terminal owner's account, identified by the immutable created username
 // (matches the first-boot seed, ADMIN_USERNAME). Only the owner may grant or
@@ -138,9 +150,13 @@ export interface AdminUserView {
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   createdAt: number;
+  // The paid tier this account holds. Resolved rather than read straight off the
+  // row: admins, software developers and founders are always Max by role and
+  // have no row at all, so a missing membership does NOT mean Free.
+  membership: Membership;
 }
 
-function toView(u: typeof users.$inferSelect): AdminUserView {
+function toView(u: typeof users.$inferSelect, membership: Membership): AdminUserView {
   return {
     id: u.id,
     username: u.username,
@@ -154,7 +170,19 @@ function toView(u: typeof users.$inferSelect): AdminUserView {
     viewBrokerage: u.viewBrokerage,
     mustChangePassword: u.mustChangePassword,
     createdAt: u.createdAt.getTime(),
+    membership,
   };
+}
+
+// The membership to show for a user in the admin list. Roles win over rows, the
+// same order getMembership() uses — so an admin always reads Max here even
+// though nothing was ever granted to them.
+function membershipForRow(
+  u: typeof users.$inferSelect,
+  stored: Map<string, Membership>,
+): Membership {
+  if (isAdmin(parseRoles(u))) return { ...FREE_MEMBERSHIP, tier: 'max', source: 'role' };
+  return stored.get(u.id) ?? FREE_MEMBERSHIP;
 }
 
 // Keep only badge keys that exist and are assignable (not auto-granted by role),
@@ -178,9 +206,9 @@ function cleanRoles(roles: string[]): RoleKey[] {
 }
 
 export async function listUsers(): Promise<AdminUserView[]> {
-  const rows = await db.select().from(users);
+  const [rows, stored] = await Promise.all([db.select().from(users), membershipsByUserId()]);
   rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  return rows.map(toView);
+  return rows.map((u) => toView(u, membershipForRow(u, stored)));
 }
 
 export interface CreateUserInput {
@@ -257,7 +285,8 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     updatedAt: now,
   };
   await db.insert(users).values(row);
-  return toView(row);
+  // A brand-new account has no grant yet, so its tier comes from its roles.
+  return toView(row, membershipForRow(row, new Map()));
 }
 
 export interface UpdateUserInput {
@@ -340,7 +369,9 @@ export async function updateUser(
   const updated = (
     await db.select().from(users).where(eq(users.id, targetId)).limit(1)
   )[0];
-  return toView(updated);
+  // Re-resolved rather than carried over: a role change here can move the
+  // account to or from Max on its own.
+  return toView(updated, membershipForRow(updated, await membershipsByUserId()));
 }
 
 // Permanently delete a user and all of their data. Unlike deactivation (which
@@ -383,8 +414,13 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingOrders).where(eq(tradingOrders.userId, targetId));
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
-    // Which optional features they had turned on (Feature Access).
+    // Which optional features they had turned on (Premium Features).
     await tx.delete(userFeatures).where(eq(userFeatures.userId, targetId));
+    // Their paid tier. The Administrator Log entry recording the grant is NOT
+    // deleted — like the employee audit log, it is the record that an admin did
+    // something, and it survives the account it was done to (target_user_id goes
+    // null, target_name is kept, so the entry still reads correctly).
+    await tx.delete(userMemberships).where(eq(userMemberships.userId, targetId));
     await tx.delete(marketDataLayout).where(eq(marketDataLayout.userId, targetId));
     await tx.delete(marketNewsStreams).where(eq(marketNewsStreams.userId, targetId));
     await tx.delete(priceAlerts).where(eq(priceAlerts.userId, targetId));
@@ -506,4 +542,65 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(sessions).where(eq(sessions.userId, targetId));
     await tx.delete(users).where(eq(users.id, targetId));
   });
+}
+
+
+// ---- Memberships ----
+
+// Grant (or change) a user's paid tier.
+//
+// One function does the grant AND its Administrator Log entry, deliberately.
+// The rule the owner set is that no membership is ever handed out without a
+// stated reason attached to a named person — so if these were two calls, the
+// second could be forgotten and the rule would quietly become optional. The log
+// write is best-effort inside recordAdminAction, so a log failure cannot leave a
+// user without the tier an admin just promised them; what it cannot do is be
+// skipped.
+//
+// How long a grant may run is not a preference either — assertCanGrantMembership
+// caps a plain admin at six months and lets founder-level users grant
+// indefinitely. That check runs on the ACTOR's roles, before anything is written.
+export async function grantMembership(
+  actor: { id: string; displayName: string; roles: RoleKey[] },
+  targetId: string,
+  input: { tier: MembershipTier; expiresAt: number | null; note: string },
+): Promise<AdminUserView> {
+  const target = (await db.select().from(users).where(eq(users.id, targetId)).limit(1))[0];
+  if (!target) throw new AdminError('That account no longer exists');
+
+  assertCanGrantMembership(actor.roles, { expiresAt: input.expiresAt });
+  if (!input.note.trim()) {
+    throw new MembershipError('Say why this membership is being granted');
+  }
+
+  // An admin or developer is already Max by role, so a grant on one of those
+  // accounts would be stored and never read. Say so rather than pretending.
+  if (isAdmin(parseRoles(target))) {
+    throw new MembershipError(
+      `${target.displayName} is an administrator or developer and already holds Max`,
+    );
+  }
+
+  const membership = await setMembership(
+    targetId,
+    input,
+    { id: actor.id, name: actor.displayName },
+  );
+
+  const until =
+    membership.expiresAt == null
+      ? 'indefinitely'
+      : `until ${new Date(membership.expiresAt).toISOString().slice(0, 10)}`;
+  await recordAdminAction({
+    kind: 'membership.granted',
+    // Informational: it is a record of something that happened, and asks nothing
+    // of anybody. Only tickets are 'open'.
+    state: 'info',
+    title: `${TIER_LABELS[input.tier]} membership granted to ${target.displayName} ${until}`,
+    detail: input.note.trim(),
+    actor: { id: actor.id, name: actor.displayName },
+    target: { id: target.id, name: target.displayName },
+  });
+
+  return toView(target, membership);
 }

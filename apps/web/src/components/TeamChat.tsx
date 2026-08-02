@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { useResponsive } from '../hooks/useMediaQuery';
 import { accentGradient, type Theme } from '../theme/themes';
 import { api, ApiError } from '../api/client';
-import { isAdmin } from '../auth/access';
+import { isAdmin, isFounder } from '../auth/access';
 import type { ChatMessage, TeamChatReason, User } from '../api/types';
 import { Icon } from './Icon';
 import { Avatar } from './Avatar';
@@ -53,12 +53,61 @@ export function TeamChat({
   });
   const [toast, setToast] = useState<ChatMessage | null>(null);
 
-  // The panel has two tabs: Team chat (default) and Support. Team chat is the
-  // one open by default every time the panel is opened.
-  const [tab, setTab] = useState<'team' | 'support'>('team');
+  // Three tabs: Team chat (default), Support, and — for founders, developers and
+  // admins — Administrator chat. Team chat is the one open by default every time
+  // the panel is opened.
+  const [tab, setTab] = useState<'team' | 'support' | 'admin'>('team');
   useEffect(() => {
     if (open) setTab('team');
   }, [open]);
+
+  // The administrator room. Install-wide rather than team-scoped, so it has its
+  // own feed rather than sharing the team one — an admin on one desk needs to
+  // reach an admin on another.
+  const [adminMessages, setAdminMessages] = useState<ChatMessage[]>([]);
+  useEffect(() => {
+    if (!open || tab !== 'admin' || !canModerate) return;
+    let alive = true;
+    const pull = () => {
+      api
+        .adminChat()
+        .then((r) => alive && setAdminMessages(r.messages))
+        .catch(() => {
+          /* leave the last feed on screen rather than blanking it */
+        });
+    };
+    pull();
+    const t = setInterval(pull, POLL_OPEN);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [open, tab, canModerate]);
+
+  async function sendAdmin() {
+    const text = input.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await api.sendAdminChat(text);
+      setAdminMessages(r.messages);
+      setInput('');
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not send that message');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function delAdmin(id: string) {
+    try {
+      const r = await api.deleteAdminChat(id);
+      setAdminMessages(r.messages);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not delete that message');
+    }
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const openRef = useRef(open);
@@ -256,17 +305,23 @@ export function TeamChat({
           >
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '12px 14px', borderBottom: '1px solid #1d3560' }}>
-              <Icon name={tab === 'team' ? 'message-circle' : 'life-buoy'} size={17} color={theme.accent} />
+              <Icon
+                name={tab === 'team' ? 'message-circle' : tab === 'admin' ? 'shield-check' : 'life-buoy'}
+                size={17}
+                color={theme.accent}
+              />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eef3ff' }}>
-                  {tab === 'team' ? 'Team chat' : 'Support'}
+                  {tab === 'team' ? 'Team chat' : tab === 'admin' ? 'Administrator chat' : 'Support'}
                 </div>
                 <div style={{ fontSize: 10.5, color: '#7e92c0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {tab === 'team'
                     ? eligible && teamName
                       ? teamName
                       : 'Your trading team'
-                    : 'Report a bug, idea, or question'}
+                    : tab === 'admin'
+                      ? 'Founders, developers and admins'
+                      : 'Report a bug, idea, or question'}
                 </div>
               </div>
               <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: '#7488b5', fontSize: 20, lineHeight: 1, cursor: 'pointer' }}>
@@ -278,11 +333,30 @@ export function TeamChat({
             <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderBottom: '1px solid #16294f' }}>
               <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
               <TabBtn active={tab === 'support'} onClick={() => setTab('support')} icon="life-buoy" label="Support" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
+              {canModerate && (
+                <TabBtn active={tab === 'admin'} onClick={() => setTab('admin')} icon="shield-check" label="Admin" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
+              )}
             </div>
 
             {/* Body */}
             {tab === 'support' ? (
               <SupportTab theme={theme} isDemo={!!user.isDemo} userId={user.id} />
+            ) : tab === 'admin' ? (
+              <ChatFeed
+                theme={theme}
+                accentGrad={accentGrad}
+                messages={adminMessages}
+                empty="No messages yet."
+                placeholder="Message the other administrators"
+                isDemo={!!user.isDemo}
+                canDeleteAny={isFounder(user.roles)}
+                input={input}
+                setInput={setInput}
+                busy={busy}
+                error={error}
+                onSend={() => void sendAdmin()}
+                onDelete={(id) => void delAdmin(id)}
+              />
             ) : eligible === false ? (
               <NotOnTeam reason={reason} accent={theme.accent} />
             ) : (
@@ -373,6 +447,137 @@ export function TeamChat({
             )}
           </div>
         </>
+      )}
+    </>
+  );
+}
+
+// A message feed with its composer. Used by the Administrator chat; the team
+// chat still renders its own copy inline, which is where this markup came from.
+//
+// Delete rights differ between the two rooms, so they are passed in rather than
+// decided here: in the team chat an admin can remove anyone's message, while in
+// the administrator room only a founder can — that room is where decisions about
+// people's accounts get discussed, so the record should not be editable by
+// everyone standing in it.
+function ChatFeed({
+  theme,
+  accentGrad,
+  messages,
+  empty,
+  placeholder,
+  isDemo,
+  canDeleteAny,
+  input,
+  setInput,
+  busy,
+  error,
+  onSend,
+  onDelete,
+}: {
+  theme: Theme;
+  accentGrad: string;
+  messages: ChatMessage[];
+  empty: string;
+  placeholder: string;
+  isDemo: boolean;
+  canDeleteAny: boolean;
+  input: string;
+  setInput: (v: string) => void;
+  busy: boolean;
+  error: string | null;
+  onSend: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'end' });
+  }, [messages.length]);
+
+  return (
+    <>
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {messages.length === 0 ? (
+          <div style={{ color: '#6f84b2', fontSize: 12, textAlign: 'center', marginTop: 16 }}>{empty}</div>
+        ) : (
+          messages.map((m) => (
+            <div key={m.id} style={{ display: 'flex', gap: 8, flexDirection: m.mine ? 'row-reverse' : 'row', alignItems: 'flex-end' }}>
+              <Avatar name={m.author} src={m.avatar} size={28} accent={theme.accent} />
+              <div style={{ maxWidth: '78%', display: 'flex', flexDirection: 'column', alignItems: m.mine ? 'flex-end' : 'flex-start' }}>
+                {!m.mine && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, margin: '0 0 2px 2px' }}>
+                    <span style={{ fontSize: 10, color: '#7e92c0' }}>{m.author}</span>
+                    <UserBadges roles={m.roles} badges={m.badges} size={11} gap={2} />
+                  </div>
+                )}
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    lineHeight: 1.5,
+                    padding: '7px 10px',
+                    borderRadius: 10,
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    color: m.mine ? '#06122c' : '#dfe7fa',
+                    background: m.mine ? theme.accent : 'rgba(255,255,255,.05)',
+                    border: m.mine ? 'none' : '1px solid #1d3560',
+                  }}
+                >
+                  {m.body}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                  <span style={{ fontSize: 9, color: '#5d72a0' }}>{clockTime(m.createdAt)}</span>
+                  {(m.mine || canDeleteAny) && !isDemo && (
+                    <button
+                      onClick={() => onDelete(m.id)}
+                      aria-label="Delete message"
+                      title="Delete message"
+                      style={{ background: 'none', border: 'none', color: '#7e6f6f', fontSize: 9, cursor: 'pointer', padding: 0 }}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={endRef} />
+      </div>
+
+      {error && (
+        <div style={{ margin: '0 10px', fontSize: 12, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '8px 11px' }}>
+          {error}
+        </div>
+      )}
+
+      {isDemo ? (
+        <div style={{ padding: '10px 12px', borderTop: '1px solid #16294f', fontSize: 11.5, color: '#7488b5' }}>
+          Read-only demo.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: 6, padding: 10, borderTop: '1px solid #16294f' }}>
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                onSend();
+              }
+            }}
+            placeholder={placeholder}
+            maxLength={1000}
+            style={inputStyle}
+          />
+          <button
+            onClick={onSend}
+            disabled={busy || !input.trim()}
+            style={{ border: 'none', background: accentGrad, color: theme.accentText, fontWeight: 700, fontSize: 12.5, padding: '0 14px', borderRadius: 8, cursor: 'pointer', opacity: busy || !input.trim() ? 0.55 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <Icon name="send" size={14} />
+          </button>
+        </div>
       )}
     </>
   );

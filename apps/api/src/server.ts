@@ -23,6 +23,7 @@ import { supportRoutes } from './routes/support.js';
 import { studiesRoutes } from './routes/studies.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
+import { devBlogRoutes } from './routes/devBlog.js';
 import { notificationPrefsRoutes } from './routes/notificationPrefs.js';
 import { priceAlertRoutes } from './routes/priceAlerts.js';
 import { widgetRoutes } from './routes/widget.js';
@@ -35,6 +36,7 @@ import { investmentRoutes } from './routes/investments.js';
 import { myPortalRoutes } from './routes/myPortal.js';
 import { applyEmployeeSecurityHeaders, enforceIpAllowlist } from './employee/guard.js';
 import { seedBadges } from './badges/service.js';
+import { seedDevBlog } from './devBlog/service.js';
 import { runMigrations } from './db/migrate.js';
 import { waitForDatabase } from './db/index.js';
 import { seedAdmin, seedDemo, backfillEmails } from './seed.js';
@@ -121,6 +123,7 @@ export async function buildServer() {
   await app.register(featureRoutes);
   await app.register(investmentRoutes);
   await app.register(myPortalRoutes);
+  await app.register(devBlogRoutes);
 
   // Serve the built frontend and fall back to index.html for client routes.
   // Only when the build exists (production / after `npm run build`).
@@ -196,8 +199,14 @@ async function bootstrapDatabase(): Promise<void> {
   // get theirs lazily on their first Studies deck-list fetch (routes/studies.ts).
   await ensureBakedInGamesAllTeams();
   await seedWelcome();
-  // Seed the built-in recognition badges (early-release star, admin shield).
+  // Seed the built-in recognition badges (Early Release rocket, admin shield,
+  // and the two membership badges).
   await seedBadges();
+  // Publish any checked-in Developer Blog posts. This is how Claude Code writes
+  // to that board — it edits devBlog/seeded.ts and the deploy publishes it, since
+  // it has no session to post through at runtime. Keyed, so a restart updates
+  // rather than duplicating.
+  await seedDevBlog();
 }
 
 async function main() {

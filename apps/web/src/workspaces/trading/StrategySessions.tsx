@@ -350,7 +350,6 @@ function SessionForm({ initial, busy, submitLabel, onSubmit, onCancel }: { initi
 
         {enabledDays.length === 0 ? (
           <div style={{ marginTop: 10, fontSize: 11.5, color: FAINT }}>
-            {"Pick one or more days to set their hours, or tap “All open market hours”."}
           </div>
         ) : (
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>

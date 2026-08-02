@@ -183,7 +183,7 @@ export function AdminMessageTemplates({ theme }: { theme: Theme }) {
         <div style={{ ...panel(theme), marginBottom: 14, display: 'flex', alignItems: 'center', gap: 9 }}>
           <Icon name="code" size={15} color="#8ea3cc" />
           <span style={{ fontSize: 12, color: '#9fb0d6' }}>
-            {"Only software developers can add or change templates. You can copy any template below."}
+            {"Only software developers can add or change templates."}
           </span>
         </div>
       )}

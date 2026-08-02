@@ -1,25 +1,34 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { FEATURE_LABELS, TIER_COLORS, TIER_LABELS, isStaffMembership } from '../../auth/access';
+import { PREMIUM_FEATURES } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { C } from '../../theme/tokens';
 import { Icon } from '../../components/Icon';
 import { SectionHeader, panel, panelLabel } from '../admin/adminUi';
 
-// My Terminal ▸ Feature Access. The optional parts of the terminal, turned on and
-// off by the person who uses them — no admin approval, no waiting.
+// My Terminal ▸ Premium Features. What your membership includes, and the optional
+// parts of the terminal you switch on for yourself.
 //
-// Only two things are optional, and both are about the trading desk. Everything
-// else is included with every account and is listed below the toggles rather
-// than hidden, so the screen reads as the whole picture of what you have rather
-// than a near-empty page with two switches.
+// The screen covers two different things and has to keep them visibly apart,
+// because conflating them is the fastest way to make a paid product feel
+// arbitrary:
 //
-// Turning something off only hides it: no trade, account or setting is deleted,
-// and turning it back on brings the workspace back exactly as it was. The server
-// enforces all of this independently (features/service.ts) — this screen is the
-// UI over it, not the gate.
+//   • MEMBERSHIP — what you are ALLOWED to use. Free, Premium or Max. Changed by
+//     upgrading, or by an administrator granting it.
+//   • OPT-INS — what you have ASKED to see. Advanced Trading and, under it,
+//     Funded Account. Free to switch either way, and holding Max does not turn
+//     them on for you.
+//
+// So a Max member can have the desk switched off, and a Free member can have it
+// switched on and still find the paid parts of it locked. Both are correct.
+//
+// Turning an opt-in off only hides it: no trade, account or setting is deleted.
+// The server enforces all of it independently (features/service.ts,
+// memberships/service.ts) — this screen is the UI over it, not the gate.
 
-export function FeatureAccess({ theme }: { theme: Theme }) {
+export function PremiumFeatures({ theme }: { theme: Theme }) {
   const { user, refreshUser } = useAuth();
   const features = user?.access.features;
   const isDemo = !!user?.isDemo;
@@ -68,9 +77,11 @@ export function FeatureAccess({ theme }: { theme: Theme }) {
   return (
     <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 20px 40px' }}>
       <SectionHeader
-        title="Feature Access"
-        subtitle="Choose which parts of the terminal you want. Turning one off only hides it — nothing you have saved is deleted, and turning it back on restores it."
+        title="Premium Features"
+        subtitle="What your membership includes, and the optional parts of the terminal you can switch on for yourself."
       />
+
+      <MembershipCard theme={theme} />
 
       {isDemo && (
         <div style={noticeBox}>
@@ -119,10 +130,7 @@ export function FeatureAccess({ theme }: { theme: Theme }) {
       </section>
 
       <section style={{ ...panel(theme), marginTop: 16 }}>
-        <div style={panelLabel}>{"Included with your account"}</div>
-        <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6, marginBottom: 12 }}>
-          {"These are always on. There is nothing to turn on and nothing to pay for."}
-        </div>
+        <div style={panelLabel}>{"Included with every account"}</div>
         <div style={{ display: 'grid', gap: 10 }}>
           <IncludedRow icon="globe" title="Markets">
             Live charts, watchlists, market headlines, the economic calendar and
@@ -153,6 +161,86 @@ export function FeatureAccess({ theme }: { theme: Theme }) {
         />
       )}
     </div>
+  );
+}
+
+// The membership card: which tier this account holds, until when, and which of
+// the paid features it reaches.
+//
+// Every paid feature is listed whether or not it is held, ticked or locked. A
+// screen that hid what you do not have would leave a Free member unable to tell
+// what upgrading would actually get them — and would make the locks they hit
+// elsewhere in the terminal look like faults rather than a tier.
+function MembershipCard({ theme }: { theme: Theme }) {
+  const { user } = useAuth();
+  const membership = user?.access.membership;
+  if (!membership) return null;
+
+  const staff = isStaffMembership(membership);
+  // The one tier palette — the same values the sidebar rows and the badges use.
+  const tint = TIER_COLORS[membership.tier] ?? C.faint;
+  // The same glyphs the badges use — diamond for Max, gold star for Premium —
+  // so the icon beside your name and the icon on this card are the one language.
+  const glyph = membership.tier === 'max' ? 'diamond' : membership.tier === 'premium' ? 'star' : 'user';
+
+  return (
+    <section style={{ ...panel(theme), marginBottom: 16 }}>
+      <div style={panelLabel}>{"Your membership"}</div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+        <Icon name={glyph} size={20} color={tint} />
+        <span style={{ fontSize: 20, fontWeight: 700, color: C.text }}>
+          {TIER_LABELS[membership.tier]}
+        </span>
+      </div>
+
+      <div style={{ fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>
+        {staff
+          ? 'Included with your role — it does not expire.'
+          : membership.expiresAt == null
+            ? membership.tier === 'free'
+              ? 'Upgrade to reach the features below.'
+              : 'Does not expire.'
+            : `${membership.tier === 'free' ? 'Ended' : 'Runs until'} ${new Date(
+                membership.expiresAt,
+              ).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}.`}
+        {!staff && membership.grantedByName ? ` Granted by ${membership.grantedByName}.` : ''}
+      </div>
+
+      {/* Every paid feature carries the colour of the tier it needs — the same
+          yellow and diamond blue the sidebar paints those sections in, so the
+          colours in the nav are readable without anything having to explain
+          them. */}
+      <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
+        {PREMIUM_FEATURES.map((f) => {
+          const on = membership.entitlements[f];
+          const needs = membership.featureTiers[f];
+          const color = TIER_COLORS[needs] ?? C.faint;
+          return (
+            <div key={f} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Icon name={on ? 'check' : 'lock'} size={14} color={on ? C.green : C.faint} />
+              <span style={{ fontSize: 13, color: on ? C.text : C.faint, flex: 1, minWidth: 0 }}>
+                {FEATURE_LABELS[f]}
+              </span>
+              <span
+                style={{
+                  flex: 'none',
+                  fontSize: 10,
+                  fontFamily: C.mono,
+                  color,
+                  border: `1px solid ${color}55`,
+                  background: `${color}14`,
+                  borderRadius: 999,
+                  padding: '1px 8px',
+                }}
+              >
+                {TIER_LABELS[needs]}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

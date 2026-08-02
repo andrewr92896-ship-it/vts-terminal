@@ -5,7 +5,7 @@ import { userFeatures } from '../db/schema.js';
 import { isDemoUser } from '../demo/identity.js';
 
 // Feature Access — the optional parts of the terminal a user turns on for
-// themselves from My Terminal ▸ Feature Access.
+// themselves from My Terminal ▸ Premium Features.
 //
 // Only the optional ones live here. Markets, Investments, Studies, My Terminal and
 // Site Help are included with every account: they hold no money, place no

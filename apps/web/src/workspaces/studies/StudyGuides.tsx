@@ -648,7 +648,7 @@ function GuideBuilder({
       </div>
       {slides.length === 0 ? (
         <div style={{ ...card(theme), color: muted, fontSize: 12.5, textAlign: 'center', lineHeight: 1.6 }}>
-          {"Your slides appear here as VTS AI drafts them. Click a slide to select it, then add a screenshot — or paste one straight in."}
+          {"Your slides appear here as VTS AI drafts them."}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

@@ -214,7 +214,7 @@ export function NetWorthScreen({ onNavigate }: { onNavigate?: (screen: string) =
                 <TrackedRow
                   label="Trading account"
                   value={tracked.trading}
-                  onOpen={() => onNavigate?.('my_holdings')}
+                  onOpen={() => onNavigate?.('desk')}
                 />
               )}
 

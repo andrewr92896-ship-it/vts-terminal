@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { requireAuth } from '../auth/middleware.js';
 import { FeatureError, featuresForUser, setUserFeatures } from '../features/service.js';
 
-// My Terminal ▸ Feature Access. Reading is open to any signed-in user; the write
+// My Terminal ▸ Premium Features. Reading is open to any signed-in user; the write
 // is a plain self-service toggle — there is no approval queue, and no route here
 // changes anyone else's account. The demo never reaches the write: demoGuard
 // refuses every non-GET before this runs.

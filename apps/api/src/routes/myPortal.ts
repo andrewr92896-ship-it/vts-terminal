@@ -40,7 +40,12 @@ function fail(err: unknown): string {
 export async function myPortalRoutes(app: FastifyInstance): Promise<void> {
   const auth = { preHandler: requireAuth };
 
-  app.get('/api/my-portal/holdings', auth, async (request) => getMyHoldings(request.currentUser!));
+  // There is no /holdings endpoint: the My Terminal ▸ Investment Holdings screen
+  // it served was removed (the Investments workspace already tracks the
+  // portfolio). Its service, myportal/holdings.ts, is NOT dead — getNetWorth
+  // reads the portfolio and trading equity through it, deliberately via the one
+  // function, so the two screens can never disagree about what a portfolio is
+  // worth.
 
   // ---- Net Worth ----
   app.get<{ Querystring: { days?: string } }>('/api/my-portal/net-worth', auth, async (request) => {

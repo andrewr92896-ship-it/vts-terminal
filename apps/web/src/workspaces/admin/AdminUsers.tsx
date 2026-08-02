@@ -2,8 +2,8 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
-import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS, canGrantRole } from '../../auth/access';
-import type { AdminUser, RoleKey, Team } from '../../api/types';
+import { ALL_ROLES, ROLE_DESCRIPTIONS, ROLE_LABELS, TIER_LABELS, canGrantRole } from '../../auth/access';
+import type { AdminUser, MembershipTier, RoleKey, Team } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { Icon } from '../../components/Icon';
@@ -548,6 +548,18 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 </div>
               )}
 
+              {/* Membership. Admins and developers hold Max by role, so there is
+                  nothing to grant on one of those accounts — the server refuses
+                  it rather than storing a grant that would never be read. */}
+              <MembershipEditor
+                theme={theme}
+                accentGrad={accentGrad}
+                user={u}
+                actorIsFounder={!!me?.access.founder}
+                onGranted={setUsers}
+                onError={setActionError}
+              />
+
               {resetFor === u.id && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <input
@@ -574,6 +586,157 @@ export function AdminUsers({ theme }: { theme: Theme }) {
       </div>
     </div>
   );
+}
+
+// Grant or change a user's paid tier.
+//
+// Two rules are enforced by the server and mirrored here so the form cannot ask
+// for something that will be refused: a note saying WHY is required, and a plain
+// admin is capped at six months while founder-level users may grant
+// indefinitely. The duration choices are presets rather than a date picker
+// because every real grant is "a month while we sort this out" or "six months,
+// they are a tester" — and a preset list cannot produce a date in the past.
+function MembershipEditor({
+  theme,
+  accentGrad,
+  user,
+  actorIsFounder,
+  onGranted,
+  onError,
+}: {
+  theme: Theme;
+  accentGrad: string;
+  user: AdminUser;
+  actorIsFounder: boolean;
+  onGranted: (users: AdminUser[]) => void;
+  onError: (msg: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [tier, setTier] = useState<MembershipTier>('premium');
+  const [months, setMonths] = useState<number | null>(1);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const byRole = user.membership.source === 'role';
+  const current = user.membership;
+
+  async function submit() {
+    if (!note.trim() || busy) return;
+    setBusy(true);
+    onError(null);
+    try {
+      const expiresAt =
+        months == null ? null : Date.now() + months * 30 * 24 * 60 * 60 * 1000;
+      const r = await api.grantMembership(user.id, { tier, expiresAt, note: note.trim() });
+      onGranted(r.users);
+      setNote('');
+      setOpen(false);
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : 'Could not grant that membership');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ ...fieldLabel, marginBottom: 8 }}>Membership</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, color: '#dfe7fa', fontWeight: 600 }}>
+          {TIER_LABELS[current.tier]}
+        </span>
+        <span style={{ fontSize: 11.5, color: '#7488b5' }}>
+          {byRole
+            ? 'by role — always Max'
+            : current.expiresAt == null
+              ? current.tier === 'free'
+                ? 'no membership'
+                : 'never expires'
+              : `until ${new Date(current.expiresAt).toLocaleDateString('en-US', {
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}`}
+        </span>
+        {!byRole && (
+          <button type="button" onClick={() => setOpen((v) => !v)} style={ghostBtn}>
+            {open ? 'Cancel' : 'Change'}
+          </button>
+        )}
+      </div>
+
+      {current.note && !byRole && (
+        <div style={{ fontSize: 11.5, color: '#7488b5', marginTop: 5 }}>
+          {current.note}
+          {current.grantedByName ? ` — ${current.grantedByName}` : ''}
+        </div>
+      )}
+
+      {open && !byRole && (
+        <div style={{ display: 'grid', gap: 9, marginTop: 11 }}>
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            {(['free', 'premium', 'max'] as MembershipTier[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTier(t)}
+                style={pill(tier === t, theme)}
+              >
+                {TIER_LABELS[t]}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+            {[1, 3, 6].map((m) => (
+              <button key={m} type="button" onClick={() => setMonths(m)} style={pill(months === m, theme)}>
+                {m} {m === 1 ? 'month' : 'months'}
+              </button>
+            ))}
+            {/* Only founder-level may grant forever — the server refuses it for a
+                plain admin, so the option is not even offered to one. */}
+            {actorIsFounder && (
+              <button type="button" onClick={() => setMonths(null)} style={pill(months == null, theme)}>
+                {"Indefinitely"}
+              </button>
+            )}
+          </div>
+
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="Why is this being granted? (required)"
+            maxLength={500}
+            style={inputStyle}
+          />
+
+          <div>
+            <button
+              onClick={() => void submit()}
+              disabled={busy || !note.trim()}
+              style={{ ...primaryBtn(theme, accentGrad), opacity: busy || !note.trim() ? 0.55 : 1 }}
+            >
+              {busy ? 'Granting…' : 'Grant'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function pill(on: boolean, theme: Theme): CSSProperties {
+  return {
+    fontSize: 12,
+    fontWeight: 600,
+    padding: '6px 12px',
+    borderRadius: 999,
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    color: on ? '#0a1226' : '#aebcd8',
+    background: on ? '#EBCB74' : 'transparent',
+    border: `1px solid ${on ? '#EBCB74' : theme.navBorder}`,
+  };
 }
 
 function RoleToggle({

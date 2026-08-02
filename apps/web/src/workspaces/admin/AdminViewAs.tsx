@@ -90,7 +90,6 @@ export function AdminViewAs({
       </div>
 
       <p style={{ marginTop: 14, fontSize: 11.5, color: '#7488b5', lineHeight: 1.5, background: 'transparent' }}>
-        {"Tip: while previewing, the workspaces and sections in the sidebar update to match that role. Come back to this section (Admin → View as role) to switch back — it stays available to you."}
       </p>
     </div>
   );

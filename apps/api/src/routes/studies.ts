@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace } from '../auth/middleware.js';
+import { requireWorkspace, requirePremium } from '../auth/middleware.js';
 import { addLearned, listLearned, removeLearned } from '../studies/learned.js';
 import { archiveRun, getGame, getLeaderboard, normalizeState, saveGame } from '../studies/game.js';
 import { addVocab, listVocab, removeVocab } from '../studies/vocab.js';
@@ -261,6 +261,13 @@ const guideUpdateSchema = z.object({
 
 export async function studiesRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
+  // MAKING study content is paid; PLAYING it is not. That split is the whole
+  // shape of Studies under the paywall — a free account can work through every
+  // built-in game, flashcard set and guide, and keeps its own progress, streak
+  // and level. What it cannot do is author new ones. So `create` guards the
+  // deck / flashcard / guide authoring routes, while the progress routes
+  // (learned, vocab, starred, game state, tests) deliberately stay on `guard`.
+  const create = { preHandler: [requireWorkspace('studies'), requirePremium('studyCreation')] };
 
   // ---- Team study games (decks) ----
   // A team builds and plays its own quizzes. Every deck is team-scoped: a member
@@ -282,7 +289,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   });
 
   // Create a deck by generating questions from a topic with Claude.
-  app.post('/api/studies/decks/generate', guard, async (request, reply) => {
+  app.post('/api/studies/decks/generate', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
     const parsed = deckGenerateSchema.safeParse(request.body);
@@ -316,7 +323,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // Step one of a file upload: AI reads the raw file text and formats it into
   // questions the author can review before anything is saved. Returns the
   // questions (with display sequence numbers) but does NOT create a deck.
-  app.post('/api/studies/decks/import/preview', guard, async (request, reply) => {
+  app.post('/api/studies/decks/import/preview', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
     const parsed = deckImportPreviewSchema.safeParse(request.body);
@@ -341,7 +348,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // Step two of a file upload: the author confirms the reviewed questions and
   // the deck is created. No AI call — the questions were already formatted in
   // the preview step and are re-validated by the schema.
-  app.post('/api/studies/decks/import/confirm', guard, async (request, reply) => {
+  app.post('/api/studies/decks/import/confirm', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
     const parsed = deckConfirmSchema.safeParse(request.body);
@@ -369,7 +376,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Combine several of the team's games into one new game with all their
   // questions. Registered before the ":id" routes so the literal path wins.
-  app.post('/api/studies/decks/merge', guard, async (request, reply) => {
+  app.post('/api/studies/decks/merge', create, async (request, reply) => {
     const me = request.currentUser!;
     if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team to combine study games.' });
     const parsed = deckMergeSchema.safeParse(request.body);
@@ -394,7 +401,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // AI auto-categorize a game's questions. Returns one {id, topic} per question
   // for the author to review before saving — it does not modify the deck.
-  app.post('/api/studies/decks/categorize', guard, async (request, reply) => {
+  app.post('/api/studies/decks/categorize', create, async (request, reply) => {
     const me = request.currentUser!;
     if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
     const parsed = deckCategorizeSchema.safeParse(request.body);
@@ -418,7 +425,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // answer key above all) and flag them for the author. Read-only — it returns
   // findings and never modifies the deck. Registered before ":id" so the literal
   // path wins.
-  app.post('/api/studies/decks/audit', guard, async (request, reply) => {
+  app.post('/api/studies/decks/audit', create, async (request, reply) => {
     const me = request.currentUser!;
     if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
     const parsed = deckAuditSchema.safeParse(request.body);
@@ -454,7 +461,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Edit a deck: rename, replace questions, and/or set its category list
   // (creator or a team admin).
-  app.patch('/api/studies/decks/:id', guard, async (request, reply) => {
+  app.patch('/api/studies/decks/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
@@ -484,7 +491,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Delete a deck. Only the Trading Team leader (or an admin/founder) may delete
   // team content; a team-less user may delete only games they created.
-  app.delete('/api/studies/decks/:id', guard, async (request, reply) => {
+  app.delete('/api/studies/decks/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
@@ -556,7 +563,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // Create a set from cards the client supplies: typed in by hand, or the
   // reviewed output of a file upload. No AI call — the cards are re-validated by
   // the schema and card numbers/ids are assigned server-side.
-  app.post('/api/studies/flashcards', guard, async (request, reply) => {
+  app.post('/api/studies/flashcards', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
     const parsed = flashcardCreateSchema.safeParse(request.body);
@@ -577,7 +584,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   });
 
   // Create a set by generating cards from a topic with Claude.
-  app.post('/api/studies/flashcards/generate', guard, async (request, reply) => {
+  app.post('/api/studies/flashcards/generate', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
     const parsed = flashcardGenerateSchema.safeParse(request.body);
@@ -611,7 +618,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // Step one of a file upload: AI reads the raw file text and formats it into
   // cards the author can review before anything is saved. Returns the cards (with
   // display sequence numbers) but does NOT create a set.
-  app.post('/api/studies/flashcards/import/preview', guard, async (request, reply) => {
+  app.post('/api/studies/flashcards/import/preview', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
     const parsed = flashcardImportPreviewSchema.safeParse(request.body);
@@ -636,7 +643,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // Generate flashcards from one of the team's study games: pull the key
   // vocabulary from its questions and write definitions. Returns cards (with
   // display sequence numbers) for review; no set is created yet.
-  app.post('/api/studies/flashcards/from-deck', guard, async (request, reply) => {
+  app.post('/api/studies/flashcards/from-deck', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
     const parsed = flashcardFromDeckSchema.safeParse(request.body);
@@ -680,7 +687,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   });
 
   // Edit a set: rename and/or replace its cards (creator or a team admin).
-  app.patch('/api/studies/flashcards/:id', guard, async (request, reply) => {
+  app.patch('/api/studies/flashcards/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
@@ -697,7 +704,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Delete a set. Only the Trading Team leader (or an admin/founder) may delete
   // team content; a team-less user may delete only sets they created.
-  app.delete('/api/studies/flashcards/:id', guard, async (request, reply) => {
+  app.delete('/api/studies/flashcards/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
@@ -722,7 +729,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // One turn of the guide-builder conversation. Returns the assistant's reply
   // plus the complete current slide draft. Persists nothing — the client saves
   // the finished guide with POST /guides once the author is happy.
-  app.post('/api/studies/guides/chat', guard, async (request, reply) => {
+  app.post('/api/studies/guides/chat', create, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study guide.' });
     const parsed = guideChatSchema.safeParse(request.body);
@@ -740,7 +747,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Save a finished guide (slides + any attached screenshots). The larger body
   // limit accommodates the embedded base64 screenshots.
-  app.post('/api/studies/guides', { ...guard, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
+  app.post('/api/studies/guides', { ...create, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
     const teamId = request.currentUser!.teamId;
     if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study guide.' });
     const parsed = guideCreateSchema.safeParse(request.body);
@@ -771,7 +778,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   });
 
   // Update a guide's name/description/slides (creator or a team admin).
-  app.put('/api/studies/guides/:id', { ...guard, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
+  app.put('/api/studies/guides/:id', { ...create, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
@@ -788,7 +795,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Delete a guide. Only the Trading Team leader (or an admin/founder) may delete
   // team content; a team-less user may delete only guides they created.
-  app.delete('/api/studies/guides/:id', guard, async (request, reply) => {
+  app.delete('/api/studies/guides/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     if (!me.teamId) return reply.code(404).send({ error: 'Not found' });

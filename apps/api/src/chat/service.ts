@@ -137,3 +137,94 @@ export async function deleteTeamMessage(
   await db.delete(chatMessages).where(eq(chatMessages.id, id));
   return listTeamMessages(teamId, user.id);
 }
+
+// ---- Administrator chat ----
+//
+// One install-wide room for founders, software developers and admins — the third
+// tab in the corner chat bubble, beside Team chat and Support.
+//
+// Deliberately NOT team-scoped, which is the whole difference from the team
+// chat above: administration is not a desk activity, and an admin on one team
+// needs to reach an admin on another. So these rows carry `teamId: null` and are
+// found by channel alone. That also means the existing table needed no migration
+// — `teamId` was already nullable for the legacy channels.
+//
+// Eligibility is a ROLE question and is checked in the route (isAdmin), never
+// here: this module does not decide who is an administrator.
+export const ADMIN_CHANNEL = 'admin';
+
+export async function listAdminMessages(
+  currentUserId: string,
+  limit = 100,
+): Promise<ChatMessageView[]> {
+  const rows = await db
+    .select({
+      id: chatMessages.id,
+      author: chatMessages.author,
+      body: chatMessages.body,
+      createdAt: chatMessages.createdAt,
+      userId: chatMessages.userId,
+      avatar: users.avatar,
+      roles: users.roles,
+      badges: users.badges,
+    })
+    .from(chatMessages)
+    .leftJoin(users, eq(users.id, chatMessages.userId))
+    .where(eq(chatMessages.channel, ADMIN_CHANNEL))
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(limit);
+  return rows.reverse().map((r) =>
+    toView({ ...r, avatar: r.avatar ?? null, roles: r.roles ?? null, badges: r.badges ?? null }, currentUserId),
+  );
+}
+
+export async function latestAdminMessageAt(): Promise<number> {
+  const rows = await db
+    .select({ createdAt: chatMessages.createdAt })
+    .from(chatMessages)
+    .where(eq(chatMessages.channel, ADMIN_CHANNEL))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(1);
+  return rows[0]?.createdAt ? rows[0].createdAt.getTime() : 0;
+}
+
+export async function postAdminMessage(
+  user: { id: string; displayName: string },
+  body: string,
+): Promise<ChatMessageView[]> {
+  const text = body.trim();
+  if (!text) throw new Error('A message is required');
+  await db.insert(chatMessages).values({
+    id: crypto.randomUUID(),
+    channel: ADMIN_CHANNEL,
+    teamId: null,
+    userId: user.id,
+    author: user.displayName,
+    body: text.slice(0, MAX_BODY),
+    createdAt: new Date(),
+  });
+  return listAdminMessages(user.id);
+}
+
+// The author deletes their own; a founder-level user can delete any. A plain
+// admin deliberately cannot remove a colleague's message — this room is where
+// administrative decisions get discussed, so the record of it should not be
+// editable by everyone standing in it.
+export async function deleteAdminMessage(
+  id: string,
+  user: { id: string; isFounder: boolean },
+): Promise<ChatMessageView[]> {
+  const row = (
+    await db
+      .select()
+      .from(chatMessages)
+      .where(and(eq(chatMessages.id, id), eq(chatMessages.channel, ADMIN_CHANNEL)))
+      .limit(1)
+  )[0];
+  if (!row) throw new Error('Message not found');
+  if (row.userId !== user.id && !user.isFounder) {
+    throw new ChatForbiddenError('You can only delete your own messages');
+  }
+  await db.delete(chatMessages).where(eq(chatMessages.id, id));
+  return listAdminMessages(user.id);
+}

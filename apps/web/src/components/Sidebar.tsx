@@ -2,6 +2,8 @@ import { useState, type CSSProperties } from 'react';
 import type { WorkspaceKey } from '../theme/themes';
 import { NAV, navFor, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
+import { SECTION_FEATURE, WORKSPACE_FEATURE, tierColorFor } from '../auth/access';
+import { useAuth } from '../auth/AuthContext';
 import { APP_VERSION } from '../meta/version';
 import { Icon } from './Icon';
 
@@ -10,7 +12,7 @@ interface SidebarProps {
   screen: string;
   workspaces: WorkspaceKey[]; // the ones this user may see, in nav order
   // Opt-in workspaces the user has NOT turned on. Drawn dimmed with a lock, and
-  // clicking one opens My Terminal ▸ Feature Access instead of the workspace — so
+  // clicking one opens My Terminal ▸ Premium Features instead of the workspace — so
   // the feature is discoverable rather than invisible.
   lockedWorkspaces?: Set<WorkspaceKey>;
   // The effective nav (workspace + section order), already reordered by any
@@ -43,6 +45,10 @@ const navLabel: CSSProperties = {
 };
 
 export function Sidebar(props: SidebarProps) {
+  // The membership drives the tier colours below. Read here rather than passed
+  // in: every row needs it, and it is already on the signed-in user.
+  const { user } = useAuth();
+  const membership = user?.access.membership;
   const {
     workspace,
     screen,
@@ -149,6 +155,7 @@ export function Sidebar(props: SidebarProps) {
             icon={w.icon}
             label={w.label}
             accent={w.accent}
+            tierColor={tierColorFor(w.key, WORKSPACE_FEATURE, membership)}
             locked={lockedWorkspaces?.has(w.key)}
             dot={workspaceDots?.has(w.key)}
             onClick={() => onSelectWorkspace(w.key)}
@@ -174,6 +181,10 @@ export function Sidebar(props: SidebarProps) {
               label={s.label}
               count={s.count}
               accent={accent}
+              // Yellow for a Premium section, diamond blue for a Max one, and
+              // nothing at all for a section that costs nothing — so the colour
+              // marks the paywall rather than repainting the sidebar.
+              tierColor={tierColorFor(s.key, SECTION_FEATURE, membership)}
               dot={sectionDots?.has(s.key)}
               onClick={() => onSelectScreen(s.key)}
             />
@@ -301,6 +312,7 @@ function NavRow({
   label,
   count,
   accent,
+  tierColor,
   collapsed,
   dot,
   locked,
@@ -312,15 +324,22 @@ function NavRow({
   label: string;
   count?: number;
   accent: string;
+  // The colour of the membership tier this row needs, or null when it needs
+  // none. When set it REPLACES the workspace accent for this row — icon, label
+  // and the active highlight — so a paid section reads the same colour whether
+  // or not it happens to be the one selected.
+  tierColor?: string | null;
   collapsed: boolean;
   dot?: boolean;
   // A workspace the user hasn't opted into: dimmed, with a padlock in place of
-  // the usual end-of-row furniture. Still clickable — it leads to Feature Access.
+  // the usual end-of-row furniture. Still clickable — it leads to Premium Features.
   locked?: boolean;
   onClick: () => void;
 }) {
   const [hover, setHover] = useState(false);
   const isSecActive = kind === 'sec' && active;
+  // A tier colour outranks the workspace accent for this row.
+  const rowAccent = tierColor ?? accent;
 
   const style: CSSProperties = {
     display: 'flex',
@@ -334,10 +353,10 @@ function NavRow({
     cursor: 'pointer',
     marginBottom: 2,
     position: 'relative',
-    color: isSecActive ? accent : active || hover ? C.text : C.muted,
+    color: isSecActive ? rowAccent : tierColor ?? (active || hover ? C.text : C.muted),
     opacity: locked ? 0.5 : 1,
     background: isSecActive
-      ? `linear-gradient(180deg, ${tint(accent, 0.16)}, ${tint(accent, 0.08)})`
+      ? `linear-gradient(180deg, ${tint(rowAccent, 0.16)}, ${tint(rowAccent, 0.08)})`
       : active
         ? 'rgba(255,255,255,.045)'
         : hover
@@ -349,9 +368,12 @@ function NavRow({
     border: 'none',
     fontFamily: 'inherit',
   };
-  // The workspace icon takes its own accent when active; an active section takes
-  // the current workspace accent. Everything else is faint.
-  const iconColor = locked ? C.faint : isSecActive ? accent : kind === 'ws' && active ? accent : C.faint;
+  // A tier-gated row is always its tier's colour. Otherwise: the workspace icon
+  // takes its own accent when active, an active section takes the current
+  // workspace accent, and everything else is faint.
+  const iconColor = locked
+    ? C.faint
+    : (tierColor ?? (isSecActive ? accent : kind === 'ws' && active ? accent : C.faint));
 
   return (
     <button
@@ -359,7 +381,7 @@ function NavRow({
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={style}
-      title={locked ? `${label} — not turned on. Open Feature Access to add it.` : collapsed ? label : undefined}
+      title={locked ? `${label} — not turned on. Open Premium Features to add it.` : collapsed ? label : undefined}
     >
       <span style={{ position: 'relative', display: 'inline-flex', flex: 'none' }}>
         <Icon name={icon} size={16} color={iconColor} />

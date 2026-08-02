@@ -145,7 +145,7 @@ export function AdminSidebarLayout({
       />
 
       <div style={{ ...msgStyle(true), marginTop: 0, marginBottom: 16, color: '#9fb4dd', background: 'rgba(11,26,58,.5)', border: `1px solid ${theme.navBorder}` }}>
-        {"Use the arrows to move a workspace up or down. Click a workspace (or \"Expand all\") to open it and reorder the sections inside it with their own arrows. This only changes the order — nothing is added, removed, or moved between workspaces."}
+        {"This only changes the order — nothing is added, removed, or moved between workspaces."}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>

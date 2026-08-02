@@ -20,30 +20,36 @@ export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
 
   if (!user) return null;
 
-  // Only full trading users (not view-only) may add their own broker APIs. The
-  // server enforces this on every connection write too.
+  // Broker connections are the trading desk, so they need the Advanced Trading
+  // opt-in. `features` is NOT optional here even though the signature allows it:
+  // canAccessWorkspace reads advancedTrading off it and returns false for
+  // everyone when it is missing, which is exactly how this whole panel — push,
+  // Pushover, the widget and broker connections — once went invisible for every
+  // account at once. Always pass it.
   const canManageBrokers =
-    canAccessWorkspace(user.roles, 'trading') && !isWorkspaceReadOnly(user.roles, 'trading');
-  // Anyone on the trading desk (full or view-only) can turn on phone alerts for
-  // their own device. The demo is look-only and never subscribes.
-  const canUsePush = !isDemo && canAccessWorkspace(user.roles, 'trading');
-
-  if (!canUsePush && !canManageBrokers) {
-    return (
-      <div style={hintStyle}>
-        {"No notification or connection settings are available for your account."}
-      </div>
-    );
-  }
+    canAccessWorkspace(user.roles, 'trading', user.access.features) &&
+    !isWorkspaceReadOnly(user.roles, 'trading');
+  // Phone alerts and Pushover are deliberately NOT behind the desk opt-in: price
+  // alerts are a Markets feature every account has, and an alert nobody can be
+  // notified about is not an alert. The demo never subscribes.
+  const canUsePush = !isDemo;
+  // Which teammate's trades buzz you is a desk-only setting, unlike the two above.
+  const canSetTradePrefs = canUsePush && canManageBrokers;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Phone notifications — any trading-desk user, their own device. */}
+      {/* Phone alerts and Pushover — every account, their own device. */}
       {canUsePush && (
         <>
           <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
           <div style={{ height: 1, background: '#1d3560' }} />
           <PushoverSection accent={accentGrad} accentText={theme.accentText} />
+        </>
+      )}
+
+      {/* Whose trades buzz you, and the positions widget — desk only. */}
+      {canSetTradePrefs && (
+        <>
           <div style={{ height: 1, background: '#1d3560' }} />
           <PerUserNotificationsSection accent={accentGrad} accentText={theme.accentText} />
           <div style={{ height: 1, background: '#1d3560' }} />
@@ -134,8 +140,7 @@ function PhoneNotificationsSection({ accent, accentText }: { accent: string; acc
       )}
 
       <p style={{ ...hintStyle, marginTop: 12, marginBottom: 0 }}>
-        On iPhone this only works once the terminal is installed to your Home Screen. Each device you
-        want buzzed needs to be turned on once.
+        On iPhone this only works once the terminal is installed to your Home Screen.
       </p>
       {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
     </section>
@@ -277,8 +282,7 @@ function PushoverSection({ accent, accentText }: { accent: string; accentText: s
             style={inputStyle}
           />
           <p style={hintStyle}>
-            Install the Pushover app, and copy your <b>User Key</b> from its home screen (or
-            pushover.net). Each device you want buzzed needs the app installed.
+            Your <b>User Key</b> is on the Pushover app's home screen, and on pushover.net.
           </p>
           <div style={{ marginTop: 4 }}>
             <button
@@ -642,7 +646,7 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
         {"Home-screen widget (iPhone)"}
       </div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
-        {"Put your team’s open positions on your iPhone Home Screen with the free Scriptable app. Generate your personal read-only token, copy the script, and add a widget. Add one widget per teammate — each shows one person’s positions."}
+        {"Put your team’s open positions on your iPhone Home Screen with the free Scriptable app. One widget per teammate — each shows one person’s positions."}
       </p>
 
       {!token ? (
