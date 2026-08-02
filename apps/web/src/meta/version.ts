@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.17';
+export const APP_VERSION = 'Beta V 6.18';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.18',
+    date: 'August 2, 2026',
+    notes: [
+      'Gold and silver stay on sample figures. The free source tried over the last two releases will not serve a server, only a browser, so the code has been removed rather than left in place doing nothing. Both rows keep the grey Sample dot so they are never mistaken for real prices.',
+      'They will switch to live on their own if you ever connect a broker account that carries metals — no further work needed at that point.',
+    ],
+  },
   {
     version: 'Beta V 6.17',
     date: 'August 2, 2026',
