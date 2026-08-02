@@ -292,16 +292,33 @@ export function MarketNews() {
   const mutate = (fn: (s: MarketNewsStreams) => MarketNewsStreams) =>
     setStreams((prev) => (prev ? fn(prev) : prev));
 
-  // Adding or removing a channel changes what the whole desk sees, so it goes
-  // straight to the server rather than through the debounced view-state save,
-  // and the reply is the authoritative list (with the id it managed to resolve).
-  async function addChannel(url: string, name: string): Promise<string | null> {
+  // Adding, editing or removing a channel changes what the whole desk sees, so
+  // it goes straight to the server rather than through the debounced view-state
+  // save, and the reply is the authoritative list (with the id it managed to
+  // resolve).
+  async function addChannel(url: string, name: string, alwaysOn: boolean): Promise<string | null> {
     try {
-      const r = await api.addMarketNewsChannel({ url, name: name || undefined });
+      const r = await api.addMarketNewsChannel({ url, name: name || undefined, alwaysOn });
       setStreams(r.streams);
       return null;
     } catch (e) {
       return e instanceof ApiError ? e.message : "Couldn't add that channel.";
+    }
+  }
+
+  // Renaming leaves the channel's `key` alone — it is derived from the handle
+  // and id, not the name — so the trader's own watching/docked/notify state
+  // survives an edit rather than quietly detaching from the row.
+  async function editChannel(
+    key: string,
+    patch: { name?: string; alwaysOn?: boolean },
+  ): Promise<string | null> {
+    try {
+      const r = await api.updateMarketNewsChannel(key, patch);
+      setStreams(r.streams);
+      return null;
+    } catch (e) {
+      return e instanceof ApiError ? e.message : "Couldn't save that channel.";
     }
   }
 
@@ -414,6 +431,7 @@ export function MarketNews() {
         <LiveStreams
           canEdit={canWrite}
           onAddChannel={addChannel}
+          onEditChannel={editChannel}
           onRemoveChannel={removeChannel}
           streams={streams}
           fomc={fomc}
@@ -592,6 +610,7 @@ function LiveStreams({
   mutate,
   canEdit,
   onAddChannel,
+  onEditChannel,
   onRemoveChannel,
 }: {
   streams: MarketNewsStreams | null;
@@ -606,7 +625,8 @@ function LiveStreams({
   // The channel list is desk-wide, so changing it needs write access — a
   // view-only role and the demo can watch the wall but not reshape it.
   canEdit: boolean;
-  onAddChannel: (url: string, name: string) => Promise<string | null>;
+  onAddChannel: (url: string, name: string, alwaysOn: boolean) => Promise<string | null>;
+  onEditChannel: (key: string, patch: { name?: string; alwaysOn?: boolean }) => Promise<string | null>;
   onRemoveChannel: (key: string, name: string) => void;
 }) {
   if (!streams) return null;
@@ -714,91 +734,257 @@ function LiveStreams({
 
             {/* right column: channel list */}
             <div style={{ ...card, padding: 0 }}>
-              {channels.map((c, i) => {
-                const isWatching = watching.includes(c.key);
-                const armed = !!streams.notify[c.key];
-                return (
-                  <div
-                    key={c.key}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: 10,
-                      padding: '11px 13px',
-                      borderTop: `1px solid ${i === 0 ? 'transparent' : C.line}`,
-                      background: isWatching ? tint(C.gold, 0.04) : 'transparent',
-                    }}
-                  >
-                    <span
-                      style={{
-                        flex: 'none',
-                        width: 7,
-                        height: 7,
-                        marginTop: 5,
-                        borderRadius: '50%',
-                        background: c.live ? C.red : '#3A4A6C',
-                        boxShadow: c.live ? `0 0 6px ${C.red}` : 'none',
-                        animation: c.live ? 'livePulse 2s infinite' : 'none',
-                      }}
-                    />
-                    <button
-                      onClick={() => toggleWatch(c.key)}
-                      style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: isWatching ? C.gold : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {c.name}
-                        </span>
-                        {isWatching && (
-                          <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', color: C.gold, border: `1px solid ${tint(C.gold, 0.4)}`, borderRadius: 4, padding: '1px 5px' }}>
-                            PLAYING
-                          </span>
-                        )}
-                        {c.alwaysOn && (
-                          <span
-                            title="Broadcasts around the clock"
-                            style={{ fontFamily: C.mono, fontSize: 8.5, fontWeight: 700, color: C.faint, border: `1px solid ${C.line2}`, borderRadius: 4, padding: '1px 5px' }}
-                          >
-                            24/7
-                          </span>
-                        )}
-                      </div>
-                      <div style={{ fontSize: 11, color: c.live ? C.muted : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
-                        {c.live
-                          ? c.streamTitle ?? 'Live'
-                          : liveKnown(c)
-                            ? c.lastLive ?? 'Offline'
-                            : 'Status unconfirmed'}
-                      </div>
-                      {c.handle && <div style={{ fontFamily: C.mono, fontSize: 9.5, color: '#3A4A6C', marginTop: 2 }}>{c.handle}</div>}
-                    </button>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <button
-                        onClick={() => toggleNotify(c.key)}
-                        title={armed ? 'Alert on when this channel goes live' : 'Alert me when this channel goes live'}
-                        style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
-                      >
-                        <Icon name="bell" size={13} color={armed ? C.gold : '#3A4A6C'} />
-                      </button>
-                      {canEdit && (
-                        <button
-                          onClick={() => onRemoveChannel(c.key, c.name)}
-                          title="Remove this channel from the desk's wall"
-                          style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#3A4A6C', fontSize: 15, lineHeight: 1 }}
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+              {channels.map((c, i) => (
+                <ChannelRow
+                  key={c.key}
+                  c={c}
+                  first={i === 0}
+                  isWatching={watching.includes(c.key)}
+                  armed={!!streams.notify[c.key]}
+                  canEdit={canEdit}
+                  onWatch={() => toggleWatch(c.key)}
+                  onNotify={() => toggleNotify(c.key)}
+                  onEdit={onEditChannel}
+                  onRemove={() => onRemoveChannel(c.key, c.name)}
+                />
+              ))}
               {canEdit && <AddChannelForm onAdd={onAddChannel} count={channels.length} />}
             </div>
           </div>
         </>
       )}
     </div>
+  );
+}
+
+// One row of the channel rail: the live dot, the channel as a selector button,
+// and the per-channel controls. It owns its own edit state so the rail can be
+// rendered from a plain map — and so a rename in progress is not thrown away by
+// the 45s channel poll refreshing the list underneath it.
+function ChannelRow({
+  c,
+  first,
+  isWatching,
+  armed,
+  canEdit,
+  onWatch,
+  onNotify,
+  onEdit,
+  onRemove,
+}: {
+  c: StreamChannel;
+  first: boolean;
+  isWatching: boolean;
+  armed: boolean;
+  canEdit: boolean;
+  onWatch: () => void;
+  onNotify: () => void;
+  onEdit: (key: string, patch: { name?: string; alwaysOn?: boolean }) => Promise<string | null>;
+  onRemove: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+
+  if (editing) {
+    return (
+      <div style={{ padding: '11px 13px', borderTop: `1px solid ${first ? 'transparent' : C.line}` }}>
+        <ChannelEditForm
+          c={c}
+          onSave={(patch) => onEdit(c.key, patch)}
+          onDone={() => setEditing(false)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        padding: '11px 13px',
+        borderTop: `1px solid ${first ? 'transparent' : C.line}`,
+        background: isWatching ? tint(C.gold, 0.04) : 'transparent',
+      }}
+    >
+      <span
+        style={{
+          flex: 'none',
+          width: 7,
+          height: 7,
+          marginTop: 5,
+          borderRadius: '50%',
+          background: c.live ? C.red : '#3A4A6C',
+          boxShadow: c.live ? `0 0 6px ${C.red}` : 'none',
+          animation: c.live ? 'livePulse 2s infinite' : 'none',
+        }}
+      />
+      <button
+        onClick={onWatch}
+        style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: 0, textAlign: 'left', cursor: 'pointer' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: isWatching ? C.gold : C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {c.name}
+          </span>
+          {isWatching && (
+            <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', color: C.gold, border: `1px solid ${tint(C.gold, 0.4)}`, borderRadius: 4, padding: '1px 5px' }}>
+              PLAYING
+            </span>
+          )}
+          {c.alwaysOn && (
+            <span
+              title="Broadcasts around the clock"
+              style={{ fontFamily: C.mono, fontSize: 8.5, fontWeight: 700, color: C.faint, border: `1px solid ${C.line2}`, borderRadius: 4, padding: '1px 5px' }}
+            >
+              24/7
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: c.live ? C.muted : C.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+          {c.live
+            ? c.streamTitle ?? 'Live'
+            : liveKnown(c)
+              ? c.lastLive ?? 'Offline'
+              : 'Status unconfirmed'}
+        </div>
+        {c.handle && <div style={{ fontFamily: C.mono, fontSize: 9.5, color: '#3A4A6C', marginTop: 2 }}>{c.handle}</div>}
+      </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <button
+          onClick={onNotify}
+          title={armed ? 'Alert on when this channel goes live' : 'Alert me when this channel goes live'}
+          style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+        >
+          <Icon name="bell" size={13} color={armed ? C.gold : '#3A4A6C'} />
+        </button>
+        {canEdit && (
+          <button
+            onClick={() => setEditing(true)}
+            title="Rename this channel, or mark it as broadcasting 24/7"
+            style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            <Icon name="pencil" size={12} color="#3A4A6C" />
+          </button>
+        )}
+        {canEdit && (
+          <button
+            onClick={onRemove}
+            title="Remove this channel from the desk's wall"
+            style={{ width: 24, height: 24, display: 'grid', placeItems: 'center', background: 'none', border: 'none', cursor: 'pointer', color: '#3A4A6C', fontSize: 15, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Rename a channel and set whether it broadcasts around the clock. The 24/7 tag
+// is not decoration: a channel marked always-on keeps its player up even when
+// the server's own live reading says dark, which from a datacenter is the answer
+// most often got wrong (a consent wall reads exactly like an off-air channel).
+// Without this the flag could only ever be true for the seeded starter channels,
+// so a trader's own 24/7 stream was stuck reading "not live right now".
+function ChannelEditForm({
+  c,
+  onSave,
+  onDone,
+}: {
+  c: StreamChannel;
+  onSave: (patch: { name?: string; alwaysOn?: boolean }) => Promise<string | null>;
+  onDone: () => void;
+}) {
+  const [name, setName] = useState(c.name);
+  const [alwaysOn, setAlwaysOn] = useState(c.alwaysOn === true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    const next = name.trim();
+    if (!next || busy) return;
+    setBusy(true);
+    // Send both every time: the server's patch schema refuses an empty body,
+    // and sending the pair keeps a save meaningful even when only one changed.
+    const problem = await onSave({ name: next, alwaysOn });
+    setBusy(false);
+    if (problem) {
+      setErr(problem);
+      return;
+    }
+    onDone();
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: C.faint, marginBottom: 7 }}>
+        Edit channel
+      </div>
+      <input
+        autoFocus
+        value={name}
+        onChange={(e) => { setName(e.target.value); setErr(null); }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void submit();
+          if (e.key === 'Escape') onDone();
+        }}
+        maxLength={60}
+        placeholder="Channel name"
+        style={inputStyle}
+      />
+      <AlwaysOnToggle checked={alwaysOn} onChange={setAlwaysOn} />
+      {err && <div style={{ fontSize: 11, color: '#ffb4ab', lineHeight: 1.45, marginTop: 7 }}>{err}</div>}
+      <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
+        <button
+          onClick={() => void submit()}
+          disabled={!name.trim() || busy}
+          style={{
+            border: 'none',
+            background: `linear-gradient(180deg, ${C.gold}, ${C.gold2})`,
+            color: C.goldText,
+            fontWeight: 700,
+            fontSize: 11.5,
+            padding: '7px 12px',
+            borderRadius: 7,
+            cursor: !name.trim() || busy ? 'default' : 'pointer',
+            opacity: !name.trim() || busy ? 0.6 : 1,
+            fontFamily: 'inherit',
+          }}
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
+        <button
+          onClick={onDone}
+          style={{ background: 'rgba(255,255,255,.05)', border: `1px solid ${C.line2}`, color: '#DFE7FA', fontSize: 11.5, fontWeight: 600, padding: '7px 12px', borderRadius: 7, cursor: 'pointer', fontFamily: 'inherit' }}
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// The 24/7 tick, shared by the add and edit forms so both describe the flag the
+// same way. The hint states what it actually does, because "24/7" alone reads as
+// a label rather than the playback decision it is.
+function AlwaysOnToggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 8, cursor: 'pointer' }}>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        style={{ marginTop: 2, accentColor: C.gold, cursor: 'pointer' }}
+      />
+      <span style={{ minWidth: 0 }}>
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: C.text }}>Broadcasts 24/7</span>
+        <span style={{ display: 'block', fontSize: 10, color: C.faint, lineHeight: 1.45, marginTop: 2 }}>
+          Keeps the player up even when we can't confirm the stream is on. Tick it for a
+          round-the-clock channel; leave it off for one that is dark between events.
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -809,19 +995,20 @@ function AddChannelForm({
   onAdd,
   count,
 }: {
-  onAdd: (url: string, name: string) => Promise<string | null>;
+  onAdd: (url: string, name: string, alwaysOn: boolean) => Promise<string | null>;
   count: number;
 }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
+  const [alwaysOn, setAlwaysOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
     if (!url.trim() || busy) return;
     setBusy(true);
-    const problem = await onAdd(url.trim(), name.trim());
+    const problem = await onAdd(url.trim(), name.trim(), alwaysOn);
     setBusy(false);
     if (problem) {
       setErr(problem);
@@ -829,6 +1016,7 @@ function AddChannelForm({
     }
     setUrl('');
     setName('');
+    setAlwaysOn(false);
     setErr(null);
     setOpen(false);
   }
@@ -876,6 +1064,7 @@ function AddChannelForm({
         placeholder="Name it (optional)"
         style={{ ...inputStyle, marginTop: 6 }}
       />
+      <AlwaysOnToggle checked={alwaysOn} onChange={setAlwaysOn} />
       {err && <div style={{ fontSize: 11, color: '#ffb4ab', lineHeight: 1.45, marginTop: 7 }}>{err}</div>}
       <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.45, marginTop: 7 }}>
         Any form works — youtube.com/@name or /channel/UC…. It joins the whole desk's wall.
