@@ -4,6 +4,7 @@ import type { GuideSlide, GuideDraftSlide, StudyGuide, StudyGuideDetail } from '
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { ActionTile } from './ActionTile';
 import { useAuth } from '../../auth/AuthContext';
 import { fileToScaledDataUrl } from '../../lib/image';
 import { GuidePresentation } from './GuidePresentation';
@@ -110,14 +111,9 @@ export function StudyGuidesLibrary({
             {"Team Study Presentations"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            {"Present your team’s slide-by-slide study presentations. Build a new one over in Study Creation."}
+            {"Present your team’s slide-by-slide study presentations."}
           </p>
         </div>
-        {!readOnly && onNavigate && guides.length > 0 && (
-          <button onClick={() => onNavigate('st_decks')} style={ghostBtn(theme)}>
-            {"✦ Build a presentation"}
-          </button>
-        )}
       </div>
 
       {loading ? (
@@ -128,24 +124,9 @@ export function StudyGuidesLibrary({
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
           {"Couldn’t load your team’s study guides. Try again in a moment."}
         </div>
-      ) : guides.length === 0 ? (
-        <div style={{ ...card(theme), textAlign: 'center' }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>📽️</div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 6 }}>
-            {"No presentations yet"}
-          </div>
-          <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
-            {readOnly
-              ? "A team builds study presentations in Study Creation — chatting with VTS AI or uploading a presentation — then presents them here."
-              : "Head to Study Creation to build one: chat with VTS AI to draft the slides, or upload a PowerPoint. Your presentations then show up here to present."}
-          </div>
-          {!readOnly && onNavigate && (
-            <button onClick={() => onNavigate('st_decks')} style={{ ...primaryBtn(theme, accentGradient(theme)), marginTop: 16 }}>
-              {"Go to Study Creation"}
-            </button>
-          )}
-        </div>
       ) : (
+        // The build tile closes the list, so an empty library still offers the
+        // way forward without a separate empty-state block.
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {guides.map((g) => (
             <GuideCard
@@ -158,6 +139,17 @@ export function StudyGuidesLibrary({
               onDelete={() => remove(g.id)}
             />
           ))}
+          {!readOnly && onNavigate && (
+            <ActionTile
+              theme={theme}
+              icon="sparkles"
+              title="Build a presentation"
+              subtitle="Draft the slides with VTS AI, or upload a PowerPoint."
+              feature="studyCreation"
+              onClick={() => onNavigate('st_decks')}
+              onLockedClick={() => onNavigate('my_access')}
+            />
+          )}
         </div>
       )}
     </div>

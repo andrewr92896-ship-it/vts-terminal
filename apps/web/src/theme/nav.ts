@@ -136,7 +136,6 @@ export const NAV: NavWorkspace[] = [
     accent: C.violet,
     group: 'Studies',
     sections: [
-      { key: 'st_home', label: 'Subjects', icon: 'layers' },
       { key: 'st_game', label: 'Study Game', icon: 'gamepad-2' },
       { key: 'st_cards', label: 'Flashcards', icon: 'copy' },
       { key: 'st_test', label: 'Practice Tests', icon: 'file-check-2' },

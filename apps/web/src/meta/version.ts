@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.34';
+export const APP_VERSION = 'Beta V 6.35';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.35',
+    date: 'August 2, 2026',
+    notes: [
+      'Study Presentations now ends with a "Build a presentation" tile, and Study Creation is a chooser — three tiles for study games, flashcard sets and presentations — instead of all three makers stacked down one page.',
+      'Removed the Subjects section from Studies. With six sections in the sidebar, a page listing them was redundant.',
+    ],
+  },
   {
     version: 'Beta V 6.34',
     date: 'August 2, 2026',

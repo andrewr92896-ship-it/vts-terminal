@@ -131,7 +131,7 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   markets: 'live',
   trading: 'tradedesk',
   investments: 'inv_overview',
-  studies: 'st_home',
+  studies: 'st_game',
   myportal: 'my_team',
   admin: 'ad_users',
   founder: 'ad_ai',
