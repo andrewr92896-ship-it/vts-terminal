@@ -95,6 +95,10 @@ export interface User {
   // Admin-assigned recognition badge keys (see BadgeType). Unioned with the
   // auto badges from the badge registry when rendered next to the name.
   badges: string[];
+  // The clock this user reads the terminal on — 'auto' (follow the device) or an
+  // IANA zone name. Stored on the account, so it follows them between devices.
+  // Never null: an account that has never chosen gets the Eastern default.
+  displayTimezone: string;
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards to teammates; the Trading workspace itself stays shared.
   teamId: string | null;

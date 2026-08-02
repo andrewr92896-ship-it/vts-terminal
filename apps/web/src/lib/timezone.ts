@@ -1,5 +1,11 @@
-// The clock the terminal DISPLAYS times in. Set from My Terminal ▸ Preferences,
-// stored per device (localStorage) alongside the other view choices there.
+// The clock the terminal DISPLAYS times in. Set from My Terminal ▸ Preferences
+// and stored ON THE ACCOUNT (`users.display_timezone`), so it follows the person
+// to every device they sign in on rather than being re-picked per browser.
+//
+// This module holds no storage of its own: `setAccountZone` is fed from the
+// signed-in user by AuthContext, and every formatter reads that. Signing out
+// returns it to the default. The one exception is `takeLegacyDeviceZone`, which
+// exists only to carry over the per-device value this replaced.
 //
 // The default is Eastern, and that matters: every stamp in the terminal was ET
 // before this existed, so anything other than an explicit choice by the user has
@@ -24,7 +30,9 @@
 // every compact stamp carries the full form with its abbreviation in the hover
 // title, so the instant is always recoverable.
 
-const KEY = 'vts.display.timezone';
+// The per-device key this setting used to live under, kept only so an existing
+// choice can be carried onto the account once (see takeLegacyDeviceZone).
+const LEGACY_KEY = 'vts.display.timezone';
 
 // The stored value: an IANA zone name, or 'auto' to follow the device.
 export const AUTO = 'auto';
@@ -148,24 +156,6 @@ function usableZone(zone: string): boolean {
   }
 }
 
-// The raw preference: 'auto', or an IANA zone name. What the picker shows.
-export function getZonePref(): string {
-  try {
-    const v = localStorage.getItem(KEY);
-    if (!v) return DEFAULT_ZONE;
-    if (v === AUTO) return AUTO;
-    return usableZone(v) ? v : DEFAULT_ZONE;
-  } catch {
-    return DEFAULT_ZONE;
-  }
-}
-
-// The IANA zone actually in force — the preference with 'auto' resolved.
-export function getDisplayZone(): string {
-  const pref = getZonePref();
-  return pref === AUTO ? deviceZone() : pref;
-}
-
 type Listener = () => void;
 const listeners = new Set<Listener>();
 
@@ -181,13 +171,45 @@ export function subscribeZone(fn: Listener): () => void {
   };
 }
 
-export function setZonePref(v: string): void {
-  try {
-    localStorage.setItem(KEY, v === AUTO || usableZone(v) ? v : DEFAULT_ZONE);
-  } catch {
-    /* ignore — private mode / storage disabled */
-  }
+// The account's setting, as last received from the server. Not persisted here —
+// the account is the store, and this is the copy the formatters read between
+// renders. It is a module-level value rather than React state because `zoneFmt`
+// is called from plain functions all over the terminal, not just components.
+let accountZone: string = DEFAULT_ZONE;
+
+// Fed from the signed-in user by AuthContext, on every path that sets a user —
+// sign-in, session check, profile save. Null (signed out) returns the default.
+export function setAccountZone(zone: string | null | undefined): void {
+  const next = !zone ? DEFAULT_ZONE : zone === AUTO || usableZone(zone) ? zone : DEFAULT_ZONE;
+  if (next === accountZone) return;
+  accountZone = next;
   for (const fn of listeners) fn();
+}
+
+// The raw preference: 'auto', or an IANA zone name. What the picker shows.
+export function getZonePref(): string {
+  return accountZone;
+}
+
+// The per-device value from before this setting moved onto the account, read
+// and cleared in one go so the carry-over can happen at most once. Returns null
+// when there is nothing to carry (the ordinary case on every device but the one
+// that set it).
+export function takeLegacyDeviceZone(): string | null {
+  try {
+    const v = localStorage.getItem(LEGACY_KEY);
+    localStorage.removeItem(LEGACY_KEY);
+    if (!v || v === DEFAULT_ZONE) return null;
+    return v === AUTO || usableZone(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+// The IANA zone actually in force — the preference with 'auto' resolved.
+export function getDisplayZone(): string {
+  const pref = getZonePref();
+  return pref === AUTO ? deviceZone() : pref;
 }
 
 // Intl.DateTimeFormat is expensive enough that every caller in this codebase

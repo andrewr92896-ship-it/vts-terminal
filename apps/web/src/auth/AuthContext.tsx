@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { api, ApiError } from '../api/client';
 import type { User } from '../api/types';
+import { DEFAULT_ZONE, setAccountZone, takeLegacyDeviceZone } from '../lib/timezone';
 
 interface AuthState {
   user: User | null;
@@ -20,7 +21,13 @@ interface AuthState {
   acceptTerms: () => Promise<void>;
   // Self-service account actions; each updates the cached user on success.
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
-  updateProfile: (patch: { username?: string; displayName?: string; email?: string; avatar?: string }) => Promise<void>;
+  updateProfile: (patch: {
+    username?: string;
+    displayName?: string;
+    email?: string;
+    avatar?: string;
+    displayTimezone?: string;
+  }) => Promise<void>;
   // Re-read the signed-in user from the server. Used after a change that alters
   // what the account can reach — turning a feature on or off — so the sidebar
   // and routing pick it up without a reload.
@@ -50,6 +57,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       alive = false;
     };
   }, []);
+
+  // The clock every timestamp in the terminal is formatted on lives on the
+  // account, so the module that does the formatting is fed from the signed-in
+  // user. One effect covers every path that sets a user — sign-in, the session
+  // check, a profile save — and signing out returns it to the default.
+  useEffect(() => {
+    setAccountZone(user?.displayTimezone ?? null);
+  }, [user?.displayTimezone]);
+
+  // One-time carry-over from when this setting was per device: if a browser
+  // still holds the old localStorage value and the account has never chosen,
+  // push it up so an existing choice does not silently revert to Eastern. The
+  // key is read and cleared in one go, so this runs at most once per browser.
+  // Best-effort — the demo cannot write, and a failure just means re-picking.
+  useEffect(() => {
+    if (!user || user.isDemo) return;
+    const legacy = takeLegacyDeviceZone();
+    if (!legacy || user.displayTimezone !== DEFAULT_ZONE) return;
+    api
+      .updateProfile({ displayTimezone: legacy })
+      .then((r) => setUser(r.user))
+      .catch(() => {
+        /* leave the account on its default; the picker still works */
+      });
+  }, [user]);
 
   const login = useCallback(async (email: string, password: string) => {
     const r = await api.login(email, password);
@@ -83,7 +115,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const updateProfile = useCallback(
-    async (patch: { username?: string; displayName?: string; email?: string; avatar?: string }) => {
+    async (patch: {
+      username?: string;
+      displayName?: string;
+      email?: string;
+      avatar?: string;
+      displayTimezone?: string;
+    }) => {
       const r = await api.updateProfile(patch);
       setUser(r.user);
     },

@@ -272,6 +272,8 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     role: 'Viewer' as const, // legacy column, unused; kept populated for type/back-compat
     roles: JSON.stringify(roles),
     badges: null,
+    // Never chosen — resolves to Eastern until they pick one in Preferences.
+    displayTimezone: null,
     teamId,
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,

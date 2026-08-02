@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.37';
+export const APP_VERSION = 'Beta V 6.38';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.38',
+    date: 'August 2, 2026',
+    notes: [
+      'Your time zone is saved to your account instead of the device, so it follows you to your phone, your laptop and anywhere else you sign in. A zone you had already picked carries over on its own.',
+    ],
+  },
   {
     version: 'Beta V 6.37',
     date: 'August 2, 2026',

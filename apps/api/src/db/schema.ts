@@ -51,6 +51,11 @@ export const users = sqliteTable('users', {
   // badges (e.g. the Admin shield, derived from the admin role) are added on top
   // of these at serialization time and are not stored here. Null/absent = none.
   badges: text('badges'),
+  // The clock this user reads the terminal on (My Terminal ▸ Preferences): the
+  // literal 'auto' to follow whichever device they are on, or an IANA zone name.
+  // Null = never chosen, which resolves to Eastern — the clock every stamp was
+  // on before the setting existed. See DEFAULT_DISPLAY_TIMEZONE in auth/rbac.ts.
+  displayTimezone: text('display_timezone'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
   viewBrokerage: integer('view_brokerage', { mode: 'boolean' })

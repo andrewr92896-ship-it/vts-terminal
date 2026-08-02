@@ -3,13 +3,13 @@ import type { Theme } from '../../theme/themes';
 import { C } from '../../theme/tokens';
 import { SectionHeader, inputStyle, panel, panelLabel } from '../admin/adminUi';
 import { getTradeLayout, setTradeLayout, type Layout } from '../trading/preferences';
+import { ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import {
   AUTO,
   usableZoneGroups,
   deviceZone,
-  getDisplayZone,
   getZonePref,
-  setZonePref,
   zoneFmt,
   zoneOffsetLabel,
 } from '../../lib/timezone';
@@ -35,7 +35,7 @@ export function Preferences({ theme }: { theme: Theme }) {
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 20px 40px' }}>
       <SectionHeader
         title="Preferences"
-        subtitle="Your personal view choices. Saved for you on this device."
+        subtitle="Your personal view choices."
       />
 
       <TimeZoneCard theme={theme} />
@@ -45,7 +45,7 @@ export function Preferences({ theme }: { theme: Theme }) {
           {"Trade Log layout"}
         </div>
         <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-          {"How the Trade Log lays out your trades. This replaces the Deck / Tape switch that used to sit in the Trade Log header."}
+          {"How the Trade Log lays out your trades. Saved on this device."}
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
           {opts.map((o) => {
@@ -77,8 +77,22 @@ export function Preferences({ theme }: { theme: Theme }) {
 // schedule stay Eastern whatever is picked here, since those are facts about the
 // market rather than about the reader; the card says so, because nothing on the
 // control could.
+//
+// Unlike the layout choice below, this one is stored on the ACCOUNT — it follows
+// the person to every device they sign in on. So it is the only control on this
+// screen that can fail, and the only one that has to say so.
 function TimeZoneCard({ theme }: { theme: Theme }) {
+  const { user, updateProfile } = useAuth();
+  // The account's value is the source of truth; this mirrors it so the select
+  // moves the instant it is used, and snaps back if the save is refused.
   const [pref, setPref] = useState<string>(() => getZonePref());
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const accountZone = user?.displayTimezone;
+  useEffect(() => {
+    if (accountZone) setPref(accountZone);
+  }, [accountZone]);
+
   // Re-render every second so the sample below the picker ticks like a clock.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -86,9 +100,21 @@ function TimeZoneCard({ theme }: { theme: Theme }) {
     return () => clearInterval(id);
   }, []);
 
-  function choose(v: string) {
+  const readOnly = !!user?.isDemo;
+
+  async function choose(v: string) {
+    const previous = pref;
     setPref(v);
-    setZonePref(v);
+    setSaving(true);
+    setError(null);
+    try {
+      await updateProfile({ displayTimezone: v });
+    } catch (e) {
+      setPref(previous);
+      setError(e instanceof ApiError ? e.message : 'Could not save your time zone');
+    } finally {
+      setSaving(false);
+    }
   }
 
   // Built once. Every option carries its current offset, which costs a format
@@ -104,7 +130,10 @@ function TimeZoneCard({ theme }: { theme: Theme }) {
     [],
   );
 
-  const zone = getDisplayZone();
+  // The sample follows the SELECTION, not what is saved, so the clock moves the
+  // moment a zone is picked rather than after the round-trip. A refused save
+  // puts `pref` back, and the sample with it.
+  const zone = pref === AUTO ? deviceZone() : pref;
   const sample = zoneFmt(
     { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' },
     zone,
@@ -116,10 +145,15 @@ function TimeZoneCard({ theme }: { theme: Theme }) {
         {"Time zone"}
       </div>
       <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
-        {"Times across the terminal are shown on this clock. Market hours, strategy sessions and the Fed schedule stay on Eastern Time wherever you are — those are the market's hours, not yours."}
+        {"Times across the terminal are shown on this clock, saved to your account so it follows you between devices. Market hours, strategy sessions and the Fed schedule stay on Eastern Time wherever you are — those are the market's hours, not yours."}
       </div>
 
-      <select value={pref} onChange={(e) => choose(e.target.value)} style={{ ...inputStyle, marginTop: 12 }}>
+      <select
+        value={pref}
+        disabled={readOnly || saving}
+        onChange={(e) => void choose(e.target.value)}
+        style={{ ...inputStyle, marginTop: 12, opacity: readOnly || saving ? 0.6 : 1 }}
+      >
         <option value={AUTO}>{`Automatic — follow this device (${deviceZone()})`}</option>
         {groups.map((g) => (
           <optgroup key={g.label} label={g.label}>
@@ -143,6 +177,8 @@ function TimeZoneCard({ theme }: { theme: Theme }) {
       >
         {sample}
       </div>
+
+      {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
     </section>
   );
 }
