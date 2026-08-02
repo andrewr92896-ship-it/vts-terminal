@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.16';
+export const APP_VERSION = 'Beta V 6.17';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.17',
+    date: 'August 2, 2026',
+    notes: [
+      'Second attempt at getting gold and silver live. The source added last release returned nothing once deployed — it hands a server a different response than it hands a browser, so the request now identifies itself the way a browser does, and falls back to a second address if the first gives nothing.',
+      'If it still comes back empty, the two rows stay on their sample figures exactly as now — nothing else on the board is affected either way.',
+    ],
+  },
   {
     version: 'Beta V 6.16',
     date: 'August 2, 2026',
