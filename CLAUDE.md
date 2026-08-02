@@ -698,21 +698,72 @@ workspaces list** (see `theme/nav.ts` order).
 - **Investments** (teal, key `investments`): a read-only, layman-friendly
   **long-term portfolio tracker** — 401(k), IRA, ESA, and general holdings. This
   is the platform's intended "bread and butter" for a future public/App Store
-  launch, and the **whole foundation is currently "Coming Soon" placeholders**
-  (`workspaces/investments/ComingSoon.tsx`, routed via `COMING_SOON_SCREENS` in
-  `Portal.tsx`). Sections: Portfolio Overview (`inv_overview`), Accounts
-  (`inv_accounts`), Holdings (`inv_holdings`), Allocation (`inv_allocation`),
-  Performance (`inv_performance`), Dividends & Income (`inv_dividends`),
-  Contributions & Goals (`inv_contributions`), Projections (`inv_projections`).
+  launch. **All eight sections are built** (`workspaces/investments/`, one lazy
+  chunk via `index.tsx`; `screens.ts` holds the key set separately so `Portal`
+  can route without pulling the workspace into the main bundle): Portfolio
+  Overview (`inv_overview`), Accounts (`inv_accounts`), Holdings
+  (`inv_holdings`), Allocation (`inv_allocation`), Performance
+  (`inv_performance`), Dividends & Income (`inv_dividends`), Contributions &
+  Goals (`inv_contributions`), Projections (`inv_projections`). Server side is
+  `apps/api/src/investments/*` over `routes/investments.ts`. Full build notes and
+  the open provider decisions are in `docs/design/investments/NOTES.md`.
   **Regulatory posture (decided with the owner):** strictly a *tracker that
   displays and educates* — no in-app trade execution or money movement (stays in
   Apple's 3.2.1(viii) portfolio-tracker lane) and **no personalized
   buy/sell/rebalance advice** (avoids RIA/adviser exposure). Deliberately **no**
-  rebalancing or tax-advice sections. Account connection is designed around a
-  **read-only aggregator (Plaid / SnapTrade)** plus **manual entry** — most
-  retirement providers (Fidelity, Vanguard 401k) don't expose per-user API keys
-  the way OANDA/Kraken do. Every advice-flavored surface must carry an
-  "informational only, not investment advice" disclaimer.
+  rebalancing or tax-advice sections, and **no target allocation to measure
+  against** — Allocation states what is true ("68% is in one holding"), never
+  what to do about it. Every advice-flavored surface carries an "informational
+  only, not investment advice" disclaimer (`Disclaimer` in
+  `workspaces/investments/ui.tsx`).
+  - **Everything is personal, never team-scoped.** Unlike Trading, where the
+    whole desk watches one book, an investment account belongs to one user:
+    every table carries `user_id`, every query filters on the caller, and
+    `scopedTraderIds` deliberately does not appear in this workspace. Do not add
+    a team dimension here.
+  - **Tables** (migration `0087`): `investment_accounts`, `investment_holdings`,
+    `investment_transactions`, `investment_snapshots`, `investment_goals` — all
+    five in the `admin/service.ts` per-user delete list. **No credential column
+    exists anywhere in them**, deliberately: the workspace never places an order,
+    so there is no table here that could hold a broker secret. A holding's
+    `symbol` is **nullable** because 401(k) menus are full of collective trusts
+    and target-date funds with a name and no ticker; a transaction's `tax_year`
+    is separate from `occurred_at` because a January contribution can be
+    designated to the previous year.
+  - **An unpriced holding is never worth zero.** It is excluded from every total
+    and *counted*, and the payload carries `unpricedCount` so the screens can say
+    how much they could not see. Treating unpriced as zero silently understates a
+    portfolio, which is the most misleading thing a tracker can do. Same family
+    of rule: a **day move** is only rendered when live quotes cover ≥60% of the
+    book, **market gain** is always separated from money that was merely added,
+    and dividend **yield is trailing** (what was received) rather than a forward
+    figure no available source could support.
+  - **Prices come through one seam** (`investments/prices.ts`). Crypto is live
+    and keyless; equities/ETFs are live only when `FINNHUB_API_KEY` is set;
+    mutual funds and collective trusts have **no free provider** and stay on the
+    price the user typed, stamped with when. Every holding reports `live` /
+    `manual` / `none` and the UI shows it — the same honesty rule as Market
+    Data's `sample: true`. Adding a provider means another entry in that seam,
+    not a branch in the service.
+  - **Account connection is still manual entry only.** The designed path is a
+    **read-only aggregator (Plaid / SnapTrade)** — most retirement providers
+    (Fidelity, Vanguard 401k) don't expose per-user API keys the way OANDA/Kraken
+    do — and it needs a paid provider account, so it is an owner decision rather
+    than a build. `investment_accounts.source` already carries `plaid` /
+    `snaptrade` values for it; the client can never set `source` (a manual
+    account must not be able to claim it is a verified connection).
+  - **Contribution limits are a hand-maintained catalog** (`investments/
+    limits.ts`) keyed by tax year. A year not in the table reports **no limit**
+    rather than borrowing a neighbouring year's, and catch-up amounts are a
+    separate line because the terminal has no birthdate. **Update it every year**
+    — it is the one figure here where being stale has a real cost.
+  - **Performance history is built forward, never back-filled**: one whole-
+    portfolio reading per ET day, written on portfolio read (skipped for the
+    demo, which must not accumulate rows). Nothing available can price a 401(k)
+    fund as of last March, so any earlier curve would be one that never happened.
+  - `npm run verify:investments` checks the portfolio math offline against
+    hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
+    touching `math.ts` or `limits.ts`.
 - **My Terminal** also holds **Feature Access** (`my_access`) — the per-user opt-in
   screen, see its own section below — plus two personal roll-up sections
   (emerald), both currently "Coming Soon":
@@ -1546,6 +1597,15 @@ Run before merging (both must pass):
 
 - Typecheck: `npm run typecheck` (root; api + web). Single workspace:
   `npm --workspace @vts/api run typecheck` / `@vts/web`.
+- **A migration is not verified by `db:migrate` printing "Migrations applied."**
+  Two things silently stop one from running, and both have bitten this repo:
+  it must be registered in `migrations/meta/_journal.json` (adding the `.sql`
+  file is not enough), and its statements must be separated by
+  `--> statement-breakpoint` or **only the first statement is applied**. After
+  adding one, run it against a scratch database and then list the tables:
+  `DATABASE_URL="file:/tmp/x.db" npm run db:migrate` and check what actually
+  exists. See `docs/design/investments/NOTES.md` for the audit of which existing
+  migrations are affected.
 - Build: `npm run build` (api `tsc` + web `vite build`). The web build emits
   **two** HTML entries — `dist/index.html` and `dist/employee.html`; if the
   latter is missing, `/employee` serves a plain "not built" 404.

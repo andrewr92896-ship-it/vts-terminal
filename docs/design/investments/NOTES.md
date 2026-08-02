@@ -7,6 +7,24 @@ code are the ones that get undone by the next person.
 Started 2026-08-02, overnight session, branch
 `claude/investments-workspace-auto-rhelsa`.
 
+## Status
+
+All eight sections are built and routed. What is **not** built, and why:
+
+- **Automatic account connection** (Plaid / SnapTrade) — needs a paid provider
+  account and, for Plaid, a production access request. Owner decision, not a
+  build. `investment_accounts.source` is ready for it.
+- **Live prices for funds** — no free provider covers mutual funds or collective
+  trusts. Owner decision.
+- **My Terminal ▸ Investment Holdings and Net Worth** — still Coming Soon. Both
+  summarise *across* workspaces, so they come after the things they summarise;
+  Investment Holdings is now unblocked and is the obvious next piece.
+
+Verified before deploying: `typecheck`, `build`, `verify:investments`, and a
+live run of the API covering the portfolio read, every write, the demo's
+read-only posture, cross-user isolation with a second real account, and a
+per-user delete taking all five tables with it.
+
 ## What this workspace is, and the line it does not cross
 
 A read-only, layman-friendly long-term portfolio tracker — 401(k), IRA, ESA,
