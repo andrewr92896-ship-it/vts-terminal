@@ -1556,6 +1556,11 @@ export const earlyAccessRequests = sqliteTable('early_access_requests', {
   email: text('email').notNull(),
   phone: text('phone'),
   source: text('source').notNull(),
+  // 'new' until an admin has dealt with the lead, then 'handled'. Added so the
+  // Administrator Log can show a request as open and let it be closed without
+  // deleting the lead — before this the only way to clear one was to throw the
+  // person's contact details away.
+  status: text('status').notNull().default('new'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type EarlyAccessRequestRow = typeof earlyAccessRequests.$inferSelect;
@@ -1920,3 +1925,124 @@ export const employeeTasks = sqliteTable('employee_tasks', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type EmployeeTaskRow = typeof employeeTasks.$inferSelect;
+
+// ---- Memberships (the paid tiers) ----
+//
+// One row per user holding the tier they have been granted and when it runs out.
+// This is the paywall's storage, and it is deliberately NOT the whole answer to
+// "what tier is this account" — memberships/service.ts resolves that, because
+// admins, software developers and founders are always Max by virtue of their
+// role and never need a row.
+//
+// `expiresAt` null means indefinite. Who may grant that is a rule, not a
+// preference: an admin is capped at six months, while founder-level users may
+// grant any length including forever (assertCanGrantMembership). Every manual
+// grant carries a `note` saying why — required, because a membership handed out
+// without a stated reason is exactly what the Administrator Log exists to catch.
+export const MEMBERSHIP_TIERS = ['free', 'premium', 'max'] as const;
+export type MembershipTier = (typeof MEMBERSHIP_TIERS)[number];
+
+export const userMemberships = sqliteTable('user_memberships', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  tier: text('tier').notNull().default('free'),
+  // Null = indefinite. A past timestamp means the grant has lapsed and the
+  // account reads Free again; nothing sweeps the row, the resolver just checks.
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
+  // How the tier was arrived at: 'manual' (an admin granted it), 'grandfather'
+  // (carried over when the paywall shipped), or 'billing' (a future Stripe /
+  // StoreKit subscription — nothing writes this yet).
+  source: text('source').notNull().default('manual'),
+  // Why it was granted. Required on a manual grant.
+  note: text('note'),
+  // Who granted it. Null once that account is deleted; the name is kept beside
+  // it so the record still says where the grant came from.
+  grantedBy: text('granted_by').references(() => users.id, { onDelete: 'set null' }),
+  grantedByName: text('granted_by_name'),
+  grantedAt: integer('granted_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type UserMembershipRow = typeof userMemberships.$inferSelect;
+
+// ---- Administrator Log ----
+//
+// The record of what admins DO. Append-only in spirit: a row is created and may
+// later be resolved, never rewritten to say something else happened.
+//
+// It holds administrative ACTIONS only — chiefly manual membership grants. The
+// bug reports, support requests and early-access leads that also appear on the
+// Administrator Log screen are deliberately NOT copied in here: they are
+// projected at read time from their own tables (adminLog.ts), so closing a bug
+// report in the Bug Reports screen turns its log entry green by itself. Storing
+// a second copy of their state is how two screens end up disagreeing about
+// whether a ticket is open.
+//
+// `state` drives the colour, and the three are distinct meanings rather than a
+// severity ladder: 'open' (red) still needs somebody, 'resolved' (green) was
+// dealt with, 'info' (gray) is a record of something that happened and asks
+// nothing of anyone.
+export const ADMIN_LOG_STATES = ['open', 'resolved', 'info'] as const;
+export type AdminLogState = (typeof ADMIN_LOG_STATES)[number];
+
+export const adminLog = sqliteTable('admin_log', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(), // 'membership.granted' | 'membership.revoked' | …
+  state: text('state').notNull().default('info'),
+  title: text('title').notNull(),
+  detail: text('detail'),
+  // Who acted, and who it was done to. Both keep a denormalized name so the log
+  // still reads correctly after a rename or a deleted account.
+  actorId: text('actor_id').references(() => users.id, { onDelete: 'set null' }),
+  actorName: text('actor_name'),
+  targetUserId: text('target_user_id').references(() => users.id, { onDelete: 'set null' }),
+  targetName: text('target_name'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+  resolvedBy: text('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+  resolvedByName: text('resolved_by_name'),
+});
+export type AdminLogRow = typeof adminLog.$inferSelect;
+
+// ---- Developer Blog ----
+//
+// The Developer Terminal's idea board. A post is written either by a signed-in
+// founder-level user or by "VTS Development" — the terminal's own development
+// account, which is what Claude Code posts as. That is an `authorKind`, not a
+// real user row, deliberately: there is no account to sign in as, so nothing can
+// authenticate as VTS Development and no password exists to leak.
+export const DEV_BLOG_AUTHORS = ['user', 'vts_development'] as const;
+export type DevBlogAuthorKind = (typeof DEV_BLOG_AUTHORS)[number];
+
+export const devBlogPosts = sqliteTable('dev_blog_posts', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  authorKind: text('author_kind').notNull().default('user'),
+  authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+  authorName: text('author_name').notNull(),
+  pinned: integer('pinned', { mode: 'boolean' }).notNull().default(false),
+  // Set on a post that came from a checked-in seed entry (devBlog/seeded.ts), so
+  // reseeding on boot updates that post instead of adding a duplicate. Null for
+  // anything typed into the screen.
+  seedKey: text('seed_key').unique(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type DevBlogPostRow = typeof devBlogPosts.$inferSelect;
+
+export const devBlogReplies = sqliteTable('dev_blog_replies', {
+  id: text('id').primaryKey(),
+  postId: text('post_id')
+    .notNull()
+    .references(() => devBlogPosts.id, { onDelete: 'cascade' }),
+  body: text('body').notNull(),
+  authorKind: text('author_kind').notNull().default('user'),
+  authorId: text('author_id').references(() => users.id, { onDelete: 'set null' }),
+  authorName: text('author_name').notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type DevBlogReplyRow = typeof devBlogReplies.$inferSelect;

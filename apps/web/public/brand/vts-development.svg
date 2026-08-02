@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="VTS Development">
+  <!--
+    The VTS Development avatar — the mark shown beside every post the terminal's
+    own development account writes on the Developer Blog.
+
+    An SVG rather than a bitmap so it stays crisp at the 28px it usually renders
+    at and costs a couple of kilobytes; the geometry is the app icon's — a navy
+    field, the gold wordmark, and the diamond rule beneath it.
+  -->
+  <defs>
+    <linearGradient id="vtsdev-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#12307e"/>
+      <stop offset="0.55" stop-color="#183a92"/>
+      <stop offset="1" stop-color="#12307e"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#vtsdev-bg)"/>
+  <text
+    x="512" y="560"
+    fill="#e3bd6a"
+    font-family="Georgia, 'Times New Roman', serif"
+    font-size="300"
+    font-weight="400"
+    letter-spacing="34"
+    text-anchor="middle"
+  >VTS</text>
+  <!-- The rule: a short bar, a diamond, a short bar. -->
+  <g fill="#e3bd6a">
+    <rect x="344" y="636" width="120" height="10"/>
+    <rect x="560" y="636" width="120" height="10"/>
+    <rect x="512" y="605" width="52" height="52" transform="rotate(45 512 641)"/>
+  </g>
+</svg>

@@ -47,6 +47,9 @@ import { AdminMessageTemplates } from '../workspaces/admin/AdminMessageTemplates
 import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
 import { AdminSupport } from '../workspaces/admin/AdminSupport';
 import { AdminSidebarLayout } from '../workspaces/admin/AdminSidebarLayout';
+import { AdminLog } from '../workspaces/admin/AdminLog';
+import { AdminGuidelines } from '../workspaces/admin/AdminGuidelines';
+import { DevBlog } from '../workspaces/admin/DevBlog';
 import {
   HelpHowTo,
   HelpAnnouncements,
@@ -66,7 +69,7 @@ import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
 import { INVESTMENT_SCREENS } from '../workspaces/investments/screens';
-import { FeatureAccess } from '../workspaces/myportal/FeatureAccess';
+import { PremiumFeatures } from '../workspaces/myportal/PremiumFeatures';
 
 // The Studies screens are code-split into a lazy chunk that only loads when the
 // Studies workspace is opened — keeping the initial app load lean for everyone
@@ -105,9 +108,6 @@ const InvestmentsWorkspace = lazy(() =>
 );
 // My Terminal's cross-workspace roll-up — lazy, since it pulls in the shared
 // Investments UI kit.
-const InvestmentHoldingsScreen = lazy(() =>
-  import('../workspaces/myportal/InvestmentHoldings').then((m) => ({ default: m.InvestmentHoldingsScreen })),
-);
 const NetWorthScreen = lazy(() =>
   import('../workspaces/myportal/NetWorth').then((m) => ({ default: m.NetWorthScreen })),
 );
@@ -174,6 +174,12 @@ function renderScreen(
     // (admins only) and enforced server-side on every admin endpoint.
     case 'ad_users':
       return <AdminUsers theme={theme} />;
+    case 'ad_log':
+      return <AdminLog theme={theme} />;
+    case 'ad_guidelines':
+      return <AdminGuidelines theme={theme} />;
+    case 'ad_blog':
+      return <DevBlog theme={theme} />;
     case 'ad_teams':
       return <AdminTeams theme={theme} />;
     case 'ad_badges':
@@ -521,14 +527,12 @@ export function Portal() {
     // The Investments workspace — the long-term portfolio tracker.
     if (INVESTMENT_SCREENS.has(scr)) return <InvestmentsWorkspace screen={scr} onNavigate={selectScreen} />;
     switch (scr) {
-      case 'my_holdings':
-        return <InvestmentHoldingsScreen onNavigate={goToSection} />;
       case 'my_networth':
         return <NetWorthScreen onNavigate={goToSection} />;
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
       case 'my_access':
-        return <FeatureAccess theme={theme} />;
+        return <PremiumFeatures theme={theme} />;
       case 'my_prefs':
         return <Preferences theme={theme} />;
       case 'my_settings':
@@ -692,7 +696,7 @@ export function Portal() {
     <PrivacyProvider>
       <BadgesProvider>
       <AlertSoundProvider>
-          {canAccessWorkspace(effectiveRoles, 'trading') && <AlertSoundWatcher />}
+          {canAccessWorkspace(effectiveRoles, 'trading', features) && <AlertSoundWatcher />}
 
           {isPhone ? (
             <div style={{ height: 'var(--app-h)', overflow: 'hidden', background: C.bg, color: C.text }}>
@@ -743,6 +747,10 @@ export function Portal() {
             workspace={workspace}
             workspaceLabel={WORKSPACE_LABELS[workspace]}
             onClose={() => setAiOpen(false)}
+            onOpenMembership={() => {
+              setAiOpen(false);
+              goToSection('my_access');
+            }}
           />
           <AccountSettings open={accountOpen} theme={theme} onClose={() => setAccountOpen(false)} />
 

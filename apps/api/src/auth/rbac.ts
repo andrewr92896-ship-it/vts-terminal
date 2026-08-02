@@ -3,6 +3,10 @@ import { config } from '../config.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { LEGAL_VERSION } from '../legal/version.js';
 import { DEFAULT_FEATURES, type UserFeatures } from '../features/service.js';
+// tiers.ts, not memberships/service.ts — the service asks this module who is an
+// admin, so importing it back here would be a cycle. tiers.ts is pure data.
+import { FREE_MEMBERSHIP_VIEW, type MembershipView } from '../memberships/tiers.js';
+import { membershipBadgeKey } from '../badges/service.js';
 
 // The company email domain that gates the Employee Portal (EMPLOYEE_EMAIL_DOMAIN).
 export const COMPANY_EMAIL_DOMAIN = config.EMPLOYEE_EMAIL_DOMAIN;
@@ -210,15 +214,30 @@ export interface PublicUser {
     // Whether this is the terminal owner account (the only account that can grant
     // the Founder / Software Developer roles).
     owner: boolean;
+    // The paid tier this account holds and which paid features it reaches.
+    // Separate from `features` above: features are what the user has ASKED to
+    // see, this is what they are ALLOWED to see. The server enforces it on every
+    // endpoint; this copy only drives locks and upgrade prompts in the UI.
+    membership: MembershipView;
   };
 }
 
-// `teamName` and `features` are resolved by the caller (routes), since this
-// module stays free of database access.
+// A tier's badge is earned, not assigned: it is appended on read rather than
+// stored in users.badges, so it appears and disappears with the membership and
+// there is no row to go stale when one lapses.
+function withMembershipBadge(assigned: string[], tier: string): string[] {
+  const key = membershipBadgeKey(tier);
+  if (!key || assigned.includes(key)) return assigned;
+  return [...assigned, key];
+}
+
+// `teamName`, `features` and `membership` are resolved by the caller (routes),
+// since this module stays free of database access.
 export function toPublicUser(
   u: UserRow,
   teamName?: string | null,
   features: UserFeatures = DEFAULT_FEATURES,
+  membership: MembershipView = FREE_MEMBERSHIP_VIEW,
 ): PublicUser {
   const roles = parseRoles(u);
   const workspaces = workspacesForRoles(roles);
@@ -231,7 +250,11 @@ export function toPublicUser(
     email: u.username === DEMO_USERNAME ? null : u.email,
     avatarUrl: u.avatar ?? null,
     roles,
-    badges: parseBadges(u),
+    // The stored badges plus the one their tier earns them. Added here rather
+    // than left to the client so every surface that renders a name gets it from
+    // one place — and so it can never be out of step with the tier, since both
+    // come off the same payload.
+    badges: withMembershipBadge(parseBadges(u), membership.tier),
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,
     viewBrokerage: u.viewBrokerage,
@@ -253,6 +276,7 @@ export function toPublicUser(
       admin: !isDemo && isAdmin(roles),
       founder: !isDemo && isFounder(roles),
       owner: !isDemo && isOwnerUser(u),
+      membership,
     },
   };
 }

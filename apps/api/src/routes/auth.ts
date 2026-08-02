@@ -17,13 +17,21 @@ import { DEMO_USERNAME } from '../demo/identity.js';
 import { ensureDemoAccount } from '../seed.js';
 import { getTeamName } from '../teams/service.js';
 import { featuresForUser } from '../features/service.js';
+import { getMembershipView } from '../memberships/service.js';
 
-// Build the browser-safe user, resolving the trading-team name from the user's
-// teamId so the client can show which team they're on, plus the optional
-// features they have turned on (which decides the workspaces the sidebar draws).
+// Build the browser-safe user: the trading-team name from the user's teamId, the
+// optional features they have turned on (which decides the workspaces the
+// sidebar draws), and their membership (which decides what is locked inside
+// them). Features and membership are separate axes on purpose — a Max member can
+// still have Advanced Trading switched off, because that is a choice rather than
+// a purchase.
 async function publicUser(u: typeof users.$inferSelect): Promise<PublicUser> {
-  const [teamName, features] = await Promise.all([getTeamName(u.teamId), featuresForUser(u)]);
-  return toPublicUser(u, teamName, features);
+  const [teamName, features, membership] = await Promise.all([
+    getTeamName(u.teamId),
+    featuresForUser(u),
+    getMembershipView(u),
+  ]);
+  return toPublicUser(u, teamName, features, membership);
 }
 
 // Sign-in is by email. `username` is still accepted as an optional fallback

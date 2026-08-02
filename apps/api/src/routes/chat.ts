@@ -1,13 +1,17 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireAdmin } from '../auth/middleware.js';
-import { canAccessWorkspace, isAdmin, parseRoles } from '../auth/rbac.js';
+import { canAccessWorkspace, isAdmin, isFounder, parseRoles } from '../auth/rbac.js';
 import { getTeamName } from '../teams/service.js';
 import {
   ChatForbiddenError,
+  deleteAdminMessage,
   deleteTeamMessage,
+  latestAdminMessageAt,
   latestTeamMessageAt,
+  listAdminMessages,
   listTeamMessages,
+  postAdminMessage,
   postTeamMessage,
 } from '../chat/service.js';
 import {
@@ -83,6 +87,38 @@ export async function chatRoutes(app: FastifyInstance) {
     }
   });
 
+  // ---- Administrator chat ----
+  //
+  // One install-wide room for founders, software developers and admins. On
+  // requireAdmin, so founder-level passes automatically (isAdmin is a superset).
+
+  app.get('/api/chat/admin', admin, async (request) => ({
+    messages: await listAdminMessages(request.currentUser!.id),
+  }));
+
+  app.post('/api/chat/admin', admin, async (request, reply) => {
+    const parsed = messageSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Type a message to send' });
+    const u = request.currentUser!;
+    try {
+      return { messages: await postAdminMessage(u, parsed.data.body) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not send message' });
+    }
+  });
+
+  app.delete('/api/chat/admin/:id', admin, async (request, reply) => {
+    const u = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    try {
+      const messages = await deleteAdminMessage(id, { id: u.id, isFounder: isFounder(parseRoles(u)) });
+      return { messages };
+    } catch (err) {
+      if (err instanceof ChatForbiddenError) return reply.code(403).send({ error: err.message });
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not delete message' });
+    }
+  });
+
   // In-terminal notifications: recent team chat from teammates (a new chat shows
   // here), plus recent suggestions and bug reports for admins. The client
   // computes "unread" from a locally stored last-seen timestamp.
@@ -133,8 +169,9 @@ export async function chatRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
     const elig = teamChatEligibility(u);
-    const [chat, announcements, suggestions, bugs, bugsAwaiting, support] = await Promise.all([
+    const [chat, adminChat, announcements, suggestions, bugs, bugsAwaiting, support] = await Promise.all([
       elig.eligible ? latestTeamMessageAt(u.teamId) : Promise.resolve(0),
+      admin ? latestAdminMessageAt() : Promise.resolve(0),
       latestAnnouncementAt(),
       admin ? latestSuggestionAt() : Promise.resolve(0),
       admin ? latestBugReportAt() : Promise.resolve(0),
@@ -144,7 +181,7 @@ export async function chatRoutes(app: FastifyInstance) {
       admin ? countBugReportsAwaiting() : Promise.resolve(0),
       admin ? latestSupportRequestAt() : Promise.resolve(0),
     ]);
-    return { chat, announcements, suggestions, bugs, bugsAwaiting, support };
+    return { chat, adminChat, announcements, suggestions, bugs, bugsAwaiting, support };
   });
 
   app.get('/api/announcements', auth, async (request) => {

@@ -5,6 +5,7 @@ import {
   createEarlyAccessRequest,
   deleteEarlyAccessRequest,
   listEarlyAccessRequests,
+  setEarlyAccessStatus,
 } from '../earlyAccess/service.js';
 
 // Public submission from the login screen's "Request Early Access" form. Last
@@ -34,6 +35,17 @@ export async function earlyAccessRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireAdmin };
 
   app.get('/api/admin/early-access', guard, async () => {
+    return { requests: await listEarlyAccessRequests() };
+  });
+
+  // Mark a lead dealt with (or reopen it). Separate from deleting, because the
+  // contact details are the reason the lead was collected — closing the item on
+  // the Administrator Log must not mean throwing them away.
+  app.post('/api/admin/early-access/:id/status', guard, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const parsed = z.object({ status: z.enum(['new', 'handled']) }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Unknown status' });
+    await setEarlyAccessStatus(id, parsed.data.status);
     return { requests: await listEarlyAccessRequests() };
   });
 

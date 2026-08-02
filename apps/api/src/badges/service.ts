@@ -133,11 +133,28 @@ export async function badgeKeyExists(key: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-// The set of assignable (non-auto) badge keys — the ones an admin can toggle on
-// a user. Auto badges (e.g. admin) are granted by role, not assigned.
+// The membership badges. Earned by holding a tier, never assigned by hand — so
+// they are kept out of the admin picker below. A badge that says somebody is a
+// Premium member has to be true, or it is decoration rather than information.
+export const MEMBERSHIP_BADGE_KEYS: Record<string, string> = {
+  premium: 'premium',
+  max: 'max',
+};
+
+// The badge key a tier shows, or null for Free (which has no badge — a badge
+// meaning "has not paid" would be a mark, not recognition).
+export function membershipBadgeKey(tier: string): string | null {
+  return MEMBERSHIP_BADGE_KEYS[tier] ?? null;
+}
+
+// The set of assignable badge keys — the ones an admin can toggle on a user.
+// Excludes both auto badges (granted by role, e.g. the Admin shield) and the
+// membership badges (granted by tier).
 export async function assignableBadgeKeys(): Promise<Set<string>> {
   const rows = await db.select().from(badgeTypes);
-  return new Set(rows.filter((r) => !r.autoRole).map((r) => r.key));
+  return new Set(
+    rows.filter((r) => !r.autoRole && !MEMBERSHIP_BADGE_KEYS[r.key]).map((r) => r.key),
+  );
 }
 
 // Seed the two built-in badges once. Idempotent: only inserts the ones missing,
@@ -159,11 +176,34 @@ export async function seedBadges(): Promise<void> {
     {
       key: 'early',
       label: 'Early Release',
-      icon: 'star',
+      // A rocket, not a star: the star now means Premium, and two badges wearing
+      // the same glyph in the same row is not a badge system.
+      icon: 'rocket',
       color: '#EBCB74',
       description: 'Early-release member — here from the start.',
       autoRole: null as string | null,
       position: 1,
+    },
+    // The two membership badges. Assigned by tier rather than by hand — see
+    // membershipBadgeKeys() below — so they cannot be handed out as decoration
+    // to somebody who has not got the tier.
+    {
+      key: 'premium',
+      label: 'Premium',
+      icon: 'star',
+      color: '#EBCB74', // gold
+      description: 'Premium member.',
+      autoRole: null as string | null,
+      position: 5,
+    },
+    {
+      key: 'max',
+      label: 'Max',
+      icon: 'diamond',
+      color: '#7DD3FC',
+      description: 'Max member — the full terminal.',
+      autoRole: null as string | null,
+      position: 6,
     },
     // Auto-granted to every software_developer-role holder (founder-equivalent
     // access), shown site-wide next to their name.

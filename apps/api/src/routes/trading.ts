@@ -5,6 +5,7 @@ import {
   requireMarkets,
   requireWorkspace,
   requireWorkspaceWrite,
+  requirePremium,
 } from '../auth/middleware.js';
 import { getLiveWall } from '../trading/service.js';
 import {
@@ -155,9 +156,31 @@ export async function tradingRoutes(app: FastifyInstance) {
   // nothing. Nothing on this guard reads a trade or reaches a broker.
   const markets = { preHandler: requireMarkets };
   // The Funded (prop-challenge) endpoints are the nested opt-in: the caller needs
-  // Advanced Trading *and* Funded Account turned on.
-  const fundedRead = { preHandler: [requireWorkspace('trading'), requireFunded] };
-  const fundedWrite = { preHandler: [requireWorkspaceWrite('trading'), requireFunded] };
+  // Advanced Trading *and* Funded Account turned on — and now a paid tier as
+  // well. Three guards, three different questions: trusted with the desk, asked
+  // to see the tracker, allowed to have it.
+  const fundedRead = { preHandler: [requireWorkspace('trading'), requireFunded, requirePremium('funded')] };
+  const fundedWrite = {
+    preHandler: [requireWorkspaceWrite('trading'), requireFunded, requirePremium('funded')],
+  };
+  // Strategy Sessions — paid. Read as well as write: the section is hidden from
+  // a free account, so leaving reads open would only serve a client that had
+  // gone looking. Nothing is deleted when a membership lapses; the sessions come
+  // back untouched on renewal.
+  const sessionsRead = { preHandler: [requireWorkspace('trading'), requirePremium('strategySessions')] };
+  const sessionsWrite = {
+    preHandler: [requireWorkspaceWrite('trading'), requirePremium('strategySessions')],
+  };
+  // Connecting a broker with the trader's own API credentials — paid. The reads
+  // stay on `read`/`write` above so a lapsed member can still see and remove a
+  // connection they already made; what they cannot do is add another.
+  const connectionWrite = {
+    preHandler: [requireWorkspaceWrite('trading'), requirePremium('brokerConnections')],
+  };
+  // Saving your own Live Wall arrangement — paid. Reading boards is deliberately
+  // NOT gated: a free account still gets the preset boards, which is a working
+  // screen rather than a teaser, and the read is what serves them.
+  const boardWrite = { preHandler: [requireMarkets, requirePremium('customBoards')] };
 
   // Every endpoint here is behind the `trading` workspace guard, so any caller
   // holds a trading role (full or view-only). Trade data is scoped to the
@@ -367,8 +390,8 @@ export async function tradingRoutes(app: FastifyInstance) {
   );
 
   // ---- Strategy Sessions ----
-  app.get('/api/trading/sessions', read, async (request) => ({ sessions: await listSessions(request.currentUser!.id) }));
-  app.post('/api/trading/sessions', write, async (request, reply) => {
+  app.get('/api/trading/sessions', sessionsRead, async (request) => ({ sessions: await listSessions(request.currentUser!.id) }));
+  app.post('/api/trading/sessions', sessionsWrite, async (request, reply) => {
     const parsed = addSessionSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name is required' });
     try {
@@ -377,7 +400,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add session' });
     }
   });
-  app.patch('/api/trading/sessions/:id', write, async (request, reply) => {
+  app.patch('/api/trading/sessions/:id', sessionsWrite, async (request, reply) => {
     const parsed = editSessionSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Check the session details' });
     try {
@@ -386,7 +409,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update session' });
     }
   });
-  app.delete('/api/trading/sessions/:id', write, async (request) => ({
+  app.delete('/api/trading/sessions/:id', sessionsWrite, async (request) => ({
     sessions: await removeSession(request.currentUser!.id, (request.params as { id: string }).id),
   }));
 
@@ -429,7 +452,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   // keep ONE board (no named presets to switch between) and only the tiles that
   // read public market data. Both limits are applied here, not just in the UI.
   app.get('/api/trading/boards', markets, async (request) => ({ boards: await listBoards(request.currentUser!.id) }));
-  app.post('/api/trading/boards', markets, async (request, reply) => {
+  app.post('/api/trading/boards', boardWrite, async (request, reply) => {
     const parsed = createBoardSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name is required' });
     const userId = request.currentUser!.id;
@@ -446,7 +469,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save board' });
     }
   });
-  app.patch('/api/trading/boards/:id', markets, async (request, reply) => {
+  app.patch('/api/trading/boards/:id', boardWrite, async (request, reply) => {
     const parsed = editBoardSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Check the board details' });
     const userId = request.currentUser!.id;
@@ -461,7 +484,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update board' });
     }
   });
-  app.delete('/api/trading/boards/:id', markets, async (request) => {
+  app.delete('/api/trading/boards/:id', boardWrite, async (request) => {
     await removeBoard(request.currentUser!.id, (request.params as { id: string }).id);
     return { boards: await listBoards(request.currentUser!.id) };
   });
@@ -821,7 +844,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { connections: await listAllConnections() };
   });
 
-  app.post('/api/trading/connections', write, async (request, reply) => {
+  app.post('/api/trading/connections', connectionWrite, async (request, reply) => {
     const parsed = addConnSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Check the connection details and try again' });

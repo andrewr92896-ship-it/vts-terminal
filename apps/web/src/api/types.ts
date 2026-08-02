@@ -127,6 +127,10 @@ export interface User {
     // Whether this is the terminal owner account (only the owner can grant the
     // Founder / Software Developer roles).
     owner: boolean;
+    // The paid tier this account holds and which paid features it reaches.
+    // Separate axis from `features` above: features are what the user has ASKED
+    // to see, this is what they are ALLOWED to see.
+    membership: MembershipView;
   };
 }
 
@@ -255,6 +259,8 @@ export interface EarlyAccessRequest {
   email: string;
   phone: string | null;
   source: string;
+  /** 'new' until an admin has dealt with the lead, then 'handled'. */
+  status: string;
   createdAt: number;
 }
 
@@ -273,6 +279,12 @@ export interface AdminUser {
   viewBrokerage: boolean;
   mustChangePassword: boolean;
   createdAt: number;
+  /**
+   * The paid tier this account holds. Resolved rather than read off a row:
+   * admins, developers and founders are always Max by role and have no stored
+   * grant, so a missing membership does not mean Free.
+   */
+  membership: Membership;
 }
 
 // Raw data returned when an item is removed, so the client can offer "undo".
@@ -1964,61 +1976,6 @@ export interface InvestmentProjection {
   years: number;
 }
 
-// ---- My Terminal ▸ Investment Holdings ----
-// The cross-workspace roll-up: the long-term Investments portfolio beside the
-// trading desk. Mirrors apps/api/src/myportal/holdings.ts.
-
-export interface CombinedHoldingRow {
-  key: string;
-  name: string;
-  symbol: string | null;
-  detail: string;
-  /**
-   * Null for an open trading position, deliberately: its notional is not a
-   * value that belongs in a column beside a fund's worth. Its P/L is in `gain`.
-   */
-  value: number | null;
-  gain: number | null;
-  gainPct: number | null;
-  side: 'investment' | 'position' | 'spot';
-}
-
-export interface MyHoldingsInvestments {
-  value: number;
-  costBasis: number;
-  gain: number;
-  gainPct: number | null;
-  dayChange: number;
-  dayChangeCoverage: number;
-  accountsCount: number;
-  holdingsCount: number;
-  unpricedCount: number;
-}
-
-export interface MyHoldingsTrading {
-  enabled: boolean;
-  brokerConfigured: boolean;
-  accountValue: number | null;
-  currency: string | null;
-  unrealizedPl: number | null;
-  realizedToday: number | null;
-  spotValue: number;
-  openPositionCount: number;
-  positions: CombinedHoldingRow[];
-  /** What is left out of the total, in words, so the screen can say why. */
-  excluded: string[];
-}
-
-export interface MyHoldings {
-  investments: MyHoldingsInvestments;
-  trading: MyHoldingsTrading;
-  /** Null when the two halves cannot honestly be added; `combinedNote` says why. */
-  combinedValue: number | null;
-  combinedNote: string | null;
-  top: CombinedHoldingRow[];
-  asOf: number;
-}
-
 // ---- My Terminal ▸ Net Worth ----
 // Everything you own minus everything you owe. Mirrors
 // apps/api/src/myportal/netWorth.ts.
@@ -2095,4 +2052,87 @@ export interface NetWorth {
   history: NetWorthPoint[];
   totalDays: number;
   asOf: number;
+}
+
+// ---- Memberships (the paid tiers) ----
+// Mirrors apps/api/src/memberships/tiers.ts. The server is the enforcer; these
+// values only drive locks and upgrade prompts in the UI.
+
+export const MEMBERSHIP_TIERS = ['free', 'premium', 'max'] as const;
+export type MembershipTier = (typeof MEMBERSHIP_TIERS)[number];
+
+export const PREMIUM_FEATURES = [
+  'ai',
+  'brokerConnections',
+  'funded',
+  'studyCreation',
+  'customBoards',
+  'teams',
+  'premiumBadges',
+  'strategySessions',
+] as const;
+export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
+
+export interface Membership {
+  tier: MembershipTier;
+  /** Null = never expires. */
+  expiresAt: number | null;
+  source: 'role' | 'demo' | 'manual' | 'grandfather' | 'billing' | 'none';
+  note: string | null;
+  grantedByName: string | null;
+  grantedAt: number | null;
+}
+
+export interface MembershipView extends Membership {
+  entitlements: Record<PremiumFeature, boolean>;
+}
+
+// ---- Administrator Log ----
+// Mirrors apps/api/src/admin/adminLog.ts. `state` drives the colour: open is
+// red (still needs somebody), resolved is green (dealt with), info is gray (a
+// record of something that happened, asking nothing of anyone).
+export type AdminLogState = 'open' | 'resolved' | 'info';
+
+export interface AdminLogEntry {
+  id: string;
+  kind: string;
+  state: AdminLogState;
+  title: string;
+  detail: string | null;
+  actorName: string | null;
+  targetName: string | null;
+  createdAt: number;
+  resolvedAt: number | null;
+  resolvedByName: string | null;
+  /** Set on an entry projected from a ticket, so the screen can point at the section that closes it. */
+  source: 'bug' | 'support' | 'early_access' | null;
+  sourceId: string | null;
+}
+
+// ---- Developer Blog ----
+// Mirrors apps/api/src/devBlog/service.ts.
+export type DevBlogAuthorKind = 'user' | 'vts_development';
+
+export interface DevBlogReply {
+  id: string;
+  body: string;
+  authorKind: DevBlogAuthorKind;
+  authorName: string;
+  authorAvatar: string | null;
+  createdAt: number;
+  mine: boolean;
+}
+
+export interface DevBlogPost {
+  id: string;
+  title: string;
+  body: string;
+  authorKind: DevBlogAuthorKind;
+  authorName: string;
+  authorAvatar: string | null;
+  pinned: boolean;
+  createdAt: number;
+  updatedAt: number;
+  mine: boolean;
+  replies: DevBlogReply[];
 }

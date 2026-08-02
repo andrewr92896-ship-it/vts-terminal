@@ -108,9 +108,11 @@ import type {
   InvestmentPerformance,
   InvestmentDividends,
   InvestmentProjection,
-  MyHoldings,
   NetWorth,
   NetWorthItemInput,
+  MembershipTier,
+  AdminLogEntry,
+  DevBlogPost,
 } from './types';
 
 // A flashcard the user added to their own personal deck (a term, a definition,
@@ -889,11 +891,6 @@ export const api = {
     });
     return request(`/api/investments/projection?${q}`);
   },
-  // My Terminal ▸ Investment Holdings — the trading desk and the long-term
-  // portfolio in one payload.
-  myHoldings(): Promise<MyHoldings> {
-    return request('/api/my-portal/holdings');
-  },
   // My Terminal ▸ Net Worth. Every write returns the recomputed picture, so the
   // screen can never render a stale total beside a fresh list.
   netWorth(days = 365): Promise<NetWorth> {
@@ -1298,6 +1295,81 @@ export const api = {
   pushTest(): Promise<{ ok: true }> {
     return request('/api/push/test', { method: 'POST', body: JSON.stringify({}) });
   },
+  // ---- Memberships (admin) ----
+  // Granting requires a note saying why; the server refuses without one, and an
+  // admin is capped at six months while founder-level users may grant forever.
+  grantMembership(
+    userId: string,
+    input: { tier: MembershipTier; expiresAt: number | null; note: string },
+  ): Promise<{ user: AdminUser; users: AdminUser[] }> {
+    return request(`/api/admin/users/${userId}/membership`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+
+  // ---- Administrator Log ----
+  adminLog(): Promise<{ entries: AdminLogEntry[] }> {
+    return request('/api/admin/log');
+  },
+  resolveAdminLogEntry(id: string): Promise<{ entries: AdminLogEntry[] }> {
+    return request(`/api/admin/log/${id}/resolve`, { method: 'POST', body: JSON.stringify({}) });
+  },
+  setEarlyAccessStatus(id: string, status: 'new' | 'handled'): Promise<{ requests: EarlyAccessRequest[] }> {
+    return request(`/api/admin/early-access/${id}/status`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    });
+  },
+
+  // ---- Developer Blog (founder-level) ----
+  devBlog(): Promise<{ posts: DevBlogPost[] }> {
+    return request('/api/dev-blog');
+  },
+  createDevBlogPost(input: {
+    title: string;
+    body: string;
+    asDevelopment?: boolean;
+    pinned?: boolean;
+  }): Promise<{ posts: DevBlogPost[] }> {
+    return request('/api/dev-blog', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateDevBlogPost(
+    id: string,
+    patch: { title?: string; body?: string; pinned?: boolean },
+  ): Promise<{ posts: DevBlogPost[] }> {
+    return request(`/api/dev-blog/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  deleteDevBlogPost(id: string): Promise<{ posts: DevBlogPost[] }> {
+    return request(`/api/dev-blog/${id}`, { method: 'DELETE' });
+  },
+  replyToDevBlogPost(
+    id: string,
+    body: string,
+    asDevelopment?: boolean,
+  ): Promise<{ posts: DevBlogPost[] }> {
+    return request(`/api/dev-blog/${id}/replies`, {
+      method: 'POST',
+      body: JSON.stringify({ body, asDevelopment }),
+    });
+  },
+  deleteDevBlogReply(id: string): Promise<{ posts: DevBlogPost[] }> {
+    return request(`/api/dev-blog/replies/${id}`, { method: 'DELETE' });
+  },
+
+  // ---- Administrator chat ----
+  // One install-wide room for founders, developers and admins. Not team-scoped,
+  // unlike the team chat: an admin on one desk needs to reach one on another.
+  adminChat(): Promise<{ messages: ChatMessage[] }> {
+    return request('/api/chat/admin');
+  },
+  sendAdminChat(body: string): Promise<{ messages: ChatMessage[] }> {
+    return request('/api/chat/admin', { method: 'POST', body: JSON.stringify({ body }) });
+  },
+  deleteAdminChat(id: string): Promise<{ messages: ChatMessage[] }> {
+    return request(`/api/chat/admin/${id}`, { method: 'DELETE' });
+  },
+
   // ---- Pushover (custom-sound notifications) ----
   pushoverStatus(): Promise<{ configured: boolean; connected: boolean }> {
     return request('/api/pushover/status');

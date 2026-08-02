@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace } from '../auth/middleware.js';
+import { requireMarkets } from '../auth/middleware.js';
 import {
   hasSubscription,
   pushConfigured,
@@ -10,9 +10,12 @@ import {
   vapidPublicKey,
 } from '../notifications/push.js';
 
-// Phone push (Web Push) subscription management. Gated behind trading access —
-// these notifications are the alert/trade feed, so only trading-desk users
-// subscribe. The public demo is read-only and never reaches a write here.
+// Phone push (Web Push) subscription management. On requireMarkets (signed in),
+// deliberately NOT the Advanced Trading opt-in: price alerts are a Markets
+// feature included with every account, so gating the delivery channel behind the
+// desk left a Markets-only user able to set an alert and never be told it fired.
+// What each subscriber is actually sent is still filtered per event. The public
+// demo is read-only and never reaches a write here.
 
 const subSchema = z.object({
   endpoint: z.string().url().max(2000),
@@ -23,11 +26,11 @@ const subSchema = z.object({
 });
 
 export async function pushRoutes(app: FastifyInstance) {
-  const trading = { preHandler: requireWorkspace('trading') };
+  const signedIn = { preHandler: requireMarkets };
 
   // The client needs the VAPID public key to create a subscription, plus whether
   // this user already has one on some device.
-  app.get('/api/push/status', trading, async (request) => {
+  app.get('/api/push/status', signedIn, async (request) => {
     const configured = pushConfigured();
     return {
       configured,
@@ -36,7 +39,7 @@ export async function pushRoutes(app: FastifyInstance) {
     };
   });
 
-  app.post('/api/push/subscribe', trading, async (request, reply) => {
+  app.post('/api/push/subscribe', signedIn, async (request, reply) => {
     if (!pushConfigured()) return reply.code(503).send({ error: 'Push is not configured on the server' });
     const parsed = subSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid push subscription' });
@@ -45,7 +48,7 @@ export async function pushRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  app.post('/api/push/unsubscribe', trading, async (request, reply) => {
+  app.post('/api/push/unsubscribe', signedIn, async (request, reply) => {
     const parsed = z.object({ endpoint: z.string().min(1).max(2000) }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'An endpoint is required' });
     await removeSubscription(parsed.data.endpoint);
@@ -53,7 +56,7 @@ export async function pushRoutes(app: FastifyInstance) {
   });
 
   // Fire a test notification to the caller's devices so they can confirm setup.
-  app.post('/api/push/test', trading, async (request, reply) => {
+  app.post('/api/push/test', signedIn, async (request, reply) => {
     if (!pushConfigured()) return reply.code(503).send({ error: 'Push is not configured on the server' });
     await sendTest(request.currentUser!.id);
     return { ok: true };

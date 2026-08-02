@@ -2,6 +2,9 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } f
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 import { api, ApiError } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
+import { hasEntitlement } from '../auth/access';
+import { UpgradeNotice } from './UpgradeNotice';
 
 interface AskClaudePanelProps {
   open: boolean;
@@ -9,6 +12,8 @@ interface AskClaudePanelProps {
   workspace?: string; // workspace key (trading, studies, ...) for context
   workspaceLabel?: string; // human label, for display
   onClose: () => void;
+  /** Sends the reader to My Terminal ▸ Premium Features when they lack the tier. */
+  onOpenMembership?: () => void;
 }
 
 interface Msg {
@@ -24,7 +29,20 @@ const SUGGESTIONS_BY_WS: Record<string, string[]> = {
 };
 const DEFAULT_SUGGESTIONS = ['Summarize what this terminal can do', 'What can you help me with here?'];
 
-export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose }: AskClaudePanelProps) {
+export function AskClaudePanel({
+  open,
+  theme,
+  workspace,
+  workspaceLabel,
+  onClose,
+  onOpenMembership,
+}: AskClaudePanelProps) {
+  const { user } = useAuth();
+  // VTS AI is paid. The button stays in the top bar for everyone on purpose —
+  // hiding it would leave a free account unable to discover the feature exists —
+  // so the panel opens as normal and the composer is replaced by the upgrade
+  // notice. The server refuses /api/ai/ask with a 402 regardless.
+  const canUseAi = hasEntitlement(user, 'ai');
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
@@ -122,7 +140,10 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
 
         {/* Messages */}
         <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {messages.length === 0 && !busy && (
+          {!canUseAi && (
+            <UpgradeNotice feature="ai" onOpenMembership={onOpenMembership} />
+          )}
+          {canUseAi && messages.length === 0 && !busy && (
             <div style={{ color: '#aebcd8', fontSize: 13, lineHeight: 1.6 }}>
               <p style={{ marginTop: 0 }}>{workspaceLabel ? `Ask anything about ${workspaceLabel} or the rest of the terminal.` : 'Ask anything about the terminal, your workflow, trading, or finances.'} Powered by VTS AI.</p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 7, marginTop: 12 }}>
@@ -154,7 +175,10 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
           {error && <div style={{ color: '#ffb4ab', fontSize: 12.5, background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 11px' }}>{error}</div>}
         </div>
 
-        {/* Composer */}
+        {/* Composer — replaced by the upgrade notice above when the account
+            cannot reach VTS AI, so there is no box to type a question into that
+            would only come back refused. */}
+        {canUseAi && (
         <div style={{ padding: 14, borderTop: `1px solid ${theme.navBorder}` }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
             <textarea
@@ -175,6 +199,7 @@ export function AskClaudePanel({ open, theme, workspace, workspaceLabel, onClose
             </button>
           </div>
         </div>
+        )}
       </aside>
     </>
   );

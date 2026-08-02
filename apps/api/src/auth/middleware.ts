@@ -15,6 +15,8 @@ import {
 } from './rbac.js';
 import { isDemoUser } from '../demo/identity.js';
 import { featuresForUser } from '../features/service.js';
+import { hasEntitlement } from '../memberships/service.js';
+import { FEATURE_LABELS, FEATURE_TIER, TIER_LABELS, type PremiumFeature } from '../memberships/tiers.js';
 
 // Runs on every request: resolves the signed session cookie to a user
 // (or null) and attaches it to request.currentUser.
@@ -138,6 +140,34 @@ export const requireFunded: preHandlerHookHandler = async (
     return reply.code(403).send({ error: 'Forbidden' });
   }
 };
+
+// Reject unless the account's membership reaches a paid feature.
+//
+// This is the paywall, and it is a THIRD axis alongside roles and feature
+// opt-ins: a role says what you are trusted with, an opt-in says what you have
+// asked to see, and a membership says what you have paid for. All three can
+// apply to one endpoint — the Funded tracker needs the desk opt-in AND a paid
+// tier — so these guards compose rather than replace one another.
+//
+// It answers 402 Payment Required, not 403, and the distinction is load-bearing:
+// the client shows an upgrade prompt on a 402 and an error on a 403, so a paid
+// feature that answered 403 would tell a paying-capable user they are forbidden
+// instead of offering them the thing they would happily buy. The body carries
+// the feature and the tier it needs so the prompt can name both.
+export function requirePremium(feature: PremiumFeature): preHandlerHookHandler {
+  return async (request: FastifyRequest, reply: FastifyReply) => {
+    const user = request.currentUser;
+    if (!user) {
+      return reply.code(401).send({ error: 'Not authenticated' });
+    }
+    if (!(await hasEntitlement(user, feature))) {
+      return reply.code(402).send({
+        error: `${FEATURE_LABELS[feature]} needs a ${TIER_LABELS[FEATURE_TIER[feature]]} membership`,
+        upgrade: { feature, requiredTier: FEATURE_TIER[feature] },
+      });
+    }
+  };
+}
 
 // Reject unless the user can *modify* the workspace — use this on every
 // POST/PATCH/DELETE.

@@ -20,30 +20,36 @@ export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
 
   if (!user) return null;
 
-  // Only full trading users (not view-only) may add their own broker APIs. The
-  // server enforces this on every connection write too.
+  // Broker connections are the trading desk, so they need the Advanced Trading
+  // opt-in. `features` is NOT optional here even though the signature allows it:
+  // canAccessWorkspace reads advancedTrading off it and returns false for
+  // everyone when it is missing, which is exactly how this whole panel — push,
+  // Pushover, the widget and broker connections — once went invisible for every
+  // account at once. Always pass it.
   const canManageBrokers =
-    canAccessWorkspace(user.roles, 'trading') && !isWorkspaceReadOnly(user.roles, 'trading');
-  // Anyone on the trading desk (full or view-only) can turn on phone alerts for
-  // their own device. The demo is look-only and never subscribes.
-  const canUsePush = !isDemo && canAccessWorkspace(user.roles, 'trading');
-
-  if (!canUsePush && !canManageBrokers) {
-    return (
-      <div style={hintStyle}>
-        {"No notification or connection settings are available for your account."}
-      </div>
-    );
-  }
+    canAccessWorkspace(user.roles, 'trading', user.access.features) &&
+    !isWorkspaceReadOnly(user.roles, 'trading');
+  // Phone alerts and Pushover are deliberately NOT behind the desk opt-in: price
+  // alerts are a Markets feature every account has, and an alert nobody can be
+  // notified about is not an alert. The demo never subscribes.
+  const canUsePush = !isDemo;
+  // Which teammate's trades buzz you is a desk-only setting, unlike the two above.
+  const canSetTradePrefs = canUsePush && canManageBrokers;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-      {/* Phone notifications — any trading-desk user, their own device. */}
+      {/* Phone alerts and Pushover — every account, their own device. */}
       {canUsePush && (
         <>
           <PhoneNotificationsSection accent={accentGrad} accentText={theme.accentText} />
           <div style={{ height: 1, background: '#1d3560' }} />
           <PushoverSection accent={accentGrad} accentText={theme.accentText} />
+        </>
+      )}
+
+      {/* Whose trades buzz you, and the positions widget — desk only. */}
+      {canSetTradePrefs && (
+        <>
           <div style={{ height: 1, background: '#1d3560' }} />
           <PerUserNotificationsSection accent={accentGrad} accentText={theme.accentText} />
           <div style={{ height: 1, background: '#1d3560' }} />

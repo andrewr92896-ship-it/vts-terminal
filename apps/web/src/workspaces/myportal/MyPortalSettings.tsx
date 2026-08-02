@@ -35,7 +35,9 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
   const sound = useAlertSound();
   const appUpdate = useCheckForUpdates();
 
-  const canTrade = !!user && canAccessWorkspace(user.roles, 'trading');
+  // `features` is required, not optional — canAccessWorkspace reads the desk
+  // opt-in off it and answers false for everyone when it is missing.
+  const canTrade = !!user && canAccessWorkspace(user.roles, 'trading', user.access.features);
 
   const [brokers, setBrokers] = useState<BrokerStatus[]>([]);
   useEffect(() => {

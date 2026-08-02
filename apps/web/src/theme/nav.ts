@@ -33,14 +33,18 @@ export const NAV: NavWorkspace[] = [
     accent: '#34D399',
     group: 'My Terminal',
     sections: [
-      // A combined portfolio summary: active Advanced Trading positions merged
-      // with the total long-term Investments portfolio and the stats across both.
-      { key: 'my_holdings', label: 'Investment Holdings', icon: 'gem' },
       // The whole-life roll-up: everything you own minus everything you owe.
+      // (There is deliberately no Investment Holdings section here — the
+      // Investments workspace already tracks the portfolio, and a second screen
+      // saying the same thing was duplication rather than a roll-up. The server
+      // module behind it, myportal/holdings.ts, is still very much alive: Net
+      // Worth reads the portfolio and trading equity through it.)
       { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
-      // Turn the optional parts of the terminal on and off for yourself.
-      { key: 'my_access', label: 'Feature Access', icon: 'toggle-right' },
+      // Memberships and the optional parts of the terminal. The key stays
+      // `my_access` though the label is now Premium Features, so a founder's
+      // saved nav.order override keeps pointing at it.
+      { key: 'my_access', label: 'Premium Features', icon: 'gem' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
@@ -144,6 +148,12 @@ export const NAV: NavWorkspace[] = [
     group: 'Administration',
     sections: [
       { key: 'ad_users', label: 'Users', icon: 'users' },
+      // What administrators have done, and what is waiting on one. Membership
+      // grants are recorded here; bug reports, support requests and early-access
+      // leads are projected live from their own sections.
+      { key: 'ad_log', label: 'Administrator Log', icon: 'file-clock' },
+      // The rules admins work to, and how to handle common situations.
+      { key: 'ad_guidelines', label: 'Admin Guidelines', icon: 'list-checks' },
       { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
       { key: 'ad_badges', label: 'Badges', icon: 'star' },
       { key: 'ad_templates', label: 'Message Templates', icon: 'message-square' },
@@ -163,6 +173,9 @@ export const NAV: NavWorkspace[] = [
     accent: '#F5A524',
     group: 'Developer',
     sections: [
+      // The idea board. Posts marked VTS Development come from Claude Code and
+      // arrive with a deploy (see devBlog/seeded.ts).
+      { key: 'ad_blog', label: 'Developer Blog', icon: 'book-open' },
       { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
       { key: 'ad_sidebar', label: 'Sidebar Layout', icon: 'list-tree' },
