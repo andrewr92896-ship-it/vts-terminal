@@ -109,7 +109,13 @@ entity that carries metals; see the entity note below and the Stooq note under
 - **Catalog data even on a live row:** the **`review` column** ("Last → next
   review"). Neither provider reports a release schedule — FRED's observations
   carry the date a reading is *for*, not the date it was published — so that
-  column keeps the catalog's hand-entered dates. See "Next" below.
+  column keeps the catalog's hand-entered dates. Because they are hand-entered
+  they **expire on their own**: seven rows were pointing at a next review that
+  had already been and gone. `reviewInfo` now renders a passed date as `tbc`,
+  the same as a row with no date at all — true, and self-correcting as the
+  calendar advances, rather than a date that has demonstrably gone. The FOMC
+  sentinels never reach that path; they resolve off the live meeting list. See
+  "Next" below for the real fix.
 
 ## The live price path (`apps/api/src/trading/marketQuotes.ts`)
 

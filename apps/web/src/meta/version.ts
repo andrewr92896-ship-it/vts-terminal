@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.18';
+export const APP_VERSION = 'Beta V 6.19';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.19',
+    date: 'August 2, 2026',
+    notes: [
+      'Rows no longer point at a “next review” date that has already passed. Seven of them did — jobless claims, GDP, the mortgage rate, the Fed balance sheet and a few others were all still showing dates from late July. Those now read “tbc” until a real date is known, which corrects itself as the calendar moves rather than going stale again.',
+    ],
+  },
   {
     version: 'Beta V 6.18',
     date: 'August 2, 2026',
