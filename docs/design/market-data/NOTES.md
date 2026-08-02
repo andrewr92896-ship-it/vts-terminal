@@ -62,9 +62,10 @@ Implemented in `Beta V 5.77`:
 
 ## What is real and what is not
 
-As of `Beta V 6.11`, **51 of the 71 non-session series read live** on the owner's
-install (it was 8). The ceiling is 54 — three of those need an OANDA entity that
-carries metals; see the entity note below.
+As of `Beta V 6.18`, **51 of the 71 non-session series read live** on the owner's
+install (it was 8). The ceiling is 54 — gold, silver and copper need an OANDA
+entity that carries metals; see the entity note below and the Stooq note under
+"Sample".
 
 > **The OANDA entity decides how much of the price half works, and most entities
 > are narrower than the design assumed.** This file used to say "commodities are
@@ -86,26 +87,25 @@ carries metals; see the entity note below.
   Forex Factory rows out of `trading_calendar`, the same feed Market News reads),
   session Open/Closed computed against the ET clock, the FOMC countdown and
   meeting dates, and the trader's saved board layout.
-- **Sample:** 18 rows. Seventeen are the ones **no free provider covers** rather
+- **Sample:** 20 rows. Seventeen are the ones **no free provider covers** rather
   than ones nobody has got to yet —
   `cut9`, `hold7` (CME FedWatch), `dots` (the SEP), `boe`, `boj`, `be1` (FRED has
   no 1-year breakeven), `nowcast`, `gdpq2` (a forecast), `ismm`, `isms` (ISM is
   licensed and was pulled from FRED), `btcetf`, `funding`, `dom`, `move` (ICE
-  BofA), `eps` (FactSet), `recprob`, `citi`. The eighteenth is **`copper`**:
-  OANDA would quote it, but only from an entity that carries metals, and no free
-  feed publishes it daily (IMF copper is monthly and priced per tonne rather than
-  per pound). It goes live by itself the moment a metals-carrying OANDA
-  connection exists. Also still sample: the Fed bar's two odds bars.
-- **`gold` and `silver` are live from Stooq** (`brokers/stooq.ts`) — keyless CSV,
-  used only when OANDA cannot quote them, so a metals-carrying connection still
-  wins. Being an **unofficial endpoint, the guards are the safety story**, and
-  they matter more here than anywhere else on the board: a row that goes live
-  loses the Sample dot that would otherwise warn the reader. A quote is used only
-  if it parses to a positive finite price **and** is dated within five days —
-  long enough for a holiday weekend, short enough that a feed which quietly froze
-  is refused rather than rendered as current. Stooq answers an unknown symbol
-  with `N/D` rather than an error, which fails the same parse. The row restates
-  its source as `Stooq · daily close` rather than claiming an LBMA fixing.
+  BofA), `eps` (FactSet), `recprob`, `citi`. The other three are **`gold`,
+  `silver` and `copper`**, which need an OANDA entity that carries metals. They
+  go live by themselves the moment such a connection exists. Also still sample:
+  the Fed bar's two odds bars.
+- **Stooq was tried for the metals and does not work from a server — do not try
+  it again without new evidence.** `stooq.com/q/l/` and `/q/d/l/` serve keyless
+  CSV and look like the obvious answer. Shipped in `Beta V 6.16`, gold came back
+  sample in production. Retried in `6.17` with browser-ish headers and a
+  fallback to the daily-history path — the fix that worked for the YouTube
+  reads — and it was still sample. The parsers were correct against recorded CSV
+  the whole time (they were covered offline), so the request itself never
+  received a CSV. The code was removed in `6.18` rather than left dead. Two
+  production round-trips is enough: the next attempt at metals should be a
+  metals-carrying OANDA entity or a paid feed, not a third guess at a free one.
 - **Catalog data even on a live row:** the **`review` column** ("Last → next
   review"). Neither provider reports a release schedule — FRED's observations
   carry the date a reading is *for*, not the date it was published — so that
