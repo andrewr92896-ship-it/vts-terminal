@@ -180,7 +180,11 @@ const DEFS: SeriesDef[] = [
   { g: 'policy', id: 'iorb', l: 'Interest on reserves', v: '4.40', u: '%', a: 'Jul 28', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['Fed Board', 'daily', ''] },
   { g: 'policy', id: 'sofr', l: 'SOFR', v: '4.31', u: '%', a: 'Jul 28', c: ['−0.01', '+0.01', '−0.02', '−0.26', '−0.52'], rev: ['NY Fed', 'daily · 8:00 AM', ''] },
   { g: 'policy', id: 'cut9', l: 'Next meeting cut odds', v: '78', u: '%', a: 'implied · 1-week change', c: ['+2', '+6', '+18', '+41', '+63'], rev: ['CME FedWatch', 'continuous', ''] },
-  { g: 'policy', id: 'hold7', l: 'Hold priced · next meeting', v: '96', u: '%', a: 'implied · futures', c: ['−1', '−2', '−7', '−22', '−38'], rev: ['CME FedWatch', 'continuous', ''] },
+  // The complement of `cut9` — the two price the same meeting, so they must sum
+  // to 100 and move in exact opposition. They read 78 and 96 side by side until
+  // now, which is impossible on its face and undermines every other figure on a
+  // board whose whole promise is that the numbers are real.
+  { g: 'policy', id: 'hold7', l: 'Hold priced · next meeting', v: '22', u: '%', a: 'implied · futures', c: ['−2', '−6', '−18', '−41', '−63'], rev: ['CME FedWatch', 'continuous', ''] },
   { g: 'policy', id: 'dots', l: '2026 dot-plot median', v: '3.875', u: '%', a: 'June SEP', s: 'manual', c: ['0.00', '0.00', '0.00', '−0.13', '−0.38'], rev: ['FOMC · SEP', '2026-06-17', 'fomc'] },
   { g: 'policy', id: 'disc', l: 'Primary credit rate', v: '4.50', u: '%', a: 'Jun 17', c: ['0.00', '0.00', '0.00', '−0.25', '−0.50'], rev: ['Fed Board', 'fomc-prev', 'fomc'] },
   { g: 'policy', id: 'ecb', l: 'ECB deposit rate', v: '2.00', u: '%', a: 'held · next Sep 10', c: ['0.00', '0.00', '0.00', '−0.25', '−1.00'], rev: ['ECB Governing Council', '2026-07-23', '2026-09-10'] },
@@ -195,7 +199,7 @@ const DEFS: SeriesDef[] = [
   { g: 'inflation', id: 'cpce', l: 'Core PCE y/y', v: '2.7', u: '%', a: 'Jun · released today', c: ['−0.1', '−0.1', '−0.2', '−0.3', '−0.5'], rev: ['BEA', '2026-07-29', '2026-08-28'] },
   { g: 'inflation', id: 'cpcemm', l: 'Core PCE m/m', v: '0.2', u: '%', a: 'Jun', c: ['0.0', '0.0', '−0.1', '−0.1', '−0.1'], rev: ['BEA', '2026-07-29', '2026-08-28'] },
   { g: 'inflation', id: 'ppi', l: 'PPI y/y', v: '2.3', u: '%', a: 'Jun', c: ['0.0', '0.0', '+0.1', '−0.2', '−0.4'], rev: ['BLS', '2026-07-16', '2026-08-14'] },
-  { g: 'inflation', id: 'be1', l: '1-yr breakeven', v: '2.44', u: '%', a: 'live · 1-day', c: ['−0.03', '−0.06', '−0.11', '−0.24', '−0.38'], rev: ['US Treasury', 'daily · 3:30 PM', ''] },
+  { g: 'inflation', id: 'be1', l: '1-yr breakeven', v: '2.44', u: '%', a: 'sample', c: ['−0.03', '−0.06', '−0.11', '−0.24', '−0.38'], rev: ['US Treasury', 'daily · 3:30 PM', ''] },
   { g: 'inflation', id: 'be5', l: '5-yr breakeven', v: '2.31', u: '%', a: 'live · 1-day', c: ['−0.02', '−0.05', '−0.09', '−0.18', '−0.29'], rev: ['US Treasury', 'daily · 3:30 PM', ''] },
   { g: 'inflation', id: 'be10', l: '10-yr breakeven', v: '2.28', u: '%', a: 'live · 1-day', c: ['−0.01', '−0.03', '−0.07', '−0.14', '−0.22'], rev: ['US Treasury', 'daily · 3:30 PM', ''] },
   { g: 'inflation', id: 'umich', l: 'UMich 1-yr expectations', v: '3.1', u: '%', a: 'Jul prelim', c: ['0.0', '−0.2', '−0.4', '−0.7', '−1.2'], rev: ['Univ. of Michigan', '2026-07-17', '2026-07-31'] },
@@ -209,7 +213,7 @@ const DEFS: SeriesDef[] = [
   { g: 'labor', id: 'claims', l: 'Initial jobless claims', v: '217', u: 'K', a: 'wk to Jul 25', c: ['−4', '−4', '+9', '+14', '+22'], rev: ['DOL', '2026-07-24', '2026-07-30'] },
   { g: 'labor', id: 'part', l: 'Participation rate', v: '62.4', u: '%', a: 'Jun', c: ['0.0', '0.0', '−0.1', '−0.2', '−0.3'], rev: ['BLS', '2026-07-03', '2026-08-07'] },
   { g: 'labor', id: 'gdp', l: 'Real GDP q/q saar', v: '3.8', u: '%', a: 'Q1 final', c: ['0.0', '0.0', '0.0', '−1.5', '+0.4'], rev: ['BEA', '2026-06-26', '2026-07-30'] },
-  { g: 'labor', id: 'gdpq2', l: 'Q2 advance GDP · fcst', v: '2.3', u: '%', a: 'advance due 8:30 AM', s: 'manual', c: ['0.0', '+0.1', '−0.3', '—', '—'], rev: ['BEA', '2026-06-26', '2026-07-30'] },
+  { g: 'labor', id: 'gdpq2', l: 'Q2 advance GDP · fcst', v: '2.3', u: '%', a: 'sample', s: 'manual', c: ['0.0', '+0.1', '−0.3', '—', '—'], rev: ['BEA', '2026-06-26', '2026-07-30'] },
   { g: 'labor', id: 'ismm', l: 'ISM manufacturing', v: '49.1', a: 'Jun', c: ['0.0', '+0.7', '+1.2', '−0.9', '−1.8'], rev: ['ISM', '2026-07-01', '2026-08-03'] },
   { g: 'labor', id: 'isms', l: 'ISM services', v: '52.4', a: 'Jun', c: ['0.0', '+1.1', '+0.8', '+0.4', '−1.1'], rev: ['ISM', '2026-07-01', '2026-08-03'] },
   { g: 'labor', id: 'retail', l: 'Retail sales m/m', v: '0.4', u: '%', a: 'Jun', c: ['0.0', '+0.2', '+0.1', '−0.3', '−0.5'], rev: ['Census Bureau', '2026-07-16', '2026-08-14'] },
@@ -233,26 +237,26 @@ const DEFS: SeriesDef[] = [
   { g: 'fx', id: 'audusd', l: 'AUD/USD', v: '0.6684', a: 'live', c: ['+0.22%', '+0.7%', '+1.6%', '+3.8%', '+2.9%'] },
 
   // ---- Commodities ----
-  { g: 'commod', id: 'gold', l: 'Gold · XAU/USD', v: '3,486.40', a: 'record high', c: ['+0.72%', '+2.4%', '+6.1%', '+34.2%', '+41.8%'], rev: ['LBMA · COMEX', 'continuous', ''] },
-  { g: 'commod', id: 'silver', l: 'Silver · XAG/USD', v: '41.18', a: 'high since 2011', c: ['+1.34%', '+3.8%', '+9.4%', '+42.6%', '+55.1%'], rev: ['LBMA · COMEX', 'continuous', ''] },
+  { g: 'commod', id: 'gold', l: 'Gold · XAU/USD', v: '3,486.40', a: 'sample', c: ['+0.72%', '+2.4%', '+6.1%', '+34.2%', '+41.8%'], rev: ['LBMA · COMEX', 'continuous', ''] },
+  { g: 'commod', id: 'silver', l: 'Silver · XAG/USD', v: '41.18', a: 'sample', c: ['+1.34%', '+3.8%', '+9.4%', '+42.6%', '+55.1%'], rev: ['LBMA · COMEX', 'continuous', ''] },
   { g: 'commod', id: 'wti', l: 'WTI crude', v: '71.05', a: 'live', c: ['−0.18%', '−1.2%', '+2.8%', '−4.1%', '−8.6%'], rev: ['NYMEX', 'continuous', ''] },
   { g: 'commod', id: 'brent', l: 'Brent crude', v: '74.32', a: 'live', c: ['−0.12%', '−1.0%', '+2.4%', '−3.6%', '−7.9%'], rev: ['ICE', 'continuous', ''] },
-  { g: 'commod', id: 'copper', l: 'Copper', v: '4.68', a: 'live', c: ['+0.41%', '+1.3%', '+3.9%', '+12.4%', '+15.2%'] },
+  { g: 'commod', id: 'copper', l: 'Copper', v: '4.68', a: 'sample', c: ['+0.41%', '+1.3%', '+3.9%', '+12.4%', '+15.2%'] },
   { g: 'commod', id: 'natgas', l: 'Nat gas', v: '3.14', a: 'live', c: ['−1.20%', '−3.4%', '+6.2%', '+8.1%', '+21.4%'] },
 
   // ---- Crypto ----
   { g: 'crypto', id: 'btc', l: 'BTC/USD', v: '118,240', a: 'live', c: ['+1.10%', '+3.2%', '+8.4%', '+26.1%', '+38.9%'] },
   { g: 'crypto', id: 'eth', l: 'ETH/USD', v: '4,062', a: 'live', c: ['+0.84%', '+2.6%', '+6.9%', '+18.4%', '+24.2%'] },
   { g: 'crypto', id: 'btcetf', l: 'BTC spot ETF net flow', v: '+412', u: 'M USD', a: 'Jul 28', money: true, c: ['+412', '+1.9B', '+4.2B', '+18.6B', '+31.4B'], rev: ['Issuer filings', 'daily', ''] },
-  { g: 'crypto', id: 'funding', l: 'BTC perp funding · 8h', v: '0.008', u: '%', a: 'live', c: ['0.000', '+0.001', '−0.002', '−0.004', '−0.009'] },
-  { g: 'crypto', id: 'dom', l: 'BTC dominance', v: '58.4', u: '%', a: 'live', c: ['−0.2', '−0.4', '+0.8', '+2.1', '+3.4'] },
+  { g: 'crypto', id: 'funding', l: 'BTC perp funding · 8h', v: '0.008', u: '%', a: 'sample', c: ['0.000', '+0.001', '−0.002', '−0.004', '−0.009'] },
+  { g: 'crypto', id: 'dom', l: 'BTC dominance', v: '58.4', u: '%', a: 'sample', c: ['−0.2', '−0.4', '+0.8', '+2.1', '+3.4'] },
 
   // ---- Indices & volatility ----
   { g: 'equity', id: 'us100', l: 'US100 · Nasdaq 100', v: '24,918', a: 'live', c: ['+0.42%', '+1.4%', '+3.8%', '+14.2%', '+21.6%'] },
   { g: 'equity', id: 'us500', l: 'US500 · S&P 500', v: '6,742', a: 'live', c: ['+0.28%', '+1.1%', '+3.1%', '+11.8%', '+17.4%'] },
   { g: 'equity', id: 'us30', l: 'US30 · Dow', v: '45,180', a: 'live', c: ['−0.11%', '+0.6%', '+2.2%', '+7.9%', '+12.1%'] },
   { g: 'equity', id: 'vix', l: 'VIX', v: '14.20', a: 'live', c: ['−2.06%', '−6.4%', '−12.8%', '−18.4%', '−24.1%'], rev: ['Cboe', 'continuous', ''] },
-  { g: 'equity', id: 'move', l: 'MOVE index · rate vol', v: '88.4', a: 'live', c: ['−1.30%', '−4.2%', '−8.6%', '−16.2%', '−22.8%'], rev: ['ICE BofA', 'continuous', ''] },
+  { g: 'equity', id: 'move', l: 'MOVE index · rate vol', v: '88.4', a: 'sample', c: ['−1.30%', '−4.2%', '−8.6%', '−16.2%', '−22.8%'], rev: ['ICE BofA', 'continuous', ''] },
   { g: 'equity', id: 'eps', l: 'S&P Q2 blended EPS y/y', v: '+8.4', u: '%', a: 'FactSet · Jul 25', s: 'manual', c: ['0.0', '+0.4', '+1.1', '+2.6', '+3.8'], rev: ['FactSet', '2026-07-25', '2026-08-01'] },
 
   // ---- Macro & liquidity ----

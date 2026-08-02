@@ -168,7 +168,10 @@ const MACRO: MacroDef[] = [
 
   // ---- Indices & volatility ----
   // The VIX close. The MOVE index and blended EPS are licensed and stay sample.
-  { id: 'vix', fred: 'VIXCLS', transform: 'level', cadence: 'daily', decimals: 2, reviewLast: 'daily · close' },
+  // Percent, not points: the VIX is an index level like the three beside it in
+  // this group, and rendering its move as a difference put "−3.57" next to the
+  // S&P's "+0.70%" in the same table. The catalog's own fixture used percent.
+  { id: 'vix', fred: 'VIXCLS', transform: 'level', cadence: 'daily', decimals: 2, changeMode: 'pct', reviewLast: 'daily · close' },
   // The three US indices as published daily closes. OANDA quotes a CFD on each
   // and is preferred where the account can see them (it is real-time, and it is
   // what the desk actually trades) — but most OANDA entities do not offer index
@@ -247,8 +250,21 @@ function yearEarlier(obs: FredObservation[], i: number): number | null {
   return found.value;
 }
 
+// The year an OBSERVATION belongs to. FRED dates a reading by plain calendar
+// date with no timezone, so this is correctly UTC.
 function utcYear(t: number): number {
   return new Date(t).getUTCFullYear();
+}
+
+// The year it is RIGHT NOW on the desk. Deliberately Eastern, matching the price
+// side (`marketQuotes.ts`) and every other clock in the portal: between 7pm and
+// midnight ET on 31 December the UTC year has already turned, so measuring
+// year-to-date against it would have the macro rows jump into the new year
+// while the price rows beside them were still in the old one.
+function etYear(now: number): number {
+  return Number(
+    new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric' }).format(now),
+  );
 }
 
 // Turn raw observations into the series of figures the board displays.
@@ -360,7 +376,7 @@ function asOfLabel(p: Point, cadence: Cadence, now: number): string {
   const d = new Date(p.timeMs);
   const month = MONTHS[d.getUTCMonth()];
   const year = d.getUTCFullYear();
-  const stale = year !== utcYear(now);
+  const stale = year !== etYear(now);
   const tail = stale ? ` ${year}` : '';
   switch (cadence) {
     case 'daily':
@@ -410,7 +426,7 @@ function changesFor(
   const gated = (periodDays: number, at: number): number | null =>
     periodDays < cadenceDays ? 0 : moveAt(at);
 
-  const yearStart = Date.UTC(utcYear(now), 0, 1);
+  const yearStart = Date.UTC(etYear(now), 0, 1);
 
   const moves = [
     gated(1, latest.timeMs - DAY_MS),
