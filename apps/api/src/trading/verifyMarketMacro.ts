@@ -15,7 +15,7 @@ import { parseKrakenOhlc } from './brokers/crypto.js';
 //
 // Exits non-zero on the first mismatch. It reads no network and no database.
 
-const { derive, changesFor, fmtValue, quoteFor, MACRO } = __macroInternals;
+const { derive, changesFor, fmtValue, quoteFor, splitReleaseDates, MACRO } = __macroInternals;
 
 type Def = (typeof MACRO)[number];
 
@@ -286,6 +286,26 @@ console.log('Market Data · macro transform check\n');
   check('kraken ohlc · last completed close', String(closes[1].close), '62762');
   check('kraken ohlc · `last` cursor not read as candles', String(parseKrakenOhlc({ error: [], result: { last: 1 } }, now).length), '0');
   check('kraken ohlc · an error array yields nothing', String(parseKrakenOhlc({ error: ['EGeneral:Invalid arguments'], result: {} }, now).length), '0');
+}
+
+// ---- the FRED release calendar, split around today ----
+{
+  const dates = ['2026-05-12', '2026-06-10', '2026-07-14', '2026-08-02', '2026-08-12', '2026-09-11'];
+  // A release happening TODAY is the last one, not the next — the figure is out,
+  // and calling today the "next review" recreates the past-date problem.
+  const w = splitReleaseDates(dates, '2026-08-02');
+  check('release · last is today when it publishes today', w.last ?? '', '2026-08-02');
+  check('release · next is the following date', w.next ?? '', '2026-08-12');
+
+  const before = splitReleaseDates(dates, '2026-07-20');
+  check('release · last is the most recent past date', before.last ?? '', '2026-07-14');
+  check('release · next is the soonest future date', before.next ?? '', '2026-08-02');
+
+  // Past the end of the published calendar there is no next — the row falls back
+  // to "tbc" rather than inventing one.
+  const after = splitReleaseDates(dates, '2027-01-01');
+  check('release · no next past the calendar end', String(after.next), 'undefined');
+  check('release · no last before the calendar start', String(splitReleaseDates(dates, '2026-01-01').last), 'undefined');
 }
 
 console.log('');

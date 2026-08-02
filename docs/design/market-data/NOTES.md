@@ -106,16 +106,26 @@ entity that carries metals; see the entity note below and the Stooq note under
   received a CSV. The code was removed in `6.18` rather than left dead. Two
   production round-trips is enough: the next attempt at metals should be a
   metals-carrying OANDA entity or a paid feed, not a third guess at a free one.
-- **Catalog data even on a live row:** the **`review` column** ("Last → next
-  review"). Neither provider reports a release schedule — FRED's observations
-  carry the date a reading is *for*, not the date it was published — so that
-  column keeps the catalog's hand-entered dates. Because they are hand-entered
-  they **expire on their own**: seven rows were pointing at a next review that
-  had already been and gone. `reviewInfo` now renders a passed date as `tbc`,
-  the same as a row with no date at all — true, and self-correcting as the
-  calendar advances, rather than a date that has demonstrably gone. The FOMC
-  sentinels never reach that path; they resolve off the live meeting list. See
-  "Next" below for the real fix.
+- **The `review` column is real WITH a FRED key, catalog data without one.**
+  Observations cannot answer it — a FRED observation is dated for the period it
+  *measures*, so June CPI is dated `2026-06-01` and released in July. The keyed
+  `series/release` + `release/dates` endpoints do answer it, and there is no
+  keyless equivalent, so this is the one feature that genuinely differs between a
+  keyed and a keyless install. Without a key the column keeps the catalog's
+  hand-entered dates, and a date that has already passed renders as `tbc` rather
+  than a date that has demonstrably gone.
+  - `include_release_dates_with_no_data=true` is what makes **future** dates
+    appear; without it the response stops at the last release that carried data,
+    which is the half we already had.
+  - **Release ids are cached for the life of the process** (they do not change)
+    and the calendar for 12 hours. One calendar serves every series on that
+    release, so ~45 series collapse into a handful of reads.
+  - A release happening **today counts as the last one, not the next** — the
+    figure is out, and calling today the "next review" recreates the past-date
+    problem the column just escaped.
+  - **The FOMC rows are never overwritten.** `next: 'fomc'` resolves off the live
+    meeting list, which describes a rate decided at a meeting better than
+    whichever statistical release happens to carry the series.
 
 ## The live price path (`apps/api/src/trading/marketQuotes.ts`)
 

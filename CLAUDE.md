@@ -456,12 +456,19 @@ workspaces list** (see `theme/nav.ts` order).
       became a visible lie the moment that row went live off FRED — the bar
       claimed a hold at a range the row directly beneath it contradicted. Anything
       the bar states about current policy must come from the payload.
-    - **The `review` column ("Last → next review") stays catalog data even on a
-      live row.** Neither provider reports a release schedule — a FRED observation
-      is dated for the period it *measures*, not the day it was published — so
-      that column keeps its hand-entered dates. Do not wire the observation date
-      into it: "last reviewed Jun 1" for a June CPI print released in July is a
-      worse claim than the schedule it replaces.
+    - **The `review` column ("Last → next review") is real only with a FRED key.**
+      Observations cannot answer it — a FRED observation is dated for the period
+      it *measures*, not the day it was published — but the keyed
+      `series/release` + `release/dates` endpoints can, and there is no keyless
+      equivalent. So this is the **one** thing that genuinely differs between a
+      keyed and a keyless install: with `FRED_API_KEY` the column shows real
+      publication dates, without it the catalog's hand-entered ones (and a date
+      that has already passed renders `tbc` rather than a date that has gone).
+      Never wire the *observation* date into it — "last reviewed Jun 1" for a June
+      CPI print released in July is a worse claim than the schedule it replaces.
+      A release happening **today is the last one, not the next**, and the **FOMC
+      rows are never overwritten** (`next: 'fomc'` resolves off the live meeting
+      list, which beats whichever statistical release carries the series).
     - The **arrangement is per user** (`trading/marketDataLayout.ts`,
       `market_data_layout`): the ordered pinned strip, removed series, and
       user-authored "custom metrics". `GET /api/trading/market-data`,
@@ -1392,8 +1399,9 @@ defaults; the app runs locally with almost nothing set.
   `FOREX_FACTORY_ENABLED`, `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`.
 - **FRED (Market Data macro series):** `FRED_API_KEY` — **optional, and the board
   reads live without it** (the keyless chart-download CSV is the fallback).
-  Setting it switches to the documented JSON API; a rejected key falls back to
-  keyless rather than blanking the board.
+  Setting it switches to the documented JSON API **and turns on the real
+  "Last → next review" release dates**, which have no keyless equivalent; a
+  rejected key falls back to keyless rather than blanking the board.
 - **YouTube (Market News live streams):** `YOUTUBE_API_KEY` (unset = poller off,
   every channel reads offline and live figures are marked sample),
   `YOUTUBE_WATCH_SECONDS` (300), `YOUTUBE_CHANNELS_PER_TICK` (8),
