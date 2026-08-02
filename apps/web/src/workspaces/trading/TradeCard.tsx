@@ -62,6 +62,11 @@ export function fmtPrice(n: number | null): string {
   return String(Number(n.toFixed(5)));
 }
 
+// Fixed to Eastern, deliberately: its remaining callers are Market Data's Fed
+// bar and economic calendar, and a 2:00 PM statement is a fact about the market
+// rather than about the reader. Anything that shows when something happened FOR
+// THE READER — the Live Wall's "Updated …", a position's stamps, an alert's
+// arrival — uses `zoneFmt` from lib/timezone and follows the Preferences setting.
 const ET = 'America/New_York';
 export function etTime(ms: number): string {
   return new Date(ms).toLocaleTimeString('en-US', {

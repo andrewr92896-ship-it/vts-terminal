@@ -3,18 +3,12 @@ import { api, ApiError } from '../../api/client';
 import type { AlertRecord, BoardTile } from '../../api/types';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
+import { zoneFmt } from '../../lib/timezone';
 
 const REFRESH_MS = 30_000;
-const ET = 'America/New_York';
-
+// When the alert landed, on the reader's chosen clock (Eastern by default).
 function etTime(ms: number): string {
-  return new Date(ms).toLocaleString('en-US', {
-    timeZone: ET,
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return zoneFmt({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(ms);
 }
 function fmtPrice(n: number | null): string {
   if (n == null) return '—';

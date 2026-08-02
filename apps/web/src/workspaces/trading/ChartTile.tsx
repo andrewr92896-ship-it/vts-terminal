@@ -5,6 +5,7 @@ import type { BoardTile, PriceAlertCondition, PriceAlertRepeat } from '../../api
 import { TvWidget } from './TvWidget';
 import { TileConfigModal } from './TileConfigModal';
 import { ScrollLockButton } from './scrollLock';
+import { getDisplayZone } from '../../lib/timezone';
 import {
   BORDER,
   BORDER2,
@@ -58,12 +59,16 @@ export function ChartTile({
   const style = tile.style || '1';
   const studies = tile.studies ?? [];
 
+  const displayZone = getDisplayZone();
+
   const config = useMemo(
     () => ({
       autosize: true,
       symbol,
       interval,
-      timezone: 'America/New_York',
+      // The chart's own time axis, on the reader's chosen clock (Eastern by
+      // default) — TradingView takes an IANA name, the same string this stores.
+      timezone: displayZone,
       theme: 'dark',
       style,
       locale: 'en',
@@ -75,7 +80,7 @@ export function ChartTile({
       gridColor: 'rgba(120,150,220,0.08)',
       support_host: 'https://www.tradingview.com',
     }),
-    [symbol, interval, style, studies],
+    [symbol, interval, style, studies, displayZone],
   );
   const configKey = JSON.stringify({ symbol, interval, style, studies });
 

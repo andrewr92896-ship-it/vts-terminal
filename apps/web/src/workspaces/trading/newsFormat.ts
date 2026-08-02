@@ -2,14 +2,19 @@
 // Market News screen and the Live Wall's News / Calendar board tiles). Kept in
 // one place so headline times and feed text render identically everywhere.
 
+import { zoneFmt } from '../../lib/timezone';
+
 const ET = 'America/New_York';
 
-// A time-of-day label in Eastern Time (e.g. "8:30 AM").
+// A time-of-day label (e.g. "8:30 AM") in the reader's chosen zone — a headline
+// time is when it landed for them, so it follows the Preferences setting.
 export function fmtTime(ms: number): string {
-  return new Intl.DateTimeFormat('en-US', { timeZone: ET, hour: 'numeric', minute: '2-digit' }).format(ms);
+  return zoneFmt({ hour: 'numeric', minute: '2-digit' }).format(ms);
 }
 
-// A short ET day label (e.g. "Wed, Jul 16").
+// A short ET day label (e.g. "Wed, Jul 16"). Stays Eastern along with the rest
+// of the day bucketing below — the feed's Today / Yesterday split is the desk's
+// trading day, not the reader's calendar day.
 export function fmtDayKey(ms: number): string {
   return new Intl.DateTimeFormat('en-US', { timeZone: ET, weekday: 'short', month: 'short', day: 'numeric' }).format(ms);
 }

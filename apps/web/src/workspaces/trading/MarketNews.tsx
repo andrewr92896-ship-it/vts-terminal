@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { hasEntitlement } from '../../auth/access';
 import { useAuth } from '../../auth/AuthContext';
 import { useNowTick } from '../../hooks/useNowTick';
+import { zoneAbbr } from '../../lib/timezone';
 import { Icon } from '../../components/Icon';
 import { C, tint } from '../../theme/tokens';
 import { ScreenTitle } from './ScreenTitle';
@@ -225,7 +226,7 @@ export function MarketNews() {
       setErr(null);
       setLastLoaded(Date.now());
     } catch (e) {
-      const at = lastLoaded ? `Showing headlines from ${fmtTime(lastLoaded)} ET. ` : '';
+      const at = lastLoaded ? `Showing headlines from ${fmtTime(lastLoaded)} ${zoneAbbr(lastLoaded)}. ` : '';
       const why = e instanceof ApiError ? e.message : 'request failed';
       setErr(`${at}Couldn't refresh: ${why}.`);
     } finally {
@@ -1460,7 +1461,7 @@ function HeadlineRow({
                 </a>
               )}
               <span style={{ fontFamily: C.mono, fontSize: 10.5, color: C.faint }}>
-                {fmtTime(h.publishedAt)} ET · {fmtDayKey(h.publishedAt)}
+                {fmtTime(h.publishedAt)} {zoneAbbr(h.publishedAt)} · {fmtDayKey(h.publishedAt)}
               </span>
             </div>
           </div>

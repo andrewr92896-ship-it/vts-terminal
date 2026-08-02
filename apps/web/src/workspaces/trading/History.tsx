@@ -42,8 +42,12 @@ function fmtPrice(n: number | null): string {
 }
 const ET = 'America/New_York';
 
-// Day-of-week / month are derived in Eastern Time so they line up with the ET
-// clock the desk runs on (and with the "Closed" column above, which is also ET).
+// Day-of-week / month stay Eastern whatever clock the reader has chosen in
+// Preferences: a trading day is an Eastern concept (a 6pm Sunday forex open
+// belongs to Monday), so grouping by the reader's own calendar day would move
+// trades between buckets — and between two teammates' buckets. The "Closed"
+// column above does follow the reader's zone, so a trade near midnight can read
+// as one date and group under the trading day it actually belonged to.
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as const;
 const etWeekdayFmt = new Intl.DateTimeFormat('en-US', { timeZone: ET, weekday: 'long' });
 const etMonthLabelFmt = new Intl.DateTimeFormat('en-US', { timeZone: ET, year: 'numeric', month: 'long' });
