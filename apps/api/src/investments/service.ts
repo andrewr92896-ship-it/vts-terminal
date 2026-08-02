@@ -20,6 +20,7 @@ import { fetchInvestmentQuotes, investmentPricesConfigured } from './prices.js';
 import {
   allocateBy,
   concentrationFlags,
+  last12MonthKeys,
   project,
   summarizePerformance,
   totalPortfolio,
@@ -761,13 +762,9 @@ export async function getDividends(userId: string): Promise<DividendPayload> {
     getPortfolio(userId),
   ]);
 
-  const now = new Date();
+  // Both sides of this must be ET month keys, or a payment lands in no bucket.
   const monthKey = (d: Date) => etToday(d).slice(0, 7);
-  const months: { month: string; amount: number }[] = [];
-  for (let i = 11; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push({ month: monthKey(d), amount: 0 });
-  }
+  const months = last12MonthKeys(etToday()).map((month) => ({ month, amount: 0 }));
   const monthIndex = new Map(months.map((m, i) => [m.month, i]));
 
   let totalLast12 = 0;

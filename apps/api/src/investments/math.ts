@@ -308,6 +308,37 @@ export function summarizePerformance(
   };
 }
 
+// ---- Income months ----
+
+/**
+ * The last 12 ET month keys ("YYYY-MM"), oldest first, ending with the month
+ * `todayEt` falls in.
+ *
+ * Takes the ET date as a string rather than reading a clock, because the obvious
+ * implementation is wrong on any server that is not already in Eastern Time.
+ * Building the months with `new Date(y, m - i, 1)` constructs midnight LOCAL,
+ * and midnight UTC on the 1st is still the previous month in ET — so on a UTC
+ * host (which is every deploy of this app) every bucket shifted back one month,
+ * the current month was absent entirely, and this month's dividends silently
+ * vanished from the chart, the trailing total and therefore the yield.
+ *
+ * So the arithmetic is done on the ET year and month numbers directly, and never
+ * round-trips through a local-time Date.
+ */
+export function last12MonthKeys(todayEt: string): string[] {
+  const year = Number(todayEt.slice(0, 4));
+  const month = Number(todayEt.slice(5, 7)); // 1-12
+  const out: string[] = [];
+  for (let i = 11; i >= 0; i--) {
+    // Shift to a 0-based absolute month count so the year rolls over correctly.
+    const abs = year * 12 + (month - 1) - i;
+    const y = Math.floor(abs / 12);
+    const m = (abs % 12) + 1;
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+  }
+  return out;
+}
+
 // ---- Projections ----
 
 export interface ProjectionPoint {

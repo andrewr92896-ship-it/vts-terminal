@@ -1,6 +1,7 @@
 import {
   allocateBy,
   concentrationFlags,
+  last12MonthKeys,
   project,
   summarizePerformance,
   totalPortfolio,
@@ -230,6 +231,21 @@ console.log('\nPerformance split');
     1000,
   )!;
   check('money in with no market move reports zero market gain', flat.marketGain, 0);
+}
+
+console.log('\nIncome months');
+{
+  const months = last12MonthKeys('2026-08-02');
+  check('twelve buckets', months.length, 12);
+  // The bug this exists to catch: on a UTC server the obvious implementation
+  // shifted every bucket back a month, so the current month was absent and this
+  // month's dividends silently vanished from the chart, the total and the yield.
+  check('ends on the month the ET date falls in', months[months.length - 1], '2026-08');
+  check('starts eleven months earlier', months[0], '2025-09');
+  check('rolls over the year boundary', last12MonthKeys('2026-01-15')[11], '2026-01');
+  check('and backwards across it', last12MonthKeys('2026-01-15')[0], '2025-02');
+  check('December does not overflow into month 13', last12MonthKeys('2026-12-31')[11], '2026-12');
+  check('every key is well formed', months.every((m) => /^\d{4}-(0[1-9]|1[0-2])$/.test(m)), true);
 }
 
 console.log('\nProjections');
