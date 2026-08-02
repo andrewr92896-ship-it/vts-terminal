@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.13';
+export const APP_VERSION = 'Beta V 6.14';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.14',
+    date: 'August 2, 2026',
+    notes: [
+      'Rows still showing placeholder figures no longer describe themselves as “live”. Eight of them did, which contradicted the grey Sample dot on the same row — they now simply say “sample”.',
+      'The cut and hold odds for the next Fed meeting used to read 78% and 96%, which cannot both be true. They are now complements, as they should be.',
+      'The VIX now shows its moves as percentages, matching the S&P, Nasdaq and Dow rows sitting beside it rather than using a different unit in the same table.',
+      'Year-to-date is now measured from the same Eastern-time year boundary everywhere on the board.',
+    ],
+  },
   {
     version: 'Beta V 6.13',
     date: 'August 2, 2026',

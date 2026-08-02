@@ -197,6 +197,18 @@ catalog through the same `applyLiveQuotes` seam. Points worth knowing:
   `changeMode: 'pct'` — percent columns with the extra 1-day decimal, exactly as
   `marketQuotes.ts` renders them. A `+18` in the S&P's 1-day column would match
   nothing else on the board. Everything else here stays on differences.
+- **A sample row must never claim to be live.** Five of them carried
+  `asOf: 'live'` and two asserted a market superlative ("record high") while
+  showing the grey Sample dot — the row contradicting its own freshness marker.
+  Placeholder rows now read `sample`. Check this whenever a row is added or a
+  provider is wired.
+- **The VIX changes in percent, not points**, like the three index rows beside
+  it in its group and like its own catalog fixture. It rendered `−3.57` next to
+  the S&P's `+0.70%` in the same table until `changeMode: 'pct'` was set.
+- **"This year" is the Eastern year**, on the macro side as well as the price
+  side. Between 7pm and midnight ET on 31 December the UTC year has already
+  turned, so a UTC boundary would have the macro rows jump into the new year
+  while the price rows beside them were still in the old one.
 - **A spread is derived from the two legs the board already shows**
   (`fredMinus`), not read from FRED's ready-made `T10Y2Y` / `T10Y3M`. FRED
   refreshes those on their own clock, so the spread row could reach a day the
