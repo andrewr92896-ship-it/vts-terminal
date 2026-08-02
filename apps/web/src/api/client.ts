@@ -98,6 +98,16 @@ import type {
   MyTeam,
   TeamMemberPermissions,
   NavOrderOverride,
+  InvestmentPortfolio,
+  InvestmentAccountInput,
+  InvestmentHoldingInput,
+  InvestmentTransaction,
+  InvestmentTransactionInput,
+  InvestmentContributions,
+  InvestmentGoalInput,
+  InvestmentPerformance,
+  InvestmentDividends,
+  InvestmentProjection,
 } from './types';
 
 // A flashcard the user added to their own personal deck (a term, a definition,
@@ -804,6 +814,77 @@ export const api = {
   },
   deletePriceAlert(id: string): Promise<{ alerts: PriceAlert[] }> {
     return request(`/api/trading/price-alerts/${id}`, { method: 'DELETE' });
+  },
+  // ---- Investments (the long-term portfolio tracker) ----
+  // Every write returns the recomputed portfolio, so a screen never has to
+  // re-request it separately and can never render a stale total beside a fresh
+  // list. Investments is included with every account — nothing here is gated on
+  // a feature opt-in.
+  investmentPortfolio(): Promise<InvestmentPortfolio> {
+    return request('/api/investments/portfolio');
+  },
+  createInvestmentAccount(input: InvestmentAccountInput): Promise<{ id: string; portfolio: InvestmentPortfolio }> {
+    return request('/api/investments/accounts', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateInvestmentAccount(
+    id: string,
+    patch: Partial<InvestmentAccountInput>,
+  ): Promise<{ portfolio: InvestmentPortfolio }> {
+    return request(`/api/investments/accounts/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  deleteInvestmentAccount(id: string): Promise<{ portfolio: InvestmentPortfolio }> {
+    return request(`/api/investments/accounts/${id}`, { method: 'DELETE' });
+  },
+  createInvestmentHolding(input: InvestmentHoldingInput): Promise<{ id: string; portfolio: InvestmentPortfolio }> {
+    return request('/api/investments/holdings', { method: 'POST', body: JSON.stringify(input) });
+  },
+  updateInvestmentHolding(
+    id: string,
+    patch: Partial<InvestmentHoldingInput>,
+  ): Promise<{ portfolio: InvestmentPortfolio }> {
+    return request(`/api/investments/holdings/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  deleteInvestmentHolding(id: string): Promise<{ portfolio: InvestmentPortfolio }> {
+    return request(`/api/investments/holdings/${id}`, { method: 'DELETE' });
+  },
+  investmentTransactions(accountId?: string): Promise<{ entries: InvestmentTransaction[] }> {
+    const q = accountId ? `?accountId=${encodeURIComponent(accountId)}` : '';
+    return request(`/api/investments/transactions${q}`);
+  },
+  createInvestmentTransaction(
+    input: InvestmentTransactionInput,
+  ): Promise<{ id: string; entries: InvestmentTransaction[] }> {
+    return request('/api/investments/transactions', { method: 'POST', body: JSON.stringify(input) });
+  },
+  deleteInvestmentTransaction(id: string): Promise<{ entries: InvestmentTransaction[] }> {
+    return request(`/api/investments/transactions/${id}`, { method: 'DELETE' });
+  },
+  investmentContributions(taxYear: number): Promise<InvestmentContributions> {
+    return request(`/api/investments/contributions?taxYear=${taxYear}`);
+  },
+  createInvestmentGoal(input: InvestmentGoalInput): Promise<{ id: string }> {
+    return request('/api/investments/goals', { method: 'POST', body: JSON.stringify(input) });
+  },
+  deleteInvestmentGoal(id: string): Promise<{ ok: boolean }> {
+    return request(`/api/investments/goals/${id}`, { method: 'DELETE' });
+  },
+  investmentPerformance(days: number): Promise<InvestmentPerformance> {
+    return request(`/api/investments/performance?days=${days}`);
+  },
+  investmentDividends(): Promise<InvestmentDividends> {
+    return request('/api/investments/dividends');
+  },
+  investmentProjection(opts: {
+    monthlyContribution: number;
+    annualRatePct: number;
+    years: number;
+  }): Promise<InvestmentProjection> {
+    const q = new URLSearchParams({
+      monthlyContribution: String(opts.monthlyContribution),
+      annualRatePct: String(opts.annualRatePct),
+      years: String(opts.years),
+    });
+    return request(`/api/investments/projection?${q}`);
   },
   // ---- Team chat ----
   teamChat(): Promise<TeamChatFeed> {
