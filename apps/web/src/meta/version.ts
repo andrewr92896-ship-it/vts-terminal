@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.15';
+export const APP_VERSION = 'Beta V 6.16';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.16',
+    date: 'August 2, 2026',
+    notes: [
+      'Gold and silver now read live, with real change columns. They were the last two price rows on sample figures — your OANDA account carries no metals, so they now come from a free daily close instead. If a gold quote ever looks stale or cannot be read, the row falls back to its sample figure rather than showing an old price as current.',
+      'That leaves 53 of the 71 rows live. Copper is the last price row on a placeholder; the rest are all data nobody publishes for free.',
+    ],
+  },
   {
     version: 'Beta V 6.15',
     date: 'August 2, 2026',
