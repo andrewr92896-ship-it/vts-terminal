@@ -1,4 +1,4 @@
-// The portal's legal documents, kept as structured data so they render
+// The terminal's legal documents, kept as structured data so they render
 // consistently in Site Help and in the first-run acceptance gate.
 //
 // These are long-form legal paragraphs, NOT site "wording": they are
@@ -18,7 +18,7 @@ export const LEGAL_EFFECTIVE_DATE = 'July 23, 2026';
 export const COMPANY = {
   entity: 'Vitalis Trading Systems LLC',
   short: 'Vitalis Trading Systems',
-  product: 'VTS Portal',
+  product: 'VTS Terminal',
   state: 'Ohio',
   country: 'United States',
   contactEmail: 'support@vitalistradingsystems.com',
@@ -51,7 +51,7 @@ export const TERMS: LegalDoc = {
   intro:
     `These Terms of Service (the "Terms") are a binding agreement between you and ${COMPANY.entity} ` +
     `("${COMPANY.short}," "we," "us," or "our") governing your access to and use of ${COMPANY.product} ` +
-    `(the "Portal," the "Service," or the "app"), including any related mobile applications, home-screen ` +
+    `(the "Terminal," the "Service," or the "app"), including any related mobile applications, home-screen ` +
     `widgets, notifications, and features. Please read them carefully. By creating an account, signing in, ` +
     `or otherwise using the Service, you agree to these Terms and to our Privacy Policy, which is ` +
     `incorporated here by reference. If you do not agree, do not use the Service.`,
@@ -71,7 +71,7 @@ export const TERMS: LegalDoc = {
           p:
             'The Service is currently private and offered by invitation only. There is no public sign-up. A ' +
             'read-only demonstration account and an Early Access request form may be made available, but ' +
-            'access to the live Portal is granted at our sole discretion and may be modified or withdrawn at ' +
+            'access to the live Terminal is granted at our sole discretion and may be modified or withdrawn at ' +
             'any time.',
         },
       ],
@@ -169,7 +169,7 @@ export const TERMS: LegalDoc = {
         {
           p:
             'The Service is organized into "teams." When you join a team, you and your teammates can see a ' +
-            'great deal of one another’s information within the Portal — including trades and positions, ' +
+            'great deal of one another’s information within the Terminal — including trades and positions, ' +
             'trade history and results, broker capital figures, trading metrics, team chat, study content, ' +
             'and other team-scoped data. Joining a team is a decision to share this information with those ' +
             'specific people.',
@@ -545,7 +545,7 @@ export const TERMS: LegalDoc = {
         {
           p:
             `Questions about these Terms? Contact ${COMPANY.entity} at ${COMPANY.contactEmail}, or use ` +
-            'Site Help ▸ Report a bug inside the Portal.',
+            'Site Help ▸ Report a bug inside the Terminal.',
         },
       ],
     },
@@ -635,7 +635,7 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: '4. Visibility within the Portal (teams, trades, and chat)',
+      heading: '4. Visibility within the Terminal (teams, trades, and chat)',
       blocks: [
         {
           p:
@@ -655,7 +655,7 @@ export const PRIVACY: LegalDoc = {
           note:
             'Trades, positions, results, and team-scoped trading data are not made available for browsing ' +
             'by our developers or administrators as part of normal operations. Administrators do not use ' +
-            'the Portal to view your team’s trades.',
+            'the Terminal to view your team’s trades.',
         },
         {
           p:
@@ -824,7 +824,7 @@ export const PRIVACY: LegalDoc = {
           p:
             `If you have questions or requests about this Policy or your information, contact ` +
             `${COMPANY.entity} at ${COMPANY.contactEmail}, or use Site Help ▸ Report a bug inside the ` +
-            'Portal.',
+            'Terminal.',
         },
       ],
     },
@@ -858,7 +858,7 @@ export const RULES: RulesDoc = {
     {
       heading: 'The big picture',
       items: [
-        'VTS Portal is an informational and educational tracker and workspace — not financial, investment, ' +
+        'VTS Terminal is an informational and educational tracker and workspace — not financial, investment, ' +
           'or trading advice, and not a place for tips, signals, or recommendations.',
         'It exists so that people who already know and trust each other can track and discuss their own ' +
           'trading together. Only work with people you personally know.',

@@ -10,7 +10,7 @@ import { accentGradient } from '../theme/themes';
 
 // Notifications & connections — the per-device / account-connection controls:
 // phone notifications, Pushover, per-trader notification prefs, and broker
-// connections. Rendered inline in My Portal ▸ Settings (it used to be a modal
+// connections. Rendered inline in My Terminal ▸ Settings (it used to be a modal
 // opened from the old top-bar settings cog). Account settings keeps only
 // who-you-are (profile, picture, password).
 export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
@@ -105,7 +105,7 @@ function PhoneNotificationsSection({ accent, accentText }: { accent: string; acc
 
       {state === 'unsupported' ? (
         <div style={hintStyle}>
-          This device can’t receive web push here. On iPhone, add the portal to your Home Screen
+          This device can’t receive web push here. On iPhone, add the terminal to your Home Screen
           (Share → Add to Home Screen) and open it from that icon, then turn this on.
         </div>
       ) : state === 'unconfigured' ? (
@@ -134,7 +134,7 @@ function PhoneNotificationsSection({ accent, accentText }: { accent: string; acc
       )}
 
       <p style={{ ...hintStyle, marginTop: 12, marginBottom: 0 }}>
-        On iPhone this only works once the portal is installed to your Home Screen. Each device you
+        On iPhone this only works once the terminal is installed to your Home Screen. Each device you
         want buzzed needs to be turned on once.
       </p>
       {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
@@ -412,14 +412,14 @@ function PerUserNotificationsSection({ accent, accentText }: { accent: string; a
   );
 }
 
-// Build the ready-to-paste Scriptable script, with the caller's portal origin
+// Build the ready-to-paste Scriptable script, with the caller's terminal origin
 // and their freshly-generated read-only token baked in. The script itself uses
 // only string concatenation (no template literals), so the two ${...} below are
 // the only interpolations. It renders one teammate's open positions styled like
 // the Live Wall TradeCard; each home-screen widget instance picks whose via its
 // Scriptable "Parameter" (a teammate handle; blank = the whole team).
 function buildScriptableScript(origin: string, token: string): string {
-  return `// VTS Portal — Open Positions widget
+  return `// VTS Terminal — Open Positions widget
 // One widget = one person: long-press → "Edit Widget" → set Parameter to a
 // teammate's handle (e.g. dale). Leave it blank for the whole team.
 //   • Large  — up to 3 position cards (a single one shows full detail)
@@ -564,7 +564,7 @@ Script.complete();
 }
 
 // Home-screen widget setup: generate a read-only token, copy the ready-made
-// Scriptable script (token + this portal's URL baked in), and see which handle
+// Scriptable script (token + this terminal's URL baked in), and see which handle
 // to type per widget. The token authenticates the phone widget's read-only
 // positions feed and nothing else; revoking it kills the widget instantly.
 function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accentText: string }) {

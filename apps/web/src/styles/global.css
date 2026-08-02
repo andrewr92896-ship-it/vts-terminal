@@ -1,4 +1,4 @@
-/* Self-hosted fonts — no external CDN calls (private portal). */
+/* Self-hosted fonts — no external CDN calls (private terminal). */
 @import '@fontsource/ibm-plex-sans/400.css';
 @import '@fontsource/ibm-plex-sans/600.css';
 @import '@fontsource/ibm-plex-sans/700.css';
@@ -31,7 +31,7 @@
   --info: #6c9eff; /* LLC workspace accent */
   --violet: #b69cff; /* Studies workspace accent */
 
-  /* ---- Portal zoom (theme/zoom.ts) ----
+  /* ---- Terminal zoom (theme/zoom.ts) ----
      `--vts-zoom` is written onto <html> by the zoom store; everything below
      derives from it. Default 1, so the app is correct before any script runs.
 
@@ -67,7 +67,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The portal scales here. `zoom` rather than `transform: scale`, so the app
+/* The terminal scales here. `zoom` rather than `transform: scale`, so the app
    re-lays-out at its new size instead of being drawn small and stretched.
    The Employee Portal mounts at #employee-root and is deliberately NOT scaled —
    separate entry point, separate design language, its own bundle. */

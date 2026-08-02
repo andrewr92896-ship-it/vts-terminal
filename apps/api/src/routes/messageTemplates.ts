@@ -11,7 +11,7 @@ import {
 } from '../messageTemplates/service.js';
 
 // Admin ▸ Message Templates — a shared copy library of text-message and email
-// templates. Reading is open to every admin (they copy them out of the portal);
+// templates. Reading is open to every admin (they copy them out of the terminal);
 // authoring/editing/deleting is founder-level only (software developers), so the
 // write routes sit behind requireFounder while the read route uses requireAdmin.
 

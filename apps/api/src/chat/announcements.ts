@@ -126,6 +126,15 @@ export async function seedWelcome(): Promise<void> {
     'Questions about the platform or a connection are welcome too — we are all here to help each other improve.',
   ]);
 
+  // The welcome announcement was seeded under the product's old name on every
+  // install that already exists. It is only ever written here, so retitling it
+  // in place is safe — and it is the one piece of stored copy the rename cannot
+  // reach from code alone. Idempotent: nothing matches after the first pass.
+  await db
+    .update(announcements)
+    .set({ title: 'Welcome to the VTS Terminal' })
+    .where(eq(announcements.title, 'Welcome to the VTS Portal'));
+
   const existing = await db.select({ id: announcements.id }).from(announcements).limit(1);
   if (existing.length === 0) {
     const base = Date.now() - 2 * 60_000;
@@ -133,7 +142,7 @@ export async function seedWelcome(): Promise<void> {
       id: crypto.randomUUID(),
       userId: owner.id,
       author: owner.displayName,
-      title: 'Welcome to the VTS Portal',
+      title: 'Welcome to the VTS Terminal',
       body: 'Thanks for joining the team workspace. Use the channels to stay in sync, and watch this announcements board for important updates from the desk.',
       createdAt: new Date(base),
     });

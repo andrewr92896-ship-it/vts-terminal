@@ -3,10 +3,10 @@
  *
  * Self-hosted through @fontsource rather than loaded from Google, because this
  * surface runs under a strict CSP (`font-src 'self' data:`) — a CDN request
- * would simply be blocked. Same reason the main portal self-hosts IBM Plex.
+ * would simply be blocked. Same reason the main terminal self-hosts IBM Plex.
  *
  * Imported only from src/employee/main.tsx, so these faces ship in the employee
- * bundle and never weigh down the main portal's.
+ * bundle and never weigh down the main terminal's.
  *
  * Weights match the design system: Source Sans 3 at 400/600/700 for UI, Source
  * Serif 4 at 600/700 for headings. Nothing else is pulled in.

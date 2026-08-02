@@ -12,7 +12,7 @@ import {
 
 // Home-screen widget API. Two halves:
 //   • Token management (GET/POST/DELETE /api/widget/token) is the user's own,
-//     authenticated by the normal session cookie like the rest of the portal.
+//     authenticated by the normal session cookie like the rest of the terminal.
 //   • The data read (GET /api/widget/positions) is the ONLY endpoint on the
 //     whole API authenticated by a bearer token instead of the cookie, because a
 //     native iOS widget / Scriptable can't hold the httpOnly session cookie. It

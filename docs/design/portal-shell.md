@@ -1,6 +1,6 @@
-# VTS Portal — design brief (current shell)
+# VTS Terminal — design brief (current shell)
 
-Paste this whole file into a design tool before asking it to design any portal
+Paste this whole file into a design tool before asking it to design any terminal
 screen. `docs/design/portal-shell.html` is the same thing as a working page —
 open it, screenshot it, or attach it so the tool can see the chrome it is
 designing inside.
@@ -69,7 +69,7 @@ Background `#071021`, `border-right: 1px solid #152139`, padding `22px 16px 18px
 3. **`WORKSPACES`** label, then one row per workspace the user may see.
 4. **The current workspace's group label** (e.g. `ADVANCED TRADING`), then one row
    per section of that workspace.
-5. **Footer**, pinned to the bottom above a hairline: `VTS Portal` in mono +
+5. **Footer**, pinned to the bottom above a hairline: `VTS Terminal` in mono +
    the version pill (gold text, gold-tinted border, e.g. `Beta V 5.78`).
 
 Nav row spec — the same row for both tiers:
@@ -103,7 +103,7 @@ Collapsed (72px): icons only, centred, label shown as a dark tooltip on hover.
 - **`Ask VTS AI`** — the one gold-gradient button in the shell (`sparkles` icon,
   dark `#241A05` text). Opens a slide-over panel. On a phone it collapses to the
   icon alone.
-- **Bell** — 36×36 icon button with a red count bubble for unread in-portal
+- **Bell** — 36×36 icon button with a red count bubble for unread in-terminal
   notifications.
 - **Avatar** — 32px circle, ringed in the current workspace accent; opens the
   account menu.
@@ -159,12 +159,12 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 
 | Workspace | Accent | Icon | Sidebar group label |
 |---|---|---|---|
-| My Portal *(pinned first)* | `#34D399` emerald | `briefcase` | My Portal |
+| My Terminal *(pinned first)* | `#34D399` emerald | `briefcase` | My Terminal |
 | Advanced Trading | `#EBCB74` gold | `candlestick-chart` | Advanced Trading |
 | Investments | `#2DD4BF` teal | `landmark` | Investments |
 | Studies | `#B69CFF` violet | `graduation-cap` | Studies |
-| Admin Portal *(admins)* | `#E0708F` rose | `shield-check` | Administration |
-| Developer Portal *(founder)* | `#F5A524` amber | `crown` | Developer |
+| Admin Terminal *(admins)* | `#E0708F` rose | `shield-check` | Administration |
+| Developer Terminal *(founder)* | `#F5A524` amber | `crown` | Developer |
 | Site Help *(everyone)* | `#6C9EFF` blue | `life-buoy` | Help & support |
 
 ### Type
@@ -175,7 +175,7 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 - Sizes in use: 19 title · 13.5 nav · 13 breadcrumb · 12.5 body/buttons ·
   11–11.5 metadata · 10.5 labels/footer · 9.5–10 chips and pills.
 - Section labels are uppercase, ~10.5px, `letter-spacing: 1.4px`, weight 600, `#5E7098`.
-- **No CDN.** Fonts are self-hosted; the portal makes no external requests.
+- **No CDN.** Fonts are self-hosted; the terminal makes no external requests.
 
 ---
 
@@ -183,7 +183,7 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 
 The sidebar's lower list. Sections a user lacks the role for are simply absent.
 
-- **My Portal** — Investment Holdings · Net Worth · Trading Team · Preferences · Settings
+- **My Terminal** — Investment Holdings · Net Worth · Trading Team · Preferences · Settings
 - **Advanced Trading** — Live Wall · Trading Alerts · Trade Desk · Trade Analysis ·
   Deleted Trades · Strategy Sessions · Manual Trades · Funded *(role-gated)* ·
   Market Data · Market News · To Do
@@ -192,15 +192,15 @@ The sidebar's lower list. Sections a user lacks the role for are simply absent.
   *(all currently "Coming Soon" placeholders)*
 - **Studies** — Subjects · Study Game · Flashcards · Practice Tests ·
   Study Presentations · Progress · Study Creation
-- **Admin Portal** — Users · Teams · Badges · Message Templates · Patch Notes ·
+- **Admin Terminal** — Users · Teams · Badges · Message Templates · Patch Notes ·
   Early Access · Bug Reports · Support
-- **Developer Portal** — AI Instructions · Site Wording · Sidebar Layout ·
+- **Developer Terminal** — AI Instructions · Site Wording · Sidebar Layout ·
   Suggestions · View as role
 - **Site Help** — How to · Announcements · Patch notes · Report a bug ·
   Suggestion · Rules & Conduct · Terms of Service · Privacy Policy
 
 The founder can reorder workspaces and the sections within a workspace from
-**Developer Portal ▸ Sidebar Layout**, so treat the order above as the default,
+**Developer Terminal ▸ Sidebar Layout**, so treat the order above as the default,
 not a constant.
 
 ---

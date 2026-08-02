@@ -23,15 +23,15 @@ export interface NavWorkspace {
 }
 
 export const NAV: NavWorkspace[] = [
-  // My Portal — the user's own personal workspace. Available to every signed-in
+  // My Terminal — the user's own personal workspace. Available to every signed-in
   // user. Home of the user-created Trading Team. Pinned to the very top of the
   // workspaces list.
   {
     key: 'myportal',
-    label: 'My Portal',
+    label: 'My Terminal',
     icon: 'briefcase',
     accent: '#34D399',
-    group: 'My Portal',
+    group: 'My Terminal',
     sections: [
       // A combined portfolio summary: active Advanced Trading positions merged
       // with the total long-term Investments portfolio and the stats across both.
@@ -39,7 +39,7 @@ export const NAV: NavWorkspace[] = [
       // The whole-life roll-up: everything you own minus everything you owe.
       { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
-      // Turn the optional parts of the portal on and off for yourself.
+      // Turn the optional parts of the terminal on and off for yourself.
       { key: 'my_access', label: 'Feature Access', icon: 'toggle-right' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
@@ -64,7 +64,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'news', label: 'Market News', icon: 'newspaper' },
     ],
   },
-  // Advanced Trading — opt-in (My Portal ▸ Feature Access). The desk: placing
+  // Advanced Trading — opt-in (My Terminal ▸ Feature Access). The desk: placing
   // trades, reviewing them, alerts, sessions, and the hand-kept manual book.
   {
     key: 'trading',
@@ -131,11 +131,11 @@ export const NAV: NavWorkspace[] = [
     ],
   },
   // Admin-only. Shown in the sidebar only to admins (Portal filters the
-  // workspaces list via workspacesForRoles); consolidates the portal's admin
+  // workspaces list via workspacesForRoles); consolidates the terminal's admin
   // tools into one workspace.
   {
     key: 'admin',
-    label: 'Admin Portal',
+    label: 'Admin Terminal',
     icon: 'shield-check',
     accent: '#E0708F',
     group: 'Administration',
@@ -151,11 +151,11 @@ export const NAV: NavWorkspace[] = [
     ],
   },
   // Developer-only. Sits above Admin and holds the developer-exclusive tools
-  // moved out of the Admin Portal: AI Instructions, Site Wording, and View as
+  // moved out of the Admin Terminal: AI Instructions, Site Wording, and View as
   // role. (Internal key stays `founder` — the role/gating is unchanged.)
   {
     key: 'founder',
-    label: 'Developer Portal',
+    label: 'Developer Terminal',
     icon: 'crown',
     accent: '#F5A524',
     group: 'Developer',
@@ -198,7 +198,7 @@ export function navFor(ws: WorkspaceKey): NavWorkspace | undefined {
 // Trading); the demo never sees them.
 export const FUNDED_ONLY_SECTIONS = new Set(['prop']);
 
-// Workspaces a user turns on for themselves in My Portal ▸ Feature Access, keyed
+// Workspaces a user turns on for themselves in My Terminal ▸ Feature Access, keyed
 // to the feature that reveals each. A workspace not listed here is included with
 // every account. When one is off the sidebar still draws its row — dimmed, with
 // a lock — so the feature is discoverable instead of invisible; clicking it

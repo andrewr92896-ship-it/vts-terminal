@@ -9,7 +9,7 @@ import { Icon } from '../../components/Icon';
 // never executes trades or moves money, and it carries no personalized
 // buy/sell/rebalance advice — hence the "informational only" note on every card.
 //
-// The same component also backs the My Portal ▸ Investment Holdings summary,
+// The same component also backs the My Terminal ▸ Investment Holdings summary,
 // which will combine active Advanced Trading positions with the long-term
 // Investments portfolio.
 
@@ -22,7 +22,7 @@ interface SectionInfo {
 }
 
 const SECTIONS: Record<string, SectionInfo> = {
-  // My Portal — the combined views across trading, long-term investing, and your
+  // My Terminal — the combined views across trading, long-term investing, and your
   // whole financial life.
   my_holdings: {
     id: 'myportal.holdings',

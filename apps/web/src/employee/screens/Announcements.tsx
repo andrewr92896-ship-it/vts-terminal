@@ -16,7 +16,7 @@ import {
 import { Icon } from '../../components/Icon';
 
 // Internal announcements. Everyone reads; portal admins post. Deliberately not
-// the main portal's announcements table — nothing written here is visible to
+// the main terminal's announcements table — nothing written here is visible to
 // members of the trading portal.
 
 export function Announcements({ canManage }: { canManage: boolean }) {

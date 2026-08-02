@@ -204,7 +204,7 @@ export const api = {
   acceptTerms(): Promise<{ user: User }> {
     return request('/api/auth/accept-terms', { method: 'POST', body: JSON.stringify({}) });
   },
-  // My Portal ▸ Feature Access — the optional parts of the portal this user has
+  // My Terminal ▸ Feature Access — the optional parts of the terminal this user has
   // turned on. `me()` already carries them on user.access.features; these two are
   // for the screen that edits them.
   features(): Promise<{ features: UserFeatures }> {
@@ -238,7 +238,7 @@ export const api = {
       body: JSON.stringify(patch),
     });
   },
-  // ---- My Portal: user-created Trading Teams ----
+  // ---- My Terminal: user-created Trading Teams ----
   myPortal(): Promise<MyPortalData> {
     return request('/api/my-portal/team');
   },
@@ -815,7 +815,7 @@ export const api = {
   deleteTeamChat(id: string): Promise<{ messages: ChatMessage[] }> {
     return request(`/api/chat/team/${id}`, { method: 'DELETE' });
   },
-  // In-portal notifications (top-bar bell).
+  // In-terminal notifications (top-bar bell).
   notifications(): Promise<{ items: NotificationItem[]; latestAt: number }> {
     return request('/api/notifications');
   },

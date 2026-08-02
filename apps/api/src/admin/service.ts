@@ -66,7 +66,7 @@ import { isAdmin, isFounder, isRoleKey, parseRoles, parseBadges, type RoleKey } 
 import { teamExists } from '../teams/service.js';
 import { assignableBadgeKeys } from '../badges/service.js';
 
-// The portal owner's account, identified by the immutable created username
+// The terminal owner's account, identified by the immutable created username
 // (matches the first-boot seed, ADMIN_USERNAME). Only the owner may grant or
 // revoke the founder / software_developer roles.
 const OWNER_USERNAME = (process.env.ADMIN_USERNAME || 'andrew').trim().toLowerCase();
@@ -350,7 +350,7 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
   if (!target) throw new AdminError('User not found');
 
   // Never delete the last admin-capable account (admin or founder-level), so the
-  // portal always has an owner who can manage it. (With self-deletion blocked
+  // terminal always has an owner who can manage it. (With self-deletion blocked
   // above this is also a backstop.)
   if (isAdmin(parseRoles(target))) {
     const all = await db.select({ roles: users.roles }).from(users);
@@ -450,9 +450,9 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
       .set({ createdBy: null })
       .where(eq(studyFlashcardSets.createdBy, targetId));
     await tx.update(studyGuides).set({ createdBy: null }).where(eq(studyGuides.createdBy, targetId));
-    // My Portal team metadata. The team itself (trading_teams + members'
+    // My Terminal team metadata. The team itself (trading_teams + members'
     // users.team_id) is the real trade-scoping team and is left intact — only
-    // this user's My Portal metadata is cleared. For any team this user led,
+    // this user's My Terminal metadata is cleared. For any team this user led,
     // drop that team's leader pointer + member badges/permissions + pending
     // invites; a new leader is auto-picked from the remaining members on next
     // access (see ensureTeamMeta). Then clear their own membership metadata and

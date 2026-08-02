@@ -37,7 +37,7 @@ const CATEGORIES: { kind: SupportKind; label: string; icon: string; blurb: strin
     kind: 'suggestion',
     label: 'Suggestion',
     icon: 'lightbulb',
-    blurb: 'An idea to improve the portal',
+    blurb: 'An idea to improve the terminal',
     greeting: "Love it — what's your idea? Tell me what you'd like to see and the problem it would solve.",
   },
   {
@@ -169,7 +169,7 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
             </div>
           </div>
           <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: '#aebcd8' }}>
-            {"Read-only demo. Sign in to the live portal to report a bug, send a suggestion, or ask for help."}
+            {"Read-only demo. Sign in to the live terminal to report a bug, send a suggestion, or ask for help."}
           </p>
         </div>
       </div>

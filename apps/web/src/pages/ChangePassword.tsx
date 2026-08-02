@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
 
 // Shown after login when the account still has a temporary password (an admin
-// just created or reset it). Blocks the portal until a new password is set.
+// just created or reset it). Blocks the terminal until a new password is set.
 export function ChangePassword() {
   const { user, changePassword, logout } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');

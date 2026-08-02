@@ -55,7 +55,7 @@ export const requireAdmin: preHandlerHookHandler = async (
 
 // Reject unless the logged-in user is founder-level (founder or the
 // permission-equivalent software_developer). Guards the founder-only tools:
-// the Founder Portal (AI Instructions, Site Wording, View as role) and the
+// the Founder Terminal (AI Instructions, Site Wording, View as role) and the
 // site-wording copy overrides. Plain admins are rejected here.
 export const requireFounder: preHandlerHookHandler = async (
   request: FastifyRequest,
@@ -72,7 +72,7 @@ export const requireFounder: preHandlerHookHandler = async (
 
 // Reject unless the logged-in user can access the given workspace.
 //
-// Trading is opt-in (My Portal ▸ Feature Access), so the workspace guard checks
+// Trading is opt-in (My Terminal ▸ Feature Access), so the workspace guard checks
 // that too — which means every endpoint already behind it inherits the gate
 // rather than each route having to remember. Market-facing endpoints that moved
 // to the always-on Markets workspace use `requireMarkets` instead.
@@ -98,7 +98,7 @@ export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
 // opted into nothing.
 export const requireMarkets: preHandlerHookHandler = requireAuth;
 
-// Reject unless the user has opted into Advanced Trading (My Portal ▸ Feature
+// Reject unless the user has opted into Advanced Trading (My Terminal ▸ Feature
 // Access). This is the gate on the whole desk — placing and reviewing trades,
 // broker connections, alerts, strategy sessions, the manual book. The
 // market-facing endpoints behind the Markets workspace (news, the economic

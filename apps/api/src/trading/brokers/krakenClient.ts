@@ -157,7 +157,7 @@ export async function krakenPrivate<T>(
 // ---- asset naming ----
 //
 // Kraken carries two names for most things: a legacy code (XXBT, ZUSD, XDG) and
-// a modern one. The portal shows the names a trader reads on a chart — BTC, USD,
+// a modern one. The terminal shows the names a trader reads on a chart — BTC, USD,
 // DOGE — so every display path funnels through here, and every request path
 // funnels back through `toKrakenAsset`. brokers/kraken.ts already tidied pair
 // names this way for the Live Wall; this is the same mapping, shared, so the

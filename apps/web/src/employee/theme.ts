@@ -1,6 +1,6 @@
 // The Employee Portal's design tokens.
 //
-// This file deliberately does NOT extend the main portal's `C` tokens. The two
+// This file deliberately does NOT extend the main terminal's `C` tokens. The two
 // surfaces are different products with different jobs: the trading portal is a
 // dark pro-terminal you stare at all day, the employee portal is a calm internal
 // site you drop into for five minutes. Sharing a palette would have forced one

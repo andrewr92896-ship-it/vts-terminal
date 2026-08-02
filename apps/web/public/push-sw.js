@@ -8,9 +8,9 @@ self.addEventListener('push', (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch (e) {
-    data = { title: 'VTS Portal', body: event.data ? event.data.text() : '' };
+    data = { title: 'VTS Terminal', body: event.data ? event.data.text() : '' };
   }
-  const title = data.title || 'VTS Portal';
+  const title = data.title || 'VTS Terminal';
   const options = {
     body: data.body || '',
     tag: data.tag || undefined,

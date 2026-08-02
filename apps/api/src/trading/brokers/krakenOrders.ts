@@ -407,7 +407,7 @@ export async function cancelKrakenOrder(cfg: KrakenConfig, txid: string): Promis
 // What one unit of `quote` is worth in USD, so the ticket can price a stop in
 // real money on a pair that is not quoted in dollars. USD is 1 by definition;
 // the dollar stablecoins are treated as 1 too, which is the same approximation
-// the portal's keyless crypto price feed already makes. Anything else is looked
+// the terminal's keyless crypto price feed already makes. Anything else is looked
 // up on Kraken itself, and a pair Kraken cannot price returns null so the ticket
 // shows "—" rather than a confidently wrong number.
 const USD_LIKE = new Set(['USD', 'USDT', 'USDC', 'DAI', 'PYUSD', 'RLUSD']);

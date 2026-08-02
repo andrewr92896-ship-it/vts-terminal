@@ -9,7 +9,7 @@ import { DESIGNATION_BADGE_KEYS } from '../badges/designations.js';
 // Who may change whose desk settings.
 //
 // A trader can always change their own. On top of that, a trader's settings can
-// be changed for them by a teammate who leads the desk: the My Portal team
+// be changed for them by a teammate who leads the desk: the My Terminal team
 // leader, or a holder of a position-designation badge (Chief Analyst / Chief
 // Strategist). Admins and founder-level users can change anyone's. This mirrors
 // how designations already mark leadership on the desk (see designations.ts).

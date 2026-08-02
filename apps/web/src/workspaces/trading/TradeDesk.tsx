@@ -311,7 +311,7 @@ export function TradeDesk() {
       </div>
 
       <div style={{ fontSize: 10.5, color: FAINT, marginTop: 16, lineHeight: 1.6, maxWidth: 820 }}>
-        {"Orders are sent to the broker account you connected, under your own credentials. The portal does not hold funds, route orders, or give investment advice — every decision, and every fill, is yours."}
+        {"Orders are sent to the broker account you connected, under your own credentials. The terminal does not hold funds, route orders, or give investment advice — every decision, and every fill, is yours."}
       </div>
 
       <BrokerConnections open={connOpen} onClose={() => setConnOpen(false)} onChanged={afterAction} />

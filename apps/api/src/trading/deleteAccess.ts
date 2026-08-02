@@ -6,7 +6,7 @@ import { scopedTraderIds } from './scope.js';
 // Who may delete (and restore) whose trades.
 //
 // A trader can always remove their own. Removing somebody else's is a team
-// grant, handed out from My Portal ▸ Trading Team: the **team leader** holds
+// grant, handed out from My Terminal ▸ Trading Team: the **team leader** holds
 // every permission implicitly, and they can give the **Delete trades**
 // permission (`canDeleteTrades`) to any member. Admins keep their install-wide
 // reach over the shared desk, as they always had.

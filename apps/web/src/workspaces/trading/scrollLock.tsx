@@ -15,7 +15,7 @@ import { BORDER2, GOLD } from './tvChart';
 // the scrollbar read the same shared state.
 
 // The DOM lock is a single CSS class rather than inline styles. `<main>` is
-// shared across every section of the portal and React owns its inline style, so
+// shared across every section of the terminal and React owns its inline style, so
 // saving/restoring inline `overflow` is fragile — a missed restore would break
 // scrolling app-wide. A class (applied to <html>, <body>, and the content
 // container) is applied and, crucially, removed symmetrically here in the store,
@@ -34,7 +34,7 @@ function ensureStyleEl() {
   document.head.appendChild(el);
 }
 
-// The portal's scroll container — its <main>, tagged in Portal.tsx.
+// The terminal's scroll container — its <main>, tagged in Portal.tsx.
 function scrollRoot(): HTMLElement | null {
   if (typeof document === 'undefined') return null;
   return document.querySelector<HTMLElement>('[data-vts-scroll-root]');

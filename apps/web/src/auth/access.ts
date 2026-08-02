@@ -23,11 +23,11 @@ export const ROLE_LABELS: Record<RoleKey, string> = {
 
 // Short descriptions shown next to each role in the admin picker.
 export const ROLE_DESCRIPTIONS: Record<RoleKey, string> = {
-  founder: 'Full access, incl. the Developer Portal. Granted only by the owner.',
+  founder: 'Full access, incl. the Developer Terminal. Granted only by the owner.',
   software_developer: 'Founder-equivalent access. Granted only by the owner.',
-  admin: 'Manage users and teams (Admin Portal). Granted by a founder.',
+  admin: 'Manage users and teams (Admin Terminal). Granted by a founder.',
   employee:
-    'Reveals the Employee Portal section in My Portal. Also requires a company email address, and its own sign-in plus a second factor at /employee.',
+    'Reveals the Employee Portal section in My Terminal. Also requires a company email address, and its own sign-in plus a second factor at /employee.',
   member: 'Baseline access to every standard workspace.',
 };
 
@@ -49,13 +49,13 @@ export function canAccessWorkspace(
   ws: WorkspaceKey,
   features?: UserFeatures,
 ): boolean {
-  // The Founder Portal is founder-level only.
+  // The Founder Terminal is founder-level only.
   if (ws === 'founder') return isFounder(roles);
-  // The Admin Portal is for admins (founder-level included).
+  // The Admin Terminal is for admins (founder-level included).
   if (ws === 'admin') return isAdmin(roles);
   // Advanced Trading is opt-in — the one workspace a signed-in user does not get
   // by default, because it places real orders. Everything else (Markets,
-  // Investments, Studies, My Portal, Site Help) is included with every account.
+  // Investments, Studies, My Terminal, Site Help) is included with every account.
   if (ws === 'trading') return !!features?.advancedTrading;
   return true;
 }
@@ -78,7 +78,7 @@ export function isCompanyEmail(email: string | null | undefined): boolean {
   return email.trim().toLowerCase().endsWith(`@${COMPANY_EMAIL_DOMAIN}`);
 }
 
-// Whether to show the My Portal ▸ Employee Portal section. Two conditions, both
+// Whether to show the My Terminal ▸ Employee Portal section. Two conditions, both
 // required: the `employee` role — NOT implied by admin or founder level, since
 // the employee surface is a separate, explicitly-granted zone — and a sign-in
 // email on the company domain. Mirror of the backend's canAccessEmployeePortal;

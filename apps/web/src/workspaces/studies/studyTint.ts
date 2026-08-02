@@ -2,7 +2,7 @@ import type { Theme } from '../../theme/themes';
 
 // A tiny pub/sub that lets the study-game player recolour the Studies workspace
 // to the learner's current level *while a game is being played*. The player
-// publishes its level's base hue; the portal shell subscribes and re-themes the
+// publishes its level's base hue; the terminal shell subscribes and re-themes the
 // workspace + tints the content background from it. Cleared when the player
 // unmounts, so the recolouring only applies to the game you're playing.
 

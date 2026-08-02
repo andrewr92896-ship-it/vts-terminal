@@ -24,7 +24,7 @@ const INPUT_BG = '#091633';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
-// The API protocols the portal can actually stream from. The brokerage *name*
+// The API protocols the terminal can actually stream from. The brokerage *name*
 // is free text (the label), so a user can call a connection anything (their
 // prop firm, etc.) while picking which API it speaks.
 const BROKERS: { key: BrokerConnectionKind; label: string }[] = [

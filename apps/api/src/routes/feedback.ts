@@ -22,7 +22,7 @@ const bodySchema = z.object({ body: z.string().trim().min(1).max(4000) });
 export async function feedbackRoutes(app: FastifyInstance) {
   const auth = { preHandler: requireAuth };
   const admin = { preHandler: requireAdmin };
-  // Suggestion triage lives in the Developer Portal, not the Admin Portal, so
+  // Suggestion triage lives in the Developer Terminal, not the Admin Terminal, so
   // its management routes are founder-level. Anyone signed in can still *send*
   // a suggestion (the POST below is plain auth) — only reading and acting on
   // the queue is restricted.

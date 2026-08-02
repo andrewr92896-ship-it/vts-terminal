@@ -433,7 +433,7 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
 // wall of pills — three rows deep on a phone — sitting above every tile, so the
 // list collapses into one dropdown and the board starts that much higher up.
 //
-// It is drawn by the portal itself (a button plus a body-portalled menu, the
+// It is drawn by the terminal itself (a button plus a body-portalled menu, the
 // same shape as the metrics tile's trader picker) rather than a native
 // <select>: on iOS that renders the OS picker wheel, which ignores the desk's
 // theme entirely. Portalling to <body> keeps the menu clear of the grid's

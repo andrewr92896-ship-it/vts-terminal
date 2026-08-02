@@ -100,7 +100,7 @@ export function Login() {
             color: '#8ea3cc',
           }}
         >
-          Portal Login
+          Terminal Login
         </p>
 
         <label style={labelStyle}>Email</label>

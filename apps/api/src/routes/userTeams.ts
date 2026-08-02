@@ -33,7 +33,7 @@ const permsSchema = z.object({
   canDeleteTrades: z.boolean().optional(),
 });
 
-// My Portal — user-created Trading Teams. All routes require a signed-in user;
+// My Terminal — user-created Trading Teams. All routes require a signed-in user;
 // the global demo guard already refuses demo writes.
 export async function userTeamRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireAuth };
