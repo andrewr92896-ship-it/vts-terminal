@@ -252,10 +252,10 @@ workspaces list** (see `theme/nav.ts` order).
       request, not which paths exist). Routes are their own file,
       `routes/tradeDesk.ts` under `/api/trading/desk/*`: reads behind
       `requireWorkspace('trading')`, **every write behind
-      `requireWorkspaceWrite`** so `trading_viewer` is read-only here too, and
-      the demo refused twice (demoGuard blocks every non-GET; `refuseDemo` in the
-      service is the second lock, deliberately, on the one surface that moves
-      money).
+      `requireWorkspaceWrite`** (the right guard on a write even though no
+      read-only role exists today — see Roles & access), and the demo refused
+      twice (demoGuard blocks every non-GET; `refuseDemo` in the service is the
+      second lock, deliberately, on the one surface that moves money).
     - **Both venues lie about success in their own way, and both are handled.**
       **OANDA answers `201 Created` even when it immediately cancels the order**
       (insufficient margin, market halted, an unfillable FOK), so an
@@ -360,11 +360,11 @@ workspaces list** (see `theme/nav.ts` order).
     publishes it / when it was last and is next revised. A bar at the top counts
     down to the next **FOMC** statement and press conference. Two views: the
     series board (search + group filter) and the **Forex Factory economic
-    calendar** — which reads the same `trading_calendar` rows Market News does,
-    so those events currently appear on both screens (see
-    `docs/design/market-data/NOTES.md`). Deliberately factual: **no AI note and
-    no advice-flavoured copy** anywhere on it, plus an "informational only"
-    footer line.
+    calendar**, which reads the shared `trading_calendar` rows. **This screen is
+    the calendar's only home** — Market News used to render the same rows and no
+    longer does, so it appears once. Deliberately factual: **no AI note and no
+    advice-flavoured copy** anywhere on it, plus an "informational only" footer
+    line.
     - The **catalog lives in code** (`trading/marketData.ts`), identical for
       everyone, and is **mostly live** — **51 of the 71** non-session series, from
       **two providers** that both overlay the catalog through the one
@@ -973,29 +973,65 @@ them while the desk is off.
 
 ## Roles & access (`auth/rbac.ts`)
 
-Granular, admin-assigned roles (JSON array in `users.roles`); a user may hold
-any combination:
+Assigned roles (JSON array in `users.roles`); a user may hold any combination.
+**`ROLE_KEYS` is the whole list** — five roles, and they are a ladder of trust
+rather than a set of workspace keys:
 
-- `admin` — everything, incl. user/team management.
-- `trading` — full Trading.
-- `trading_viewer` — **read-only** Trading (the only read-only variant;
-  `requireWorkspaceWrite` blocks it).
+- `founder` — the terminal's owners. Sits **above** admin and carries every
+  admin capability plus the founder-only tools (Developer Terminal).
+- `software_developer` — **permission-equivalent to `founder`**; the two are
+  tested together by `isFounder()`. Not a lesser tier.
+- `admin` — user/team management and the Admin Terminal. `isAdmin()` is
+  `admin || isFounder()`, so founder-level passes every admin guard.
 - `employee` — reveals **My Terminal ▸ Employee Portal** and permits the separate
   sign-in at `/employee`. **Not** implied by admin or founder level — it must be
   granted outright, by a founder. It unlocks nothing inside the main terminal, and
   on its own it is not enough: a **company-domain sign-in email** is required too
   (`canAccessEmployeePortal(roles, email)`). Never the demo.
-- `studies` — Studies.
+- `member` — the baseline. Every signed-in user is at least a member and reaches
+  every non-admin workspace.
 
-**Retired: `funded`.** The Funded tracker used to be an admin-granted role; it
-is now the nested opt-in above, so the role is gone from `ROLE_KEYS` and the
-admin pickers, and the opt-in is the only gate. Do not reintroduce it — two
-sources of truth for the same section is exactly what this removed.
+**Who may grant what** (`assertCanAssignRoles` in `admin/service.ts`): only the
+**owner** (`isOwnerUser`, matched on the immutable `createdUsername` against
+`ADMIN_USERNAME`) may grant or revoke `founder` / `software_developer`; only a
+**founder-level** user may grant `admin` / `employee`.
 
-Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`,
+**A role no longer decides which workspace you see — the opt-in does.** This is
+the single most important thing about the current model, and the thing most
+likely to be misremembered:
+
+- **Retired: `trading`, `trading_viewer`, `studies`, `funded`.** All four are
+  gone from `ROLE_KEYS` and the admin pickers. What gates Advanced Trading and
+  Funded Account is the per-user **Feature Access opt-in** (see above), and
+  Markets / Investments / Studies / My Terminal / Site Help are included with
+  every account.
+- `canAccessWorkspace()` therefore returns **true** for everyone, and
+  `isWorkspaceReadOnly()` returns **false** for everyone. Both are kept as stable
+  exports so the write guards still compile and so a paid/read-only tier has an
+  obvious place to land later — they are not dead by accident.
+- **There is no read-only role.** The only read-only presentation in the terminal
+  is the **demo**, and it is enforced by `demoGuard` (which refuses every
+  non-GET), not by a role. So do not write a comment claiming a guard stops "a
+  view-only role" — nothing holds one. Say the demo, or say nothing.
+- Consequence for `requireWorkspaceWrite(ws)`: today it differs from
+  `requireWorkspace(ws)` only by a read-only check that cannot currently fire. It
+  is still the right guard on every write — it is where the check goes back when
+  a tier returns — so keep using it; just do not describe it as blocking a role
+  that no longer exists.
+
+`WorkspaceKey` server-side is only `'trading' | 'studies'`; Markets, Investments,
+My Terminal and Site Help have no role gate to name.
+
+Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`, `requireFounder`,
 `requireWorkspace(ws)`, `requireWorkspaceWrite(ws)`, `requireMarkets`,
-`requireAdvancedTrading`, `requireFunded`. The legacy `users.role` string column
-is still populated but **unused** — real roles live in `users.roles`.
+`requireAdvancedTrading`, `requireFunded`. `requireMarkets` **is** `requireAuth`,
+named separately so the always-on boundary is legible at the call sites. The
+legacy `users.role` string column is still populated but **unused** — real roles
+live in `users.roles`.
+
+The web mirror is `apps/web/src/auth/access.ts` (`ALL_ROLES`, `ROLE_LABELS`,
+`ROLE_DESCRIPTIONS`, `isFounder`, `isAdmin`) and is already in step with the
+above; the **server is the enforcer**.
 
 ## Teams (`teams/service.ts`) — scope almost everything
 
@@ -1089,7 +1125,9 @@ control — the server is still the enforcer.
   - Applied to: `global` (+ workspace guidance), `tutor`, `market_overview`,
     `metrics_coach`, `support`, `support_intake`, the study-guide builder
     (`chatStudyGuide`, which takes the style as an argument so `claude.ts` stays
-    free of the settings/DB layer), and the To Do command bar (`todo/command.ts`).
+    free of the settings/DB layer), and the To Do command bar (`todo/command.ts`
+    — wired server-side but **not reachable from any screen**; see "Server
+    surface no screen reaches").
   - `withStyle(system, { structured: true })` appends a reminder that the reply
     is still JSON-only — use it for every prompt whose output is parsed, or the
     intake/builder parsers break.
@@ -1664,6 +1702,44 @@ is unreadable, and it forces a judgment call the owner has no way to make. So:
 - `themes.ts` `TABS`/`TabDef` — superseded by `theme/nav.ts`.
 - `tokens.ts` `info` comment ("LLC workspace accent") and `nav.ts`/`access.ts`
   "wealth/finance deep link" fallbacks — reference removed workspaces.
+
+### Server surface no screen reaches (audited 2026-08-02)
+
+About 35 endpoints are live and registered with **no caller anywhere in the
+web app**, each with a matching dead wrapper in `api/client.ts`. They compile,
+they ship, and they read exactly like working features — which is the danger:
+**a method existing in `client.ts` is not evidence a feature works.** Check for
+a caller before believing one. (That cuts both ways —
+`updateMarketNewsChannel` sat in this same list until Beta V 6.28, and the
+right answer there was to *build the missing UI*, not to delete it.)
+
+Three groups, and they want different treatment:
+
+- **Superseded (~21 endpoints, `/api/studies/{learned,game,leaderboard,tests,vocab,starred,sections}`).**
+  The pre-team-decks Studies implementation. The giveaway is the near-miss
+  naming: the live screens call `saveStudyDeckGame` / `archiveStudyDeckGame`,
+  while `saveStudyGame` / `archiveStudyGame` are the old ones. **Do not wire
+  these back** — team-built decks (`studyEngine.ts`, `gameStats.ts`) are the
+  model now, and reviving a second one is how a leaderboard ends up with two
+  disagreeing sources.
+- **Removed on purpose (~9 endpoints).** The manual news/calendar CRUD
+  (`/api/trading/news`, `/api/trading/calendar` writes) dropped in the Market
+  News rebuild, plus `/api/trading/feed/brief` and `/api/trading/truth` — the
+  AI overview brief and the Truth Social tab, which that section already says
+  are **not to be reintroduced**. The GET on `/api/trading/news` is still very
+  much live; it is the shared feed. Only the writes are orphaned.
+- **Built but never wired (4 endpoints).** `GET /api/investments/transactions`
+  (the screens read transactions off the portfolio payload instead), and the
+  To Do trio `POST /api/todo/sections`, `POST /api/todo/items/:id/state` and
+  **`POST /api/todo/command`** — the natural-language command bar in
+  `todo/command.ts`. That last one is a complete AI feature, metered against
+  the AI cap, with **no UI at all**; the AI section above lists it as a place
+  the response style is applied, which overstates it. `TradingTodo.tsx` adds
+  items to the first trading-tagged section and does nothing else.
+
+Deleting any of it is a real cleanup and an owner decision, not a tidy-up to
+slip into an unrelated change — the routes are registered, so removing them is
+a behaviour change for anything calling the API directly.
 
 ## Verifying changes
 

@@ -532,9 +532,10 @@ export type TradingBoardRow = typeof tradingBoards.$inferSelect;
 
 // ---- Market News (a shared desk feed: headlines + economic calendar) ----
 // Unlike the per-user trading data, news and calendar events are shared across
-// all traders. Anyone in the Trading workspace can read them; only writers
-// (not trading_viewer) can post or edit. authorId is nullable and set to NULL
-// when its author is deleted, so the shared feed survives.
+// all traders. Anyone in the Trading workspace can read them; posting or editing
+// is behind the workspace write guard, and the demo is refused by demoGuard
+// (every non-GET). authorId is nullable and set to NULL when its author is
+// deleted, so the shared feed survives.
 export const NEWS_IMPACTS = ['high', 'medium', 'low'] as const;
 export type NewsImpact = (typeof NEWS_IMPACTS)[number];
 export const NEWS_BIASES = ['bullish', 'bearish', 'neutral'] as const;

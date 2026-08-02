@@ -45,8 +45,10 @@ export function ChartTile({
   const [showCfg, setShowCfg] = useState(false);
   const [showAlert, setShowAlert] = useState(false);
   const { user } = useAuth();
-  // A price alert can be created by anyone with trading write access (not the
-  // read-only demo or a trading_viewer). The button is hidden otherwise.
+  // A price alert can be created by anyone with trading write access — which
+  // today means everyone except the read-only demo. `readOnlyWorkspaces` is
+  // still consulted because it is what a read-only tier would populate; it is
+  // empty for every non-demo account. The button is hidden otherwise.
   const canAlert = !!user && !user.isDemo && !user.access.readOnlyWorkspaces.includes('trading');
   // Leaving edit mode closes the settings panel so it doesn't reopen on the
   // next edit.

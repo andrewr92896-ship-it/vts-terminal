@@ -26,9 +26,10 @@ A trader opens Market News to answer three questions, in this order:
 Today's layout answers all three with the same undifferentiated vertical stack of
 cards, which is the core of the complaint.
 
-Audience is the desk (owner + a few traders). Public demo and `trading_viewer` see
-it read-only. It is a **shared** feed — not per-user — so two traders see the same
-headlines; only the "affects" chips are personalised.
+Audience is the desk (owner + a few traders). The public demo sees it read-only —
+that is the only read-only account, since the `trading_viewer` role this doc
+originally named has been retired. It is a **shared** feed — not per-user — so two
+traders see the same headlines; only the "affects" chips are personalised.
 
 ---
 
