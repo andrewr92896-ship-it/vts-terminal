@@ -9,6 +9,8 @@ import {
 } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { hasEntitlement } from '../../auth/access';
+import { UpgradeNotice } from '../../components/UpgradeNotice';
 import { usePrivacy } from '../../privacy/privacy';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { C, tint } from '../../theme/tokens';
@@ -180,6 +182,10 @@ export function MarketData() {
   // Read-only for trading view-only roles and the demo: the board can be read
   // and searched, but nothing pins, removes or persists.
   const canWrite = !!user && !user.access.readOnlyWorkspaces.includes('trading');
+  // The 75-series board is Premium. The economic calendar and the FOMC countdown
+  // on this same screen are free (owner decision, 2026-08), so the screen stays
+  // useful on a free account rather than being a wall.
+  const canBoard = hasEntitlement(user, 'marketData');
   const { privacy, toggle: togglePrivacy } = usePrivacy();
   const { isPhone } = useResponsive();
 
@@ -190,7 +196,7 @@ export function MarketData() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const [view, setView] = useState<'board' | 'calendar'>('board');
+  const [view, setView] = useState<'board' | 'calendar'>(canBoard ? 'board' : 'calendar');
   const [editing, setEditing] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -234,8 +240,14 @@ export function MarketData() {
 
   const load = useCallback(async () => {
     try {
-      const [payload, news] = await Promise.all([api.marketData(), api.marketNews()]);
-      setData(payload);
+      // The series board is paid; the economic calendar and the Fed countdown
+      // are not. So an account without the tier still loads the calendar half
+      // rather than hitting a 402 and getting an empty screen.
+      const [payload, news] = await Promise.all([
+        canBoard ? api.marketData() : Promise.resolve(null),
+        api.marketNews(),
+      ]);
+      if (payload) setData(payload);
       setCalendar(news.calendar);
       setLoadedAt(Date.now());
       setErr(null);
@@ -404,7 +416,34 @@ export function MarketData() {
     </div>
   );
   if (err && !data) return shell(<div style={{ color: C.red, fontSize: 13 }}>{err}</div>);
-  if (!data) return shell(<div style={{ color: C.muted, fontSize: 13 }}>Loading market data…</div>);
+  if (!data && canBoard) {
+    return shell(<div style={{ color: C.muted, fontSize: 13 }}>Loading market data…</div>);
+  }
+  // Without the tier there is no board payload at all, so the screen renders its
+  // free half on its own path rather than threading a null `data` through every
+  // board computation below. The calendar and the Fed countdown are the free
+  // half, and they are genuinely useful on their own.
+  if (!data) {
+    return shell(
+      <>
+        <div style={{ marginBottom: 16 }}>
+          <UpgradeNotice feature="marketData" />
+        </div>
+        <CalendarView
+          upcoming={calUpcoming}
+          past={calPast}
+          now={now}
+          ccy={calCcy}
+          impact={calImpact}
+          openId={openCal}
+          onCcy={setCalCcy}
+          onImpact={setCalImpact}
+          onToggle={(id) => setOpenCal((cur) => (cur === id ? null : id))}
+        />
+        <div style={disclaimer}>Market data is informational only — not investment advice.</div>
+      </>,
+    );
+  }
 
   const pinnedMetrics = pinned.flatMap((id) => {
     const m = byId.get(id);
