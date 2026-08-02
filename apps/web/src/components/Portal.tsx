@@ -66,6 +66,7 @@ import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
 import { ComingSoon, COMING_SOON_SCREENS } from '../workspaces/investments/ComingSoon';
+import { INVESTMENT_SCREENS } from '../workspaces/investments/screens';
 import { FeatureAccess } from '../workspaces/myportal/FeatureAccess';
 
 // The Studies screens are code-split into a lazy chunk that only loads when the
@@ -97,6 +98,11 @@ const Preferences = lazy(() =>
 );
 const DeletedTrades = lazy(() =>
   import('../workspaces/trading/DeletedTrades').then((m) => ({ default: m.DeletedTrades })),
+);
+// The whole Investments workspace is one lazy chunk, the same treatment Studies
+// gets — nobody who never opens it pays for its code.
+const InvestmentsWorkspace = lazy(() =>
+  import('../workspaces/investments').then((m) => ({ default: m.InvestmentsWorkspace })),
 );
 
 // Screens that have real implementations; everything else falls back to the
@@ -488,8 +494,10 @@ export function Portal() {
   // View-as / Suggestions / Bug Reports sections. Returns null for anything else
   // so it falls through to renderScreen and then the placeholder.
   function renderExtra(scr: string): React.ReactNode {
-    // The Investments workspace sections and the My Terminal ▸ Investment Holdings
-    // summary are all themed "Coming Soon" placeholders for now (the foundation).
+    // The Investments workspace — the long-term portfolio tracker.
+    if (INVESTMENT_SCREENS.has(scr)) return <InvestmentsWorkspace screen={scr} onNavigate={selectScreen} />;
+    // What is left on the placeholder: the two My Terminal roll-ups, which
+    // summarise across workspaces and so come after the things they summarise.
     if (COMING_SOON_SCREENS.has(scr)) return <ComingSoon screen={scr} theme={theme} />;
     switch (scr) {
       case 'my_team':
