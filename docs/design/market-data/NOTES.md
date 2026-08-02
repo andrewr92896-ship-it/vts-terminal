@@ -281,11 +281,13 @@ run it after touching a transform, a scale or the cadence gate.
 
 ## Next
 
-- **A real release schedule for the `review` column.** It is the one part of a
-  live macro row still carrying catalog data (see above). FRED can answer it —
-  `fred/series/release` then `fred/release/dates` — but only through the keyed
-  API, so wiring it would make the column work on a keyed install and not on a
-  keyless one. Decide whether that asymmetry is acceptable before building it.
+- ~~**A real release schedule for the `review` column.**~~ **Done** (Beta V 6.20).
+  The asymmetry was accepted: with `FRED_API_KEY` the column shows real
+  publication dates from `fred/series/release` + `fred/release/dates`, and
+  without a key it falls back to the catalog's hand-entered ones. It is the one
+  thing that genuinely differs between a keyed and a keyless install. Never wire
+  the *observation* date into it — a FRED observation is dated for the period it
+  measures, not the day it was published.
 - **The 17 sample rows all need a paid or licensed vendor**, so none of them is
   a small job: CME FedWatch for meeting odds, ISM for the surveys, ICE BofA for
   MOVE, FactSet for EPS, Citi for the surprise index. `applyLiveQuotes` remains
@@ -296,9 +298,11 @@ run it after touching a transform, a scale or the cadence gate.
 - **Real last/next review inputs on the custom-metric form** (flagged in the
   handoff's own "next" list). Custom metrics currently read "Manual entry · when
   you update it".
-- **Decide where the calendar lives.** It is on this screen now, but Market News
-  still has its own Calendar feed reading the same table, so the same rows appear
-  in two places. The handoff calls moving it "a one-block move"; resolve it with
-  the Market News redesign (`docs/design/market-news/`).
+- ~~**Decide where the calendar lives.**~~ **Resolved** — the full calendar
+  *view* lives here and nowhere else. The Market News rebuild dropped its
+  Calendar feed, so the duplication that prompted this is gone; that screen still
+  receives `calendar` on its payload and no longer reads it. The Live Wall's
+  `CalendarTile` reads the same `trading_calendar` rows, but that is a
+  dashboard tile showing what's ahead, not a second calendar screen — leave it.
 - Sparklines per series and per-series alert thresholds were discussed in the
   handoff but are not designed.

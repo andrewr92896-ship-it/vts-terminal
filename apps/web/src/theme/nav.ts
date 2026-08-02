@@ -92,11 +92,14 @@ export const NAV: NavWorkspace[] = [
     ],
   },
   // Investments (teal) — a read-only, long-term portfolio tracker for the layman:
-  // 401(k), IRA, ESA, and general holdings connected via a read-only aggregator
-  // (Plaid / SnapTrade) or entered by hand. Strictly a tracker — it displays and
-  // educates, it never executes trades or moves money (Apple 3.2.1(viii)) — and
-  // carries no personalized buy/sell/rebalance advice (no RIA exposure). Every
-  // section below is a "Coming Soon" placeholder for now; this is the foundation.
+  // 401(k), IRA, ESA, and general holdings, entered by hand today (a read-only
+  // aggregator — Plaid / SnapTrade — is the designed path and needs a paid
+  // provider account, so it is an owner decision rather than a build). Strictly a
+  // tracker — it displays and educates, it never executes trades or moves money
+  // (Apple 3.2.1(viii)) — and carries no personalized buy/sell/rebalance advice
+  // (no RIA exposure). All eight sections below are built; the "Coming Soon"
+  // placeholder they once rendered has been deleted rather than left in the tree
+  // saying that about shipped screens.
   {
     key: 'investments',
     label: 'Investments',

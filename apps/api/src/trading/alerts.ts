@@ -169,8 +169,8 @@ export async function getAlerts(ownerId: string): Promise<AlertsData> {
 // A tiny desk-wide signal the trading clients poll so they can chime when a new
 // TradingView alert arrives. Every inbound alert is attributed to the single
 // owner, so the latest receivedAt across the whole table is the desk-wide
-// latest. That is why a trading_viewer (who owns no alerts of their own) still
-// gets a real signal and hears the sound.
+// latest. That is why a teammate who owns no alerts of their own still gets a
+// real signal and hears the sound.
 export interface AlertSignal {
   lastAlertAt: number | null;
   alertCount: number;

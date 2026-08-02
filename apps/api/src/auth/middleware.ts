@@ -139,9 +139,17 @@ export const requireFunded: preHandlerHookHandler = async (
   }
 };
 
-// Reject unless the user can *modify* the workspace. Read-only roles (today only
-// trading_viewer) can see the workspace but must not mutate it — use this on
-// every POST/PATCH/DELETE so a viewer's writes are rejected server-side.
+// Reject unless the user can *modify* the workspace — use this on every
+// POST/PATCH/DELETE.
+//
+// It checks three things: workspace access, the Advanced Trading opt-in, and
+// whether the workspace is read-only for these roles. That last check cannot
+// currently fire: the read-only role variants (`trading_viewer` and friends) are
+// retired, so isWorkspaceReadOnly() is false for everyone and the only read-only
+// account is the demo, which demoGuard stops before this runs. Keep using this
+// on writes anyway — it is the single place a paid/read-only tier's check lands
+// if one returns, and putting writes on requireWorkspace instead would silently
+// remove that seam.
 export function requireWorkspaceWrite(ws: WorkspaceKey): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const user = request.currentUser;

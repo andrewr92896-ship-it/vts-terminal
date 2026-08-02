@@ -252,10 +252,10 @@ workspaces list** (see `theme/nav.ts` order).
       request, not which paths exist). Routes are their own file,
       `routes/tradeDesk.ts` under `/api/trading/desk/*`: reads behind
       `requireWorkspace('trading')`, **every write behind
-      `requireWorkspaceWrite`** so `trading_viewer` is read-only here too, and
-      the demo refused twice (demoGuard blocks every non-GET; `refuseDemo` in the
-      service is the second lock, deliberately, on the one surface that moves
-      money).
+      `requireWorkspaceWrite`** (the right guard on a write even though no
+      read-only role exists today — see Roles & access), and the demo refused
+      twice (demoGuard blocks every non-GET; `refuseDemo` in the service is the
+      second lock, deliberately, on the one surface that moves money).
     - **Both venues lie about success in their own way, and both are handled.**
       **OANDA answers `201 Created` even when it immediately cancels the order**
       (insufficient margin, market halted, an unfillable FOK), so an
@@ -360,11 +360,11 @@ workspaces list** (see `theme/nav.ts` order).
     publishes it / when it was last and is next revised. A bar at the top counts
     down to the next **FOMC** statement and press conference. Two views: the
     series board (search + group filter) and the **Forex Factory economic
-    calendar** — which reads the same `trading_calendar` rows Market News does,
-    so those events currently appear on both screens (see
-    `docs/design/market-data/NOTES.md`). Deliberately factual: **no AI note and
-    no advice-flavoured copy** anywhere on it, plus an "informational only"
-    footer line.
+    calendar**, which reads the shared `trading_calendar` rows. **This screen is
+    the calendar's only home** — Market News used to render the same rows and no
+    longer does, so it appears once. Deliberately factual: **no AI note and no
+    advice-flavoured copy** anywhere on it, plus an "informational only" footer
+    line.
     - The **catalog lives in code** (`trading/marketData.ts`), identical for
       everyone, and is **mostly live** — **51 of the 71** non-session series, from
       **two providers** that both overlay the catalog through the one
@@ -973,29 +973,65 @@ them while the desk is off.
 
 ## Roles & access (`auth/rbac.ts`)
 
-Granular, admin-assigned roles (JSON array in `users.roles`); a user may hold
-any combination:
+Assigned roles (JSON array in `users.roles`); a user may hold any combination.
+**`ROLE_KEYS` is the whole list** — five roles, and they are a ladder of trust
+rather than a set of workspace keys:
 
-- `admin` — everything, incl. user/team management.
-- `trading` — full Trading.
-- `trading_viewer` — **read-only** Trading (the only read-only variant;
-  `requireWorkspaceWrite` blocks it).
+- `founder` — the terminal's owners. Sits **above** admin and carries every
+  admin capability plus the founder-only tools (Developer Terminal).
+- `software_developer` — **permission-equivalent to `founder`**; the two are
+  tested together by `isFounder()`. Not a lesser tier.
+- `admin` — user/team management and the Admin Terminal. `isAdmin()` is
+  `admin || isFounder()`, so founder-level passes every admin guard.
 - `employee` — reveals **My Terminal ▸ Employee Portal** and permits the separate
   sign-in at `/employee`. **Not** implied by admin or founder level — it must be
   granted outright, by a founder. It unlocks nothing inside the main terminal, and
   on its own it is not enough: a **company-domain sign-in email** is required too
   (`canAccessEmployeePortal(roles, email)`). Never the demo.
-- `studies` — Studies.
+- `member` — the baseline. Every signed-in user is at least a member and reaches
+  every non-admin workspace.
 
-**Retired: `funded`.** The Funded tracker used to be an admin-granted role; it
-is now the nested opt-in above, so the role is gone from `ROLE_KEYS` and the
-admin pickers, and the opt-in is the only gate. Do not reintroduce it — two
-sources of truth for the same section is exactly what this removed.
+**Who may grant what** (`assertCanAssignRoles` in `admin/service.ts`): only the
+**owner** (`isOwnerUser`, matched on the immutable `createdUsername` against
+`ADMIN_USERNAME`) may grant or revoke `founder` / `software_developer`; only a
+**founder-level** user may grant `admin` / `employee`.
 
-Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`,
+**A role no longer decides which workspace you see — the opt-in does.** This is
+the single most important thing about the current model, and the thing most
+likely to be misremembered:
+
+- **Retired: `trading`, `trading_viewer`, `studies`, `funded`.** All four are
+  gone from `ROLE_KEYS` and the admin pickers. What gates Advanced Trading and
+  Funded Account is the per-user **Feature Access opt-in** (see above), and
+  Markets / Investments / Studies / My Terminal / Site Help are included with
+  every account.
+- `canAccessWorkspace()` therefore returns **true** for everyone, and
+  `isWorkspaceReadOnly()` returns **false** for everyone. Both are kept as stable
+  exports so the write guards still compile and so a paid/read-only tier has an
+  obvious place to land later — they are not dead by accident.
+- **There is no read-only role.** The only read-only presentation in the terminal
+  is the **demo**, and it is enforced by `demoGuard` (which refuses every
+  non-GET), not by a role. So do not write a comment claiming a guard stops "a
+  view-only role" — nothing holds one. Say the demo, or say nothing.
+- Consequence for `requireWorkspaceWrite(ws)`: today it differs from
+  `requireWorkspace(ws)` only by a read-only check that cannot currently fire. It
+  is still the right guard on every write — it is where the check goes back when
+  a tier returns — so keep using it; just do not describe it as blocking a role
+  that no longer exists.
+
+`WorkspaceKey` server-side is only `'trading' | 'studies'`; Markets, Investments,
+My Terminal and Site Help have no role gate to name.
+
+Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`, `requireFounder`,
 `requireWorkspace(ws)`, `requireWorkspaceWrite(ws)`, `requireMarkets`,
-`requireAdvancedTrading`, `requireFunded`. The legacy `users.role` string column
-is still populated but **unused** — real roles live in `users.roles`.
+`requireAdvancedTrading`, `requireFunded`. `requireMarkets` **is** `requireAuth`,
+named separately so the always-on boundary is legible at the call sites. The
+legacy `users.role` string column is still populated but **unused** — real roles
+live in `users.roles`.
+
+The web mirror is `apps/web/src/auth/access.ts` (`ALL_ROLES`, `ROLE_LABELS`,
+`ROLE_DESCRIPTIONS`, `isFounder`, `isAdmin`) and is already in step with the
+above; the **server is the enforcer**.
 
 ## Teams (`teams/service.ts`) — scope almost everything
 

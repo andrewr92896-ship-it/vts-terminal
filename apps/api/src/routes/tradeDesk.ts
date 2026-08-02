@@ -20,9 +20,10 @@ import {
 // so the one namespace that can move money is a file of its own.
 //
 // Reads (accounts, instruments, quotes, working orders, the order journal) are
-// behind the trading workspace guard; every write is behind requireWorkspaceWrite,
-// which excludes the read-only `trading_viewer` role, and the demo is refused
-// twice over — once by demoGuard (every non-GET) and again inside the service.
+// behind the trading workspace guard; every write is behind requireWorkspaceWrite
+// (the right guard on a write, and where a read-only tier's check goes if one
+// ever returns — no read-only role exists today), and the demo is refused twice
+// over — once by demoGuard (every non-GET) and again inside the service.
 //
 // Teammates' live positions are NOT served from here: the desk reads them from
 // the existing team-scoped /api/trading/live, so the visibility boundary stays

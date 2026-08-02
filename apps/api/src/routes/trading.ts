@@ -167,7 +167,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   const SEE_BALANCES = true;
 
   // The Live Wall: open positions streamed from the caller's team's brokers.
-  // Read-only, so the trading_viewer role is fine.
+  // A pure read, so it sits on the read guard.
   app.get('/api/trading/live', read, async (request) => {
     return getLiveWall(request.currentUser!);
   });
@@ -310,10 +310,14 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   // Live OANDA account capital (NAV/balance), pulled from the OANDA API so it
   // reflects trades the moment they're placed. Desk-wide — every full trader
-  // sees the whole desk's capital, each account tagged with its owner. Behind
-  // the *write* guard so it is visible to full traders only; the trading_viewer
-  // (view-only) role is rejected, per the desk's request to keep capital off the
-  // view-only role.
+  // sees the whole desk's capital, each account tagged with its owner.
+  //
+  // A GET deliberately on the *write* guard: the desk asked for balances to be
+  // kept off view-only accounts, and that guard was where the check lived. The
+  // view-only role has since been retired, so what the guard buys today is the
+  // Advanced Trading opt-in — still the right floor for a desk-wide balance, and
+  // still where the check lands if a read-only tier returns. Left as-is on
+  // purpose; moving it to `read` would quietly widen who sees the desk's money.
   app.get('/api/trading/oanda-capital', write, async (request) => {
     return getOandaCapital(request.currentUser!);
   });
@@ -741,8 +745,8 @@ export async function tradingRoutes(app: FastifyInstance) {
   });
 
   // Lightweight desk-wide poll so trading clients can play an alert sound when a
-  // new TradingView alert arrives. Read access, so trading_viewer users (who own
-  // no alerts of their own) still receive the shared signal and hear the sound.
+  // new TradingView alert arrives. On the read guard, so a teammate who owns no
+  // alerts of their own still receives the shared signal and hears the sound.
   app.get('/api/trading/signals', read, async () => getAlertSignal());
 
   // Analyze an alert's pasted screenshot with Opus 4.8 and auto-create a trade.
