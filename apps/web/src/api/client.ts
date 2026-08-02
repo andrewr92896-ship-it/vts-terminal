@@ -108,6 +108,7 @@ import type {
   InvestmentPerformance,
   InvestmentDividends,
   InvestmentProjection,
+  MyHoldings,
 } from './types';
 
 // A flashcard the user added to their own personal deck (a term, a definition,
@@ -885,6 +886,11 @@ export const api = {
       years: String(opts.years),
     });
     return request(`/api/investments/projection?${q}`);
+  },
+  // My Terminal ▸ Investment Holdings — the trading desk and the long-term
+  // portfolio in one payload.
+  myHoldings(): Promise<MyHoldings> {
+    return request('/api/my-portal/holdings');
   },
   // ---- Team chat ----
   teamChat(): Promise<TeamChatFeed> {

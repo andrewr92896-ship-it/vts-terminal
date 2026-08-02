@@ -2,13 +2,13 @@ import type { Theme } from '../../theme/themes';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { Icon } from '../../components/Icon';
 
-// Themed "Coming Soon" placeholders for the sections that are not built yet.
+// Themed "Coming Soon" placeholder for the one section that is not built yet.
 //
-// The Investments workspace itself IS built — see workspaces/investments/. What
-// is left here are the two My Terminal roll-ups, and they are last for a reason:
-// each one summarises across workspaces (Advanced Trading positions plus the
-// long-term Investments portfolio; then every asset and liability on top of
-// that), so neither can be right until the thing it summarises exists.
+// The Investments workspace is built (workspaces/investments/), and so is My
+// Terminal ▸ Investment Holdings (workspaces/myportal/InvestmentHoldings.tsx).
+// Net Worth is last for a reason: it summarises everything the other two show
+// and then adds every asset and liability on top, so it could not be right until
+// those existed.
 
 interface SectionInfo {
   icon: string;
@@ -17,14 +17,6 @@ interface SectionInfo {
 }
 
 const SECTIONS: Record<string, SectionInfo> = {
-  // My Terminal — the combined views across trading, long-term investing, and your
-  // whole financial life.
-  my_holdings: {
-    icon: 'gem',
-    title: 'Investment Holdings',
-    blurb:
-      'Your whole picture in one place — active Advanced Trading positions merged with your long-term Investments portfolio, plus the combined value, day change, and all-time performance across both.',
-  },
   my_networth: {
     icon: 'scale',
     title: 'Net Worth',

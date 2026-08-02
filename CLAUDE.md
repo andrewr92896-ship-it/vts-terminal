@@ -768,11 +768,37 @@ workspaces list** (see `theme/nav.ts` order).
     touching `math.ts` or `limits.ts`.
 - **My Terminal** also holds **Feature Access** (`my_access`) — the per-user opt-in
   screen, see its own section below — plus two personal roll-up sections
-  (emerald), both currently "Coming Soon":
-  - **Investment Holdings** (`my_holdings`) — a combined summary of active
-    Advanced Trading positions + the total long-term Investments portfolio and
-    stats across both.
-  - **Net Worth** (`my_networth`) — the whole-life picture: every asset (cash,
+  (emerald):
+  - **Investment Holdings** (`my_holdings`,
+    `workspaces/myportal/InvestmentHoldings.tsx` over
+    `myportal/holdings.ts` → `GET /api/my-portal/holdings`) — the long-term
+    Investments portfolio beside what is live on the trading desk. **Built.**
+    - **What may be added together is the whole design.** A trading position's
+      **notional is not money anyone owns** — 100,000 units of EUR/USD is a
+      leveraged exposure, not $100k of savings — so adding it to a portfolio
+      value would overstate by an order of magnitude while looking entirely
+      plausible. The combined figure is portfolio value **+ trading account
+      equity (NAV) + coins held outright on a spot account**, and nothing else.
+      Open positions are listed as exposure with their P/L and are **never**
+      summed into the total (their `value` is deliberately `null`). Do not
+      "fix" that by populating it.
+    - **Everything is the caller's own**, not the team's: every trading read
+      passes `teamId: null` so `scopedTraderIds` resolves to just this user. The
+      Live Wall is a team board by design; this screen is one person's money.
+    - **Nothing is silently dropped.** A hand-kept Manual Trades book (no balance
+      to read) and a **funded challenge account** (whose balance is the *firm's*
+      capital — counting it would be the most flattering error this screen could
+      make) are excluded and *named on screen*. Those are checked against the
+      tables, never against the opt-in flag: claiming a challenge is excluded
+      when the user has none is a false statement about their money.
+    - A trading account reporting a **non-USD** currency makes `combinedValue`
+      null with a note, rather than adding currencies. `getLiveWall`'s **sample**
+      fallback is ignored — a made-up position has no place on a screen about
+      what someone actually owns.
+    - With Advanced Trading off the screen still works, showing the investments
+      half and offering Feature Access; no broker call is made at all.
+  - **Net Worth** (`my_networth`) — still **"Coming Soon"**. The whole-life
+    picture: every asset (cash,
     investments, real estate, crypto, vehicles) minus every liability (loans,
     cards, mortgage), tracked over time as a single number. Lives in My Terminal
     (not Investments) as a personal cross-workspace summary, keeping the

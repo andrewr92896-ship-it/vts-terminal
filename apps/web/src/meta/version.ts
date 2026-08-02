@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.24';
+export const APP_VERSION = 'Beta V 6.25';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.25',
+    date: 'August 2, 2026',
+    notes: [
+      'New: My Terminal ▸ Investment Holdings. Your long-term investment portfolio and your trading desk on one screen, with a single total across both.',
+      'The total adds your portfolio to the money actually in your trading account, plus any coins you hold outright. Open trades are listed with their profit or loss but are deliberately not added in — the size of a leveraged position is not money you hold, and counting it would badly overstate what you are worth.',
+      'Anything left out of the total is named rather than quietly dropped: a book you keep by hand has no balance to read, and a funded challenge account is the firm\u2019s capital rather than yours.',
+      'Without Advanced Trading turned on the screen still works — it shows your investments and offers the trading half if you want it.',
+    ],
+  },
   {
     version: 'Beta V 6.24',
     date: 'August 2, 2026',

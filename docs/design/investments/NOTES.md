@@ -16,9 +16,20 @@ All eight sections are built and routed. What is **not** built, and why:
   build. `investment_accounts.source` is ready for it.
 - **Live prices for funds** — no free provider covers mutual funds or collective
   trusts. Owner decision.
-- **My Terminal ▸ Investment Holdings and Net Worth** — still Coming Soon. Both
-  summarise *across* workspaces, so they come after the things they summarise;
-  Investment Holdings is now unblocked and is the obvious next piece.
+- **My Terminal ▸ Net Worth** — still Coming Soon. It summarises everything the
+  other screens show and then adds every asset and liability on top, so it comes
+  last.
+
+**My Terminal ▸ Investment Holdings is built** (`myportal/holdings.ts` →
+`GET /api/my-portal/holdings`). The one thing it had to get right is what may be
+added to what: a trading position's *notional* is not money anyone owns, so the
+combined total is portfolio value + trading account equity (NAV) + coins held
+outright, and open positions appear as exposure with their P/L rather than as a
+value in the total. Anything left out — a hand-kept book, a funded challenge
+account whose balance is the firm's capital — is named on screen, and those are
+checked against the tables rather than against the opt-in flag, because telling
+someone a challenge is excluded when they have none is a false statement about
+their money.
 
 Verified before deploying: `typecheck`, `build`, `verify:investments`, and a
 live run of the API covering the portfolio read, every write, the demo's
