@@ -44,6 +44,7 @@ import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
 import { startFeeds } from './trading/feeds.js';
 import { startDeskWatch } from './trading/service.js';
+import { warmMarketMacro } from './trading/marketMacro.js';
 import { startSessionWatch } from './trading/sessionWatch.js';
 import { startYoutubeWatch } from './trading/youtubeWatch.js';
 import { startPriceAlertWatch } from './trading/priceAlertWatch.js';
@@ -212,6 +213,10 @@ async function main() {
     // Start the background market-news pollers (production only). Best-effort
     // and non-blocking: failures are contained and never affect serving.
     startFeeds();
+    // Fill the Market Data macro cache (FRED) so the first person to open the
+    // board does not pay a cold read of ~40 series. Fire-and-forget: a failure
+    // just means the board takes the cold path on first request.
+    warmMarketMacro();
     // Watch broker positions server-side so trade open/close push fires even
     // when no one has the Live Wall open (production + push configured only).
     startDeskWatch();

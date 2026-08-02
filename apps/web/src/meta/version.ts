@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.09';
+export const APP_VERSION = 'Beta V 6.10';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.10',
+    date: 'August 2, 2026',
+    notes: [
+      'Market Data is now live. Where the board previously showed real figures only for currencies, the dollar index and crypto, it now reads live for policy rates, inflation, the jobs numbers, the Treasury curve, the VIX, the Fed balance sheet, commodities and the US indices — values and all five change columns.',
+      'That is 54 of the 71 data rows reading real numbers, up from 8. The economic data comes from the St. Louis Fed and the prices from OANDA; no setup is needed on your side.',
+      'The 17 rows still showing sample figures are the ones no free data source covers — Fed meeting odds, the dot plot, the ISM surveys, the MOVE index, blended earnings and the crypto flow rows. They keep the grey Sample dot, and the notice at the top of the board now names them so you can see exactly what is left.',
+      'Each live row is labelled with the period it is for — “Jun”, “wk to Jul 25”, “Q2” — so a monthly figure is never mistaken for today’s. Monthly and weekly figures show a flat 0 in the day column rather than borrowing a longer period’s move.',
+    ],
+  },
   {
     version: 'Beta V 6.09',
     date: 'August 1, 2026',

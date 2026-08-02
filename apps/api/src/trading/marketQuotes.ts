@@ -10,11 +10,13 @@ import { resolveOandaPricingConfig } from './priceSource.js';
 // Live values for the Market Data board's price series, from OANDA.
 //
 // The board's catalog (marketData.ts) ships display-ready sample figures. This
-// module replaces them for the series OANDA can actually quote — the FX majors,
-// the dollar index, and the two crypto majors — with a real spot mark and real
-// 1D/1W/1M/YTD/1Y changes computed from daily candles. Everything else on the
-// board (CPI, payrolls, the Treasury curve, the Fed balance sheet) needs a macro
-// provider and stays sample.
+// module replaces them for every series OANDA can quote — the FX majors, the
+// dollar index, the two crypto majors, the commodities and the three US index
+// CFDs — with a real spot mark and real 1D/1W/1M/YTD/1Y changes computed from
+// daily candles. The macro side of the board (CPI, payrolls, the Treasury curve,
+// the Fed balance sheet) is a different provider entirely and lives in
+// `marketMacro.ts`; both overlay the catalog through the same `applyLiveQuotes`
+// seam.
 //
 // Why candles: a spot price alone gives no change columns, and the board's whole
 // point is the five of them. One `/v3/instruments/{sym}/candles` read per symbol
@@ -33,11 +35,19 @@ const CANDLE_COUNT = 400; // ~19 months of trading days
 
 // How many decimals a series' value carries, matching the catalog's own
 // formatting so a live figure sits in the column exactly like the sample did.
+//
+// `review` restates who the figure came from, and is set wherever the catalog's
+// stated publisher would now be wrong. OANDA does not quote the exchange
+// contract for any of these: metals are OTC spot rather than LBMA fixings or
+// COMEX futures, and the energy, copper and index rows are CFDs tracking a
+// future rather than the index or contract itself. The number is the right one
+// to trade off; the row must simply not claim NYMEX or Cboe published it.
 interface QuoteDef {
   id: string;
   symbol: string; // OANDA instrument
   decimals: number;
-  group: 'fx' | 'crypto';
+  group: 'fx' | 'crypto' | 'commod' | 'equity';
+  review?: string;
 }
 
 const QUOTES: QuoteDef[] = [
@@ -48,6 +58,15 @@ const QUOTES: QuoteDef[] = [
   { id: 'audusd', symbol: 'AUD_USD', decimals: 4, group: 'fx' },
   { id: 'btc', symbol: 'BTC_USD', decimals: 0, group: 'crypto' },
   { id: 'eth', symbol: 'ETH_USD', decimals: 0, group: 'crypto' },
+  { id: 'gold', symbol: 'XAU_USD', decimals: 2, group: 'commod', review: 'OANDA · spot' },
+  { id: 'silver', symbol: 'XAG_USD', decimals: 2, group: 'commod', review: 'OANDA · spot' },
+  { id: 'wti', symbol: 'WTICO_USD', decimals: 2, group: 'commod', review: 'OANDA · CFD' },
+  { id: 'brent', symbol: 'BCO_USD', decimals: 2, group: 'commod', review: 'OANDA · CFD' },
+  { id: 'copper', symbol: 'XCU_USD', decimals: 2, group: 'commod', review: 'OANDA · CFD' },
+  { id: 'natgas', symbol: 'NATGAS_USD', decimals: 2, group: 'commod', review: 'OANDA · CFD' },
+  { id: 'us100', symbol: 'NAS100_USD', decimals: 0, group: 'equity', review: 'OANDA · CFD' },
+  { id: 'us500', symbol: 'SPX500_USD', decimals: 0, group: 'equity', review: 'OANDA · CFD' },
+  { id: 'us30', symbol: 'US30_USD', decimals: 0, group: 'equity', review: 'OANDA · CFD' },
 ];
 
 // The dollar index is not an OANDA instrument, so it is computed from the six
@@ -293,6 +312,7 @@ async function refresh(): Promise<Snapshot> {
       value: fmtValue(px, q.decimals),
       changes: changesFor(px, closes.get(q.symbol) ?? [], now),
       asOf: 'live',
+      ...(q.review ? { reviewBody: q.review } : {}),
     });
   }
 
