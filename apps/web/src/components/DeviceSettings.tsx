@@ -140,8 +140,7 @@ function PhoneNotificationsSection({ accent, accentText }: { accent: string; acc
       )}
 
       <p style={{ ...hintStyle, marginTop: 12, marginBottom: 0 }}>
-        On iPhone this only works once the terminal is installed to your Home Screen. Each device you
-        want buzzed needs to be turned on once.
+        On iPhone this only works once the terminal is installed to your Home Screen.
       </p>
       {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
     </section>
@@ -283,8 +282,7 @@ function PushoverSection({ accent, accentText }: { accent: string; accentText: s
             style={inputStyle}
           />
           <p style={hintStyle}>
-            Install the Pushover app, and copy your <b>User Key</b> from its home screen (or
-            pushover.net). Each device you want buzzed needs the app installed.
+            Your <b>User Key</b> is on the Pushover app's home screen, and on pushover.net.
           </p>
           <div style={{ marginTop: 4 }}>
             <button
@@ -648,7 +646,7 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
         {"Home-screen widget (iPhone)"}
       </div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
-        {"Put your team’s open positions on your iPhone Home Screen with the free Scriptable app. Generate your personal read-only token, copy the script, and add a widget. Add one widget per teammate — each shows one person’s positions."}
+        {"Put your team’s open positions on your iPhone Home Screen with the free Scriptable app. One widget per teammate — each shows one person’s positions."}
       </p>
 
       {!token ? (

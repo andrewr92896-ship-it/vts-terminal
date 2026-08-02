@@ -581,7 +581,7 @@ function SetComposer({
               </button>
             </div>
             <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
-              {"Type each card’s term and definition. Topic is optional — add topics to enable the study-time topic filter."}
+              {"Topic is optional — adding topics enables the topic filter at study time."}
             </div>
           </>
         ) : mode === 'ai' ? (

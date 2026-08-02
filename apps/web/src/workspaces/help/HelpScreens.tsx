@@ -451,7 +451,7 @@ export function HelpBugReport({ theme, user }: { theme: Theme; user: User }) {
     <>
       <Header
         title={"Report a bug"}
-        subtitle={"Tell us what went wrong. Our assistant will ask for anything missing, then file the ticket for the admins."}
+        subtitle={"Tell us what went wrong."}
       />
       <div style={panel(theme)}>
         <label style={{ display: 'block', fontSize: 11, letterSpacing: '0.4px', textTransform: 'uppercase', color: '#8ea3cc', marginBottom: 8 }}>
