@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.21';
+export const APP_VERSION = 'Beta V 6.22';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.22',
+    date: 'August 2, 2026',
+    notes: [
+      'The gold “due soon” dates are meaningful again. Now that the review dates are real, every daily figure — the yields, TIPS, the VIX — was permanently highlighted, because a daily release is always due tomorrow. The highlight now only appears on monthly and quarterly releases like CPI and the jobs report, which is where knowing one is coming up actually helps.',
+    ],
+  },
   {
     version: 'Beta V 6.21',
     date: 'August 2, 2026',
