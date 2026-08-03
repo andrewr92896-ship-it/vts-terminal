@@ -1862,10 +1862,68 @@ hardcoded" below.)
   throttle are the only rate limits. (The **Employee Portal** has all of these —
   lockout, CSRF token, idle timeout, emailed-code 2FA — on its own separate session; see its
   section above. None of it applies to the main terminal's `vts_session`.)
-- **Key rotation caveat:** `SESSION_SECRET` signs cookies; `CREDENTIALS_KEY`
-  (or, if unset, a key derived from `SESSION_SECRET`) encrypts broker creds.
-  Rotating either **invalidates all sessions and makes stored broker creds
-  undecryptable** — re-enter creds after a rotation.
+- **Broker credentials at rest (`security/secretbox.ts`, `security/credentialsKey.ts`).**
+  AES-256-GCM, envelope **`v2:<keyId>:<iv>:<tag>:<ct>`**, key derived by
+  **HKDF-SHA256** from `CREDENTIALS_KEY`. Five things carry the design, and each
+  one is why the format changed (the reset was migration `0094` — see below):
+  - **`CREDENTIALS_KEY` is REQUIRED in production and separate from
+    `SESSION_SECRET`.** It no longer falls back to it: one secret must not
+    protect both sessions and every broker key. The boot guard in `config.ts`
+    refuses to start if it is unset, fails validation, or equals
+    `SESSION_SECRET`, and exits naming the variable and the command that fixes
+    it. In **development** the fallback survives with a loud warning on every
+    boot — but never onto the built-in `dev-only-insecure-session-secret-…`,
+    which is refused outright because it is a literal in this repository. (That
+    combination is exactly what used to ship: `NODE_ENV` defaults to
+    `development`, so a deploy setting neither variable booted happily and
+    encrypted every credential under a published string.)
+  - **It must be GENERATED randomness, 32+ bytes, base64 or hex — a passphrase
+    is refused at boot** (charset + round-trip + all-printable-ASCII checks in
+    `credentialsKey.ts`). That is what replaces a slow KDF, deliberately:
+    credentials are decrypted on the Live Wall's **10-second poll** for every
+    connection on a team, so scrypt/argon2 there would be a permanent latency tax
+    on the busiest loop in the terminal. An unguessable key removes the
+    brute-force concern instead of pricing it, which leaves HKDF free to be fast.
+    The derived key is **memoized per process**, not re-derived per call.
+  - **The `keyId`** (first 8 hex of `sha256(derivedKey)`, so no second env var to
+    keep in step) is the **rotation seam**. A record written by another key
+    throws `WrongKeyError` — distinct from `MalformedSecretError` (a v1 or
+    corrupt record) and `SecretAuthError` (tampered / wrong row). **Nothing
+    consumes that distinction yet**: it is what a future rotation path needs —
+    try the current key, fall back to a retired one, re-encrypt on read.
+    **Rotation itself is not built.**
+  - **AAD binds a ciphertext to its row** (`userId` + connection `id`), so a blob
+    moved between rows no longer decrypts. This is why `encryptSecret` /
+    `decryptSecret` take a `SecretScope` — and why `addConnection` mints the row
+    id *before* sealing. `authTagLength: 16` is pinned on **both** cipher and
+    decipher (unpinned, GCM accepts a shortened tag).
+  - **A credential that will not decrypt is surfaced, not swallowed.** Both read
+    paths in `connections.ts` log (never the secret, never the ciphertext) and
+    mark the connection errored via `recordConnectionStatus` — but **only when
+    the stored status is not already `error`**, because this runs on that same
+    10-second poll. Before this, an unreadable connection vanished from results
+    while the UI kept showing a green "ok" dot.
+  - `npm run verify:secretbox` checks all of it offline — round trip, tampering,
+    row binding, the v1 path, the key rules and the boot guard.
+- **Rotating a key still costs something:** `SESSION_SECRET` signs cookies, so
+  rotating it **invalidates every session**; rotating `CREDENTIALS_KEY` makes
+  stored broker credentials unreadable until each trader re-enters them (until
+  the rotation seam above is built out).
+- **The reset (migration `0094`).** v1 records cannot be read under v2, so every
+  non-manual `broker_connections` row was marked `active = false`,
+  `last_status = 'error'` with a plain re-enter sentence. **Rows are kept** —
+  label, broker and `history_start_at` survive, so reconnecting is pasting a key
+  into the connection that is already there (`updateConnection` re-encrypts).
+  **`manual` rows are deliberately excluded**: they hold no credential to
+  re-enter (their payload is `{}`) but are still decrypted on the way to the Live
+  Wall, so `repairManualConnectionSecrets()` re-seals them **on boot** beside
+  `backfillConnectionLabels()` — the half a migration cannot do, since a
+  migration cannot run the encryption.
+- **`PRAGMA secure_delete = ON`** (`db/index.ts`) so a deleted row's ciphertext is
+  overwritten rather than left in a freed page that every backup copies. It
+  governs **future** deletes only; already-freed pages keep their contents until a
+  `VACUUM`, which is deliberately not run at boot (it needs room for a second copy
+  of the database and holds a write lock).
 - **Demo** (`demo/`): username `demo`, roles `['member']`, own team. Its feature
   opt-ins are forced by `featuresForUser` — Advanced Trading **on** so the tour is
   complete, Funded **off** — rather than read from a stored row.
@@ -1917,7 +1975,13 @@ defaults; the app runs locally with almost nothing set.
   (CORS), `DATABASE_URL` (default `file:./data/vts.db`), `SESSION_SECRET`
   (**required in production**, ≥16 chars; dev falls back to an insecure default),
   `SESSION_TTL_DAYS` (14), `COOKIE_SECURE` (`true` only over HTTPS),
-  `CREDENTIALS_KEY` (broker-cred encryption; falls back to `SESSION_SECRET`).
+  `CREDENTIALS_KEY` (broker-credential encryption — **required in production**,
+  32+ bytes of generated randomness in base64 or hex, and **must differ from
+  `SESSION_SECRET`**; the API refuses to boot otherwise. Generate with
+  `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
+  Dev may leave it unset and falls back to `SESSION_SECRET` with a warning. It no
+  longer silently derives from `SESSION_SECRET` in production — see Auth &
+  security specifics).
 - **AI:** `ANTHROPIC_API_KEY` (absent = AI off), `ANTHROPIC_MODEL_DEFAULT`,
   `ANTHROPIC_MODEL_ANALYSIS`, `AI_MONTHLY_LIMIT` (1000), `AI_RATE_PER_MIN` (15).
 - **Webhooks:** `TRADINGVIEW_WEBHOOK_SECRET`, `TV_WEBHOOK_SECRET` (each unset =
@@ -2174,6 +2238,11 @@ Run before merging (both must pass):
 - Build: `npm run build` (api `tsc` + web `vite build`). The web build emits
   **two** HTML entries — `dist/index.html` and `dist/employee.html`; if the
   latter is missing, `/employee` serves a plain "not built" 404.
+- **Credential encryption: `npm run verify:secretbox`** after touching
+  `security/secretbox.ts` or `security/credentialsKey.ts`. Everything it checks
+  fails *silently* in production: a ciphertext not bound to its row still
+  decrypts, an unpinned tag length still verifies, a passphrase still encrypts.
+  Nothing about the running terminal looks wrong — the guarantee is simply gone.
 
 Run `npm install` first in a fresh container.
 

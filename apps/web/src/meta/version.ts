@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.43';
+export const APP_VERSION = 'Beta V 6.44';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.44',
+    date: 'August 3, 2026',
+    notes: [
+      'Broker credentials are now stored under a stronger, dedicated encryption key. Everyone has to enter their broker keys once more: your connections are still there with their names and settings, marked disconnected — open Trade Analysis ▸ Live Brokers and paste the key back in.',
+      'Hand-entered (manual) books are unaffected and need nothing from you.',
+      'A connection whose stored credentials cannot be read now says so on the connection itself, instead of quietly disappearing from the desk while still showing a green light.',
+    ],
+  },
   {
     version: 'Beta V 6.43',
     date: 'August 3, 2026',

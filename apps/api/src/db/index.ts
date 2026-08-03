@@ -28,6 +28,29 @@ const client = openClient();
 export const db = drizzle(client, { schema });
 export { schema, client };
 
+// Overwrite deleted content instead of leaving it in freed pages.
+//
+// SQLite's default is to unlink a page from the b-tree and leave its bytes where
+// they are until something else claims the space. This database holds encrypted
+// broker credentials, and the file goes into every backup — so a deleted
+// connection's ciphertext would otherwise ride along in whole-file copies long
+// after the row was gone.
+//
+// This governs FUTURE deletes only. Pages already freed keep their contents
+// until a VACUUM rewrites the file, which is deliberately not run here: it needs
+// room for a second copy of the database on the Railway volume and holds a write
+// lock for the duration, neither of which belongs in a boot path.
+//
+// Started at import so it is the first statement this process sends, and awaited
+// by waitForDatabase() so the boot sequence cannot outrun it.
+export const pragmasApplied: Promise<void> = client
+  .execute('PRAGMA secure_delete = ON')
+  .then(() => undefined)
+  .catch((err: unknown) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[db] Could not enable secure_delete: ${msg}`);
+  });
+
 // Boot-time readiness probe: confirm the database actually answers a query
 // before migrations/serving begin. Tolerates a brief volume-mount delay by
 // retrying with a short backoff, and logs clearly so a persistent failure is
@@ -36,6 +59,7 @@ export async function waitForDatabase(retries = 5, delayMs = 2000): Promise<void
   for (let attempt = 1; ; attempt++) {
     try {
       await client.execute('select 1');
+      await pragmasApplied;
       return;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
