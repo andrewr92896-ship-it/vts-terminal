@@ -27,7 +27,7 @@ function fmtPrice(n: number | null): string {
   return String(Number(n.toFixed(5)));
 }
 
-// Trading ▸ Deleted Trades. Soft-deleted rows (from the Trade Log or History)
+// Trading ▸ Deleted Trades. Soft-deleted rows (removed from the Trade Log)
 // that are kept out of the stats but can be restored — undo for a mistaken
 // delete. Team-scoped; a trader restores their own, and whoever may delete a
 // teammate's trade (team leader, the team's "Delete trades" permission, or an
@@ -72,7 +72,7 @@ export function DeletedTrades() {
     <div style={{ maxWidth: 1000, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <ScreenTitle>Deleted Trades</ScreenTitle>
       <div style={{ fontSize: 12.5, color: MUTED, marginTop: 6, marginBottom: 16, lineHeight: 1.5 }}>
-        {"Trades you removed from the Trade Log or History. They don’t count toward your stats (win rate, profit factor, P/L), but nothing is gone for good — restore any you deleted by mistake."}
+        {"Trades you removed from the Trade Log. They don’t count toward your stats (win rate, profit factor, P/L), but nothing is gone for good — restore any you deleted by mistake."}
       </div>
 
       {error && <div style={banner}>{error}</div>}
@@ -81,7 +81,7 @@ export function DeletedTrades() {
         <div style={{ color: MUTED, fontSize: 13, padding: 20 }}>{"Loading…"}</div>
       ) : trades.length === 0 ? (
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-          {"Nothing deleted. Anything you remove from the Trade Log or History shows up here, ready to restore."}
+          {"Nothing deleted. Anything you remove from the Trade Log shows up here, ready to restore."}
         </div>
       ) : (
         <div style={{ ...card, padding: 0, overflow: 'hidden' }}>

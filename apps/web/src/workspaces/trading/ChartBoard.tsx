@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import GridLayout, { WidthProvider, type Layout } from 'react-grid-layout';
+import GridLayout, { type Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { api, ApiError } from '../../api/client';
@@ -15,9 +15,17 @@ import { NewsTile } from './NewsTile';
 import { CalendarTile } from './CalendarTile';
 import { AlertsTile } from './AlertsTile';
 import { MobileScrollLockBar } from './scrollLock';
+import { useContentWidth } from '../../lib/measure';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input, marketStarterTiles, newTile, starterTiles } from './tvChart';
 
-const RGL = WidthProvider(GridLayout);
+// Deliberately NOT WidthProvider: it sizes the board from
+// `ResizeObserver.contentRect`, which is the painted width, while the pixel
+// widths it then writes onto each tile land in the element's layout space. Once
+// #root carries a CSS `zoom` those two differ on WebKit, so every tile came out
+// a factor of the zoom too wide on iPhone — a sideways scroll on the page, and
+// the TradingView iframes rendering into a box the wrong size. `useContentWidth`
+// measures the space the tiles are actually written in. See lib/measure.ts.
+const RGL = GridLayout;
 const COLS = 12;
 const ROW_H = 30;
 const MARGIN = 10;
@@ -67,6 +75,10 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
   // trade; they are transient (never saved, never marked dirty).
   const [autoRows, setAutoRows] = useState<Record<string, number>>({});
   const firstLoad = useRef(true);
+  // The board's own width, read from the element rather than a resize entry —
+  // see lib/measure.ts for why that distinction is the whole bug on iPhone.
+  const boardRef = useRef<HTMLDivElement | null>(null);
+  const boardW = useContentWidth(boardRef, 1120);
 
   const applyBoard = useCallback(
     (b: TradingBoard) => {
@@ -380,8 +392,10 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
         </div>
       ) : (
         <>
+          <div ref={boardRef}>
           <RGL
             className="layout"
+            width={boardW}
             layout={layout}
             cols={COLS}
             rowHeight={ROW_H}
@@ -419,6 +433,7 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
               </div>
             ))}
           </RGL>
+          </div>
           {/* While editing, keep a little breathing room below the grid so the
               bottom-row tile's resize handle isn't jammed against the footer and
               can be dragged down to grow the cell. */}

@@ -181,7 +181,7 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   // crypto and (later) shares have no pip, and labelling their price moves in
   // pips would be inventing a unit. `forexPair` is the terminal's single test for
   // this (mirrored server-side in trading/forex.ts), so the ticket agrees with
-  // how the Live Wall, Trade Log and History already score a trade.
+  // how the Live Wall and the Trade Log already score a trade.
   const isForex = forexPair(instrument) != null;
 
   // The unit of price movement this instrument is read in. For a currency pair

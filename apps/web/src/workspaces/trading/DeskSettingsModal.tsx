@@ -338,7 +338,7 @@ export function DeskSettingsModal({
               <div style={{ fontSize: 12, color: MUTED, marginTop: 6, lineHeight: 1.55 }}>
                 A closed trade whose result stays inside this buffer — in either direction — counts as a{' '}
                 <b style={{ color: GOLD }}>break-even</b> trade instead of a win or a loss. It applies to the Trade Log,
-                History, and the Live Wall. The <b>default</b> below governs every instrument, and you
+                and the Live Wall. The <b>default</b> below governs every instrument, and you
                 can override it for a <b>specific instrument</b> underneath. Set <b>0</b> to turn a buffer off.
               </div>
 
@@ -507,12 +507,12 @@ export function DeskSettingsModal({
               </div>
 
               {/* Test-trade floor: broker fills under N units drop out of the
-                  Trade Log / History entirely (stats and list). */}
+                  Trade Log entirely (stats and list). */}
               <div style={{ borderTop: `1px solid ${BORDER}`, marginTop: 18, paddingTop: 14 }}>
                 <div style={sectionLabel}>{"Ignore test trades"}</div>
                 <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
                   Broker fills smaller than this many <b>units</b> are treated as test trades and left out of the
-                  Trade Log and History — stats <i>and</i> the list. Handy for the 1-unit orders you place to check a
+                  Trade Log — stats <i>and</i> the list. Handy for the 1-unit orders you place to check a
                   broker connection. Set <b>0</b> to keep every trade.
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
@@ -545,7 +545,7 @@ export function DeskSettingsModal({
                   <div style={sectionLabel}>{"Count trades since (per account)"}</div>
                   <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
                     Pick the date your real trading on each broker account began. Trades opened before it are left
-                    out of your Trade Log and History — and never re-imported. Blank counts everything.
+                    out of your Trade Log — and never re-imported. Blank counts everything.
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
                     {conns.filter((c) => c.broker !== 'manual').map((c) => (

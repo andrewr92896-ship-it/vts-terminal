@@ -79,10 +79,13 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   teamChat: 'max',
   // Adding your own YouTube channel to the Market News wall.
   customStreams: 'max',
+  // Connecting a broker with the user's own credentials, and the live account
+  // capital that comes with it (Trade Analysis ▸ Live Brokers). Moved up from
+  // Premium by owner decision, 2026-08: it is the one feature that holds a
+  // trading credential, and it sits beside the Trade Desk that spends it.
+  brokerConnections: 'max',
 
   // ---- Premium ----
-  // Connecting a broker, or any other API, with the user's own credentials.
-  brokerConnections: 'premium',
   // The prop-firm challenge tracker.
   funded: 'premium',
   // Building your own study games, flashcard sets and guides. Playing the
@@ -101,6 +104,9 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   marketData: 'premium',
   // The seeded Market News live streams beyond Yahoo Finance. Yahoo itself is
   // free, so a free account still has a working wall rather than an empty one.
+  // The seeded live-stream wall beyond Yahoo Finance — and watching more than
+  // one channel at once, which is meaningless on free anyway (a free account has
+  // exactly one channel it may play).
   presetStreams: 'premium',
   // Sending a suggestion, and the general-support conversation. Reporting a BUG
   // is deliberately absent from this map and free on every account: a bug report
@@ -145,7 +151,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   premiumBadges: 'Recognition badges beside your name.',
   strategySessions: 'Session windows with a bias, and open/close notifications.',
   marketData: '75 rates, prints and prices with five change columns each.',
-  presetStreams: 'Bloomberg, Reuters and the Fed alongside Yahoo Finance.',
+  presetStreams: 'Bloomberg, Reuters and the Fed alongside Yahoo Finance, and up to four playing at once.',
   suggestions: 'Send ideas straight to the developers.',
   supportChat: 'Talk to a person about anything that is not a bug.',
 };

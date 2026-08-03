@@ -147,7 +147,7 @@ function renderScreen(
     case 'data':
       return <MarketData />;
     case 'news':
-      return <MarketNews />;
+      return <MarketNews onOpenMembership={() => onNavigate('my_access')} />;
     case 'td_trading':
       return <TradingTodo />;
     // The Study Game, Test Mode, and Progress sections are all deck launchers
