@@ -98,7 +98,7 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
 
   useEffect(() => {
     // The positions feed is a desk endpoint (403 without Advanced Trading), so
-    // a Markets-only viewer never asks for it — the board half needs none of it.
+    // a viewer without the desk never asks for it — the board half needs none of it.
     if (!desk) return;
     void load();
     const id = window.setInterval(() => void load(), REFRESH_MS);

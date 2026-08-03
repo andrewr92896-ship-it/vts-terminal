@@ -159,8 +159,8 @@ Tech:
   (`security/secretbox.ts`).
 - **Notifications:** web push (VAPID, `web-push`) and **Pushover**. Both are on
   `requireMarkets` (**signed in**), deliberately **not** the Advanced Trading
-  opt-in: price alerts are a Markets feature included with every account, and
-  gating the delivery channel behind the desk left a Markets-only user able to set
+  opt-in: price alerts are included with every account, and
+  gating the delivery channel behind the desk left a user without the desk able to set
   an alert and never be told it fired.
 
 ### Where things live
@@ -198,16 +198,26 @@ Sections a user lacks the role for — or the **feature opt-in** for (see Featur
 Access below) — are hidden. **My Terminal is pinned to the very top of the
 workspaces list** (see `theme/nav.ts` order).
 
-- **Markets** (sky blue, key `markets`) — **included with every account, no
-  opt-in**: Market News (`news`), Market Data (`data`).
-  Everything here reads public market data — no trade, no broker, no balance —
-  which is exactly why it sits outside the Advanced Trading opt-in and is the
-  terminal's floor for a user who has turned nothing on.
-  **The Live Wall moved out of here** (owner decision, 2026-08) to the top of My
-  Terminal: it draws on every workspace now rather than just this one. The key
-  stayed `live`, so saved `nav.order` overrides and in-app links keep working,
-  and **`myportal` is the landing workspace on sign-in** (it was `markets`).
-  `DEFAULT_SCREEN.markets` is now `news`.
+- **Markets is GONE as a workspace** (owner decision, 2026-08). Its two sections,
+  Market News (`news`) and Market Data (`data`), are **My Terminal sections** now
+  — the Live Wall had already moved there, and all three read public market data
+  rather than anything belonging to a workspace of their own. **Nothing else
+  changed**: the screens, their section keys, their routes and their guards are
+  untouched, so saved `nav.order` overrides, the `howto` wording and every in-app
+  link still resolve, and Market Data is still Premium while Market News is still
+  free. The `markets` `WorkspaceKey`, its theme, its `DEFAULT_SCREEN` entry and
+  its `WORKSPACE_LABELS` entry are all deleted; `applyNavOrder` ignores an
+  override naming a workspace that no longer exists, so an old saved sidebar
+  layout degrades to the default position rather than hiding a row.
+  - **`requireMarkets` keeps its name** and still means exactly what it meant:
+    signed in, no opt-in, no trade / broker / balance reachable. It was never a
+    workspace check (`WorkspaceKey` server-side is only `'trading' | 'studies'`),
+    so nothing on the server moved. Read "Markets" in a server comment as "the
+    market-facing surfaces included with every account".
+  - The `markets` **tile group** and the `markets` **built-in Live Wall layout**
+    keep their keys and labels — they name a data category, not the workspace,
+    and the preset key is what a free account's remembered layout choice is
+    stored against.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
   its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
   **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
@@ -239,9 +249,9 @@ workspaces list** (see `theme/nav.ts` order).
   to My Terminal** (owner decision, 2026-08 — a to-do list is personal, not a
   desk instrument); its key is still `td_trading`, so saved `nav.order`
   overrides and in-app links keep working.
-  Market Data and Market News moved to **Markets**; their section keys are
-  unchanged (`data` / `news`), so saved `nav.order` overrides, `howto` wording
-  and in-app links keep working.
+  Market Data and Market News left this workspace long ago and now live in **My
+  Terminal**; their section keys are unchanged (`data` / `news`), so saved
+  `nav.order` overrides, `howto` wording and in-app links keep working.
   - **Trade Desk** (`tradedesk`, `workspaces/trading/TradeDesk.tsx` +
     `OrderTicket.tsx` + `DeskPositions.tsx`) is where a trade is **placed**. It
     sends real orders to the trader's **own** accounts at **two venues — OANDA
@@ -379,7 +389,7 @@ workspaces list** (see `theme/nav.ts` order).
     "Whose settings" picker surfaces this. `getTrades` / `getHistory` /
     `getLiveWall` score each viewer's desk with the **viewer's own** settings.
   - **Market Data** (`data`, `workspaces/trading/MarketData.tsx` — now a
-    **Markets** section, files unchanged) is the desk's
+    **My Terminal** section, files unchanged) is the desk's
     read-only board of every rate, print and price it watches: 75 series across
     ten groups (policy, inflation, labor, yields, FX, commodities, crypto,
     indices, macro, sessions), each with five changes (1D/1W/1M/YTD/1Y) and who
@@ -523,7 +533,7 @@ workspaces list** (see `theme/nav.ts` order).
       for anything schedule-shaped; `newsFormat.ts` remains the formatter for an
       instant you already have.
   - **Market News** (`news`, `workspaces/trading/MarketNews.tsx` — now a
-    **Markets** section, files unchanged) is two things:
+    **My Terminal** section, files unchanged) is two things:
     the **headline feed** and an embedded **YouTube live-stream wall**. The feed
     is every story the desk's feeds carry (`GET /api/trading/news` — the same
     shared `trading_news` rows; the payload's `calendar` is now read only by
@@ -623,8 +633,8 @@ workspaces list** (see `theme/nav.ts` order).
       a rail row opens `ChannelEditForm` (rename + the 24/7 tick), and the add
       form carries the same tick. Adding, editing and removing are all on
       `requireMarkets` — **signed in**, deliberately not the trading write guard,
-      since Market News is a Markets section included with every account and
-      demanding the Advanced Trading opt-in would lock a Markets-only user out of
+      since Market News is included with every account and demanding the Advanced
+      Trading opt-in would lock a user who has not turned the desk on out of
       their own team's wall. The demo is refused by `demoGuard` (every non-GET),
       which is what `canWrite` mirrors on the client.
       `MAX_TEAM_CHANNELS` (24) guards against a runaway list.
@@ -1149,12 +1159,13 @@ cycle.
     the `NAV` array itself, so a founder's saved `nav.order` override still wins
     over it.
     - **Where a workspace's list starts is NOT what it opens on.** `DEFAULT_SCREEN`
-      (`theme/themes.ts`) is separate and deliberately unchanged by this: Markets
-      still opens on Market News and Studies on Study Game, because landing a free
+      (`theme/themes.ts`) is separate and deliberately unchanged by this: Studies
+      still opens on Study Game, because landing a free
       account on the paid screen now sitting at the top would open the workspace on
       something it cannot use. Advanced Trading already opened on `tradedesk`, so
       there the two now agree by coincidence rather than by rule.
-    - Consequence in My Terminal: **Trading Team sits above the Live Wall**, which
+    - Consequence in My Terminal: **Trading Team and Market Data sit above the
+      Live Wall**, which
       still opens on sign-in (`DEFAULT_SCREEN.myportal` is `live`). The Live Wall
       is no longer the first *row* of the first workspace; it is still the first
       *screen*.
@@ -1201,8 +1212,8 @@ cycle.
     choice from Admin ▸ Badges is not overwritten.
   - The **badge colours are the same two values** (`badges/service.ts`): the
     Premium star is `#EBCB74`, the Max gem `#B9F2FF`. Change one and change the
-    other. Both are kept icier/warmer than the Markets accent (`#5AC8FA`) so a
-    tier marker is never read as a workspace one.
+    other. Both are kept icier/warmer than the sky blue the terminal signals
+    market-watching with (`#5AC8FA`) so a tier marker is never read as one.
 - **Three splits worth keeping**, each of which exists so a free account is a
   working product rather than a teaser:
   - **Market Data** — the series board is Premium; the **economic calendar and
@@ -1263,8 +1274,8 @@ Only two things are optional, and both are the trading desk:
   so switching the desk off and back on brings Funded back rather than silently
   forgetting it.
 
-Everything else — **Markets, Investments, Studies, My Terminal, Site Help** — is
-included with every account and deliberately has nothing to opt into: none of it
+Everything else — **Investments, Studies, My Terminal (including Market Data and
+Market News), Site Help** — is included with every account and deliberately has nothing to opt into: none of it
 holds money or places an order, and a terminal without it is worth nothing to an
 average user. The Premium Features screen lists them as "Included with every
 account" rather than hiding them, so the screen reads as the whole picture.
@@ -1491,8 +1502,8 @@ likely to be misremembered:
 - **Retired: `trading`, `trading_viewer`, `studies`, `funded`.** All four are
   gone from `ROLE_KEYS` and the admin pickers. What gates Advanced Trading and
   Funded Account is the per-user **Premium Features opt-in** (see above), and
-  Markets / Investments / Studies / My Terminal / Site Help are included with
-  every account.
+  Investments / Studies / My Terminal / Site Help are included with every
+  account.
 - `canAccessWorkspace()` therefore returns **true** for everyone, and
   `isWorkspaceReadOnly()` returns **false** for everyone. Both are kept as stable
   exports so the write guards still compile and so a paid/read-only tier has an
@@ -1507,7 +1518,7 @@ likely to be misremembered:
   a tier returns — so keep using it; just do not describe it as blocking a role
   that no longer exists.
 
-`WorkspaceKey` server-side is only `'trading' | 'studies'`; Markets, Investments,
+`WorkspaceKey` server-side is only `'trading' | 'studies'`; Investments,
 My Terminal and Site Help have no role gate to name.
 
 Middleware (`auth/middleware.ts`): `requireAuth`, `requireAdmin`, `requireFounder`,

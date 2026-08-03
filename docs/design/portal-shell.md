@@ -174,7 +174,6 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 | Workspace | Accent | Icon | Sidebar group label |
 |---|---|---|---|
 | My Terminal *(pinned first)* | `#34D399` emerald | `briefcase` | My Terminal |
-| Markets | `#5AC8FA` sky | `globe` | Markets |
 | Advanced Trading *(opt-in)* | `#EBCB74` gold | `candlestick-chart` | Advanced Trading |
 | Investments | `#2DD4BF` teal | `landmark` | Investments |
 | Studies | `#B69CFF` violet | `graduation-cap` | Studies |
@@ -209,9 +208,9 @@ The marker is drawn for everyone, including a member who already holds the tier:
 its job is to say what a row costs, not to act as a lock. A free row is marked
 with nothing.
 
-- **My Terminal** — Trading Team *(gem)* · **Live Wall** · Net Worth · To Do ·
-  Premium Features · Preferences · Settings
-- **Markets** — Market Data *(star)* · Market News
+- **My Terminal** — Trading Team *(gem)* · Market Data *(star)* ·
+  **Live Wall** · Market News · Net Worth · To Do · Premium Features ·
+  Preferences · Settings
 - **Advanced Trading** — Trade Desk *(gem)* · Strategy Sessions *(star)* ·
   Funded Account *(star, nested opt-in)* · Trading Alerts · Trade Analysis ·
   Manual Trades · Deleted Trades

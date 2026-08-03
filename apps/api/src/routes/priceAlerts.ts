@@ -10,8 +10,8 @@ import {
 } from '../trading/priceAlerts.js';
 import { hasPriceSource } from '../trading/priceSource.js';
 
-// User-authored price alerts. These sit in the always-on Markets workspace
-// rather than behind the Advanced Trading opt-in: setting one is watching a
+// User-authored price alerts. These are included with every account rather than
+// sitting behind the Advanced Trading opt-in: setting one is watching a
 // price, not trading it — no broker of the user's own is involved and no order
 // can result — and the alert control lives on the chart tile, which every
 // account has. The demo is read-only regardless (demoGuard 403s every write).

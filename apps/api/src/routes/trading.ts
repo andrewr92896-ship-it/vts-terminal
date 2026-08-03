@@ -170,7 +170,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   const read = { preHandler: requireWorkspace('trading') };
   const write = { preHandler: requireWorkspaceWrite('trading') };
   // The market-facing endpoints — headlines, the economic calendar, market data,
-  // the chart board. These live in the always-on Markets workspace, so they are
+  // the chart board. These are included with every account, so they are
   // deliberately open to every signed-in user, including one who has opted into
   // nothing. Nothing on this guard reads a trade or reaches a broker.
   const markets = { preHandler: requireMarkets };
@@ -581,8 +581,8 @@ export async function tradingRoutes(app: FastifyInstance) {
   // armed for alerts stays personal. `liveConfigured` tells the client whether
   // live status is real yet, so the screen can mark it as sample when it isn't.
   //
-  // These sit on `markets`, not `write`: Market News is part of the always-on
-  // Markets workspace, so gating the wall behind the Advanced Trading opt-in
+  // These sit on `markets`, not `write`: Market News is included with every
+  // account, so gating the wall behind the Advanced Trading opt-in
   // would let a user see it and not shape it. The demo is still refused every
   // non-GET by demoGuard, so it watches without reshaping the desk's wall.
   //
@@ -630,9 +630,9 @@ export async function tradingRoutes(app: FastifyInstance) {
   // Add / rename / remove a channel on the desk's wall — Max (owner decision,
   // 2026-08: watching the seeded channels is Premium, bringing your own is Max).
   //
-  // Deliberately NOT on the trading write guard: Market News is a Markets section
-  // included with every account, so requiring the Advanced Trading opt-in here
-  // would lock a paying Markets-only user out of their own team's wall. The demo
+  // Deliberately NOT on the trading write guard: Market News is included with
+  // every account, so requiring the Advanced Trading opt-in here would lock a
+  // paying user who has not turned the desk on out of their own team's wall. The demo
   // is still refused by demoGuard, which rejects every non-GET first.
   const ownStreams = { preHandler: [requireMarkets, requirePremium('customStreams')] };
   app.post('/api/trading/market-news/channels', ownStreams, async (request, reply) => {

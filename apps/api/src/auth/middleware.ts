@@ -76,8 +76,8 @@ export const requireFounder: preHandlerHookHandler = async (
 //
 // Trading is opt-in (My Terminal ▸ Premium Features), so the workspace guard checks
 // that too — which means every endpoint already behind it inherits the gate
-// rather than each route having to remember. Market-facing endpoints that moved
-// to the always-on Markets workspace use `requireMarkets` instead.
+// rather than each route having to remember. The market-facing endpoints that
+// are included with every account use `requireMarkets` instead.
 export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {
     const user = request.currentUser;
@@ -93,19 +93,21 @@ export function requireWorkspace(ws: WorkspaceKey): preHandlerHookHandler {
   };
 }
 
-// The Markets workspace — headlines, the economic calendar, market data and the
-// chart board — is included with every account, so this is just "signed in".
-// Named rather than reusing requireAuth at the call sites so the boundary is
+// The market-facing surfaces — headlines, the economic calendar, market data and
+// the chart board — are included with every account, so this is just "signed
+// in". Named rather than reusing requireAuth at the call sites so the boundary is
 // legible: anything on this guard is deliberately available to a user who has
-// opted into nothing.
+// opted into nothing. (The name predates the Markets workspace being dissolved
+// into My Terminal; what it guards — public market data, no trade, no broker, no
+// balance — is unchanged, so the name still describes the boundary.)
 export const requireMarkets: preHandlerHookHandler = requireAuth;
 
 // Reject unless the user has opted into Advanced Trading (My Terminal ▸ Premium
 // Features). This is the gate on the whole desk — placing and reviewing trades,
 // broker connections, alerts, strategy sessions, the manual book. The
-// market-facing endpoints behind the Markets workspace (news, the economic
-// calendar, market data, the chart board) deliberately do NOT use this guard:
-// they are included with every account.
+// market-facing endpoints (news, the economic calendar, market data, the chart
+// board) deliberately do NOT use this guard: they are included with every
+// account.
 export const requireAdvancedTrading: preHandlerHookHandler = async (
   request: FastifyRequest,
   reply: FastifyReply,

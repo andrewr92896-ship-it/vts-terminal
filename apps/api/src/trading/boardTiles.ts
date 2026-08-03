@@ -98,7 +98,7 @@ export const TILE_GATES: Partial<Record<BoardTileKind, TileGate>> = {
 // Tiles that read the desk rather than public market data. This is the set the
 // board route strips from anything a non-desk user saves — everything else on
 // the board is public market data or the reader's own, which is exactly the
-// split that lets one board serve a Markets-only user and a trader.
+// split that lets one board serve a market-watching user and a trader alike.
 export const DESK_TILE_KINDS: Set<string> = new Set(
   Object.entries(TILE_GATES)
     .filter(([, g]) => g?.desk)
