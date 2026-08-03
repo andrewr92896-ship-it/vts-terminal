@@ -2,7 +2,7 @@
 //
 // The wall changed the economics of a poll. With seven tile kinds a board held a
 // chart and a watchlist and every tile read something different; with
-// twenty-three, a realistic board has Trade Analysis beside Closed Trades (both
+// two dozen, a realistic board has Trade Analysis beside Closed Trades (both
 // the closed-trade history), Net Worth beside Portfolio (net worth reads the
 // portfolio to build its own total), and two Market Data tiles pinned to
 // different groups off one catalog. Every one of those pairs was two requests

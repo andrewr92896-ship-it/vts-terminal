@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.50';
+export const APP_VERSION = 'Beta V 6.51';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.51',
+    date: 'August 3, 2026',
+    notes: [
+      'You can search the Live Wall tile list. With two dozen tiles across five groups, typing "net worth" beats guessing which group it files under.',
+      'The Live Wall stops polling while its tab is in the background, and catches up the moment you come back. A board left open all day was quietly making requests for a screen nobody was looking at.',
+    ],
+  },
   {
     version: 'Beta V 6.50',
     date: 'August 3, 2026',

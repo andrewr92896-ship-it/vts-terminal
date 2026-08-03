@@ -95,7 +95,7 @@ export function intervalLabel(code: string | undefined): string {
 // The tile factory and the starter boards used to live here. They moved to
 // tileCatalog.ts (what a tile IS, and its defaults) and presetLayouts.ts (the
 // three built-in boards) when the wall grew from seven tile kinds to
-// twenty-three — a tile's size, label, group and price belong beside each other
+// two dozen — a tile's size, label, group and price belong beside each other
 // rather than split across a chart-config module.
 
 // Small shared styles reused by the tiles/board editors.

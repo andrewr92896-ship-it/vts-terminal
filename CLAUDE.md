@@ -1374,9 +1374,9 @@ order over the real arrangement, including for a board merely left in edit mode
 on a desktop and then narrowed.
 
 **Any tile can be expanded to fill the screen**, and the control is in the grid
-**cell**, not the tile header. Deliberately: the headers belong to twenty-three
-components, seven of which predate the shared `TileFrame`, so putting it in the
-cell gives every kind the behaviour with no per-tile change. The bottom-right
+**cell**, not the tile header. Deliberately: there is a component per tile kind,
+seven of which predate the shared `TileFrame`, so putting the control in the cell
+gives every kind the behaviour with no per-tile change. The bottom-right
 corner is free exactly when it is offered — while editing, that corner is the
 resize handle and the button is hidden. It is hover-revealed on a pointer device
 and permanently visible under `@media (hover: none)`, since a touch device gets

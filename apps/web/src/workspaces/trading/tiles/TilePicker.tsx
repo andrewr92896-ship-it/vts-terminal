@@ -12,7 +12,7 @@ import { BORDER2, FAINT, GOLD, MUTED, TEXT } from '../tvChart';
 //
 // It replaced a row of "+ Chart / + Watchlist / + News …" buttons, which worked
 // at seven tile kinds and would have been a wrapping wall of them at
-// twenty-three. Grouped by where a tile's data comes from, because that is the
+// two dozen. Grouped by where a tile's data comes from, because that is the
 // question somebody adding one is actually asking.
 //
 // Every kind is listed, including the ones this account cannot reach — marked
@@ -35,6 +35,10 @@ export function TilePicker({
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const [group, setGroup] = useState<TileGroup>('markets');
+  // Twenty-six kinds across five groups is past the point where browsing alone
+  // works — somebody who knows they want "net worth" should not have to guess
+  // which group it files under.
+  const [query, setQuery] = useState('');
   const btnRef = useRef<HTMLButtonElement>(null);
 
   // Same lifecycle as the preset picker: a body-portalled menu that can never
@@ -60,11 +64,19 @@ export function TilePicker({
   const membership = user?.access.membership;
 
   function toggle() {
-    if (!open && btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    if (!open && btnRef.current) {
+      setRect(btnRef.current.getBoundingClientRect());
+      setQuery('');
+    }
     setOpen((v) => !v);
   }
 
-  const rows = TILE_CATALOG.filter((t) => t.group === group);
+  // Searching looks across EVERY group, not within the open one — a search that
+  // silently only covered the current tab would read as "no such tile".
+  const q = query.trim().toLowerCase();
+  const rows = q
+    ? TILE_CATALOG.filter((t) => t.label.toLowerCase().includes(q) || t.blurb.toLowerCase().includes(q))
+    : TILE_CATALOG.filter((t) => t.group === group);
 
   return (
     <>
@@ -95,16 +107,39 @@ export function TilePicker({
                 overflow: 'hidden',
               }}
             >
-              {/* Group rail — the tabs across the top. Wraps rather than
-                  scrolling sideways, so every label stays readable in full. */}
-              <div style={groupBar}>
-                {TILE_GROUPS.map((g) => (
-                  <button key={g.key} onClick={() => setGroup(g.key)} style={groupBtn(g.key === group)}>
-                    {g.label}
+              <div style={searchBar}>
+                <Icon name="search" size={13} color={FAINT} />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search tiles"
+                  style={searchInput}
+                />
+                {query && (
+                  <button onClick={() => setQuery('')} style={clearBtn} title="Clear">
+                    ✕
                   </button>
-                ))}
+                )}
               </div>
+              {/* Group rail — the tabs across the top. Wraps rather than
+                  scrolling sideways, so every label stays readable in full.
+                  Hidden while searching, which spans every group anyway. */}
+              {!q && (
+                <div style={groupBar}>
+                  {TILE_GROUPS.map((g) => (
+                    <button key={g.key} onClick={() => setGroup(g.key)} style={groupBtn(g.key === group)}>
+                      {g.label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div style={{ overflowY: 'auto', padding: 6 }}>
+                {rows.length === 0 && (
+                  <div style={{ padding: '18px 10px', fontSize: 11.5, color: FAINT, textAlign: 'center' }}>
+                    No tile matches “{query.trim()}”.
+                  </div>
+                )}
                 {rows.map((t) => {
                   const lock = tileLock(t.kind, features, entitled);
                   const tier = t.feature ? tierOfFeature(t.feature, membership) : null;
@@ -189,6 +224,34 @@ const addBtn: CSSProperties = {
   padding: '8px 12px',
   borderRadius: 7,
   cursor: 'pointer',
+};
+const searchBar: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  padding: '8px 10px',
+  borderBottom: `1px solid ${BORDER2}`,
+  flex: '0 0 auto',
+};
+const searchInput: CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  background: 'transparent',
+  border: 'none',
+  outline: 'none',
+  color: TEXT,
+  fontSize: 12.5,
+  fontFamily: 'inherit',
+};
+const clearBtn: CSSProperties = {
+  flex: 'none',
+  background: 'transparent',
+  border: 'none',
+  color: FAINT,
+  fontSize: 11,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  padding: 2,
 };
 const groupBar: CSSProperties = {
   display: 'flex',

@@ -664,7 +664,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
                   />
                   {/* Full-screen, in the cell's bottom-right corner.
                       Deliberately NOT in the tile header: the headers belong to
-                      twenty-three different components, seven of which predate
+                      a component per tile kind, seven of which predate
                       the shared frame, and this way every kind gets it with no
                       per-tile change. The corner is free precisely when this is
                       offered — while editing, that is the resize handle, and
