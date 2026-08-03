@@ -476,13 +476,15 @@ export async function tradingRoutes(app: FastifyInstance) {
   // (`boardWrite`). What the Advanced Trading opt-in still decides is which
   // TILES a board may carry: the desk-reading kinds are stripped from anything a
   // non-desk user saves. Applied here, not just in the UI.
-  // Reading includes what the reader's TEAM has published. Deliberately on the
-  // free guard alongside their own boards: a free account cannot build a layout,
-  // but adopting the one their desk already uses costs nothing to allow and is
-  // the most useful thing their team can hand them.
-  // Every board response carries the same three fields. A helper rather than
-  // three routes each remembering: the client types them as one shape, so a
-  // route that answered with only `boards` would hand it an undefined list.
+  // Every board response carries the same three fields — the reader's own
+  // boards, what their TEAM has published, and whether they are on one. A helper
+  // rather than each route remembering: the client types them as a single shape,
+  // so a route answering with only `boards` would hand it an undefined list.
+  //
+  // Reading the shared list sits on the free guard alongside their own boards: a
+  // free account cannot build a layout, but adopting the one their desk already
+  // uses costs nothing to allow and is the most useful thing a team can hand a
+  // new member.
   const boardsPayload = async (userId: string) => {
     const team = await getUserTeamContext(userId);
     return {
