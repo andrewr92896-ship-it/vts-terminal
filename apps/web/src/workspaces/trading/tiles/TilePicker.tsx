@@ -142,7 +142,10 @@ export function TilePicker({
                 )}
                 {rows.map((t) => {
                   const lock = tileLock(t.kind, features, entitled);
-                  const tier = t.feature ? tierOfFeature(t.feature, membership) : null;
+                  // A tile can be MARKED with a tier it is not gated by (Broker
+                  // Capital), so the mark reads either field.
+                  const marked = t.feature ?? t.markFeature ?? null;
+                  const tier = marked ? tierOfFeature(marked, membership) : null;
                   return (
                     <TileRow
                       key={t.kind}

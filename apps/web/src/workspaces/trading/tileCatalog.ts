@@ -30,6 +30,18 @@ export interface TileDef {
   blurb: string;
   /** The paid feature gating it, or null when it is included with every account. */
   feature: PremiumFeature | null;
+  /**
+   * A tier this tile is MARKED with but not gated by.
+   *
+   * The two are genuinely different, and conflating them locks people out of
+   * their own data. Broker Capital is the case: connecting a broker is Max, but
+   * *reading* an account you already connected is not — the endpoint serves any
+   * desk user, and Trade Analysis ▸ Live Brokers shows the same figures behind
+   * nothing but a marker. That is the terminal's standing rule for a credential
+   * feature: reading its status and disconnecting stay open, so a lapsed member
+   * is never locked away from what they already have.
+   */
+  markFeature?: PremiumFeature;
   /** Needs the Advanced Trading opt-in. */
   desk?: boolean;
   /** Needs the nested Funded Account opt-in as well. */
@@ -218,7 +230,10 @@ export const TILE_CATALOG: TileDef[] = [
     group: 'desk',
     icon: 'landmark',
     blurb: 'What each connected account is worth right now.',
-    feature: 'brokerConnections',
+    // Marked, not gated — see `markFeature`. Connecting the broker is Max;
+    // reading an account you already connected is not.
+    feature: null,
+    markFeature: 'brokerConnections',
     desk: true,
     w: 4,
     h: 10,
