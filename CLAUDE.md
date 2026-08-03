@@ -852,9 +852,10 @@ workspaces list** (see `theme/nav.ts` order).
   - `npm run verify:investments` checks the portfolio math offline against
     hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
     touching `math.ts` or `limits.ts`.
-- **My Terminal** (emerald) leads with the **Live Wall** (`live`) — the
-  terminal's one centralized board, first section of the first workspace and what
-  a sign-in opens on; see its own section below. It also holds **Premium
+- **My Terminal** (emerald) holds the **Live Wall** (`live`) — the terminal's one
+  centralized board and what a sign-in opens on; see its own section below. (Its
+  nav row sits under Trading Team since the tier stacking flipped — the workspace
+  still *opens* on the wall, see Memberships ▸ the sidebar marking.) It also holds **Premium
   Features** (`my_access`) — memberships and the per-user opt-ins, see its own
   section below — plus one personal roll-up section:
   - **Removed: Investment Holdings** (`my_holdings`). Owner decision, 2026-08 —
@@ -1143,8 +1144,24 @@ cycle.
     `MembershipView` carries `featureTiers` as well as `entitlements`: the two
     answer different questions — what this account can REACH, versus what a
     feature COSTS. The badge needs the second.
-  - **Sections stack free → Premium → Max** inside each workspace, in the `NAV`
-    array itself, so a founder's saved `nav.order` override still wins over it.
+  - **Sections stack Max → Premium → free** inside each workspace — the paid rows
+    lead (owner decision, 2026-08; it was free → Premium → Max until then) — in
+    the `NAV` array itself, so a founder's saved `nav.order` override still wins
+    over it.
+    - **Where a workspace's list starts is NOT what it opens on.** `DEFAULT_SCREEN`
+      (`theme/themes.ts`) is separate and deliberately unchanged by this: Markets
+      still opens on Market News and Studies on Study Game, because landing a free
+      account on the paid screen now sitting at the top would open the workspace on
+      something it cannot use. Advanced Trading already opened on `tradedesk`, so
+      there the two now agree by coincidence rather than by rule.
+    - Consequence in My Terminal: **Trading Team sits above the Live Wall**, which
+      still opens on sign-in (`DEFAULT_SCREEN.myportal` is `live`). The Live Wall
+      is no longer the first *row* of the first workspace; it is still the first
+      *screen*.
+    - The Live Wall's **tile picker deliberately orders the other way** (free →
+      Premium → Max, `tileCatalog.ts`): a nav row is a destination, so the paid
+      ones lead, while the picker is a catalog being read through and opens on
+      what the reader already has.
   - **Only wholly-gated sections are marked** in the sidebar. Several paid
     features have no section of their own, and each is marked **at its own
     control** instead (audited 2026-08 — every one of the sixteen paid features
@@ -1295,10 +1312,11 @@ account" rather than hiding them, so the screen reads as the whole picture.
 
 ### The Live Wall — one centralized board (`live`)
 
-**The terminal's one board, and the first section of My Terminal** (owner
-decision, 2026-08). Every part of the terminal can be put on it, so it is
-deliberately the screen a sign-in lands on. There is no lite duplicate to keep in
-sync — one screen serves a free account and a full desk alike.
+**The terminal's one board, and the screen a sign-in lands on** (owner decision,
+2026-08). Every part of the terminal can be put on it, which is why it is the
+landing screen; its nav row is no longer My Terminal's first, since the tier
+stacking puts the paid Trading Team row above it. There is no lite duplicate to
+keep in sync — one screen serves a free account and a full desk alike.
 
 **Four files carry the design, and adding a tile kind touches all of them:**
 

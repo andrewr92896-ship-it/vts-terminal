@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.55';
+export const APP_VERSION = 'Beta V 6.56';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.56',
+    date: 'August 3, 2026',
+    notes: [
+      'The sidebar now leads each workspace with its paid sections instead of burying them: Max first, then Premium, then everything included with your account. Nothing moved between workspaces and nothing changed about what you can reach — Advanced Trading now opens its list with Trade Desk, Markets with Market Data, Studies with Study Creation, and My Terminal with Trading Team. Signing in still opens the Live Wall.',
+    ],
+  },
   {
     version: 'Beta V 6.55',
     date: 'August 3, 2026',
