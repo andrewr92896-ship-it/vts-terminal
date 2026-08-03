@@ -2740,6 +2740,17 @@ resize entry. Call sites: `ChartBoard` (which therefore does **not** use
 `WidthProvider`), `MarketData`, `MarketNews`. `PositionsTile` already did the
 right thing by reading `scrollHeight`.
 
+**It waits for the element, and that is load-bearing.** A `RefObject` cannot tell
+the hook when it becomes non-null and the layout effect runs once, so a caller
+that renders its measured element behind a condition — `if (loading) return …`,
+an empty-state branch, a lazily resolved chunk — was measured **never** and kept
+the fallback width for the life of the screen. So the hook polls a frame at a
+time until the element appears, then observes it. Symptom when it regressed: the
+Live Wall laid a 1120px grid out inside a 390px viewport, which is invisible on a
+desktop (the fallback is roughly right) and unusable on a phone. Verified by
+driving a real browser at 1440 / 768 / 390 / 320 and checking the cells actually
+track the viewport — a typecheck cannot see this, and neither can a desktop.
+
 ### Mobile input zoom (iOS)
 
 iOS Safari auto-zooms the viewport whenever a focused text field has a

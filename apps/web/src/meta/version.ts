@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.53';
+export const APP_VERSION = 'Beta V 6.54';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.54',
+    date: 'August 3, 2026',
+    notes: [
+      'Fixed the Live Wall being laid out at a fixed width regardless of your screen. On a desktop the board was slightly narrower than the space it had; on a phone it was drawn at desktop width and clipped, so tiles ran off the side. It now fits the window at every size, and follows along when you resize or rotate.',
+    ],
+  },
   {
     version: 'Beta V 6.53',
     date: 'August 3, 2026',
