@@ -9,7 +9,6 @@ import { fmtPips, tradePips } from './pips';
 // about it. These are the parts of it worth keeping, moved here so the Trade Log
 // scores a filtered selection exactly the way the server scores the whole set.
 
-const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
 const RED = '#ef5468';
 const TEXT = '#eef3ff';
@@ -190,4 +189,3 @@ export const filterSelect: CSSProperties = {
   padding: '7px 10px',
   minHeight: 34,
 };
-export const filterGold = GOLD;
