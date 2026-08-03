@@ -4,8 +4,8 @@ import { fetchOandaTrades, fetchOandaPrices } from './brokers/oanda.js';
 import { fetchKrakenPositions } from './brokers/kraken.js';
 import { getManualTrades } from './manual.js';
 import { getDeskFundedOpenPositions } from './funded.js';
-import { scopedTraderIds } from './scope.js';
-import { getDeskSnapshot } from './liveWallCache.js';
+import { visibleTraderIds } from './scope.js';
+import { deskSnapshotKey, getDeskSnapshot } from './liveWallCache.js';
 import { sampleLiveTrades } from './sample.js';
 import { computeForex, forexPair } from './forex.js';
 import { reconcile } from './history.js';
@@ -255,11 +255,17 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   const { breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides } = await getDeskSettings(user.id);
 
   // Trade data is scoped to the viewer's team (or just the viewer, if they have
-  // no team) — never the whole install. Only that team's active connections are
-  // loaded, so the wall shows only the team's open positions, each tagged with
-  // its owner. The public demo is sandboxed: it never reaches real connections,
-  // so it falls through to the sample feed below.
-  const scopeIds = await scopedTraderIds(user);
+  // no team) — never the whole install — and within that team, to the members
+  // who share their book. So the wall shows the team's open positions, each
+  // tagged with its owner, minus anyone running in private mode. The public demo
+  // is sandboxed: it never reaches real connections, so it falls through to the
+  // sample feed below.
+  //
+  // Worth keeping: the scope set is what getAllActiveDecrypted is given, so a
+  // private trader's broker credentials are never decrypted to serve a
+  // teammate's poll. Private mode stops the read at the connection, not at the
+  // render.
+  const scopeIds = await visibleTraderIds(user);
   const conns = isDemoUser(user) ? [] : await getAllActiveDecrypted(scopeIds);
 
   // Open funded positions, marked against the team's OANDA price. Kept separate
@@ -309,11 +315,15 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
 
   // The heavy, team-shared part — pull every active connection, tag slippage,
   // and reconcile into History — is served through a short-TTL, single-flight
-  // per-team cache. So many concurrent renders of the same team (every open
-  // Live Wall AND every home-screen widget) collapse into ONE broker fetch
-  // instead of each polling the same accounts. Keyed by team (or solo:<id> for
-  // a team-less trader), since that's exactly what scopedTraderIds/conns cover.
-  const deskKey = user.teamId ?? `solo:${user.id}`;
+  // cache. So many concurrent renders of the same desk (every open Live Wall
+  // AND every home-screen widget) collapse into ONE broker fetch instead of
+  // each polling the same accounts.
+  //
+  // Keyed by the team (or solo:<id>) AND the visible trader set, because those
+  // are no longer the same thing: a private trader's desk includes their own
+  // connections and their teammates' does not. Keying on the team alone would
+  // serve one of those two answers to both — see liveWallCache.ts.
+  const deskKey = deskSnapshotKey(user.teamId ?? `solo:${user.id}`, scopeIds);
   const snap = await getDeskSnapshot(deskKey, async () => {
     const { brokers, raw: loaded } = await loadDesk(conns);
     // Backfill missing marks on hand-entered manual positions from the rest of

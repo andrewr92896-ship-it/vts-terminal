@@ -3,7 +3,7 @@ import { db } from '../db/index.js';
 import { tradingTrades, tradingPositions, users, type TradeSide } from '../db/schema.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
-import { scopedTraderIds, type Viewer } from './scope.js';
+import { visibleTraderIds, type Viewer } from './scope.js';
 import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 
 // The Deleted Trades section: soft-deleted trades (hand-logged + broker-imported)
@@ -35,7 +35,7 @@ export async function listDeletedTrades(
   viewerIsDemo = false,
 ): Promise<{ trades: DeletedTradeRecord[] }> {
   if (viewerIsDemo) return { trades: [] };
-  const scopeIds = await scopedTraderIds(viewer);
+  const scopeIds = await visibleTraderIds(viewer);
 
   const [manual, positions] = await Promise.all([
     db

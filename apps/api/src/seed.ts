@@ -135,12 +135,18 @@ export async function seedAdmin(): Promise<void> {
   // and getMembership() answers Max on roles before it ever looks for a row. The
   // same is true of migration 0090's grandfathering — it has nobody to carry over
   // on a fresh install either, and does not need to.
+  // Sharing is set here for the same reason: migration 0093 grandfathers every
+  // account already on a team into sharing, and on a fresh install there is
+  // nobody for it to carry over — so without this the owner would find their own
+  // book private on a desk they are the only member of.
   await db.insert(userFeatures).values({
     id: crypto.randomUUID(),
     userId: adminId,
     advancedTrading: true,
     funded: true,
     tradingAckAt: now,
+    shareBook: true,
+    bookAckAt: now,
     createdAt: now,
     updatedAt: now,
   });

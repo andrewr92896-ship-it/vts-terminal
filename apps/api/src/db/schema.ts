@@ -916,6 +916,12 @@ export const userFeatures = sqliteTable('user_features', {
   advancedTrading: integer('advanced_trading', { mode: 'boolean' }).notNull().default(false),
   funded: integer('funded', { mode: 'boolean' }).notNull().default(false),
   tradingAckAt: integer('trading_ack_at', { mode: 'timestamp_ms' }),
+  // Private mode. `shareBook` false — the default — keeps this trader's open
+  // positions off their teammates' Live Wall, Trade Log and History; they still
+  // see everything themselves and still receive every team notification.
+  // `bookAckAt` stamps the consent, and survives switching back to private.
+  shareBook: integer('share_book', { mode: 'boolean' }).notNull().default(false),
+  bookAckAt: integer('book_ack_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
