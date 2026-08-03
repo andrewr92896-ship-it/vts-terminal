@@ -206,18 +206,12 @@ const SECTION_ACTIVITY: Record<string, 'suggestions' | 'support'> = {
 // still outstanding until somebody replies or closes the report.
 const BUG_DOT_SECTION = 'ad_bugs';
 
-// Where a user lands on sign-in: Markets, whose first section is the Live Wall.
-// That is the same board this has always opened on, and it is the one workspace
-// every account has — so the landing screen is identical for a trader and for
-// someone who has opted into nothing.
-// Where a sign-in lands. My Terminal, because the Live Wall is its first
-// section — the one board that draws on every workspace, so it is the most
-// useful thing to open on whatever the account has turned on. (It was Markets
-// until the wall moved there.) Every account reaches My Terminal, so the
-// fallbacks below are a safety net rather than a real path.
+// Where a sign-in lands: My Terminal, which opens on the Live Wall — the one
+// board that draws on every workspace, so it is the most useful thing to open on
+// whatever the account has turned on. Every account reaches My Terminal, so the
+// fallback below is a safety net rather than a real path.
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
   if (allowed.includes('myportal')) return 'myportal';
-  if (allowed.includes('markets')) return 'markets';
   if (allowed.includes('trading')) return 'trading';
   return allowed[0] ?? 'studies';
 }

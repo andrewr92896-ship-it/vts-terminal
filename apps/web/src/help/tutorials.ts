@@ -20,7 +20,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
   my_access: {
     title: 'Turning features on and off',
     intro:
-      'Feature Access is where you choose which optional parts of the terminal you want. Markets, Investments, Studies, My Terminal and Site Help are included with every account — there is nothing to switch on for those. The two optional ones are both about the trading desk.',
+      'Feature Access is where you choose which optional parts of the terminal you want. Investments, Studies, My Terminal and Site Help are included with every account — there is nothing to switch on for those. The two optional ones are both about the trading desk.',
     steps: [
       {
         title: 'Advanced Trading',

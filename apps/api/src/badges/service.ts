@@ -206,8 +206,8 @@ export async function seedBadges(): Promise<void> {
       // set is a rounded tilted square and reads as a rhombus rather than a
       // jewel — migration 0091 corrects the rows seeded before this.
       icon: 'gem',
-      // Diamond blue — icier than the Markets accent (#5AC8FA) on purpose, so a
-      // Max marker is never read as a Markets one.
+      // Diamond blue — icier on purpose than the sky blue the terminal signals
+      // market-watching with (#5AC8FA), so a Max marker is never read as one.
       color: '#B9F2FF',
       description: 'Max member — the full terminal.',
       autoRole: null as string | null,

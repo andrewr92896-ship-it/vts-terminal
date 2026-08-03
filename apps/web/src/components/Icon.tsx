@@ -33,7 +33,8 @@ const ICONS: Record<string, string> = {
   'settings-2':
     '<path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/>',
   // Premium Features: the toggle glyph for the section, the padlock for a
-  // workspace the user hasn't turned on, and the globe for the Markets rail.
+  // workspace the user hasn't turned on, and the globe for the included-with-
+  // every-account rail.
   'toggle-right':
     '<rect width="20" height="12" x="2" y="6" rx="6" ry="6"/><circle cx="16" cy="12" r="2"/>',
   lock:

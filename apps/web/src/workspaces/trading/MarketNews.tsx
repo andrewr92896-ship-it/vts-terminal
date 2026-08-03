@@ -177,7 +177,7 @@ export function MarketNews({ onOpenMembership }: { onOpenMembership?: () => void
   // Keep the "x ago" ages fresh between the 120s data polls.
   const now = useNowTick(30_000);
   const { user } = useAuth();
-  // Market News lives in the always-on Markets workspace, so the wall is not
+  // Market News is included with every account, so the wall is not
   // gated on the Advanced Trading opt-in — mirroring the server, which puts
   // these endpoints on `requireMarkets`. The read-only demo is the exception:
   // it watches the wall but cannot reshape what the desk sees (demoGuard refuses

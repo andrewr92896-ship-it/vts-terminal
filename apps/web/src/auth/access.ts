@@ -68,8 +68,8 @@ export function canAccessWorkspace(
   // The Admin Terminal is for admins (founder-level included).
   if (ws === 'admin') return isAdmin(roles);
   // Advanced Trading is opt-in — the one workspace a signed-in user does not get
-  // by default, because it places real orders. Everything else (Markets,
-  // Investments, Studies, My Terminal, Site Help) is included with every account.
+  // by default, because it places real orders. Everything else (Investments,
+  // Studies, My Terminal, Site Help) is included with every account.
   if (ws === 'trading') return !!features.advancedTrading;
   return true;
 }
@@ -121,7 +121,6 @@ export function workspacesForRoles(roles: RoleKey[], features: UserFeatures): Wo
 // Every workspace in the order the sidebar gates them. (Actual display order is
 // driven by the NAV array; this list only decides which a user may see.)
 export const ALL_WORKSPACES: WorkspaceKey[] = [
-  'markets',
   'trading',
   'investments',
   'studies',
@@ -215,9 +214,9 @@ export const TIER_COLORS: Record<MembershipTier, string | null> = {
   free: null,
   // Gold — the same yellow as the Premium star badge.
   premium: '#EBCB74',
-  // Diamond blue, matching the Max gem badge. Deliberately icier than the
-  // Markets workspace accent (#5AC8FA) so a Max marker is never read as a
-  // Markets one.
+  // Diamond blue, matching the Max gem badge. Deliberately icier than the sky
+  // blue the terminal signals market-watching with (#5AC8FA) so a Max marker is
+  // never read as one of those.
   max: '#B9F2FF',
 };
 
