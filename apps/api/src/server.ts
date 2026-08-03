@@ -42,7 +42,7 @@ import { waitForDatabase } from './db/index.js';
 import { seedAdmin, seedDemo, backfillEmails } from './seed.js';
 import { seedDefaultTeam } from './teams/service.js';
 import { backfillTeamLeaders } from './userTeams/service.js';
-import { backfillConnectionLabels } from './trading/connections.js';
+import { backfillConnectionLabels, repairManualConnectionSecrets } from './trading/connections.js';
 import { ensureBakedInGamesAllTeams } from './studies/bakedGames.js';
 import { seedWelcome } from './chat/announcements.js';
 import { demoGuard } from './demo/demo.js';
@@ -194,6 +194,10 @@ async function bootstrapDatabase(): Promise<void> {
   // ("Andrew's Kraken", not "Andrew's Trades"). Runs every boot rather than as
   // a one-shot migration, so a connection added later cannot drift back.
   await backfillConnectionLabels();
+  // Re-seal any hand-entered (manual) connection whose stored payload predates
+  // the current credentials key. Those hold no credential to re-enter, so they
+  // are repaired here rather than being reset like a broker connection.
+  await repairManualConnectionSecrets();
   // Seed the built-in example study game(s) into every team (idempotent; re-syncs
   // content when BAKED_IN_VERSION bumps). Brand-new teams created between deploys
   // get theirs lazily on their first Studies deck-list fetch (routes/studies.ts).

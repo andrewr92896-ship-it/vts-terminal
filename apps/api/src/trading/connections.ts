@@ -233,6 +233,35 @@ export async function adminUpdateConnection(
   await db.update(brokerConnections).set(patch).where(eq(brokerConnections.id, id));
 }
 
+// ---- when a stored credential cannot be read ----
+//
+// A connection whose ciphertext will not decrypt used to be skipped in silence:
+// it dropped out of every result while the UI kept showing whatever status was
+// last recorded, so a green "ok" dot sat beside a connection the server could no
+// longer use. Say so instead — in the log, and on the row the trader is looking
+// at.
+//
+// The write is guarded on the stored status because this runs inside the Live
+// Wall's 10-second poll, once per connection on the team. Writing on every
+// failure would turn one broken row into six updates a minute, forever.
+
+const UNREADABLE_CREDENTIAL_MESSAGE =
+  'Stored credentials could not be read. Re-enter them to reconnect this account.';
+
+async function noteUnreadable(row: BrokerConnectionRow, err: unknown): Promise<void> {
+  // The class, not err.name — an Error subclass inherits the name "Error", and
+  // which failure it was (retired format / wrong key / failed authentication) is
+  // the only thing this line is for.
+  const reason = err instanceof Error ? `${err.constructor.name}: ${err.message}` : 'unknown error';
+  // Never the ciphertext and never the credential — the secretbox errors are
+  // written to carry neither, and nothing else from the row belongs in a log.
+  console.error(
+    `[connections] ${row.broker} connection ${row.id} (owner ${row.userId}) could not be decrypted — ${reason}`,
+  );
+  if (row.lastStatus === 'error') return;
+  await recordConnectionStatus(row.id, false, UNREADABLE_CREDENTIAL_MESSAGE);
+}
+
 export async function getActiveDecrypted(userId: string): Promise<DecryptedConnection[]> {
   const rows = await db
     .select()
@@ -241,9 +270,14 @@ export async function getActiveDecrypted(userId: string): Promise<DecryptedConne
   const out: DecryptedConnection[] = [];
   for (const r of rows) {
     try {
-      out.push({ id: r.id, broker: r.broker, label: r.label, creds: JSON.parse(decryptSecret(r.secretEnc)) });
-    } catch {
-      // Undecryptable (e.g. key rotated), skip; status stays as last recorded.
+      out.push({
+        id: r.id,
+        broker: r.broker,
+        label: r.label,
+        creds: JSON.parse(decryptSecret(r.secretEnc, { userId: r.userId, connectionId: r.id })),
+      });
+    } catch (err) {
+      await noteUnreadable(r, err);
     }
   }
   return out;
@@ -284,13 +318,15 @@ export async function getAllActiveDecrypted(scopeIds?: Set<string>): Promise<Own
         id: r.conn.id,
         broker: r.conn.broker,
         label: r.conn.label,
-        creds: JSON.parse(decryptSecret(r.conn.secretEnc)),
+        creds: JSON.parse(
+          decryptSecret(r.conn.secretEnc, { userId: r.conn.userId, connectionId: r.conn.id }),
+        ),
         ownerId: r.conn.userId,
         owner: r.username,
         historyStartAt: r.conn.historyStartAt ? r.conn.historyStartAt.getTime() : null,
       });
-    } catch {
-      // Undecryptable (e.g. key rotated), skip; status stays as last recorded.
+    } catch (err) {
+      await noteUnreadable(r.conn, err);
     }
   }
   return out;
@@ -305,12 +341,16 @@ export async function addConnection(
   const label = venueLabel(str(input.label) || defaultConnectionLabel('', input.broker), input.broker);
   const creds = normalizeCreds(input.broker, input.creds);
   const now = new Date();
+  // The id is minted before the secret is sealed, because the ciphertext is
+  // bound to the row it belongs to (id + owner) as authenticated data — a blob
+  // moved to another connection or another user no longer decrypts.
+  const id = crypto.randomUUID();
   await db.insert(brokerConnections).values({
-    id: crypto.randomUUID(),
+    id,
     userId,
     broker: input.broker,
     label: label.slice(0, 80),
-    secretEnc: encryptSecret(JSON.stringify(creds)),
+    secretEnc: encryptSecret(JSON.stringify(creds), { userId, connectionId: id }),
     summary: summaryOf(input.broker, creds),
     active: true,
     lastStatus: 'unknown',
@@ -349,7 +389,7 @@ export async function updateConnection(
   }
   if (input.creds !== undefined) {
     const creds = normalizeCreds(row.broker, input.creds);
-    patch.secretEnc = encryptSecret(JSON.stringify(creds));
+    patch.secretEnc = encryptSecret(JSON.stringify(creds), { userId, connectionId: id });
     patch.summary = summaryOf(row.broker, creds);
     // New credentials → reset health until the next refresh proves them.
     patch.lastStatus = 'unknown';
@@ -438,6 +478,40 @@ export async function backfillConnectionLabels(): Promise<void> {
       .update(brokerConnections)
       .set({ label: fixed, updatedAt: new Date() })
       .where(eq(brokerConnections.id, r.id));
+  }
+}
+
+// Re-seal `manual` connections whose stored payload can no longer be read.
+//
+// A manual connection has no credentials — its encrypted payload is an empty
+// object, kept only so every connection has the same shape — but it is still
+// decrypted on the way to the Live Wall, which reads a hand-entered book through
+// the same path as a broker one. So when the encryption scheme changed, a manual
+// book would have quietly dropped off the wall with nothing for its owner to
+// re-enter: there is no key to paste.
+//
+// Migration 0094 therefore leaves manual rows alone and this repairs them, the
+// same split as the connection-label backfill above — a migration cannot run the
+// encryption, and this is the half it cannot do. Idempotent and cheap: a row that
+// already reads is left untouched, and the plaintext is a constant.
+export async function repairManualConnectionSecrets(): Promise<void> {
+  const rows = await db.select().from(brokerConnections).where(eq(brokerConnections.broker, 'manual'));
+  for (const r of rows) {
+    try {
+      JSON.parse(decryptSecret(r.secretEnc, { userId: r.userId, connectionId: r.id }));
+      continue;
+    } catch {
+      // Unreadable — re-seal it below. Nothing is lost: a manual connection's
+      // credential is `{}`, and its positions live in their own table.
+    }
+    await db
+      .update(brokerConnections)
+      .set({
+        secretEnc: encryptSecret(JSON.stringify({}), { userId: r.userId, connectionId: r.id }),
+        updatedAt: new Date(),
+      })
+      .where(eq(brokerConnections.id, r.id));
+    console.log(`[connections] re-sealed manual connection ${r.id} under the current credentials key`);
   }
 }
 

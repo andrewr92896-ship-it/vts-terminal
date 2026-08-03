@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import { DEV_SESSION_SECRET, resolveCredentialsMaterial } from './security/credentialsKey.js';
 
 // Load apps/api/.env regardless of where the process was started from.
 const apiRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -43,10 +44,21 @@ const envSchema = z.object({
   // Shared secret that inbound TradingView alerts must include (TradingView
   // sends no auth of its own). When unset, the webhook rejects everything.
   TRADINGVIEW_WEBHOOK_SECRET: z.string().optional(),
-  // Key used to encrypt per-user broker API credentials at rest. Optional —
-  // falls back to a key derived from SESSION_SECRET. Set once and keep stable
-  // (changing it makes stored credentials undecryptable).
-  CREDENTIALS_KEY: z.string().optional(),
+  // Key used to encrypt per-user broker API credentials at rest. REQUIRED in
+  // production, and separate from SESSION_SECRET on purpose — one secret must
+  // not protect both sessions and every broker key on the desk.
+  //
+  // It must be 32+ bytes of GENERATED randomness, base64 or hex; a passphrase is
+  // refused at boot (see security/credentialsKey.ts for why the answer is an
+  // unguessable key rather than a slow KDF). Generate one with:
+  //   node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+  // Set it once and keep it stable — changing it makes stored credentials
+  // unreadable, and every trader has to re-enter them.
+  //
+  // Blank counts as unset: a hosting dashboard hands you an empty string the
+  // moment somebody creates the variable and tabs away, and an empty key must
+  // fail the guard below rather than be hashed as if it were one.
+  CREDENTIALS_KEY: blankAsUnset,
   // Web Push (VAPID) keys for phone push notifications. Generate once with
   // `npx web-push generate-vapid-keys` and set both. When unset, push features
   // report "not configured" and the rest of the app is unaffected. The subject
@@ -156,15 +168,40 @@ const parsed = envSchema.safeParse({
   // boots before the user creates a .env. Production requires a real one.
   SESSION_SECRET:
     process.env.SESSION_SECRET ||
-    (process.env.NODE_ENV === 'production'
-      ? undefined
-      : 'dev-only-insecure-session-secret-change-me'),
+    (process.env.NODE_ENV === 'production' ? undefined : DEV_SESSION_SECRET),
 });
 
 if (!parsed.success) {
   console.error('Invalid environment configuration:');
   console.error(parsed.error.flatten().fieldErrors);
   process.exit(1);
+}
+
+// ---- broker credential key: checked at boot, not at first use ----
+//
+// This runs here rather than inside secretbox.ts so a misconfigured deploy dies
+// on start with a message naming the variable and the command that fixes it. The
+// alternative is a server that boots healthy and then fails the first time
+// somebody opens the Live Wall, which reads as a broker outage.
+//
+// The old behaviour is what makes this worth failing over: CREDENTIALS_KEY was
+// optional and fell back to SESSION_SECRET, and SESSION_SECRET itself fell back
+// to a literal in this repository whenever NODE_ENV was not "production" — so a
+// deploy that set neither booted happily and encrypted every broker credential
+// under a published string.
+{
+  const resolved = resolveCredentialsMaterial({
+    credentialsKey: parsed.data.CREDENTIALS_KEY,
+    sessionSecret: parsed.data.SESSION_SECRET,
+    isProd: parsed.data.NODE_ENV === 'production',
+  });
+  if (!resolved.ok) {
+    console.error(`[config] ${resolved.message}`);
+    process.exit(1);
+  }
+  // Loud, and on every boot: a fallback nobody is reminded of is a fallback that
+  // ends up in production.
+  if (resolved.warning) console.warn(`[config] WARNING: ${resolved.warning}`);
 }
 
 // Resolve a relative file: URL against the api root so it works no matter
