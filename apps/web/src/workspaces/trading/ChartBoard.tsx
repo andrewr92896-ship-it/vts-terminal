@@ -624,15 +624,22 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
 
       {error && <div style={errBanner}>{error}</div>}
 
-      {tiles.length === 0 ? (
-        <div style={emptyState}>
-          {canEdit
-            ? 'This board is empty. Turn on Edit layout and add a tile.'
-            : 'This layout has nothing you can see yet.'}
-        </div>
-      ) : (
-        <>
-          <div ref={boardRef}>
+      {/* The measured element is ALWAYS mounted, empty board or not.
+          `useContentWidth` measures in a layout effect keyed on the ref, and a
+          RefObject cannot notify the hook when it later becomes non-null — so a
+          board div that only appears once tiles arrive is never measured, and
+          the grid silently keeps its fallback width forever. On a desktop that
+          is a slightly narrow board; on a phone it is 1100px-wide tiles inside a
+          390px viewport. Keep this div outside the conditional. */}
+      <div ref={boardRef}>
+        {tiles.length === 0 ? (
+          <div style={emptyState}>
+            {canEdit
+              ? 'This board is empty. Turn on Edit layout and add a tile.'
+              : 'This layout has nothing you can see yet.'}
+          </div>
+        ) : (
+          <>
             <RGL
               className="layout"
               width={boardW}
@@ -682,23 +689,23 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
                 </div>
               ))}
             </RGL>
-          </div>
-          {/* While editing, keep a little breathing room below the grid so the
-              bottom-row tile's resize handle isn't jammed against the footer and
-              can be dragged down to grow the cell. */}
-          {editing && <div aria-hidden style={{ height: 140 }} />}
+            {/* While editing, keep a little breathing room below the grid so the
+                bottom-row tile's resize handle isn't jammed against the footer
+                and can be dragged down to grow the cell. */}
+            {editing && <div aria-hidden style={{ height: 140 }} />}
 
-          {maxTile && (
-            <MaximizedTile
-              tile={maxTile}
-              lock={locks.get(maxTile.id) ?? null}
-              onChange={(p) => patchTile(maxTile.id, p)}
-              onClose={() => setMaxId(null)}
-              onOpenMembership={onOpenMembership}
-            />
-          )}
-        </>
-      )}
+            {maxTile && (
+              <MaximizedTile
+                tile={maxTile}
+                lock={locks.get(maxTile.id) ?? null}
+                onChange={(p) => patchTile(maxTile.id, p)}
+                onClose={() => setMaxId(null)}
+                onOpenMembership={onOpenMembership}
+              />
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

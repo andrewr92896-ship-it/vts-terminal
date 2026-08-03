@@ -35,10 +35,11 @@ export function useContentWidth(
   // Layout effect, so the first paint is already at the measured width rather
   // than at the fallback.
   useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    let ro: ResizeObserver | null = null;
+    let raf = 0;
+    let cancelled = false;
 
-    const measure = () => {
+    const measure = (el: HTMLElement) => {
       // clientWidth is the padding box; take the padding off so this is the
       // content width, i.e. a drop-in for the contentRect.width it replaces.
       const cs = getComputedStyle(el);
@@ -47,10 +48,36 @@ export function useContentWidth(
       if (w > 0) setWidth(w);
     };
 
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => ro.disconnect();
+    // Wait for the element to exist before measuring it.
+    //
+    // A RefObject cannot tell the hook when it becomes non-null, and the effect
+    // only runs once — so a caller that renders its measured element behind a
+    // condition (`if (loading) return …`, an empty-state branch, a lazily
+    // resolved chunk) got measured never, and silently kept the fallback width
+    // for the life of the screen. That is invisible on a desktop, where the
+    // fallback is roughly right, and catastrophic on a phone, where it laid a
+    // 1120px grid out inside a 390px viewport.
+    //
+    // Polling a frame at a time is the cheap fix that keeps the RefObject API
+    // every call site already uses: it stops the moment the element appears.
+    const attach = () => {
+      if (cancelled) return;
+      const el = ref.current;
+      if (!el) {
+        raf = requestAnimationFrame(attach);
+        return;
+      }
+      measure(el);
+      ro = new ResizeObserver(() => measure(el));
+      ro.observe(el);
+    };
+
+    attach();
+    return () => {
+      cancelled = true;
+      if (raf) cancelAnimationFrame(raf);
+      ro?.disconnect();
+    };
   }, [ref, zoom]);
 
   return width;
