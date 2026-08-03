@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.44';
+export const APP_VERSION = 'Beta V 6.45';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.45',
+    date: 'August 3, 2026',
+    notes: [
+      'Market prices for the Market Data board and price alerts now come from an account belonging to the site. Before this, if the site had no account of its own, it quietly used whichever trader\'s OANDA connection it found first — spending their rate limit to serve everyone else, with no way for them to know or opt out.',
+      'The same borrowing is gone from funded positions on the Live Wall: a funded position is now marked with the site price feed or its own owner\'s connection, never a teammate\'s.',
+      'Your broker connection is now only ever used for your own positions.',
+    ],
+  },
   {
     version: 'Beta V 6.44',
     date: 'August 3, 2026',

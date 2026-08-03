@@ -1,5 +1,5 @@
 import type { UserRow } from '../db/schema.js';
-import { BROKER_META, brokerMeta } from './config.js';
+import { BROKER_META, brokerMeta, type OandaConfig } from './config.js';
 import { fetchOandaTrades, fetchOandaPrices } from './brokers/oanda.js';
 import { fetchKrakenPositions } from './brokers/kraken.js';
 import { getManualTrades } from './manual.js';
@@ -11,12 +11,14 @@ import { computeForex, forexPair } from './forex.js';
 import { reconcile } from './history.js';
 import { backfillClosedTrades } from './backfill.js';
 import {
+  ALL_USERS,
   getAllActiveDecrypted,
   recordConnectionStatus,
   type OwnedConnection,
   type KrakenCreds,
   type OandaCreds,
 } from './connections.js';
+import { resolveOandaPricingConfig } from './priceSource.js';
 import { isDemoUser } from '../demo/identity.js';
 import { getDeskSettings } from './settings.js';
 import { designationsFor, designationRank } from '../badges/designations.js';
@@ -122,29 +124,58 @@ function normSym(s: string): string {
 }
 
 // Open funded/prop positions (FTP etc.) rendered as Live Wall trades, marked
-// against the desk's OANDA price. These carry no connectionId, so the reconcile
+// against a live OANDA price. These carry no connectionId, so the reconcile
 // step never persists them — keeping them off the Trade Log, History, and Live
 // Brokers capital while still showing live P/L on the wall. Best-effort: if no
-// OANDA connection is available (or a symbol isn't priceable) the position still
+// price source is available (or a symbol isn't priceable) the position still
 // shows with its fill, just without a live mark.
+//
+// **Whose credential does the marking matters.** This used to take the first
+// OANDA connection on the team and price everybody's funded positions through it,
+// so one teammate's key silently served the rest of the desk. Team-scoped, so far
+// milder than the install-wide pricing borrow this was fixed alongside — but the
+// same pattern, and private mode makes it worse rather than better: a trader who
+// has hidden their book has not volunteered their credential either.
+//
+// So: the install's own pricing account first, and failing that each position is
+// marked through **its own owner's** connection. Somebody whose funded position
+// cannot be priced by either simply goes unmarked, which is what the fallback
+// above already renders.
 async function loadFundedLiveTrades(conns: OwnedConnection[], scopeIds: Set<string>): Promise<LiveTrade[]> {
   const positions = await getDeskFundedOpenPositions(scopeIds);
   if (positions.length === 0) return [];
 
   const marks = new Map<string, number>();
-  const oanda = conns.find((c) => c.broker === 'oanda');
-  if (oanda) {
-    const cr = oanda.creds as OandaCreds;
-    const base = cr.env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com';
+  const priceWith = async (cfg: OandaConfig, instruments: string[]): Promise<void> => {
+    if (instruments.length === 0) return;
     try {
-      const priced = await fetchOandaPrices(
-        { token: cr.token, accountId: cr.accountId, base },
-        positions.map((p) => p.instrument),
-      );
+      const priced = await fetchOandaPrices(cfg, instruments);
       for (const [inst, mid] of priced) marks.set(normSym(inst), mid);
     } catch {
-      /* leave marks empty — positions still render with their fill price */
+      /* leave those marks absent — positions still render with their fill price */
     }
+  };
+
+  const pricing = resolveOandaPricingConfig();
+  if (pricing) {
+    await priceWith(pricing, positions.map((p) => p.instrument));
+  } else {
+    // No install pricing account: fall back to each owner marking their own.
+    const byOwner = new Map<string, string[]>();
+    for (const p of positions) {
+      const list = byOwner.get(p.userId);
+      if (list) list.push(p.instrument);
+      else byOwner.set(p.userId, [p.instrument]);
+    }
+    await Promise.all(
+      [...byOwner].map(async ([ownerId, instruments]) => {
+        const own = conns.find((c) => c.broker === 'oanda' && c.ownerId === ownerId);
+        if (!own) return; // nothing of their own to price with — leave unmarked
+        const cr = own.creds as OandaCreds;
+        const base = cr.env === 'live' ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com';
+        await priceWith({ token: cr.token, accountId: cr.accountId, base }, instruments);
+      }),
+    );
   }
 
   return positions.map((p) => {
@@ -401,14 +432,17 @@ async function reconcilePerOwner(
 // open/close push notifications fire when nobody has the Live Wall open — the
 // background watch calls it on an interval. Cheap when there are no connections.
 export async function reconcileDeskPositions(): Promise<void> {
-  const conns = await getAllActiveDecrypted();
+  // One of the two install-wide decrypts in the codebase, and deliberate: with no
+  // viewer present there is no team to scope to, and every connection's positions
+  // are written to that connection's own owner. Nothing here is shown to anyone.
+  const conns = await getAllActiveDecrypted(ALL_USERS);
   if (conns.length === 0) return;
   const { brokers, raw } = await loadDesk(conns);
   const withSlip = withSlippage(fillManualMarks(raw));
   await reconcilePerOwner(conns, brokers, withSlip);
   // Also fold in any closed trades the live pass missed (opened+closed between
   // polls). Self-throttled per connection, so calling it every tick is cheap.
-  await backfillClosedTrades().catch(() => {});
+  await backfillClosedTrades(ALL_USERS).catch(() => {});
 }
 
 // Poll cadence for the background trade watch — keeps the latency on a "trade

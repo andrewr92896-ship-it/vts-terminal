@@ -358,8 +358,8 @@ export function applyLiveQuotes(
 }
 
 export async function getMarketData(): Promise<MarketDataPayload> {
-  // Both providers are best-effort and independent: with no OANDA credentials
-  // anywhere on the install the price half returns an empty map, and if FRED
+  // Both providers are best-effort and independent: with no OANDA pricing
+  // account configured the price half returns an empty map, and if FRED
   // cannot be reached the macro half does — either way the rows that source
   // could not fill simply keep the catalog's sample figures.
   //

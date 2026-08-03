@@ -389,7 +389,7 @@ function PriceAlertSettings() {
 
           {!priceSource && (
             <div style={{ ...warnBanner, marginBottom: 12 }}>
-              {"Crypto alerts work out of the box. Forex, metals and index alerts need an OANDA connection to fire — add one under Trade Desk ▸ Live Brokers."}
+              {"Crypto alerts are working. Forex, metals and index alerts need a site-wide price feed that isn't switched on right now, so they won't fire until it is. Nothing to do on your end — connecting your own broker doesn't change it."}
             </div>
           )}
 

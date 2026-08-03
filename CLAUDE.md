@@ -395,7 +395,22 @@ workspaces list** (see `theme/nav.ts` order).
       rows are sourced from both), and `getMarketData` merges macro first so
       **OANDA wins where it can answer** — its quote is real-time, FRED's is a
       published close.
-      - **Prices — `trading/marketQuotes.ts`, from OANDA.** The FX majors, the
+      - **Prices — `trading/marketQuotes.ts`, from OANDA.** **The pricing account
+        is the install's own and is never a customer's**
+        (`oandaPricingConfig()` in `trading/config.ts`: `OANDA_PRICING_*`, then
+        the general `OANDA_*`, then nothing). It used to fall back to the first
+        active OANDA connection on the whole deployment, which meant one trader's
+        key served the Market Data board for **every** signed-in account and every
+        price alert on the install — spending their rate limit, showing in their
+        account activity, with no way for them to know or opt out. That is
+        indefensible the moment a stranger connects an account, so the fallback is
+        gone and there is no path back to a user connection: `resolveOandaPricingConfig()`
+        and `hasPriceSource()` are **synchronous env reads**, and a function that
+        cannot await cannot read a credential. Point the variables at a **practice**
+        account — the rates are account-independent, so it prices the board exactly
+        as well and a leak reaches no money. With none set, those rows keep their
+        sample figures and stay marked `sample: true`.
+        The FX majors, the
         dollar index, the crypto majors, the commodities and the three US index
         CFDs: spot from `/pricing`, and the 1D/1W/1M/YTD/1Y changes computed from
         `/v3/instruments/{sym}/candles` daily closes. Three subtleties: a
@@ -1391,6 +1406,18 @@ Worth preserving: `service.ts` hands the visible set to `getAllActiveDecrypted`,
 so a private trader's broker credentials are **never decrypted** to serve a
 teammate's poll. Private mode stops the read at the connection, not at the render.
 
+**`getAllActiveDecrypted(scope)` requires its scope, and `ALL_USERS` is the only
+way to ask for the whole install.** It used to be an optional parameter, which
+made the install-wide decrypt the thing you got by *forgetting* to pass anything —
+and that is how one customer's OANDA key came to price the Market Data board for
+every other customer. Omitting it is now a compile error. There are exactly **two**
+`ALL_USERS` callers, both background bookkeeping that no viewer ever sees:
+`reconcileDeskPositions` (`service.ts`) and `backfillClosedTrades(ALL_USERS)` from
+that same pass — each connection writes only to its own owner's history.
+`backfillClosedTrades` takes the same required scope for the same reason; its two
+viewer-facing callers pass a team. **Adding a third `ALL_USERS` caller is a
+decision to justify, not a default to inherit.**
+
 ### One team, two surfaces (merged)
 
 `users.team_id` (+ the `trading_teams` row) is the **single source of truth** for
@@ -1989,6 +2016,15 @@ defaults; the app runs locally with almost nothing set.
 - **Brokers** (env-config path; also seedable per-user in the UI): `OANDA_API_TOKEN`,
   `OANDA_ACCOUNT_ID`, `OANDA_ENV` (`practice`/`live`), `KRAKEN_API_KEY/SECRET`,
   `TRADESTATION_*`, `FTP_API_URL/TOKEN/ACCOUNT_ID`.
+- **OANDA pricing account** (the Market Data board + the price-alert watch):
+  `OANDA_PRICING_TOKEN`, `OANDA_PRICING_ACCOUNT_ID`, `OANDA_PRICING_ENV`
+  (`practice` default). Falls back to the general `OANDA_*` account, then to
+  nothing. **Point it at a practice account** — the rates are identical and a
+  leaked pricing credential then reaches no money. This is the *only* thing that
+  can price those rows: there is deliberately no fallback to a user's own broker
+  connection (see Market Data ▸ Prices). Unset means the OANDA-sourced rows show
+  sample figures and forex/metals/index alerts cannot fire; crypto is keyless and
+  unaffected either way.
 - **Feeds:** `FINNHUB_API_KEY`, `RSS_NEWS_ENABLED`, `NEWS_AI_SUMMARY_ENABLED`,
   `FOREX_FACTORY_ENABLED`, `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`.
 - **FRED (Market Data macro series):** `FRED_API_KEY` — **optional, and the board

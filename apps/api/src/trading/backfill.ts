@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingPositions } from '../db/schema.js';
-import { getAllActiveDecrypted, type OandaCreds } from './connections.js';
+import { getAllActiveDecrypted, type ConnectionScope, type OandaCreds } from './connections.js';
 import { fetchOandaClosedTradeRows } from './brokers/oanda.js';
 
 // Why this exists:
@@ -76,13 +76,19 @@ function sameNum(a: number | null, b: number | null): boolean {
 const BACKFILL_MIN_INTERVAL_MS = Math.max(60, Number(process.env.BACKFILL_INTERVAL_SECONDS) || 300) * 1000;
 const lastRunByConn = new Map<string, number>();
 
-// Ingest OANDA closed trades for the given team scope (or the whole install when
-// omitted) into `tradingPositions`: inserting trades not already recorded, and
-// correcting the fills of ones reconcile only estimated. Best-effort per
-// connection — a broker error on one account never blocks the others or throws
-// to the caller. Returns how many rows were written (inserted + corrected).
-export async function backfillClosedTrades(scopeIds?: Set<string>): Promise<number> {
-  const conns = (await getAllActiveDecrypted(scopeIds)).filter((c) => c.broker === 'oanda');
+// Ingest OANDA closed trades for the given scope into `tradingPositions`:
+// inserting trades not already recorded, and correcting the fills of ones
+// reconcile only estimated. Best-effort per connection — a broker error on one
+// account never blocks the others or throws to the caller. Returns how many rows
+// were written (inserted + corrected).
+//
+// The scope is required rather than defaulted: a viewer-facing read passes their
+// team, and only the background pass says `ALL_USERS`. Each connection writes to
+// its own owner's history either way, so the wide read surfaces nothing to
+// anybody — but it decrypts every credential on the install, which is a thing to
+// state rather than to inherit from an empty argument list.
+export async function backfillClosedTrades(scope: ConnectionScope): Promise<number> {
+  const conns = (await getAllActiveDecrypted(scope)).filter((c) => c.broker === 'oanda');
   if (conns.length === 0) return 0;
 
   const now = Date.now();

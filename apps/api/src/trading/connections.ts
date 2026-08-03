@@ -283,15 +283,28 @@ export async function getActiveDecrypted(userId: string): Promise<DecryptedConne
   return out;
 }
 
+// Whose credentials a read is allowed to decrypt: a set of user ids, or the
+// explicit install-wide opt-in.
+//
+// `ALL_USERS` exists so that decrypting every credential on the deployment has to
+// be **written down**. This used to be an optional parameter, which meant the
+// install-wide read was what you got by forgetting to pass anything — and that is
+// exactly how one customer's OANDA key came to price the Market Data board for
+// every other customer. An omitted argument is now a compile error, and the two
+// legitimate background callers say `ALL_USERS` where a reviewer can see it.
+export const ALL_USERS = 'all-users' as const;
+export type ConnectionScope = Set<string> | typeof ALL_USERS;
+
 // Active broker connections, decrypted and tagged with their owner. Only
 // connections owned by a user who currently has trading access are included, so
 // a revoked teammate drops off automatically.
 //
-// `scopeIds` restricts the result to connections owned by those userIds — the
-// viewer's team — so the Live Wall and broker capital only ever surface a team's
-// own positions. Omit it (background desk reconcile) to load the whole install;
-// no viewer sees that result, it only records each owner's positions to History.
-export async function getAllActiveDecrypted(scopeIds?: Set<string>): Promise<OwnedConnection[]> {
+// A `Set` restricts the result to connections owned by those userIds — the
+// viewer's team, minus anyone in private mode — so the Live Wall and broker
+// capital only ever surface a team's own positions. `ALL_USERS` loads the whole
+// install and is only for background bookkeeping that no viewer sees: it records
+// each owner's own positions to their own History.
+export async function getAllActiveDecrypted(scope: ConnectionScope): Promise<OwnedConnection[]> {
   const rows = await db
     .select({
       conn: brokerConnections,
@@ -301,9 +314,9 @@ export async function getAllActiveDecrypted(scopeIds?: Set<string>): Promise<Own
     .from(brokerConnections)
     .innerJoin(users, eq(users.id, brokerConnections.userId))
     .where(
-      scopeIds
-        ? and(eq(brokerConnections.active, true), inArray(brokerConnections.userId, [...scopeIds]))
-        : eq(brokerConnections.active, true),
+      scope === ALL_USERS
+        ? eq(brokerConnections.active, true)
+        : and(eq(brokerConnections.active, true), inArray(brokerConnections.userId, [...scope])),
     );
 
   const out: OwnedConnection[] = [];
