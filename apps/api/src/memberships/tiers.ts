@@ -38,6 +38,14 @@ export const TIER_LABELS: Record<MembershipTier, string> = {
 //
 // The list is ordered Max first, then Premium, matching how the sidebar stacks
 // its sections: free at the top, Premium beneath, Max last.
+//
+// **One rule is not up for negotiation when adding a feature: anything that
+// requires the user's own API key or credential is Max** (owner decision,
+// 2026-08). Holding somebody else's key is a responsibility rather than a
+// convenience — the worst case is their money or their account, not their
+// screen — so the terminal only takes one from the top tier. Today that is
+// `brokerConnections` (OANDA, Kraken) and `pushover`; the check when adding a
+// feature is simply "does the user paste something of theirs into it".
 export const PREMIUM_FEATURES = [
   // Max
   'ai',
@@ -45,8 +53,9 @@ export const PREMIUM_FEATURES = [
   'teams',
   'teamChat',
   'customStreams',
-  // Premium
   'brokerConnections',
+  'pushover',
+  // Premium
   'funded',
   'studyCreation',
   'customBoards',
@@ -79,11 +88,23 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   teamChat: 'max',
   // Adding your own YouTube channel to the Market News wall.
   customStreams: 'max',
-  // Connecting a broker with the user's own credentials, and the live account
-  // capital that comes with it (Trade Analysis ▸ Live Brokers). Moved up from
-  // Premium by owner decision, 2026-08: it is the one feature that holds a
-  // trading credential, and it sits beside the Trade Desk that spends it.
+
+  // ---- Max because they hold a credential of the USER'S ----
+  // See the rule on PREMIUM_FEATURES above. These two are the only places in the
+  // terminal where somebody types in a key of their own, and both sit at the top
+  // tier for that reason alone rather than for what they cost to run.
+  //
+  // Connecting a broker, and the live account capital that comes with it
+  // (Trade Analysis ▸ Live Brokers). The key can trade; it sits beside the Trade
+  // Desk that spends it.
   brokerConnections: 'max',
+  // Pushover, which the user connects by pasting their own user key. Lower
+  // powered than a broker key — it delivers notifications and cannot read or
+  // spend anything — but it is still their credential in this database, which is
+  // the line the rule draws. **Web push is deliberately NOT in this map**, so a
+  // free account still gets told when its price alert fires; what Max buys is
+  // the Pushover channel and its custom sounds, not being notified at all.
+  pushover: 'max',
 
   // ---- Premium ----
   // The prop-firm challenge tracker.
@@ -125,6 +146,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   teamChat: 'Team chat',
   customStreams: 'Your own live streams',
   brokerConnections: 'Broker connections',
+  pushover: 'Pushover notifications',
   funded: 'Funded Account tracking',
   studyCreation: 'Study creation',
   customBoards: 'Custom Live Wall boards',
@@ -145,6 +167,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   teamChat: 'The private conversation with your desk.',
   customStreams: 'Add any YouTube channel to the live-stream wall.',
   brokerConnections: 'Connect OANDA and Kraken to stream your positions and balances.',
+  pushover: 'Trade and alert notifications through Pushover, with your own sound.',
   funded: 'Track a prop-firm challenge: equity, target, and drawdown left.',
   studyCreation: 'Build your own study games, flashcard sets and guides.',
   customBoards: 'Save your own Live Wall arrangements instead of the presets.',

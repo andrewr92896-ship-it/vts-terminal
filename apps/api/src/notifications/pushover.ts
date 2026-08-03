@@ -5,6 +5,7 @@ import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
 import { config } from '../config.js';
 import { recipientsWantingEvent, type NotifEvent } from './prefs.js';
+import { entitledUserIds } from '../memberships/service.js';
 
 // Pushover delivery for trade/alert notifications with a custom, attention-
 // grabbing sound (the whole reason we use it over plain web push: Pushover lets
@@ -124,11 +125,18 @@ export async function sendPushoverToDesk(msg: PushoverMessage, opts: PushoverDes
     .select({ id: users.id, roles: users.roles, username: users.username })
     .from(pushoverUsers)
     .innerJoin(users, eq(users.id, pushoverUsers.userId));
+  // Pushover is Max, because it runs on a credential the user handed over. That
+  // is checked here as well as on the connect route so a membership that LAPSES
+  // stops the key being used, rather than the key quietly working forever
+  // because it was connected while they were paying. Their row is left alone —
+  // it comes back with the tier.
+  const entitled = await entitledUserIds(rows, 'pushover');
   const recipients: string[] = [];
   for (const r of rows) {
     if (r.id === excludeUserId) continue;
     if (scopeIds && !scopeIds.has(r.id)) continue; // only the owner's team
     if (isDemoUser({ username: r.username })) continue;
+    if (!entitled.has(r.id)) continue;
     if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
     recipients.push(r.id);
   }

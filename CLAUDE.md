@@ -1005,10 +1005,8 @@ cycle.
 
 - **`FEATURE_TIER` is the entire paywall, in one object.** Eight paid features
   (owner decisions, 2026-08). **Max:** `ai`, `tradeDesk`, `teams`, `teamChat`,
-  `customStreams`, `brokerConnections` (moved up from Premium — it is the one
-  feature holding a trading credential, and it sits beside the Trade Desk that
-  spends it; **Trade Analysis ▸ Live Brokers carries its diamond**).
-  **Premium:** `funded`, `studyCreation`,
+  `customStreams`, `brokerConnections` (**Trade Analysis ▸ Live Brokers carries
+  its diamond**), `pushover`. **Premium:** `funded`, `studyCreation`,
   `customBoards`, `premiumBadges`, `strategySessions`, `marketData`,
   `presetStreams`, `suggestions`, `supportChat`. Everything absent
   from that map is included with every account. **Moving a feature between tiers
@@ -1016,6 +1014,33 @@ cycle.
   follows — that is the whole reason features ask `hasEntitlement(user, 'ai')` and
   never "is this user premium". The owner is still deciding what belongs where, so
   keep it editable like this.
+- **Anything that takes the user's own API key or credential is Max** (owner
+  instruction, 2026-08). Not for what it costs to run — for what it means to
+  hold. A key of somebody else's is a responsibility, and the worst case is their
+  money or their account rather than their screen, so the terminal only accepts
+  one from the top tier. **The test when adding a feature is simply: does the
+  user paste something of theirs into it?** Today that is exactly two surfaces —
+  `brokerConnections` (the OANDA token, the Kraken key/secret, AES-encrypted via
+  `security/secretbox.ts`) and `pushover` (their Pushover user key). Nothing else
+  in the terminal accepts a credential; the FRED, Finnhub, YouTube and Anthropic
+  keys are all server-side env, and the Investments workspace has **no credential
+  column at all** by design.
+  - **Two things stay ungated on a credential feature**, and both matter:
+    **reading its status**, so a free account can see what the tier buys rather
+    than a blank panel, and **disconnecting**. Blocking the disconnect would
+    strand a lapsed member's key in the database with no way for them to remove
+    it — the exact custody problem the tier exists to limit. Taking your own
+    credential back is always allowed.
+  - **Delivery is filtered at send time too**, not just at connect
+    (`entitledUserIds` in `memberships/service.ts`, used by `sendPushoverToDesk`).
+    Gating only the write would leave a key connected while paying still working
+    forever after the tier lapsed. The row is left alone, so it comes back with
+    the tier.
+  - **Web push is deliberately NOT in `FEATURE_TIER`** and must stay out of it.
+    It needs no credential from anyone — the browser issues the subscription — so
+    a free account is still told when its price alert fires. That is what makes
+    charging for Pushover honest: what Max buys is the Pushover channel and its
+    custom sound, never being notified at all.
 - **AI is paid except customer support.** Support intake (`routes/support.ts`,
   `routes/feedback.ts`) stays free on purpose: a user who cannot reach help is a
   user who cannot tell you their payment failed. Never put the complaints channel

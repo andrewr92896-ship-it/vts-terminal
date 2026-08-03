@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api, ApiError, type NotifTarget, type NotifPrefFlags, type WidgetTokenStatus } from '../api/client';
-import { canAccessWorkspace, isWorkspaceReadOnly } from '../auth/access';
+import { canAccessWorkspace, hasEntitlement, isWorkspaceReadOnly, tierOfFeature } from '../auth/access';
+import { TierMark } from './TierMark';
+import { UpgradeNotice } from './UpgradeNotice';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
 import { ownerHandle } from '../workspaces/trading/TradeCard';
 import { usePushNotifications } from '../push/usePushNotifications';
@@ -30,9 +32,12 @@ export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
   const canManageBrokers =
     canAccessWorkspace(user.roles, 'trading', user.access.features) &&
     !isWorkspaceReadOnly(user.roles, 'trading');
-  // Phone alerts and Pushover are deliberately NOT behind the desk opt-in: price
+  // Phone alerts are deliberately NOT behind the desk opt-in OR a tier: price
   // alerts are a Markets feature every account has, and an alert nobody can be
-  // notified about is not an alert. The demo never subscribes.
+  // notified about is not an alert. Pushover sits beside it and IS paid — not
+  // for the delivery, but because connecting it takes the user's own key (see
+  // FEATURE_TIER) — which is exactly why free web push has to stay free. The
+  // demo never subscribes.
   const canUsePush = !isDemo;
   // Which teammate's trades buzz you is a desk-only setting, unlike the two above.
   const canSetTradePrefs = canUsePush && canManageBrokers;
@@ -152,6 +157,11 @@ function PhoneNotificationsSection({ accent, accentText }: { accent: string; acc
 // sound (chosen in the Pushover app). They paste their personal "user key" once;
 // the app token lives on the server.
 function PushoverSection({ accent, accentText }: { accent: string; accentText: string }) {
+  const { user } = useAuth();
+  // Connecting Pushover hands the terminal a credential of the user's own, which
+  // is what puts it at Max. Disconnecting is never gated, so somebody whose tier
+  // lapsed can always take their key back out.
+  const canConnect = !!user && hasEntitlement(user, 'pushover');
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [connected, setConnected] = useState(false);
   const [keyInput, setKeyInput] = useState('');
@@ -223,14 +233,25 @@ function PushoverSection({ accent, accentText }: { accent: string; accentText: s
 
   return (
     <section>
-      <div style={sectionLabel}>Pushover (custom alert sound)</div>
+      <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 7 }}>
+        <span>Pushover (custom alert sound)</span>
+        {/* Marked for everyone, including somebody who holds the tier — the mark
+            says what the feature costs rather than acting as a lock. */}
+        <TierMark tier={tierOfFeature('pushover', user?.access.membership)} size={12} dim={!canConnect} />
+      </div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
         Get trade and alert notifications through{' '}
         <a href="https://pushover.net/" target="_blank" rel="noreferrer" style={{ color: '#8ea3cc' }}>Pushover</a>{' '}
         with your own loud, custom sound — pick or upload it right in the Pushover app.
       </p>
 
-      {configured === false ? (
+      {/* Connecting takes a credential of the user's own, so it is Max. The
+          section is still SHOWN — a free account has to be able to see what the
+          tier buys. Phone notifications above stay free and need no key, so a
+          price alert still reaches a free account. */}
+      {!canConnect && !connected ? (
+        <UpgradeNotice feature="pushover" compact />
+      ) : configured === false ? (
         <div style={hintStyle}>Pushover isn’t set up on the server yet.</div>
       ) : configured == null ? (
         <div style={hintStyle}>Checking…</div>
