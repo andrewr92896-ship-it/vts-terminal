@@ -80,6 +80,18 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   const lastKey = user?.id ? `vts:lastBoard:${user.id}` : null;
   const builtInKey = user?.id ? `vts:wallLayout:${user.id}` : null;
   const [boards, setBoards] = useState<TradingBoard[]>([]);
+  // What this reader's teammates have published. Read for everyone — a free
+  // account cannot build a layout but can open the one their desk uses.
+  const [teamBoards, setTeamBoards] = useState<TradingBoard[]>([]);
+  // The id of the teammate's shared layout currently open, or null. Held as an
+  // id rather than a flag so "Save a copy" knows exactly which row to copy —
+  // matching it back by name would break the moment two people shared a layout
+  // called "Scalping".
+  const [sharedId, setSharedId] = useState<string | null>(null);
+  // Whether there is anybody to publish to. From the server — the client has no
+  // other way to know, and offering "Share with team" to a solo trader would be
+  // a button whose only outcome is an error.
+  const [onTeam, setOnTeam] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null); // null → unsaved working board
   const [name, setName] = useState('New board');
   // Which built-in layout a reader without `customBoards` is on.
@@ -115,6 +127,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   const applyBoard = useCallback(
     (b: TradingBoard) => {
       setActiveId(b.id);
+      setSharedId(null);
       setName(b.name);
       setTiles(b.layout.tiles ?? []);
       setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
@@ -136,10 +149,15 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     (key: string) => {
       setBuiltIn(key);
       setActiveId(null);
+      setSharedId(null);
       const p = presetLayout(key);
       setName(p.label);
-      setTiles(buildPreset(p, features, entitled));
-      setSavedTilesJson('');
+      const built = buildPreset(p, features, entitled);
+      setTiles(built);
+      // Baseline the comparison against what was just applied, so an untouched
+      // built-in layout is not "modified". Without this every layout switch
+      // asked "discard unsaved changes?" about changes nobody had made.
+      setSavedTilesJson(JSON.stringify(built));
       if (builtInKey) {
         try {
           localStorage.setItem(builtInKey, key);
@@ -160,8 +178,10 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
         setError(null);
         return;
       }
-      const { boards: list } = await api.tradingBoards();
+      const { boards: list, teamBoards: shared, onTeam: team } = await api.tradingBoards();
       setBoards(list);
+      setTeamBoards(shared);
+      setOnTeam(team);
       if (firstLoad.current) {
         if (list.length > 0) {
           // Prefer the user's last-opened preset, then their default, then the first.
@@ -204,7 +224,11 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
 
   const tilesJson = useMemo(() => JSON.stringify(tiles), [tiles]);
   const isUnsaved = activeId == null;
-  const dirty = isUnsaved || tilesJson !== savedTilesJson;
+  // Modified since it was applied — deliberately NOT "unsaved". A built-in
+  // layout is permanently unsaved and is nonetheless untouched, and conflating
+  // the two made every layout switch warn about discarding nothing.
+  const dirty = tilesJson !== savedTilesJson;
+  const activeBoard = activeId ? (boards.find((b) => b.id === activeId) ?? null) : null;
 
   // Which tiles this reader cannot reach, resolved once per render rather than
   // per tile per frame.
@@ -341,8 +365,9 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     }
     setSaving(true);
     try {
-      const { board, boards: list } = await api.updateBoard(activeId!, { layout: { tiles } });
+      const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { layout: { tiles } });
       setBoards(list);
+      setTeamBoards(shared);
       setSavedTilesJson(JSON.stringify(board.layout.tiles ?? []));
       setError(null);
     } catch (e) {
@@ -359,12 +384,14 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     setSaving(true);
     try {
       if (namePrompt.mode === 'create') {
-        const { board, boards: list } = await api.createBoard({ name: nm, layout: { tiles }, isDefault: boards.length === 0 });
+        const { board, boards: list, teamBoards: shared } = await api.createBoard({ name: nm, layout: { tiles }, isDefault: boards.length === 0 });
         setBoards(list);
+        setTeamBoards(shared);
         applyBoard(board);
       } else {
-        const { board, boards: list } = await api.updateBoard(activeId!, { name: nm });
+        const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { name: nm });
         setBoards(list);
+        setTeamBoards(shared);
         setName(board.name);
       }
       setNamePrompt(null);
@@ -376,11 +403,65 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     }
   };
 
+  // Open a teammate's published layout.
+  //
+  // Read-only by construction: `activeId` stays null, so there is nothing for
+  // Save to write to. Nothing of theirs comes with it either — the tiles fetch
+  // as the signed-in reader, so this shows THEIR arrangement of YOUR figures.
+  const applyShared = useCallback((b: TradingBoard) => {
+    setActiveId(null);
+    setSharedId(b.id);
+    setName(b.name);
+    setTiles(b.layout.tiles ?? []);
+    // Baselined for the same reason as a built-in: opening a teammate's layout
+    // is not an edit.
+    setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
+    setNamePrompt(null);
+    setEditing(false);
+  }, []);
+
+  // Take a copy of the shared layout currently open, into the reader's own
+  // boards, where they can rearrange it freely.
+  const copyShared = async (sourceId: string) => {
+    setSaving(true);
+    try {
+      const { board, boards: list, teamBoards: shared } = await api.copyTeamBoard(sourceId);
+      setBoards(list);
+      setTeamBoards(shared);
+      applyBoard(board);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not copy that layout');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Publish this board to the team, or take it back. One per person: the server
+  // unshares the reader's others, so the picker stays a short menu.
+  const toggleShare = async () => {
+    if (isUnsaved) return;
+    const next = !activeBoard?.sharedTeamId;
+    setSaving(true);
+    try {
+      const { boards: list, teamBoards: shared, onTeam: team } = await api.shareBoard(activeId!, next);
+      setBoards(list);
+      setTeamBoards(shared);
+      setOnTeam(team);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not share that board');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const setDefault = async () => {
     if (isUnsaved) return;
     try {
-      const { boards: list } = await api.updateBoard(activeId!, { isDefault: true });
+      const { boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { isDefault: true });
       setBoards(list);
+      setTeamBoards(shared);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not set the default board');
     }
@@ -390,8 +471,9 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     if (isUnsaved) return;
     if (!window.confirm(`Delete the board "${name}"? This can't be undone.`)) return;
     try {
-      const { boards: list } = await api.removeBoard(activeId!);
+      const { boards: list, teamBoards: shared } = await api.removeBoard(activeId!);
       setBoards(list);
+      setTeamBoards(shared);
       if (list.length > 0) applyBoard(list.find((b) => b.isDefault) ?? list[0]);
       else applyBuiltIn(builtIn);
     } catch (e) {
@@ -414,15 +496,27 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
         <span style={railLabel}>Layout</span>
         <LayoutPicker
           boards={canCustomize ? boards : []}
+          teamBoards={teamBoards}
           activeId={activeId}
           builtIn={builtIn}
           name={name}
           isUnsaved={isUnsaved}
+          sharedId={sharedId}
           onPickBoard={(b) => confirmSwitch(() => applyBoard(b))}
           onPickBuiltIn={(k) => confirmSwitch(() => applyBuiltIn(k))}
+          onPickShared={(b) => confirmSwitch(() => applyShared(b))}
         />
 
-        {canEdit ? (
+        {/* A teammate's layout is not the reader's to save over, so the one
+            action offered is taking a copy of it. Free accounts can open a
+            shared layout but not copy it — copying creates a board. */}
+        {sharedId && canCustomize && (
+          <button onClick={() => void copyShared(sharedId)} disabled={saving} style={goldBtn}>
+            {saving ? 'Copying…' : 'Save a copy'}
+          </button>
+        )}
+
+        {canEdit && !sharedId ? (
           <>
             <button onClick={() => setEditing((v) => !v)} style={editing ? goldBtn : ghostBtn}>
               {editing ? '✓ Done editing' : '✎ Edit layout'}
@@ -445,6 +539,32 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
                 {!isUnsaved && (
                   <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>
                     {"Delete"}
+                  </button>
+                )}
+                {/* Publishing sends the ARRANGEMENT to the team, never the
+                    figures — each teammate's tiles fetch as themselves. A notes
+                    tile's text is stripped server-side on the way out. */}
+                {!isUnsaved && onTeam && (
+                  <button
+                    onClick={() => void toggleShare()}
+                    disabled={saving}
+                    style={{
+                      ...ghostBtn,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      ...(activeBoard?.sharedTeamId
+                        ? { color: GREEN, borderColor: 'rgba(53,196,123,.5)' }
+                        : null),
+                    }}
+                    title={
+                      activeBoard?.sharedTeamId
+                        ? 'Your team can open this layout'
+                        : 'Let your team open this layout'
+                    }
+                  >
+                    <Icon name="users" size={12} color={activeBoard?.sharedTeamId ? GREEN : FAINT} />
+                    <span>{activeBoard?.sharedTeamId ? 'Shared with team' : 'Share with team'}</span>
                   </button>
                 )}
                 <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>
@@ -642,8 +762,8 @@ function MaximizedTile({
   );
 }
 
-// The layout picker: the three built-in layouts, and — for a member who can
-// arrange their own — their saved boards under them.
+// The layout picker: the three built-in layouts, a member's own saved boards,
+// and whatever their teammates have published.
 //
 // It is drawn by the terminal itself (a button plus a body-portalled menu)
 // rather than a native <select>: on iOS that renders the OS picker wheel, which
@@ -652,20 +772,27 @@ function MaximizedTile({
 // or Escape so it can never float detached from its button.
 function LayoutPicker({
   boards,
+  teamBoards,
   activeId,
   builtIn,
   name,
   isUnsaved,
+  sharedId,
   onPickBoard,
   onPickBuiltIn,
+  onPickShared,
 }: {
   boards: TradingBoard[];
+  teamBoards: TradingBoard[];
   activeId: string | null;
   builtIn: string;
   name: string;
   isUnsaved: boolean;
+  /** The teammate's layout currently open, if any. */
+  sharedId: string | null;
   onPickBoard: (b: TradingBoard) => void;
   onPickBuiltIn: (key: string) => void;
+  onPickShared: (b: TradingBoard) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -736,7 +863,7 @@ function LayoutPicker({
             >
               <div style={menuHeading}>Built-in layouts</div>
               {PRESET_LAYOUTS.map((p) => {
-                const sel = activeId == null && p.key === builtIn;
+                const sel = activeId == null && !sharedId && p.key === builtIn;
                 return (
                   <button
                     key={p.key}
@@ -778,7 +905,42 @@ function LayoutPicker({
                         <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
                           {b.name}
                         </span>
+                        {/* A published board says so in the reader's own list,
+                            so they always know what their team can see. */}
+                        {b.sharedTeamId && <Icon name="users" size={12} color={GREEN} />}
                         {b.isDefault && <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>default</span>}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+              {teamBoards.length > 0 && (
+                <>
+                  <div style={menuHeading}>Shared with your team</div>
+                  {teamBoards.map((b) => {
+                    const sel = b.id === sharedId;
+                    return (
+                      <button
+                        key={b.id}
+                        onClick={() => {
+                          setOpen(false);
+                          onPickShared(b);
+                        }}
+                        style={menuRow(sel)}
+                      >
+                        <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                          {sel ? <Icon name="check" size={13} color={GREEN} /> : null}
+                        </span>
+                        <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {b.name}
+                          </span>
+                          {/* Naming the author matters here: this is the one
+                              group in the menu whose rows somebody else made. */}
+                          <span style={{ display: 'block', fontSize: 10, color: FAINT, marginTop: 1 }}>
+                            from {b.sharedBy}
+                          </span>
+                        </span>
                       </button>
                     );
                   })}

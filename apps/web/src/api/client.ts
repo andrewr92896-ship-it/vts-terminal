@@ -43,6 +43,7 @@ import type {
   MarketHoursResult,
   SessionAlertPrefs,
   TradingBoard,
+  BoardsResponse,
   BoardInput,
   MarketNewsData,
   MarketNewsView,
@@ -613,17 +614,30 @@ export const api = {
   saveSessionAlertPrefs(prefs: SessionAlertPrefs): Promise<{ prefs: SessionAlertPrefs }> {
     return request('/api/trading/session-alert-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
   },
-  tradingBoards(): Promise<{ boards: TradingBoard[] }> {
+  // Every board response carries `teamBoards` — what this reader's teammates
+  // have published — so the picker never needs a second round trip to fill its
+  // "Shared with your team" group.
+  tradingBoards(): Promise<BoardsResponse> {
     return request('/api/trading/boards');
   },
-  createBoard(input: BoardInput): Promise<{ board: TradingBoard; boards: TradingBoard[] }> {
+  createBoard(input: BoardInput): Promise<{ board: TradingBoard } & BoardsResponse> {
     return request('/api/trading/boards', { method: 'POST', body: JSON.stringify(input) });
   },
-  updateBoard(id: string, patch: BoardInput): Promise<{ board: TradingBoard; boards: TradingBoard[] }> {
+  updateBoard(id: string, patch: BoardInput): Promise<{ board: TradingBoard } & BoardsResponse> {
     return request(`/api/trading/boards/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
   },
-  removeBoard(id: string): Promise<{ boards: TradingBoard[] }> {
+  removeBoard(id: string): Promise<BoardsResponse> {
     return request(`/api/trading/boards/${id}`, { method: 'DELETE' });
+  },
+  // Publish one of your layouts to your team, or take it back. Publishing
+  // strips a notes tile's text server-side — an arrangement is shared, never
+  // somebody's scratchpad.
+  shareBoard(id: string, shared: boolean): Promise<BoardsResponse> {
+    return request(`/api/trading/boards/${id}/share`, { method: 'POST', body: JSON.stringify({ shared }) });
+  },
+  // Take a copy of a teammate's layout into your own boards.
+  copyTeamBoard(id: string): Promise<{ board: TradingBoard } & BoardsResponse> {
+    return request(`/api/trading/boards/${id}/copy`, { method: 'POST', body: JSON.stringify({}) });
   },
   marketNews(): Promise<MarketNewsData> {
     return request('/api/trading/news');

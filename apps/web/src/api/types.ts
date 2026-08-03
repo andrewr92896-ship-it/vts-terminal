@@ -1209,6 +1209,20 @@ export interface TradingBoard {
   layout: BoardLayout;
   isDefault: boolean;
   updatedAt: number;
+  /** Published to this team, or null when private. */
+  sharedTeamId: string | null;
+  /** Who published it. Present only on a teammate's board. */
+  sharedBy?: string;
+}
+
+// Every board response carries both lists: the reader's own, and what their
+// teammates have published. One shape so the picker is never rendering a stale
+// half of the menu after a save.
+export interface BoardsResponse {
+  boards: TradingBoard[];
+  teamBoards: TradingBoard[];
+  /** Whether the reader is on a team, i.e. has anybody to publish a layout to. */
+  onTeam: boolean;
 }
 
 export interface BoardInput {
