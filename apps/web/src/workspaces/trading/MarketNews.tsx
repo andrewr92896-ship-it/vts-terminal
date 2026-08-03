@@ -12,6 +12,7 @@ import { ScreenTitle } from './ScreenTitle';
 import { newsFeeds, affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } from './newsRelevance';
 import { decodeEntities, fmtDayKey, fmtTime } from './newsFormat';
 import { countdown, etDay, nextMeetingStamp, prevMeetingStamp } from './etClock';
+import { embedSrc, liveKnown } from './streamEmbed';
 import type { MarketNewsData, MarketNewsStreams, MembershipTier, NewsItem, StreamChannel } from '../../api/types';
 import { useContentWidth } from '../../lib/measure';
 
@@ -130,24 +131,10 @@ function topicsOf(h: NewsItem): string[] {
   return [...set];
 }
 
-// What a tile actually plays.
-//
-// The channel-based `live_stream?channel=` embed is the workhorse: it plays
-// these channels reliably, it needs nothing but the channel id, and it shows
-// YouTube's own card when the channel is dark. A specific video id is used only
-// when the server resolved one it trusts — worth it for a *scheduled* broadcast
-// (the Fed's waiting room, which the channel embed cannot show) and for the
-// Data API's answer.
-//
-// Deliberately not "video id first". Pointing the player at a guessed id renders
-// "This video is unavailable" on a channel that is broadcasting perfectly well,
-// which is strictly worse than the channel embed — knowing a channel is live and
-// knowing which video to play are separate facts, and only the second one breaks
-// the tile when it is wrong.
-function embedSrc(c: StreamChannel): string {
-  if (c.liveVideoId) return `https://www.youtube.com/embed/${c.liveVideoId}?autoplay=1&rel=0`;
-  return c.channelId ? `https://www.youtube.com/embed/live_stream?channel=${c.channelId}&autoplay=1&rel=0` : '';
-}
+// What a tile plays, and whether a channel's state was ever established, both
+// live in streamEmbed.ts — the Live Wall's stream tile reads the same rules, and
+// the "never point the player at a guessed id" one is not worth having two
+// copies of.
 // The Fed's own YouTube channel — the one starter tile that is dark between
 // meetings, and the reason the FOMC countdown exists. Matched on the channel id,
 // which is the identity YouTube itself agrees on; the handle is the fallback for
@@ -156,14 +143,6 @@ const FED_CHANNEL_ID = 'UCAzhpt9DmG6PnHXjmJTvRGQ';
 function isFedChannel(c: StreamChannel): boolean {
   if (c.channelId) return c.channelId === FED_CHANNEL_ID;
   return /federalreserve/i.test(c.handle);
-}
-
-// Whether the server actually established this channel's state. When it did not,
-// the screen must not say "Offline" — a tile can be playing perfectly well via
-// the fallback embed while we have no reading, and calling that offline is
-// simply false. Say nothing instead.
-function liveKnown(c: StreamChannel): boolean {
-  return c.liveChecked === true;
 }
 
 // The window around a Fed decision when the tile should try to play rather than

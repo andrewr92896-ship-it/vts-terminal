@@ -199,11 +199,15 @@ Access below) — are hidden. **My Terminal is pinned to the very top of the
 workspaces list** (see `theme/nav.ts` order).
 
 - **Markets** (sky blue, key `markets`) — **included with every account, no
-  opt-in**: Live Wall (`live`), Market Data (`data`), Market News (`news`).
+  opt-in**: Market News (`news`), Market Data (`data`).
   Everything here reads public market data — no trade, no broker, no balance —
   which is exactly why it sits outside the Advanced Trading opt-in and is the
-  terminal's floor for a user who has turned nothing on. It is also the landing
-  workspace on sign-in for everybody.
+  terminal's floor for a user who has turned nothing on.
+  **The Live Wall moved out of here** (owner decision, 2026-08) to the top of My
+  Terminal: it draws on every workspace now rather than just this one. The key
+  stayed `live`, so saved `nav.order` overrides and in-app links keep working,
+  and **`myportal` is the landing workspace on sign-in** (it was `markets`).
+  `DEFAULT_SCREEN.markets` is now `news`.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
   its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
   **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
@@ -848,9 +852,11 @@ workspaces list** (see `theme/nav.ts` order).
   - `npm run verify:investments` checks the portfolio math offline against
     hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
     touching `math.ts` or `limits.ts`.
-- **My Terminal** also holds **Premium Features** (`my_access`) — memberships and
-  the per-user opt-ins, see its own section below — plus one personal roll-up
-  section (emerald):
+- **My Terminal** (emerald) leads with the **Live Wall** (`live`) — the
+  terminal's one centralized board, first section of the first workspace and what
+  a sign-in opens on; see its own section below. It also holds **Premium
+  Features** (`my_access`) — memberships and the per-user opt-ins, see its own
+  section below — plus one personal roll-up section:
   - **Removed: Investment Holdings** (`my_holdings`). Owner decision, 2026-08 —
     the Investments workspace already tracks the portfolio, so a second screen
     saying the same thing was duplication rather than a roll-up. The screen, its
@@ -1139,13 +1145,36 @@ cycle.
     feature COSTS. The badge needs the second.
   - **Sections stack free → Premium → Max** inside each workspace, in the `NAV`
     array itself, so a founder's saved `nav.order` override still wins over it.
-  - **Only wholly-gated sections are marked.** Several paid features have no
-    section (`ai` is the top-bar button, `brokerConnections` lives in Settings,
-    `premiumBadges` is a per-member setting, and `teamChat` / `suggestions` /
-    `supportChat` are chat-bubble tabs). `customBoards` is left out on purpose:
-    the Live Wall itself is free — a free account gets the preset boards, a
+  - **Only wholly-gated sections are marked** in the sidebar. Several paid
+    features have no section of their own, and each is marked **at its own
+    control** instead (audited 2026-08 — every one of the sixteen paid features
+    now carries its mark somewhere a user can see before they hit the paywall):
+    | feature | where it is marked |
+    | --- | --- |
+    | `ai` | the Ask VTS AI panel header |
+    | `teamChat` | the chat bubble's Team chat tab |
+    | `suggestions`, `supportChat` | the intake choices in `SupportTab` |
+    | `brokerConnections` | Trade Analysis ▸ Live Brokers, **and** the Settings section |
+    | `pushover` | its row in `DeviceSettings` |
+    | `premiumBadges` | the **Badge** button in My Terminal ▸ Trading Team |
+    | `customBoards` | the Live Wall's "Build your own" button |
+    | `studyCreation` | the Studies **Create** `ActionTile` |
+    | `presetStreams`, `customStreams` | the Market News channel rail |
+    Everything else is a nav row (`tradeDesk`, `teams`, `marketData`,
+    `strategySessions`, `funded`, `studyCreation`) and marked there.
+    `customBoards` is deliberately **not** in `SECTION_FEATURE`: the Live Wall
+    section itself is free — a free account gets the three built-in layouts, a
     working screen — and only *saving your own* arrangement is paid, so marking
     the whole section would overstate the paywall.
+  - **Live Wall tiles are marked in the picker**, every kind listed with the tier
+    it costs (or a padlock where the fix is an opt-in rather than a payment), and
+    a tile already on a board the reader can no longer reach draws its mark on
+    the locked tile itself.
+  - **`TierMark` is the mark**, and new code should use it rather than reading
+    `TIER_GLYPHS`/`TIER_COLORS` by hand. Two older surfaces predate it and draw a
+    *labelled pill* from the same two maps — `ActionTile`/`TierPill` (Studies) and
+    `SupportTab`. That is a deliberate size variation on a large tile, not a
+    second meaning: same glyph, same colour, same source.
   - `WORKSPACE_FEATURE` is **empty**, and that is correct rather than unfinished:
     no workspace is entirely paid, and marking one that is not would be a false
     claim about every free section inside it.
@@ -1264,23 +1293,68 @@ account" rather than hiding them, so the screen reads as the whole picture.
   Keep that — discoverability is the point, and it is where a paid tier would
   surface later.
 
-### One Live Wall, two audiences
+### The Live Wall — one centralized board (`live`)
 
-`live` is the Markets workspace's board and serves both kinds of user off one
-screen — deliberately, so there is no lite duplicate to keep in sync:
+**The terminal's one board, and the first section of My Terminal** (owner
+decision, 2026-08). Every part of the terminal can be put on it, so it is
+deliberately the screen a sign-in lands on. There is no lite duplicate to keep in
+sync — one screen serves a free account and a full desk alike.
 
-- **Without Advanced Trading:** the market half — chart, watchlist, news and
-  calendar tiles — on **one** saved board (no named presets), and no Positions
-  view, no Connections, no desk settings. `LiveWall` never even calls
-  `/api/trading/live`.
-- **With it:** the Positions view returns, the desk tiles (`positions`,
-  `metrics`, `alerts`) join the palette, and named presets come back.
+**Four files carry the design, and adding a tile kind touches all of them:**
 
-Both limits are applied **server-side too** (`routes/trading.ts`): a second board
-is refused, and desk tiles are stripped from anything a non-desk user saves. The
-client mirror is `DESK_TILE_KINDS` in `ChartBoard.tsx`; a board saved while the
-user had the desk keeps its desk tiles in the database and simply doesn't render
-them while the desk is off.
+- **`workspaces/trading/tileCatalog.ts`** — the single source of truth for what a
+  tile IS: its label, group, icon, one-line blurb, starting size, minimum size,
+  and **what it costs** (`feature`, `desk`, `funded`). `tileLock()` answers "can
+  this reader have it", and `newTile()` builds one. The board itself no longer
+  knows what kinds exist.
+- **`workspaces/trading/tiles/`** — one renderer per kind, over the shared
+  `TileFrame` (header, drag handle, per-tile settings, scrolling body) and
+  `useTileData` (poll, keep the last good data on a failed refresh, write nothing
+  after unmount). `tiles/index.tsx` maps kind → component.
+- **`apps/api/src/trading/boardTiles.ts`** — the server's mirror of the *gate*
+  half only. `BOARD_TILE_KINDS` is a tuple the route's Zod schema reads directly,
+  so the validator cannot drift from the list.
+- **`workspaces/trading/presetLayouts.ts`** — the three built-in layouts.
+
+**Three axes decide what a given account gets, and confusing them is the classic
+mistake here:**
+
+- **The Advanced Trading opt-in** decides whether the desk-reading tiles exist at
+  all (`positions`, `metrics`, `alerts`, `tradelog`, `closed`, `sessions`,
+  `funded`), plus the Positions view, Connections and desk settings. Without it
+  `LiveWall` never even calls `/api/trading/live`.
+- **`customBoards` (Premium)** decides whether the board can be **arranged and
+  saved**. Without it the reader gets the **three built-in layouts** — Markets,
+  Trading Desk, My Terminal — chosen from the same picker a member uses, with the
+  choice remembered per device (there is nothing saved server-side to hold it).
+  That is what makes a free account a working board rather than an empty grid
+  behind a locked save button.
+- **Individual tiers** gate individual tiles (`marketdata` → Premium,
+  `teamchat` → Max, and so on).
+
+**Two rules about stripping that are NOT the same, and must not be merged:**
+
+- **Desk tiles ARE stripped server-side** from anything a non-desk user saves
+  (`allowedLayout` in `routes/trading.ts`, over `DESK_TILE_KINDS`). The desk is an
+  opt-in the reader controls, so a board saved without it never meant to carry
+  them.
+- **Paid tiles are NOT stripped.** A membership lapses on its own — stripping on
+  save would quietly delete the arrangement of somebody whose card expired, and
+  they would return to a board missing tiles they had built. The tile stays in the
+  row and the client draws it **locked**, so the board is intact the moment the
+  membership is. Nothing leaks by keeping it: every paid tile's **data** is gated
+  at its own endpoint, which is what makes the tile a shell rather than a hole.
+
+**A built-in layout is filtered, not padlocked.** `buildPreset` drops what the
+reader cannot reach and closes the vertical gap, so a layout they did not build
+never opens as a wall of locks. What they are missing is discoverable from the
+**tile picker**, which lists *every* kind with its star/diamond — that is the
+surface whose job is to say what a thing costs.
+
+**Two shared modules exist so a rule is not written twice:**
+`streamEmbed.ts` (what a live-stream tile plays, and the "never point the player
+at a guessed id" rule — read by both Market News and the wall's `streams` tile),
+and the tile catalog above.
 
 ## Roles & access (`auth/rbac.ts`)
 

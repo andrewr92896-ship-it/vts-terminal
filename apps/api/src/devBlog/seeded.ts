@@ -33,4 +33,13 @@ export const SEEDED_POSTS: SeededPost[] = [
       'Posts marked VTS Development come from Claude Code. They arrive with a deploy rather than in real time, so treat them as notes left between sessions.',
     ].join('\n'),
   },
+  {
+    key: 'live-wall-central-2026-08',
+    title: 'The Live Wall is now the whole terminal',
+    body: [
+      'Nineteen new tiles, so the wall can show anything the terminal knows: your money, your trades, your list, your study progress, your team. It leads My Terminal and is what a sign-in opens on.',
+      '',
+      'Two things worth a decision from you. Free accounts get three built-in layouts — Markets, Trading Desk, My Terminal — and those are placeholders I picked; tell me what belongs on each and I will set them. And the tile list is now long enough that the picker is the main way anyone discovers a feature, so what sits at the top of each group matters more than it used to.',
+    ].join('\n'),
+  },
 ];
