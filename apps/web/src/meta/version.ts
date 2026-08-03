@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.40';
+export const APP_VERSION = 'Beta V 6.41';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.41',
+    date: 'August 3, 2026',
+    notes: [
+      'Fixed the Live Wall on mobile: with the terminal zoomed in, the board sized its tiles wider than the screen, which pushed the page sideways and left the watchlist and chart rendering off-centre with a white band beside them. They now measure the screen the same way the tiles are drawn, at any zoom level.',
+    ],
+  },
   {
     version: 'Beta V 6.40',
     date: 'August 2, 2026',

@@ -13,6 +13,7 @@ import { newsFeeds, affectedInstruments, deriveWatchlist, DEFAULT_WATCHLIST } fr
 import { decodeEntities, fmtDayKey, fmtTime } from './newsFormat';
 import { countdown, etDay, nextMeetingStamp, prevMeetingStamp } from './etClock';
 import type { MarketNewsData, MarketNewsStreams, MembershipTier, NewsItem, StreamChannel } from '../../api/types';
+import { useContentWidth } from '../../lib/measure';
 
 // The FOMC statement schedule, as sent with the stream wall. Same list Market
 // Data's countdown bar reads — the server holds one copy of it.
@@ -221,17 +222,9 @@ export function MarketNews({ onOpenMembership }: { onOpenMembership?: () => void
   // Content-column width drives the responsive column counts (the sidebar
   // collapses, so a media query would fire at the wrong moment).
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [contentW, setContentW] = useState(1120);
-  useEffect(() => {
-    const el = rootRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w) setContentW(w);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  // Read off the element, not the resize entry — under the terminal's CSS `zoom`
+  // those are different coordinate spaces on WebKit. See lib/measure.ts.
+  const contentW = useContentWidth(rootRef, 1120);
 
   async function load(manual = false) {
     if (manual) setBusy(true);

@@ -2239,6 +2239,36 @@ A zone the browser's ICU build cannot format is filtered out of the picker
 mid-use. `Europe/Frankfurt` is the live example — an alias Node rejects
 outright — which is why the list says `Europe/Berlin`.
 
+### Measuring an element under the terminal zoom (`lib/measure.ts`)
+
+`#root` carries a CSS `zoom` (the account-menu zoom control), and that splits
+every DOM measurement into two coordinate spaces:
+
+- **layout space** — `clientWidth` / `offsetWidth` / `scrollHeight`. The space an
+  inline `width: 480px` written back onto a child lands in.
+- **painted space** — `getBoundingClientRect()`, and `window.innerWidth`.
+
+**Measure in layout space whenever the number is fed back into layout.**
+`ResizeObserver`'s `contentRect` is the trap: Chromium reports it in layout
+space, WebKit in painted space, so a width taken from it and applied as pixels
+is a factor of the zoom off *on iPhone only*.
+
+That is not hypothetical — it is what broke the Live Wall on mobile. The board
+used `react-grid-layout`'s `WidthProvider`, which sizes from `contentRect`, so at
+125% zoom on a 400px phone every tile came out ~60px wider than the board: the
+page gained a sideways scroll, and the two tiles that hard-measure their own box
+— the **TradingView chart and watchlist iframes** — rendered into a box wider
+than the tile, leaving the widget shifted with a band of the iframe's own white
+background beside it. It verified clean in Chromium at 100/150/200% because
+Chromium reports the *other* space, and it is invisible at 100% in every engine.
+
+`useContentWidth(ref, fallback)` is the fix and the only thing new code should
+use: the observer is a **trigger**, the value always comes off the element, and
+the zoom factor is a dependency because a zoom change does not reliably fire a
+resize entry. Call sites: `ChartBoard` (which therefore does **not** use
+`WidthProvider`), `MarketData`, `MarketNews`. `PositionsTile` already did the
+right thing by reading `scrollHeight`.
+
 ### Mobile input zoom (iOS)
 
 iOS Safari auto-zooms the viewport whenever a focused text field has a

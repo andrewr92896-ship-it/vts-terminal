@@ -30,6 +30,7 @@ import {
   sameEtDay,
   sessionOpen,
 } from './etClock';
+import { useContentWidth } from '../../lib/measure';
 import type {
   CalendarEvent,
   CustomMetric,
@@ -218,17 +219,9 @@ export function MarketData() {
   // Column set is chosen from the *content* width, not the viewport: the sidebar
   // collapses, so a media query would drop columns at the wrong moment.
   const wellRef = useRef<HTMLDivElement | null>(null);
-  const [wellWidth, setWellWidth] = useState(1200);
-  useEffect(() => {
-    const el = wellRef.current;
-    if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width;
-      if (w) setWellWidth(w);
-    });
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
+  // Read off the element, not the resize entry — under the terminal's CSS `zoom`
+  // those are different coordinate spaces on WebKit. See lib/measure.ts.
+  const wellWidth = useContentWidth(wellRef, 1200);
 
   const undoTimer = useRef<number | null>(null);
   useEffect(
