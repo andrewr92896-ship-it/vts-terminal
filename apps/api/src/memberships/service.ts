@@ -202,6 +202,28 @@ export async function setMembership(
   };
 }
 
+// Which of these users may reach a feature, in ONE query rather than a lookup
+// per person — for a fan-out like the notification recipients, where the list is
+// every connected account on the desk.
+//
+// It repeats getMembership's precedence deliberately (roles first, then the
+// demo, then the stored grant) rather than approximating it: a filter that
+// treated a missing row as Free would silently drop every admin, who never has
+// a stored grant.
+export async function entitledUserIds(
+  people: Pick<UserRow, 'id' | 'username' | 'roles'>[],
+  feature: PremiumFeature,
+): Promise<Set<string>> {
+  const stored = await membershipsByUserId();
+  const out = new Set<string>();
+  for (const u of people) {
+    const tier =
+      isAdmin(parseRoles(u)) || isDemoUser(u) ? 'max' : stored.get(u.id)?.tier ?? 'free';
+    if (tierAllows(tier, feature)) out.add(u.id);
+  }
+  return out;
+}
+
 // Stored memberships keyed by user id, for the admin Users list. Roles still
 // win, so the caller merges this with its own role check rather than treating a
 // missing row as Free.

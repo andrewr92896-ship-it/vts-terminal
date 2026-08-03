@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.41';
+export const APP_VERSION = 'Beta V 6.42';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.42',
+    date: 'August 3, 2026',
+    notes: [
+      'Anything that takes an API key of your own is now Max. That was already true of broker connections; Pushover joins it, since connecting it means handing over your Pushover key.',
+      'Phone notifications stay free on every account — they need no key from you — so a free account is still told when a price alert fires.',
+    ],
+  },
   {
     version: 'Beta V 6.41',
     date: 'August 3, 2026',

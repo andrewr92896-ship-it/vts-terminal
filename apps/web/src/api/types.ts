@@ -2082,7 +2082,10 @@ export const PREMIUM_FEATURES = [
   'teams',
   'teamChat',
   'customStreams',
+  // Max because they hold a credential of the USER'S — the rule on the server's
+  // FEATURE_TIER: anything somebody pastes a key of their own into is top tier.
   'brokerConnections',
+  'pushover',
   'funded',
   'studyCreation',
   'customBoards',
