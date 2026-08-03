@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.54';
+export const APP_VERSION = 'Beta V 6.55';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.55',
+    date: 'August 3, 2026',
+    notes: [
+      'The Funded Account tile showed your remaining drawdown in red even when the whole allowance was untouched. Red now means breached, matching the gauges on the Funded Account screen, with amber as the warning once less than a quarter is left.',
+    ],
+  },
   {
     version: 'Beta V 6.54',
     date: 'August 3, 2026',
