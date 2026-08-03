@@ -76,7 +76,13 @@ export const TILE_GATES: Partial<Record<BoardTileKind, TileGate>> = {
   closed: { desk: true },
   sessions: { desk: true, feature: 'strategySessions' },
   funded: { desk: true, funded: true, feature: 'funded' },
-  capital: { desk: true, feature: 'brokerConnections' },
+  // Desk-gated only. Connecting a broker is Max, but reading an account you
+  // already connected is not — `/api/trading/oanda-capital` serves any desk
+  // user, and Trade Analysis ▸ Live Brokers shows the same figures behind
+  // nothing but a marker. The client marks this tile with the Max gem without
+  // locking it, which is the same rule every credential feature follows:
+  // reading its status and disconnecting stay open.
+  capital: { desk: true },
 
   // Team
   teamchat: { feature: 'teamChat' },

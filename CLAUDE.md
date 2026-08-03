@@ -1338,6 +1338,14 @@ mistake here:**
     decides is which **tiles** a board may carry.
 - **Individual tiers** gate individual tiles (`marketdata` → Premium,
   `teamchat` → Max, and so on).
+  - **A tile can be MARKED with a tier it is not GATED by** — `markFeature`
+    beside `feature` in the catalog. Broker Capital is the case: connecting a
+    broker is Max, but *reading* an account you already connected is not. Its
+    endpoint serves any desk user and Trade Analysis ▸ Live Brokers shows the
+    same figures behind nothing but a marker, so gating the tile would have
+    locked a lapsed member out of a connection they still hold — the exact thing
+    "reading its status and disconnecting stay open" exists to prevent. Reach for
+    `markFeature` whenever the tier buys the *setup* rather than the *reading*.
 
 **Two rules about stripping that are NOT the same, and must not be merged:**
 

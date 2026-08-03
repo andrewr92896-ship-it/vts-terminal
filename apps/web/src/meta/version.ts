@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.51';
+export const APP_VERSION = 'Beta V 6.52';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.52',
+    date: 'August 3, 2026',
+    notes: [
+      'The Broker Capital tile no longer locks you out of an account you already connected. Connecting a broker is a Max feature, but reading a connection you already have is not — the tile still shows the diamond so the cost is clear, and it opens for anyone with the trading desk on, matching the Live Brokers screen.',
+    ],
+  },
   {
     version: 'Beta V 6.51',
     date: 'August 3, 2026',
