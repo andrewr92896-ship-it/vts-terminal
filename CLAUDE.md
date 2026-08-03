@@ -214,6 +214,11 @@ workspaces list** (see `theme/nav.ts` order).
     workspace check (`WorkspaceKey` server-side is only `'trading' | 'studies'`),
     so nothing on the server moved. Read "Markets" in a server comment as "the
     market-facing surfaces included with every account".
+  - **The two are kept adjacent in the sidebar** (owner decision, 2026-08): they
+    are read as a pair. Since `data` is Premium and the Max → Premium → free
+    stacking puts it above the free rows, keeping them together means **Market
+    News leads the free rows rather than the Live Wall**. The wall still opens on
+    sign-in — where a workspace's list starts is not what it opens on.
   - The `markets` **tile group** and the `markets` **built-in Live Wall layout**
     keep their keys and labels — they name a data category, not the workspace,
     and the preset key is what a free account's remembered layout choice is
@@ -1164,8 +1169,8 @@ cycle.
       account on the paid screen now sitting at the top would open the workspace on
       something it cannot use. Advanced Trading already opened on `tradedesk`, so
       there the two now agree by coincidence rather than by rule.
-    - Consequence in My Terminal: **Trading Team and Market Data sit above the
-      Live Wall**, which
+    - Consequence in My Terminal: **Trading Team, Market Data and Market News sit
+      above the Live Wall**, which
       still opens on sign-in (`DEFAULT_SCREEN.myportal` is `live`). The Live Wall
       is no longer the first *row* of the first workspace; it is still the first
       *screen*.

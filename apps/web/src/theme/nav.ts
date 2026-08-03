@@ -35,9 +35,21 @@ export const NAV: NavWorkspace[] = [
     sections: [
       // Max — first, per the Max → Premium → free stacking below.
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
-      // Premium — the Market Data series board. The economic calendar and the
-      // FOMC countdown on that same screen stay free.
+      // The two market-watching screens, kept **adjacent** (owner decision,
+      // 2026-08) — they came here together when the Markets workspace was
+      // dissolved, and they are read as a pair. That is why Market News leads
+      // the free rows rather than the Live Wall: `data` is Premium and has to
+      // sit above the free rows per the stacking below, so the only way the pair
+      // stays together is for `news` to follow it. Both read public market data
+      // — no trade, no broker, no balance — and their keys stay `data` and
+      // `news`, so saved nav.order overrides, the howto wording and every
+      // in-app link keep working.
+      //
+      // Premium — the series board. The economic calendar and the FOMC
+      // countdown on that same screen stay free.
       { key: 'data', label: 'Market Data', icon: 'line-chart' },
+      // Free.
+      { key: 'news', label: 'Market News', icon: 'newspaper' },
       // Free. The Live Wall is the terminal's one centralized board (owner
       // decision, 2026-08) and is still what a sign-in opens on —
       // DEFAULT_SCREEN.myportal is `live`, which is a separate thing from where
@@ -45,13 +57,6 @@ export const NAV: NavWorkspace[] = [
       // key stays `live`, so saved nav.order overrides, the howto wording and
       // every in-app link keep working — the same reason `desk` stayed `desk`.
       { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
-      // Free. Market Data and Market News came here when the Markets workspace
-      // was dissolved (owner decision, 2026-08) — both read public market data
-      // and neither touches a trade, a broker or a balance, so they sit with the
-      // reader rather than in a workspace of their own. Their keys stay `data`
-      // and `news`, so saved nav.order overrides, the howto wording and every
-      // in-app link keep working.
-      { key: 'news', label: 'Market News', icon: 'newspaper' },
       // The whole-life roll-up: everything you own minus everything you owe.
       // (There is deliberately no Investment Holdings section here — the
       // Investments workspace already tracks the portfolio, and a second screen
