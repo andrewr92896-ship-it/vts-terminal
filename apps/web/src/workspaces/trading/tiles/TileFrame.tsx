@@ -8,7 +8,7 @@ import { BORDER, BORDER2, FAINT, GOLD, MONO, MUTED, PANEL, TEXT } from '../tvCha
 // button, the settings a tile exposes while the board is being edited, and the
 // scrolling body beneath.
 //
-// It exists because the wall went from seven tile kinds to twenty-three, and
+// It exists because the wall went from seven tile kinds to two dozen, and
 // each one had been re-implementing the same header markup. One frame means a
 // change to how a tile looks is a change in one file, and — more importantly —
 // that every tile drags, scrolls and removes identically.
@@ -210,10 +210,26 @@ export function useTileData<T>(
   useEffect(() => {
     alive.current = true;
     void load();
-    const id = window.setInterval(() => void load(), refreshMs);
+    // A hidden tab does not poll.
+    //
+    // A board of twenty tiles left open in a background tab was making twenty
+    // requests a cycle, indefinitely, for a screen nobody was looking at — the
+    // wall multiplied a cost that was negligible when a board held two tiles.
+    // Coming back re-reads immediately, so the reader never sees a stale board;
+    // what they no longer pay for is the hours in between.
+    const tick = () => {
+      if (document.visibilityState === 'hidden') return;
+      void load();
+    };
+    const id = window.setInterval(tick, refreshMs);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       alive.current = false;
       window.clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, refreshMs, ...deps]);

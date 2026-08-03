@@ -431,7 +431,9 @@ export function tutorialFor(screen: string): Tutorial {
 // Labels here mirror the section labels in theme/nav.ts (the source of truth)
 // so the same section reads the same everywhere.
 export const HOWTO_TOPICS: { key: string; label: string }[] = [
-  { key: 'my_access', label: 'Feature Access' },
+  // The screen was renamed to Premium Features; the key stayed `my_access` so
+  // saved sidebar orders and in-app links keep working.
+  { key: 'my_access', label: 'Premium Features' },
   { key: 'live', label: 'Live Wall' },
   { key: 'alerts', label: 'Trading Alerts' },
   { key: 'tradedesk', label: 'Trade Desk' },
