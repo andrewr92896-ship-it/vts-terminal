@@ -29,6 +29,17 @@ Specifically, none of these exist:
   always "VTS AI", never "Claude", "Anthropic", or a model name.
 - **Per-workspace backgrounds.** The background is one navy everywhere; a
   workspace is signalled by its accent only.
+- **The Live Wall under Advanced Trading.** It leads **My Terminal** now, and is
+  the whole terminal's board rather than a charts screen. Mockups showing it as a
+  trading-only section are out of date.
+- **"Portal" as the product name.** It is **VTS Terminal**, and the workspaces are
+  My Terminal, Admin Terminal and Developer Terminal. The one exception is the
+  **Employee Portal**, which keeps its name because it is a separate site.
+- **Studies ▸ Subjects and My Terminal ▸ Investment Holdings.** Both removed.
+- **Investments as placeholders.** All eight sections are built.
+- **Coloured sidebar rows for paid sections.** Tried and reverted — every row
+  keeps its workspace accent, and what a section costs is said by a small star or
+  gem at the right of it.
 
 ---
 
@@ -70,7 +81,7 @@ Background `#071021`, `border-right: 1px solid #152139`, padding `22px 16px 18px
 4. **The current workspace's group label** (e.g. `ADVANCED TRADING`), then one row
    per section of that workspace.
 5. **Footer**, pinned to the bottom above a hairline: `VTS Terminal` in mono +
-   the version pill (gold text, gold-tinted border, e.g. `Beta V 5.78`).
+   the version pill (gold text, gold-tinted border, e.g. `Beta V 6.50`).
 
 Nav row spec — the same row for both tiers:
 
@@ -163,12 +174,17 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 | Workspace | Accent | Icon | Sidebar group label |
 |---|---|---|---|
 | My Terminal *(pinned first)* | `#34D399` emerald | `briefcase` | My Terminal |
-| Advanced Trading | `#EBCB74` gold | `candlestick-chart` | Advanced Trading |
+| Markets | `#5AC8FA` sky | `globe` | Markets |
+| Advanced Trading *(opt-in)* | `#EBCB74` gold | `candlestick-chart` | Advanced Trading |
 | Investments | `#2DD4BF` teal | `landmark` | Investments |
 | Studies | `#B69CFF` violet | `graduation-cap` | Studies |
 | Admin Terminal *(admins)* | `#E0708F` rose | `shield-check` | Administration |
 | Developer Terminal *(founder)* | `#F5A524` amber | `crown` | Developer |
 | Site Help *(everyone)* | `#6C9EFF` blue | `life-buoy` | Help & support |
+
+Advanced Trading is the one workspace a user turns on for themselves. Until they
+do, its row is still drawn — **dimmed, with a padlock at the left** — because the
+point is that the feature is discoverable rather than invisible.
 
 ### Type
 
@@ -186,21 +202,39 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 
 The sidebar's lower list. Sections a user lacks the role for are simply absent.
 
-- **My Terminal** — Investment Holdings · Net Worth · Trading Team · Preferences · Settings
-- **Advanced Trading** — Live Wall · Trading Alerts · Trade Desk · Trade Analysis ·
-  Deleted Trades · Strategy Sessions · Manual Trades · Funded *(role-gated)* ·
-  Market Data · Market News · To Do
+Sections stack **free → Premium → Max** within each workspace, and a paid row
+carries its tier marker at the **right** of the row — a small gold **star**
+(`#EBCB74`) for Premium, an icy **gem** (`#B9F2FF`) for Max. The marker is drawn
+for everyone, including a member who already holds the tier: its job is to say
+what a row costs, not to act as a lock. A free row is marked with nothing.
+
+- **My Terminal** — **Live Wall** · Net Worth · To Do · Premium Features ·
+  Preferences · Settings · Trading Team *(gem)*
+- **Markets** — Market News · Market Data *(star)*
+- **Advanced Trading** — Trading Alerts · Trade Analysis · Manual Trades ·
+  Deleted Trades · Strategy Sessions *(star)* · Funded Account *(star, nested
+  opt-in)* · Trade Desk *(gem)*
 - **Investments** — Portfolio Overview · Accounts · Holdings · Allocation ·
   Performance · Dividends & Income · Contributions & Goals · Projections
-  *(all currently "Coming Soon" placeholders)*
-- **Studies** — Subjects · Study Game · Flashcards · Practice Tests ·
-  Study Presentations · Progress · Study Creation
-- **Admin Terminal** — Users · Teams · Badges · Message Templates · Patch Notes ·
-  Early Access · Bug Reports · Support
-- **Developer Terminal** — AI Instructions · Site Wording · Sidebar Layout ·
-  Suggestions · View as role
+- **Studies** — Study Game · Flashcards · Practice Tests ·
+  Study Presentations · Progress · Study Creation *(star)*
+- **Admin Terminal** — Users · Administrator Log · Admin Guidelines · Teams ·
+  Badges · Message Templates · Patch Notes · Early Access · Bug Reports · Support
+- **Developer Terminal** — Developer Blog · AI Instructions · Site Wording ·
+  Sidebar Layout · Suggestions · View as role
 - **Site Help** — How to · Announcements · Patch notes · Report a bug ·
   Suggestion · Rules & Conduct · Terms of Service · Privacy Policy
+
+The **Live Wall leads My Terminal**, and is the screen a sign-in opens on. It is
+the terminal's one board: a drag-resize grid of tiles drawn from every workspace
+— charts, quotes, headlines and the calendar, the desk's open and closed trades,
+the reader's net worth, portfolio and to-do list, study progress, team messages.
+Every account gets three built-in layouts; arranging and saving your own is
+Premium. On a phone it renders as one full-width column.
+
+Above the workspaces list, and **not** part of it, sits a standalone
+**Employee Portal** row for staff — it opens a separate site in a new tab and has
+its own design language entirely (`docs/design/employee-portal/`).
 
 The founder can reorder workspaces and the sections within a workspace from
 **Developer Terminal ▸ Sidebar Layout**, so treat the order above as the default,
