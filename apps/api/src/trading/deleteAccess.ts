@@ -1,7 +1,7 @@
 import type { UserRow } from '../db/schema.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { getEffectivePermissions } from '../userTeams/service.js';
-import { scopedTraderIds } from './scope.js';
+import { visibleTraderIds } from './scope.js';
 
 // Who may delete (and restore) whose trades.
 //
@@ -40,7 +40,12 @@ export async function tradeDeleteScope(actor: UserRow): Promise<TradeDeleteScope
   // Leader ⇒ every permission (getEffectivePermissions resolves that for us).
   const perms = await getEffectivePermissions(actor.id);
   if (!perms?.canDeleteTrades) return ownTradesOnly(actor.id);
-  const ownerIds = await scopedTraderIds(actor);
+  // Bounded by what the actor can SEE, not merely by their team: a leader with
+  // the delete permission cannot reach the trades of a member running in private
+  // mode, because those trades are not on their desk to begin with. Deleting
+  // something you are not allowed to look at is not a power a team grant should
+  // carry. Admins never reach here — they took the `any` path above.
+  const ownerIds = await visibleTraderIds(actor);
   ownerIds.add(actor.id);
   // A solo trader with the permission still only has their own trades to reach.
   return { any: false, ownerIds, others: ownerIds.size > 1 };

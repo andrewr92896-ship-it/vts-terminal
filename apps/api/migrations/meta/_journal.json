@@ -645,6 +645,13 @@
       "when": 1782342336908,
       "tag": "0092_user_display_timezone",
       "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "6",
+      "when": 1782342436908,
+      "tag": "0093_book_privacy",
+      "breakpoints": true
     }
   ]
 }

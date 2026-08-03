@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import type { MyPortalData, MyTeam, TeamMemberPermissions, UserTeamMember, User } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
+import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { Icon } from '../../components/Icon';
 import {
@@ -315,6 +316,8 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
         </div>
       )}
 
+      <BookVisibility theme={theme} grad={grad} />
+
       {/* Roster */}
       <div style={{ ...panel(theme), marginBottom: 16 }}>
         <div style={panelLabel}>
@@ -402,6 +405,189 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
     </div>
   );
 }
+
+// Private mode — whether this trader's open book is on their teammates' screens.
+//
+// The switch is stored with the feature opt-ins (user_features.share_book) but
+// belongs here, where the team is: it is a question about these people, not
+// about which parts of the terminal you have turned on.
+//
+// New members start private, so the consent is a real decision rather than a
+// notice to scroll past. The server does the filtering (trading/scope.ts —
+// visibleTraderIds); this is the control over it, not the mechanism.
+function BookVisibility({ theme, grad }: { theme: Theme; grad: string }) {
+  const { user, refreshUser } = useAuth();
+  const sharing = !!user?.access.features.shareBook;
+  const acknowledged = !!user?.access.features.bookAckAt;
+  const isDemo = !!user?.isDemo;
+
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+
+  async function save(patch: Parameters<typeof api.saveFeatures>[0]) {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.saveFeatures(patch);
+      // Re-read the user so this screen and every gate see the change now
+      // rather than on the next reload.
+      await refreshUser();
+      setConfirming(false);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not save that change');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggle() {
+    if (sharing) {
+      void save({ shareBook: false });
+      return;
+    }
+    // First time sharing: say what a teammate would see before it happens. The
+    // stamp is kept server-side, so somebody coming back is not asked twice.
+    if (!acknowledged) {
+      setConfirming(true);
+      return;
+    }
+    void save({ shareBook: true });
+  }
+
+  return (
+    <div
+      style={{
+        ...panel(theme),
+        marginBottom: 16,
+        borderLeft: `2px solid ${sharing ? '#5AC8FA' : '#EBCB74'}`,
+      }}
+    >
+      <div style={panelLabel}>{"Your trading book"}</div>
+
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ flex: 'none', marginTop: 1 }}>
+          <Icon name={sharing ? 'eye' : 'eye-off'} size={17} color={sharing ? '#5AC8FA' : '#EBCB74'} />
+        </span>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#eef3ff' }}>
+            {sharing ? 'Visible to your team' : 'Private'}
+          </div>
+          <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc', lineHeight: 1.6 }}>
+            {sharing
+              ? 'Your open and closed trades appear on your teammates’ Live Wall, Trade Log and History, tagged with your name.'
+              : 'Your trades are yours alone. Nobody on your team — the leader included — sees them on the Live Wall, Trade Log or History. You still see everything of theirs that they share, and you still get every team alert.'}
+          </p>
+        </div>
+        <button
+          style={sharing ? ghostBtn : primaryBtn(theme, grad)}
+          disabled={busy || isDemo}
+          onClick={toggle}
+        >
+          {busy ? 'Saving…' : sharing ? 'Go private' : 'Share with my team'}
+        </button>
+      </div>
+
+      {isDemo && (
+        <p style={{ margin: '10px 0 0', fontSize: 12, color: '#8ea3cc' }}>
+          {"This is the read-only demo account, so this can’t be changed."}
+        </p>
+      )}
+      {error && <div style={msgStyle(false)}>{error}</div>}
+
+      {confirming && (
+        <BookSharingAcknowledgement
+          theme={theme}
+          grad={grad}
+          busy={busy}
+          onCancel={() => setConfirming(false)}
+          onAccept={() => void save({ shareBook: true, acknowledgeBook: true })}
+        />
+      )}
+    </div>
+  );
+}
+
+// The consent step. Named in full rather than softened to "your trades", because
+// the point is that somebody can only agree to what they have actually been
+// told. Mirrors the acknowledgement shown before Advanced Trading is switched on.
+function BookSharingAcknowledgement({
+  theme,
+  grad,
+  busy,
+  onCancel,
+  onAccept,
+}: {
+  theme: Theme;
+  grad: string;
+  busy: boolean;
+  onCancel: () => void;
+  onAccept: () => void;
+}) {
+  return (
+    <div style={modalWrap} onClick={onCancel}>
+      <div style={modalCard} onClick={(e) => e.stopPropagation()}>
+        <h3 style={{ margin: 0, fontSize: 16.5, fontWeight: 700, color: '#eef3ff' }}>
+          {"Before you share your book"}
+        </h3>
+        <p style={{ margin: '12px 0 0', fontSize: 13, color: '#cfe0ff', lineHeight: 1.6 }}>
+          {"Every member of your team will be able to see, for each of your trades:"}
+        </p>
+        <ul style={{ margin: '10px 0 0', padding: '0 0 0 18px', color: '#8ea3cc', fontSize: 13, lineHeight: 1.7 }}>
+          <li>The instrument, and whether you are long or short</li>
+          <li>Your exact entry price and position size</li>
+          <li>Your stop loss and take profit</li>
+          <li>Your live profit and loss, updating as the market moves</li>
+          <li>When you opened the position, and when you closed it</li>
+        </ul>
+        <ul style={{ margin: '12px 0 0', padding: '0 0 0 18px', color: '#8ea3cc', fontSize: 13, lineHeight: 1.7 }}>
+          <li>
+            This is your <b style={{ color: '#eef3ff' }}>teammates only</b> — the
+            people on your trading team. Nothing here is ever public, and no other
+            team on the terminal can see it.
+          </li>
+          <li>
+            You can go private again at any time, and nothing is lost — your
+            trades, history and settings all stay exactly as they are. They simply
+            stop appearing on other people's screens.
+          </li>
+          <li>
+            If your account is with a prop firm, check your agreement first. Most
+            of them prohibit sharing account information with anyone else.
+          </li>
+        </ul>
+        <div style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
+          <button onClick={onAccept} disabled={busy} style={{ ...primaryBtn(theme, grad), opacity: busy ? 0.6 : 1 }}>
+            {busy ? 'Saving…' : 'I understand — share my book'}
+          </button>
+          <button onClick={onCancel} style={ghostBtn}>{"Cancel"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const modalWrap: CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(3,8,20,.72)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 20,
+  zIndex: 120,
+};
+const modalCard: CSSProperties = {
+  width: 'min(560px, 100%)',
+  maxHeight: 'calc(86 * var(--vh))',
+  overflowY: 'auto',
+  background: '#0C1C3C',
+  border: '1px solid #1d3560',
+  borderRadius: 12,
+  padding: '20px 22px 22px',
+  boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+};
 
 // One member row: avatar, name, badge, and (for the leader / permitted members)
 // the badge editor, permission toggles, transfer, and remove controls.

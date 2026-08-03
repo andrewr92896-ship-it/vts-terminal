@@ -1205,6 +1205,17 @@ account" rather than hiding them, so the screen reads as the whole picture.
   orders with the user's own broker — **the desk cannot be enabled without it**
   (`FeatureError`), and the stamp survives an opt-out so returning does not ask
   twice.
+  - **The table also holds `shareBook` / `bookAckAt` (migration `0093`) — private
+    mode — which is NOT an opt-in and is NOT edited from this screen.** It is a
+    privacy setting about the team, so its switch lives in **My Terminal ▸ Trading
+    Team**; it rides this row because the plumbing is identical (one row per user,
+    a switch beside an acknowledgement stamp, already in the per-user delete list,
+    already carried to the client on `user.access.features`). It follows the same
+    acknowledgement rule as the desk, and is deliberately **not nested** under
+    `advancedTrading`: a trader who switches the desk off still has closed trades
+    on the team's Trade Log, and their answer about who may read them should not
+    depend on another switch. What it actually gates is in **Teams ▸ Private
+    mode** above — read that before touching `trading/scope.ts`.
 - **Turning a feature off only hides it.** No trade, account or setting is
   touched, so re-enabling restores the workspace exactly as it was. Do not add a
   destructive opt-out.
@@ -1328,8 +1339,57 @@ below), and notification recipients — a trader
 only ever sees their own team's data (or just their own if team-less). Default
 team `team-vitalis` / "Vitalis Trading Team" (seeded on boot; team-less users are
 adopted into it). Study games, flashcard sets, and guides are all team-scoped —
-a team only sees its own. `scopedTraderIds` (`trading/scope.ts`) is the single
+a team only sees its own. `trading/scope.ts` is the single
 place the boundary is defined; everything funnels through it.
+
+### Private mode, and why `scope.ts` has two functions
+
+Being on a team no longer means broadcasting your book to it. **`shareBook`**
+(`user_features.share_book`, migration `0093`) is a per-user privacy switch: while
+it is off, that trader's positions are absent from every teammate's Live Wall,
+Trade Log, History, Deleted Trades and broker capital — **including the team
+leader's**, since leading a team is not a right to read a member's positions.
+Administrators keep their install-wide reach for support (their paths never come
+through here).
+
+- **Privacy is the default and the consent is real.** A new member starts
+  private; their book appears only after they tick the acknowledgement naming
+  what a teammate would see (instrument, direction, entry, size, stop, target,
+  live P&L, open time). Migration `0093` **grandfathers everyone already on a
+  team** into sharing with a stamped acknowledgement — they have been sharing all
+  along, so nobody's wall goes dark on deploy — and deliberately leaves team-less
+  traders private, since they have nobody to share with yet. `seed.ts` does the
+  same for the first-boot owner, as `0083` did. The stamp survives going private
+  again, so returning does not ask twice. The demo is forced to sharing.
+- **The switch lives in My Terminal ▸ Trading Team**, not Premium Features: it is
+  a question about those people, not about which parts of the terminal you have
+  switched on. Storage location and UI location deliberately differ.
+
+**`scope.ts` exports two functions and they are not interchangeable.** The team
+set is used in two opposite directions, and private mode belongs on only one:
+
+- **`visibleTraderIds(viewer)` — visibility.** "Whose trade data may this viewer
+  *see*." Private members removed, the viewer's own id always kept. Use this on a
+  **read**: the Live Wall (`service.ts` — and so the Trade Desk's team book, which
+  reads the same `/api/trading/live` feed), Trade Log, History, Deleted Trades,
+  broker capital, the desk-settings instrument list, the "notify me about a
+  trader" picker, and `deleteAccess.ts` (a leader must not be able to delete a
+  trade they cannot see).
+- **`scopedTraderIds(viewer)` — recipients.** "Who should *receive* this." Private
+  members **kept**. Use this on a **send**. `trading/alerts.ts` is the reason this
+  split exists: a TradingView alert is a team-wide signal, not a report of anyone's
+  book, so filtering it would cut a private trader off from the alerts their desk
+  is sending them. **Do not "tidy" alerts.ts onto the filtered function.**
+- **`notifyTraderIds(ownerId)` — the third case**, for a notification that *is* a
+  send but whose entire content is one trader's position (the open / close /
+  stop-moved buzzes in `history.ts`). Their team normally; **just them** while
+  private. A private trader whose fills still buzzed every teammate's phone would
+  not be private in any sense that matters, however clean their Live Wall row
+  looked.
+
+Worth preserving: `service.ts` hands the visible set to `getAllActiveDecrypted`,
+so a private trader's broker credentials are **never decrypted** to serve a
+teammate's poll. Private mode stops the read at the connection, not at the render.
 
 ### One team, two surfaces (merged)
 

@@ -29,7 +29,7 @@ import { listDeletedTrades, restoreDeleted } from '../trading/deleted.js';
 import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { tradeDeleteScope } from '../trading/deleteAccess.js';
-import { scopedTraderIds } from '../trading/scope.js';
+import { visibleTraderIds } from '../trading/scope.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
 import {
@@ -271,7 +271,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
-    const ids = await scopedTraderIds(me);
+    const ids = await visibleTraderIds(me);
     const [settings, instruments, editableMembers] = await Promise.all([
       getDeskSettings(target),
       getDeskInstruments(ids),
@@ -291,7 +291,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
       return reply.code(403).send({ error: 'You cannot change that member’s desk settings' });
     }
-    const ids = await scopedTraderIds(me);
+    const ids = await visibleTraderIds(me);
     const [settings, instruments, editableMembers] = await Promise.all([
       updateDeskSettings(target, parsed.data),
       getDeskInstruments(ids),

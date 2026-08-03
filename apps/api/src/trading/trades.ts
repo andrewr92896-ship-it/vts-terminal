@@ -17,7 +17,7 @@ import { DEMO_USERNAME } from '../demo/identity.js';
 import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEvenOverride } from './outcome.js';
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
-import { scopedTraderIds, type Viewer } from './scope.js';
+import { visibleTraderIds, type Viewer } from './scope.js';
 import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 import { backfillClosedTrades } from './backfill.js';
 import { beforeCutoff, connectionCutoffs } from './connections.js';
@@ -268,7 +268,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
   const viewerId = viewer.id;
   // Trade data is scoped to the viewer's team (or just the viewer, if teamless):
   // the Trade Log only shows that team's trades, never the whole install.
-  const scopeIds = await scopedTraderIds(viewer);
+  const scopeIds = await visibleTraderIds(viewer);
 
   // Pull the team's OANDA closed-trade history into `tradingPositions` before we
   // read, so trades the live reconcile never caught (opened+closed between polls)

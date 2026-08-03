@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.42';
+export const APP_VERSION = 'Beta V 6.43';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.43',
+    date: 'August 3, 2026',
+    notes: [
+      'You can now keep your trading book to yourself while staying on your team. The switch is in My Terminal ▸ Trading Team, and it says exactly what a teammate sees before you turn it on: instrument, direction, entry, size, stop, target, live P&L and open time.',
+      'Going private hides your trades from your teammates — the team leader included — on the Live Wall, Trade Log and History. It changes nothing about what you see, and you still get every team alert.',
+      'Anyone already on a team keeps sharing, so nothing on the wall goes dark. Whoever joins a team from here starts private until they say otherwise.',
+    ],
+  },
   {
     version: 'Beta V 6.42',
     date: 'August 3, 2026',

@@ -229,6 +229,9 @@ export const api = {
     advancedTrading?: boolean;
     funded?: boolean;
     acknowledgeTrading?: boolean;
+    // Private mode. Lives on this row, but is edited from Trading Team.
+    shareBook?: boolean;
+    acknowledgeBook?: boolean;
   }): Promise<{ features: UserFeatures }> {
     return request('/api/features', { method: 'PUT', body: JSON.stringify(patch) });
   },

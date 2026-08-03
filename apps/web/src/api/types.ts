@@ -81,6 +81,12 @@ export interface UserFeatures {
   funded: boolean;
   // When the user acknowledged what the trading desk does (ms), or null.
   tradingAckAt: number | null;
+  // Private mode, inverted. False — the default — keeps this trader's book off
+  // their teammates' screens. Edited from My Terminal ▸ Trading Team; the server
+  // is what actually filters (trading/scope.ts), this only drives the UI.
+  shareBook: boolean;
+  // When the user acknowledged what sharing exposes (ms), or null.
+  bookAckAt: number | null;
 }
 
 // Matches the backend's PublicUser shape (auth/rbac.ts).

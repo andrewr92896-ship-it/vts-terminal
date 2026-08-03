@@ -6,7 +6,7 @@ import { users } from '../db/schema.js';
 import { requireWorkspace } from '../auth/middleware.js';
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
-import { scopedTraderIds } from '../trading/scope.js';
+import { visibleTraderIds } from '../trading/scope.js';
 import {
   DEFAULT_PREF_FLAGS,
   getPrefsFor,
@@ -33,9 +33,14 @@ export async function notificationPrefsRoutes(app: FastifyInstance) {
   // The teammates this trader can be notified about (their own team, or just
   // themselves if team-less), plus their current per-teammate prefs. A target
   // with no stored row falls back to the all-on default so the UI can render it.
+  //
+  // Visibility, not the raw team: a teammate in private mode sends no trade
+  // notifications to anyone, so offering them here would be a switch that does
+  // nothing — and would name, on a screen anyone can open, exactly who on the
+  // desk has gone private.
   app.get('/api/notification-prefs', trading, async (request) => {
     const me = request.currentUser!;
-    const scopeIds = await scopedTraderIds({ id: me.id, teamId: me.teamId });
+    const scopeIds = await visibleTraderIds({ id: me.id, teamId: me.teamId });
     const rows = await db
       .select({ id: users.id, username: users.username, displayName: users.displayName, roles: users.roles })
       .from(users)
@@ -67,7 +72,7 @@ export async function notificationPrefsRoutes(app: FastifyInstance) {
     const parsed = flagsSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid notification preferences' });
 
-    const scopeIds = await scopedTraderIds({ id: me.id, teamId: me.teamId });
+    const scopeIds = await visibleTraderIds({ id: me.id, teamId: me.teamId });
     if (!scopeIds.has(targetUserId)) {
       return reply.code(404).send({ error: 'That user is not on your desk' });
     }

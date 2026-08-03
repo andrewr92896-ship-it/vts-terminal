@@ -1,7 +1,7 @@
 import { getAllActiveDecrypted, type OandaCreds } from './connections.js';
 import { fetchOandaAccountSummary, fetchOandaClosedTrades } from './brokers/oanda.js';
 import { pnlWindows, type PnlWindows } from './pnl.js';
-import { scopedTraderIds, type Viewer } from './scope.js';
+import { visibleTraderIds, type Viewer } from './scope.js';
 
 // Re-export under the legacy name so existing imports keep working.
 export type OandaPnl = PnlWindows;
@@ -49,7 +49,7 @@ export async function getOandaCapital(viewer: Viewer): Promise<OandaCapital> {
   // Scoped to the viewer's team (or just the viewer, if teamless): pull only that
   // team's active OANDA connections so capital never leaks across teams. Each
   // account is tagged with its owner below.
-  const scopeIds = await scopedTraderIds(viewer);
+  const scopeIds = await visibleTraderIds(viewer);
   const conns = (await getAllActiveDecrypted(scopeIds)).filter((c) => c.broker === 'oanda');
   const generatedAt = Date.now();
   if (conns.length === 0) {

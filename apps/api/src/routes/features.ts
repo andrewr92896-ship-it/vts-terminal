@@ -13,12 +13,19 @@ const patchSchema = z
     advancedTrading: z.boolean().optional(),
     funded: z.boolean().optional(),
     acknowledgeTrading: z.boolean().optional(),
+    // Private mode, edited from My Terminal ▸ Trading Team rather than the
+    // Premium Features screen — it is a privacy setting about the team, not an
+    // opt-in. It rides this endpoint because it rides the same row.
+    shareBook: z.boolean().optional(),
+    acknowledgeBook: z.boolean().optional(),
   })
   .refine(
     (v) =>
       v.advancedTrading !== undefined ||
       v.funded !== undefined ||
-      v.acknowledgeTrading !== undefined,
+      v.acknowledgeTrading !== undefined ||
+      v.shareBook !== undefined ||
+      v.acknowledgeBook !== undefined,
     { message: 'Nothing to change' },
   );
 

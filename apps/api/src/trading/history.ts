@@ -11,7 +11,7 @@ import { classifyOutcome, type BreakEvenConfig, type BreakEvenMode, type BreakEv
 import { tradePips } from './forex.js';
 import { deskTradeCodeIndex } from './codes.js';
 import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
-import { scopedTraderIds, scopedTraderIdsForUser, type Viewer } from './scope.js';
+import { notifyTraderIds, visibleTraderIds, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
 import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 import { beforeCutoff, connectionCutoffs } from './connections.js';
@@ -149,12 +149,14 @@ export async function reconcile(
   }
 
   // Buzz the OWNER'S TEAM about fresh fills and closes — trade info never fans
-  // out past the team. Best-effort and fire-and-forget so the Live Wall render
-  // never waits on (or fails from) a push. Because the open/close DB transition
-  // happens exactly once, this notifies once even though every viewer's poll
-  // calls reconcile.
+  // out past the team, and not even that far while the owner is private
+  // (notifyTraderIds narrows to the owner alone, since the whole content of one
+  // of these is that trader's own position). Best-effort and fire-and-forget so
+  // the Live Wall render never waits on (or fails from) a push. Because the
+  // open/close DB transition happens exactly once, this notifies once even
+  // though every viewer's poll calls reconcile.
   const hasEvents = opened.length > 0 || closed.length > 0 || retargeted.length > 0;
-  const teamIds = hasEvents ? await scopedTraderIdsForUser(userId) : new Set<string>();
+  const teamIds = hasEvents ? await notifyTraderIds(userId) : new Set<string>();
   // When the owner holds a position designation (Chief Strategist / Chief
   // Analyst), lead the notification with its coloured circle + label so the
   // "colour designation" carries into the push/Pushover text.
@@ -490,7 +492,7 @@ export async function getHistory(
   // Team-scoped history: the closed positions of the viewer's team (or just the
   // viewer, if teamless), tagged with the owner. Joined live with users so a
   // teammate who loses trading access drops off, mirroring the Live Wall/Trade Log.
-  const scopeIds = await scopedTraderIds(viewer);
+  const scopeIds = await visibleTraderIds(viewer);
 
   // Ingest the team's OANDA closed-trade history first, so trades the live
   // reconcile never saw (opened+closed between polls) appear here too. Throttled
