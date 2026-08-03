@@ -1522,8 +1522,10 @@ export interface PriceAlertInput {
   note?: string | null;
 }
 
-// The price-alerts list plus whether an OANDA price source is configured (when
-// false, alerts can be saved but won't fire until an OANDA connection exists).
+// The price-alerts list plus whether the site's OANDA price source is configured
+// (when false, alerts can be saved but forex/metals/index rules won't fire).
+// This is a site-level setting — a user's own broker connection has no bearing on
+// it, and never did anything for anyone but themselves.
 export interface PriceAlertsData {
   alerts: PriceAlert[];
   priceSource: boolean;

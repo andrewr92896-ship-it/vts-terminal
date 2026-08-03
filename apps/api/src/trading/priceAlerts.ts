@@ -121,7 +121,8 @@ export async function listPriceAlerts(userId: string): Promise<PriceAlert[]> {
 // (return { sourced:false }) from "priced" / "source exists but symbol is
 // unpriceable". Used to arm a new alert against the current price and to reject
 // symbols we can't follow. Crypto has a keyless feed, so it's always sourced;
-// forex/metals/indices need an OANDA connection.
+// forex/metals/indices need the install's own OANDA pricing account. A trader's
+// personal connection is deliberately never used for this — see priceSource.ts.
 async function markFor(pricingInstrument: string): Promise<{ sourced: boolean; price: number | null }> {
   if (isCryptoInstrument(pricingInstrument)) {
     const marks = await fetchCryptoPrices([pricingInstrument]);

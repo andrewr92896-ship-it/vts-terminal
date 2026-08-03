@@ -59,6 +59,33 @@ export function oandaConfig(): OandaConfig | null {
   };
 }
 
+// The account used to READ PRICES — the Market Data board and the price-alert
+// watch — as opposed to the one used to read the owner's own positions.
+//
+// It is deliberately its own pair of variables, and a **practice** account is the
+// right thing to point them at. OANDA's rates are account-independent, so a
+// practice account with no money in it prices the board exactly as well as a live
+// one, and a leaked pricing credential then reaches nothing: no balance, no
+// positions, no orders worth placing. Nothing here can ever fall through to a
+// user's own connection — see priceSource.ts for what that used to do and why it
+// had to stop.
+//
+// Falls back to the general OANDA_* account so an install that already has one
+// keeps pricing exactly as it did.
+export function oandaPricingConfig(): OandaConfig | null {
+  const token = env('OANDA_PRICING_TOKEN');
+  const accountId = env('OANDA_PRICING_ACCOUNT_ID');
+  if (token && accountId) {
+    const live = (env('OANDA_PRICING_ENV') ?? 'practice').toLowerCase() === 'live';
+    return {
+      token,
+      accountId,
+      base: live ? 'https://api-fxtrade.oanda.com' : 'https://api-fxpractice.oanda.com',
+    };
+  }
+  return oandaConfig();
+}
+
 export function krakenConfig(): KrakenConfig | null {
   const apiKey = env('KRAKEN_API_KEY');
   const apiSecret = env('KRAKEN_API_SECRET');
