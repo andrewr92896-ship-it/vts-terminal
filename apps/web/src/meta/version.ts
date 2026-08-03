@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.52';
+export const APP_VERSION = 'Beta V 6.53';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.53',
+    date: 'August 3, 2026',
+    notes: [
+      'The Live Wall now has two separate tiles where it had one wrong one. "Funded Account" reads your prop-firm challenge — equity against the target, and how much drawdown is left before it is breached. "Manual Trades" reads the book you keep by hand. The single tile shipped yesterday was labelled Funded Account but showed the manual book.',
+    ],
+  },
   {
     version: 'Beta V 6.52',
     date: 'August 3, 2026',
