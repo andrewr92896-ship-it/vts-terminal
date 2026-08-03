@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.48';
+export const APP_VERSION = 'Beta V 6.49';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.49',
+    date: 'August 3, 2026',
+    notes: [
+      'The Live Wall now works properly on a phone. Tiles stack into one full-width column in the order you arranged them, instead of being squeezed into a twelve-column grid. Your desktop arrangement is untouched — the phone only changes how it is drawn.',
+      'Any tile can be blown up to fill the screen. Hover a tile and press the expand button in its bottom-right corner; Escape or Close puts it back. Useful for charts and for the longer lists.',
+      'Saved boards now follow your membership rather than the trading desk. A Premium member who has not switched Advanced Trading on used to get exactly one board despite paying for custom boards; they now get named layouts like everyone else.',
+      'The wall makes fewer requests. Two tiles reading the same thing — Trade Analysis beside Closed Trades, say — now share one request instead of each making their own.',
+    ],
+  },
   {
     version: 'Beta V 6.48',
     date: 'August 3, 2026',

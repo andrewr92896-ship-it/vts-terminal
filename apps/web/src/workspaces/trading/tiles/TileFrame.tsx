@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { ApiError } from '../../../api/client';
 import { Icon } from '../../../components/Icon';
+import { sharedFetch } from './tileFeed';
 import { BORDER, BORDER2, FAINT, GOLD, MONO, MUTED, PANEL, TEXT } from '../tvChart';
 
 // The shell every Live Wall tile is built in: the draggable header, the remove
@@ -158,7 +159,7 @@ export function TileSelect({
 
 // Poll an endpoint for a tile.
 //
-// Two rules every tile on this wall follows, and the reason this is a hook
+// Three rules every tile on this wall follows, and the reason this is a hook
 // rather than copied into each one:
 //
 //  - a failed REFRESH keeps the last good data on screen. A tile that blanks
@@ -166,7 +167,13 @@ export function TileSelect({
 //    minute ago, which is what a wall of them is for.
 //  - nothing is written after unmount. Twenty tiles each holding a timer and a
 //    pending request will otherwise all resolve into a board that has moved on.
+//  - two tiles reading the same endpoint make ONE request (tileFeed.ts). `key`
+//    is what identifies "the same endpoint", so it must name the request and
+//    everything that varies it — `studies:leaderboard:<deckId>`, not
+//    `studies:leaderboard`, or every leaderboard tile would show the first
+//    deck's standings.
 export function useTileData<T>(
+  key: string,
   fetcher: () => Promise<T>,
   refreshMs: number,
   deps: unknown[] = [],
@@ -182,7 +189,11 @@ export function useTileData<T>(
 
   const load = useCallback(async () => {
     try {
-      const d = await fetcherRef.current();
+      // Half the poll interval as the staleness bound: comfortably wide enough
+      // to absorb tiles that opened together or drifted into lockstep, and
+      // narrow enough that a tile never shows an answer older than it would
+      // have fetched for itself.
+      const d = await sharedFetch(key, () => fetcherRef.current(), refreshMs / 2);
       if (!alive.current) return;
       setData(d);
       setError(null);
@@ -194,7 +205,7 @@ export function useTileData<T>(
     } finally {
       firstLoad.current = false;
     }
-  }, []);
+  }, [key, refreshMs]);
 
   useEffect(() => {
     alive.current = true;

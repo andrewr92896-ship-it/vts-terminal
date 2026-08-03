@@ -32,7 +32,7 @@ const STREAM_POLL = 45_000; // a channel going live must reach an open tile
 //     quoted a price that came from somewhere else.
 export function MarketDataTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.marketData(), SLOW);
+  const { data, error } = useTileData('market:data', () => api.marketData(), SLOW);
 
   const rows = useMemo(() => {
     if (!data) return [];
@@ -121,7 +121,7 @@ function changeColor(v: string): string {
 // watchable one, and the server refuses the rest on read anyway.
 export function StreamTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { user } = useAuth();
-  const { data, error } = useTileData(() => api.marketNewsStreams(), STREAM_POLL);
+  const { data, error } = useTileData('market:streams', () => api.marketNewsStreams(), STREAM_POLL);
   const channels = data?.streams.channels ?? [];
 
   // A channel is playable when the account reaches it: every account gets the

@@ -1324,11 +1324,18 @@ mistake here:**
   `funded`), plus the Positions view, Connections and desk settings. Without it
   `LiveWall` never even calls `/api/trading/live`.
 - **`customBoards` (Premium)** decides whether the board can be **arranged and
-  saved**. Without it the reader gets the **three built-in layouts** — Markets,
-  Trading Desk, My Terminal — chosen from the same picker a member uses, with the
-  choice remembered per device (there is nothing saved server-side to hold it).
-  That is what makes a free account a working board rather than an empty grid
-  behind a locked save button.
+  saved**, and **how many boards may be kept**. Without it the reader gets the
+  **three built-in layouts** — Markets, Trading Desk, My Terminal — chosen from
+  the same picker a member uses, with the choice remembered per device (there is
+  nothing saved server-side to hold it). That is what makes a free account a
+  working board rather than an empty grid behind a locked save button.
+  - **Named presets follow the membership, NOT the desk opt-in.** The create
+    route used to cap a non-desk user at one board, from when the wall was a
+    charts screen and presets read as a desk feature. They are not: saving your
+    own arrangement *is* `customBoards`, which `boardWrite` has already checked —
+    so the cap charged a Premium member for presets and then gave them one, on
+    the strength of a switch that has nothing to do with it. What the desk still
+    decides is which **tiles** a board may carry.
 - **Individual tiers** gate individual tiles (`marketdata` → Premium,
   `teamchat` → Max, and so on).
 
@@ -1355,6 +1362,38 @@ surface whose job is to say what a thing costs.
 `streamEmbed.ts` (what a live-stream tile plays, and the "never point the player
 at a guessed id" rule — read by both Market News and the wall's `streams` tile),
 and the tile catalog above.
+
+**A phone renders ONE column, and never writes that back.** The grid is a desktop
+idea — at twelve columns a four-wide tile is a third of a 390px screen. So on a
+phone the same tiles stack full-width, ordered `y` then `x` (how the desktop
+board reads anyway), each with a height floor. The stored `x`/`y`/`w` are
+untouched: the phone changes what is **rendered**, never what is saved. That is
+also why `canEdit` is `customBoards && !isPhone` and why `isDraggable` tests
+`canEdit` as well as `editing` — a drag on the phone would write the flattened
+order over the real arrangement, including for a board merely left in edit mode
+on a desktop and then narrowed.
+
+**Any tile can be expanded to fill the screen**, and the control is in the grid
+**cell**, not the tile header. Deliberately: the headers belong to twenty-three
+components, seven of which predate the shared `TileFrame`, so putting it in the
+cell gives every kind the behaviour with no per-tile change. The bottom-right
+corner is free exactly when it is offered — while editing, that corner is the
+resize handle and the button is hidden. It is hover-revealed on a pointer device
+and permanently visible under `@media (hover: none)`, since a touch device gets
+no chance to discover a hover-only control.
+
+**Tiles fetch through `tiles/tileFeed.ts`, so two tiles reading one endpoint make
+one request.** The wall changed the economics of a poll: a realistic board has
+Trade Analysis beside Closed Trades (both the closed-trade history), Net Worth
+beside Portfolio, two Market Data tiles off one catalog. `sharedFetch` shares an
+**in-flight** request (the mount case — a board opens and fires everything at
+once) and an answer younger than the **caller's own** staleness bound (the
+steady-state case — two tiles on the same interval drift into lockstep). A failed
+request drops the in-flight marker but **keeps the last good answer**, which is
+what lets a tile go on showing the previous reading. `useTileData`'s first
+argument is the key, and it must name everything that varies the request —
+`studies:leaderboard:<deckId>`, never `studies:leaderboard`, or every leaderboard
+tile shows the first deck's standings.
 
 ## Roles & access (`auth/rbac.ts`)
 

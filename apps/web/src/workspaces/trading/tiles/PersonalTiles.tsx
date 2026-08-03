@@ -41,7 +41,7 @@ const MEDIUM = 120_000;
 // part of the figure is tracked automatically versus typed in by hand.
 export function NetWorthTile({ tile, editing, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.netWorth(90), SLOW);
+  const { data, error } = useTileData('my:networth', () => api.netWorth(90), SLOW);
 
   const spark = useMemo(() => (data ? data.history.map((p) => p.netWorth) : []), [data]);
   const change = useMemo(() => {
@@ -111,7 +111,7 @@ export function NetWorthTile({ tile, editing, onRemove }: TileProps) {
 //   - market gain is separated from money that was merely added.
 export function PortfolioTile({ tile, editing, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.investmentPortfolio(), SLOW);
+  const { data, error } = useTileData('inv:portfolio', () => api.investmentPortfolio(), SLOW);
   const t = data?.totals;
   // The same coverage floor the Portfolio Overview screen uses: below it, a day
   // move would describe a fraction of the book while reading as the whole.
@@ -166,7 +166,7 @@ export function PortfolioTile({ tile, editing, onRemove }: TileProps) {
 // available source could support and which would read as a promise.
 export function DividendsTile({ tile, editing, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.investmentDividends(), SLOW);
+  const { data, error } = useTileData('inv:dividends', () => api.investmentDividends(), SLOW);
 
   return (
     <TileFrame
@@ -204,7 +204,7 @@ export function DividendsTile({ tile, editing, onRemove }: TileProps) {
 // ---- To Do --------------------------------------------------------------
 
 export function TodoTile({ tile, editing, onChange, onRemove }: TileProps) {
-  const { data, error } = useTileData(() => api.getTodo(), MEDIUM);
+  const { data, error } = useTileData('my:todo', () => api.getTodo(), MEDIUM);
   const limit = tile.limit ?? 8;
 
   const sections = data?.sections ?? [];
@@ -280,7 +280,7 @@ export function NotesTile({ tile, editing, onChange, onRemove }: TileProps) {
 // ---- Announcements ------------------------------------------------------
 
 export function AnnouncementsTile({ tile, editing, onRemove }: TileProps) {
-  const { data, error } = useTileData(() => api.announcements(), SLOW);
+  const { data, error } = useTileData('site:announcements', () => api.announcements(), SLOW);
   const shown = (data?.announcements ?? []).slice(0, tile.limit ?? 8);
 
   return (
@@ -313,7 +313,7 @@ export function AnnouncementsTile({ tile, editing, onRemove }: TileProps) {
 // ---- What's new (patch notes) -------------------------------------------
 
 export function PatchNotesTile({ tile, editing, onRemove }: TileProps) {
-  const { data, error } = useTileData(() => api.patchNotes(), SLOW);
+  const { data, error } = useTileData('site:patchnotes', () => api.patchNotes(), SLOW);
   const shown = (data?.notes ?? []).slice(0, tile.limit ?? 5);
 
   return (
