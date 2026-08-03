@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingBoards, type TradingBoardRow } from '../db/schema.js';
+import { tradingBoards, users, type TradingBoardRow } from '../db/schema.js';
 import type { BoardTileKind } from './boardTiles.js';
 
 // Per-user Live Wall "boards" — saved drag-resize grids of chart and watchlist
@@ -71,6 +71,10 @@ export interface TradingBoard {
   layout: BoardLayout;
   isDefault: boolean;
   updatedAt: number;
+  /** Published to this team, or null when private. */
+  sharedTeamId: string | null;
+  /** Who published it. Set only on a teammate's board, for the picker. */
+  sharedBy?: string;
 }
 
 export interface BoardInput {
@@ -102,6 +106,24 @@ function toBoard(row: TradingBoardRow): TradingBoard {
     layout: parseLayout(row.layout),
     isDefault: row.isDefault,
     updatedAt: row.updatedAt.getTime(),
+    sharedTeamId: row.sharedTeamId ?? null,
+  };
+}
+
+// A layout with everything personal taken out of it, for publishing to a team.
+//
+// A board is almost entirely arrangement — which tiles, where, and how each is
+// configured — and none of that is private: the figures a tile shows are fetched
+// by whoever is READING it, so a teammate opening a shared board sees their own
+// net worth and their own trades.
+//
+// The notes tile is the exception, and the reason this function exists. Its text
+// lives in the layout blob rather than in a table of its own, so publishing a
+// board verbatim would publish the author's scratchpad along with it. The tile
+// is kept (the arrangement is the point) and emptied.
+function shareableLayout(layout: BoardLayout): BoardLayout {
+  return {
+    tiles: layout.tiles.map((t) => (t.kind === 'notes' ? { ...t, noteText: '' } : t)),
   };
 }
 
@@ -166,6 +188,86 @@ export async function updateBoard(userId: string, id: string, input: BoardInput)
     .where(and(eq(tradingBoards.id, id), eq(tradingBoards.userId, userId)));
   if (!row) throw new Error('Board not found');
   return toBoard(row);
+}
+
+// The layouts this user's teammates have published.
+//
+// Deliberately excludes the reader's own — those are already in their list, and
+// showing a board twice under two headings is how somebody ends up editing the
+// copy they did not mean to.
+export async function listTeamBoards(userId: string, teamId: string | null): Promise<TradingBoard[]> {
+  if (!teamId) return [];
+  const rows = await db
+    .select({ board: tradingBoards, author: users.displayName, username: users.username })
+    .from(tradingBoards)
+    .innerJoin(users, eq(users.id, tradingBoards.userId))
+    .where(and(eq(tradingBoards.sharedTeamId, teamId), ne(tradingBoards.userId, userId)))
+    .orderBy(asc(tradingBoards.name));
+  return rows.map((r) => ({
+    ...toBoard(r.board),
+    // A shared board is never the reader's default — that flag belongs to the
+    // author's own list and means nothing here.
+    isDefault: false,
+    sharedBy: r.author || r.username,
+  }));
+}
+
+// Publish this board to the caller's team, or take it back.
+//
+// **One shared board per person**, enforced by unsharing their others: the
+// picker is a menu, and a five-person team each publishing four layouts turns it
+// into a directory. One each keeps it a short, useful list and needs no new
+// permission concept — anyone on the team may publish, because an arrangement
+// carries no data and the cap is what bounds the clutter.
+export async function shareBoard(
+  userId: string,
+  id: string,
+  teamId: string | null,
+  shared: boolean,
+): Promise<void> {
+  const [row] = await db
+    .select()
+    .from(tradingBoards)
+    .where(and(eq(tradingBoards.id, id), eq(tradingBoards.userId, userId)));
+  if (!row) throw new Error('Board not found');
+  if (!shared) {
+    await db.update(tradingBoards).set({ sharedTeamId: null }).where(eq(tradingBoards.id, id));
+    return;
+  }
+  if (!teamId) throw new Error('You are not on a team yet');
+  // Strip the author's notes before it becomes visible to anyone else.
+  await db
+    .update(tradingBoards)
+    .set({ sharedTeamId: null })
+    .where(and(eq(tradingBoards.userId, userId), eq(tradingBoards.sharedTeamId, teamId)));
+  await db
+    .update(tradingBoards)
+    .set({ sharedTeamId: teamId, layout: JSON.stringify(shareableLayout(parseLayout(row.layout))) })
+    .where(eq(tradingBoards.id, id));
+}
+
+// Take a copy of a teammate's published layout into your own boards.
+//
+// A copy rather than a reference, deliberately: once it is yours you rearrange
+// it freely, and the author editing theirs afterwards does not reach into your
+// board. It is the same reason "Save as new" exists.
+export async function copyTeamBoard(
+  userId: string,
+  teamId: string | null,
+  sourceId: string,
+): Promise<TradingBoard> {
+  if (!teamId) throw new Error('You are not on a team yet');
+  const [row] = await db
+    .select()
+    .from(tradingBoards)
+    .where(and(eq(tradingBoards.id, sourceId), eq(tradingBoards.sharedTeamId, teamId)));
+  // Scoped on the team, so a board id from another desk cannot be copied by
+  // guessing it — the row simply does not match.
+  if (!row) throw new Error('That layout is not shared with your team');
+  return createBoard(userId, {
+    name: row.name.slice(0, 70),
+    layout: shareableLayout(parseLayout(row.layout)),
+  });
 }
 
 export async function removeBoard(userId: string, id: string): Promise<void> {

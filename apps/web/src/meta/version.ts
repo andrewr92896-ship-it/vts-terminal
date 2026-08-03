@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.49';
+export const APP_VERSION = 'Beta V 6.50';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.50',
+    date: 'August 3, 2026',
+    notes: [
+      'You can now share a Live Wall layout with your team. Publish one of your boards and every teammate finds it in their own layout menu, named after you. Each person can take a copy and rearrange it however they like.',
+      'Only the arrangement is shared, never the figures. A teammate opening your layout sees their own net worth, their own trades and their own lists in it — and if the board has a notes tile, your notes are stripped before anyone else can see it.',
+      'A free account can open a layout its team has shared, even though it cannot build one. Taking a copy needs a Premium membership.',
+      'Switching layouts no longer asks whether to discard changes you had not made.',
+    ],
+  },
   {
     version: 'Beta V 6.49',
     date: 'August 3, 2026',

@@ -529,6 +529,13 @@ export const tradingBoards = sqliteTable('trading_boards', {
   // JSON: { tiles: BoardTile[] }. Opaque to the DB; validated in the route.
   layout: text('layout').notNull().default('{"tiles":[]}'),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+  // Null = private (the default). A team id publishes this layout to that team,
+  // who can open it from their own picker. Only the ARRANGEMENT travels — every
+  // tile fetches as the signed-in reader, so a teammate sees their own figures
+  // in it (migration 0097). No foreign key: a team that is renamed or emptied
+  // should not take a member's board down with it, and a stale id simply
+  // matches nobody.
+  sharedTeamId: text('shared_team_id'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

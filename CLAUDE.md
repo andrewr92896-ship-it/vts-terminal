@@ -1382,6 +1382,36 @@ resize handle and the button is hidden. It is hover-revealed on a pointer device
 and permanently visible under `@media (hover: none)`, since a touch device gets
 no chance to discover a hover-only control.
 
+**A layout can be published to the team** (`shared_team_id`, migration `0097`).
+`GET /api/trading/boards` answers with `{ boards, teamBoards, onTeam }` — one
+shape every board route returns via `boardsPayload`, so no route can hand the
+client an undefined list — and the picker draws "Shared with your team" naming
+the author.
+
+- **Only the ARRANGEMENT travels.** Every tile fetches as the signed-in reader,
+  with their own credentials and their own team scope, so a teammate opening a
+  shared board sees **their** net worth and **their** trades in it. That is what
+  makes sharing safe, and it is a consequence of how tiles fetch rather than
+  something enforced at the boundary.
+- **The one exception is the notes tile**, whose text rides in the layout blob.
+  `shareBoard` empties it on the way out (`shareableLayout`) — the tile is kept,
+  because the arrangement is the point, but a board must never publish somebody's
+  scratchpad.
+- **One shared board per person**, enforced by unsharing their others. A
+  five-person team each publishing four layouts turns the picker into a
+  directory; the cap is what lets *anyone* on the team publish without inventing
+  a permission for it.
+- **Reading the shared list is free; copying is `customBoards`.** A free account
+  cannot build a layout but can open the one its desk already uses, which is the
+  most useful thing a team can hand a new member. Copying **creates** a board, so
+  it sits on the paid guard. A copy rather than a reference, so the author
+  editing theirs later never reaches into somebody else's board.
+
+**`dirty` means MODIFIED, not merely unsaved.** A built-in layout is permanently
+unsaved and nonetheless untouched, so `applyBuiltIn` / `applyShared` baseline
+`savedTilesJson` against what they just applied. Conflating the two made every
+layout switch ask "discard unsaved changes?" about changes nobody had made.
+
 **Tiles fetch through `tiles/tileFeed.ts`, so two tiles reading one endpoint make
 one request.** The wall changed the economics of a poll: a realistic board has
 Trade Analysis beside Closed Trades (both the closed-trade history), Net Worth

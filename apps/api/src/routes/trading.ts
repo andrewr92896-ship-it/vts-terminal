@@ -61,7 +61,16 @@ import {
   liveStreamsConfigured,
   ChannelError,
 } from '../trading/marketNewsStreams.js';
-import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
+import { getUserTeamContext } from '../userTeams/service.js';
+import {
+  copyTeamBoard,
+  createBoard,
+  listBoards,
+  listTeamBoards,
+  removeBoard,
+  shareBoard,
+  updateBoard,
+} from '../trading/boards.js';
 import { BOARD_TILE_KINDS, DESK_TILE_KINDS } from '../trading/boardTiles.js';
 import {
   getMarketNews,
@@ -467,7 +476,46 @@ export async function tradingRoutes(app: FastifyInstance) {
   // (`boardWrite`). What the Advanced Trading opt-in still decides is which
   // TILES a board may carry: the desk-reading kinds are stripped from anything a
   // non-desk user saves. Applied here, not just in the UI.
-  app.get('/api/trading/boards', markets, async (request) => ({ boards: await listBoards(request.currentUser!.id) }));
+  // Reading includes what the reader's TEAM has published. Deliberately on the
+  // free guard alongside their own boards: a free account cannot build a layout,
+  // but adopting the one their desk already uses costs nothing to allow and is
+  // the most useful thing their team can hand them.
+  // Every board response carries the same three fields. A helper rather than
+  // three routes each remembering: the client types them as one shape, so a
+  // route that answered with only `boards` would hand it an undefined list.
+  const boardsPayload = async (userId: string) => {
+    const team = await getUserTeamContext(userId);
+    return {
+      boards: await listBoards(userId),
+      teamBoards: await listTeamBoards(userId, team?.teamId ?? null),
+      onTeam: !!team?.teamId,
+    };
+  };
+  app.get('/api/trading/boards', markets, async (request) => boardsPayload(request.currentUser!.id));
+  app.post('/api/trading/boards/:id/share', boardWrite, async (request, reply) => {
+    const parsed = z.object({ shared: z.boolean() }).safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Say whether to share it' });
+    const userId = request.currentUser!.id;
+    const team = await getUserTeamContext(userId);
+    try {
+      await shareBoard(userId, (request.params as { id: string }).id, team?.teamId ?? null, parsed.data.shared);
+      return boardsPayload(userId);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not share that board' });
+    }
+  });
+  // Taking a copy CREATES a board, so it is on the paid write guard even though
+  // reading the shared list is free.
+  app.post('/api/trading/boards/:id/copy', boardWrite, async (request, reply) => {
+    const userId = request.currentUser!.id;
+    const team = await getUserTeamContext(userId);
+    try {
+      const board = await copyTeamBoard(userId, team?.teamId ?? null, (request.params as { id: string }).id);
+      return { board, ...(await boardsPayload(userId)) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not copy that layout' });
+    }
+  });
   app.post('/api/trading/boards', boardWrite, async (request, reply) => {
     const parsed = createBoardSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name is required' });
@@ -484,7 +532,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     // What the desk still decides is which TILES a board may carry, below.
     try {
       const board = await createBoard(userId, { ...parsed.data, layout: allowedLayout(parsed.data.layout, full) });
-      return { board, boards: await listBoards(userId) };
+      return { board, ...(await boardsPayload(userId)) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save board' });
     }
@@ -499,14 +547,14 @@ export async function tradingRoutes(app: FastifyInstance) {
         ...parsed.data,
         layout: allowedLayout(parsed.data.layout, full),
       });
-      return { board, boards: await listBoards(userId) };
+      return { board, ...(await boardsPayload(userId)) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update board' });
     }
   });
   app.delete('/api/trading/boards/:id', boardWrite, async (request) => {
     await removeBoard(request.currentUser!.id, (request.params as { id: string }).id);
-    return { boards: await listBoards(request.currentUser!.id) };
+    return boardsPayload(request.currentUser!.id);
   });
 
   // ---- Market Data (the series catalog + this trader's board arrangement) ----
