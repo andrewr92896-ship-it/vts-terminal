@@ -13,7 +13,7 @@ import type { BrokerLiveResult, LiveTrade } from './types.js';
 //     burst of widget refreshes never fans out to the broker more than once.
 //
 // It caches only the shared, team-level broker part; the per-viewer bits
-// (funded merge, designation colours, break-even settings) are applied after,
+// (funded merge, balance gating, break-even settings) are applied after,
 // so what each viewer sees is unchanged. Only the "live" path uses this — the
 // no-connection sample path is viewer-attributed and cheap, so it stays direct.
 //
@@ -35,7 +35,7 @@ import type { BrokerLiveResult, LiveTrade } from './types.js';
 export interface DeskSnapshot {
   generatedAt: number; // when the brokers were actually polled
   brokers: BrokerLiveResult[];
-  withSlip: LiveTrade[]; // broker positions, slippage-tagged, pre designation/gate/funded
+  withSlip: LiveTrade[]; // broker positions, slippage-tagged, pre gate/funded merge
   note: string | null;
 }
 

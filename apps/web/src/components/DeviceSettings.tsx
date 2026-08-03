@@ -496,7 +496,6 @@ function renderCard(w, p, detailed){
   const head = card.addStack(); head.centerAlignContent();
   const sym = head.addText(p.instrument); sym.font=Font.boldSystemFont(14); sym.textColor=Color.white();
   head.addSpacer(6); pill(head, long?"LONG":"SHORT", sideColor); head.addSpacer();
-  if(p.designation && p.designation.emoji){ const d=head.addText(p.designation.emoji+" "+p.designation.label); d.font=Font.mediumSystemFont(9); d.textColor=new Color(p.designation.color||"#9fb0d6"); }
   const meta = card.addStack(); meta.centerAlignContent();
   const ow = meta.addText("@"+p.owner); ow.font=Font.mediumSystemFont(9.5); ow.textColor=new Color("#bcd0ff");
   meta.addSpacer(6); const bk = meta.addText(p.brokerName||p.broker); bk.font=Font.systemFont(9.5); bk.textColor=C.muted;
@@ -526,7 +525,7 @@ function renderCard(w, p, detailed){
 // Compact single-line row — used by the MEDIUM widget to fit several people.
 function renderRow(w, p){
   const long = p.side==="long"; const sideColor = long?C.green:C.red;
-  const dotColor = (p.designation && p.designation.color) ? new Color(p.designation.color) : sideColor;
+  const dotColor = sideColor;
   const row = w.addStack(); row.centerAlignContent(); row.setPadding(3,0,3,0);
   const dot = row.addStack(); dot.size = new Size(7,7); dot.cornerRadius = 4; dot.backgroundColor = dotColor;
   row.addSpacer(7);
@@ -550,7 +549,6 @@ function renderSolo(w, p){
   const head = w.addStack(); head.centerAlignContent();
   const sym = head.addText(p.instrument); sym.font=Font.boldSystemFont(16); sym.textColor=Color.white(); sym.minimumScaleFactor=0.7; sym.lineLimit=1;
   head.addSpacer(6); pill(head, long?"LONG":"SHORT", sideColor);
-  if(p.designation && p.designation.emoji){ const d=w.addText(p.designation.emoji+" "+p.designation.label); d.font=Font.mediumSystemFont(10); d.textColor=new Color(p.designation.color||"#9fb0d6"); d.lineLimit=1; }
   w.addSpacer(4);
   if(p.unrealizedPl===null||p.unrealizedPl===undefined){ const t=w.addText("—"); t.font=Font.boldSystemFont(24); t.textColor=C.muted; }
   else { const up=p.unrealizedPl>=0; const t=w.addText((up?"+":"")+money(p.unrealizedPl)); t.font=Font.boldSystemFont(24); t.textColor=up?C.green:C.red; t.minimumScaleFactor=0.5; t.lineLimit=1; }

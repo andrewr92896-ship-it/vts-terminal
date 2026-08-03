@@ -95,7 +95,6 @@ export interface WidgetPosition {
   slippage: number | null;
   unrealizedPl: number | null;
   openedAt: number | null;
-  designation: { label: string; color: string; emoji: string } | null;
   forex: {
     accountCurrency: string;
     moneyPerPip: number | null;
@@ -150,9 +149,6 @@ export async function buildWidgetPositions(
     slippage: t.slippage,
     unrealizedPl: t.unrealizedPl,
     openedAt: t.openedAt,
-    designation: t.designation
-      ? { label: t.designation.label, color: t.designation.color, emoji: t.designation.emoji }
-      : null,
     forex: t.forex
       ? {
           accountCurrency: t.forex.accountCurrency,

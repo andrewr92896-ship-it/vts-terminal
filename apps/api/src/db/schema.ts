@@ -375,8 +375,8 @@ export type TradingChallengeRow = typeof tradingChallenges.$inferSelect;
 // their own view of the desk (break-even scoring + the test-trade floor). The
 // legacy `id = 'desk'` row is kept as the DEFAULT that a trader who has never
 // customized falls back to (see trading/settings.ts). A trader's own settings
-// can be changed by that trader, and — for any teammate — by the team leader,
-// the Chief Analyst / Chief Strategist, and admins (see trading/deskAccess.ts).
+// can be changed by that trader, and — for any teammate — by the team leader and
+// admins (see trading/deskAccess.ts).
 // The break-even buffer marks a barely-moved trade as flat (neither win nor
 // loss). `breakEvenMode` picks how the buffer is measured:
 //   • 'percent' — ±`breakEvenPct` of the entry→exit price move (the original)
@@ -1645,7 +1645,7 @@ export type UserTeamRow = typeof userTeams.$inferSelect;
 
 // One row per member of a user Trading Team. `userId` is unique across the whole
 // table, so a user can be in at most one team. `badge` is a cosmetic title label
-// (e.g. "Chief Strategist"), null for none. The boolean columns are the leader-
+// (e.g. "Lead Trader"), null for none. The boolean columns are the leader-
 // granted permissions; the leader implicitly has them all (checked via
 // userTeams.leaderId, not these flags).
 export const userTeamMembers = sqliteTable('user_team_members', {
@@ -1657,7 +1657,7 @@ export const userTeamMembers = sqliteTable('user_team_members', {
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
-  badge: text('badge'), // cosmetic title, e.g. "Chief Strategist"; null for none
+  badge: text('badge'), // cosmetic title, e.g. "Lead Trader"; null for none
   canCreateStudyGuides: integer('can_create_study_guides', { mode: 'boolean' }).notNull().default(false),
   canInvite: integer('can_invite', { mode: 'boolean' }).notNull().default(false),
   canManageBadges: integer('can_manage_badges', { mode: 'boolean' }).notNull().default(false),

@@ -2,7 +2,6 @@ import { useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
-import { DesignationTag, tileTint } from './DesignationTag';
 import { TradeTimes, etSince } from './tradeTime';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
 
@@ -20,7 +19,7 @@ const TEXT = '#eef3ff';
 const MUTED = '#9fb0d6';
 const FAINT = '#6f84b0';
 // Neutral gray used to mute off-book (funded/FTP) positions — they sit last on
-// the wall and never take a green/red designation tint.
+// the wall and read as separate from the desk's on-book book.
 const GRAY = '#8892a6';
 const CARD = 'rgba(13,31,68,.5)';
 const PANEL = 'rgba(11,26,58,.5)';
@@ -119,10 +118,11 @@ export function TradeCard({
   const long = t.side === 'long';
   const sideColor = long ? GREEN : RED;
   // Off-book (funded/FTP) positions are muted gray and always sorted last on the
-  // wall, regardless of who placed them; on-book positions take their owner's
-  // designation colour (Chief Strategist green / Chief Analyst red), if any.
+  // wall, regardless of who placed them. On-book positions take no accent: a
+  // position is not coloured by whose it is (the Chief Strategist / Chief Analyst
+  // tints were removed — owner decision, 2026-08).
   const offBook = t.broker === 'ftp';
-  const accent = offBook ? GRAY : t.designation?.color ?? null;
+  const accent = offBook ? GRAY : null;
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
   // While open, a position sitting inside the desk's break-even band (its move
@@ -182,9 +182,8 @@ export function TradeCard({
         padding: 0,
         overflow: 'hidden',
         borderTop: `2px solid ${sideColor}`,
-        // Tint the whole tile in its accent colour with a matching left accent:
-        // the owner's designation colour on-book, or gray for an off-book
-        // (funded) position — so whose position it is reads at a glance.
+        // Gray wash + left accent on an off-book (funded) position, so it reads
+        // as separate from the desk's on-book positions.
         ...(accent ? { borderLeft: `3px solid ${accent}`, background: tileTint(accent, CARD) } : {}),
       }}
     >
@@ -196,10 +195,6 @@ export function TradeCard({
           {isBreakeven && <span style={{ ...sideBadge, color: GOLD, border: `1px solid ${GOLD}` }} title="Break-even — inside the desk's break-even band">B/E</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {/* The owner's Chief Strategist / Chief Analyst designation, shown on
-              every card (including the viewer's own). On an off-book position it
-              renders in gray to match the muted tile. */}
-          <DesignationTag designation={t.designation} color={offBook ? GRAY : undefined} />
           {/* On the viewer's own card the broker name already identifies it, so
               the owner tag is dropped. On teammates' cards show their handle
               (the part of the email before the domain) so it's clear whose it
@@ -365,6 +360,12 @@ function RRBox({ label, pips, money, ccy, color }: { label: string; pips: number
 }
 
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12 };
+
+// A subtle wash of an accent colour blended into the card's base background, so
+// the whole tile reads in that colour. Only off-book (funded) positions use it.
+function tileTint(accent: string, base: string): string {
+  return `color-mix(in srgb, ${accent} 13%, ${base})`;
+}
 const fxLabel: CSSProperties = { fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT };
 const fxTag: CSSProperties = {
   fontSize: 8.5,

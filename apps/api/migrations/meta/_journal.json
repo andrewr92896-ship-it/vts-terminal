@@ -687,6 +687,13 @@
       "when": 1782342936908,
       "tag": "0098_drop_nav_order_override",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "6",
+      "when": 1782343036908,
+      "tag": "0099_drop_chief_designations",
+      "breakpoints": true
     }
   ]
 }

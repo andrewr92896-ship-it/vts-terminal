@@ -26,7 +26,12 @@ export const MAX_TEAM_MEMBERS = 5;
 
 // Cosmetic badge titles offered as presets; the leader may also type a custom
 // one (any label up to 40 chars).
-export const BADGE_PRESETS = ['Chief Strategist', 'Chief Analyst', 'Risk Manager', 'Lead Trader'] as const;
+//
+// "Chief Strategist" and "Chief Analyst" were removed (owner decision, 2026-08):
+// a title naming one teammate the desk's analyst or strategist implies they are
+// advising the others, which is a posture the terminal deliberately stays out of.
+// Migration 0099 clears the ones already stored. Do not add them back.
+export const BADGE_PRESETS = ['Risk Manager', 'Lead Trader'] as const;
 
 // The leader-granted permission flags. The leader implicitly holds them all.
 export interface MemberPermissions {

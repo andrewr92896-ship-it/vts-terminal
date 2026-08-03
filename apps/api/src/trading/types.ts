@@ -41,9 +41,6 @@ export interface LiveTrade {
   // Forex pip math (pips of open P/L, money per pip, risk/reward), present only
   // for genuine currency pairs. Money fields are gated like unrealizedPl.
   forex?: import('./forex.js').ForexMetrics | null;
-  // The owner's position designation (Chief Strategist / Chief Analyst), when
-  // they hold one — colours the position on the wall. Null/absent otherwise.
-  designation?: import('../badges/designations.js').TradeDesignation | null;
 }
 
 // Per-broker outcome of a Live Wall refresh: was it configured, did the fetch

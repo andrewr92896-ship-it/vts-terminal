@@ -1,30 +1,26 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users, type UserRow } from '../db/schema.js';
-import { isAdmin, parseBadges, parseRoles } from '../auth/rbac.js';
+import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import { getUserTeamContext } from '../userTeams/service.js';
-import { DESIGNATION_BADGE_KEYS } from '../badges/designations.js';
 
 // Who may change whose desk settings.
 //
 // A trader can always change their own. On top of that, a trader's settings can
-// be changed for them by a teammate who leads the desk: the My Terminal team
-// leader, or a holder of a position-designation badge (Chief Analyst / Chief
-// Strategist). Admins and founder-level users can change anyone's. This mirrors
-// how designations already mark leadership on the desk (see designations.ts).
-
-// Whether `actor` carries a Chief Analyst / Chief Strategist designation badge.
-function hasDesignation(actor: UserRow): boolean {
-  const held = new Set(parseBadges(actor));
-  return DESIGNATION_BADGE_KEYS.some((k) => held.has(k));
-}
+// be changed for them by the My Terminal team leader. Admins and founder-level
+// users can change anyone's.
+//
+// A badge never grants this. The two badges that used to — Chief Strategist and
+// Chief Analyst — were removed outright (owner decision, 2026-08): a title
+// naming one trader the desk's analyst or strategist implies they are advising
+// the others, which is exactly the advice-giving posture the terminal stays out
+// of. Do not reintroduce a badge-derived permission here.
 
 // Whether `actor` is a "desk lead" — empowered to change teammates' desk
-// settings — by virtue of admin capability, team leadership, or a designation.
+// settings — by virtue of admin capability or team leadership.
 export async function isDeskLead(actor: UserRow): Promise<boolean> {
   if (isAdmin(parseRoles(actor))) return true;
-  if (hasDesignation(actor)) return true;
   const ctx = await getUserTeamContext(actor.id);
   return !!ctx?.isLeader;
 }
