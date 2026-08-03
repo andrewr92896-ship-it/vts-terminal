@@ -352,19 +352,24 @@ export function ChallengeTile({ tile, editing, onRemove }: TileProps) {
           <TileRow label="Profit" value={hide ? HIDDEN : signedMoney(m.profit)} color={plColor(m.profit)} strong />
           {m.toTarget != null && <TileRow label="Left to target" value={hide ? HIDDEN : money(m.toTarget)} />}
           {/* Headroom, not the floor: "how much can I lose today" is the
-              question a challenge account is actually run on. */}
+              question a challenge account is actually run on.
+              `*HeadroomPct` is a FRACTION (headroom / allowance, 0..1), not a
+              percentage — reading it as one paints a full allowance red. Red
+              means BREACHED, the same signal the Funded Account screen's gauges
+              use, so the tile and the screen never disagree; amber is the
+              warning below a quarter left. */}
           {m.dailyHeadroom != null && (
             <TileRow
               label="Daily drawdown left"
               value={hide ? HIDDEN : money(m.dailyHeadroom)}
-              color={m.dailyHeadroomPct < 25 ? RED : TEXT}
+              color={m.breaches.daily ? RED : m.dailyHeadroomPct < 0.25 ? AMBER : TEXT}
             />
           )}
           {m.maxHeadroom != null && (
             <TileRow
               label="Max drawdown left"
               value={hide ? HIDDEN : money(m.maxHeadroom)}
-              color={m.maxHeadroomPct < 25 ? RED : TEXT}
+              color={m.breaches.max ? RED : m.maxHeadroomPct < 0.25 ? AMBER : TEXT}
             />
           )}
         </>
@@ -373,6 +378,7 @@ export function ChallengeTile({ tile, editing, onRemove }: TileProps) {
   );
 }
 
+const AMBER = '#e0a23a';
 const STATUS_WORD: Record<'active' | 'passed' | 'breached', string> = {
   active: 'Active',
   passed: 'Passed',
