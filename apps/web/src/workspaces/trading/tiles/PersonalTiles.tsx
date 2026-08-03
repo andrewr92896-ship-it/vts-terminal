@@ -159,6 +159,48 @@ export function PortfolioTile({ tile, editing, onRemove }: TileProps) {
   );
 }
 
+// ---- Dividends & income --------------------------------------------------
+//
+// What the portfolio has actually paid out. The yield here is TRAILING — what
+// was received over the last twelve months — never a forward figure, which no
+// available source could support and which would read as a promise.
+export function DividendsTile({ tile, editing, onRemove }: TileProps) {
+  const { privacy } = usePrivacy();
+  const { data, error } = useTileData(() => api.investmentDividends(), SLOW);
+
+  return (
+    <TileFrame
+      title={tile.title || 'Dividends & Income'}
+      icon="banknote"
+      editing={editing}
+      onRemove={onRemove}
+      footer="Informational only — a tracker, not investment advice."
+    >
+      {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
+      {error && !data && <TileMessage tone="error">{error}</TileMessage>}
+      {data && data.entries.length === 0 && <TileMessage>{"No income recorded yet."}</TileMessage>}
+      {data && data.entries.length > 0 && (
+        <>
+          <TileStat
+            label="Last 12 months"
+            value={privacy ? HIDDEN : money(data.totalLast12)}
+            color={GREEN}
+            sub={
+              data.trailingYieldPct != null
+                ? `${data.trailingYieldPct.toFixed(2)}% trailing yield`
+                : null
+            }
+          />
+          <TileRow label="All time" value={privacy ? HIDDEN : money(data.totalAllTime)} />
+          {data.bySymbol.slice(0, 5).map((s) => (
+            <TileRow key={s.symbol} label={s.symbol} value={privacy ? HIDDEN : money(s.amount)} />
+          ))}
+        </>
+      )}
+    </TileFrame>
+  );
+}
+
 // ---- To Do --------------------------------------------------------------
 
 export function TodoTile({ tile, editing, onChange, onRemove }: TileProps) {

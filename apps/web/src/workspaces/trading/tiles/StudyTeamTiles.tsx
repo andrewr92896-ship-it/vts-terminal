@@ -204,6 +204,81 @@ export function FlashcardsTile({ tile, editing, onChange, onRemove }: TileProps)
   );
 }
 
+// ---- Study leaderboard ---------------------------------------------------
+//
+// Where the team stands on one study game. Live rows and banked runs both come
+// back from the same endpoint; the tile shows them in score order the way the
+// game's own leaderboard does, with the reader's row marked.
+export function LeaderboardTile({ tile, editing, onChange, onRemove }: TileProps) {
+  const { data: deckList } = useTileData(() => api.studyDecks(), SLOW);
+  const decks = deckList?.decks ?? [];
+  const deck = decks.find((d) => d.id === tile.deckId) ?? decks[0];
+
+  const { data, error } = useTileData(
+    () => (deck ? api.studyDeckLeaderboard(deck.id) : Promise.resolve({ entries: [] })),
+    CHAT_POLL,
+    [deck?.id],
+  );
+
+  const rows = useMemo(
+    () => [...(data?.entries ?? [])].sort((a, b) => (b.score ?? -1) - (a.score ?? -1)).slice(0, tile.limit ?? 8),
+    [data, tile.limit],
+  );
+
+  return (
+    <TileFrame
+      title={tile.title || 'Study Leaderboard'}
+      icon="trophy"
+      count={data ? data.entries.length : null}
+      editing={editing}
+      onRemove={onRemove}
+      controls={
+        <TileSelect
+          value={deck?.id ?? ''}
+          onChange={(v) => onChange({ deckId: v })}
+          title="Which study game"
+          options={decks.map((d) => ({ value: d.id, label: d.name }))}
+        />
+      }
+      status={deck ? <span style={stamp}>{deck.name}</span> : null}
+      footer={STUDY_NOTE}
+    >
+      {!deckList && !error && <TileMessage>{"Loading…"}</TileMessage>}
+      {error && !data && <TileMessage tone="error">{error}</TileMessage>}
+      {deckList && !deck && <TileMessage>{"No study games yet."}</TileMessage>}
+      {deck && data && rows.length === 0 && <TileMessage>{"Nobody has played this one yet."}</TileMessage>}
+      {rows.map((e, i) => (
+        <div key={e.id} style={{ ...msgRow, display: 'flex', alignItems: 'center', gap: 9 }}>
+          <span style={{ fontSize: 10.5, fontWeight: 700, color: i === 0 ? GOLD : FAINT, fontFamily: MONO, flex: '0 0 16px' }}>
+            {i + 1}
+          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: e.isMe ? 700 : 500,
+                color: e.isMe ? GOLD : TEXT,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {e.name}
+              {e.archived && <span style={{ fontSize: 9, color: FAINT, marginLeft: 5 }}>past run</span>}
+            </div>
+            <div style={{ fontSize: 9.5, color: FAINT, marginTop: 1 }}>
+              {e.correct}/{e.attempted} correct
+            </div>
+          </div>
+          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: MONO, color: '#fff', flex: 'none' }}>
+            {e.score == null ? '—' : `${e.score.toFixed(0)}%`}
+          </span>
+        </div>
+      ))}
+    </TileFrame>
+  );
+}
+
 // ---- Team chat -----------------------------------------------------------
 //
 // The desk's latest messages. Read-only on the wall: the corner chat bubble is

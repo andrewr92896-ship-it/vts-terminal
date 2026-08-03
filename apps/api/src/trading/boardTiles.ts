@@ -33,16 +33,19 @@ export const BOARD_TILE_KINDS = [
   'closed',
   'sessions',
   'funded',
+  'capital',
   // Personal
   'networth',
   'portfolio',
   'todo',
   'notes',
+  'dividends',
   'announcements',
   'patchnotes',
   // Studies and the team
   'studystats',
   'flashcards',
+  'leaderboard',
   'teamchat',
 ] as const;
 
@@ -73,6 +76,7 @@ export const TILE_GATES: Partial<Record<BoardTileKind, TileGate>> = {
   closed: { desk: true },
   sessions: { desk: true, feature: 'strategySessions' },
   funded: { desk: true, funded: true, feature: 'funded' },
+  capital: { desk: true, feature: 'brokerConnections' },
 
   // Team
   teamchat: { feature: 'teamChat' },

@@ -15,6 +15,7 @@ import { CalendarTile } from '../CalendarTile';
 import { AlertsTile } from '../AlertsTile';
 import {
   AnnouncementsTile,
+  DividendsTile,
   NetWorthTile,
   NotesTile,
   PatchNotesTile,
@@ -22,9 +23,9 @@ import {
   TodoTile,
   type TileProps,
 } from './PersonalTiles';
-import { ClosedTradesTile, FundedTile, SessionsTile, TradeLogTile } from './DeskTiles';
+import { CapitalTile, ClosedTradesTile, FundedTile, SessionsTile, TradeLogTile } from './DeskTiles';
 import { ClockTile, MarketDataTile, StreamTile } from './MarketTiles';
-import { FlashcardsTile, StudyStatsTile, TeamChatTile } from './StudyTeamTiles';
+import { FlashcardsTile, LeaderboardTile, StudyStatsTile, TeamChatTile } from './StudyTeamTiles';
 
 // One tile, resolved from its kind.
 //
@@ -93,12 +94,16 @@ export function BoardTileView({
       return <SessionsTile {...props} />;
     case 'funded':
       return <FundedTile {...props} />;
+    case 'capital':
+      return <CapitalTile {...props} />;
 
     // Personal
     case 'networth':
       return <NetWorthTile {...props} />;
     case 'portfolio':
       return <PortfolioTile {...props} />;
+    case 'dividends':
+      return <DividendsTile {...props} />;
     case 'todo':
       return <TodoTile {...props} />;
     case 'notes':
@@ -113,6 +118,8 @@ export function BoardTileView({
       return <StudyStatsTile {...props} />;
     case 'flashcards':
       return <FlashcardsTile {...props} />;
+    case 'leaderboard':
+      return <LeaderboardTile {...props} />;
     case 'teamchat':
       return <TeamChatTile {...props} />;
 

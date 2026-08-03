@@ -18,7 +18,7 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 6.48',
     date: 'August 3, 2026',
     notes: [
-      'The Live Wall is now the terminal’s one board, and it sits at the top of My Terminal — it is also what the terminal opens on when you sign in. Sixteen new tiles bring the rest of the terminal onto it: market data, a live news channel, a market clock, your net worth, your investment portfolio, your to-do list, notes, announcements, what’s new, study progress, flashcards, trade analysis, closed trades, strategy sessions, funded accounts and team chat.',
+      'The Live Wall is now the terminal’s one board, and it sits at the top of My Terminal — it is also what the terminal opens on when you sign in. Nineteen new tiles bring the rest of the terminal onto it: market data, a live news channel, a market clock, your net worth, your investment portfolio, dividends, your to-do list, notes, announcements, what’s new, study progress, flashcards, the study leaderboard, trade analysis, closed trades, strategy sessions, funded accounts, broker capital and team chat.',
       'Adding a tile is now a grouped catalog rather than a row of buttons. Every tile is listed, including ones your membership does not reach — those carry the star or diamond that says what they cost, so you can see what upgrading would add.',
       'Every account now gets three ready-made Live Wall layouts to choose between: Markets, Trading Desk, and My Terminal. Building and saving your own arrangement stays a Premium feature.',
       'A layout only ever shows what your account actually has, so a board never opens with holes or padlocks in it where a tile you have not turned on would be.',

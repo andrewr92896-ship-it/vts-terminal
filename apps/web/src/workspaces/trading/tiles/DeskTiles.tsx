@@ -305,7 +305,68 @@ export function FundedTile({ tile, editing, onChange, onRemove }: TileProps) {
   );
 }
 
+// ---- Broker capital -------------------------------------------------------
+//
+// What each connected account is actually worth right now, read from the broker
+// itself. NAV — balance plus open P&L — is the capital figure, and it is what the
+// Live Brokers screen leads with, so the tile leads with the same one.
+export function CapitalTile({ tile, editing, onRemove }: TileProps) {
+  const { privacy } = usePrivacy();
+  const { data, error } = useTileData(() => api.oandaCapital(), MEDIUM);
+  const accounts = data?.accounts ?? [];
+
+  return (
+    <TileFrame
+      title={tile.title || 'Broker Capital'}
+      icon="landmark"
+      count={data ? accounts.length : null}
+      editing={editing}
+      onRemove={onRemove}
+    >
+      {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
+      {error && !data && <TileMessage tone="error">{error}</TileMessage>}
+      {data && !data.configured && <TileMessage>{"No broker connected yet."}</TileMessage>}
+      {data && data.configured && accounts.length === 0 && <TileMessage>{"No accounts to read."}</TileMessage>}
+      {data && data.nav != null && accounts.length > 1 && (
+        // Only worth a headline when there is more than one account to total.
+        <TileStat
+          label="Total capital"
+          value={privacy ? HIDDEN : money(data.nav, data.currency ?? 'USD')}
+          sub={data.pnl ? <span style={{ color: plColor(data.pnl.daily) }}>{signedMoney(privacy ? null : data.pnl.daily)} today</span> : null}
+        />
+      )}
+      {accounts.map((a) => (
+        <div key={a.connectionId} style={capitalRow}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 3 }}>
+            <span style={{ ...dot, background: a.ok ? GREEN : RED }} />
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: TEXT, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {a.label}
+            </span>
+            <span style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 700, fontFamily: MONO, color: '#fff', flex: 'none' }}>
+              {privacy ? HIDDEN : money(a.nav, a.currency)}
+            </span>
+          </div>
+          {/* A connection that would not answer says so rather than reading as
+              an account worth nothing. */}
+          {!a.ok && a.error ? (
+            <div style={{ fontSize: 10, color: '#ffb4ab', lineHeight: 1.45 }}>{a.error}</div>
+          ) : (
+            <div style={{ display: 'flex', gap: 10, fontSize: 9.5, color: FAINT, fontFamily: MONO }}>
+              {a.pnl && <span style={{ color: plColor(a.pnl.daily) }}>{signedMoney(privacy ? null : a.pnl.daily)} today</span>}
+              {a.unrealizedPl != null && (
+                <span style={{ color: plColor(a.unrealizedPl) }}>{signedMoney(privacy ? null : a.unrealizedPl)} open</span>
+              )}
+              {a.openTradeCount != null && <span>{a.openTradeCount} open</span>}
+            </div>
+          )}
+        </div>
+      ))}
+    </TileFrame>
+  );
+}
+
 const stamp: CSSProperties = { fontSize: 10, color: FAINT, whiteSpace: 'nowrap' };
+const capitalRow: CSSProperties = { padding: '9px 12px', borderBottom: `1px solid rgba(22,41,79,.5)` };
 const tradeRow: CSSProperties = {
   display: 'flex',
   alignItems: 'center',

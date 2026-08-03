@@ -1124,16 +1124,19 @@ export type BoardTileKind =
   | 'closed'
   | 'sessions'
   | 'funded'
+  | 'capital'
   // Personal — the user's own money, lists and reading.
   | 'networth'
   | 'portfolio'
   | 'todo'
   | 'notes'
+  | 'dividends'
   | 'announcements'
   | 'patchnotes'
   // Studies and the team.
   | 'studystats'
   | 'flashcards'
+  | 'leaderboard'
   | 'teamchat';
 
 export interface BoardTile {

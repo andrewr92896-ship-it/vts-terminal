@@ -212,6 +212,18 @@ export const TILE_CATALOG: TileDef[] = [
     h: 10,
     minH: 5,
   },
+  {
+    kind: 'capital',
+    label: 'Broker Capital',
+    group: 'desk',
+    icon: 'landmark',
+    blurb: 'What each connected account is worth right now.',
+    feature: 'brokerConnections',
+    desk: true,
+    w: 4,
+    h: 10,
+    minH: 5,
+  },
 
   // ---- Personal: the user's own money, lists and reading ----
   {
@@ -234,6 +246,17 @@ export const TILE_CATALOG: TileDef[] = [
     feature: null,
     w: 4,
     h: 11,
+    minH: 5,
+  },
+  {
+    kind: 'dividends',
+    label: 'Dividends & Income',
+    group: 'personal',
+    icon: 'banknote',
+    blurb: 'What the portfolio has paid out, and its trailing yield.',
+    feature: null,
+    w: 4,
+    h: 10,
     minH: 5,
   },
   {
@@ -302,6 +325,18 @@ export const TILE_CATALOG: TileDef[] = [
     feature: null,
     w: 4,
     h: 9,
+    minH: 5,
+  },
+
+  {
+    kind: 'leaderboard',
+    label: 'Study Leaderboard',
+    group: 'studies',
+    icon: 'trophy',
+    blurb: 'Where your team stands on a study game.',
+    feature: null,
+    w: 4,
+    h: 10,
     minH: 5,
   },
 
@@ -402,6 +437,7 @@ export function newTile(kind: BoardTileKind, at: { x: number; y: number }): Boar
     case 'announcements':
     case 'patchnotes':
     case 'teamchat':
+    case 'leaderboard':
     case 'todo':
       return { ...base, limit: 8 };
     case 'tradelog':
