@@ -182,15 +182,23 @@ Tech:
   truth for workspaces, sidebar sections, order, icons, and role gates. Section
   `key`s are the screen keys switched in `Portal.tsx` (`renderScreen` /
   `renderExtra`).
-- **Sidebar order is founder-overridable:** the **Developer Terminal ▸ Sidebar
-  Layout** editor (`AdminSidebarLayout`) saves a single order override to
-  `app_settings` under `nav.order` (routes: `GET /api/nav-layout` for everyone,
-  founder-only `PUT|DELETE /api/admin/nav-layout`). `theme/navOrder.ts`
-  (`applyNavOrder`) applies it over the code-default `NAV` for **every** user;
-  `Portal.tsx` loads it and passes the reordered nav to `Sidebar`. It only
-  reorders (workspaces + sections within a workspace) — never adds/removes/moves
-  a section across workspaces, so routing is untouched. Unknown/new keys keep
-  their default position (appended), so a stale override never hides new nav.
+- **Sidebar order is code-only, and nothing at runtime may change it** (owner
+  decision, 2026-08). The `NAV` array **is** the order — workspaces, and the
+  sections within each — and reordering the sidebar means editing `theme/nav.ts`
+  and deploying. `Sidebar.tsx` reads `NAV` directly.
+  - **Removed, and not to be reintroduced:** the Developer Terminal ▸ Sidebar
+    Layout editor (`AdminSidebarLayout`), `theme/navOrder.ts` (`applyNavOrder` /
+    `buildNavOrder` / `isDefaultOrder`), the `NavOrderOverride` type, the three
+    client methods, the routes `GET /api/nav-layout` and
+    `PUT|DELETE /api/admin/nav-layout`, and the `app_settings` key `nav.order`
+    (dropped by migration `0098`). Do not add a second, runtime source of nav
+    order — two of them can disagree, and the stored one wins silently, which is
+    exactly what made a code change to the order look like it had not deployed.
+  - Consequence worth knowing: a section's `key` no longer needs to stay stable
+    for a *saved layout's* sake. It still does for every other reason — the keys
+    are the screen keys `Portal.tsx` switches on, `DEFAULT_SCREEN` names them,
+    and in-app links and `howto.<screen>` wording are keyed on them. **Rename a
+    label, never a key** remains the rule; only the justification narrowed.
 
 ## Workspaces & sections (`theme/nav.ts`)
 
@@ -205,17 +213,17 @@ workspaces list** (see `theme/nav.ts` order).
   terminal's floor for a user who has turned nothing on.
   **The Live Wall moved out of here** (owner decision, 2026-08) to the top of My
   Terminal: it draws on every workspace now rather than just this one. The key
-  stayed `live`, so saved `nav.order` overrides and in-app links keep working,
-  and **`myportal` is the landing workspace on sign-in** (it was `markets`).
+  stayed `live`, so in-app links keep working, and **`myportal` is the landing
+  workspace on sign-in** (it was `markets`).
   `DEFAULT_SCREEN.markets` is now `news`.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
   its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
   **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
   (`desk` — **two tabs, Trade Log + Live Brokers**; legacy keys
   `log`/`history`/`metrics` alias into it. **The key stayed `desk` when the label
-  changed** from "Trade Desk" to "Trade Analysis", so saved `nav.order`
-  overrides, the `howto.desk` wording and every in-app link keep pointing at the
-  review screen; the new placement screen took the *new* key `tradedesk`.
+  changed** from "Trade Desk" to "Trade Analysis", so the `howto.desk` wording
+  and every in-app link keep pointing at the review screen; the new placement
+  screen took the *new* key `tradedesk`.
   **History was removed** — owner decision, 2026-08: it listed the same closed
   trades the Trade Log already carried, from the same rows, so two screens
   answered one question and were free to disagree about it. Everything it had
@@ -237,11 +245,10 @@ workspaces list** (see `theme/nav.ts` order).
   Manual Trades (`funded` key, `FundedScreen`), **Funded Account**
   (`prop` key — the nested opt-in; prop-firm challenge dashboard). **To Do moved
   to My Terminal** (owner decision, 2026-08 — a to-do list is personal, not a
-  desk instrument); its key is still `td_trading`, so saved `nav.order`
-  overrides and in-app links keep working.
+  desk instrument); its key is still `td_trading`, so in-app links keep working.
   Market Data and Market News moved to **Markets**; their section keys are
-  unchanged (`data` / `news`), so saved `nav.order` overrides, `howto` wording
-  and in-app links keep working.
+  unchanged (`data` / `news`), so the `howto` wording and in-app links keep
+  working.
   - **Trade Desk** (`tradedesk`, `workspaces/trading/TradeDesk.tsx` +
     `OrderTicket.tsx` + `DeskPositions.tsx`) is where a trade is **placed**. It
     sends real orders to the trader's **own** accounts at **two venues — OANDA
@@ -989,7 +996,6 @@ workspaces list** (see `theme/nav.ts` order).
   per-user delete list.
 - **Developer Terminal** (`founder` key/role, amber): **Developer Blog**,
   AI Instructions, Site Wording,
-  Sidebar Layout (`ad_sidebar` — reorder the whole sidebar, see below),
   **Suggestions** (`ad_suggestions` — moved out of the Admin Terminal; the
   `/api/admin/suggestions` read/patch/delete routes are `requireFounder` to
   match, while *sending* a suggestion from Site Help stays open to everyone),
@@ -1146,8 +1152,7 @@ cycle.
     feature COSTS. The badge needs the second.
   - **Sections stack Max → Premium → free** inside each workspace — the paid rows
     lead (owner decision, 2026-08; it was free → Premium → Max until then) — in
-    the `NAV` array itself, so a founder's saved `nav.order` override still wins
-    over it.
+    the `NAV` array itself, which is the sidebar's only source of order.
     - **Where a workspace's list starts is NOT what it opens on.** `DEFAULT_SCREEN`
       (`theme/themes.ts`) is separate and deliberately unchanged by this: Markets
       still opens on Market News and Studies on Study Game, because landing a free
@@ -1248,8 +1253,8 @@ themselves. The opt-ins are self-service and immediate — there is no approval
 queue and no route that changes anyone else's account.
 
 > **The label changed, the key did not.** It was "Feature Access" until 2026-08;
-> the section key is still `my_access`, so saved `nav.order` overrides and in-app
-> links keep working — the same reason `desk` stayed `desk`. The screen now covers
+> the section key is still `my_access`, so in-app links keep working — the same
+> reason `desk` stayed `desk`. The screen now covers
 > **two different things** and keeps them visibly apart: the **membership** (what
 > you are allowed to use — see Memberships above) and the **opt-ins** (what you
 > have asked to see). Holding Max does not switch an opt-in on for you.
@@ -2474,10 +2479,10 @@ at all. Nowhere else.
     point. So do its own HR admins ("portal admins") and its files/tables.
   - **Internal identifiers stay `portal`** — the `myportal` workspace key, the
     `/api/my-portal` routes, `MyPortalData`, `Portal.tsx`, `MyPortalSettings.tsx`,
-    `workspaces/myportal/`. A saved `nav.order` override is keyed on the
-    workspace key, so renaming it would silently drop a founder's sidebar layout
-    — the same reason `desk` stayed `desk` when Trade Desk became Trade Analysis.
-    Rename the label, never the key.
+    `workspaces/myportal/`. The workspace key is what `DEFAULT_SCREEN`, the
+    routing switch and every in-app link are keyed on — the same reason `desk`
+    stayed `desk` when Trade Desk became Trade Analysis. Rename the label, never
+    the key.
   - **React's `createPortal`** is a DOM concept, not the product.
   Two things carry the old name in stored data and are repaired on boot rather
   than in code: the seeded welcome announcement (`chat/announcements.ts`) and the

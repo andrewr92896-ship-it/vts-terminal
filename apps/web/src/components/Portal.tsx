@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
-import type { RoleKey, NavOrderOverride } from '../api/types';
+import type { RoleKey } from '../api/types';
 import {
   THEMES,
   DEFAULT_SCREEN,
@@ -10,7 +10,6 @@ import {
   type Theme,
 } from '../theme/themes';
 import { NAV, navFor, accentFor, OPT_IN_WORKSPACES } from '../theme/nav';
-import { applyNavOrder } from '../theme/navOrder';
 import { C } from '../theme/tokens';
 import {
   canAccessEmployeePortal,
@@ -46,7 +45,6 @@ import { AdminSuggestions } from '../workspaces/admin/AdminSuggestions';
 import { AdminMessageTemplates } from '../workspaces/admin/AdminMessageTemplates';
 import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
 import { AdminSupport } from '../workspaces/admin/AdminSupport';
-import { AdminSidebarLayout } from '../workspaces/admin/AdminSidebarLayout';
 import { AdminLog } from '../workspaces/admin/AdminLog';
 import { AdminGuidelines } from '../workspaces/admin/AdminGuidelines';
 import { DevBlog } from '../workspaces/admin/DevBlog';
@@ -291,23 +289,6 @@ export function Portal() {
   // Mobile off-canvas nav drawer.
   const [navOpen, setNavOpen] = useState(false);
 
-  // Founder-set sidebar ordering, applied over the code-default nav for every
-  // user. Loaded once; the Developer Terminal's Sidebar Layout editor updates it
-  // live (via setNavOverride) so a save re-orders the real sidebar immediately.
-  const [navOverride, setNavOverride] = useState<NavOrderOverride | null>(null);
-  useEffect(() => {
-    let alive = true;
-    api
-      .navLayout()
-      .then((r) => alive && setNavOverride(r.order))
-      .catch(() => {
-        /* transient — the code-default nav renders until the next load */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  const orderedNav = useMemo(() => applyNavOrder(NAV, navOverride), [navOverride]);
 
   // While a study game is being played, its level recolours the Studies
   // workspace (published by the player via studyTint). Re-render on change.
@@ -556,15 +537,6 @@ export function Portal() {
         return <HelpTerms theme={theme} />;
       case 'hp_privacy':
         return <HelpPrivacy theme={theme} />;
-      case 'ad_sidebar':
-        return (
-          <AdminSidebarLayout
-            theme={theme}
-            nav={orderedNav}
-            override={navOverride}
-            onApply={setNavOverride}
-          />
-        );
       case 'ad_viewas':
         return <AdminViewAs theme={theme} actingRole={actingRole} onSetActingRole={changeActingRole} />;
       case 'ad_templates':
@@ -587,7 +559,6 @@ export function Portal() {
       screen={screen}
       workspaces={allowed}
       lockedWorkspaces={locked}
-      nav={orderedNav}
       canFunded={canFunded}
       canEmployee={canEmployee}
       collapsed={isPhone ? false : collapsed}

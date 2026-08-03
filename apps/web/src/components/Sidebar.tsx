@@ -17,9 +17,6 @@ interface SidebarProps {
   // clicking one opens My Terminal ▸ Premium Features instead of the workspace — so
   // the feature is discoverable rather than invisible.
   lockedWorkspaces?: Set<WorkspaceKey>;
-  // The effective nav (workspace + section order), already reordered by any
-  // founder-set sidebar layout. Falls back to the code-default NAV when absent.
-  nav?: NavWorkspace[];
   // Whether the private Funded (prop-challenge) section is revealed.
   canFunded: boolean;
   // Whether the Employee Portal row is revealed (the `employee` role plus a
@@ -56,7 +53,6 @@ export function Sidebar(props: SidebarProps) {
     screen,
     workspaces,
     lockedWorkspaces,
-    nav,
     canFunded,
     canEmployee,
     collapsed,
@@ -67,16 +63,17 @@ export function Sidebar(props: SidebarProps) {
     onSelectScreen,
   } = props;
 
-  // The effective nav — the founder-reordered layout when provided, otherwise
-  // the code default. Both drive workspace order and each workspace's sections.
-  const navList = nav ?? NAV;
-  const current = navList.find((w) => w.key === workspace) ?? navFor(workspace);
+  // Workspace order and each workspace's section order come straight from the
+  // code-default NAV — the sidebar has no runtime ordering. Reordering it is a
+  // change to theme/nav.ts and a deploy (owner decision, 2026-08); the in-app
+  // Sidebar Layout editor that used to override this is gone.
+  const current = navFor(workspace);
   const accent = current?.accent ?? C.gold;
   // Hide the private Funded section from anyone without the `funded` role.
   const sections = (current?.sections ?? []).filter((s) => canFunded || !FUNDED_ONLY_SECTIONS.has(s.key));
   // The workspaces this user can access, plus any opt-in workspace they have not
-  // turned on (drawn locked), all in the effective nav order.
-  const visible: NavWorkspace[] = navList.filter(
+  // turned on (drawn locked), all in nav order.
+  const visible: NavWorkspace[] = NAV.filter(
     (w) => workspaces.includes(w.key) || lockedWorkspaces?.has(w.key),
   );
 

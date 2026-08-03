@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.56';
+export const APP_VERSION = 'Beta V 6.57';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.57',
+    date: 'August 3, 2026',
+    notes: [
+      'Removed Developer Terminal ▸ Sidebar Layout. The order of the workspaces, and of the sections inside each one, is now set in code and changes with a deploy — there is no longer a way to reorder the sidebar from inside the terminal. Any order saved with the old editor has been cleared, so everyone now sees the built-in order.',
+    ],
+  },
   {
     version: 'Beta V 6.56',
     date: 'August 3, 2026',

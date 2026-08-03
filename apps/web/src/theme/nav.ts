@@ -196,7 +196,9 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_blog', label: 'Developer Blog', icon: 'book-open' },
       { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
-      { key: 'ad_sidebar', label: 'Sidebar Layout', icon: 'list-tree' },
+      // (There is deliberately no Sidebar Layout editor. This array IS the
+      // sidebar's order — workspaces and the sections within each — and the only
+      // way to change it is to edit it here and deploy. Owner decision, 2026-08.)
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
       { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
     ],
