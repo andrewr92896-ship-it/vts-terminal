@@ -2175,3 +2175,40 @@ export interface DevBlogPost {
   mine: boolean;
   replies: DevBlogReply[];
 }
+
+// ---- credential use audit ----
+//
+// Every use of a stored broker credential, so the person who owns the key can
+// answer "was my key used?". Background polling arrives pre-aggregated by the
+// hour (`aggregated: true`, `count` > 1) — the server does not log one row per
+// poll, or a 10-second reconcile would write thousands a day per connection.
+export type CredentialAuditPurpose =
+  | 'order_place'
+  | 'order_close'
+  | 'order_amend'
+  | 'order_cancel'
+  | 'desk_read'
+  | 'holdings'
+  | 'quotes'
+  | 'wall_read'
+  | 'reconcile'
+  | 'backfill'
+  | 'capital';
+
+export interface CredentialAuditEntry {
+  id: string;
+  connectionId: string;
+  ownerUserId: string;
+  owner: string;
+  actorUserId: string | null;
+  // Username of whoever caused it; null means the terminal did it on its own
+  // schedule rather than a person.
+  actor: string | null;
+  purpose: CredentialAuditPurpose;
+  sourceIp: string | null;
+  occurredAt: number;
+  count: number;
+  aggregated: boolean;
+  ok: boolean;
+  error: string | null;
+}

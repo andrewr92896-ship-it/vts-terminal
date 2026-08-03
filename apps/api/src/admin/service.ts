@@ -404,6 +404,13 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
   // are deleted explicitly rather than relying on SQLite's ON DELETE CASCADE
   // (which only fires when the connection's foreign_keys pragma is on), so no
   // data is ever orphaned. NOTE: add any new per-user table here.
+  //
+  // Two deliberate exceptions, both security records that have to outlive the
+  // account they describe: `employee_audit_log` and `credential_audit`. Neither
+  // carries a foreign key, and both denormalize the username for exactly this
+  // reason — a log of who used a broker key that vanishes when the account is
+  // deleted answers nothing after an incident. Do not "tidy" either into the
+  // list below; a privacy-policy rewrite covers them explicitly instead.
   await db.transaction(async (tx) => {
     await tx.delete(todoItems).where(eq(todoItems.userId, targetId));
     await tx.delete(todoSections).where(eq(todoSections.userId, targetId));

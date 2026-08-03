@@ -1946,6 +1946,58 @@ hardcoded" below.)
   Wall, so `repairManualConnectionSecrets()` re-seals them **on boot** beside
   `backfillConnectionLabels()` — the half a migration cannot do, since a
   migration cannot run the encryption.
+- **Credential use is audited (`trading/credentialAudit.ts`, `credential_audit`,
+  migration `0095`).** Broker credentials here can place real orders, and nothing
+  recorded that one had been used — so after a leaked database, a rogue admin or a
+  disputed trade there was no way to reconstruct what happened, and no answer to
+  "was my key used?". Several US state breach-notification laws turn on exactly
+  that determination, and being unable to establish what was reached generally
+  forces the broadest possible notification.
+  - **Two tiers in one table, and the split is what makes it affordable.**
+    Credentials are decrypted on hot paths — reconcile runs install-wide every 10
+    seconds, the Live Wall decrypts a whole team's on every poll — so a row per
+    decryption would be thousands per connection per day of pure noise. Anything
+    that moves money or that a person asked for (the four order actions,
+    `desk_read`, `holdings`, `quotes`) writes **one detailed row**; background
+    polling (`wall_read`, `reconcile`, `backfill`, `capital`) **upserts one row
+    per (connection, purpose, hour)** and increments `count`. That bounds the
+    table to roughly connections × purposes × 24 rows a day at any poll rate.
+    `hour_bucket` is NULL on an individual row, which is what lets both tiers
+    share the unique index — SQL treats NULLs as distinct.
+  - **Purpose is passed in, because the decrypt site cannot know it.**
+    `getActiveDecrypted` / `getAllActiveDecrypted` are the only two places a
+    credential becomes usable, which makes them the one place worth auditing —
+    but serving the Live Wall and serving an order look identical from in there.
+    So both take a required `CredentialUse`. Two flags carry real weight: `only`
+    (the desk decrypts every connection to find the one an order names, and
+    recording "order placed" against the others would be false on the very screen
+    that exists to tell somebody their key was used) and `deferred` (the order
+    paths write their own row **after** the broker answers, so it carries the real
+    outcome — a refusal is an attempt that was made and failed, which is what
+    matters).
+  - **Fire and forget, always.** An audit write must never delay or fail a broker
+    call; `recordCredentialUse` returns void and swallows its own errors into a
+    log. A trader whose order was refused because the logging table was busy would
+    be a far worse outcome than a missing row.
+  - **A null actor is a statement, not a gap** — it means the terminal did this on
+    its own schedule. Aggregate rows are always null-actor: an hour of polling has
+    no single actor, and naming one would be a false attribution. Individual rows
+    carry the actor and `request.ip`, which is the real client address because
+    `trustProxy` is on in production (`server.ts`); it is the left-most forwarded
+    address, so treat it as an investigative indicator rather than proof.
+  - **Append-only, and it deliberately outlives the account it describes.** No
+    foreign keys — a `references(...)` would take the trail down with the
+    connection or the user — so `owner_username` is denormalized onto the row and
+    the table is **deliberately NOT in the `admin/service.ts` per-user delete
+    list**. That is the same exception `employee_audit_log` already takes, and a
+    privacy-policy rewrite has to cover it explicitly.
+  - **Who may read it:** a trader sees **their own only**, scoped from the session
+    (`GET /api/trading/credential-audit`) — a teammate or team leader gets nothing,
+    and there is no parameter that could widen it. Admins see everyone
+    (`/credential-audit/all`, same guard shape as `connections/all`). The panel is
+    in `BrokerConnectionsPanel.tsx` under Live Brokers. Nothing about a credential
+    reaches a row: the writer is handed ids, a purpose and an outcome, and the
+    module contains no credential-bearing identifier at all.
 - **`PRAGMA secure_delete = ON`** (`db/index.ts`) so a deleted row's ciphertext is
   overwritten rather than left in a freed page that every backup copies. It
   governs **future** deletes only; already-freed pages keep their contents until a

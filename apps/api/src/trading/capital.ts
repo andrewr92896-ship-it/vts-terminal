@@ -50,7 +50,9 @@ export async function getOandaCapital(viewer: Viewer): Promise<OandaCapital> {
   // team's active OANDA connections so capital never leaks across teams. Each
   // account is tagged with its owner below.
   const scopeIds = await visibleTraderIds(viewer);
-  const conns = (await getAllActiveDecrypted(scopeIds)).filter((c) => c.broker === 'oanda');
+  const conns = (await getAllActiveDecrypted(scopeIds, { purpose: 'capital' })).filter(
+    (c) => c.broker === 'oanda',
+  );
   const generatedAt = Date.now();
   if (conns.length === 0) {
     return { configured: false, accounts: [], currency: null, balance: null, nav: null, unrealizedPl: null, pnl: null, generatedAt };

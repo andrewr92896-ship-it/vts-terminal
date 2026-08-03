@@ -11,6 +11,8 @@ import {
 import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { decryptSecret, encryptSecret } from '../security/secretbox.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
+import { recordCredentialUse, type AuditActor } from './credentialAudit.js';
+import type { CredentialAuditPurpose } from '../db/schema.js';
 
 // Per-user broker connections. Credentials are encrypted at rest; only a
 // non-secret `summary` is ever exposed to the client. The connector layer uses
@@ -262,7 +264,46 @@ async function noteUnreadable(row: BrokerConnectionRow, err: unknown): Promise<v
   await recordConnectionStatus(row.id, false, UNREADABLE_CREDENTIAL_MESSAGE);
 }
 
-export async function getActiveDecrypted(userId: string): Promise<DecryptedConnection[]> {
+// ---- every decryption is recorded ----
+//
+// The two functions below are the only places in the codebase that turn a stored
+// credential back into something usable, which makes them the one place worth
+// auditing. They cannot work out *why* they were called, though — serving the
+// Live Wall and serving an order placement look identical from in here — so the
+// purpose is passed in by the caller and is not optional.
+//
+// See trading/credentialAudit.ts for the two tiers and why the pollers are
+// counted by the hour rather than logged per call.
+export interface CredentialUse {
+  purpose: CredentialAuditPurpose;
+  actor?: AuditActor;
+  // Record only this one connection. The desk decrypts all of a trader's
+  // connections in order to find the one an order names; logging "order placed"
+  // against the other two would be false, and alarming on a screen whose entire
+  // job is telling somebody their key was used.
+  only?: string;
+  // The caller writes the row itself, once the broker has answered. Used by the
+  // order paths, where the outcome is the whole point and is not known yet at
+  // the moment of decryption.
+  deferred?: boolean;
+}
+
+function noteUse(use: CredentialUse, conn: { id: string; userId: string; username?: string }): void {
+  if (use.deferred) return;
+  if (use.only && use.only !== conn.id) return;
+  recordCredentialUse({
+    connectionId: conn.id,
+    ownerUserId: conn.userId,
+    ownerUsername: conn.username,
+    purpose: use.purpose,
+    actor: use.actor,
+  });
+}
+
+export async function getActiveDecrypted(
+  userId: string,
+  use: CredentialUse,
+): Promise<DecryptedConnection[]> {
   const rows = await db
     .select()
     .from(brokerConnections)
@@ -276,6 +317,7 @@ export async function getActiveDecrypted(userId: string): Promise<DecryptedConne
         label: r.label,
         creds: JSON.parse(decryptSecret(r.secretEnc, { userId: r.userId, connectionId: r.id })),
       });
+      noteUse(use, r);
     } catch (err) {
       await noteUnreadable(r, err);
     }
@@ -304,7 +346,10 @@ export type ConnectionScope = Set<string> | typeof ALL_USERS;
 // capital only ever surface a team's own positions. `ALL_USERS` loads the whole
 // install and is only for background bookkeeping that no viewer sees: it records
 // each owner's own positions to their own History.
-export async function getAllActiveDecrypted(scope: ConnectionScope): Promise<OwnedConnection[]> {
+export async function getAllActiveDecrypted(
+  scope: ConnectionScope,
+  use: CredentialUse,
+): Promise<OwnedConnection[]> {
   const rows = await db
     .select({
       conn: brokerConnections,
@@ -338,6 +383,7 @@ export async function getAllActiveDecrypted(scope: ConnectionScope): Promise<Own
         owner: r.username,
         historyStartAt: r.conn.historyStartAt ? r.conn.historyStartAt.getTime() : null,
       });
+      noteUse(use, { id: r.conn.id, userId: r.conn.userId, username: r.username });
     } catch (err) {
       await noteUnreadable(r.conn, err);
     }

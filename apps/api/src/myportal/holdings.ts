@@ -150,8 +150,8 @@ export async function getMyHoldings(user: UserRow): Promise<MyHoldingsPayload> {
     const [capital, wall, spot, conns] = await Promise.all([
       getOandaCapital(viewer).catch(() => null),
       getLiveWall(user).catch(() => null),
-      listDeskHoldings(user.id).catch(() => []),
-      getAllActiveDecrypted(new Set([user.id])).catch(() => []),
+      listDeskHoldings(user.id, { actorUserId: user.id, sourceIp: null }).catch(() => []),
+      getAllActiveDecrypted(new Set([user.id]), { purpose: 'capital' }).catch(() => []),
     ]);
 
     if (capital) {

@@ -32,6 +32,7 @@ import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { visibleTraderIds } from '../trading/scope.js';
 import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
+import { getAllCredentialAudit, getOwnCredentialAudit } from '../trading/credentialAudit.js';
 import {
   getFunded,
   addFundedAccount,
@@ -865,6 +866,26 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'Admins only' });
     }
     return { connections: await listAllConnections() };
+  });
+
+  // ---- who used a broker credential ----
+  //
+  // The answer to "was my key used?", for the person who owns the key. Scoped to
+  // the caller from their SESSION, never from anything the client sends — a
+  // teammate has no way to ask about somebody else's credential, and being on the
+  // same team grants nothing here. See trading/credentialAudit.ts for why the
+  // pollers appear as one hourly row rather than one per poll.
+  app.get('/api/trading/credential-audit', read, async (request) => ({
+    entries: await getOwnCredentialAudit(request.currentUser!.id),
+  }));
+
+  // Admin-only: everyone's, for a support case or an incident. Same guard shape
+  // as the desk-wide connection list above.
+  app.get('/api/trading/credential-audit/all', read, async (request, reply) => {
+    if (!isAdmin(parseRoles(request.currentUser!))) {
+      return reply.code(403).send({ error: 'Admins only' });
+    }
+    return { entries: await getAllCredentialAudit() };
   });
 
   // Admin-only: rename / pause any connection regardless of owner.

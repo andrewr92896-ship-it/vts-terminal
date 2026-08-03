@@ -5,6 +5,8 @@ import { etStamp, etStampFull } from './tradeTime';
 import type {
   BrokerConnection,
   BrokerConnectionKind,
+  CredentialAuditEntry,
+  CredentialAuditPurpose,
   ManualPosition,
   OwnedBrokerConnection,
 } from '../../api/types';
@@ -341,7 +343,126 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
       </div>
       )}
 
+      <CredentialUseLog />
+
       {isAdmin && <TeamConnections onChanged={() => onChanged?.()} />}
+    </div>
+  );
+}
+
+// What each recorded use actually was, in the words somebody who owns the key
+// would use. The wire values are deliberately not shown raw.
+const PURPOSE_LABELS: Record<CredentialAuditPurpose, string> = {
+  order_place: 'Order placed',
+  order_close: 'Position closed',
+  order_amend: 'Stop or target changed',
+  order_cancel: 'Order cancelled',
+  desk_read: 'Trade Desk opened',
+  holdings: 'Holdings read',
+  quotes: 'Prices read',
+  wall_read: 'Live Wall refresh',
+  reconcile: 'Background position check',
+  backfill: 'Closed-trade import',
+  capital: 'Account balance read',
+};
+
+// Every use of this trader's own broker credentials.
+//
+// This is the answer to "was my key used?", shown to the one person entitled to
+// ask it. A teammate cannot see this and neither can a team leader: the server
+// scopes it to the session, so there is nothing the client could send to widen
+// it.
+//
+// The rows for background polling arrive already counted by the hour — the
+// terminal deliberately does not record one row per poll, since the desk checks
+// positions every ten seconds and the log would be nothing but that.
+function CredentialUseLog() {
+  const [entries, setEntries] = useState<CredentialAuditEntry[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .credentialAudit()
+      .then((d) => alive && (setEntries(d.entries), setLoaded(true)))
+      .catch(() => alive && setLoaded(true));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!loaded) return null;
+
+  const shown = open ? entries : entries.slice(0, 8);
+
+  return (
+    <div style={{ ...panel, marginTop: 16 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: TEXT, marginBottom: 2 }}>
+        {'Credential use'}
+      </div>
+      <div style={{ fontSize: 11, color: MUTED, marginBottom: 10, lineHeight: 1.5 }}>
+        {'Every time one of your broker keys was used, and what for. Repeated background checks are counted by the hour rather than listed one by one.'}
+      </div>
+
+      {entries.length === 0 ? (
+        <div style={{ fontSize: 12, color: FAINT }}>{'No recorded use yet.'}</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 6 }}>
+          {shown.map((e) => (
+            <div
+              key={e.id}
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'baseline',
+                gap: 8,
+                padding: '7px 9px',
+                borderRadius: 8,
+                background: PANEL,
+                border: `1px solid ${BORDER}`,
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 3,
+                  background: e.ok ? GREEN : RED,
+                  flex: '0 0 auto',
+                }}
+              />
+              <span style={{ fontSize: 12, color: TEXT, fontWeight: 600 }}>
+                {PURPOSE_LABELS[e.purpose] ?? e.purpose}
+              </span>
+              {e.count > 1 && (
+                <span style={{ fontSize: 11, color: MUTED }}>{`× ${e.count}`}</span>
+              )}
+              <span style={{ fontSize: 11, color: MUTED }}>
+                {e.actor ? `by ${e.actor}` : 'by the terminal'}
+              </span>
+              {e.sourceIp && (
+                <span style={{ fontSize: 11, color: FAINT }}>{`from ${e.sourceIp}`}</span>
+              )}
+              <span
+                style={{ fontSize: 11, color: FAINT, marginLeft: 'auto' }}
+                title={etStampFull(e.occurredAt)}
+              >
+                {etStamp(e.occurredAt)}
+              </span>
+              {!e.ok && e.error && (
+                <div style={{ flexBasis: '100%', fontSize: 11, color: RED }}>{e.error}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {entries.length > 8 && (
+        <button onClick={() => setOpen((v) => !v)} style={{ ...ghostBtn, marginTop: 10 }}>
+          {open ? 'Show less' : `Show all ${entries.length}`}
+        </button>
+      )}
     </div>
   );
 }
