@@ -181,13 +181,11 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
 
   useEffect(() => {
     void load();
-    // Only on mount and when the customization right changes — `load` re-reads
-    // the built-in choice from state each time it runs.
+    // Only on mount and when the customization right changes. `load` reads the
+    // current built-in choice and the boards list itself, so re-running it on
+    // every identity change of those would re-apply a board over the trader's
+    // unsaved edits. Its `finally` clears `loading` on both paths.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [canCustomize]);
-
-  useEffect(() => {
-    if (!canCustomize) setLoading(false);
   }, [canCustomize]);
 
   const tilesJson = useMemo(() => JSON.stringify(tiles), [tiles]);

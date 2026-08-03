@@ -15,6 +15,13 @@ import type { TileProps } from './PersonalTiles';
 const SLOW = 300_000;
 const CHAT_POLL = 30_000;
 
+// The study surfaces all carry `StudyDisclaimer`, for a reason that applies here
+// too: study content is team-built and may teach *about* a third party's method,
+// brand or name. A tile that puts a flashcard on the board is showing that same
+// content, so it makes the same statement — shortened to fit a tile footer,
+// never dropped.
+const STUDY_NOTE = 'Educational content only — not financial, investment, legal or tax advice.';
+
 // ---- Study progress ------------------------------------------------------
 //
 // Level, streak and accuracy on one study game. The per-deck state is a
@@ -62,6 +69,7 @@ export function StudyStatsTile({ tile, editing, onChange, onRemove }: TileProps)
         />
       }
       status={deck ? <span style={stamp}>{deck.name}</span> : null}
+      footer={STUDY_NOTE}
     >
       {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
       {error && !data && <TileMessage tone="error">{error}</TileMessage>}
@@ -148,6 +156,7 @@ export function FlashcardsTile({ tile, editing, onChange, onRemove }: TileProps)
         />
       }
       status={set ? <span style={stamp}>{set.name}</span> : null}
+      footer={STUDY_NOTE}
       bodyStyle={{ display: 'flex', flexDirection: 'column' }}
     >
       {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}

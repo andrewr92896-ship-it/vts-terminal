@@ -43,27 +43,28 @@ export const TUTORIALS: Record<string, Tutorial> = {
   // ---- Trading ----
   live: {
     title: 'Using the Live Wall',
-    intro: 'Your open positions across every connected broker, normalized into one feed — planned entry vs. actual fill, slippage, take-profit/stop-loss, and open P/L. The wall refreshes itself every 30 seconds.',
+    intro:
+      'The terminal’s one board, at the top of My Terminal, and what the terminal opens on. Tiles draw from every part of the site — charts and quotes, your open and closed trades, your net worth and portfolio, your to-do list, study progress, announcements, and a live news channel — arranged on one screen.',
     steps: [
       {
-        title: 'Connect your brokers',
-        body: 'The strip near the top shows each broker (FTP, OANDA, Kraken, TradeStation) and whether it is connected. Until API keys are added, the wall shows clearly-labeled sample trades so you can see the layout. Once a broker is connected, its real open positions stream in.',
+        title: 'Choose a layout',
+        body: 'Three layouts come built in: Markets (charts, quotes, headlines, the calendar), Trading Desk (open trades, the record, alerts) and My Terminal (your money, your list, what is new). Pick one from the Layout menu. A layout only ever shows tiles your account actually has, so it never opens with gaps where something you have not turned on would be.',
       },
       {
-        title: 'Read a trade card',
-        body: 'Each card shows the instrument and direction (LONG/SHORT), the planned entry → actual fill with slippage, take-profit and stop-loss, position size, and the strategy/timeframe. Cards are colored green for longs and red for shorts.',
+        title: 'Add a tile',
+        body: 'With a Premium membership, turn on Edit layout and use "Add a tile". Tiles are grouped by where their data comes from — Markets, Advanced Trading, My Terminal, Studies, Team. Every tile is listed, including ones your membership does not reach; those carry a star (Premium) or diamond (Max) so you can see what upgrading would add.',
       },
       {
-        title: 'Slippage',
-        body: 'Slippage is the actual fill minus the price you planned to enter at. It is green when the fill beat your plan and amber when it was worse. It only shows once a planned/alert price is recorded for the trade.',
+        title: 'Arrange and save',
+        body: 'While Edit layout is on, drag a tile by its header and resize it from the bottom-right corner. Most tiles carry their own settings in the header while editing — which news topic, which study game, which funded account, how many rows. Save keeps the arrangement; "Save as new" keeps the current one and stores a copy under a new name.',
       },
       {
-        title: 'Open P/L and balances',
-        body: 'The footer of each card shows live open profit or loss. This is only visible if your account has the "view brokerage" permission; otherwise it reads "P/L hidden".',
+        title: 'Positions',
+        body: 'With Advanced Trading on, the Positions view beside the board shows every open position your desk holds as full trade cards — planned entry against actual fill, slippage, stop and target, and live open P/L. Slippage is green when the fill beat your plan and amber when it was worse; it only appears once a planned or alert price was recorded.',
       },
       {
         title: 'Hide dollar details',
-        body: 'Click "Hide $" — or turn on Privacy mode in the top bar — to mask P/L figures when someone might see your screen. Use "Refresh" to pull the latest positions immediately.',
+        body: 'Use "Hide $" — or Privacy mode in the top bar — to mask money figures across the wall when someone might see your screen.',
       },
     ],
   },

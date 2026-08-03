@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace, requireWorkspaceWrite } from '../auth/middleware.js';
+import { requireAuth } from '../auth/middleware.js';
 import {
   addItem,
   addSection,
@@ -56,12 +56,17 @@ const restoreSchema = z.object({
 });
 
 export async function todoRoutes(app: FastifyInstance) {
-  // The shared to-do list now lives inside Trading (the Trading ▸ To Do tab),
-  // so it requires Trading access. Reads are open to any Trading viewer; writes
-  // are blocked for read-only trading viewers (mirroring the Trading routes).
-  // Admins are always allowed via requireWorkspace.
-  const read = { preHandler: requireWorkspace('trading') };
-  const write = { preHandler: requireWorkspaceWrite('trading') };
+  // The to-do list is personal and lives in **My Terminal**, which every account
+  // reaches — so these are on plain auth.
+  //
+  // They were behind `requireWorkspace('trading')` from when To Do was a desk
+  // tab. The section moved (owner decision, 2026-08) and the guard did not, which
+  // left every account without the Advanced Trading opt-in getting a 403 from
+  // their own list — a section the sidebar showed them. The list is per-user
+  // (`getTodo(userId)`), so there is nothing about the desk to protect here.
+  // The demo is refused by `demoGuard` on every non-GET, as everywhere else.
+  const read = { preHandler: requireAuth };
+  const write = { preHandler: requireAuth };
 
   app.get('/api/todo', read, async (request) => {
     const sections = await getTodo(request.currentUser!.id);

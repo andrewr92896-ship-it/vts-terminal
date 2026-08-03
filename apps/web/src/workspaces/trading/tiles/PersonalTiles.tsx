@@ -58,6 +58,9 @@ export function NetWorthTile({ tile, editing, onRemove }: TileProps) {
       editing={editing}
       onRemove={onRemove}
       status={data ? <span style={stamp}>{data.tracked.available ? 'Tracked' : 'Incomplete'}</span> : null}
+      // The same statement the Net Worth screen carries. A tile must never say
+      // less about a figure than the screen it is drawn from.
+      footer="Informational only — your own figures plus what the terminal tracks."
     >
       {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
       {error && !data && <TileMessage tone="error">{error}</TileMessage>}
