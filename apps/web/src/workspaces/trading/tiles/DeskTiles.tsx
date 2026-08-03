@@ -249,12 +249,15 @@ const STATUS_COLOR: Record<SessionStatus, string> = {
 };
 const BIAS_LABEL: Record<SessionBias, string> = { bull: 'Bull', bear: 'Bear', both: 'Two-way' };
 
-// ---- Funded account ------------------------------------------------------
+// ---- Manual Trades -------------------------------------------------------
 //
-// A prop-firm challenge: what the account is at, and what it has made. Note the
-// figure here is the FIRM's capital, not the trader's own — which is exactly why
-// Net Worth excludes a funded account and names it rather than adding it in.
-export function FundedTile({ tile, editing, onChange, onRemove }: TileProps) {
+// The hand-kept book: accounts a trader tracks themselves, with no broker API
+// behind them. `/api/trading/funded` is this — NOT the prop-firm challenge,
+// which is `ChallengeTile` below. The two are separate on purpose: plenty of
+// traders keep a manual book without ever running a challenge, which is why
+// Manual Trades is a plain Advanced Trading section and the challenge sits
+// behind the nested Funded opt-in.
+export function ManualBookTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
   const { data, error } = useTileData('trading:funded', () => api.funded(), SLOW);
   const accounts = data?.accounts ?? [];
@@ -262,8 +265,8 @@ export function FundedTile({ tile, editing, onChange, onRemove }: TileProps) {
 
   return (
     <TileFrame
-      title={tile.title || 'Funded Account'}
-      icon="shield-check"
+      title={tile.title || 'Manual Trades'}
+      icon="pencil"
       editing={editing}
       onRemove={onRemove}
       controls={
@@ -277,11 +280,11 @@ export function FundedTile({ tile, editing, onChange, onRemove }: TileProps) {
         ) : null
       }
       status={account ? <span style={stamp}>{account.platform}</span> : null}
-      footer="Balances shown are the funding firm's capital, not your own."
+      footer="A book you keep by hand — nothing here reads a broker."
     >
       {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
       {error && !data && <TileMessage tone="error">{error}</TileMessage>}
-      {data && !account && <TileMessage>{"No funded accounts yet."}</TileMessage>}
+      {data && !account && <TileMessage>{"No accounts yet."}</TileMessage>}
       {account && (
         <>
           <TileStat
@@ -308,6 +311,78 @@ export function FundedTile({ tile, editing, onChange, onRemove }: TileProps) {
     </TileFrame>
   );
 }
+
+// ---- Funded Account (the prop-firm challenge) -----------------------------
+//
+// Equity against the target, and how much drawdown is left before the challenge
+// is breached. The headroom figures are the ones that actually matter day to
+// day — a trader passes or fails on those, not on the profit line.
+//
+// The balance here is the FIRM's capital, not the trader's own, which is exactly
+// why Net Worth excludes a funded account and names it rather than adding it in.
+export function ChallengeTile({ tile, editing, onRemove }: TileProps) {
+  const { privacy } = usePrivacy();
+  const { data, error } = useTileData('trading:challenge', () => api.tradingChallenge(), SLOW);
+  const m = data?.metrics;
+  const hide = privacy || (data ? !data.canSeeBalances : true);
+
+  return (
+    <TileFrame
+      title={tile.title || 'Funded Account'}
+      icon="shield-check"
+      editing={editing}
+      onRemove={onRemove}
+      status={m ? <span style={{ ...stamp, color: STATUS_TINT[m.status] }}>{STATUS_WORD[m.status]}</span> : null}
+      footer="Balances shown are the funding firm's capital, not your own."
+    >
+      {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
+      {error && !data && <TileMessage tone="error">{error}</TileMessage>}
+      {data && m && (
+        <>
+          <TileStat
+            label={data.label || 'Equity'}
+            value={hide ? HIDDEN : money(data.equity)}
+            color={STATUS_TINT[m.status]}
+            sub={
+              m.targetEquity != null
+                ? `${m.progressPct.toFixed(0)}% of the way to ${hide ? HIDDEN : money(m.targetEquity)}`
+                : null
+            }
+          />
+          <TileRow label="Profit" value={hide ? HIDDEN : signedMoney(m.profit)} color={plColor(m.profit)} strong />
+          {m.toTarget != null && <TileRow label="Left to target" value={hide ? HIDDEN : money(m.toTarget)} />}
+          {/* Headroom, not the floor: "how much can I lose today" is the
+              question a challenge account is actually run on. */}
+          {m.dailyHeadroom != null && (
+            <TileRow
+              label="Daily drawdown left"
+              value={hide ? HIDDEN : money(m.dailyHeadroom)}
+              color={m.dailyHeadroomPct < 25 ? RED : TEXT}
+            />
+          )}
+          {m.maxHeadroom != null && (
+            <TileRow
+              label="Max drawdown left"
+              value={hide ? HIDDEN : money(m.maxHeadroom)}
+              color={m.maxHeadroomPct < 25 ? RED : TEXT}
+            />
+          )}
+        </>
+      )}
+    </TileFrame>
+  );
+}
+
+const STATUS_WORD: Record<'active' | 'passed' | 'breached', string> = {
+  active: 'Active',
+  passed: 'Passed',
+  breached: 'Breached',
+};
+const STATUS_TINT: Record<'active' | 'passed' | 'breached', string> = {
+  active: TEXT,
+  passed: GREEN,
+  breached: RED,
+};
 
 // ---- Broker capital -------------------------------------------------------
 //

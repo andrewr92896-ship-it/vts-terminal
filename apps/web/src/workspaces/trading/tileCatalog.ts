@@ -212,7 +212,23 @@ export const TILE_CATALOG: TileDef[] = [
     minH: 5,
   },
   {
+    // The hand-kept book. Deliberately NOT behind the Funded opt-in: plenty of
+    // traders keep a manual book without ever running a challenge, which is why
+    // Manual Trades is a plain Advanced Trading section.
     kind: 'funded',
+    label: 'Manual Trades',
+    group: 'desk',
+    icon: 'pencil',
+    blurb: 'Balance and P&L on a book you keep by hand.',
+    feature: null,
+    desk: true,
+    w: 4,
+    h: 10,
+    minH: 5,
+  },
+  {
+    // The prop-firm challenge — this is the one behind the nested opt-in.
+    kind: 'challenge',
     label: 'Funded Account',
     group: 'desk',
     icon: 'shield-check',
@@ -221,7 +237,7 @@ export const TILE_CATALOG: TileDef[] = [
     desk: true,
     funded: true,
     w: 4,
-    h: 10,
+    h: 11,
     minH: 5,
   },
   {

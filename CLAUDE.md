@@ -1338,6 +1338,14 @@ mistake here:**
     decides is which **tiles** a board may carry.
 - **Individual tiers** gate individual tiles (`marketdata` → Premium,
   `teamchat` → Max, and so on).
+  - **`funded` and `challenge` are two different tiles**, matching the two
+    different screens. `funded` is the hand-kept **Manual Trades** book
+    (`/api/trading/funded`, desk-gated only) and is deliberately independent of
+    the Funded opt-in — plenty of traders keep a manual book without ever running
+    a challenge. `challenge` is the prop-firm **Funded Account**
+    (`/api/trading/challenge`, `fundedRead` = desk + `requireFunded` +
+    `requirePremium('funded')`). They were briefly one tile labelled "Funded
+    Account" that read the manual book, which is wrong in both directions.
   - **A tile can be MARKED with a tier it is not GATED by** — `markFeature`
     beside `feature` in the catalog. Broker Capital is the case: connecting a
     broker is Max, but *reading* an account you already connected is not. Its

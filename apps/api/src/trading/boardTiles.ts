@@ -33,6 +33,7 @@ export const BOARD_TILE_KINDS = [
   'closed',
   'sessions',
   'funded',
+  'challenge',
   'capital',
   // Personal
   'networth',
@@ -75,7 +76,13 @@ export const TILE_GATES: Partial<Record<BoardTileKind, TileGate>> = {
   tradelog: { desk: true },
   closed: { desk: true },
   sessions: { desk: true, feature: 'strategySessions' },
-  funded: { desk: true, funded: true, feature: 'funded' },
+  // `funded` is the hand-kept MANUAL book (`/api/trading/funded`), a plain
+  // Advanced Trading section — deliberately independent of the Funded opt-in,
+  // since plenty of traders keep a manual book without running a challenge.
+  funded: { desk: true },
+  // `challenge` is the prop-firm Funded Account (`/api/trading/challenge`),
+  // which IS behind the nested opt-in and the paid feature.
+  challenge: { desk: true, funded: true, feature: 'funded' },
   // Desk-gated only. Connecting a broker is Max, but reading an account you
   // already connected is not — `/api/trading/oanda-capital` serves any desk
   // user, and Trade Analysis ▸ Live Brokers shows the same figures behind

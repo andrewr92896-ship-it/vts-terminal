@@ -1124,6 +1124,7 @@ export type BoardTileKind =
   | 'closed'
   | 'sessions'
   | 'funded'
+  | 'challenge'
   | 'capital'
   // Personal — the user's own money, lists and reading.
   | 'networth'

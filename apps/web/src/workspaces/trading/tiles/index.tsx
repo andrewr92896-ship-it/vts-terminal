@@ -23,7 +23,14 @@ import {
   TodoTile,
   type TileProps,
 } from './PersonalTiles';
-import { CapitalTile, ClosedTradesTile, FundedTile, SessionsTile, TradeLogTile } from './DeskTiles';
+import {
+  CapitalTile,
+  ChallengeTile,
+  ClosedTradesTile,
+  ManualBookTile,
+  SessionsTile,
+  TradeLogTile,
+} from './DeskTiles';
 import { ClockTile, MarketDataTile, StreamTile } from './MarketTiles';
 import { FlashcardsTile, LeaderboardTile, StudyStatsTile, TeamChatTile } from './StudyTeamTiles';
 
@@ -93,7 +100,9 @@ export function BoardTileView({
     case 'sessions':
       return <SessionsTile {...props} />;
     case 'funded':
-      return <FundedTile {...props} />;
+      return <ManualBookTile {...props} />;
+    case 'challenge':
+      return <ChallengeTile {...props} />;
     case 'capital':
       return <CapitalTile {...props} />;
 
