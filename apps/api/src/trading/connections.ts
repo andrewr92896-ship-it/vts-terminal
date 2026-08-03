@@ -391,6 +391,49 @@ export async function getAllActiveDecrypted(
   return out;
 }
 
+// A stored connection's metadata, owner-tagged, WITHOUT decrypting anything.
+//
+// This exists so a screen can tell "this desk has never connected a broker" from
+// "this desk has a connection the terminal currently cannot read" — two states
+// that look identical to getAllActiveDecrypted, which returns an empty array for
+// both. The Live Wall needs the distinction to decide whether showing its sample
+// feed is honest (see getLiveWall).
+//
+// Deliberately touches no credential: no decrypt, so no audit row, no
+// noteUnreadable, and nothing here can fail on a bad key. It reads the same
+// status columns the Live Brokers panel already shows.
+export interface StoredConnection {
+  id: string;
+  broker: BrokerConnectionKind;
+  label: string;
+  ownerId: string;
+  owner: string;
+  active: boolean;
+  lastStatus: ConnStatus;
+  lastError: string | null;
+}
+
+export async function listStoredConnections(scope: Set<string>): Promise<StoredConnection[]> {
+  if (scope.size === 0) return [];
+  const rows = await db
+    .select({ conn: brokerConnections, username: users.username })
+    .from(brokerConnections)
+    .innerJoin(users, eq(users.id, brokerConnections.userId))
+    .where(inArray(brokerConnections.userId, [...scope]));
+  return rows
+    .filter((r) => r.username !== DEMO_USERNAME)
+    .map((r) => ({
+      id: r.conn.id,
+      broker: r.conn.broker,
+      label: r.conn.label,
+      ownerId: r.conn.userId,
+      owner: r.username,
+      active: r.conn.active,
+      lastStatus: r.conn.lastStatus,
+      lastError: r.conn.lastError,
+    }));
+}
+
 export async function addConnection(
   userId: string,
   input: { broker: BrokerConnectionKind; label: string; creds: Record<string, unknown> },

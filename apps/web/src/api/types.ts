@@ -556,7 +556,11 @@ export interface BreakEvenOverride {
 }
 
 export interface LiveWall {
-  source: 'live' | 'sample';
+  // 'sample' means this desk has never connected a broker, so the wall previews
+  // itself with representative trades. 'unavailable' means one IS connected and
+  // cannot be read — never sample data in that case, because invented positions
+  // would hide the broken feed the trader has to go and fix.
+  source: 'live' | 'sample' | 'unavailable';
   generatedAt: number;
   canSeeBalances: boolean;
   brokers: BrokerLiveResult[];

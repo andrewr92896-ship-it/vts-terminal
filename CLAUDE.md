@@ -1340,6 +1340,44 @@ landing screen; its nav row is no longer My Terminal's first, since the tier
 stacking puts the paid Trading Team row above it. There is no lite duplicate to
 keep in sync — one screen serves a free account and a full desk alike.
 
+**`source` has THREE states, and the third one is the point** (`trading/types.ts`,
+mirrored in the web `api/types.ts` and on the widget payload):
+
+- **`live`** — a broker was read; these are real positions.
+- **`sample`** — this desk has **never connected a broker**, so the wall previews
+  itself with representative trades. This is the only case a made-up position is
+  honest, and it is a first-run preview rather than a fallback.
+- **`unavailable`** — a broker **is** connected and could not be read: the row was
+  deactivated (migration `0094`'s credential reset does exactly that), or its
+  stored secret will not decrypt under the current key. **No trades are invented
+  here.** The wall says the feed is not being read, names the trader's *own*
+  broken connections with the reason already recorded on the row, and points at
+  Trade Analysis ▸ Live Brokers.
+
+The last two used to be one state — `conns.length === 0` → sample — and merging
+them was a real fault. After the credential reset a desk with a perfectly good
+OANDA account was shown six invented positions with invented P/L, chipped
+"sample", while the one thing the trader needed to read ("re-enter this account's
+key") went unsaid. It is the same rule Net Worth already follows when it refuses
+to count the sample, and Market Data follows with `sample: true`: **a fabricated
+figure must never stand in for one that could not be read.** Do not collapse them
+again, and do not make a new surface treat "not sample" as "live".
+
+- The detection reads connection rows **without decrypting**
+  (`listStoredConnections` in `trading/connections.ts`): a credential that will
+  not decrypt is precisely the case being detected, so the detection cannot
+  depend on reading one. It also writes no audit row and cannot mark a connection
+  unreadable — it is metadata only.
+- Every "nothing to show" string on the affected surfaces is gated on it, because
+  **"No open positions" is a claim about the book** and may only be made when the
+  book was actually read. Call sites: `LiveWall.tsx`, `PositionsTile.tsx`,
+  `TradeDesk.tsx`'s team book (via `sample`), and the Scriptable widget script in
+  `DeviceSettings.tsx` — the widget most of all, since a Home Screen glance has no
+  surrounding screen to qualify it and "No open positions" there reads as flat.
+- Hand-kept **funded** positions are real and still shown in this state.
+- The **demo** is unaffected: it is forced down the sample path so its tour is
+  complete.
+
 **Four files carry the design, and adding a tile kind touches all of them:**
 
 - **`workspaces/trading/tileCatalog.ts`** — the single source of truth for what a

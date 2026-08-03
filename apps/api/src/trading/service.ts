@@ -13,6 +13,7 @@ import { backfillClosedTrades } from './backfill.js';
 import {
   ALL_USERS,
   getAllActiveDecrypted,
+  listStoredConnections,
   recordConnectionStatus,
   type OwnedConnection,
   type KrakenCreds,
@@ -298,9 +299,67 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   // Live Brokers capital. Scoped to the same team; demo users never see them.
   const fundedLive = isDemoUser(user) ? [] : await loadFundedLiveTrades(conns, scopeIds);
 
-  // No connection anywhere on the desk → show the sample feed so the wall is
-  // never blank. The sample is attributed to the viewer.
+  // Nothing readable on the desk. That is TWO different situations and they get
+  // two different answers — see the `source` union in types.ts for why conflating
+  // them was a fault rather than a simplification.
   if (conns.length === 0) {
+    // Does this desk have a broker connection at all? Read the rows without
+    // decrypting: a credential that will not decrypt is exactly the case being
+    // detected, so the detection must not depend on reading one.
+    const stored = isDemoUser(user) ? [] : await listStoredConnections(scopeIds);
+
+    // A connection exists but could not be read — deactivated by the credential
+    // reset, or its stored secret will not decrypt under the current key. Say so
+    // and show nothing; a fabricated book here would hide the very thing the
+    // trader needs to act on. Real funded positions are hand-kept and still real,
+    // so they stay.
+    if (stored.length > 0) {
+      const trades = gateBalances(enrichForex(withSlippage(fundedLive), 'USD'), canSeeBalances).sort(byWallOrder);
+      const brokers: BrokerLiveResult[] = stored.map((c) => {
+        const meta = brokerMeta(c.broker);
+        return {
+          connectionId: c.id,
+          ownerId: c.ownerId,
+          owner: c.owner,
+          broker: c.broker,
+          name: c.label,
+          platform: meta.platform,
+          kind: meta.kind,
+          // The row is there — saying otherwise is what sent a trader looking
+          // for a connection they had already made.
+          configured: true,
+          ok: false,
+          // The connection's own recorded reason, which is the one the Live
+          // Brokers panel shows, so the two screens cannot disagree.
+          error: c.lastError ?? (c.active ? 'Not reachable' : 'Disconnected'),
+          count: 0,
+        };
+      });
+      // Name the trader's OWN broken connections. A teammate's is their problem
+      // to fix, and telling somebody to re-enter a key they do not hold is worse
+      // than saying nothing.
+      const mine = stored.filter((c) => c.ownerId === user.id);
+      const note =
+        mine.length > 0
+          ? `${mine.map((c) => c.label).join(', ')} ${mine.length > 1 ? 'are' : 'is'} not being read, so no live positions can be shown. Open Trade Analysis ▸ Live Brokers and re-enter the account key to reconnect.`
+          : 'No broker on this desk is being read, so no live positions can be shown.';
+      return {
+        source: 'unavailable',
+        generatedAt,
+        canSeeBalances,
+        brokers,
+        trades,
+        note,
+        breakEvenPct,
+        breakEvenMode,
+        breakEvenAmount,
+        breakEvenOverrides,
+      };
+    }
+
+    // No connection has ever been made → the sample feed, as a preview of what
+    // the screen becomes. This is the ONLY case it is honest in. Attributed to
+    // the viewer.
     const sample = sampleLiveTrades(generatedAt).map((t) => ({
       ...t,
       ownerId: user.id,

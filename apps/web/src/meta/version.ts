@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.59';
+export const APP_VERSION = 'Beta V 6.60';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.60',
+    date: 'August 3, 2026',
+    notes: [
+      'The Live Wall no longer shows sample positions when your broker is connected but can’t be read. It used to fill the screen with example trades — marked “sample”, but they read as a real book and hid the actual problem. Now it says the feed isn’t being read and points you at Trade Analysis ▸ Live Brokers to reconnect, and the Positions tile, the Trade Desk book and the iPhone widget all say the same. The sample is still shown to an account that has never connected a broker, which is the one case it is honest in.',
+    ],
+  },
   {
     version: 'Beta V 6.59',
     date: 'August 3, 2026',

@@ -60,9 +60,22 @@ export interface BrokerLiveResult {
 }
 
 export interface LiveWall {
-  // 'live'  — at least one broker is configured; trades came from real feeds.
-  // 'sample'— no broker configured yet, so a representative sample is shown.
-  source: 'live' | 'sample';
+  // 'live'       — at least one broker is configured; trades came from real feeds.
+  // 'sample'     — this desk has NEVER connected a broker, so a representative
+  //                sample is shown as a first-run preview of the screen.
+  // 'unavailable'— a broker IS connected but the terminal cannot read it right
+  //                now (deactivated, or its stored credential will not decrypt).
+  //
+  // The last two used to be one state, and collapsing them was a real fault
+  // rather than a tidy simplification: a desk whose OANDA connection had been
+  // deactivated by the credential-encryption reset was shown six invented
+  // positions with invented P/L, chipped "sample", while the actual problem —
+  // "re-enter this account's key" — went unsaid. Made-up positions must never
+  // stand in for a broker feed that is down; the same rule Net Worth already
+  // follows when it refuses to count the sample, and Market Data follows with
+  // `sample: true`. A trader has to be able to tell "nothing is connected yet"
+  // from "your book is not being read".
+  source: 'live' | 'sample' | 'unavailable';
   generatedAt: number; // ms epoch
   canSeeBalances: boolean; // always true now — balances are open to the trading team
   brokers: BrokerLiveResult[];

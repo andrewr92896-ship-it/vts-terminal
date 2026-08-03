@@ -567,6 +567,12 @@ try { data = await loadData(); } catch(e) { data = null; }
 if(!data || !data.positions){
   const t=w.addText("Couldn't load positions"); t.font=Font.mediumSystemFont(13); t.textColor=C.muted;
   const h=w.addText("Check your token / connection"); h.font=Font.systemFont(10); h.textColor=C.faint;
+} else if(data.source==="unavailable"){
+  // The broker is not being read. "No open positions" would be a claim about
+  // the book, and the book was never read — on a Home Screen widget, with no
+  // surrounding screen to qualify it, that reads as "you are flat".
+  const t=w.addText("Broker not connected"); t.font=Font.mediumSystemFont(13); t.textColor=C.red;
+  const h=w.addText("Positions can't be shown. Reconnect it in the terminal."); h.font=Font.systemFont(10); h.textColor=C.faint;
 } else if(data.positions.length===0){
   const t=w.addText(PARAM?("No open positions for @"+PARAM):"No open positions"); t.font=Font.mediumSystemFont(13); t.textColor=C.muted;
 } else if(fam==="small"){
