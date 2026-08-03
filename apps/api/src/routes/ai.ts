@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireWorkspace, requirePremium } from '../auth/middleware.js';
-import { canAccessWorkspace, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
+import { canAccessWorkspace, isAdmin, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
 import { featuresForUser } from '../features/service.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
 import { getPrompt, withStyle } from '../ai/prompts.js';
@@ -65,9 +65,15 @@ const tutorSchema = z.object({
 }).refine((v) => v.explain || v.ask || v.messages, { message: 'Provide a question to explain or ask' });
 
 export async function aiRoutes(app: FastifyInstance) {
-  // Current user's AI usage against the monthly cap (for the UI to show).
+  // Current user's AI usage against the two monthly caps (for the UI to show).
+  //
+  // An admin additionally gets `system` — what the terminal spent on its own
+  // schedule tagging news and explaining calendar releases. That spend used to
+  // be recorded nowhere at all, so the usage figure covered roughly half the
+  // real bill. It is reported to admins only and is not a budget: nothing caps
+  // the background jobs, and this exists so the number can be seen.
   app.get('/api/ai/usage', { preHandler: requireAuth }, async (request) => {
-    return getAiUsage(request.currentUser!.id);
+    return getAiUsage(request.currentUser!.id, isAdmin(parseRoles(request.currentUser!)));
   });
 
   // Ask VTS AI — paid. Customer support is deliberately NOT on this guard (see

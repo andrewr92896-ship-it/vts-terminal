@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import type { AiUsage } from '../api/types';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 import { api, ApiError } from '../api/client';
@@ -48,6 +49,10 @@ export function AskClaudePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
+  // The whole usage payload: the text allowance this panel spends, the separate
+  // screenshot allowance, and — for an admin — what the terminal spent on its
+  // own schedule.
+  const [usage, setUsage] = useState<AiUsage | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -57,7 +62,16 @@ export function AskClaudePanel({
   // Load the monthly-usage counter when the panel opens.
   useEffect(() => {
     if (!open) return;
-    api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => setRemaining(null));
+    api
+      .aiUsage()
+      .then((u) => {
+        setRemaining(u.remaining);
+        setUsage(u);
+      })
+      .catch(() => {
+        setRemaining(null);
+        setUsage(null);
+      });
   }, [open]);
 
   const suggestions = (workspace && SUGGESTIONS_BY_WS[workspace]) || DEFAULT_SUGGESTIONS;
@@ -75,7 +89,15 @@ export function AskClaudePanel({
     try {
       const { reply } = await api.askAi(next, workspace);
       setMessages([...next, { role: 'assistant', content: reply }]);
-      api.aiUsage().then((u) => setRemaining(u.remaining)).catch(() => { /* keep */ });
+      api
+        .aiUsage()
+        .then((u) => {
+          setRemaining(u.remaining);
+          setUsage(u);
+        })
+        .catch(() => {
+          /* keep the last figures */
+        });
     } catch (e) {
       const msg =
         e instanceof ApiError
@@ -125,8 +147,28 @@ export function AskClaudePanel({
             {workspaceLabel && <span style={{ fontSize: 11, color: '#7e92c0' }}>· {workspaceLabel}</span>}
             <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>VTS AI</span>
             {remaining != null && (
-              <span title="AI requests left this month" style={{ fontSize: 9.5, color: remaining <= 5 ? '#e0a23a' : '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}>
+              <span title="Questions left this month" style={{ fontSize: 9.5, color: remaining <= 5 ? '#e0a23a' : '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}>
                 {remaining} left
+              </span>
+            )}
+            {/* The screenshot allowance is separate and much smaller, so it is
+                worth showing before somebody runs into it mid-import. */}
+            {usage && (
+              <span
+                title="Screenshot reads left this month — a separate allowance from questions"
+                style={{ fontSize: 9.5, color: usage.vision.remaining <= 3 ? '#e0a23a' : '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                {usage.vision.remaining} screenshots
+              </span>
+            )}
+            {/* Admins only: what the terminal spent tagging news and explaining
+                calendar releases. Not an allowance — nothing caps it. */}
+            {usage?.system != null && (
+              <span
+                title="Background AI this month (news tagging, calendar explainers) — not capped"
+                style={{ fontSize: 9.5, color: '#6f84b0', fontFamily: "'IBM Plex Mono', monospace" }}
+              >
+                {usage.system} system
               </span>
             )}
           </div>

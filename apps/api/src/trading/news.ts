@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 import { desc, eq, gte } from 'drizzle-orm';
+import { aiConfigured } from '../ai/claude.js';
+import { newsAiEnabled } from './feeds.js';
 import { db } from '../db/index.js';
 import {
   tradingNews,
@@ -46,6 +48,16 @@ export interface CalendarEvent {
 export interface MarketNewsData {
   headlines: NewsItem[];
   calendar: CalendarEvent[];
+  // Whether headlines are being read by the AI right now (see feeds.ts —
+  // opt-in, and off unless NEWS_AI_SUMMARY_ENABLED is 'true').
+  //
+  // The client needs this because a bias is stored per headline: rows tagged
+  // while it was on keep a real bias forever, while new rows all read
+  // 'neutral' — the schema default, not an assessment. Rendering the glyph
+  // regardless would give a feed where some rows carry a directional cue and
+  // some do not, which reads as broken rather than as switched off. So the cue
+  // is all-or-nothing, and this is the switch.
+  aiTagging: boolean;
 }
 
 function isImpact(v: unknown): v is NewsImpact {
@@ -113,7 +125,11 @@ export async function getMarketNews(): Promise<MarketNewsData> {
       .orderBy(tradingCalendar.eventTime)
       .limit(400),
   ]);
-  return { headlines: headRows.map(toNews), calendar: calRows.map(toEvent) };
+  return {
+    headlines: headRows.map(toNews),
+    calendar: calRows.map(toEvent),
+    aiTagging: newsAiEnabled() && aiConfigured(),
+  };
 }
 
 // Timestamp (ms) of the most recently published headline, or 0 when there are

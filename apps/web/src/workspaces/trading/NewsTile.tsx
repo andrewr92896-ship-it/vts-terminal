@@ -44,6 +44,12 @@ export function NewsTile({
   // Keep the "x ago" times fresh between data polls.
   useNowTick();
   const [headlines, setHeadlines] = useState<NewsItem[] | null>(null);
+  // Whether the server is tagging headlines at all. Same reason as Market News:
+  // a stored bias is real, an untagged headline's 'neutral' is just the column
+  // default, and showing both as though they meant the same thing is worse than
+  // showing neither. The High/Med/Low chip is unaffected — that one comes from
+  // the feed's own per-source setting, not from the AI.
+  const [aiTagging, setAiTagging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const firstLoad = useRef(true);
   const alive = useRef(true);
@@ -53,6 +59,7 @@ export function NewsTile({
       const d = await api.marketNews();
       if (!alive.current) return;
       setHeadlines(d.headlines);
+      setAiTagging(!!d.aiTagging);
       setError(null);
     } catch (e) {
       if (!alive.current) return;
@@ -120,22 +127,24 @@ export function NewsTile({
           <div style={hint}>No {feed === 'all' ? '' : `${feedLabel} `}headlines yet. New stories appear here automatically.</div>
         )}
         {shown.map((h) => (
-          <HeadlineRow key={h.id} h={h} />
+          <HeadlineRow key={h.id} h={h} showBias={aiTagging} />
         ))}
       </div>
     </div>
   );
 }
 
-function HeadlineRow({ h }: { h: NewsItem }) {
+function HeadlineRow({ h, showBias }: { h: NewsItem; showBias: boolean }) {
   const bi = BIAS[h.bias];
   const im = IMPACT[h.impact];
   return (
-    <div style={{ ...row, borderLeft: `3px solid ${bi.color}` }}>
+    <div style={{ ...row, borderLeft: `3px solid ${showBias ? bi.color : 'transparent'}` }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, color: bi.color, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-          <span style={{ fontSize: 8 }}>{bi.arrow}</span>{bi.label}
-        </span>
+        {showBias && (
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: bi.color, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ fontSize: 8 }}>{bi.arrow}</span>{bi.label}
+          </span>
+        )}
         <span style={{ ...chip, color: im.color, borderColor: im.color }}>{im.label}</span>
         <span style={{ marginLeft: 'auto', fontSize: 9.5, color: FAINT, fontFamily: MONO }}>{fmtRelative(h.publishedAt)}</span>
       </div>

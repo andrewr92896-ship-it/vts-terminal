@@ -1,13 +1,22 @@
 import crypto from 'node:crypto';
-import { and, count, eq, gte } from 'drizzle-orm';
+import { and, count, eq, gte, inArray, isNull, notInArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { aiUsage } from '../db/schema.js';
 import { config } from '../config.js';
 
-// Per-user AI guardrails: a per-minute burst limit (in memory) plus a monthly
-// cap (counted from the ai_usage table). enforceAiLimit() is called by every
+// Per-user AI guardrails: a per-minute burst limit (in memory) plus monthly
+// caps (counted from the ai_usage table). enforceAiLimit() is called by every
 // route that hits Claude — it throws AiLimitError (mapped to HTTP 429) when a
 // limit is reached, and otherwise records the call.
+//
+// **Two monthly budgets, not one.** A text question costs roughly 1.5–2¢ and a
+// screenshot read 5–10¢, so a single counter did not bound the worst case in any
+// useful way: a user who spent their whole allowance on screenshots cost several
+// times one who spent it on questions, and the cap could not tell the difference.
+// Vision calls are counted against their own, much smaller allowance.
+//
+// Deliberately NOT per-tier: there is no billing yet, and an allowance that
+// varies by what somebody paid belongs with the thing that takes the payment.
 
 export class AiLimitError extends Error {
   retryAfterSec?: number;
@@ -18,9 +27,33 @@ export class AiLimitError extends Error {
   }
 }
 
+// The four flows that send an image. Everything else — `ask`, `market_hours`,
+// `todo_command` and the eleven `studies_*` kinds — is text.
+//
+// A kind not listed here counts as text, which is the safe default in both
+// directions: a new text kind is classified correctly by doing nothing, and a
+// new *vision* kind that somebody forgets to add here is merely metered against
+// the larger budget rather than escaping metering altogether.
+export const VISION_KINDS = [
+  'analyze',
+  'position_screenshot',
+  'funded_screenshot',
+  'account_screenshot',
+] as const;
+
+export type AiBudgetKind = 'text' | 'vision';
+
+export function budgetFor(kind: string): AiBudgetKind {
+  return (VISION_KINDS as readonly string[]).includes(kind) ? 'vision' : 'text';
+}
+
+function limitFor(budget: AiBudgetKind): number {
+  return budget === 'vision' ? config.AI_VISION_MONTHLY_LIMIT : config.AI_MONTHLY_LIMIT;
+}
+
 const RATE_WINDOW_MS = 60_000;
 // userId -> recent call timestamps within the window. In-memory by design: a
-// best-effort burst smoother that resets on restart (the monthly cap is the
+// best-effort burst smoother that resets on restart (the monthly caps are the
 // durable control).
 const recentCalls = new Map<string, number[]>();
 
@@ -34,29 +67,85 @@ function etMonthStartMs(): number {
   return Date.parse(`${ym}-01T00:00:00Z`);
 }
 
-export async function aiUsageThisMonth(userId: string): Promise<number> {
+// This user's calls in the current ET month, for one budget.
+//
+// Background rows carry a NULL user_id and can never be counted here: `user_id =
+// ?` does not match NULL in SQL. That is what keeps a news-tagging poll from
+// eating somebody's personal allowance — a property of the comparison rather
+// than of an exclusion somebody has to remember to write.
+export async function aiUsageThisMonth(userId: string, budget?: AiBudgetKind): Promise<number> {
+  const since = new Date(etMonthStartMs());
+  const kinds = [...VISION_KINDS];
+  const rows = await db
+    .select({ c: count() })
+    .from(aiUsage)
+    .where(
+      and(
+        eq(aiUsage.userId, userId),
+        gte(aiUsage.createdAt, since),
+        budget === 'vision'
+          ? inArray(aiUsage.kind, kinds)
+          : budget === 'text'
+            ? notInArray(aiUsage.kind, kinds)
+            : undefined,
+      ),
+    );
+  return rows[0]?.c ?? 0;
+}
+
+// Background AI in the current ET month — the rows with no user behind them.
+export async function systemAiUsageThisMonth(): Promise<number> {
   const since = new Date(etMonthStartMs());
   const rows = await db
     .select({ c: count() })
     .from(aiUsage)
-    .where(and(eq(aiUsage.userId, userId), gte(aiUsage.createdAt, since)));
+    .where(and(isNull(aiUsage.userId), gte(aiUsage.createdAt, since)));
   return rows[0]?.c ?? 0;
 }
 
-export interface AiUsageInfo {
+export interface AiBudget {
   used: number;
   limit: number;
   remaining: number;
 }
 
-export async function getAiUsage(userId: string): Promise<AiUsageInfo> {
-  const used = await aiUsageThisMonth(userId);
-  const limit = config.AI_MONTHLY_LIMIT;
+export interface AiUsageInfo {
+  // The text budget, kept flat as well so the existing "N left" counter in the
+  // Ask VTS AI panel keeps working unchanged — an ordinary question spends this
+  // one.
+  used: number;
+  limit: number;
+  remaining: number;
+  text: AiBudget;
+  vision: AiBudget;
+  // Background AI (news tagging, calendar explainers) this month. Admins only,
+  // null for everyone else. Not a budget: nothing caps it, and it is here to be
+  // seen rather than enforced.
+  system: number | null;
+}
+
+function budget(used: number, limit: number): AiBudget {
   return { used, limit, remaining: Math.max(0, limit - used) };
 }
 
-// Throws AiLimitError if the user is over the burst or monthly limit; otherwise
-// records the call and returns. Call this immediately before invoking Claude.
+export async function getAiUsage(userId: string, includeSystem = false): Promise<AiUsageInfo> {
+  const [text, vision, system] = await Promise.all([
+    aiUsageThisMonth(userId, 'text'),
+    aiUsageThisMonth(userId, 'vision'),
+    includeSystem ? systemAiUsageThisMonth() : Promise.resolve(null),
+  ]);
+  const textBudget = budget(text, config.AI_MONTHLY_LIMIT);
+  return {
+    ...textBudget,
+    text: textBudget,
+    vision: budget(vision, config.AI_VISION_MONTHLY_LIMIT),
+    system,
+  };
+}
+
+// Throws AiLimitError if the user is over the burst or the relevant monthly
+// limit; otherwise records the call and returns. Call this immediately before
+// invoking Claude.
 export async function enforceAiLimit(userId: string, kind: string): Promise<void> {
   const now = Date.now();
 
@@ -66,9 +155,19 @@ export async function enforceAiLimit(userId: string, kind: string): Promise<void
     throw new AiLimitError('Too many AI requests right now — give it a few seconds.', retry);
   }
 
-  const used = await aiUsageThisMonth(userId);
-  if (used >= config.AI_MONTHLY_LIMIT) {
-    throw new AiLimitError('Monthly AI limit reached. It resets at the start of next month.');
+  // Which allowance this call spends, and only that one — a screenshot read
+  // never touches the text budget or the reverse.
+  const which = budgetFor(kind);
+  const used = await aiUsageThisMonth(userId, which);
+  if (used >= limitFor(which)) {
+    // Name the budget that was hit. "AI limit reached" leaves somebody who has
+    // used forty screenshot imports believing every AI feature is gone, when
+    // asking a question would have worked perfectly well.
+    throw new AiLimitError(
+      which === 'vision'
+        ? 'Monthly screenshot allowance reached — that is the budget for reading images, and it is separate from asking questions. It resets at the start of next month.'
+        : 'Monthly AI limit reached. It resets at the start of next month.',
+    );
   }
 
   arr.push(now);
@@ -79,4 +178,26 @@ export async function enforceAiLimit(userId: string, kind: string): Promise<void
     kind: kind.slice(0, 40),
     createdAt: new Date(now),
   });
+}
+
+// Record an AI call the terminal made on its own schedule — the news headline
+// tagger and the calendar explainer, which run on the feed poller with no user
+// behind them.
+//
+// **Records, never enforces.** These jobs are not capped: if one runs it should
+// finish, and half-tagged output is worse than either extreme. The point is that
+// the spend stops being invisible — it was roughly half the bill and appeared
+// nowhere. It also never throws, for the same reason the audit writer does not:
+// a metering failure must not take down the feed poll it was measuring.
+export async function recordSystemAiUse(kind: string): Promise<void> {
+  try {
+    await db.insert(aiUsage).values({
+      id: crypto.randomUUID(),
+      userId: null,
+      kind: kind.slice(0, 40),
+      createdAt: new Date(),
+    });
+  } catch (err) {
+    console.error('Could not record background AI use:', err);
+  }
 }

@@ -32,14 +32,25 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   // Claude / Anthropic. The key is optional — when absent, AI features report
   // "not configured" instead of failing. The site default is Sonnet; trade
-  // screenshot analysis uses Opus 4.8 (vision).
+  // screenshot analysis uses a separate vision model (see below).
   ANTHROPIC_API_KEY: z.string().optional(),
   ANTHROPIC_MODEL_DEFAULT: z.string().default('claude-sonnet-4-6'),
-  ANTHROPIC_MODEL_ANALYSIS: z.string().default('claude-opus-4-8'),
+  // Vision / screenshot parsing. Sonnet 5 rather than Opus: reading a trade off
+  // a broker screenshot is structured extraction, not hard reasoning, and Sonnet
+  // 5 is the first Sonnet-tier model with high-resolution vision (2576px long
+  // edge) — so there is no capability loss on a screenshot, at $3/$15 per
+  // million tokens against Opus's $5/$25. Env-overridable, so going back to Opus
+  // is a variable change on the host rather than a redeploy.
+  ANTHROPIC_MODEL_ANALYSIS: z.string().default('claude-sonnet-5'),
   // AI usage guardrails (per user). The monthly cap resets at the start of each
   // Eastern-Time month; the per-minute limit smooths bursts. Keeps Claude use
   // from running up an unexpected bill.
+  //
+  // Two budgets, because the two kinds of call cost an order of magnitude apart:
+  // a text question is roughly 1.5–2¢, a screenshot read 5–10¢. AI_MONTHLY_LIMIT
+  // keeps its name (and covers text) so existing deployments are unaffected.
   AI_MONTHLY_LIMIT: z.coerce.number().int().positive().default(1000),
+  AI_VISION_MONTHLY_LIMIT: z.coerce.number().int().positive().default(40),
   AI_RATE_PER_MIN: z.coerce.number().int().positive().default(15),
   // Shared secret that inbound TradingView alerts must include (TradingView
   // sends no auth of its own). When unset, the webhook rejects everything.

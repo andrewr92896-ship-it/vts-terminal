@@ -666,6 +666,13 @@
       "when": 1782342636908,
       "tag": "0095_credential_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "6",
+      "when": 1782342736908,
+      "tag": "0096_ai_usage_system_rows",
+      "breakpoints": true
     }
   ]
 }

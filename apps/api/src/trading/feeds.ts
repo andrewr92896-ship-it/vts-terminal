@@ -5,6 +5,7 @@ import { tradingNews, tradingCalendar, truthPosts, type NewsImpact, type NewsCat
 import { config } from '../config.js';
 import { resolveOwnerId } from './alerts.js';
 import { aiConfigured, summarizeNewsItems, explainCalendarTitles, type NewsRead } from '../ai/claude.js';
+import { recordSystemAiUse } from '../ai/usage.js';
 
 // Three best-effort scheduled pollers that populate the Market News area:
 //   1. Finnhub market-news headlines (needs FINNHUB_API_KEY).
@@ -212,10 +213,36 @@ function rssEnabled(): boolean {
   return process.env.RSS_NEWS_ENABLED !== 'false';
 }
 
-function newsAiEnabled(): boolean {
-  // Claude bias/impact/trade-note read of each headline. On by default; needs an
-  // API key (aiConfigured). Set to 'false' to ingest headlines without the read.
-  return process.env.NEWS_AI_SUMMARY_ENABLED !== 'false';
+// The Claude bias/impact/trade-note read of each headline. **Opt-in, and off
+// unless explicitly enabled** — it used to be on by default.
+//
+// It is a batched call every five minutes, forever, whether or not anybody is
+// signed in, costing the same with one user as with a thousand. What it buys is
+// a bias glyph on Market News and a note in the Live Wall's news tile; the
+// headlines themselves ingest and display perfectly well without it. That is a
+// standing bill for a decoration, so it now has to be asked for.
+//
+// Needs an API key as well (aiConfigured). Exported because the news payload
+// tells the client whether tagging is on — see `aiTagging` in routes/trading.ts.
+export function newsAiEnabled(): boolean {
+  return process.env.NEWS_AI_SUMMARY_ENABLED === 'true';
+}
+
+// The plain-language explainer on an economic-calendar release. **On by
+// default**, unlike the headline tagging above, and deliberately kept on its own
+// switch rather than sharing one.
+//
+// The difference is that this one converges: explanations are keyed by release
+// TITLE and reused across every recurrence, so once CPI and NFP have been
+// explained they are never explained again. The spend is a few calls on a fresh
+// install trending to nothing, not a standing charge — so turning it off saves
+// approximately nothing and costs the calendar its explanations.
+//
+// Before this had its own switch, both read NEWS_AI_SUMMARY_ENABLED, which would
+// have made inverting that default silently take the calendar explainer down
+// with it.
+function calendarAiEnabled(): boolean {
+  return process.env.CALENDAR_AI_EXPLAINER_ENABLED !== 'false';
 }
 
 const RSS_MAX_PER_FEED = 12; // cap each poll so one busy feed can't flood the list
@@ -323,6 +350,12 @@ export async function ingestRssNews(): Promise<void> {
     let reads: NewsRead[];
     try {
       reads = await summarizeNewsItems(targets.map((t) => ({ title: t.title, source: t.source, category: t.category })));
+      // Recorded, never capped: this is the terminal spending on its own
+      // schedule with no user behind it, and it was previously invisible — no
+      // ai_usage row at all, so the owner saw roughly half the real bill. A
+      // background job is not made to fail by its own metering, so this is
+      // awaited only for ordering and swallows its own errors.
+      await recordSystemAiUse('news_read');
     } catch (err) {
       // The rows are already stored with their excerpt; a later poll retries them.
       console.error('News AI read failed:', err);
@@ -518,7 +551,7 @@ const CAL_EXPLAIN_MAX_TITLES = 15; // distinct titles explained by Claude per po
 // each distinct title is explained by Claude once and reused across every event
 // with that title (past, current, other currencies). Best-effort; needs a key.
 export async function explainCalendar(): Promise<void> {
-  if (!newsAiEnabled() || !aiConfigured()) return;
+  if (!calendarAiEnabled() || !aiConfigured()) return;
   try {
     const windowStart = new Date(Date.now() - CAL_EXPLAIN_WINDOW_MS);
     const rows = await db
@@ -545,6 +578,7 @@ export async function explainCalendar(): Promise<void> {
     }
     if (need.length > 0) {
       const texts = await explainCalendarTitles(need);
+      await recordSystemAiUse('calendar_explain');
       need.forEach((t, i) => {
         if (texts[i]) byTitle.set(t, texts[i]);
       });
