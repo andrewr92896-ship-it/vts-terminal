@@ -737,9 +737,14 @@ export type SupportRequestMessageRow = typeof supportRequestMessages.$inferSelec
 // feature made the call (ask, analyze, news_brief, todo_command, ...).
 export const aiUsage = sqliteTable('ai_usage', {
   id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+  // NULL = the terminal spent this on its own schedule, with no user behind it
+  // (the news headline tagger, the calendar explainer). Made nullable in
+  // migration 0096 so background AI stops being invisible.
+  //
+  // Every per-user count filters on `user_id = ?`, which never matches a NULL in
+  // SQL — so a background job cannot consume anyone's personal allowance, by
+  // construction rather than by remembering to exclude it.
+  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
   kind: text('kind').notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });

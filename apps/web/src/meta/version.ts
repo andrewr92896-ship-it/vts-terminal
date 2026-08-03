@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.46';
+export const APP_VERSION = 'Beta V 6.47';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.47',
+    date: 'August 3, 2026',
+    notes: [
+      'AI running costs cut. The terminal was paying to have every news headline read by AI every five minutes around the clock, whether or not anyone was signed in — that is now off unless it is switched on. Headlines still arrive and display exactly as before; the small bias arrow on a story is hidden while it is off, rather than showing on some stories and not others.',
+      'Screenshot imports now run on a faster, cheaper model. Reading a trade off a broker screenshot is the same job it always was, at roughly 40% less per import.',
+      'Screenshots and questions now have separate monthly allowances, because a screenshot costs several times what a question does. Running out of one no longer blocks the other, and the message tells you which one you have used up.',
+      'Background AI spend is now recorded and visible to admins alongside personal usage. It was previously invisible — roughly half the bill appeared nowhere.',
+    ],
+  },
   {
     version: 'Beta V 6.46',
     date: 'August 3, 2026',

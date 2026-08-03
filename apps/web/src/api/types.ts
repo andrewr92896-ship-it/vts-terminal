@@ -325,10 +325,24 @@ export interface TodoCommandResult {
 }
 
 // Current user's AI usage against the monthly cap.
+export interface AiBudget {
+  used: number;
+  limit: number;
+  remaining: number;
+}
+
+// Two separate monthly allowances: a text question and a screenshot read cost an
+// order of magnitude apart, so they are counted apart. The flat used/limit/
+// remaining mirror the TEXT budget, which is what an ordinary question spends.
 export interface AiUsage {
   used: number;
   limit: number;
   remaining: number;
+  text: AiBudget;
+  vision: AiBudget;
+  // Background AI the terminal ran on its own schedule this month. Admins only;
+  // null for everyone else. Not a budget — nothing caps it.
+  system: number | null;
 }
 
 export type TodoMarker = 'check' | 'dash' | 'dot';
@@ -1178,6 +1192,11 @@ export interface CalendarEvent {
 export interface MarketNewsData {
   headlines: NewsItem[];
   calendar: CalendarEvent[];
+  // Whether the server is AI-tagging headlines right now (opt-in, and off by
+  // default). Gates the directional cue on both news surfaces: a bias stored
+  // while tagging was on is real, while an untagged headline's 'neutral' is only
+  // the column default, so the cue is drawn for all of them or none.
+  aiTagging: boolean;
 }
 
 // A followed YouTube channel on the Market News live-stream wall. Identity

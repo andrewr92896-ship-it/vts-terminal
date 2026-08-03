@@ -28,6 +28,13 @@ export interface FomcSchedule {
 // no economic calendar — the calendar moved to Market Data, and the rest were
 // removed to keep the screen free of recommendation-flavoured copy. A single
 // tape-read glyph per headline is the one directional cue, switchable off here.
+// The tape-read glyph is the one directional cue on this feed. It is only drawn
+// when the server says headline tagging is actually running (`aiTagging` on the
+// news payload) — see trading/news.ts. A headline stored while tagging was on
+// keeps its real bias forever, while anything ingested since reads 'neutral'
+// because that is the column default rather than an assessment, so drawing it
+// unconditionally would mix genuine cues with placeholders in one list. All or
+// nothing is the honest rendering.
 const SHOW_BIAS = true;
 
 const REFRESH_MS = 120_000;
@@ -535,6 +542,7 @@ export function MarketNews({ onOpenMembership }: { onOpenMembership?: () => void
                       watchlist={watchlist}
                       open={openId === h.id}
                       onToggle={() => setOpenId(openId === h.id ? null : h.id)}
+                      showBias={SHOW_BIAS && !!data?.aiTagging}
                     />
                   ))}
                 </div>
@@ -1476,12 +1484,14 @@ function HeadlineRow({
   watchlist,
   open,
   onToggle,
+  showBias,
 }: {
   h: NewsItem;
   now: number;
   watchlist: string[];
   open: boolean;
   onToggle: () => void;
+  showBias: boolean;
 }) {
   const mentions = useMemo(() => affectedInstruments(h, watchlist).slice(0, 3), [h, watchlist]);
   const bias =
@@ -1510,7 +1520,7 @@ function HeadlineRow({
           {decodeEntities(h.title)}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 7 }}>
-          {SHOW_BIAS && (
+          {showBias && (
             <span title={bias.label} style={{ fontSize: 9, color: bias.color }}>
               {bias.glyph}
             </span>

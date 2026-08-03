@@ -526,8 +526,17 @@ workspaces list** (see `theme/nav.ts` order).
     Market Data), newest first, bucketed by recency (Last hour / Earlier today /
     Yesterday / dated days), each row tagging the instruments it mentions
     (`newsRelevance.affectedInstruments`) and filterable by topic pill or by the
-    Sources rail. One switchable **tape-read glyph** (`SHOW_BIAS`) is the only
-    directional cue. Deliberately **removed and not to be reintroduced**: the AI
+    Sources rail. One **tape-read glyph** (`SHOW_BIAS`) is the only directional
+    cue, and it is drawn **only when headline tagging is actually running** — the
+    news payload carries `aiTagging` and both news surfaces gate on it. A
+    headline stored while tagging was on keeps a real bias forever, while
+    anything ingested since reads `neutral` because that is the column default
+    rather than an assessment, so drawing it regardless would mix genuine cues
+    with placeholders in one list. All-or-nothing is the honest rendering. The
+    same gate covers the Live Wall news tile's bias label and border; its
+    **High/Med/Low chip is deliberately not gated**, because that value comes
+    from the feed's own per-source setting and is real either way. `tradeNote`
+    was already conditional and degrades to the headline's excerpt on its own. Deliberately **removed and not to be reintroduced**: the AI
     overview brief, the "how it could affect us" note, the impact dots/chips, the
     "Most mentioned" rail, and the Trump/Truth Social tab — an "informational
     only, not investment advice" line sits under the feed instead. The economic
@@ -1467,14 +1476,57 @@ control — the server is still the enforcer.
 
 - **Models** (env-overridable, current defaults): text = `ANTHROPIC_MODEL_DEFAULT`
   (`claude-sonnet-4-6`); vision/screenshot analysis = `ANTHROPIC_MODEL_ANALYSIS`
-  (`claude-opus-4-8`, adaptive thinking). No streaming anywhere — every call is
-  a single awaited `messages.create`.
+  (**`claude-sonnet-5`**). No streaming anywhere — every call is a single awaited
+  `messages.create`.
+  - **The analysis model moved off Opus** (2026-08, cost). Reading a trade off a
+    broker screenshot is structured extraction, not hard reasoning, and Sonnet 5
+    is the first Sonnet-tier model with high-resolution vision (2576px long
+    edge) — so there is no capability loss on a screenshot, at $3/$15 per million
+    tokens against Opus's $5/$25. All four vision flows parse structured JSON out
+    of the reply via `extractJson`, so **that parse is what a model change has to
+    be checked against**, not just a typecheck. The variable is env-overridable,
+    so reverting is a host variable change and a restart, never a redeploy.
 - **Availability:** `aiConfigured()` = `!!ANTHROPIC_API_KEY`. When unset, AI
   endpoints return **503**.
-- **Usage cap:** per-user, metered in `ai_usage`. `AI_MONTHLY_LIMIT` (default
-  **1000**/month, resets at the start of each **Eastern-Time** month) + an
-  in-memory burst limit `AI_RATE_PER_MIN` (default **15**, resets on restart).
-  Over limit → **429**. `enforceAiLimit` runs before every call.
+- **Usage caps: TWO monthly budgets, not one** (`ai/usage.ts`), both per-user,
+  both metered in `ai_usage`, both resetting at the start of each **Eastern-Time**
+  month, plus one in-memory burst limit `AI_RATE_PER_MIN` (default **15**, resets
+  on restart, shared across both). Over limit → **429**. `enforceAiLimit(userId,
+  kind)` runs before every call and picks the budget from the kind.
+  - `AI_MONTHLY_LIMIT` (default **1000**) — **text**: `ask`, `market_hours`,
+    `todo_command` and the eleven `studies_*` kinds. Name unchanged on purpose so
+    existing deployments are unaffected.
+  - `AI_VISION_MONTHLY_LIMIT` (default **40**) — the four **vision** kinds
+    (`analyze`, `position_screenshot`, `funded_screenshot`, `account_screenshot`),
+    listed in `VISION_KINDS`. A kind not in that list counts as text, which is
+    the safe default both ways: a new text kind needs no edit, and a forgotten
+    new vision kind is merely metered against the larger budget rather than
+    escaping metering.
+  - **Why they are separate:** a text question costs roughly 1.5–2¢ and a
+    screenshot read 5–10¢, so one counter did not bound the worst case usefully —
+    somebody spending their whole allowance on screenshots cost several times
+    somebody spending it on questions, and nothing could tell the difference.
+  - **The 429 names which budget was hit.** "AI limit reached" leaves a user who
+    has used forty screenshot imports believing every AI feature is gone when
+    asking a question would have worked. `getAiUsage` returns both budgets (and
+    the flat `used`/`limit`/`remaining` still mirror **text**, so the existing
+    counter keeps working).
+  - Deliberately **not per-tier**: there is no billing yet, and an allowance that
+    varies by what somebody paid belongs with the thing that takes the payment.
+- **Background AI is recorded, never capped** (`recordSystemAiUse`). The two
+  background callers — the news headline tagger and the calendar explainer — run
+  on the feed poller with no user behind them and used to write no `ai_usage` row
+  at all, so the owner's usage figure covered roughly half the real bill.
+  `ai_usage.user_id` is **nullable** (migration `0096`) and a null means "the
+  terminal did this on its own schedule".
+  - **A null can never consume somebody's allowance**, because every per-user
+    count filters on `user_id = ?` and SQL does not match a NULL — a property of
+    the comparison rather than an exclusion somebody has to remember to write.
+  - It **records without enforcing**: if one of these jobs runs it should finish,
+    and half-tagged output is worse than either extreme. `recordSystemAiUse`
+    swallows its own errors so metering can never take down the poll it measures.
+  - Surfaced to **admins only**, as `system` on `GET /api/ai/usage` and a line in
+    the Ask VTS AI panel. Not a budget — nothing caps it.
 - **Editable prompts** (`ai/prompts.ts`, `PROMPT_DEFS`): shipped default here,
   admin-editable live from **Admin ▸ AI Instructions** (override in
   `app_settings` under `ai.<id>`; blank value resets to default). Edit the
@@ -2062,7 +2114,11 @@ defaults; the app runs locally with almost nothing set.
   longer silently derives from `SESSION_SECRET` in production — see Auth &
   security specifics).
 - **AI:** `ANTHROPIC_API_KEY` (absent = AI off), `ANTHROPIC_MODEL_DEFAULT`,
-  `ANTHROPIC_MODEL_ANALYSIS`, `AI_MONTHLY_LIMIT` (1000), `AI_RATE_PER_MIN` (15).
+  `ANTHROPIC_MODEL_ANALYSIS` (**`claude-sonnet-5`** — moved off Opus for cost;
+  set it back to `claude-opus-4-8` to revert, which is a host variable change and
+  a restart, not a redeploy), `AI_MONTHLY_LIMIT` (1000, **text only**),
+  `AI_VISION_MONTHLY_LIMIT` (40, the four screenshot flows), `AI_RATE_PER_MIN`
+  (15, shared burst limit). See the AI section for why the budgets are split.
 - **Webhooks:** `TRADINGVIEW_WEBHOOK_SECRET`, `TV_WEBHOOK_SECRET` (each unset =
   that webhook rejects everything).
 - **Brokers** (env-config path; also seedable per-user in the UI): `OANDA_API_TOKEN`,
@@ -2077,8 +2133,22 @@ defaults; the app runs locally with almost nothing set.
   connection (see Market Data ▸ Prices). Unset means the OANDA-sourced rows show
   sample figures and forex/metals/index alerts cannot fire; crypto is keyless and
   unaffected either way.
-- **Feeds:** `FINNHUB_API_KEY`, `RSS_NEWS_ENABLED`, `NEWS_AI_SUMMARY_ENABLED`,
-  `FOREX_FACTORY_ENABLED`, `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`.
+- **Feeds:** `FINNHUB_API_KEY`, `RSS_NEWS_ENABLED`, `FOREX_FACTORY_ENABLED`,
+  `TRUTH_ENABLED`, `TRUTH_ACCOUNT_ID`, `DESK_WATCH_SECONDS`, plus the two AI feed
+  switches, which are **separate on purpose**:
+  - `NEWS_AI_SUMMARY_ENABLED` — the headline bias/impact/trade-note read.
+    **Opt-in: off unless set to exactly `'true'`** (inverted 2026-08, cost). It is
+    a batched call every 5 minutes forever, running whether or not anybody is
+    signed in and costing the same with one user as with a thousand, and what it
+    buys is a bias glyph on Market News plus a note in the Live Wall's news tile.
+    Headlines ingest and display perfectly well without it.
+  - `CALENDAR_AI_EXPLAINER_ENABLED` — the plain-language calendar explainer. **On
+    by default**, and kept on its own switch rather than sharing the one above:
+    explanations are keyed by release **title** and reused across every
+    recurrence, so the spend converges to nothing after the first few polls.
+    Turning it off saves approximately nothing and costs the calendar its
+    explanations. Before the split both read `NEWS_AI_SUMMARY_ENABLED`, so
+    inverting that default would have silently taken this down with it.
 - **FRED (Market Data macro series):** `FRED_API_KEY` — **optional, and the board
   reads live without it** (the keyless chart-download CSV is the fallback).
   Setting it switches to the documented JSON API **and turns on the real
