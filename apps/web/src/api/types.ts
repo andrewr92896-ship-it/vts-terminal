@@ -1,14 +1,5 @@
 import type { WorkspaceKey } from '../theme/themes';
 
-// The founder-set sidebar ordering override: an ordered list of workspace keys
-// and, per workspace, an ordered list of its section keys. Applied over the
-// code-default nav (see theme/navOrder.ts). Keys not present keep their default
-// position; unknown keys are ignored.
-export interface NavOrderOverride {
-  workspaces: string[];
-  sections: Record<string, string[]>;
-}
-
 // Granular, admin-assigned roles (mirror of backend auth/rbac.ts ROLE_KEYS).
 // A user can hold any combination. (`funded` is retired — the Funded tracker is
 // a per-user opt-in under Advanced Trading now, not a granted role.)

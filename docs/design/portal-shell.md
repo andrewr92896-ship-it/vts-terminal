@@ -222,13 +222,13 @@ with nothing.
 - **Admin Terminal** — Users · Administrator Log · Admin Guidelines · Teams ·
   Badges · Message Templates · Patch Notes · Early Access · Bug Reports · Support
 - **Developer Terminal** — Developer Blog · AI Instructions · Site Wording ·
-  Sidebar Layout · Suggestions · View as role
+  Suggestions · View as role
 - **Site Help** — How to · Announcements · Patch notes · Report a bug ·
   Suggestion · Rules & Conduct · Terms of Service · Privacy Policy
 
 The **Live Wall is the screen a sign-in opens on** (My Terminal's row order puts
-the paid Trading Team above it; what a workspace opens on is a separate thing
-from what sits at the top of its list). It is the terminal's one board: a drag-resize grid of tiles drawn from every workspace
+the paid Trading Team and the market-watching pair above it; what a workspace
+opens on is a separate thing from what sits at the top of its list). It is the terminal's one board: a drag-resize grid of tiles drawn from every workspace
 — charts, quotes, headlines and the calendar, the desk's open and closed trades,
 the reader's net worth, portfolio and to-do list, study progress, team messages.
 Every account gets three built-in layouts; arranging and saving your own is
@@ -238,9 +238,10 @@ Above the workspaces list, and **not** part of it, sits a standalone
 **Employee Portal** row for staff — it opens a separate site in a new tab and has
 its own design language entirely (`docs/design/employee-portal/`).
 
-The founder can reorder workspaces and the sections within a workspace from
-**Developer Terminal ▸ Sidebar Layout**, so treat the order above as the default,
-not a constant.
+The order above is the whole story — it is hard-coded in
+`apps/web/src/theme/nav.ts` and there is no in-app way to reorder the sidebar.
+(There was a Developer Terminal ▸ Sidebar Layout editor until 2026-08; it and its
+stored override are gone.)
 
 ---
 

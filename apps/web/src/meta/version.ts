@@ -11,14 +11,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.57';
+export const APP_VERSION = 'Beta V 6.58';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.58',
+    date: 'August 3, 2026',
+    notes: [
+      'The Markets workspace is gone. Market Data and Market News are My Terminal sections now, sitting together just above the Live Wall — one place for everything you watch. Nothing was removed and nothing changed about who can reach what: both screens work exactly as before, and signing in still opens the Live Wall.',
+    ],
+  },
   {
     version: 'Beta V 6.57',
     date: 'August 3, 2026',
     notes: [
-      'The Markets workspace is gone. Market Data and Market News are My Terminal sections now, alongside the Live Wall — one place for everything you watch. Nothing was removed and nothing changed about who can reach what: both screens work exactly as before, and signing in still opens the Live Wall.',
+      'Removed Developer Terminal ▸ Sidebar Layout. The order of the workspaces, and of the sections inside each one, is now set in code and changes with a deploy — there is no longer a way to reorder the sidebar from inside the terminal. Any order saved with the old editor has been cleared, so everyone now sees the built-in order.',
     ],
   },
   {

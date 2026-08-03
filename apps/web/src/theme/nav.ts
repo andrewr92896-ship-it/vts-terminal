@@ -42,8 +42,7 @@ export const NAV: NavWorkspace[] = [
       // sit above the free rows per the stacking below, so the only way the pair
       // stays together is for `news` to follow it. Both read public market data
       // — no trade, no broker, no balance — and their keys stay `data` and
-      // `news`, so saved nav.order overrides, the howto wording and every
-      // in-app link keep working.
+      // `news`, so the howto wording and every in-app link keep working.
       //
       // Premium — the series board. The economic calendar and the FOMC
       // countdown on that same screen stay free.
@@ -79,8 +78,8 @@ export const NAV: NavWorkspace[] = [
   // (The Markets workspace was dissolved — owner decision, 2026-08. Its two
   // sections, Market Data and Market News, are My Terminal sections now; the
   // Live Wall had already moved there. Nothing was removed: the screens, their
-  // keys and their routes are unchanged, so a saved sidebar order or an in-app
-  // link still resolves.)
+  // keys and their routes are unchanged, so the howto wording and every in-app
+  // link still resolve.)
   // Advanced Trading — opt-in (My Terminal ▸ Premium Features). The desk: placing
   // trades, reviewing them, alerts, sessions, and the hand-kept manual book.
   {
@@ -194,7 +193,9 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_blog', label: 'Developer Blog', icon: 'book-open' },
       { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
-      { key: 'ad_sidebar', label: 'Sidebar Layout', icon: 'list-tree' },
+      // (There is deliberately no Sidebar Layout editor. This array IS the
+      // sidebar's order — workspaces and the sections within each — and the only
+      // way to change it is to edit it here and deploy. Owner decision, 2026-08.)
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
       { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
     ],

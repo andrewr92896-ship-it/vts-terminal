@@ -22,10 +22,6 @@ import {
 
 // How-to overrides are stored under the "howto." key prefix in app_settings.
 const HOWTO_PREFIX = 'howto.';
-// The founder-set sidebar ordering override (a single JSON blob describing the
-// desired workspace + section order). Applied over the code-default nav for
-// every user. See theme/navOrder.ts on the web side.
-const NAV_ORDER_KEY = 'nav.order';
 
 const promptSchema = z.object({ value: z.string().max(8000) });
 const badgeCreateSchema = z.object({
@@ -52,18 +48,11 @@ const noteUpdateSchema = z.object({
 });
 const noteStatusSchema = z.object({ status: z.enum(['draft', 'published']) });
 const howtoSchema = z.object({ value: z.string().max(20000) });
-// The sidebar layout override: an ordered list of workspace keys, plus an
-// ordered list of section keys per workspace. Keys are the app's own nav keys
-// (short slugs); anything not recognized by the web client is ignored on apply.
-const navOrderSchema = z.object({
-  workspaces: z.array(z.string().max(40)).max(50),
-  sections: z.record(z.array(z.string().max(40)).max(120)),
-});
 
 export async function contentRoutes(app: FastifyInstance) {
   const adminGuard = { preHandler: requireAdmin };
   const authGuard = { preHandler: requireAuth };
-  // Founder-only tools: AI Instructions and the sidebar layout.
+  // Founder-only tools: AI Instructions.
   const founderGuard = { preHandler: requireFounder };
 
   // ---- Badges (registry read for any signed-in user; render icons next to names) ----
@@ -256,32 +245,10 @@ export async function contentRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // ---- Sidebar layout (workspace + section ordering) ----
-  // Read by every signed-in user so the founder's reorganized sidebar renders
-  // for everyone; the client applies it over its code-default nav. Returns
-  // `order: null` when never customized (the client then uses its defaults).
-  app.get('/api/nav-layout', authGuard, async () => {
-    const raw = await getSetting(NAV_ORDER_KEY);
-    if (!raw) return { order: null };
-    try {
-      return { order: JSON.parse(raw) };
-    } catch {
-      // A corrupt blob should never break the sidebar — fall back to defaults.
-      return { order: null };
-    }
-  });
-
-  // Founder-only: save the sidebar ordering. Stored verbatim as JSON; the client
-  // sends a DELETE (below) instead when the order returns to the code default.
-  app.put('/api/admin/nav-layout', founderGuard, async (request, reply) => {
-    const parsed = navOrderSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Invalid layout' });
-    await setSetting(NAV_ORDER_KEY, JSON.stringify(parsed.data));
-    return { ok: true, order: parsed.data };
-  });
-
-  app.delete('/api/admin/nav-layout', founderGuard, async () => {
-    await clearSetting(NAV_ORDER_KEY);
-    return { ok: true, order: null };
-  });
+  // (There is deliberately no sidebar-layout route. The sidebar's order — the
+  // workspaces and the sections within each — lives in the web app's
+  // theme/nav.ts and is changed by editing that file and deploying. Owner
+  // decision, 2026-08: nothing at runtime may reorder the nav, so there is no
+  // stored override for a route to read, write or clear. Migration 0098 dropped
+  // the `nav.order` row this once persisted.)
 }
