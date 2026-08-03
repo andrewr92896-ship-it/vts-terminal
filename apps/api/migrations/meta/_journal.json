@@ -659,6 +659,13 @@
       "when": 1782342536908,
       "tag": "0094_credential_encryption_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "6",
+      "when": 1782342636908,
+      "tag": "0095_credential_audit",
+      "breakpoints": true
     }
   ]
 }

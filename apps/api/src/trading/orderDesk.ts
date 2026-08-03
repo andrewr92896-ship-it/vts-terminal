@@ -1,8 +1,16 @@
 import crypto from 'node:crypto';
 import { and, desc, eq, gte } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingOrders, type TradeOrderKind, type TradeOrderStatus, type TradeOrderType, type UserRow } from '../db/schema.js';
-import { getActiveDecrypted } from './connections.js';
+import {
+  tradingOrders,
+  type CredentialAuditPurpose,
+  type TradeOrderKind,
+  type TradeOrderStatus,
+  type TradeOrderType,
+  type UserRow,
+} from '../db/schema.js';
+import { getActiveDecrypted, type CredentialUse } from './connections.js';
+import { recordCredentialUse, type AuditActor } from './credentialAudit.js';
 import { invalidateDeskSnapshot } from './liveWallCache.js';
 import { isDemoUser } from '../demo/identity.js';
 import {
@@ -38,17 +46,67 @@ export type { DeskHolding, DeskInstrumentSpec } from './deskBrokers.js';
 
 // Resolve one of the caller's own active connections into a broker adapter.
 // Throws rather than returning null so every caller fails closed.
-async function resolveConnection(userId: string, connectionId: string): Promise<DeskBroker> {
-  const conns = await getActiveDecrypted(userId);
+async function resolveConnection(
+  userId: string,
+  connectionId: string,
+  use: CredentialUse,
+): Promise<DeskBroker> {
+  // `only` matters here: this decrypts every connection the trader has in order
+  // to find the one named, and recording "placed an order" against the other two
+  // would be false on the very screen that exists to tell somebody their key was
+  // used.
+  const conns = await getActiveDecrypted(userId, { ...use, only: connectionId });
   const conn = conns.find((c) => c.id === connectionId);
   if (!conn) throw new DeskError('That broker connection is not available on your account', 404);
   return deskBrokerFor(conn);
 }
 
 // Every connection the caller can actually trade through, as adapters.
-async function tradeableBrokers(userId: string): Promise<DeskBroker[]> {
-  const conns = await getActiveDecrypted(userId);
+async function tradeableBrokers(userId: string, use: CredentialUse): Promise<DeskBroker[]> {
+  const conns = await getActiveDecrypted(userId, use);
   return conns.filter((c) => isTradeableBroker(c.broker)).map(deskBrokerFor);
+}
+
+// Record one audit row for a desk write, once the broker has answered.
+//
+// It is written after the attempt rather than at decryption because the outcome
+// is the useful half: a refusal — our own validation or the venue's — is an
+// attempt that was made on this credential and failed, which is precisely what
+// somebody asking "was my key used?" needs to see. Fire and forget, so the audit
+// can never be what stops an order.
+//
+// The desk only ever trades the caller's own connections, so the caller is both
+// actor and owner here.
+async function withOrderAudit<T>(
+  user: UserRow,
+  connectionId: string,
+  purpose: CredentialAuditPurpose,
+  actor: AuditActor,
+  run: () => Promise<T>,
+): Promise<T> {
+  try {
+    const out = await run();
+    recordCredentialUse({
+      connectionId,
+      ownerUserId: user.id,
+      ownerUsername: user.username,
+      purpose,
+      actor,
+      ok: true,
+    });
+    return out;
+  } catch (e) {
+    recordCredentialUse({
+      connectionId,
+      ownerUserId: user.id,
+      ownerUsername: user.username,
+      purpose,
+      actor,
+      ok: false,
+      error: e instanceof Error ? e.message : 'The attempt failed',
+    });
+    throw e;
+  }
 }
 
 // The demo is a sandbox with canned data; it must never reach a broker's write
@@ -107,8 +165,8 @@ export interface DeskAccount {
 // Every account the caller can trade, with live capital. Best-effort per
 // account: one unreachable account reports its error and the others still load,
 // so a single bad token never blanks the desk.
-export async function listDeskAccounts(userId: string): Promise<DeskAccount[]> {
-  const brokers = await tradeableBrokers(userId);
+export async function listDeskAccounts(userId: string, actor: AuditActor): Promise<DeskAccount[]> {
+  const brokers = await tradeableBrokers(userId, { purpose: 'desk_read', actor });
   return Promise.all(
     brokers.map(async (b): Promise<DeskAccount> => {
       const base = {
@@ -144,8 +202,12 @@ export async function listDeskAccounts(userId: string): Promise<DeskAccount[]> {
 
 // ---- instruments ----
 
-export async function deskInstruments(userId: string, connectionId: string): Promise<DeskInstrumentSpec[]> {
-  const broker = await resolveConnection(userId, connectionId);
+export async function deskInstruments(
+  userId: string,
+  connectionId: string,
+  actor: AuditActor,
+): Promise<DeskInstrumentSpec[]> {
+  const broker = await resolveConnection(userId, connectionId, { purpose: 'desk_read', actor });
   return viaBroker(() => broker.instruments());
 }
 
@@ -165,8 +227,9 @@ export async function deskQuotes(
   userId: string,
   connectionId: string,
   instruments: string[],
+  actor: AuditActor,
 ): Promise<DeskQuoteRow[]> {
-  const broker = await resolveConnection(userId, connectionId);
+  const broker = await resolveConnection(userId, connectionId, { purpose: 'quotes', actor });
   if (instruments.length === 0) return [];
   return viaBroker(() => broker.quotes(instruments));
 }
@@ -182,8 +245,8 @@ export interface DeskHoldingRow extends DeskHolding {
 // What the caller's spot accounts actually hold. A margin account has none —
 // there the exposure *is* the position, and it shows on the desk's book.
 // Best-effort per account, like the account strip.
-export async function listDeskHoldings(userId: string): Promise<DeskHoldingRow[]> {
-  const brokers = (await tradeableBrokers(userId)).filter((b) => b.spot);
+export async function listDeskHoldings(userId: string, actor: AuditActor): Promise<DeskHoldingRow[]> {
+  const brokers = (await tradeableBrokers(userId, { purpose: 'holdings', actor })).filter((b) => b.spot);
   const results = await Promise.all(
     brokers.map(async (b) => {
       try {
@@ -372,9 +435,13 @@ function checkProtection(
   }
 }
 
-export async function placeDeskOrder(user: UserRow, input: PlaceInput): Promise<PlaceResult> {
+async function placeOrderImpl(user: UserRow, input: PlaceInput, actor: AuditActor): Promise<PlaceResult> {
   refuseDemo(user);
-  const broker = await resolveConnection(user.id, input.connectionId);
+  const broker = await resolveConnection(user.id, input.connectionId, {
+    purpose: 'order_place',
+    actor,
+    deferred: true,
+  });
   const spec = await specFor(broker, input.instrument);
 
   if (!spec.tradeable) {
@@ -518,9 +585,13 @@ export interface CloseInput {
 
 export type CloseResult = DeskCloseResponse;
 
-export async function closeDeskPosition(user: UserRow, input: CloseInput): Promise<CloseResult> {
+async function closePositionImpl(user: UserRow, input: CloseInput, actor: AuditActor): Promise<CloseResult> {
   refuseDemo(user);
-  const broker = await resolveConnection(user.id, input.connectionId);
+  const broker = await resolveConnection(user.id, input.connectionId, {
+    purpose: 'order_close',
+    actor,
+    deferred: true,
+  });
   const units = input.units == null || input.units <= 0 ? null : input.units;
 
   const shared = {
@@ -578,9 +649,13 @@ export interface ModifyInput {
   stopLoss?: number | null;
 }
 
-export async function modifyDeskPosition(user: UserRow, input: ModifyInput): Promise<void> {
+async function modifyPositionImpl(user: UserRow, input: ModifyInput, actor: AuditActor): Promise<void> {
   refuseDemo(user);
-  const broker = await resolveConnection(user.id, input.connectionId);
+  const broker = await resolveConnection(user.id, input.connectionId, {
+    purpose: 'order_amend',
+    actor,
+    deferred: true,
+  });
   const spec = await specFor(broker, input.instrument);
   const takeProfit = input.takeProfit == null ? input.takeProfit : round(input.takeProfit, spec.displayPrecision);
   const stopLoss = input.stopLoss == null ? input.stopLoss : round(input.stopLoss, spec.displayPrecision);
@@ -638,8 +713,11 @@ export interface DeskWorkingOrder extends DeskWorkingOrderRow {
 }
 
 // Every resting order across the caller's own accounts.
-export async function listDeskWorkingOrders(userId: string): Promise<DeskWorkingOrder[]> {
-  const brokers = await tradeableBrokers(userId);
+export async function listDeskWorkingOrders(
+  userId: string,
+  actor: AuditActor,
+): Promise<DeskWorkingOrder[]> {
+  const brokers = await tradeableBrokers(userId, { purpose: 'desk_read', actor });
   const results = await Promise.all(
     brokers.map(async (b) => {
       try {
@@ -653,12 +731,17 @@ export async function listDeskWorkingOrders(userId: string): Promise<DeskWorking
   return results.flat().sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }
 
-export async function cancelDeskOrder(
+async function cancelOrderImpl(
   user: UserRow,
   input: { connectionId: string; orderId: string; instrument?: string },
+  actor: AuditActor,
 ): Promise<void> {
   refuseDemo(user);
-  const broker = await resolveConnection(user.id, input.connectionId);
+  const broker = await resolveConnection(user.id, input.connectionId, {
+    purpose: 'order_cancel',
+    actor,
+    deferred: true,
+  });
   const shared = {
     connectionId: broker.connectionId,
     broker: broker.broker,
@@ -688,4 +771,38 @@ export async function cancelDeskOrder(
     });
     throw new DeskError(message, 502, brokerErrorCode(e));
   }
+}
+
+// ---- audited entry points for every desk write ----
+//
+// The four functions that can move money are exported through this façade so the
+// audit row is written in exactly one place per action, after the broker has
+// answered, carrying the real outcome. The implementations above are unchanged
+// and module-private; nothing can reach them without being recorded.
+export function placeDeskOrder(user: UserRow, input: PlaceInput, actor: AuditActor): Promise<PlaceResult> {
+  return withOrderAudit(user, input.connectionId, 'order_place', actor, () =>
+    placeOrderImpl(user, input, actor),
+  );
+}
+
+export function closeDeskPosition(user: UserRow, input: CloseInput, actor: AuditActor): Promise<CloseResult> {
+  return withOrderAudit(user, input.connectionId, 'order_close', actor, () =>
+    closePositionImpl(user, input, actor),
+  );
+}
+
+export function modifyDeskPosition(user: UserRow, input: ModifyInput, actor: AuditActor): Promise<void> {
+  return withOrderAudit(user, input.connectionId, 'order_amend', actor, () =>
+    modifyPositionImpl(user, input, actor),
+  );
+}
+
+export function cancelDeskOrder(
+  user: UserRow,
+  input: { connectionId: string; orderId: string; instrument?: string },
+  actor: AuditActor,
+): Promise<void> {
+  return withOrderAudit(user, input.connectionId, 'order_cancel', actor, () =>
+    cancelOrderImpl(user, input, actor),
+  );
 }

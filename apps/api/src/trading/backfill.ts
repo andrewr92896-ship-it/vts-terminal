@@ -88,7 +88,9 @@ const lastRunByConn = new Map<string, number>();
 // anybody — but it decrypts every credential on the install, which is a thing to
 // state rather than to inherit from an empty argument list.
 export async function backfillClosedTrades(scope: ConnectionScope): Promise<number> {
-  const conns = (await getAllActiveDecrypted(scope)).filter((c) => c.broker === 'oanda');
+  const conns = (await getAllActiveDecrypted(scope, { purpose: 'backfill' })).filter(
+    (c) => c.broker === 'oanda',
+  );
   if (conns.length === 0) return 0;
 
   const now = Date.now();

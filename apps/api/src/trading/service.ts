@@ -297,7 +297,9 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   // teammate's poll. Private mode stops the read at the connection, not at the
   // render.
   const scopeIds = await visibleTraderIds(user);
-  const conns = isDemoUser(user) ? [] : await getAllActiveDecrypted(scopeIds);
+  const conns = isDemoUser(user)
+    ? []
+    : await getAllActiveDecrypted(scopeIds, { purpose: 'wall_read' });
 
   // Open funded positions, marked against the team's OANDA price. Kept separate
   // from the broker feed so they never reconcile into the Trade Log / History /
@@ -435,7 +437,7 @@ export async function reconcileDeskPositions(): Promise<void> {
   // One of the two install-wide decrypts in the codebase, and deliberate: with no
   // viewer present there is no team to scope to, and every connection's positions
   // are written to that connection's own owner. Nothing here is shown to anyone.
-  const conns = await getAllActiveDecrypted(ALL_USERS);
+  const conns = await getAllActiveDecrypted(ALL_USERS, { purpose: 'reconcile' });
   if (conns.length === 0) return;
   const { brokers, raw } = await loadDesk(conns);
   const withSlip = withSlippage(fillManualMarks(raw));

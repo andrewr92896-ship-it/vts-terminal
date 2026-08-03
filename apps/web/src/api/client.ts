@@ -34,6 +34,7 @@ import type {
   ManualPosition,
   ManualPositionInput,
   AnalyzePositionResult,
+  CredentialAuditEntry,
   OwnedBrokerConnection,
   TruthPost,
   HistoryData,
@@ -780,6 +781,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(image),
     });
+  },
+  // Every use of this user's own broker credentials. The server scopes it to the
+  // session — there is no way to ask about somebody else's.
+  credentialAudit(): Promise<{ entries: CredentialAuditEntry[] }> {
+    return request('/api/trading/credential-audit');
+  },
+  // Admin: everyone's, for a support case or an incident.
+  allCredentialAudit(): Promise<{ entries: CredentialAuditEntry[] }> {
+    return request('/api/trading/credential-audit/all');
   },
   // Admin: every teammate's connection, and rename/pause any of them.
   allConnections(): Promise<{ connections: OwnedBrokerConnection[] }> {

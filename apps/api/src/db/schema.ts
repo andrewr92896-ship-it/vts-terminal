@@ -2057,3 +2057,73 @@ export const devBlogReplies = sqliteTable('dev_blog_replies', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type DevBlogReplyRow = typeof devBlogReplies.$inferSelect;
+
+// ---- Credential use audit ----
+//
+// An append-only record of every time a stored broker credential was decrypted
+// and used, and what for. Broker credentials can place real orders, and until
+// this existed nothing anywhere recorded that one had been used — so after a
+// leaked database, a rogue administrator or a customer disputing a trade, there
+// was no way to reconstruct what happened and no answer to "was my key used?".
+// Several US state breach-notification laws turn on exactly that determination,
+// and being unable to establish what was reached generally forces the broadest
+// possible notification.
+//
+// **Two tiers in one table, because volume would otherwise sink it.** Credentials
+// are decrypted on hot paths — the desk reconcile runs install-wide every 10
+// seconds and the Live Wall decrypts a whole team's credentials on every poll —
+// so a row per decryption would be thousands per connection per day of pure
+// noise in a SQLite file on a mounted volume. Instead:
+//
+//   - anything that moves money or was asked for by a person (the four order
+//     actions, and interactive desk reads) writes ONE row, in full detail;
+//   - background polling (`wall_read`, `reconcile`, `backfill`, `capital`)
+//     upserts a single row per (connection, purpose, hour) and increments
+//     `count`.
+//
+// That bounds the table to roughly connections × purposes × 24 rows a day
+// however often the pollers run.
+//
+// **No foreign keys, deliberately.** A `references(...)` here would take the
+// audit trail down with the account or connection it describes, which is exactly
+// backwards for a security record — so the owner's username is denormalized onto
+// the row and it outlives them. This table is deliberately NOT in the per-user
+// delete list in admin/service.ts, the same exception `employee_audit_log`
+// already takes; a privacy-policy rewrite has to cover it explicitly.
+export const CREDENTIAL_AUDIT_PURPOSES = [
+  'order_place',
+  'order_close',
+  'order_amend',
+  'order_cancel',
+  'desk_read',
+  'holdings',
+  'quotes',
+  'wall_read',
+  'reconcile',
+  'backfill',
+  'capital',
+] as const;
+export type CredentialAuditPurpose = (typeof CREDENTIAL_AUDIT_PURPOSES)[number];
+
+export const credentialAudit = sqliteTable('credential_audit', {
+  id: text('id').primaryKey(),
+  connectionId: text('connection_id').notNull(),
+  ownerUserId: text('owner_user_id').notNull(),
+  ownerUsername: text('owner_username').notNull(),
+  // Who caused it. NULL is meaningful rather than missing: it says the system
+  // did this on its own schedule, not a person.
+  actorUserId: text('actor_user_id'),
+  purpose: text('purpose').$type<CredentialAuditPurpose>().notNull(),
+  sourceIp: text('source_ip'),
+  occurredAt: integer('occurred_at', { mode: 'timestamp_ms' }).notNull(),
+  // Top of the hour, for the aggregate upsert. NULL on an individual row, which
+  // is what lets both tiers share the unique index below — SQL treats NULLs as
+  // distinct, so any number of individual rows coexist while an aggregate row is
+  // unique per (connection, purpose, hour).
+  hourBucket: integer('hour_bucket', { mode: 'timestamp_ms' }),
+  count: integer('count').notNull().default(1),
+  ok: integer('ok', { mode: 'boolean' }).notNull().default(true),
+  // A short failure reason. NEVER the credential and never the ciphertext.
+  error: text('error'),
+});
+export type CredentialAuditRow = typeof credentialAudit.$inferSelect;

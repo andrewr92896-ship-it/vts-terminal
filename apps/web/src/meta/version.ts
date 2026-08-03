@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.45';
+export const APP_VERSION = 'Beta V 6.46';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.46',
+    date: 'August 3, 2026',
+    notes: [
+      'Your broker connections now keep a record of every time one of your keys was used and what for — orders placed, positions closed, prices read — with a "Credential use" panel under Live Brokers showing it. Until now nothing anywhere recorded that a key had been used, so there was no way to answer "was my key used?" after anything went wrong.',
+      'Only you can see your own. Being on the same team, or leading it, does not show anyone your credential use; administrators can see everyone for support.',
+      'Routine background checks are counted by the hour rather than listed one by one, so the list stays readable — the desk checks your positions every ten seconds.',
+    ],
+  },
   {
     version: 'Beta V 6.45',
     date: 'August 3, 2026',
