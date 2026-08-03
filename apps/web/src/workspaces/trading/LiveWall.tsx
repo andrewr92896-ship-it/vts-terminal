@@ -117,7 +117,7 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <ScreenTitle>Live Wall</ScreenTitle>
             {showPositions && data && (
-              <span style={data.source === 'sample' ? sampledPill : livePill}>{data.source === 'sample' ? 'Sample data' : 'Live'}</span>
+              <span style={sourcePill(data.source)}>{sourceLabel(data.source)}</span>
             )}
           </div>
           {/* Board ⇄ Positions view toggle — the Positions half is the desk, so
@@ -181,12 +181,20 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
               </div>
             )}
 
+            {/* The sample note is informational (nothing is wrong yet); a feed
+                that cannot be read is a warning, since it is something the
+                trader has to go and fix. */}
             {data.note && <div style={data.source === 'sample' ? infoBanner : warnBanner}>{data.note}</div>}
 
             {/* Trade cards */}
             {data.trades.length === 0 ? (
               <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
-                {"No open positions right now. New fills appear here automatically."}
+                {/* Only claim the book is empty when the book was read. With the
+                    feed down the banner above carries the reason, and this line
+                    must not contradict it by asserting nothing is open. */}
+                {data.source === 'unavailable'
+                  ? "Open positions can't be shown until a broker connection is reading again."
+                  : 'No open positions right now. New fills appear here automatically.'}
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(300px,1fr))', gap: 13 }}>
@@ -264,6 +272,23 @@ const livePill: CSSProperties = {
   padding: '2px 7px',
 };
 const sampledPill: CSSProperties = { ...livePill, color: GOLD, border: `1px solid ${GOLD}` };
+// A feed that cannot be read is red, not gold: gold reads as "heads up", and
+// this is the state where the wall is showing no book at all.
+const noFeedPill: CSSProperties = { ...livePill, color: RED, border: `1px solid ${RED}` };
+
+// What the wall is showing, said in the header. Three states, never two — see
+// the `source` union in api/types.ts.
+function sourcePill(source: LiveWallData['source']): CSSProperties {
+  if (source === 'sample') return sampledPill;
+  if (source === 'unavailable') return noFeedPill;
+  return livePill;
+}
+
+function sourceLabel(source: LiveWallData['source']): string {
+  if (source === 'sample') return 'Sample data';
+  if (source === 'unavailable') return 'No feed';
+  return 'Live';
+}
 const infoBanner: CSSProperties = {
   marginBottom: 14,
   fontSize: 12.5,

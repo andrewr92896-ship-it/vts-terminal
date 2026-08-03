@@ -104,7 +104,7 @@ export function PositionsTile({
           {editing && <span style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>⠿</span>}
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{tile.title || 'Open Positions'}</span>
           {data && <span style={countChip}>{data.trades.length}</span>}
-          {data && <span style={data.source === 'sample' ? sampleDot : liveDot}>{data.source === 'sample' ? 'sample' : 'live'}</span>}
+          {data && <span style={sourceDot(data.source)}>{sourceWord(data.source)}</span>}
         </div>
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <ScrollLockButton />
@@ -135,7 +135,16 @@ export function PositionsTile({
       >
         {!data && !error && <div style={hint}>{"Loading positions…"}</div>}
         {error && !data && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
-        {data && data.trades.length === 0 && <div style={hint}>{"No open positions right now. New fills appear here automatically."}</div>}
+        {/* "No open positions" is a claim about the book. It can only be made
+            when the book was actually read — with the feed down the honest
+            statement is that nothing could be read, not that nothing is open. */}
+        {data && data.trades.length === 0 && (
+          <div style={hint}>
+            {data.source === 'unavailable'
+              ? 'Your broker is not being read, so open positions can’t be shown. Reconnect it in Trade Analysis ▸ Live Brokers.'
+              : 'No open positions right now. New fills appear here automatically.'}
+          </div>
+        )}
         {data && data.trades.length > 0 && layoutMode === 'cards' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {data.trades.map((t) => (
@@ -287,6 +296,23 @@ const liveDot: CSSProperties = {
   padding: '1px 5px',
 };
 const sampleDot: CSSProperties = { ...liveDot, color: GOLD, border: `1px solid ${GOLD}` };
+// Red rather than gold: this tile is showing no book at all, and the reason is
+// something the trader has to go and fix.
+const noFeedDot: CSSProperties = { ...liveDot, color: RED, border: `1px solid ${RED}` };
+
+// Three states, never two — 'sample' means no broker has ever been connected,
+// 'unavailable' means one is and cannot be read. See api/types.ts.
+function sourceDot(source: LiveWall['source']): CSSProperties {
+  if (source === 'sample') return sampleDot;
+  if (source === 'unavailable') return noFeedDot;
+  return liveDot;
+}
+
+function sourceWord(source: LiveWall['source']): string {
+  if (source === 'sample') return 'sample';
+  if (source === 'unavailable') return 'no feed';
+  return 'live';
+}
 const iconBtn: CSSProperties = {
   fontSize: 12,
   lineHeight: 1,

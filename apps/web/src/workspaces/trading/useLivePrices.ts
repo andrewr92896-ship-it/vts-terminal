@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../api/client';
-import type { TradeSide } from '../../api/types';
+import type { LiveWall, TradeSide } from '../../api/types';
 
 // Current marks for the instruments currently open on the desk, read straight
 // from the Live Wall. The Funded section has no price feed of its own (FTP/prop
@@ -15,7 +15,9 @@ export interface LiveMark {
 
 export interface LivePrices {
   marks: Map<string, LiveMark>; // keyed by normalized symbol
-  source: 'live' | 'sample' | null;
+  // Taken off the wall payload rather than restated, so a new state there can
+  // never leave this reporting one of two when the wall has three.
+  source: LiveWall['source'] | null;
   generatedAt: number | null;
   // Look up the current mark for a free-typed instrument (e.g. "EUR/USD",
   // "eur_usd", "EURUSD" all resolve to the same wall position).
@@ -33,7 +35,7 @@ function normalize(s: string): string {
 
 export function useLivePrices(): LivePrices {
   const [marks, setMarks] = useState<Map<string, LiveMark>>(new Map());
-  const [source, setSource] = useState<'live' | 'sample' | null>(null);
+  const [source, setSource] = useState<LiveWall['source'] | null>(null);
   const [generatedAt, setGeneratedAt] = useState<number | null>(null);
   const alive = useRef(true);
 

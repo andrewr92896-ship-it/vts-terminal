@@ -109,7 +109,12 @@ export interface WidgetPosition {
 
 export interface WidgetPositionsPayload {
   generatedAt: number;
-  source: 'live' | 'sample';
+  // Mirrors the Live Wall's own three states (see trading/types.ts). It matters
+  // more here, not less: a home-screen widget is read at a glance with no
+  // surrounding screen to qualify it, so it must be able to say "your broker is
+  // not being read" rather than quietly showing a sample book as if it were the
+  // trader's own open positions.
+  source: 'live' | 'sample' | 'unavailable';
   owner: string | null; // the filtered owner handle, or null for the whole team
   note: string | null;
   people: string[]; // distinct owner handles present, so a widget can list them
