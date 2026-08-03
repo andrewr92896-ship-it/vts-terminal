@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { useResponsive } from '../hooks/useMediaQuery';
 import { accentGradient, type Theme } from '../theme/themes';
 import { api, ApiError } from '../api/client';
-import { hasEntitlement, isAdmin, isFounder } from '../auth/access';
+import { hasEntitlement, isAdmin, isFounder, tierOfFeature } from '../auth/access';
 import { UpgradeNotice } from './UpgradeNotice';
-import type { ChatMessage, TeamChatReason, User } from '../api/types';
+import type { ChatMessage, MembershipTier, TeamChatReason, User } from '../api/types';
 import { Icon } from './Icon';
+import { TierMark } from './TierMark';
 import { Avatar } from './Avatar';
 import { UserBadges } from './UserBadges';
 import { SupportTab } from './SupportTab';
@@ -336,7 +337,11 @@ export function TeamChat({
 
             {/* Tabs */}
             <div style={{ display: 'flex', gap: 6, padding: '8px 10px', borderBottom: '1px solid #16294f' }}>
-              <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
+              {/* Team chat is Max. The tab still opens for everyone — the
+                  upgrade notice replaces the feed rather than the tab — so the
+                  mark is what says the feed costs something. Support carries
+                  its own per-kind marks inside (a bug report is free). */}
+              <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} tier={tierOfFeature('teamChat', user.access.membership)} />
               <TabBtn active={tab === 'support'} onClick={() => setTab('support')} icon="life-buoy" label="Support" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
               {canModerate && (
                 <TabBtn active={tab === 'admin'} onClick={() => setTab('admin')} icon="shield-check" label="Admin" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
@@ -601,6 +606,7 @@ function TabBtn({
   accent,
   accentGrad,
   accentText,
+  tier,
 }: {
   active: boolean;
   onClick: () => void;
@@ -609,6 +615,8 @@ function TabBtn({
   accent: string;
   accentGrad: string;
   accentText: string;
+  /** What this tab's feature costs, when it costs something. */
+  tier?: MembershipTier | null;
 }) {
   return (
     <button
@@ -632,6 +640,7 @@ function TabBtn({
     >
       <Icon name={icon} size={14} />
       {label}
+      {tier && <TierMark tier={tier} size={11} />}
     </button>
   );
 }

@@ -68,7 +68,14 @@ export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
         <>
           {canUsePush && <div style={{ height: 1, background: '#1d3560' }} />}
           <section>
-            <div style={sectionLabel}>Broker connections</div>
+            {/* Connecting a broker is paid — it takes a credential of the
+                user's own, which is what puts it at the top tier. Reading the
+                panel and disconnecting stay open regardless, so a lapsed member
+                is never left with a key stranded in the database. */}
+            <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Broker connections</span>
+              <TierMark tier={tierOfFeature('brokerConnections', user?.access.membership)} size={12} />
+            </div>
             <BrokerConnectionsPanel />
           </section>
         </>

@@ -4,8 +4,9 @@ import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 import { api, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { hasEntitlement } from '../auth/access';
+import { hasEntitlement, tierOfFeature } from '../auth/access';
 import { UpgradeNotice } from './UpgradeNotice';
+import { TierMark } from './TierMark';
 
 interface AskClaudePanelProps {
   open: boolean;
@@ -144,6 +145,10 @@ export function AskClaudePanel({
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <span style={{ width: 9, height: 9, borderRadius: '50%', background: accentGradient(theme) }} />
             <strong style={{ fontSize: 14, color: '#eef3ff' }}>Ask VTS AI</strong>
+            {/* The top-bar button opens for everyone, so the panel is where the
+                feature can say what it costs. Drawn for a Max member too — the
+                mark states a price, it is not a lock. */}
+            <TierMark tier={tierOfFeature('ai', user?.access.membership)} size={12} />
             {workspaceLabel && <span style={{ fontSize: 11, color: '#7e92c0' }}>· {workspaceLabel}</span>}
             <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>VTS AI</span>
             {remaining != null && (

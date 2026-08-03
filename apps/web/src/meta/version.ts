@@ -11,9 +11,20 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.47';
+export const APP_VERSION = 'Beta V 6.48';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.48',
+    date: 'August 3, 2026',
+    notes: [
+      'The Live Wall is now the terminal’s one board, and it sits at the top of My Terminal — it is also what the terminal opens on when you sign in. Sixteen new tiles bring the rest of the terminal onto it: market data, a live news channel, a market clock, your net worth, your investment portfolio, your to-do list, notes, announcements, what’s new, study progress, flashcards, trade analysis, closed trades, strategy sessions, funded accounts and team chat.',
+      'Adding a tile is now a grouped catalog rather than a row of buttons. Every tile is listed, including ones your membership does not reach — those carry the star or diamond that says what they cost, so you can see what upgrading would add.',
+      'Every account now gets three ready-made Live Wall layouts to choose between: Markets, Trading Desk, and My Terminal. Building and saving your own arrangement stays a Premium feature.',
+      'A layout only ever shows what your account actually has, so a board never opens with holes or padlocks in it where a tile you have not turned on would be.',
+      'Paid features across the terminal now consistently carry their tier marker — the star for Premium, the diamond for Max. Ask VTS AI, team chat, broker connections and teammate badges were each missing theirs.',
+    ],
+  },
   {
     version: 'Beta V 6.47',
     date: 'August 3, 2026',
@@ -198,9 +209,9 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 6.27',
     date: 'August 2, 2026',
     notes: [
-      'Checked all 33 contribution limits in Contributions & Goals against the IRS announcements. One was wrong: the 2026 SIMPLE IRA catch-up was showing $3,500, which was last year\u2019s figure. It is $4,000. Everything else \u2014 the 401(k), IRA, SEP, HSA and ESA limits for 2024, 2025 and 2026 \u2014 was correct.',
-      'Fixed a more subtle error: every catch-up was labelled \u201cAge 50+\u201d, but an HSA\u2019s extra $1,000 only starts at 55. Anyone aged 50 to 54 was being shown a thousand dollars of room they did not have. Each limit now states its own starting age.',
-      'Added the higher catch-up for ages 60 to 63 introduced by SECURE 2.0 \u2014 $11,250 on a 401(k), $5,250 on a SIMPLE. It replaces the ordinary catch-up rather than adding to it, and the screen says so.',
+      'Checked all 33 contribution limits in Contributions & Goals against the IRS announcements. One was wrong: the 2026 SIMPLE IRA catch-up was showing $3,500, which was last year’s figure. It is $4,000. Everything else — the 401(k), IRA, SEP, HSA and ESA limits for 2024, 2025 and 2026 — was correct.',
+      'Fixed a more subtle error: every catch-up was labelled \u201cAge 50+\u201d, but an HSA’s extra $1,000 only starts at 55. Anyone aged 50 to 54 was being shown a thousand dollars of room they did not have. Each limit now states its own starting age.',
+      'Added the higher catch-up for ages 60 to 63 introduced by SECURE 2.0 — $11,250 on a 401(k), $5,250 on a SIMPLE. It replaces the ordinary catch-up rather than adding to it, and the screen says so.',
       'The footnote now also flags that a SIMPLE plan at a small employer can allow a higher limit than the published one.',
     ],
   },
@@ -209,9 +220,9 @@ export const PATCH_NOTES: PatchNote[] = [
     date: 'August 2, 2026',
     notes: [
       'New: My Terminal \u25b8 Net Worth. Everything you own minus everything you owe, in one number, recorded once a day so you can watch it move.',
-      'Your investment portfolio and trading account are counted automatically \u2014 you do not enter them, and the screen marks them so you do not add them a second time by mistake. Everything else goes in by hand: a house, a car, savings, a mortgage, a card balance.',
+      'Your investment portfolio and trading account are counted automatically — you do not enter them, and the screen marks them so you do not add them a second time by mistake. Everything else goes in by hand: a house, a car, savings, a mortgage, a card balance.',
       'Debts are entered as plain positive amounts and subtracted for you. A negative net worth shows honestly rather than being hidden.',
-      'If part of the picture cannot be read \u2014 say a broker is not answering \u2014 no total is shown at all, and that day is not recorded. A net worth with a piece missing looks complete when it is not.',
+      'If part of the picture cannot be read — say a broker is not answering — no total is shown at all, and that day is not recorded. A net worth with a piece missing looks complete when it is not.',
       'That completes the build: every section in Investments and both My Terminal summaries are now live.',
     ],
   },
@@ -221,7 +232,7 @@ export const PATCH_NOTES: PatchNote[] = [
     notes: [
       'New: My Terminal ▸ Investment Holdings. Your long-term investment portfolio and your trading desk on one screen, with a single total across both.',
       'The total adds your portfolio to the money actually in your trading account, plus any coins you hold outright. Open trades are listed with their profit or loss but are deliberately not added in — the size of a leveraged position is not money you hold, and counting it would badly overstate what you are worth.',
-      'Anything left out of the total is named rather than quietly dropped: a book you keep by hand has no balance to read, and a funded challenge account is the firm\u2019s capital rather than yours.',
+      'Anything left out of the total is named rather than quietly dropped: a book you keep by hand has no balance to read, and a funded challenge account is the firm’s capital rather than yours.',
       'Without Advanced Trading turned on the screen still works — it shows your investments and offers the trading half if you want it.',
     ],
   },
@@ -487,7 +498,7 @@ export const PATCH_NOTES: PatchNote[] = [
     date: 'August 1, 2026',
     notes: [
       'Fixed: the four channels the stream wall starts with (Yahoo Finance, Bloomberg, the Federal Reserve, Reuters) could get stuck on \u201cchannel ID is still being looked up\u201d and never start playing.',
-      'The portal now looks up a missing channel ID on its own, in the background, whenever you open Market News \u2014 no YouTube key needed. Give it a few seconds and the stream starts playing by itself.',
+      'The portal now looks up a missing channel ID on its own, in the background, whenever you open Market News — no YouTube key needed. Give it a few seconds and the stream starts playing by itself.',
       'A channel that genuinely cannot be found is retried at most once every half hour rather than on every refresh.',
     ],
   },
@@ -496,9 +507,9 @@ export const PATCH_NOTES: PatchNote[] = [
     date: 'July 31, 2026',
     notes: [
       'You can now add your own channels to the Market News stream wall. Paste a YouTube channel link, give it a name if you want, and it joins the wall.',
-      'Channels belong to the whole trading team \u2014 add one and every teammate sees it. Which streams you keep open, which one is docked in the corner, and which ones alert you stay your own.',
+      'Channels belong to the whole trading team — add one and every teammate sees it. Which streams you keep open, which one is docked in the corner, and which ones alert you stay your own.',
       'Any link form works: youtube.com/@name, youtube.com/channel/..., or the older /c/ and /user/ addresses. A /channel/ link starts playing straight away; the others take a moment to look up the first time.',
-      'The wall starts with Yahoo Finance, Bloomberg, the Federal Reserve and Reuters. None of them are fixed any more \u2014 remove any you do not want with the \u00d7 beside it.',
+      'The wall starts with Yahoo Finance, Bloomberg, the Federal Reserve and Reuters. None of them are fixed any more — remove any you do not want with the \u00d7 beside it.',
       'The read-only demo can watch the wall but cannot change what the desk sees.',
     ],
   },
@@ -518,9 +529,9 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 5.92',
     date: 'July 30, 2026',
     notes: [
-      'Adding a YouTube channel to the Market News stream wall now accepts the address straight from the browser bar, in any form \u2014 a /channel/ link, an @handle link, a bare @handle, or the older /c/ and /user/ links.',
+      'Adding a YouTube channel to the Market News stream wall now accepts the address straight from the browser bar, in any form — a /channel/ link, an @handle link, a bare @handle, or the older /c/ and /user/ links.',
       'A /channel/ link already contains the channel ID, so the portal now reads it out of the address instead of looking it up. That channel starts playing immediately, uses none of the daily YouTube allowance, and works even with no YouTube key set.',
-      'Fixed: pasting anything other than an @handle link used to be silently misread \u2014 a /channel/ address became the nonsense handle \u201cchannel\u201d, which wasted a lookup, failed, and was then ignored for six hours.',
+      'Fixed: pasting anything other than an @handle link used to be silently misread — a /channel/ address became the nonsense handle \u201cchannel\u201d, which wasted a lookup, failed, and was then ignored for six hours.',
     ],
   },
   {
@@ -619,9 +630,9 @@ export const PATCH_NOTES: PatchNote[] = [
     date: 'July 30, 2026',
     notes: [
       'Market Data now shows real prices for FX and crypto, quoted from OANDA: EUR/USD, GBP/USD, USD/JPY, USD/CAD, AUD/USD, the dollar index, Bitcoin and Ethereum.',
-      'Those rows also carry real changes over all five periods \u2014 1 day, 1 week, 1 month, year to date and 1 year \u2014 worked out from daily closing prices rather than estimated.',
+      'Those rows also carry real changes over all five periods — 1 day, 1 week, 1 month, year to date and 1 year — worked out from daily closing prices rather than estimated.',
       'The dollar index is not something a broker quotes, so it is calculated from the six currencies and weights the official index uses. The row says so instead of crediting a publisher it did not come from.',
-      'Every figure still waiting on a data source now carries a grey Sample dot, and the notice at the top of the screen names exactly which groups are live and counts the rest \u2014 so it is clear at a glance which numbers you can trade off.',
+      'Every figure still waiting on a data source now carries a grey Sample dot, and the notice at the top of the screen names exactly which groups are live and counts the rest — so it is clear at a glance which numbers you can trade off.',
       'Prices refresh at most once a minute and the last good reading stays on screen if a refresh fails, so the board never blanks out.',
     ],
   },
@@ -629,10 +640,10 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 5.80',
     date: 'July 29, 2026',
     notes: [
-      'New section: Advanced Trading \u25b8 Market Data, sitting just above Market News. One screen for every rate, print and price the desk watches \u2014 policy rates, inflation, jobs, the Treasury curve, FX, commodities, crypto, indices, liquidity, and the four trading sessions.',
+      'New section: Advanced Trading \u25b8 Market Data, sitting just above Market News. One screen for every rate, print and price the desk watches — policy rates, inflation, jobs, the Treasury curve, FX, commodities, crypto, indices, liquidity, and the four trading sessions.',
       'A bar across the top counts down to the next Federal Reserve decision and press conference, with the last meeting, the current target range, and what the market has priced for the next two meetings.',
       'The board is yours to arrange: pin the numbers you care about to the strip at the top, drag them into the order you want, remove anything you never look at, and add your own metric for anything the feeds do not carry. Every removal can be undone, and your arrangement is saved to your account rather than the browser.',
-      'Each series shows five changes side by side \u2014 1 day, 1 week, 1 month, year to date, 1 year \u2014 plus who publishes it, when it was last revised, and when it is next due. A due date inside a week is highlighted.',
+      'Each series shows five changes side by side — 1 day, 1 week, 1 month, year to date, 1 year — plus who publishes it, when it was last revised, and when it is next due. A due date inside a week is highlighted.',
       'A second view carries the Forex Factory release calendar: actual against forecast and previous, grouped by day in Eastern Time, with past releases dimmed below and a plain-language explanation of what the bigger releases actually are.',
       'The series figures on this first release are placeholder values from the design and the screen says so at the top. The economic calendar, the session open/closed readings and the Fed countdown are all real.',
     ],

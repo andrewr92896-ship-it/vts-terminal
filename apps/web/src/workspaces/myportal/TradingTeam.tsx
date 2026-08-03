@@ -6,6 +6,8 @@ import { accentGradient } from '../../theme/themes';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { Icon } from '../../components/Icon';
+import { TierMark } from '../../components/TierMark';
+import { tierOfFeature } from '../../auth/access';
 import {
   SectionHeader,
   dangerSolidBtn,
@@ -633,7 +635,9 @@ function MemberRow({
   grad: string;
 }) {
   const { isPhone } = useResponsive();
+  const { user: viewer } = useAuth();
   const [editingBadge, setEditingBadge] = useState(false);
+  const badgeTier = tierOfFeature('premiumBadges', viewer?.access.membership);
   const canEditBadge = canManageBadges && !m.isLeader;
   const showPerms = viewerIsLeader && !m.isLeader;
   const showTransfer = viewerIsLeader && !m.isLeader;
@@ -646,8 +650,15 @@ function MemberRow({
   const actionButtons = (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
       {canEditBadge && (
-        <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={() => { onDraft(m.badge ?? ''); setEditingBadge((v) => !v); }}>
-          Badge
+        <button
+          style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+          disabled={busy}
+          onClick={() => { onDraft(m.badge ?? ''); setEditingBadge((v) => !v); }}
+        >
+          <span>Badge</span>
+          {/* Assigning a teammate's badge is its own paid feature, so the
+              control says what it costs — the same mark the sidebar draws. */}
+          <TierMark tier={badgeTier} size={11} />
         </button>
       )}
       {showTransfer && (
