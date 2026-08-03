@@ -37,14 +37,25 @@ function refreshedAt(ms: number): string {
 // the initial app bundle lean (same pattern as the Studies screens).
 const ChartBoard = lazy(() => import('./ChartBoard').then((m) => ({ default: m.ChartBoard })));
 
-// The Live Wall is the Markets workspace's board, and it serves two kinds of
-// user off one screen. Without Advanced Trading it is a market-watching board:
-// charts, watchlists, headlines and the economic calendar, on a single saved
-// layout. With Advanced Trading it also carries the desk — the team's open
-// positions view, the desk tiles, named presets, and broker connections. The
-// server applies the same split independently (routes/trading.ts), so nothing
-// here is the gate; it just stops offering what would be refused.
-export function LiveWall() {
+// The Live Wall — the terminal's one centralized board, and the first thing in
+// My Terminal.
+//
+// Every part of the terminal can be put on it: charts and quotes, the desk's
+// open trades and its record, the reader's own net worth, portfolio, to-do list
+// and study progress, the team's messages, the live news channels. What a given
+// account actually gets is decided on two independent axes, and confusing them
+// is the classic mistake here:
+//
+//   - the Advanced Trading OPT-IN decides whether the desk-reading tiles exist
+//     at all (and with them the Positions view and broker connections);
+//   - the MEMBERSHIP decides whether the board can be arranged and saved
+//     (`customBoards`) and which individual tiles are reachable.
+//
+// A free account is a working board rather than a teaser: three built-in
+// layouts, chosen from the same picker a paying member uses. The server applies
+// every one of these limits independently (routes/trading.ts), so nothing here
+// is the gate — it just stops offering what would be refused.
+export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }) {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
   const { user } = useAuth();
@@ -150,8 +161,8 @@ export function LiveWall() {
           open, so the preset you have open and any unsaved edits survive
           switching to Positions and back. */}
       <div style={{ display: showPositions ? 'none' : 'block' }}>
-        <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading charts…"}</div>}>
-          <ChartBoard desk={desk} />
+        <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading your board…"}</div>}>
+          <ChartBoard desk={desk} onOpenMembership={onOpenMembership} />
         </Suspense>
       </div>
 

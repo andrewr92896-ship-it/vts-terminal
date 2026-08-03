@@ -5,18 +5,17 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
+import { hasEntitlement, tierOfFeature } from '../../auth/access';
 import { Icon } from '../../components/Icon';
-import type { BoardTile, BoardTileKind, TradingBoard } from '../../api/types';
-import { ChartTile } from './ChartTile';
-import { WatchlistTile } from './WatchlistTile';
-import { PositionsTile } from './PositionsTile';
-import { MetricsTile } from './MetricsTile';
-import { NewsTile } from './NewsTile';
-import { CalendarTile } from './CalendarTile';
-import { AlertsTile } from './AlertsTile';
+import { TierMark } from '../../components/TierMark';
+import type { BoardTile, BoardTileKind, PremiumFeature, TradingBoard } from '../../api/types';
 import { MobileScrollLockBar } from './scrollLock';
 import { useContentWidth } from '../../lib/measure';
-import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input, marketStarterTiles, newTile, starterTiles } from './tvChart';
+import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input } from './tvChart';
+import { DESK_TILE_KINDS, newTile, tileDef, tileLock } from './tileCatalog';
+import { PRESET_LAYOUTS, buildPreset, presetLayout } from './presetLayouts';
+import { BoardTileView } from './tiles';
+import { TilePicker } from './tiles/TilePicker';
 
 // Deliberately NOT WidthProvider: it sizes the board from
 // `ResizeObserver.contentRect`, which is the painted width, while the pixel
@@ -43,27 +42,50 @@ function rowsForPx(px: number): number {
   return Math.max(1, Math.ceil((px + MARGIN) / (ROW_H + MARGIN)));
 }
 
-// The customizable, multi-chart board on the Live Wall. It's a drag-resize grid
-// (react-grid-layout) of chart and watchlist tiles that a trader arranges and
-// saves as named "presets" (persisted per-user via /api/trading/boards). The
-// grid is locked for interaction until "Edit layout" is on, so charts stay
-// clickable while you trade and only move when you mean to move them.
+// The Live Wall's board: a drag-resize grid (react-grid-layout) of tiles drawn
+// from every part of the terminal — charts and quotes, the desk's open trades
+// and its record, the reader's own net worth and list, their study progress, the
+// team's messages.
 //
-// `desk` is whether the viewer has Advanced Trading. Without it the board is
-// still fully theirs to arrange and save — what it loses is the desk half: the
-// tiles that read team positions, desk performance and the alert feed, and the
-// named presets (they keep one board rather than a switchable set). Both limits
-// are enforced server-side too; this only decides what is offered.
-export function ChartBoard({ desk = true }: { desk?: boolean }) {
+// Two audiences, one screen, and the split is a membership rather than a role:
+//
+//  - WITHOUT `customBoards` the board is the three built-in layouts
+//    (presetLayouts.ts). They are complete boards rather than a teaser, chosen
+//    from the same picker a member uses, and the choice is remembered per
+//    device since there is nothing saved server-side to remember it in.
+//  - WITH it, the board is editable and saved: named presets, any tile the
+//    account reaches, arranged however the trader wants.
+//
+// `desk` is whether the viewer has Advanced Trading, which is an opt-in rather
+// than a tier — it decides whether the desk-reading tiles are offered at all.
+// Every limit here is applied server-side too (routes/trading.ts); this only
+// decides what is offered.
+export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; onOpenMembership?: () => void }) {
   const { user } = useAuth();
+  const features = user?.access.features ?? { advancedTrading: desk, funded: false };
+  const entitled = useCallback((f: PremiumFeature) => hasEntitlement(user, f), [user]);
+  // Saving your own arrangement is the paid part. Without it the reader gets the
+  // built-in layouts instead of an empty grid and a locked save button.
+  const canCustomize = hasEntitlement(user, 'customBoards');
+
   // Remember the last-opened preset per user (per device) so returning to the
   // board — after toggling to Positions, a reload, or a new session — lands on
   // the same preset instead of resetting to the default.
   const lastKey = user?.id ? `vts:lastBoard:${user.id}` : null;
+  const builtInKey = user?.id ? `vts:wallLayout:${user.id}` : null;
   const [boards, setBoards] = useState<TradingBoard[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null); // null → unsaved working board
   const [name, setName] = useState('New board');
-  const [tiles, setTiles] = useState<BoardTile[]>(() => (desk ? starterTiles() : marketStarterTiles()));
+  // Which built-in layout a reader without `customBoards` is on.
+  const [builtIn, setBuiltIn] = useState<string>(() => {
+    if (!builtInKey) return PRESET_LAYOUTS[0].key;
+    try {
+      return localStorage.getItem(builtInKey) ?? PRESET_LAYOUTS[0].key;
+    } catch {
+      return PRESET_LAYOUTS[0].key;
+    }
+  });
+  const [tiles, setTiles] = useState<BoardTile[]>([]);
   const [savedTilesJson, setSavedTilesJson] = useState<string>(''); // '' → never saved
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -84,31 +106,69 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
     (b: TradingBoard) => {
       setActiveId(b.id);
       setName(b.name);
-      // A board saved while the trader had the desk keeps its desk tiles in the
-      // database; drop them from what is rendered if the desk is off now, rather
-      // than mounting tiles whose every request would be refused.
-      const shown = allowedTiles(b.layout.tiles ?? [], desk);
-      setTiles(shown);
-      setSavedTilesJson(JSON.stringify(shown));
+      setTiles(b.layout.tiles ?? []);
+      setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
       setNamePrompt(null);
       if (lastKey) {
-        try { localStorage.setItem(lastKey, b.id); } catch { /* storage unavailable — non-fatal */ }
+        try {
+          localStorage.setItem(lastKey, b.id);
+        } catch {
+          /* storage unavailable — non-fatal */
+        }
       }
     },
-    [lastKey, desk],
+    [lastKey],
+  );
+
+  // Switch to a built-in layout. Rebuilt through `buildPreset` so it is filtered
+  // to what this reader can actually reach before it ever renders.
+  const applyBuiltIn = useCallback(
+    (key: string) => {
+      setBuiltIn(key);
+      setActiveId(null);
+      const p = presetLayout(key);
+      setName(p.label);
+      setTiles(buildPreset(p, features, entitled));
+      setSavedTilesJson('');
+      if (builtInKey) {
+        try {
+          localStorage.setItem(builtInKey, key);
+        } catch {
+          /* ignore */
+        }
+      }
+    },
+    [builtInKey, features, entitled],
   );
 
   const load = useCallback(async () => {
     try {
+      // A reader without `customBoards` has nothing saved to load, and the read
+      // would only ever come back empty — so go straight to the built-ins.
+      if (!canCustomize) {
+        applyBuiltIn(builtIn);
+        setError(null);
+        return;
+      }
       const { boards: list } = await api.tradingBoards();
       setBoards(list);
-      if (firstLoad.current && list.length > 0) {
-        // Prefer the user's last-opened preset, then their default, then the first.
-        let savedId: string | null = null;
-        if (lastKey) {
-          try { savedId = localStorage.getItem(lastKey); } catch { /* ignore */ }
+      if (firstLoad.current) {
+        if (list.length > 0) {
+          // Prefer the user's last-opened preset, then their default, then the first.
+          let savedId: string | null = null;
+          if (lastKey) {
+            try {
+              savedId = localStorage.getItem(lastKey);
+            } catch {
+              /* ignore */
+            }
+          }
+          applyBoard(list.find((b) => b.id === savedId) ?? list.find((b) => b.isDefault) ?? list[0]);
+        } else {
+          // Nothing saved yet: open on a built-in layout rather than an empty
+          // grid, so a first visit shows a finished board.
+          applyBuiltIn(builtIn);
         }
-        applyBoard(list.find((b) => b.id === savedId) ?? list.find((b) => b.isDefault) ?? list[0]);
       }
       setError(null);
     } catch (e) {
@@ -117,15 +177,30 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
       firstLoad.current = false;
       setLoading(false);
     }
-  }, [applyBoard, lastKey]);
+  }, [applyBoard, applyBuiltIn, builtIn, canCustomize, lastKey]);
 
   useEffect(() => {
     void load();
-  }, [load]);
+    // Only on mount and when the customization right changes — `load` re-reads
+    // the built-in choice from state each time it runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canCustomize]);
+
+  useEffect(() => {
+    if (!canCustomize) setLoading(false);
+  }, [canCustomize]);
 
   const tilesJson = useMemo(() => JSON.stringify(tiles), [tiles]);
   const isUnsaved = activeId == null;
   const dirty = isUnsaved || tilesJson !== savedTilesJson;
+
+  // Which tiles this reader cannot reach, resolved once per render rather than
+  // per tile per frame.
+  const locks = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof tileLock>>();
+    for (const t of tiles) m.set(t.id, tileLock(t.kind, features, entitled));
+    return m;
+  }, [tiles, features, entitled]);
 
   const layout: Layout[] = useMemo(
     () =>
@@ -134,15 +209,15 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
         // grid height to the reported row count so the cell grows per trade and
         // can't be hand-resized shorter (which would reintroduce a scroll).
         const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
-        const minH = t.kind === 'watchlist' ? 2 : t.kind === 'positions' ? 4 : t.kind === 'metrics' ? 4 : t.kind === 'news' || t.kind === 'calendar' || t.kind === 'alerts' ? 5 : 8;
+        const def = tileDef(t.kind);
         return {
           i: t.id,
           x: t.x,
           y: t.y,
           w: t.w,
           h: auto ?? t.h,
-          minW: 3,
-          minH: auto ?? minH,
+          minW: def?.minW ?? 3,
+          minH: auto ?? def?.minH ?? 4,
           ...(auto ? { maxH: auto } : {}),
         };
       }),
@@ -195,6 +270,7 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
       return prev[id] === rows ? prev : { ...prev, [id]: rows };
     });
   }, []);
+
   const addTile = useCallback((kind: BoardTileKind) => {
     setTiles((prev) => {
       // Drop new tiles at the bottom of the current stack.
@@ -294,77 +370,82 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
       const { boards: list } = await api.removeBoard(activeId!);
       setBoards(list);
       if (list.length > 0) applyBoard(list.find((b) => b.isDefault) ?? list[0]);
-      else {
-        setActiveId(null);
-        setName('New board');
-        setTiles(desk ? starterTiles() : marketStarterTiles());
-        setSavedTilesJson('');
-      }
+      else applyBuiltIn(builtIn);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not delete the board');
     }
   };
 
-  if (loading) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading your charts…"}</div>;
+  if (loading) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading your board…"}</div>;
+
+  const customBoardsTier = tierOfFeature('customBoards', user?.access.membership);
 
   return (
     <div>
       <style>{PLACEHOLDER_CSS}</style>
       <MobileScrollLockBar />
 
-      {/* Toolbar — the preset picker and the layout actions share one wrapping
-          row, so the board starts right below it when you're just watching. */}
+      {/* Toolbar — the layout picker and the actions share one wrapping row, so
+          the board starts right below it when you're just watching. */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-        {/* Named presets are part of Advanced Trading. Without it the viewer has
-            exactly one board, so there is nothing to pick between. */}
-        {desk && (
+        <span style={railLabel}>Layout</span>
+        <LayoutPicker
+          boards={canCustomize ? boards : []}
+          activeId={activeId}
+          builtIn={builtIn}
+          name={name}
+          isUnsaved={isUnsaved}
+          onPickBoard={(b) => confirmSwitch(() => applyBoard(b))}
+          onPickBuiltIn={(k) => confirmSwitch(() => applyBuiltIn(k))}
+        />
+
+        {canCustomize ? (
           <>
-            <span style={{ fontSize: 9, letterSpacing: '.5px', textTransform: 'uppercase', color: FAINT, marginRight: 2 }}>Presets</span>
-            <PresetPicker
-              boards={boards}
-              activeId={activeId}
-              name={name}
-              isUnsaved={isUnsaved}
-              onPick={(b) => confirmSwitch(() => applyBoard(b))}
-            />
-          </>
-        )}
-        <button onClick={() => setEditing((v) => !v)} style={editing ? goldBtn : ghostBtn}>
-          {editing ? '✓ Done editing' : '✎ Edit layout'}
-        </button>
-        {editing && (
-          <>
-            <button onClick={() => addTile('chart')} style={ghostBtn}>+ Chart</button>
-            <button onClick={() => addTile('watchlist')} style={ghostBtn}>+ Watchlist</button>
-            <button onClick={() => addTile('news')} style={ghostBtn}>+ News</button>
-            <button onClick={() => addTile('calendar')} style={ghostBtn}>+ Calendar</button>
-            {/* The desk tiles: team positions, desk performance, the alert feed. */}
-            {desk && (
+            <button onClick={() => setEditing((v) => !v)} style={editing ? goldBtn : ghostBtn}>
+              {editing ? '✓ Done editing' : '✎ Edit layout'}
+            </button>
+            {editing && (
               <>
-                <button onClick={() => addTile('positions')} style={ghostBtn}>+ Positions</button>
-                <button onClick={() => addTile('metrics')} style={ghostBtn}>+ Metrics</button>
-                <button onClick={() => addTile('alerts')} style={ghostBtn}>+ Alerts</button>
+                <TilePicker onAdd={addTile} onOpenMembership={onOpenMembership} />
+                {desk && !isUnsaved && (
+                  <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>
+                    {"Rename"}
+                  </button>
+                )}
+                {desk && !isUnsaved && (
+                  <button onClick={setDefault} style={ghostBtn} title="Show this board by default">
+                    {"Set default"}
+                  </button>
+                )}
+                {desk && !isUnsaved && (
+                  <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>
+                    {"Delete"}
+                  </button>
+                )}
+                {desk && <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>}
               </>
             )}
-            {desk && !isUnsaved && (
-              <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>Rename</button>
+            {editing && (
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                {dirty && <span style={{ fontSize: 11, color: FAINT }}>Unsaved changes</span>}
+                <button
+                  onClick={save}
+                  disabled={saving || (!dirty && !isUnsaved)}
+                  style={{ ...goldBtn, opacity: saving || (!dirty && !isUnsaved) ? 0.55 : 1 }}
+                >
+                  {saving ? 'Saving…' : isUnsaved ? 'Save board' : 'Save'}
+                </button>
+              </div>
             )}
-            {desk && !isUnsaved && (
-              <button onClick={setDefault} style={ghostBtn} title="Show this board by default">Set default</button>
-            )}
-            {desk && !isUnsaved && (
-              <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>{"Delete"}</button>
-            )}
-            {desk && <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>}
           </>
-        )}
-        {editing && (
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-            {dirty && <span style={{ fontSize: 11, color: FAINT }}>Unsaved changes</span>}
-            <button onClick={save} disabled={saving || (!dirty && !isUnsaved)} style={{ ...goldBtn, opacity: saving || (!dirty && !isUnsaved) ? 0.55 : 1 }}>
-              {saving ? 'Saving…' : isUnsaved ? 'Save board' : 'Save'}
-            </button>
-          </div>
+        ) : (
+          // The paid half, stated rather than hidden: the reader can see that
+          // arranging their own board is what a membership adds.
+          <button onClick={onOpenMembership} style={{ ...ghostBtn, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="pencil" size={12} color={FAINT} />
+            <span>Build your own</span>
+            <TierMark tier={customBoardsTier} size={11} />
+          </button>
         )}
       </div>
 
@@ -375,12 +456,19 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
             autoFocus
             value={namePrompt.value}
             onChange={(e) => setNamePrompt({ ...namePrompt, value: e.target.value.slice(0, 80) })}
-            onKeyDown={(e) => { if (e.key === 'Enter') void confirmName(); if (e.key === 'Escape') setNamePrompt(null); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void confirmName();
+              if (e.key === 'Escape') setNamePrompt(null);
+            }}
             placeholder="e.g. Forex scalp"
             style={{ ...input, minWidth: 200 }}
           />
-          <button onClick={() => void confirmName()} disabled={saving} style={goldBtn}>{namePrompt.mode === 'create' ? 'Save' : 'Rename'}</button>
-          <button onClick={() => setNamePrompt(null)} style={ghostBtn}>{"Cancel"}</button>
+          <button onClick={() => void confirmName()} disabled={saving} style={goldBtn}>
+            {namePrompt.mode === 'create' ? 'Save' : 'Rename'}
+          </button>
+          <button onClick={() => setNamePrompt(null)} style={ghostBtn}>
+            {"Cancel"}
+          </button>
         </div>
       )}
 
@@ -388,51 +476,41 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
 
       {tiles.length === 0 ? (
         <div style={emptyState}>
-          This board is empty. Turn on <b>Edit layout</b> and add a chart or watchlist.
+          {canCustomize
+            ? 'This board is empty. Turn on Edit layout and add a tile.'
+            : 'This layout has nothing you can see yet.'}
         </div>
       ) : (
         <>
           <div ref={boardRef}>
-          <RGL
-            className="layout"
-            width={boardW}
-            layout={layout}
-            cols={COLS}
-            rowHeight={ROW_H}
-            margin={[10, 10]}
-            isDraggable={editing}
-            isResizable={editing}
-            draggableHandle=".tile-header"
-            draggableCancel=".no-drag"
-            onLayoutChange={onLayoutChange}
-            compactType="vertical"
-          >
-            {tiles.map((t) => (
-              <div key={t.id} style={{ overflow: 'hidden' }}>
-                {t.kind === 'chart' ? (
-                  <ChartTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-                ) : t.kind === 'positions' ? (
-                  <PositionsTile
+            <RGL
+              className="layout"
+              width={boardW}
+              layout={layout}
+              cols={COLS}
+              rowHeight={ROW_H}
+              margin={[10, 10]}
+              isDraggable={editing}
+              isResizable={editing}
+              draggableHandle=".tile-header"
+              draggableCancel=".no-drag"
+              onLayoutChange={onLayoutChange}
+              compactType="vertical"
+            >
+              {tiles.map((t) => (
+                <div key={t.id} style={{ overflow: 'hidden' }}>
+                  <BoardTileView
                     tile={t}
                     editing={editing}
+                    lock={locks.get(t.id) ?? null}
                     onChange={(p) => patchTile(t.id, p)}
                     onRemove={() => removeTile(t.id)}
                     onMeasure={(px) => measureTile(t.id, px)}
+                    onOpenMembership={onOpenMembership}
                   />
-                ) : t.kind === 'metrics' ? (
-                  <MetricsTile tile={t} editing={editing} onRemove={() => removeTile(t.id)} />
-                ) : t.kind === 'news' ? (
-                  <NewsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-                ) : t.kind === 'calendar' ? (
-                  <CalendarTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-                ) : t.kind === 'alerts' ? (
-                  <AlertsTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-                ) : (
-                  <WatchlistTile tile={t} editing={editing} onChange={(p) => patchTile(t.id, p)} onRemove={() => removeTile(t.id)} />
-                )}
-              </div>
-            ))}
-          </RGL>
+                </div>
+              ))}
+            </RGL>
           </div>
           {/* While editing, keep a little breathing room below the grid so the
               bottom-row tile's resize handle isn't jammed against the footer and
@@ -444,28 +522,30 @@ export function ChartBoard({ desk = true }: { desk?: boolean }) {
   );
 }
 
-// The saved-preset picker. A trader with a few boards used to get a wrapping
-// wall of pills — three rows deep on a phone — sitting above every tile, so the
-// list collapses into one dropdown and the board starts that much higher up.
+// The layout picker: the three built-in layouts, and — for a member who can
+// arrange their own — their saved boards under them.
 //
-// It is drawn by the terminal itself (a button plus a body-portalled menu, the
-// same shape as the metrics tile's trader picker) rather than a native
-// <select>: on iOS that renders the OS picker wheel, which ignores the desk's
-// theme entirely. Portalling to <body> keeps the menu clear of the grid's
-// stacking context, and it closes on outside click, scroll, resize or Escape so
-// it can never float detached from its button.
-function PresetPicker({
+// It is drawn by the terminal itself (a button plus a body-portalled menu)
+// rather than a native <select>: on iOS that renders the OS picker wheel, which
+// ignores the desk's theme entirely. Portalling to <body> keeps the menu clear
+// of the grid's stacking context, and it closes on outside click, scroll, resize
+// or Escape so it can never float detached from its button.
+function LayoutPicker({
   boards,
   activeId,
+  builtIn,
   name,
   isUnsaved,
-  onPick,
+  onPickBoard,
+  onPickBuiltIn,
 }: {
   boards: TradingBoard[];
   activeId: string | null;
+  builtIn: string;
   name: string;
   isUnsaved: boolean;
-  onPick: (b: TradingBoard) => void;
+  onPickBoard: (b: TradingBoard) => void;
+  onPickBuiltIn: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -474,7 +554,9 @@ function PresetPicker({
   useEffect(() => {
     if (!open) return;
     const close = () => setOpen(false);
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
     window.addEventListener('scroll', close, true);
     window.addEventListener('resize', close);
     window.addEventListener('keydown', onKey);
@@ -492,29 +574,24 @@ function PresetPicker({
 
   const active = boards.find((b) => b.id === activeId);
   const label = active?.name ?? name;
-  // With nothing saved yet there is only the working board, so the button is
-  // just a label — opening an empty menu would say nothing.
-  const empty = boards.length === 0;
 
   return (
     <>
       <button
         ref={btnRef}
-        onClick={empty ? undefined : toggle}
-        disabled={empty}
-        title={empty ? 'Save this board to keep it as a preset' : 'Switch preset'}
+        onClick={toggle}
+        title="Switch layout"
         style={{
           ...presetBtn,
           display: 'inline-flex',
           alignItems: 'center',
           gap: 6,
           maxWidth: 'min(calc(72 * var(--vw)), 260px)',
-          cursor: empty ? 'default' : 'pointer',
         }}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-        {isUnsaved && <span style={{ color: FAINT, flex: '0 0 auto' }}>· unsaved</span>}
-        {!empty && <Icon name="chevron-down" size={12} color={FAINT} />}
+        {isUnsaved && boards.length > 0 && <span style={{ color: FAINT, flex: '0 0 auto' }}>· unsaved</span>}
+        <Icon name="chevron-down" size={12} color={FAINT} />
       </button>
       {open &&
         rect &&
@@ -537,34 +614,56 @@ function PresetPicker({
                 zIndex: 201,
               }}
             >
-              {isUnsaved && (
-                <button onClick={() => setOpen(false)} style={menuRow(true)}>
-                  <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
-                    <Icon name="check" size={13} color={GREEN} />
-                  </span>
-                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>unsaved</span>
-                </button>
-              )}
-              {boards.map((b) => {
-                const sel = b.id === activeId;
+              <div style={menuHeading}>Built-in layouts</div>
+              {PRESET_LAYOUTS.map((p) => {
+                const sel = activeId == null && p.key === builtIn;
                 return (
                   <button
-                    key={b.id}
+                    key={p.key}
                     onClick={() => {
                       setOpen(false);
-                      onPick(b);
+                      onPickBuiltIn(p.key);
                     }}
                     style={menuRow(sel)}
                   >
                     <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
                       {sel ? <Icon name="check" size={13} color={GREEN} /> : null}
                     </span>
-                    <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</span>
-                    {b.isDefault && <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>default</span>}
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                      <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {p.label}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 10, color: FAINT, marginTop: 1 }}>{p.blurb}</span>
+                    </span>
                   </button>
                 );
               })}
+              {boards.length > 0 && (
+                <>
+                  <div style={menuHeading}>Your boards</div>
+                  {boards.map((b) => {
+                    const sel = b.id === activeId;
+                    return (
+                      <button
+                        key={b.id}
+                        onClick={() => {
+                          setOpen(false);
+                          onPickBoard(b);
+                        }}
+                        style={menuRow(sel)}
+                      >
+                        <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                          {sel ? <Icon name="check" size={13} color={GREEN} /> : null}
+                        </span>
+                        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                          {b.name}
+                        </span>
+                        {b.isDefault && <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>default</span>}
+                      </button>
+                    );
+                  })}
+                </>
+              )}
             </div>
           </>,
           document.body,
@@ -573,14 +672,9 @@ function PresetPicker({
   );
 }
 
-// Tiles that read the desk rather than public market data. A viewer without
-// Advanced Trading never sees these — the same three kinds the server strips
-// from anything they save (routes/trading.ts).
-const DESK_TILE_KINDS = new Set<BoardTileKind>(['positions', 'metrics', 'alerts']);
-
-function allowedTiles(tiles: BoardTile[], desk: boolean): BoardTile[] {
-  return desk ? tiles : tiles.filter((t) => !DESK_TILE_KINDS.has(t.kind));
-}
+// Re-exported so the Live Wall (and the server mirror's client twin) can keep
+// reading the desk-tile set from one place.
+export { DESK_TILE_KINDS };
 
 // react-grid-layout drag/resize visuals themed to the navy/gold desk.
 const PLACEHOLDER_CSS = `
@@ -589,8 +683,14 @@ const PLACEHOLDER_CSS = `
 .react-grid-item.react-draggable-dragging { z-index: 20; opacity: .95; }
 `;
 
-// The picker's trigger — the gold "this is the open preset" pill the row used
-// to render per board, now the one thing standing in for the whole list.
+const railLabel: CSSProperties = {
+  fontSize: 9,
+  letterSpacing: '.5px',
+  textTransform: 'uppercase',
+  color: FAINT,
+  marginRight: 2,
+};
+// The picker's trigger — the gold "this is the open layout" pill.
 const presetBtn: CSSProperties = {
   fontSize: 11.5,
   fontWeight: 600,
@@ -600,6 +700,14 @@ const presetBtn: CSSProperties = {
   borderRadius: 7,
   padding: '6px 11px',
   cursor: 'pointer',
+};
+const menuHeading: CSSProperties = {
+  fontSize: 9,
+  fontWeight: 700,
+  letterSpacing: '.6px',
+  textTransform: 'uppercase',
+  color: FAINT,
+  padding: '8px 8px 4px',
 };
 const menuRow = (sel: boolean): CSSProperties => ({
   display: 'flex',

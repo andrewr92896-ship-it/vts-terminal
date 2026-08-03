@@ -33,6 +33,12 @@ export const NAV: NavWorkspace[] = [
     accent: '#34D399',
     group: 'My Terminal',
     sections: [
+      // The Live Wall leads My Terminal, and is the first section of the first
+      // workspace — the terminal's one centralized board (owner decision,
+      // 2026-08). It was a Markets section until then; the key stays `live`, so
+      // saved nav.order overrides, the howto wording and every in-app link keep
+      // working — the same reason `desk` stayed `desk`.
+      { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       // The whole-life roll-up: everything you own minus everything you owe.
       // (There is deliberately no Investment Holdings section here — the
       // Investments workspace already tracks the portfolio, and a second screen
@@ -55,12 +61,11 @@ export const NAV: NavWorkspace[] = [
     ],
   },
   // Markets — included with every account, no opt-in. Everything here reads
-  // public market data: nothing on these three screens touches a trade, a broker
-  // or a balance, which is exactly why they can sit outside the Advanced Trading
-  // opt-in. The Live Wall board is shared between the two: a Markets-only user
-  // gets the chart / watchlist / news / calendar tiles and one saved board,
-  // while opting into Advanced Trading adds the desk tiles and named presets to
-  // the same screen rather than giving them a second one.
+  // public market data: nothing on these screens touches a trade, a broker or a
+  // balance, which is exactly why they can sit outside the Advanced Trading
+  // opt-in. (The Live Wall moved to the top of My Terminal — it draws on every
+  // workspace now, not just this one, so it belongs with the reader rather than
+  // under Markets.)
   {
     key: 'markets',
     label: 'Markets',
@@ -68,7 +73,6 @@ export const NAV: NavWorkspace[] = [
     accent: '#5AC8FA',
     group: 'Markets',
     sections: [
-      { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       { key: 'news', label: 'Market News', icon: 'newspaper' },
       // Premium — the series board. The economic calendar and FOMC countdown on
       // that screen stay free.

@@ -1103,7 +1103,38 @@ export interface SessionAlertPrefs {
 // ---- Trading — Live Wall boards (mirror of apps/api/src/trading/boards.ts) ----
 // A saved, customizable grid of chart/watchlist tiles the trader arranges on
 // the Live Wall ("presets").
-export type BoardTileKind = 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar' | 'alerts' | 'metrics';
+// Every kind of tile the wall can carry. The catalog that says what each one is
+// called, which group it belongs to and what it costs lives in
+// workspaces/trading/tileCatalog.ts; the server's gate mirror is
+// apps/api/src/trading/boardTiles.ts. Add a kind in all three.
+export type BoardTileKind =
+  // Markets — public data, included with every account.
+  | 'chart'
+  | 'watchlist'
+  | 'news'
+  | 'calendar'
+  | 'marketdata'
+  | 'streams'
+  | 'clock'
+  // The desk — behind the Advanced Trading opt-in.
+  | 'positions'
+  | 'metrics'
+  | 'alerts'
+  | 'tradelog'
+  | 'closed'
+  | 'sessions'
+  | 'funded'
+  // Personal — the user's own money, lists and reading.
+  | 'networth'
+  | 'portfolio'
+  | 'todo'
+  | 'notes'
+  | 'announcements'
+  | 'patchnotes'
+  // Studies and the team.
+  | 'studystats'
+  | 'flashcards'
+  | 'teamchat';
 
 export interface BoardTile {
   id: string;
@@ -1138,6 +1169,31 @@ export interface BoardTile {
   // Alerts tiles — which TradingView alerts to show: 'active' (every
   // non-dismissed alert, the default) or 'new' (unanalyzed alerts only).
   alertsFilter?: 'active' | 'new';
+  // Market Data tiles — the series ids to show, in order. Unknown ids are
+  // dropped on read (the same rule the Market Data layout follows), so a catalog
+  // change never invalidates a saved board.
+  seriesIds?: string[];
+  // Live-stream tiles — which channel to play, by its catalog `key`. Whether the
+  // viewer may play it is their entitlement, re-checked server-side.
+  channelKey?: string;
+  // Notes tiles — the text itself, saved with the board rather than in a table
+  // of its own. A board is already per-user JSON, so a scratchpad needs no
+  // migration; the trade-off is that the note belongs to the board it sits on.
+  noteText?: string;
+  // Study tiles — which study game / flashcard set to report on. Undefined →
+  // whichever the learner most recently played.
+  deckId?: string;
+  // Funded tiles — which funded account to report on. Undefined → all of them.
+  accountId?: string;
+  // Clock tiles — IANA zone names to show beside the market sessions.
+  clockZones?: string[];
+  // Feed-shaped tiles (closed trades, announcements, team chat, to do) — how many
+  // rows to draw before the tile scrolls.
+  limit?: number;
+  // To Do tiles — which section to show. Undefined → every section.
+  todoSectionId?: string;
+  // Trade Analysis / closed-trade tiles — the window they score.
+  range?: '7d' | '30d' | '90d' | 'all';
 }
 
 export interface BoardLayout {

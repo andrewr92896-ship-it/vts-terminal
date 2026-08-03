@@ -62,6 +62,7 @@ import {
   ChannelError,
 } from '../trading/marketNewsStreams.js';
 import { createBoard, listBoards, removeBoard, updateBoard } from '../trading/boards.js';
+import { BOARD_TILE_KINDS, DESK_TILE_KINDS } from '../trading/boardTiles.js';
 import {
   getMarketNews,
   addNews,
@@ -1455,7 +1456,7 @@ const sessionAlertPrefsSchema = z.object({
 // keys are stripped.
 const boardTileSchema = z.object({
   id: z.string().trim().min(1).max(64),
-  kind: z.enum(['chart', 'watchlist', 'positions', 'news', 'calendar', 'alerts', 'metrics']),
+  kind: z.enum(BOARD_TILE_KINDS),
   x: z.number().int().min(0).max(96),
   y: z.number().int().min(0).max(4096),
   w: z.number().int().min(1).max(96),
@@ -1471,17 +1472,35 @@ const boardTileSchema = z.object({
   newsFeed: z.string().trim().max(24).optional(),
   minImpact: z.enum(['all', 'medhigh', 'high']).optional(),
   alertsFilter: z.enum(['active', 'new']).optional(),
+  seriesIds: z.array(z.string().trim().max(48)).max(24).optional(),
+  channelKey: z.string().trim().max(64).optional(),
+  // A scratchpad tile's text rides in the board blob rather than a table of its
+  // own. Capped so a board row cannot be grown without bound by one tile.
+  noteText: z.string().max(4000).optional(),
+  deckId: z.string().trim().max(64).optional(),
+  accountId: z.string().trim().max(64).optional(),
+  clockZones: z.array(z.string().trim().max(64)).max(8).optional(),
+  limit: z.number().int().min(1).max(50).optional(),
+  todoSectionId: z.string().trim().max(64).optional(),
+  range: z.enum(['7d', '30d', '90d', 'all']).optional(),
 });
-const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(40) });
+// The wall carries far more kinds than it used to, so the cap is per board and
+// generous rather than tight — 40 was set when there were seven kinds to choose
+// between.
+const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(60) });
 
-// Board tiles that read the desk: the team's open positions, desk performance,
-// and the TradingView alert feed. Everything else on the board — charts,
-// watchlists, headlines, the economic calendar — is public market data, which is
-// exactly the split that lets one board serve both a Markets-only user and a
-// trader. A user without Advanced Trading has these dropped from anything they
-// save, so a hand-made request can't put a positions tile on their board.
-const DESK_TILE_KINDS = new Set(['positions', 'metrics', 'alerts']);
-
+// A user without Advanced Trading has the desk-reading tiles dropped from
+// anything they save, so a hand-made request can't put a positions tile on their
+// board. Which kinds those are is stated once, in trading/boardTiles.ts.
+//
+// PAID tiles are deliberately NOT stripped here, and the difference matters. The
+// desk is an opt-in the reader controls, so a board saved without it never meant
+// to carry those tiles. A membership lapses on its own — stripping on save would
+// quietly delete the arrangement of somebody whose card expired, and they would
+// come back to a board missing tiles they had built. Instead the tile stays in
+// the row and the client draws it locked, so the board is intact the moment the
+// membership is. Nothing leaks by keeping it: every paid tile's DATA is gated at
+// its own endpoint.
 function allowedLayout(
   layout: { tiles: z.infer<typeof boardTileSchema>[] } | undefined,
   advancedTrading: boolean,

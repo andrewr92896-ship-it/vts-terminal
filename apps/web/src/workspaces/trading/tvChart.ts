@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-import type { BoardTile, BoardTileKind } from '../../api/types';
 
 // Shared config for the Live Wall chart board: the trading palette, the
 // TradingView candle-style / interval / indicator option lists, and a small
@@ -93,88 +92,11 @@ export function intervalLabel(code: string | undefined): string {
   return INTERVALS.find((i) => i.code === code)?.label ?? code ?? '1h';
 }
 
-// Defaults for a freshly-added tile of each kind.
-export function newTile(kind: BoardTileKind, at: { x: number; y: number }): BoardTile {
-  const id = `${kind}-${Math.round(at.x)}-${Math.round(at.y)}-${idCounter()}`;
-  if (kind === 'chart') {
-    return { id, kind, x: at.x, y: at.y, w: 6, h: 14, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] };
-  }
-  if (kind === 'positions') {
-    return { id, kind, x: at.x, y: at.y, w: 4, h: 12, title: 'Open Positions', positionsView: 'list' };
-  }
-  if (kind === 'news') {
-    return { id, kind, x: at.x, y: at.y, w: 4, h: 14, title: 'Market News', newsFeed: 'all' };
-  }
-  if (kind === 'calendar') {
-    return { id, kind, x: at.x, y: at.y, w: 4, h: 14, title: 'Calendar', minImpact: 'medhigh' };
-  }
-  if (kind === 'alerts') {
-    return { id, kind, x: at.x, y: at.y, w: 4, h: 14, title: 'Alerts', alertsFilter: 'active' };
-  }
-  if (kind === 'metrics') {
-    return { id, kind, x: at.x, y: at.y, w: 6, h: 8, title: 'Desk Metrics' };
-  }
-  return {
-    id,
-    kind,
-    x: at.x,
-    y: at.y,
-    w: 12,
-    h: 3,
-    title: 'Watchlist',
-    symbols: ['OANDA:EURUSD', 'OANDA:GBPUSD', 'OANDA:XAUUSD', 'OANDA:NAS100USD', 'BINANCE:BTCUSDT'],
-  };
-}
-
-// The default board a trader sees before they've saved any presets: a ticker
-// strip across the top and a single chart below it.
-export function starterTiles(): BoardTile[] {
-  return [
-    {
-      id: `watchlist-start-${idCounter()}`,
-      kind: 'watchlist',
-      x: 0,
-      y: 0,
-      w: 12,
-      h: 3,
-      title: 'Watchlist',
-      symbols: ['OANDA:EURUSD', 'OANDA:GBPUSD', 'OANDA:USDJPY', 'OANDA:XAUUSD', 'OANDA:NAS100USD', 'BINANCE:BTCUSDT'],
-    },
-    // Chart and the live positions list side by side, so a fresh board already
-    // shows charts and open positions on one screen.
-    { id: `chart-start-${idCounter()}`, kind: 'chart', x: 0, y: 3, w: 8, h: 16, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] },
-    { id: `positions-start-${idCounter()}`, kind: 'positions', x: 8, y: 3, w: 4, h: 16, title: 'Open Positions' },
-  ];
-}
-
-// The starter board for a viewer without Advanced Trading. Same shape as above,
-// but the open-positions cell — which reads the desk — is a headline feed
-// instead, so a market-watching board opens complete rather than with a hole
-// where a tile they can't have used to be.
-export function marketStarterTiles(): BoardTile[] {
-  return [
-    {
-      id: `watchlist-start-${idCounter()}`,
-      kind: 'watchlist',
-      x: 0,
-      y: 0,
-      w: 12,
-      h: 3,
-      title: 'Watchlist',
-      symbols: ['OANDA:EURUSD', 'OANDA:GBPUSD', 'OANDA:USDJPY', 'OANDA:XAUUSD', 'OANDA:NAS100USD', 'BINANCE:BTCUSDT'],
-    },
-    { id: `chart-start-${idCounter()}`, kind: 'chart', x: 0, y: 3, w: 8, h: 16, symbol: 'OANDA:EURUSD', interval: '60', style: '1', studies: [] },
-    { id: `news-start-${idCounter()}`, kind: 'news', x: 8, y: 3, w: 4, h: 16, title: 'Market News' },
-  ];
-}
-
-// A monotonic counter so ids added in the same millisecond don't collide
-// (Date.now() alone can repeat within a burst of "Add chart" clicks).
-let _n = 0;
-function idCounter(): number {
-  _n = (_n + 1) % 100000;
-  return _n;
-}
+// The tile factory and the starter boards used to live here. They moved to
+// tileCatalog.ts (what a tile IS, and its defaults) and presetLayouts.ts (the
+// three built-in boards) when the wall grew from seven tile kinds to
+// twenty-three — a tile's size, label, group and price belong beside each other
+// rather than split across a chart-config module.
 
 // Small shared styles reused by the tiles/board editors.
 export const chip: CSSProperties = {

@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingBoards, type TradingBoardRow } from '../db/schema.js';
+import type { BoardTileKind } from './boardTiles.js';
 
 // Per-user Live Wall "boards" — saved drag-resize grids of chart and watchlist
 // tiles ("presets"). The whole arrangement lives in one JSON blob so the grid
@@ -13,7 +14,8 @@ import { tradingBoards, type TradingBoardRow } from '../db/schema.js';
 // chart/watchlist details; the server only needs the grid geometry to be sane.
 export interface BoardTile {
   id: string;
-  kind: 'chart' | 'watchlist' | 'positions' | 'news' | 'calendar' | 'alerts' | 'metrics';
+  // The kind list (and which kinds are gated) lives in boardTiles.ts.
+  kind: BoardTileKind;
   x: number;
   y: number;
   w: number;
@@ -39,6 +41,24 @@ export interface BoardTile {
   minImpact?: 'all' | 'medhigh' | 'high';
   // Alerts tiles — which TradingView alerts to show ('active' | 'new').
   alertsFilter?: 'active' | 'new';
+  // Market Data tiles — the series ids shown, in order.
+  seriesIds?: string[];
+  // Live-stream tiles — which channel to play, by catalog key.
+  channelKey?: string;
+  // Notes tiles — the scratchpad text, saved with the board.
+  noteText?: string;
+  // Study tiles — which study game / flashcard set to report on.
+  deckId?: string;
+  // Funded tiles — which funded account to report on.
+  accountId?: string;
+  // Clock tiles — extra IANA zones shown beside the market sessions.
+  clockZones?: string[];
+  // Feed-shaped tiles — how many rows before the tile scrolls.
+  limit?: number;
+  // To Do tiles — which section to show.
+  todoSectionId?: string;
+  // Trade Analysis / closed-trade tiles — the window scored.
+  range?: '7d' | '30d' | '90d' | 'all';
 }
 
 export interface BoardLayout {

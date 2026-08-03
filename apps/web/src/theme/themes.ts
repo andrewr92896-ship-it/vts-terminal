@@ -128,11 +128,14 @@ export function accentGradient(t: Theme): string {
 }
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
-  markets: 'live',
+  // Markets lands on the news feed now that the Live Wall leads My Terminal.
+  markets: 'news',
   trading: 'tradedesk',
   investments: 'inv_overview',
   studies: 'st_game',
-  myportal: 'my_team',
+  // The Live Wall is the terminal's centralized board and the first thing in
+  // My Terminal, so it is what this workspace opens on.
+  myportal: 'live',
   admin: 'ad_users',
   founder: 'ad_ai',
   help: 'hp_howto',

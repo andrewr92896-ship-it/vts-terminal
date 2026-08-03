@@ -128,7 +128,7 @@ function renderScreen(
   }
   switch (screen) {
     case 'live':
-      return <LiveWall />;
+      return <LiveWall onOpenMembership={() => onNavigate('my_access')} />;
     case 'alerts':
       return <Alerts onNavigate={onNavigate} />;
     // Placing trades (Trade Desk) and reviewing them (Trade Analysis) are two
@@ -212,7 +212,13 @@ const BUG_DOT_SECTION = 'ad_bugs';
 // That is the same board this has always opened on, and it is the one workspace
 // every account has — so the landing screen is identical for a trader and for
 // someone who has opted into nothing.
+// Where a sign-in lands. My Terminal, because the Live Wall is its first
+// section — the one board that draws on every workspace, so it is the most
+// useful thing to open on whatever the account has turned on. (It was Markets
+// until the wall moved there.) Every account reaches My Terminal, so the
+// fallbacks below are a safety net rather than a real path.
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
+  if (allowed.includes('myportal')) return 'myportal';
   if (allowed.includes('markets')) return 'markets';
   if (allowed.includes('trading')) return 'trading';
   return allowed[0] ?? 'studies';
