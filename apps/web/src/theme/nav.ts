@@ -33,11 +33,14 @@ export const NAV: NavWorkspace[] = [
     accent: '#34D399',
     group: 'My Terminal',
     sections: [
-      // The Live Wall leads My Terminal, and is the first section of the first
-      // workspace — the terminal's one centralized board (owner decision,
-      // 2026-08). It was a Markets section until then; the key stays `live`, so
-      // saved nav.order overrides, the howto wording and every in-app link keep
-      // working — the same reason `desk` stayed `desk`.
+      // Max — first, per the Max → Premium → free stacking below.
+      { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      // Free. The Live Wall is the terminal's one centralized board (owner
+      // decision, 2026-08) and is still what a sign-in opens on —
+      // DEFAULT_SCREEN.myportal is `live`, which is a separate thing from where
+      // the row sits in this list. It was a Markets section until 2026-08; the
+      // key stays `live`, so saved nav.order overrides, the howto wording and
+      // every in-app link keep working — the same reason `desk` stayed `desk`.
       { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       // The whole-life roll-up: everything you own minus everything you owe.
       // (There is deliberately no Investment Holdings section here — the
@@ -56,8 +59,6 @@ export const NAV: NavWorkspace[] = [
       { key: 'my_access', label: 'Premium Features', icon: 'gem' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
-      // Max — last, per the free → Premium → Max stacking below.
-      { key: 'my_team', label: 'Trading Team', icon: 'users' },
     ],
   },
   // Markets — included with every account, no opt-in. Everything here reads
@@ -73,10 +74,13 @@ export const NAV: NavWorkspace[] = [
     accent: '#5AC8FA',
     group: 'Markets',
     sections: [
-      { key: 'news', label: 'Market News', icon: 'newspaper' },
       // Premium — the series board. The economic calendar and FOMC countdown on
-      // that screen stay free.
+      // that screen stay free. (DEFAULT_SCREEN.markets stays `news`: the top row
+      // of a workspace is not what it opens on, and landing a free account on a
+      // screen it cannot reach would be the worst of both.)
       { key: 'data', label: 'Market Data', icon: 'line-chart' },
+      // Free.
+      { key: 'news', label: 'Market News', icon: 'newspaper' },
     ],
   },
   // Advanced Trading — opt-in (My Terminal ▸ Premium Features). The desk: placing
@@ -88,23 +92,23 @@ export const NAV: NavWorkspace[] = [
     accent: C.gold,
     group: 'Advanced Trading',
     sections: [
-      // Free with the desk opt-in.
-      { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
-      { key: 'desk', label: 'Trade Analysis', icon: 'candlestick-chart' },
-      // Manual Trades is a plain Advanced Trading section — your own book, kept
-      // by hand. It is deliberately independent of the Funded opt-in below:
-      // plenty of traders keep a manual book without ever running a challenge.
-      { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
-      { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
+      // Max — placing an order. The section key is `tradedesk`; `desk` below is
+      // the review screen that used to carry this name, and keeps its key so
+      // saved sidebar orders, how-to wording and in-app links stay pointed at it.
+      { key: 'tradedesk', label: 'Trade Desk', icon: 'zap' },
       // Premium.
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
       // The nested opt-in: shown only when Funded Account is turned on as well
       // (see FUNDED_ONLY_SECTIONS + the sidebar filter). Never shown to the demo.
       { key: 'prop', label: 'Funded Account', icon: 'shield-check' },
-      // Max — placing an order. The section key is `tradedesk`; `desk` above is
-      // the review screen that used to carry this name, and keeps its key so
-      // saved sidebar orders, how-to wording and in-app links stay pointed at it.
-      { key: 'tradedesk', label: 'Trade Desk', icon: 'zap' },
+      // Free with the desk opt-in.
+      { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
+      { key: 'desk', label: 'Trade Analysis', icon: 'candlestick-chart' },
+      // Manual Trades is a plain Advanced Trading section — your own book, kept
+      // by hand. It is deliberately independent of the Funded opt-in above:
+      // plenty of traders keep a manual book without ever running a challenge.
+      { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
+      { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
     ],
   },
   // Investments (teal) — a read-only, long-term portfolio tracker for the layman:
@@ -140,12 +144,15 @@ export const NAV: NavWorkspace[] = [
     accent: C.violet,
     group: 'Studies',
     sections: [
+      // Premium — making. Playing every built-in game, set and guide is free,
+      // which is why the rest of this list is not marked.
+      { key: 'st_decks', label: 'Study Creation', icon: 'library' },
+      // Free.
       { key: 'st_game', label: 'Study Game', icon: 'gamepad-2' },
       { key: 'st_cards', label: 'Flashcards', icon: 'copy' },
       { key: 'st_test', label: 'Practice Tests', icon: 'file-check-2' },
       { key: 'st_guides', label: 'Study Presentations', icon: 'presentation' },
       { key: 'st_progress', label: 'Progress', icon: 'trending-up' },
-      { key: 'st_decks', label: 'Study Creation', icon: 'library' },
     ],
   },
   // Admin-only. Shown in the sidebar only to admins (Portal filters the

@@ -53,8 +53,10 @@ export interface TileDef {
   minW?: number;
 }
 
-// Ordered within each group free → Premium → Max, the same way the sidebar
-// stacks its sections.
+// Ordered within each group free → Premium → Max. (The sidebar stacks the other
+// way round — Max → Premium → free — because a nav row is a destination and the
+// paid ones lead; the picker is a catalog being read through, so it opens on
+// what the reader already has.)
 export const TILE_CATALOG: TileDef[] = [
   // ---- Markets: public data, included with every account ----
   {

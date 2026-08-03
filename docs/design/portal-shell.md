@@ -202,22 +202,23 @@ point is that the feature is discoverable rather than invisible.
 
 The sidebar's lower list. Sections a user lacks the role for are simply absent.
 
-Sections stack **free → Premium → Max** within each workspace, and a paid row
-carries its tier marker at the **right** of the row — a small gold **star**
-(`#EBCB74`) for Premium, an icy **gem** (`#B9F2FF`) for Max. The marker is drawn
-for everyone, including a member who already holds the tier: its job is to say
-what a row costs, not to act as a lock. A free row is marked with nothing.
+Sections stack **Max → Premium → free** within each workspace — the paid rows
+lead — and a paid row carries its tier marker at the **right** of the row: a
+small gold **star** (`#EBCB74`) for Premium, an icy **gem** (`#B9F2FF`) for Max.
+The marker is drawn for everyone, including a member who already holds the tier:
+its job is to say what a row costs, not to act as a lock. A free row is marked
+with nothing.
 
-- **My Terminal** — **Live Wall** · Net Worth · To Do · Premium Features ·
-  Preferences · Settings · Trading Team *(gem)*
-- **Markets** — Market News · Market Data *(star)*
-- **Advanced Trading** — Trading Alerts · Trade Analysis · Manual Trades ·
-  Deleted Trades · Strategy Sessions *(star)* · Funded Account *(star, nested
-  opt-in)* · Trade Desk *(gem)*
+- **My Terminal** — Trading Team *(gem)* · **Live Wall** · Net Worth · To Do ·
+  Premium Features · Preferences · Settings
+- **Markets** — Market Data *(star)* · Market News
+- **Advanced Trading** — Trade Desk *(gem)* · Strategy Sessions *(star)* ·
+  Funded Account *(star, nested opt-in)* · Trading Alerts · Trade Analysis ·
+  Manual Trades · Deleted Trades
 - **Investments** — Portfolio Overview · Accounts · Holdings · Allocation ·
   Performance · Dividends & Income · Contributions & Goals · Projections
-- **Studies** — Study Game · Flashcards · Practice Tests ·
-  Study Presentations · Progress · Study Creation *(star)*
+- **Studies** — Study Creation *(star)* · Study Game · Flashcards ·
+  Practice Tests · Study Presentations · Progress
 - **Admin Terminal** — Users · Administrator Log · Admin Guidelines · Teams ·
   Badges · Message Templates · Patch Notes · Early Access · Bug Reports · Support
 - **Developer Terminal** — Developer Blog · AI Instructions · Site Wording ·
@@ -225,8 +226,9 @@ what a row costs, not to act as a lock. A free row is marked with nothing.
 - **Site Help** — How to · Announcements · Patch notes · Report a bug ·
   Suggestion · Rules & Conduct · Terms of Service · Privacy Policy
 
-The **Live Wall leads My Terminal**, and is the screen a sign-in opens on. It is
-the terminal's one board: a drag-resize grid of tiles drawn from every workspace
+The **Live Wall is the screen a sign-in opens on** (My Terminal's row order puts
+the paid Trading Team above it; what a workspace opens on is a separate thing
+from what sits at the top of its list). It is the terminal's one board: a drag-resize grid of tiles drawn from every workspace
 — charts, quotes, headlines and the calendar, the desk's open and closed trades,
 the reader's net worth, portfolio and to-do list, study progress, team messages.
 Every account gets three built-in layouts; arranging and saving your own is
