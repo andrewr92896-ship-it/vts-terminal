@@ -99,7 +99,6 @@ import type {
   MyPortalData,
   MyTeam,
   TeamMemberPermissions,
-  NavOrderOverride,
   InvestmentPortfolio,
   InvestmentAccountInput,
   InvestmentHoldingInput,
@@ -487,17 +486,6 @@ export const api = {
   },
   adminResetHowto(screen: string): Promise<{ ok: boolean }> {
     return request(`/api/admin/site-content/howto/${screen}`, { method: 'DELETE' });
-  },
-  // ---- Sidebar layout (workspace + section ordering) ----
-  // Any signed-in user reads the effective order; only a founder can change it.
-  navLayout(): Promise<{ order: NavOrderOverride | null }> {
-    return request('/api/nav-layout');
-  },
-  adminSaveNavLayout(order: NavOrderOverride): Promise<{ ok: boolean; order: NavOrderOverride }> {
-    return request('/api/admin/nav-layout', { method: 'PUT', body: JSON.stringify(order) });
-  },
-  adminResetNavLayout(): Promise<{ ok: boolean; order: null }> {
-    return request('/api/admin/nav-layout', { method: 'DELETE' });
   },
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');

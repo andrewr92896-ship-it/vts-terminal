@@ -1,0 +1,16 @@
+-- Drop the stored sidebar-order override.
+--
+-- The sidebar's order — the workspaces, and the sections within each — now lives
+-- only in the web app's theme/nav.ts and changes by editing that file and
+-- deploying (owner decision, 2026-08). The Developer Terminal editor that wrote
+-- this row, its three routes and the client-side apply step are all removed, so
+-- nothing reads the row any more.
+--
+-- It is deleted rather than left in place because a dormant override is a trap:
+-- the row would sit in app_settings claiming an order that no longer matches the
+-- code, and anything that ever read the key again — a restored backup, a future
+-- feature reusing the name — would silently resurrect a stale sidebar that the
+-- terminal no longer has any way to edit or clear.
+--
+-- One statement, so this file deliberately carries no statement separator.
+DELETE FROM `app_settings` WHERE `key` = 'nav.order';

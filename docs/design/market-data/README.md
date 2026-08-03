@@ -96,9 +96,9 @@ Resting row: text `#93A5C9`, icon `#5E7098`, transparent background, `9px 10px`
 padding, `8px` radius, `11px` gap, 13.5px/500. Hover: text `#E9EFFB`, background
 `rgba(255,255,255,.03)`.
 
-The founder can reorder sections in Developer Portal ▸ Sidebar Layout, so register
-the row through the same nav config as the others (`apps/web/src/theme/nav.ts`), not
-as a hard-coded position.
+Register the row through the same nav config as the others
+(`apps/web/src/theme/nav.ts`) — that array is the sidebar's order, and where the
+row sits in it is where it renders for everyone.
 
 ### 2. Top bar (existing component — no change)
 
