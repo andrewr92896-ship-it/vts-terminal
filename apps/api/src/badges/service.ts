@@ -233,27 +233,6 @@ export async function seedBadges(): Promise<void> {
       autoRole: 'admin' as string | null,
       position: 2,
     },
-    // Position designations — colour the holder's open positions across the desk
-    // (Live Wall, Trade Log / History, and trade notifications). See
-    // badges/designations.ts.
-    {
-      key: 'chief-strategist',
-      label: 'Chief Strategist',
-      icon: 'crown',
-      color: '#35c47b', // green
-      description: 'Chief Strategist — their open positions show in green across the desk.',
-      autoRole: null as string | null,
-      position: 3,
-    },
-    {
-      key: 'chief-analyst',
-      label: 'Chief Analyst',
-      icon: 'candlestick-chart',
-      color: '#ef5468', // red
-      description: 'Chief Analyst — their open positions show in red across the desk.',
-      autoRole: null as string | null,
-      position: 4,
-    },
   ];
   for (const b of builtins) {
     const exists = (await db.select({ id: badgeTypes.id }).from(badgeTypes).where(eq(badgeTypes.key, b.key)).limit(1))[0];

@@ -15,7 +15,6 @@ import { notifyTraderIds, visibleTraderIds, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
 import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 import { beforeCutoff, connectionCutoffs } from './connections.js';
-import { designationsFor, type TradeDesignation } from '../badges/designations.js';
 import type { LiveTrade } from './types.js';
 
 // A position opened within this window is treated as a fresh fill worth a push;
@@ -157,12 +156,11 @@ export async function reconcile(
   // though every viewer's poll calls reconcile.
   const hasEvents = opened.length > 0 || closed.length > 0 || retargeted.length > 0;
   const teamIds = hasEvents ? await notifyTraderIds(userId) : new Set<string>();
-  // When the owner holds a position designation (Chief Strategist / Chief
-  // Analyst), lead the notification with its coloured circle + label so the
-  // "colour designation" carries into the push/Pushover text.
-  const desig = hasEvents ? (await designationsFor([userId])).get(userId) ?? null : null;
-  const tag = desig ? `${desig.emoji} ${desig.label} · ` : '';
-  const who = `${tag}${ownerName ? `${ownerName} · ` : ''}`;
+  // A trade notification names the trader and nothing more. It used to lead with
+  // a coloured "Chief Strategist" / "Chief Analyst" tag; both badges were removed
+  // (owner decision, 2026-08) — a push announcing one teammate's fill under a
+  // title like that reads as a call being handed to the desk.
+  const who = ownerName ? `${ownerName} · ` : '';
   for (const t of opened) {
     const body = `${who}${t.side.toUpperCase()} ${t.units}${t.entryPrice ? ` @ ${t.entryPrice}` : ''}`;
     void sendToTradingDesk({
@@ -255,9 +253,6 @@ export interface HistoryRecord {
   openedAt: number | null;
   closedAt: number | null;
   code: string | null; // desk code MMDDYY-N, shared with the Trade Log
-  // The owner's position designation (Chief Strategist / Chief Analyst), when
-  // they hold one — colours the row. Null otherwise. Filled in by getHistory.
-  designation: TradeDesignation | null;
 }
 
 export interface HistoryGroup {
@@ -325,7 +320,6 @@ function toRecord(
     openedAt: row.openedAt ? row.openedAt.getTime() : null,
     closedAt: row.closedAt ? row.closedAt.getTime() : null,
     code: null, // filled in by getHistory from the desk-wide code index
-    designation: null, // filled in by getHistory from the owner's badges
   };
 }
 
@@ -539,13 +533,9 @@ export async function getHistory(
   const decided = wins + losses;
 
   const codes = await deskTradeCodeIndex(scopeIds);
-  // Colour each row by its owner's position designation (Chief Strategist /
-  // Chief Analyst), when they hold one.
-  const designations = await designationsFor(visible.map((r) => r.pos.userId));
   const trades = rows.map((r) => {
     const rec = toRecord(r, ownerOf.get(r.id) ?? '', viewerId, canSeeBalances);
     rec.code = codes.get(r.id) ?? null;
-    rec.designation = designations.get(r.userId) ?? null;
     return rec;
   });
 

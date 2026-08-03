@@ -75,8 +75,8 @@ export function DeskSettingsModal({
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   // Whose settings are being edited, and the roster the caller may switch
-  // between. A desk lead (team leader / Chief Analyst / Chief Strategist / admin)
-  // sees their whole team here; everyone else sees only themselves.
+  // between. A desk lead (team leader / admin) sees their whole team here;
+  // everyone else sees only themselves.
   const [members, setMembers] = useState<DeskMember[]>([]);
   const [targetId, setTargetId] = useState<string>('');
   const [mode, setMode] = useState<BreakEvenMode>('percent');
@@ -302,9 +302,9 @@ export function DeskSettingsModal({
         </div>
 
         <div style={{ padding: 18 }}>
-          {/* Whose settings — a desk lead (team leader / Chief Analyst / Chief
-              Strategist / admin) can pick a teammate and edit theirs. Hidden for
-              everyone else, who only ever see their own. */}
+          {/* Whose settings — a desk lead (team leader / admin) can pick a
+              teammate and edit theirs. Hidden for everyone else, who only ever
+              see their own. */}
           {members.length > 1 && (
             <div style={{ marginBottom: 16 }}>
               <label htmlFor="desk-whose" style={{ ...sectionLabel, marginTop: 0, display: 'block', marginBottom: 6 }}>

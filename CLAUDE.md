@@ -379,12 +379,15 @@ workspaces list** (see `theme/nav.ts` order).
     `(owner_id, instrument)`; `owner_id = userId`, or `'desk'` for the shared
     default a trader falls back to before customizing), and the "ignore test
     trades" floor all govern **that trader's own view** of the desk. A trader
-    edits their own; a **desk lead** — team leader, Chief Analyst / Chief
-    Strategist designation, or admin/founder — can edit any **teammate's** via
-    the `?userId=` param, gated by `trading/deskAccess.ts`
-    (`canEditDeskSettingsFor` / `editableDeskMembers`). The `DeskSettingsModal`
-    "Whose settings" picker surfaces this. `getTrades` / `getHistory` /
-    `getLiveWall` score each viewer's desk with the **viewer's own** settings.
+    edits their own; a **desk lead** — team leader or admin/founder — can edit
+    any **teammate's** via the `?userId=` param, gated by
+    `trading/deskAccess.ts` (`canEditDeskSettingsFor` / `editableDeskMembers`).
+    The `DeskSettingsModal` "Whose settings" picker surfaces this. `getTrades` /
+    `getHistory` / `getLiveWall` score each viewer's desk with the **viewer's
+    own** settings.
+    - **A badge never grants this**, and no badge may again. Holding the Chief
+      Analyst / Chief Strategist designation used to make somebody a desk lead;
+      both were removed outright (see Position designations below).
   - **Market Data** (`data`, `workspaces/trading/MarketData.tsx` — now a
     **Markets** section, files unchanged) is the desk's
     read-only board of every rate, print and price it watches: 75 series across
@@ -1634,6 +1637,41 @@ act on the same team:
   Because membership is `team_id`, the My Terminal team **is** the trade-scoping
   team — the two are one. (Consequence: the Studies delete gate, keyed on team
   leadership, is now live — non-leader members can't delete team study content.)
+
+### Position designations — REMOVED, do not rebuild
+
+**Chief Strategist and Chief Analyst are gone** (owner decision, 2026-08, for
+risk management). A title naming one trader the desk's analyst or strategist
+implies they are advising the rest, and that is the advice-giving posture the
+whole product is built to stay out of — the same reason Investments carries no
+target allocation and gives no buy/sell guidance.
+
+They were one feature spanning three layers, and **all three are removed**:
+
+- **The two badges** (`chief-strategist` / `chief-analyst`), seeded builtin in
+  `badges/service.ts`. Migration `0099` deletes the `badge_types` rows, strips
+  the keys out of every user's `users.badges` array, and clears any
+  `user_team_members.badge` cosmetic title reading "Chief Strategist"/"Chief
+  Analyst". It rebuilds the JSON array with `json_group_array` over `json_each`
+  rather than editing the JSON text, so other badges survive untouched. Deleting
+  the rows is what `seedBadges` cannot do on its own — it only ever inserts what
+  is missing, so a builtin badge left in code would be re-seeded forever.
+- **The colouring and ranking.** `badges/designations.ts` and the web's
+  `DesignationTag.tsx` are deleted. A position is no longer tinted, accented,
+  icon-tagged or sorted by whose it is, on the Live Wall, Trade Log, History, the
+  iOS widget, or anywhere else. **The off-book (funded/FTP) gray tint and its
+  last-place sort stay** — that is a fact about the account, not about the
+  person; `tileTint` moved into `TradeCard.tsx`, its only remaining caller.
+  Trade open/close notifications name the trader and nothing more.
+- **The permission.** Holding a designation used to make a trader a *desk lead*
+  (able to edit teammates' Trade Analysis settings). `isDeskLead` is now team
+  leader or admin/founder only. **Do not add a badge-derived permission here** —
+  a cosmetic label should never be an access-control input.
+
+`BADGE_PRESETS` (`userTeams/service.ts`) is down to `Risk Manager` / `Lead
+Trader`. That field is still **free text** up to 40 chars, so a team leader can
+type any title they like; there is deliberately no blocklist, since one would be
+trivially defeated by a space or a spelling and would give false assurance.
 
 ### Who may delete a trade (`trading/deleteAccess.ts`)
 

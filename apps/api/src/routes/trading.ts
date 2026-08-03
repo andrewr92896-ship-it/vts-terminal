@@ -272,8 +272,8 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   // ---- Desk settings (per trader) ----
   // Each trader has their own settings; a `?userId=` targets a teammate's, which
-  // only a desk lead (team leader / Chief Analyst / Chief Strategist / admin) may
-  // read or change (canEditDeskSettingsFor). The response carries `instruments`
+  // only a desk lead (team leader / admin) may read or change
+  // (canEditDeskSettingsFor). The response carries `instruments`
   // (every symbol the team has traded, for the buffer picker), the resolved
   // `userId`, and `editableMembers` — the roster the caller may switch between.
   app.get('/api/trading/desk-settings', read, async (request, reply) => {

@@ -21,7 +21,6 @@ import {
 import { resolveOandaPricingConfig } from './priceSource.js';
 import { isDemoUser } from '../demo/identity.js';
 import { getDeskSettings } from './settings.js';
-import { designationsFor, designationRank } from '../badges/designations.js';
 import { pushConfigured } from '../notifications/push.js';
 import { pushoverConfigured } from '../notifications/pushover.js';
 import { config } from '../config.js';
@@ -41,27 +40,20 @@ function newestFirst(a: LiveTrade, b: LiveTrade): number {
   return (b.openedAt ?? -Infinity) - (a.openedAt ?? -Infinity);
 }
 
-// Sort rank for the Live Wall order: Chief Strategist (0) on top, then Chief
-// Analyst (1), then the rest of the on-book positions (2), then every off-book
-// (funded/FTP) position last (99) — regardless of who placed it. Requires the
-// designation to already be attached (see withDesignations).
+// Sort rank for the Live Wall order: on-book positions first (0), then every
+// off-book (funded/FTP) position last (99) — regardless of who placed it.
+//
+// Nobody's positions float above anyone else's any more. The wall used to rank
+// the Chief Strategist's positions on top and the Chief Analyst's next; both
+// badges were removed (owner decision, 2026-08) because ordering one trader's
+// calls above the desk's implies the desk should be following them.
 function wallOrderRank(t: LiveTrade): number {
-  if (t.broker === 'ftp') return 99; // off-book always sinks to the bottom
-  return designationRank(t.designation?.key);
+  return t.broker === 'ftp' ? 99 : 0;
 }
 
 // Order the wall by rank, newest-first within each group.
 function byWallOrder(a: LiveTrade, b: LiveTrade): number {
   return wallOrderRank(a) - wallOrderRank(b) || newestFirst(a, b);
-}
-
-// Tag each position with its owner's designation (Chief Strategist / Chief
-// Analyst), when they hold one, so the wall can colour and rank it. Mutates in
-// place and returns the same array for chaining.
-async function withDesignations(trades: LiveTrade[]): Promise<LiveTrade[]> {
-  const designations = await designationsFor(trades.map((t) => t.ownerId));
-  for (const t of trades) t.designation = designations.get(t.ownerId) ?? null;
-  return trades;
 }
 
 // Optionally strip open P/L (an account balance) from the wall. The trading desk
@@ -314,10 +306,9 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
       ownerId: user.id,
       owner: user.username,
     }));
-    const trades = (
-      await withDesignations(
-        gateBalances(enrichForex(withSlippage([...sample, ...fundedLive]), 'USD'), canSeeBalances),
-      )
+    const trades = gateBalances(
+      enrichForex(withSlippage([...sample, ...fundedLive]), 'USD'),
+      canSeeBalances,
     ).sort(byWallOrder);
     const brokers: BrokerLiveResult[] = BROKER_META.map((m) => ({
       connectionId: `sample-${m.key}`,
@@ -373,11 +364,9 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
 
   // Fold funded/prop positions in only after reconcile, so they show on the wall
   // but never land in tradingPositions (Trade Log / History / Live Brokers).
-  // Designations/gate/sort stay per-viewer (cheap), so each viewer's card is
-  // unchanged; funded is per-viewer too and never pollutes the cached snapshot.
-  const trades = (
-    await withDesignations(gateBalances([...snap.withSlip, ...fundedLive], canSeeBalances))
-  ).sort(byWallOrder);
+  // Gate/sort stay per-viewer (cheap), so each viewer's card is unchanged;
+  // funded is per-viewer too and never pollutes the cached snapshot.
+  const trades = gateBalances([...snap.withSlip, ...fundedLive], canSeeBalances).sort(byWallOrder);
 
   return { source: 'live', generatedAt: snap.generatedAt, canSeeBalances, brokers: snap.brokers, trades, note: snap.note, breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides };
 }
