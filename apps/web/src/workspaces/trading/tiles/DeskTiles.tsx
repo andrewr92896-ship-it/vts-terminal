@@ -97,8 +97,12 @@ const RANGE_OPTIONS = [
 // Reading the payload's whole-book summary while showing a 7-day slice would put
 // a win rate beside a set of trades that did not produce it.
 function scoreWindow(trades: HistoryRecord[], range: string) {
-  const cutoff =
-    range === 'all' ? 0 : Date.now() - { '7d': 7, '30d': 30, '90d': 90 }[range]! * 86_400_000;
+  // A stored board's JSON is not re-validated on read (boards.ts parses it
+  // defensively and no more), so an unrecognized window falls back to the whole
+  // book rather than producing a NaN cutoff — which would silently score zero
+  // trades and read as "no closed trades in this window".
+  const days: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
+  const cutoff = days[range] ? Date.now() - days[range] * 86_400_000 : 0;
   const rows = trades.filter((t) => (t.closedAt ?? 0) >= cutoff);
   let wins = 0;
   let losses = 0;

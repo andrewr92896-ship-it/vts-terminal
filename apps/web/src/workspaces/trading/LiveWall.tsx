@@ -120,11 +120,13 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
               <span style={data.source === 'sample' ? sampledPill : livePill}>{data.source === 'sample' ? 'Sample data' : 'Live'}</span>
             )}
           </div>
-          {/* Master (charts board) ⇄ Positions view toggle — the Positions half
-              is the desk, so the toggle only appears with Advanced Trading. */}
+          {/* Board ⇄ Positions view toggle — the Positions half is the desk, so
+              the toggle only appears with Advanced Trading. (It said "Master"
+              when the board was only charts; it now carries every workspace, so
+              "Board" is what it is.) */}
           {desk && (
             <div style={segWrap}>
-              <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>{"Master"}</button>
+              <button onClick={() => setView('charts')} style={segBtn(view === 'charts')}>{"Board"}</button>
               <button onClick={() => setView('positions')} style={segBtn(view === 'positions')}>{"Positions"}</button>
             </div>
           )}
@@ -157,7 +159,7 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
         </>
       )}
 
-      {/* Master board — kept mounted (just hidden) when the Positions view is
+      {/* The board — kept mounted (just hidden) when the Positions view is
           open, so the preset you have open and any unsaved edits survive
           switching to Positions and back. */}
       <div style={{ display: showPositions ? 'none' : 'block' }}>

@@ -12,7 +12,7 @@ import type { BoardTile, BoardTileKind, PremiumFeature, TradingBoard } from '../
 import { MobileScrollLockBar } from './scrollLock';
 import { useContentWidth } from '../../lib/measure';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input } from './tvChart';
-import { DESK_TILE_KINDS, newTile, tileDef, tileLock } from './tileCatalog';
+import { newTile, tileDef, tileLock } from './tileCatalog';
 import { PRESET_LAYOUTS, buildPreset, presetLayout } from './presetLayouts';
 import { BoardTileView } from './tiles';
 import { TilePicker } from './tiles/TilePicker';
@@ -669,10 +669,6 @@ function LayoutPicker({
     </>
   );
 }
-
-// Re-exported so the Live Wall (and the server mirror's client twin) can keep
-// reading the desk-tile set from one place.
-export { DESK_TILE_KINDS };
 
 // react-grid-layout drag/resize visuals themed to the navy/gold desk.
 const PLACEHOLDER_CSS = `
