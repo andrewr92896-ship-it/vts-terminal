@@ -138,10 +138,6 @@ export function PremiumFeatures({ theme }: { theme: Theme }) {
       <section style={{ ...panel(theme), marginTop: 16 }}>
         <div style={panelLabel}>{"Included with every account"}</div>
         <div style={{ display: 'grid', gap: 10 }}>
-          <IncludedRow icon="globe" title="Markets">
-            Live charts, watchlists, market headlines, the economic calendar and
-            the market-data board.
-          </IncludedRow>
           <IncludedRow icon="landmark" title="Investments">
             Your long-term portfolio — retirement accounts, holdings, allocation
             and performance.
@@ -150,7 +146,8 @@ export function PremiumFeatures({ theme }: { theme: Theme }) {
             Study games, flashcards, practice tests and study guides.
           </IncludedRow>
           <IncludedRow icon="briefcase" title="My Terminal">
-            Your own summary, your trading team, and your settings.
+            Your Live Wall, market headlines and the economic calendar, your net
+            worth, your trading team, and your settings.
           </IncludedRow>
           <IncludedRow icon="life-buoy" title="Site Help">
             How-to guides, announcements, patch notes, and the bug and suggestion

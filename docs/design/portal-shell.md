@@ -174,7 +174,6 @@ The **only** thing that changes between workspaces. Backgrounds never do.
 | Workspace | Accent | Icon | Sidebar group label |
 |---|---|---|---|
 | My Terminal *(pinned first)* | `#34D399` emerald | `briefcase` | My Terminal |
-| Markets | `#5AC8FA` sky | `globe` | Markets |
 | Advanced Trading *(opt-in)* | `#EBCB74` gold | `candlestick-chart` | Advanced Trading |
 | Investments | `#2DD4BF` teal | `landmark` | Investments |
 | Studies | `#B69CFF` violet | `graduation-cap` | Studies |
@@ -209,9 +208,10 @@ The marker is drawn for everyone, including a member who already holds the tier:
 its job is to say what a row costs, not to act as a lock. A free row is marked
 with nothing.
 
-- **My Terminal** — Trading Team *(gem)* · **Live Wall** · Net Worth · To Do ·
-  Premium Features · Preferences · Settings
-- **Markets** — Market Data *(star)* · Market News
+- **My Terminal** — Trading Team *(gem)* · Market Data *(star)* · Market News ·
+  **Live Wall** · Net Worth · To Do · Premium Features · Preferences · Settings
+  *(Market Data and Market News are kept adjacent — they are read as a pair, so
+  Market News leads the free rows rather than the Live Wall.)*
 - **Advanced Trading** — Trade Desk *(gem)* · Strategy Sessions *(star)* ·
   Funded Account *(star, nested opt-in)* · Trading Alerts · Trade Analysis ·
   Manual Trades · Deleted Trades
@@ -227,8 +227,8 @@ with nothing.
   Suggestion · Rules & Conduct · Terms of Service · Privacy Policy
 
 The **Live Wall is the screen a sign-in opens on** (My Terminal's row order puts
-the paid Trading Team above it; what a workspace opens on is a separate thing
-from what sits at the top of its list). It is the terminal's one board: a drag-resize grid of tiles drawn from every workspace
+the paid Trading Team and the market-watching pair above it; what a workspace
+opens on is a separate thing from what sits at the top of its list). It is the terminal's one board: a drag-resize grid of tiles drawn from every workspace
 — charts, quotes, headlines and the calendar, the desk's open and closed trades,
 the reader's net worth, portfolio and to-do list, study progress, team messages.
 Every account gets three built-in layouts; arranging and saving your own is

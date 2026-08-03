@@ -11,14 +11,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.58';
+export const APP_VERSION = 'Beta V 6.59';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.59',
+    date: 'August 3, 2026',
+    notes: [
+      'Removed the Chief Strategist and Chief Analyst titles. Both badges are gone from Admin ▸ Badges and from the Trading Team title list, and any that were already given out have been cleared. Positions are no longer colour-coded or sorted by whose they are — the Live Wall, Trade Log and History now read the same for everyone, and trade notifications name the trader without a title. Changing a teammate’s Trade Analysis settings now takes team leadership or an admin.',
+    ],
+  },
   {
     version: 'Beta V 6.58',
     date: 'August 3, 2026',
     notes: [
-      'Removed the Chief Strategist and Chief Analyst titles. Both badges are gone from Admin ▸ Badges and from the Trading Team title list, and any that were already given out have been cleared. Positions are no longer colour-coded or sorted by whose they are — the Live Wall, Trade Log and History now read the same for everyone, and trade notifications name the trader without a title. Changing a teammate’s Trade Analysis settings now takes team leadership or an admin.',
+      'The Markets workspace is gone. Market Data and Market News are My Terminal sections now, sitting together just above the Live Wall — one place for everything you watch. Nothing was removed and nothing changed about who can reach what: both screens work exactly as before, and signing in still opens the Live Wall.',
     ],
   },
   {

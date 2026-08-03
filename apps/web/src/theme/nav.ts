@@ -35,6 +35,20 @@ export const NAV: NavWorkspace[] = [
     sections: [
       // Max — first, per the Max → Premium → free stacking below.
       { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      // The two market-watching screens, kept **adjacent** (owner decision,
+      // 2026-08) — they came here together when the Markets workspace was
+      // dissolved, and they are read as a pair. That is why Market News leads
+      // the free rows rather than the Live Wall: `data` is Premium and has to
+      // sit above the free rows per the stacking below, so the only way the pair
+      // stays together is for `news` to follow it. Both read public market data
+      // — no trade, no broker, no balance — and their keys stay `data` and
+      // `news`, so the howto wording and every in-app link keep working.
+      //
+      // Premium — the series board. The economic calendar and the FOMC
+      // countdown on that same screen stay free.
+      { key: 'data', label: 'Market Data', icon: 'line-chart' },
+      // Free.
+      { key: 'news', label: 'Market News', icon: 'newspaper' },
       // Free. The Live Wall is the terminal's one centralized board (owner
       // decision, 2026-08) and is still what a sign-in opens on —
       // DEFAULT_SCREEN.myportal is `live`, which is a separate thing from where
@@ -61,28 +75,11 @@ export const NAV: NavWorkspace[] = [
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
   },
-  // Markets — included with every account, no opt-in. Everything here reads
-  // public market data: nothing on these screens touches a trade, a broker or a
-  // balance, which is exactly why they can sit outside the Advanced Trading
-  // opt-in. (The Live Wall moved to the top of My Terminal — it draws on every
-  // workspace now, not just this one, so it belongs with the reader rather than
-  // under Markets.)
-  {
-    key: 'markets',
-    label: 'Markets',
-    icon: 'globe',
-    accent: '#5AC8FA',
-    group: 'Markets',
-    sections: [
-      // Premium — the series board. The economic calendar and FOMC countdown on
-      // that screen stay free. (DEFAULT_SCREEN.markets stays `news`: the top row
-      // of a workspace is not what it opens on, and landing a free account on a
-      // screen it cannot reach would be the worst of both.)
-      { key: 'data', label: 'Market Data', icon: 'line-chart' },
-      // Free.
-      { key: 'news', label: 'Market News', icon: 'newspaper' },
-    ],
-  },
+  // (The Markets workspace was dissolved — owner decision, 2026-08. Its two
+  // sections, Market Data and Market News, are My Terminal sections now; the
+  // Live Wall had already moved there. Nothing was removed: the screens, their
+  // keys and their routes are unchanged, so the howto wording and every in-app
+  // link still resolve.)
   // Advanced Trading — opt-in (My Terminal ▸ Premium Features). The desk: placing
   // trades, reviewing them, alerts, sessions, and the hand-kept manual book.
   {

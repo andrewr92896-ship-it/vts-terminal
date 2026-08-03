@@ -11,9 +11,9 @@ import {
 } from '../notifications/push.js';
 
 // Phone push (Web Push) subscription management. On requireMarkets (signed in),
-// deliberately NOT the Advanced Trading opt-in: price alerts are a Markets
-// feature included with every account, so gating the delivery channel behind the
-// desk left a Markets-only user able to set an alert and never be told it fired.
+// deliberately NOT the Advanced Trading opt-in: price alerts are included with
+// every account, so gating the delivery channel behind the desk left a user who
+// has not turned it on able to set an alert and never be told it fired.
 // What each subscriber is actually sent is still filtered per event. The public
 // demo is read-only and never reaches a write here.
 

@@ -3,7 +3,6 @@
 // lives in theme/nav.ts, the single source of truth.)
 
 export type WorkspaceKey =
-  | 'markets'
   | 'trading'
   | 'investments'
   | 'studies'
@@ -44,21 +43,9 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
     accent2: '#C9A24B',
     accentText: '#0c2768',
   },
-  // Markets: the always-on market-watching workspace — the chart/news board,
-  // headlines and the market-data board. It shares Advanced Trading's navy
-  // ground (it is the same market, read the same way) but signals with a cooler
-  // sky-blue rather than the desk's gold, so the two are never confused: gold
-  // means you can place a trade, blue means you are watching.
-  markets: {
-    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0b2a52 0%,#060f24 55%)',
-    headerBg: 'linear-gradient(90deg,#0a2350 0%,#0d3068 100%)',
-    headerBorder: '#1c4278',
-    navBg: '#0a1834',
-    navBorder: '#16294f',
-    accent: '#5AC8FA',
-    accent2: '#3AA0D8',
-    accentText: '#062033',
-  },
+  // (There is no `markets` theme — the Markets workspace was dissolved into My
+  // Terminal, owner decision 2026-08. Market Data and Market News render on My
+  // Terminal's emerald now.)
   // Investments: a calm teal accent for the long-term, layman-friendly portfolio
   // tracker (401k / IRA / ESA / general holdings). Distinct from the Advanced
   // Trading gold and My Terminal's greener emerald — teal signals steady, long-hold
@@ -128,8 +115,6 @@ export function accentGradient(t: Theme): string {
 }
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
-  // Markets lands on the news feed now that the Live Wall leads My Terminal.
-  markets: 'news',
   trading: 'tradedesk',
   investments: 'inv_overview',
   studies: 'st_game',
@@ -142,7 +127,6 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
 };
 
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
-  markets: 'Markets',
   trading: 'Advanced Trading',
   investments: 'Investments',
   studies: 'Studies',
