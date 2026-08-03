@@ -34,7 +34,7 @@ const SLOW = 120_000;
 // here, so the tile and the screen can never disagree about a win rate.
 export function TradeLogTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.tradingHistory(), SLOW);
+  const { data, error } = useTileData('trading:history', () => api.tradingHistory(), SLOW);
   const range = tile.range ?? '30d';
 
   const scoped = useMemo(() => scoreWindow(data?.trades ?? [], range), [data, range]);
@@ -136,7 +136,7 @@ function scoreWindow(trades: HistoryRecord[], range: string) {
 
 export function ClosedTradesTile({ tile, editing, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.tradingHistory(), SLOW);
+  const { data, error } = useTileData('trading:history', () => api.tradingHistory(), SLOW);
   const limit = tile.limit ?? 8;
 
   const rows = useMemo(
@@ -193,7 +193,7 @@ export function ClosedTradesTile({ tile, editing, onRemove }: TileProps) {
 // their own note about their plan, not a recommendation from the terminal, and
 // the footer says so.
 export function SessionsTile({ tile, editing, onRemove }: TileProps) {
-  const { data, error } = useTileData(() => api.tradingSessions(), MEDIUM);
+  const { data, error } = useTileData('trading:sessions', () => api.tradingSessions(), MEDIUM);
   // Active-now first, then opening soon, then idle — the same order the Strategy
   // Sessions screen groups them in, so the tile's top row is the one that
   // matters right now.
@@ -256,7 +256,7 @@ const BIAS_LABEL: Record<SessionBias, string> = { bull: 'Bull', bear: 'Bear', bo
 // Net Worth excludes a funded account and names it rather than adding it in.
 export function FundedTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.funded(), SLOW);
+  const { data, error } = useTileData('trading:funded', () => api.funded(), SLOW);
   const accounts = data?.accounts ?? [];
   const account = tile.accountId ? accounts.find((a) => a.id === tile.accountId) : accounts[0];
 
@@ -316,7 +316,7 @@ export function FundedTile({ tile, editing, onChange, onRemove }: TileProps) {
 // Live Brokers screen leads with, so the tile leads with the same one.
 export function CapitalTile({ tile, editing, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData(() => api.oandaCapital(), MEDIUM);
+  const { data, error } = useTileData('trading:capital', () => api.oandaCapital(), MEDIUM);
   const accounts = data?.accounts ?? [];
 
   return (

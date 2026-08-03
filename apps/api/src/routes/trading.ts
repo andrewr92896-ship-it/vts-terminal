@@ -461,22 +461,27 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { prefs };
   });
 
-  // ---- Live Wall boards (per-user customizable chart/watchlist presets) ----
-  // The board is the Markets workspace's own screen, so it is open to everyone.
-  // What differs is how much of it a user gets: without Advanced Trading they
-  // keep ONE board (no named presets to switch between) and only the tiles that
-  // read public market data. Both limits are applied here, not just in the UI.
+  // ---- Live Wall boards (the per-user saved arrangements) ----
+  // Reading is open to everyone — a free account gets the three built-in
+  // layouts, which is a working screen. Saving your own is `customBoards`
+  // (`boardWrite`). What the Advanced Trading opt-in still decides is which
+  // TILES a board may carry: the desk-reading kinds are stripped from anything a
+  // non-desk user saves. Applied here, not just in the UI.
   app.get('/api/trading/boards', markets, async (request) => ({ boards: await listBoards(request.currentUser!.id) }));
   app.post('/api/trading/boards', boardWrite, async (request, reply) => {
     const parsed = createBoardSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name is required' });
     const userId = request.currentUser!.id;
     const full = (await featuresForUser(request.currentUser!)).advancedTrading;
-    if (!full && (await listBoards(userId)).length >= 1) {
-      return reply
-        .code(400)
-        .send({ error: 'Saved presets are part of Advanced Trading — edit your board instead' });
-    }
+    // How MANY boards you may keep follows the MEMBERSHIP, not the desk opt-in.
+    //
+    // It used to cap a non-desk user at one board, from when the wall was a
+    // charts screen and named presets read as a desk feature. They are not:
+    // saving your own arrangement is `customBoards`, which `boardWrite` has
+    // already checked above — so anyone reaching this line has paid for exactly
+    // this. Capping them as well charged a Premium member for presets and then
+    // gave them one, on the grounds of a switch that has nothing to do with it.
+    // What the desk still decides is which TILES a board may carry, below.
     try {
       const board = await createBoard(userId, { ...parsed.data, layout: allowedLayout(parsed.data.layout, full) });
       return { board, boards: await listBoards(userId) };

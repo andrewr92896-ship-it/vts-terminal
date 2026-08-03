@@ -11,8 +11,9 @@ import { TierMark } from '../../components/TierMark';
 import type { BoardTile, BoardTileKind, PremiumFeature, TradingBoard } from '../../api/types';
 import { MobileScrollLockBar } from './scrollLock';
 import { useContentWidth } from '../../lib/measure';
+import { useResponsive } from '../../hooks/useMediaQuery';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input } from './tvChart';
-import { newTile, tileDef, tileLock } from './tileCatalog';
+import { newTile, tileDef, tileLabel, tileLock } from './tileCatalog';
 import { PRESET_LAYOUTS, buildPreset, presetLayout } from './presetLayouts';
 import { BoardTileView } from './tiles';
 import { TilePicker } from './tiles/TilePicker';
@@ -62,11 +63,16 @@ function rowsForPx(px: number): number {
 // decides what is offered.
 export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; onOpenMembership?: () => void }) {
   const { user } = useAuth();
+  const { isPhone } = useResponsive();
   const features = user?.access.features ?? { advancedTrading: desk, funded: false };
   const entitled = useCallback((f: PremiumFeature) => hasEntitlement(user, f), [user]);
   // Saving your own arrangement is the paid part. Without it the reader gets the
   // built-in layouts instead of an empty grid and a locked save button.
   const canCustomize = hasEntitlement(user, 'customBoards');
+  // Arranging a board is a desktop action. On a phone the wall renders as one
+  // column (see `layout`), and a drag there would write that flattened order
+  // back over the real arrangement — so editing is simply not offered.
+  const canEdit = canCustomize && !isPhone;
 
   // Remember the last-opened preset per user (per device) so returning to the
   // board — after toggling to Positions, a reload, or a new session — lands on
@@ -96,6 +102,10 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   // by tile id. These override the tile's stored h so the cell grows to fit every
   // trade; they are transient (never saved, never marked dirty).
   const [autoRows, setAutoRows] = useState<Record<string, number>>({});
+  // The tile blown up to fill the screen, if any. Held by id rather than by
+  // value so the overlay always renders the live tile — a setting changed while
+  // expanded is the same object the board is holding.
+  const [maxId, setMaxId] = useState<string | null>(null);
   const firstLoad = useRef(true);
   // The board's own width, read from the element rather than a resize entry —
   // see lib/measure.ts for why that distinction is the whole bug on iPhone.
@@ -188,6 +198,10 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCustomize]);
 
+  // Resolved from the live list, so a tile removed while expanded closes the
+  // overlay rather than leaving it showing something the board no longer has.
+  const maxTile = maxId ? (tiles.find((t) => t.id === maxId) ?? null) : null;
+
   const tilesJson = useMemo(() => JSON.stringify(tiles), [tiles]);
   const isUnsaved = activeId == null;
   const dirty = isUnsaved || tilesJson !== savedTilesJson;
@@ -200,27 +214,50 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     return m;
   }, [tiles, features, entitled]);
 
-  const layout: Layout[] = useMemo(
-    () =>
-      tiles.map((t) => {
-        // Expand positions tiles are sized by their measured content: lock the
-        // grid height to the reported row count so the cell grows per trade and
-        // can't be hand-resized shorter (which would reintroduce a scroll).
+  const layout: Layout[] = useMemo(() => {
+    // A phone gets ONE column, in the board's own reading order.
+    //
+    // The grid is a desktop idea: at twelve columns a four-wide tile is about a
+    // third of a 390px screen, which is not a tile, it is a sliver. Rather than
+    // a second mobile board to keep in sync, the same tiles stack full-width in
+    // the order they are arranged in — top-to-bottom, then left-to-right, which
+    // is how the desktop board reads anyway.
+    //
+    // The stored x/y/w are untouched: the phone only changes what is RENDERED,
+    // so opening the same board on a desktop finds the arrangement intact. That
+    // is also why editing is off here (see `canEdit`) — a drag on the phone
+    // would otherwise write this flattened order back over the real one.
+    if (isPhone) {
+      const ordered = [...tiles].sort((a, b) => a.y - b.y || a.x - b.x);
+      let y = 0;
+      return ordered.map((t) => {
         const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
-        const def = tileDef(t.kind);
-        return {
-          i: t.id,
-          x: t.x,
-          y: t.y,
-          w: t.w,
-          h: auto ?? t.h,
-          minW: def?.minW ?? 3,
-          minH: auto ?? def?.minH ?? 4,
-          ...(auto ? { maxH: auto } : {}),
-        };
-      }),
-    [tiles, autoRows],
-  );
+        // Give every tile a floor on a phone: a 3-row watchlist is legible in a
+        // 12-wide strip and unreadable as a full-width stub.
+        const h = Math.max(auto ?? t.h, tileDef(t.kind)?.minH ?? 4, 6);
+        const row = { i: t.id, x: 0, y, w: 1, h, minW: 1, minH: h, static: true };
+        y += h;
+        return row;
+      });
+    }
+    return tiles.map((t) => {
+      // Expand positions tiles are sized by their measured content: lock the
+      // grid height to the reported row count so the cell grows per trade and
+      // can't be hand-resized shorter (which would reintroduce a scroll).
+      const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
+      const def = tileDef(t.kind);
+      return {
+        i: t.id,
+        x: t.x,
+        y: t.y,
+        w: t.w,
+        h: auto ?? t.h,
+        minW: def?.minW ?? 3,
+        minH: auto ?? def?.minH ?? 4,
+        ...(auto ? { maxH: auto } : {}),
+      };
+    });
+  }, [tiles, autoRows, isPhone]);
 
   const onLayoutChange = useCallback(
     (next: Layout[]) => {
@@ -295,22 +332,10 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   const save = async () => {
     if (saving) return;
     if (isUnsaved) {
-      // Without the desk there are no named presets, so the one board saves
-      // straight through under a fixed name instead of prompting for one.
-      if (!desk) {
-        setSaving(true);
-        try {
-          const { board, boards: list } = await api.createBoard({ name: 'My board', layout: { tiles }, isDefault: true });
-          setBoards(list);
-          applyBoard(board);
-          setError(null);
-        } catch (e) {
-          setError(e instanceof ApiError ? e.message : 'Could not save the board');
-        } finally {
-          setSaving(false);
-        }
-        return;
-      }
+      // Naming it is the same step for everybody now: how many boards you may
+      // keep follows the membership rather than the desk opt-in, so a Markets-
+      // only member who paid for custom boards gets real presets like anyone
+      // else, instead of one board silently called "My board".
       setNamePrompt({ mode: 'create', value: name });
       return;
     }
@@ -397,7 +422,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
           onPickBuiltIn={(k) => confirmSwitch(() => applyBuiltIn(k))}
         />
 
-        {canCustomize ? (
+        {canEdit ? (
           <>
             <button onClick={() => setEditing((v) => !v)} style={editing ? goldBtn : ghostBtn}>
               {editing ? '✓ Done editing' : '✎ Edit layout'}
@@ -405,22 +430,24 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
             {editing && (
               <>
                 <TilePicker onAdd={addTile} onOpenMembership={onOpenMembership} />
-                {desk && !isUnsaved && (
+                {/* The board actions follow the membership, not the desk — see
+                    `save` above. They only need a board to act on. */}
+                {!isUnsaved && (
                   <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>
                     {"Rename"}
                   </button>
                 )}
-                {desk && !isUnsaved && (
+                {!isUnsaved && (
                   <button onClick={setDefault} style={ghostBtn} title="Show this board by default">
                     {"Set default"}
                   </button>
                 )}
-                {desk && !isUnsaved && (
+                {!isUnsaved && (
                   <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>
                     {"Delete"}
                   </button>
                 )}
-                {desk && <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>}
+                <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>
               </>
             )}
             {editing && (
@@ -436,6 +463,11 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
               </div>
             )}
           </>
+        ) : canCustomize ? (
+          // A member on a phone: they already hold this, they simply cannot
+          // arrange a grid here. Showing them the upsell would be telling a
+          // paying customer to buy what they have bought.
+          <span style={{ fontSize: 11, color: FAINT }}>{"Arrange this board on a larger screen"}</span>
         ) : (
           // The paid half, stated rather than hidden: the reader can see that
           // arranging their own board is what a membership adds.
@@ -474,7 +506,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
 
       {tiles.length === 0 ? (
         <div style={emptyState}>
-          {canCustomize
+          {canEdit
             ? 'This board is empty. Turn on Edit layout and add a tile.'
             : 'This layout has nothing you can see yet.'}
         </div>
@@ -485,18 +517,22 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
               className="layout"
               width={boardW}
               layout={layout}
-              cols={COLS}
+              cols={isPhone ? 1 : COLS}
               rowHeight={ROW_H}
               margin={[10, 10]}
-              isDraggable={editing}
-              isResizable={editing}
+              // `canEdit` as well as `editing`: a board left in edit mode on a
+              // desktop and then narrowed to a phone would otherwise stay
+              // draggable, and a drag there writes the flattened one-column
+              // order back over the real arrangement.
+              isDraggable={editing && canEdit}
+              isResizable={editing && canEdit}
               draggableHandle=".tile-header"
               draggableCancel=".no-drag"
               onLayoutChange={onLayoutChange}
               compactType="vertical"
             >
               {tiles.map((t) => (
-                <div key={t.id} style={{ overflow: 'hidden' }}>
+                <div key={t.id} className="wall-cell" style={{ overflow: 'hidden', position: 'relative' }}>
                   <BoardTileView
                     tile={t}
                     editing={editing}
@@ -506,6 +542,23 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
                     onMeasure={(px) => measureTile(t.id, px)}
                     onOpenMembership={onOpenMembership}
                   />
+                  {/* Full-screen, in the cell's bottom-right corner.
+                      Deliberately NOT in the tile header: the headers belong to
+                      twenty-three different components, seven of which predate
+                      the shared frame, and this way every kind gets it with no
+                      per-tile change. The corner is free precisely when this is
+                      offered — while editing, that is the resize handle, and
+                      this is hidden. */}
+                  {!editing && (
+                    <button
+                      className="wall-expand no-drag"
+                      onClick={() => setMaxId(t.id)}
+                      title={`Expand ${tileLabel(t.kind)}`}
+                      aria-label={`Expand ${tileLabel(t.kind)}`}
+                    >
+                      <Icon name="maximize-2" size={11} color="#cfe0ff" />
+                    </button>
+                  )}
                 </div>
               ))}
             </RGL>
@@ -514,9 +567,78 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
               bottom-row tile's resize handle isn't jammed against the footer and
               can be dragged down to grow the cell. */}
           {editing && <div aria-hidden style={{ height: 140 }} />}
+
+          {maxTile && (
+            <MaximizedTile
+              tile={maxTile}
+              lock={locks.get(maxTile.id) ?? null}
+              onChange={(p) => patchTile(maxTile.id, p)}
+              onClose={() => setMaxId(null)}
+              onOpenMembership={onOpenMembership}
+            />
+          )}
         </>
       )}
     </div>
+  );
+}
+
+// One tile, filling the screen.
+//
+// The same component the grid renders, in a bigger box — not a second view of
+// the tile. A chart at a third of a board's width is a thumbnail; a Trade
+// Analysis tile has more rows than its cell shows. Rather than making every tile
+// responsible for its own expanded form, the box changes and the tile fills it.
+//
+// It renders through a portal for the same reason the pickers do: the grid's
+// stacking context would otherwise trap it behind the tiles beside it.
+function MaximizedTile({
+  tile,
+  lock,
+  onChange,
+  onClose,
+  onOpenMembership,
+}: {
+  tile: BoardTile;
+  lock: ReturnType<typeof tileLock>;
+  onChange: (patch: Partial<BoardTile>) => void;
+  onClose: () => void;
+  onOpenMembership?: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(2,7,20,.72)', zIndex: 300 }} />
+      <div style={maxWrap}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button onClick={onClose} style={{ ...ghostBtn, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="minimize-2" size={12} color="#dfe7fa" />
+            <span>Close</span>
+          </button>
+        </div>
+        <div style={{ flex: 1, minHeight: 0 }}>
+          {/* `editing` is false: the expanded view is for reading a tile, not
+              rearranging the board it came from. Its own settings stay reachable
+              from the grid. */}
+          <BoardTileView
+            tile={tile}
+            editing={false}
+            lock={lock}
+            onChange={onChange}
+            onRemove={onClose}
+            onOpenMembership={onOpenMembership}
+          />
+        </div>
+      </div>
+    </>,
+    document.body,
   );
 }
 
@@ -670,13 +792,39 @@ function LayoutPicker({
   );
 }
 
-// react-grid-layout drag/resize visuals themed to the navy/gold desk.
+// react-grid-layout drag/resize visuals themed to the navy/gold desk, plus the
+// per-cell expand control.
+//
+// The expand button is hover-revealed on a pointer device and permanently
+// visible where there is no hover — a touch device gets no chance to discover a
+// control that only appears on hover, so it would simply not exist there.
 const PLACEHOLDER_CSS = `
 .react-grid-item.react-grid-placeholder { background: rgba(235,203,116,.22) !important; border: 1px dashed ${GOLD}; border-radius: 10px; }
 .react-grid-item > .react-resizable-handle::after { border-right-color: ${MUTED}; border-bottom-color: ${MUTED}; }
 .react-grid-item.react-draggable-dragging { z-index: 20; opacity: .95; }
+.wall-expand {
+  position: absolute; right: 6px; bottom: 6px; z-index: 5;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0;
+  background: rgba(9,20,46,.92); border: 1px solid ${BORDER2}; border-radius: 6px;
+  cursor: pointer;
+  opacity: 0; transition: opacity .15s ease;
+}
+.wall-cell:hover .wall-expand, .wall-expand:focus-visible { opacity: 1; }
+@media (hover: none) { .wall-expand { opacity: .55; } }
 `;
 
+const maxWrap: CSSProperties = {
+  position: 'fixed',
+  top: '4vh',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  width: 'min(1240px, calc(94 * var(--vw)))',
+  height: 'calc(92 * var(--vh))',
+  display: 'flex',
+  flexDirection: 'column',
+  zIndex: 301,
+};
 const railLabel: CSSProperties = {
   fontSize: 9,
   letterSpacing: '.5px',

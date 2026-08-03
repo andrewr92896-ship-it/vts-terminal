@@ -31,7 +31,7 @@ const STUDY_NOTE = 'Educational content only — not financial, investment, lega
 // keeps the wall and the game agreeing about a level.
 export function StudyStatsTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { user } = useAuth();
-  const { data, error } = useTileData(() => api.studyDecks(), SLOW);
+  const { data, error } = useTileData('studies:decks', () => api.studyDecks(), SLOW);
   // Re-read the stored progress periodically: playing a game writes to
   // localStorage, and the tile should catch up without a reload.
   const tick = useNowTick(20_000);
@@ -106,7 +106,7 @@ export function StudyStatsTile({ tile, editing, onChange, onRemove }: TileProps)
 // and the whole point of a flashcard is that the answer is hidden until you
 // have tried to recall it.
 export function FlashcardsTile({ tile, editing, onChange, onRemove }: TileProps) {
-  const { data, error } = useTileData(() => api.studyFlashcardSets(), SLOW);
+  const { data, error } = useTileData('studies:flashcardSets', () => api.studyFlashcardSets(), SLOW);
   const sets = data?.sets ?? [];
   const set = sets.find((s) => s.id === tile.deckId) ?? sets[0];
 
@@ -210,11 +210,15 @@ export function FlashcardsTile({ tile, editing, onChange, onRemove }: TileProps)
 // back from the same endpoint; the tile shows them in score order the way the
 // game's own leaderboard does, with the reader's row marked.
 export function LeaderboardTile({ tile, editing, onChange, onRemove }: TileProps) {
-  const { data: deckList } = useTileData(() => api.studyDecks(), SLOW);
+  const { data: deckList } = useTileData('studies:decks', () => api.studyDecks(), SLOW);
   const decks = deckList?.decks ?? [];
   const deck = decks.find((d) => d.id === tile.deckId) ?? decks[0];
 
+  // The key names the deck, not just the endpoint: two leaderboard tiles set to
+  // different games must not share one answer. `no-deck` keeps the key stable
+  // (and therefore the shared entry harmless) before the deck list arrives.
   const { data, error } = useTileData(
+    `studies:leaderboard:${deck?.id ?? 'no-deck'}`,
     () => (deck ? api.studyDeckLeaderboard(deck.id) : Promise.resolve({ entries: [] })),
     CHAT_POLL,
     [deck?.id],
@@ -286,7 +290,7 @@ export function LeaderboardTile({ tile, editing, onChange, onRemove }: TileProps
 // would mean two places that can send, with the tile's the one that scrolls away
 // mid-sentence.
 export function TeamChatTile({ tile, editing, onRemove }: TileProps) {
-  const { data, error } = useTileData(() => api.teamChat(), CHAT_POLL);
+  const { data, error } = useTileData('team:chat', () => api.teamChat(), CHAT_POLL);
   const limit = tile.limit ?? 8;
   // Newest last, the way a conversation reads, but only the tail of it.
   const messages = (data?.messages ?? []).slice(-limit);
