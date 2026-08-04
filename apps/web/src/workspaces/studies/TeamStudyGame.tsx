@@ -67,6 +67,14 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   const [deck, setDeck] = useState<TeamDeckDetail | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [view, setView] = useState<'quiz' | 'leaderboard'>('quiz');
+  // Only the terminal's built-in games carry a leaderboard, and it is public
+  // across every account. `isSample` is what marks a built-in copy; the server
+  // is the enforcer and 404s the endpoint for anything else.
+  const hasLeaderboard = !!deck?.isSample;
+
+  useEffect(() => {
+    if (!hasLeaderboard && view === 'leaderboard') setView('quiz');
+  }, [hasLeaderboard, view]);
 
   const [game, setGame] = useState<DeckGameState | null>(null);
   const poolRef = useRef<number[]>([]);
@@ -463,7 +471,18 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
           {deck.questionCount} questions · level up as you answer correctly · {STREAK_STEP} in a row for a multiplier
         </p>
       </div>
-      <div style={{ display: 'inline-flex', border: `1px solid ${theme.navBorder}`, borderRadius: 999, overflow: 'hidden' }}>
+      {/* Only the terminal's built-in games have a leaderboard, and theirs is
+          public across every account (owner decision, 2026-08). A game somebody
+          made has none, so the tab is hidden rather than opening on an empty
+          board that reads as broken. */}
+      <div
+        style={{
+          display: hasLeaderboard ? 'inline-flex' : 'none',
+          border: `1px solid ${theme.navBorder}`,
+          borderRadius: 999,
+          overflow: 'hidden',
+        }}
+      >
         {(['quiz', 'leaderboard'] as const).map((v) => (
           <button
             key={v}

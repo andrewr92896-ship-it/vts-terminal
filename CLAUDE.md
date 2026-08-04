@@ -967,6 +967,31 @@ workspaces list** (see `theme/nav.ts` order).
   build with VTS AI or upload a `.pptx`, parsed client-side in `lib/pptx.ts`).
   **Study Presentations** (`StudyGuidesLibrary`) is the present/manage side — the
   finished guides only, ending with a **Build a presentation** tile.
+  - **Leaderboards changed shape (owner decision, 2026-08).** The terminal's
+    **built-in** games have a **PUBLIC** board spanning every account on the
+    install; **user-made games have none at all**.
+    - **A built-in game is not one deck**, which is the whole design problem.
+      `bakedGames.ts` seeds a copy into every scope, so "Market Terminology 101"
+      exists once per user and once per team, each with its own id — ranking on
+      one id would rank somebody against nobody. `leaderboardDeckIds` resolves a
+      built-in deck to **every copy of itself**, matched on the name that
+      identifies it in code, and the board spans all of them.
+    - A **user-made** deck resolves to no ids, and the route answers **404 rather
+      than an empty list** so the client hides the tab instead of opening an
+      empty board that reads as broken. The caller must still own a copy of the
+      deck to ask, which stops this being a way to probe deck ids.
+    - **Opting out** is `users.hide_from_leaderboards` (migration `0103`), set
+      from My Terminal ▸ Preferences. Default **off** — a board nobody is on is
+      not a board, and what it shows is a display name and an accuracy percentage
+      on a study game, not anything about money. An opted-out player is filtered
+      from everyone else's board but **still sees their own row**: it is about
+      being findable, not about losing your standing.
+    - On `users` rather than `user_features` deliberately: the leaderboard join
+      already reads `display_name` off that row, so a second table for one
+      boolean would be a join for nothing.
+    - The Live Wall's leaderboard tile lists **only built-in games** in its
+      picker, for the same reason the tab hides — every other option would sit in
+      front of an endpoint that 404s.
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.

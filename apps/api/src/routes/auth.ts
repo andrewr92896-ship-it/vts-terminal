@@ -57,6 +57,8 @@ const profileSchema = z
   .object({
     username: z.string().trim().min(1).max(64).optional(),
     displayName: z.string().trim().min(1).max(120).optional(),
+    // Off the public study leaderboards. Set from My Terminal ▸ Preferences.
+    hideFromLeaderboards: z.boolean().optional(),
     email: z.string().trim().email().max(255).optional(),
     // A client-resized profile picture as a data URL (~128px JPEG/PNG), or an
     // empty string / null to remove it. Capped to keep the inline blob small.
@@ -85,7 +87,8 @@ const profileSchema = z
       v.displayName != null ||
       v.email != null ||
       v.avatar !== undefined ||
-      v.displayTimezone != null,
+      v.displayTimezone != null ||
+      v.hideFromLeaderboards != null,
     { message: 'Nothing to update' },
   );
 
@@ -220,6 +223,7 @@ export async function authRoutes(app: FastifyInstance) {
       email?: string;
       avatar?: string | null;
       displayTimezone?: string;
+      hideFromLeaderboards?: boolean;
       updatedAt: Date;
     } = {
       updatedAt: new Date(),
@@ -256,6 +260,9 @@ export async function authRoutes(app: FastifyInstance) {
         return reply.code(400).send({ error: 'That display name is already taken' });
       }
       patch.displayName = dn;
+    }
+    if (parsed.data.hideFromLeaderboards != null) {
+      patch.hideFromLeaderboards = parsed.data.hideFromLeaderboards;
     }
     if (parsed.data.email != null) {
       const email = parsed.data.email.toLowerCase();

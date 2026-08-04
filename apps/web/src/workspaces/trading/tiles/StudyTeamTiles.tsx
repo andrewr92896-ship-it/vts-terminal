@@ -206,12 +206,17 @@ export function FlashcardsTile({ tile, editing, onChange, onRemove }: TileProps)
 
 // ---- Study leaderboard ---------------------------------------------------
 //
-// Where the team stands on one study game. Live rows and banked runs both come
-// back from the same endpoint; the tile shows them in score order the way the
-// game's own leaderboard does, with the reader's row marked.
+// Where you stand on one of the terminal's built-in study games, against every
+// other player on the install. Live rows and banked runs both come back from the
+// same endpoint; the tile shows them in score order the way the game's own
+// leaderboard does, with the reader's row marked.
+//
+// The picker lists ONLY built-in games (owner decision, 2026-08): a game somebody
+// made has no leaderboard at all, and offering one in the dropdown would put an
+// endpoint that answers 404 behind every selection.
 export function LeaderboardTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { data: deckList } = useTileData('studies:decks', () => api.studyDecks(), SLOW);
-  const decks = deckList?.decks ?? [];
+  const decks = (deckList?.decks ?? []).filter((d) => d.isSample);
   const deck = decks.find((d) => d.id === tile.deckId) ?? decks[0];
 
   // The key names the deck, not just the endpoint: two leaderboard tiles set to

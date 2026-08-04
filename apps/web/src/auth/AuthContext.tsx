@@ -27,6 +27,7 @@ interface AuthState {
     email?: string;
     avatar?: string;
     displayTimezone?: string;
+    hideFromLeaderboards?: boolean;
   }) => Promise<void>;
   // Re-read the signed-in user from the server. Used after a change that alters
   // what the account can reach — turning a feature on or off — so the sidebar
@@ -121,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email?: string;
       avatar?: string;
       displayTimezone?: string;
+      hideFromLeaderboards?: boolean;
     }) => {
       const r = await api.updateProfile(patch);
       setUser(r.user);

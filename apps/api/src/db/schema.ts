@@ -28,6 +28,13 @@ export const users = sqliteTable('users', {
   // for rows created before this column existed (backfilled in migration).
   createdUsername: text('created_username'),
   displayName: text('display_name').notNull(),
+  // Off the public study leaderboards (migration 0103). Default false — a board
+  // nobody is on is not a board, and what it shows is a name and an accuracy
+  // percentage on a study game, not anything about money. Somebody who would
+  // rather not be findable switches it on and still sees their own rank.
+  hideFromLeaderboards: integer('hide_from_leaderboards', { mode: 'boolean' })
+    .notNull()
+    .default(false),
   email: text('email'),
   // Optional profile picture, stored as a small data URL (a client-resized
   // JPEG/PNG, ~128px). Null when the user has not set one — the UI then falls
