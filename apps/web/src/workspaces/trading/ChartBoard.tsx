@@ -14,7 +14,7 @@ import { useContentWidth } from '../../lib/measure';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, ghostBtn, goldBtn, input } from './tvChart';
 import { newTile, tileDef, tileLabel, tileLock } from './tileCatalog';
-import { PRESET_LAYOUTS, buildPreset, presetLayout } from './presetLayouts';
+import { PRESET_LAYOUTS, buildPreset, presetLayout, type PresetLayout } from './presetLayouts';
 import { BoardTileView } from './tiles';
 import { TilePicker } from './tiles/TilePicker';
 
@@ -112,9 +112,46 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
       return PRESET_LAYOUTS[0].key;
     }
   });
+  // The published templates from the server — what the Developer Terminal's
+  // builder edits. Falls back to the code presets until it answers (and if it
+  // never does): a picker showing three finished layouts from memory is a much
+  // better failure than an empty one.
+  const [templates, setTemplates] = useState<PresetLayout[]>(PRESET_LAYOUTS);
+  useEffect(() => {
+    let alive = true;
+    api
+      .wallTemplates()
+      .then((r) => {
+        if (!alive || r.templates.length === 0) return;
+        setTemplates(
+          r.templates.map((t) => ({ key: t.key, label: t.label, blurb: t.blurb, tiles: t.tiles })),
+        );
+      })
+      .catch(() => {
+        /* keep the built-in fallback */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const [tiles, setTiles] = useState<BoardTile[]>([]);
   const [savedTilesJson, setSavedTilesJson] = useState<string>(''); // '' → never saved
   const [editing, setEditing] = useState(false);
+
+  // Escape leaves edit mode. Every other layer of this screen that can be open
+  // (the tile picker, a settings modal, the maximized tile) handles Escape
+  // itself and stops it, so this only fires when the board is what the reader is
+  // actually looking at. Without it the only way out is finding the Done button,
+  // which on a long board can be a scroll away from wherever they were dragging.
+  useEffect(() => {
+    if (!editing) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) setEditing(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editing]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -159,7 +196,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
       setBuiltIn(key);
       setActiveId(null);
       setSharedId(null);
-      const p = presetLayout(key);
+      const p = templates.find((t) => t.key === key) ?? templates[0] ?? presetLayout(key);
       setName(p.label);
       const built = buildPreset(p, features, entitled);
       setTiles(built);
@@ -514,6 +551,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
           name={name}
           isUnsaved={isUnsaved}
           sharedId={sharedId}
+          templates={templates}
           onPickBoard={(b) => confirmSwitch(() => applyBoard(b))}
           onPickBuiltIn={(k) => confirmSwitch(() => applyBuiltIn(k))}
           onPickShared={(b) => confirmSwitch(() => applyShared(b))}
@@ -665,13 +703,29 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
               // order back over the real arrangement.
               isDraggable={editing && canEdit}
               isResizable={editing && canEdit}
+              // ALL FOUR CORNERS, not just the bottom-right (owner instruction,
+              // 2026-08). Dragging only from the south-east corner means a tile
+              // at the right edge of the board can be made bigger but not
+              // smaller from the side you are actually looking at, and a tile
+              // low on a long board has its one handle off screen.
+              //
+              // Corners only, deliberately — not the edges as well. An edge
+              // handle sits along the whole side of a tile, which on this board
+              // overlaps the tile's own scrollable body and its controls, so a
+              // drag meant for the content starts a resize instead. Corners are
+              // small, unambiguous, and are what people reach for.
+              resizeHandles={['se', 'sw', 'ne', 'nw']}
               draggableHandle=".tile-header"
               draggableCancel=".no-drag"
               onLayoutChange={onLayoutChange}
               compactType="vertical"
             >
               {tiles.map((t) => (
-                <div key={t.id} className="wall-cell" style={{ overflow: 'hidden', position: 'relative' }}>
+                <div
+                  key={t.id}
+                  className={`wall-cell${editing ? ' wall-cell-editing' : ''}`}
+                  style={{ overflow: 'hidden', position: 'relative' }}
+                >
                   <BoardTileView
                     tile={t}
                     editing={editing}
@@ -792,6 +846,7 @@ function MaximizedTile({
 function LayoutPicker({
   boards,
   teamBoards,
+  templates,
   activeId,
   builtIn,
   name,
@@ -803,6 +858,8 @@ function LayoutPicker({
 }: {
   boards: TradingBoard[];
   teamBoards: TradingBoard[];
+  /** The published built-in layouts, from the server. */
+  templates: PresetLayout[];
   activeId: string | null;
   builtIn: string;
   name: string;
@@ -881,7 +938,7 @@ function LayoutPicker({
               }}
             >
               <div style={menuHeading}>Built-in layouts</div>
-              {PRESET_LAYOUTS.map((p) => {
+              {templates.map((p) => {
                 const sel = activeId == null && !sharedId && p.key === builtIn;
                 return (
                   <button
@@ -981,8 +1038,55 @@ function LayoutPicker({
 // control that only appears on hover, so it would simply not exist there.
 const PLACEHOLDER_CSS = `
 .react-grid-item.react-grid-placeholder { background: rgba(235,203,116,.22) !important; border: 1px dashed ${GOLD}; border-radius: 10px; }
-.react-grid-item > .react-resizable-handle::after { border-right-color: ${MUTED}; border-bottom-color: ${MUTED}; }
 .react-grid-item.react-draggable-dragging { z-index: 20; opacity: .95; }
+
+/* ---- Resize handles ----------------------------------------------------
+   react-resizable ships visuals for the SOUTH-EAST handle only — the other
+   three render as an invisible hit area, which is worse than not having them:
+   the tile resizes from a corner with nothing to say so. These draw the same
+   corner bracket on all four, rotated to point outward.
+
+   Only while editing. Outside edit mode the handles are not rendered at all
+   (isResizable is false), and the bottom-right corner belongs to the expand
+   button — which is why that button hides during editing. */
+.react-grid-item > .react-resizable-handle {
+  width: 16px; height: 16px; padding: 0; background-image: none;
+}
+.react-grid-item > .react-resizable-handle::after {
+  content: ''; position: absolute; width: 7px; height: 7px;
+  border-right: 2px solid ${MUTED}; border-bottom: 2px solid ${MUTED};
+  border-radius: 0 0 2px 0; opacity: .75; transition: opacity .12s ease, border-color .12s ease;
+}
+.react-grid-item:hover > .react-resizable-handle::after { opacity: 1; border-color: ${GOLD}; }
+
+.react-grid-item > .react-resizable-handle-se { right: 2px; bottom: 2px; cursor: nwse-resize; }
+.react-grid-item > .react-resizable-handle-se::after { right: 3px; bottom: 3px; transform: rotate(0deg); }
+
+.react-grid-item > .react-resizable-handle-sw { left: 2px; bottom: 2px; cursor: nesw-resize; }
+.react-grid-item > .react-resizable-handle-sw::after { left: 3px; bottom: 3px; transform: rotate(90deg); }
+
+.react-grid-item > .react-resizable-handle-ne { right: 2px; top: 2px; cursor: nesw-resize; }
+.react-grid-item > .react-resizable-handle-ne::after { right: 3px; top: 3px; transform: rotate(270deg); }
+
+.react-grid-item > .react-resizable-handle-nw { left: 2px; top: 2px; cursor: nwse-resize; }
+.react-grid-item > .react-resizable-handle-nw::after { left: 3px; top: 3px; transform: rotate(180deg); }
+
+/* A touch device gets no hover, so the handles stay at full strength there —
+   otherwise they are permanently at the dimmed resting state and read as
+   decoration rather than something to grab. */
+@media (hover: none) {
+  .react-grid-item > .react-resizable-handle { width: 22px; height: 22px; }
+  .react-grid-item > .react-resizable-handle::after { opacity: 1; border-color: ${GOLD}; }
+}
+
+/* While editing, a tile has to LOOK movable. Without this the board in edit
+   mode is visually identical to the board out of it, and the only clue that
+   anything can be dragged is the cursor changing once you are already over a
+   header — which nobody discovers by accident. */
+.wall-cell-editing { outline: 1px dashed rgba(235,203,116,.32); outline-offset: -1px; border-radius: 10px; }
+.wall-cell-editing:hover { outline-color: rgba(235,203,116,.6); }
+.wall-cell-editing .tile-header { cursor: grab; }
+.wall-cell-editing .tile-header:active { cursor: grabbing; }
 .wall-expand {
   position: absolute; right: 6px; bottom: 6px; z-index: 5;
   display: inline-flex; align-items: center; justify-content: center;

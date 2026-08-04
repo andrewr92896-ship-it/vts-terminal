@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.68';
+export const APP_VERSION = 'Beta V 6.69';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.69',
+    date: 'August 4, 2026',
+    notes: [
+      'Live Wall tiles now resize from all four corners instead of only the bottom-right one, so a tile at the edge of the board or low down a long one is no longer awkward to reach.',
+      'Editing a board looks like editing now — tiles show an outline, the header takes a grab cursor, and Escape leaves edit mode instead of hunting for the Done button.',
+      'New in the Developer Terminal: Live Wall Templates. The default boards every account chooses between can be edited there rather than needing a deploy. Changes save as a draft and only reach members when you press Publish.',
+    ],
+  },
   {
     version: 'Beta V 6.68',
     date: 'August 4, 2026',

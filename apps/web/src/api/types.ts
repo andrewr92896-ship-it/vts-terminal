@@ -2386,3 +2386,38 @@ export interface BudgetMonth {
   /** Whether any expense category has a target — see the service comment. */
   hasTargets: boolean;
 }
+
+// ---- Live Wall templates ----
+//
+// The default layouts a free account chooses between. Editable from the
+// Developer Terminal; draft-then-publish, so a half-arranged board never reaches
+// a member (see trading/wallTemplates.ts).
+export interface TemplateTile {
+  kind: BoardTileKind;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** What a member's layout picker offers — published layouts only. */
+export interface PublishedWallTemplate {
+  key: string;
+  label: string;
+  blurb: string;
+  tiles: TemplateTile[];
+}
+
+/** The Developer Terminal's view, drafts included. */
+export interface WallTemplate {
+  id: string;
+  key: string;
+  label: string;
+  blurb: string;
+  published: TemplateTile[];
+  draft: TemplateTile[];
+  hasDraft: boolean;
+  hidden: boolean;
+  sortOrder: number;
+  updatedAt: number;
+}
