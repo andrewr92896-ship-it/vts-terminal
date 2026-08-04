@@ -12,8 +12,8 @@
 // drafted to reduce liability; they are not a substitute for review by a
 // licensed attorney before public launch.
 
-export const LEGAL_VERSION = '2026-07-23.1';
-export const LEGAL_EFFECTIVE_DATE = 'July 23, 2026';
+export const LEGAL_VERSION = '2026-08-04.1';
+export const LEGAL_EFFECTIVE_DATE = 'August 4, 2026';
 
 export const COMPANY = {
   entity: 'Vitalis Trading Systems LLC',
@@ -164,29 +164,26 @@ export const TERMS: LegalDoc = {
       ],
     },
     {
-      heading: '5. Teams, shared visibility, and assumption of risk',
+      heading: '5. Your trading information is private to you',
       blocks: [
         {
-          p:
-            'The Service is organized into "teams." When you join a team, you and your teammates can see a ' +
-            'great deal of one another’s information within the Terminal — including trades and positions, ' +
-            'trade history and results, broker capital figures, trading metrics, team chat, study content, ' +
-            'and other team-scoped data. Joining a team is a decision to share this information with those ' +
-            'specific people.',
-        },
-        {
           note:
-            'Only work with people you personally know and trust. Assume that everyone on your team can ' +
-            'see essentially all of your team-scoped information. Do not join a team with, or invite, ' +
-            'strangers. We are not responsible for how your teammates use information you choose to share ' +
-            'with them.',
+            'No other user of the Service can see your trades, positions, results, balances, or broker ' +
+            'data. This is not a setting you have to find and switch on — it is how the Service works, and ' +
+            'there is no feature that shows your trading information to another user.',
         },
         {
           p:
-            'Data in the Service can be created, edited, and deleted by users, including trade entries and ' +
-            'results. Information shared by a teammate is self-reported and unverified. You are responsible ' +
-            'for deciding whom to trust, and you accept the risks of team-based sharing described in these ' +
-            'Terms and in Section 6.',
+            'Some accounts have access to team features, which allow shared study material, group chat, ' +
+            'and published Live Wall layouts. Teams do not make trading information visible: a shared ' +
+            'layout carries the arrangement only, and every figure in it is loaded for whoever is looking ' +
+            'at it. Anything you type into a shared chat or create as shared study material is, of course, ' +
+            'visible to the people it is shared with.',
+        },
+        {
+          p:
+            'Content another user shares with you is self-reported and unverified, whatever form it takes. ' +
+            'You are responsible for deciding whom to trust and for what you choose to share.',
         },
       ],
     },
@@ -207,16 +204,22 @@ export const TERMS: LegalDoc = {
           note:
             'Because trade data can be edited, it must not be used to demonstrate, prove, market, or ' +
             'advertise anyone’s trading performance or track record. Trading metrics in the Service are ' +
-            'for your own personal reference and for reference within your team only.',
+            'for your own personal reference only. Publishing or circulating them — inside or outside the ' +
+            'Service — to establish credibility, attract followers, solicit money, or advertise a track ' +
+            'record is prohibited, and we will remove such content and may remove the account behind it.',
         },
         {
           p:
-            'You must understand and accept that relying on another person’s displayed metrics or results ' +
-            'as a reason to trust them, follow them, or copy them can lead to losses, because that data can ' +
-            'be manipulated or is simply mistaken. Do not treat any figures in the Service as verified ' +
-            'performance. You may share your own trade information and results with your team for ' +
-            'troubleshooting, journaling, discussion, and mutual reference — but never to induce, solicit, ' +
-            'or encourage anyone to copy your trades or to pay for access to them (see Section 7).',
+            'You must understand and accept that relying on anyone’s displayed metrics or results as a ' +
+            'reason to trust them, follow them, or copy them can lead to losses, because that data can be ' +
+            'manipulated or is simply mistaken. Do not treat any figures in the Service as verified ' +
+            'performance — including your own.',
+        },
+        {
+          p:
+            'The Service connects to forex and cryptocurrency accounts only. Anything else you track — ' +
+            'shares, funds, retirement accounts, budgeting entries — is entered by you, is connected to ' +
+            'nothing, and is verified by no one.',
         },
       ],
     },
@@ -591,9 +594,13 @@ export const PRIVACY: LegalDoc = {
               'exchange feeds (such as API keys or tokens and account identifiers) and the resulting ' +
               'read-only trading data (positions, balances/NAV, and closed trades). Broker credentials are ' +
               'stored encrypted (see Security).',
-            'AI and support interactions: the prompts, messages, screenshots, and other content you send ' +
-              'to the AI features and to support/bug intake, and the responses. These are logged and are ' +
-              'available to administrators (see Sections 5 and 6).',
+            'AI and support interactions: support and bug-intake conversations, which are stored so the ' +
+              'team can act on them. Ordinary conversations with the AI assistants are NOT stored — they ' +
+              'are sent to our AI provider to produce a reply and are not retained by us. The exceptions ' +
+              'are described in Section 5: we record that an AI request was made (for usage metering), and ' +
+              'we store the conversation when a request trips our financial-advice limits.',
+            'Budgeting and personal finance information you enter: categories, amounts, dates, and notes. ' +
+              'This is entered by you and is not connected to any bank or financial institution.',
             'Usage, device, and log data: IP address, browser/device and user-agent information, session ' +
               'and cookie identifiers, pages/actions and timestamps, approximate metering of AI usage, and ' +
               'diagnostic logs.',
@@ -635,37 +642,40 @@ export const PRIVACY: LegalDoc = {
       ],
     },
     {
-      heading: '4. Visibility within the Terminal (teams, trades, and chat)',
+      heading: '4. Visibility within the Terminal',
       blocks: [
         {
-          p:
-            'The Service is built around trust boundaries. How your information is visible depends on your ' +
-            'team:',
+          note:
+            'Your trading information is visible only to you. Positions, trade history, results, balances, ' +
+            'and broker data are not shown to any other user of the Service — not to other members, not to ' +
+            'anyone on a team you belong to, and not to a team leader.',
         },
+        { p: 'What other people can see is limited to:' },
         {
           ul: [
-            'Trades and team-scoped data are visible only to members of your own team. They are not shown ' +
-              'to other teams or to the public.',
-            'Team chat among your team’s members is private to that team.',
-            'Data belonging to people outside your team is not available to you, and viewing it is ' +
-              'prohibited by the Terms.',
+            'Your display name, profile picture, and any badges — wherever you appear in the Service.',
+            'Public study leaderboards: if you play one of the built-in study games, your display name and ' +
+              'score appear on a leaderboard visible to all users. You can remove yourself from these at ' +
+              'any time in My Terminal ▸ Preferences, and you will still see your own standing.',
+            'Content you deliberately share: messages you post in a chat, study material you create within ' +
+              'a team, and a Live Wall layout you choose to publish (the arrangement only — never your ' +
+              'figures, which are always fetched as the person viewing it).',
           ],
         },
         {
-          note:
-            'Trades, positions, results, and team-scoped trading data are not made available for browsing ' +
-            'by our developers or administrators as part of normal operations. Administrators do not use ' +
-            'the Terminal to view your team’s trades.',
+          p:
+            'Your email address is never shown to other users. Team features, where enabled for an account, ' +
+            'allow shared study material, chat, and layouts — they do not make trading information visible ' +
+            'to anyone.',
         },
         {
           p:
-            'Please understand the practical limits of any private system: within your team, teammates can ' +
-            'see essentially all team-scoped information, so share only with people you trust. In addition, ' +
-            'as with any hosted service, personnel with database or infrastructure access could ' +
-            'technically access stored data when strictly necessary for security, legal, maintenance, or ' +
+            'As with any hosted service, personnel with database or infrastructure access could technically ' +
+            'access stored data when strictly necessary for security, legal, maintenance, or ' +
             'abuse-prevention reasons, and we may access specific data when you ask us to (for example, to ' +
             'troubleshoot an issue you report) or when required by law. We limit such access to what is ' +
-            'necessary.',
+            'necessary. Trades, positions, results, and broker data are not browsed by administrators as ' +
+            'part of normal operations.',
         },
       ],
     },
@@ -674,17 +684,35 @@ export const PRIVACY: LegalDoc = {
       blocks: [
         {
           note:
-            'Your interactions with the AI assistants and with support/bug intake are logged and can be ' +
-            'reviewed by our administrators. They are not private and are not treated as confidential ' +
-            'team chat.',
+            'Conversations with the AI assistants and with support/bug intake are not private and are not ' +
+            'treated as confidential. They can be reviewed by our administrators.',
+        },
+        { p: 'Specifically, and to be clear about what is kept:' },
+        {
+          ul: [
+            'Ordinary AI conversations are not stored by us. Your messages are sent to our AI provider to ' +
+              'produce a reply; we retain a record that a request was made and of what type, for usage ' +
+              'metering, but not its contents.',
+            'If a request trips our financial-advice limits, we store that conversation — the recent ' +
+              'messages and the reply — so an administrator can review whether the Service acted ' +
+              'correctly. You are told on screen when this happens, and you can tell us you believe it was ' +
+              'a mistake. These records are deleted when your account is deleted.',
+            'Support and bug-report conversations are stored so the team can act on them.',
+          ],
         },
         {
           p:
             'We do this to keep the Service safe and compliant — including to enforce our rule that the AI ' +
-            'must not be used for financial or investment advice and must not be manipulated to bypass its ' +
-            'safeguards. The Service may flag suspected misuse or circumvention attempts so that a member of ' +
-            'the administrative team can review the relevant AI chat or support history. By using the AI and ' +
-            'support features, you consent to this logging, monitoring, and review.',
+            'must not be used to obtain financial or investment advice and must not be manipulated to ' +
+            'bypass its safeguards. Repeated attempts may result in temporary loss of access to AI ' +
+            'features, and can lead to removal from the Service. By using the AI and support features, you ' +
+            'consent to this logging, monitoring, and review.',
+        },
+        {
+          p:
+            'Your trading data is a separate matter and is not part of this: positions, results, balances, ' +
+            'and broker credentials are not read by administrators, and are reachable only by a software ' +
+            'developer acting to keep them secure.',
         },
       ],
     },

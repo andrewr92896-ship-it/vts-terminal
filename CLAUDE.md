@@ -402,6 +402,14 @@ workspaces list** (see `theme/nav.ts` order).
     - **A badge never grants this**, and no badge may again. Holding the Chief
       Analyst / Chief Strategist designation used to make somebody a desk lead;
       both were removed outright (see Position designations below).
+    - **The team half is behind the Trading Teams GRANT** (2026-08). Editing a
+      teammate's settings — and even seeing their name in the "whose settings"
+      picker — is a team surface, and `deskAccess.ts` was the one that gated on
+      `actor.teamId` alone. Revoking somebody's grant while leaving them on a
+      team therefore left them able to reach teammates here after every other
+      team surface had vanished. `isDeskLead` and `canEditDeskSettingsFor` both
+      check the grant now. Admins are unaffected — their reach never depended on
+      a team.
   - **Market Data** (`data`, `workspaces/trading/MarketData.tsx` — now a
     **My Terminal** section, files unchanged) is the desk's
     read-only board of every rate, print and price it watches: 75 series across
@@ -3002,6 +3010,28 @@ Three groups, and they want different treatment:
 Deleting any of it is a real cleanup and an owner decision, not a tidy-up to
 slip into an unrelated change — the routes are registered, so removing them is
 a behaviour change for anything calling the API directly.
+
+## News feeds can have SEVERAL candidate URLs
+
+`RssFeed.url` in `trading/feeds.ts` accepts a string **or a list**, tried in
+order until one answers with usable items. A publisher's RSS endpoint is not a
+stable thing — outlets retire, move and rename feeds without notice — and the
+failure mode is silent: the poll logs a 404 nobody reads and the screen stays
+empty, which looks like "no news today" rather than "this source is gone".
+
+- A **200 with no parseable items counts as a miss**, not a hit. Several retired
+  feeds still serve a valid-looking shell, so stopping at the first 200 would
+  mean never reaching the address that actually works.
+- A source that produces nothing logs **one line naming every address tried**, so
+  a dead feed is diagnosable from the logs.
+- **Candidates must be the same publisher's same coverage** — alternate addresses,
+  not a fallback to a different outlet. A reader told a headline came from
+  Reuters has to be right about that.
+- The World/Politics URLs were written in an environment with **no outbound
+  network** (every address failed identically, including ones already working in
+  production), so they are unverified. Reuters retired its long-standing
+  `feeds.reuters.com` endpoints and AP publishes no official public RSS, which is
+  why each topic carries more than one source as well as more than one URL.
 
 ## Verifying changes
 

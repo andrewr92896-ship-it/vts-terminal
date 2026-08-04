@@ -128,11 +128,28 @@ export interface RssItem {
 
 // One configured feed: where to fetch it and how its items should be tagged in
 // the shared headline list (source label + category + default impact).
+//
+// `url` may be a LIST of candidates, tried in order until one answers with
+// usable items. That exists because a publisher's RSS endpoint is not a stable
+// thing: outlets retire, move and rename feeds without notice, and the failure
+// mode is silent — the poll logs a 404 nobody reads and the screen simply stays
+// empty, which looks like "no news today" rather than "this source is gone".
+// Several candidates make one dead URL a non-event.
+//
+// Keep the candidates for a source genuinely equivalent. They are alternate
+// addresses for the same publisher's same coverage, not a fallback to a
+// different outlet — a reader who is told a headline came from Reuters has to be
+// right about that.
 interface RssFeed {
-  url: string;
+  url: string | string[];
   source: string;
   category: NewsCategory;
   impact: NewsImpact;
+}
+
+/** The candidate URLs for a feed, in the order they should be tried. */
+function feedUrls(feed: RssFeed): string[] {
+  return Array.isArray(feed.url) ? feed.url : [feed.url];
 }
 
 // The desk's feed list, grouped by the trader's priorities. Order is cosmetic —
@@ -158,9 +175,53 @@ const RSS_FEEDS: RssFeed[] = [
   // reason to hold — whichever outlets appear here are read as a stance by
   // somebody, and a wire is the one answer that is defensible to everyone.
   // Do not add opinion or commentary outlets to these two categories.
-  { url: 'https://feeds.reuters.com/reuters/worldNews', source: 'Reuters', category: 'world', impact: 'medium' },
-  { url: 'https://feeds.reuters.com/Reuters/PoliticsNews', source: 'Reuters', category: 'politics', impact: 'medium' },
-  { url: 'https://rsshub.app/apnews/topics/apf-topnews', source: 'Associated Press', category: 'world', impact: 'medium' },
+  //
+  // NOTE ON THESE URLS. They could not be verified from the environment they
+  // were written in — outbound HTTPS was blocked there, so every address failed
+  // identically including ones already working in production. Reuters retired
+  // its long-standing `feeds.reuters.com` endpoints, so that address is listed
+  // last as a courtesy rather than a hope. Each source therefore carries several
+  // candidates and the poller tries them in order (see `feedUrls`); a source
+  // that produces nothing logs every address it tried.
+  {
+    url: [
+      'https://www.reuters.com/arc/outboundfeeds/rss/category/world/?outputType=xml',
+      'https://www.reutersagency.com/feed/?best-topics=world&post_type=best',
+      'https://feeds.reuters.com/reuters/worldNews',
+    ],
+    source: 'Reuters',
+    category: 'world',
+    impact: 'medium',
+  },
+  {
+    url: [
+      'https://www.reuters.com/arc/outboundfeeds/rss/category/politics/?outputType=xml',
+      'https://www.reutersagency.com/feed/?best-topics=political-general&post_type=best',
+      'https://feeds.reuters.com/Reuters/PoliticsNews',
+    ],
+    source: 'Reuters',
+    category: 'politics',
+    impact: 'medium',
+  },
+  // AP publishes no official public RSS, so these are its hub pages' feeds and a
+  // community mirror. If none answer, the World topic still fills from Reuters —
+  // which is the reason each topic has more than one source.
+  {
+    url: [
+      'https://apnews.com/hub/world-news.rss',
+      'https://rsshub.app/apnews/topics/apf-intlnews',
+      'https://rsshub.app/apnews/topics/apf-topnews',
+    ],
+    source: 'Associated Press',
+    category: 'world',
+    impact: 'medium',
+  },
+  {
+    url: ['https://apnews.com/hub/politics.rss', 'https://rsshub.app/apnews/topics/apf-politics'],
+    source: 'Associated Press',
+    category: 'politics',
+    impact: 'medium',
+  },
 ];
 
 // Unwrap a `<![CDATA[ ... ]]>` payload, or return the string unchanged.
@@ -287,17 +348,41 @@ export async function ingestRssNews(): Promise<void> {
     const candidates: { feed: RssFeed; item: RssItem }[] = [];
     for (const feed of RSS_FEEDS) {
       try {
-        const res = await fetch(feed.url, {
-          headers: {
-            'User-Agent': TRUTH_USER_AGENT,
-            Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
-          },
-        });
-        if (!res.ok) {
-          console.error(`RSS feed ${feed.source} responded ${res.status}`);
+        // Try each candidate until one answers with items. A URL that responds
+        // 200 with an empty or unparseable body counts as a miss, not a hit:
+        // several retired feeds still serve a valid-looking shell, and stopping
+        // on the first 200 would mean never reaching the address that works.
+        let items: RssItem[] = [];
+        const attempts: string[] = [];
+        for (const url of feedUrls(feed)) {
+          try {
+            const res = await fetch(url, {
+              headers: {
+                'User-Agent': TRUTH_USER_AGENT,
+                Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
+              },
+            });
+            if (!res.ok) {
+              attempts.push(`${url} → ${res.status}`);
+              continue;
+            }
+            const parsed = parseRssItems(await res.text());
+            if (parsed.length === 0) {
+              attempts.push(`${url} → 200 but no items`);
+              continue;
+            }
+            items = parsed.slice(0, RSS_MAX_PER_FEED);
+            break;
+          } catch (err) {
+            attempts.push(`${url} → ${err instanceof Error ? err.message : 'failed'}`);
+          }
+        }
+        if (items.length === 0) {
+          // Logged as one line naming every address tried, so a dead source is
+          // diagnosable from the logs rather than presenting as an empty screen.
+          console.error(`RSS feed ${feed.source} produced nothing — tried: ${attempts.join('; ')}`);
           continue;
         }
-        const items = parseRssItems(await res.text()).slice(0, RSS_MAX_PER_FEED);
         for (const item of items) {
           if (!item.url || seen.has(item.url) || item.publishedAt < cutoff) continue;
           seen.add(item.url);

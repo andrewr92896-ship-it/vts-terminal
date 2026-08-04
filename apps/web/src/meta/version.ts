@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.69';
+export const APP_VERSION = 'Beta V 6.70';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.70',
+    date: 'August 4, 2026',
+    notes: [
+      'The Terms of Service and Privacy Policy have been rewritten to match how the terminal now works: your trading information is private to you, what public study leaderboards show, what budgeting data is, and exactly what is and is not kept from AI conversations. Everyone will be asked to accept them once on next sign-in.',
+      'Closed a gap where a team leader could still adjust a teammate\u2019s Trade Analysis settings without being granted trading teams.',
+      'The World and Politics feeds now try several addresses per source, so one retired feed no longer leaves a topic empty.',
+    ],
+  },
   {
     version: 'Beta V 6.69',
     date: 'August 4, 2026',
