@@ -11,7 +11,7 @@ import {
   type LegalDoc,
 } from '../../legal/content';
 
-// The Site Help legal screens: Rules & Conduct (a plain-English overview),
+// The Site Help legal screens: Rules & Conduct,
 // Terms of Service, and Privacy Policy. These render long-form legal copy from
 // legal/content.ts. Per CLAUDE.md, legal paragraphs are intentionally NOT
 // wrapped in <EditableText> — they are edited in the content module, not inline.
@@ -47,8 +47,8 @@ function DocHeader({ title, theme }: { title: string; theme: Theme }) {
           lineHeight: 1.5,
         }}
       >
-        This document is provided for transparency and is not legal advice. VTS Terminal is an informational
-        and educational tool only — not financial, investment, or trading advice.
+        {COMPANY.product} is an informational and educational tool. It does not provide financial,
+        investment, or trading advice, and nothing in it should be relied on as such.
       </div>
     </div>
   );

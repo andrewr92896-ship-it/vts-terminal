@@ -1836,18 +1836,30 @@ than anything else in this section:
 - **Teams are hidden from the average account** and handed out by a software
   developer, by hand. They are not for sale and no opt-in reveals them.
 
-### Trade visibility is self-only (`trading/scope.ts`)
+### Trade visibility: self-only by default, team-wide on a GRANT
 
-`visibleTraderIds(viewer)` **returns exactly the viewer**, always. Positions, the
-Trade Log, History, Deleted Trades and live broker capital are each trader's own.
-The reason is regulatory: a screen showing one trader's results to another is the
-raw material for an implied track record, which is a long way from the
-informational-only posture the product holds at public launch — and the same
-reason the Site Help rules say desk metrics are not proof of performance.
+`visibleTraderIds(viewer)` returns **exactly the viewer** unless that account
+holds the Trading Teams grant, in which case it returns their team.
 
-The function is **kept rather than deleted** so the boundary stays defined in one
-place and stays easy to widen. Eight call sites read it; if a shared desk ever
-returns, it returns here and every read follows.
+The default is what matters at public launch: a screen showing one trader's
+results to another is the raw material for an implied track record, a long way
+from the informational-only posture the product holds — the same reason the Site
+Help rules say desk metrics are not proof of performance. Since teams are hidden
+and handed out by a software developer, every ordinary account and every public
+signup resolves to itself.
+
+A **granted** team is a different situation (owner decision, 2026-08, after the
+first cut made it self-only for everybody): those are people who already know
+each other working one desk, and sharing the book is the reason they were put on
+a team. The grant is the gate, so widening this cannot reach anybody who was not
+deliberately given it — **a public signup is unaffected by construction, not by
+a filter somebody has to remember**.
+
+`hasTradingTeamsGrant` in this file reads the row directly rather than going
+through `featuresForUser`, because `rbac.ts` already imports from
+`features/service.ts` and importing back is a cycle. It resolves founder-level to
+true with no stored row, matching `featuresForUser` exactly — **if that rule
+changes, change it in both places.**
 
 **`scope.ts` exports three functions and they are NOT interchangeable:**
 
@@ -1861,16 +1873,18 @@ returns, it returns here and every read follows.
   function.**
 - **`notifyTraderIds(ownerId)` — a send whose whole content is one trader's
   position** (the open / close / stop-moved buzzes in `history.ts`). Follows
-  *visibility*, so: just that trader. Hiding the Live Wall row while still
-  buzzing a teammate's phone would have moved the disclosure, not removed it.
+  *visibility*, so it widens with it: on a granted team a fill reaches the
+  teammates who can already see the position, and nowhere else. Buzzing a phone
+  about a book the recipient may not look at would move the disclosure rather
+  than remove it.
 
 **Private mode is retired.** `shareBook` / `bookAckAt` (`user_features`,
-migration `0093`) existed to keep a trader's book off teammates' screens. With
-visibility self-only there was nothing left for it to hide, so the switch offered
-a choice about something already true. The columns, the stored values and the
-consent stamps are **untouched**; the switch, its acknowledgement modal and
-`sharingBookUserIds` are gone. Bringing a shared desk back means writing that
-query again against data that never went away.
+migration `0093`) existed to keep a trader's book off teammates' screens. It was
+removed when visibility went self-only and has **not** come back with the grant:
+a granted team is a group that deliberately shares a book, and reviving a
+per-member opt-out is a real decision rather than something to infer. The
+columns, stored values and consent stamps are **untouched**, so that decision is
+still available — `sharingBookUserIds` is the query to write again.
 
 ### Trading Teams is a GRANT (`user_features.trading_teams`, migration `0100`)
 
