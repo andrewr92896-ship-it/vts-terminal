@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireAdmin, requireFounder } from '../auth/middleware.js';
 import { PROMPT_DEFS, promptDefault } from '../ai/prompts.js';
+import { guardrailText } from '../ai/guardrails.js';
 import { getSetting, setSetting, clearSetting, getSettingsByPrefix } from '../settings/service.js';
 import {
   BadgeError,
@@ -94,7 +95,12 @@ export async function contentRoutes(app: FastifyInstance) {
         };
       }),
     );
-    return { prompts };
+    // The financial-advice guardrails ride along, read-only. They are welded onto
+    // every prompt at send time (ai/guardrails.ts) and there is no route that can
+    // change them — but an administrator editing these instructions has to be
+    // able to SEE what is already being enforced, or they will write it again by
+    // hand and wonder why their edits appear not to matter.
+    return { prompts, guardrails: guardrailText() };
   });
 
   app.put('/api/admin/ai-prompts/:id', founderGuard, async (request, reply) => {

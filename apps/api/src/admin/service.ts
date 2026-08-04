@@ -21,6 +21,7 @@ import {
   notificationPrefs,
   sessionAlertPrefs,
   userFeatures,
+  aiViolations,
   userMemberships,
   marketDataLayout,
   marketNewsStreams,
@@ -463,8 +464,16 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingOrders).where(eq(tradingOrders.userId, targetId));
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
-    // Which optional features they had turned on (Premium Features).
+    // Which optional features they had turned on (Premium Features), plus their
+    // Trading Teams grant, which rides the same row.
     await tx.delete(userFeatures).where(eq(userFeatures.userId, targetId));
+    // Their recorded AI guardrail violations, and the stored conversations with
+    // them. Deliberately UNLIKE credential_audit and employee_audit_log, which
+    // both outlive the account: those record access to somebody's money and to a
+    // hardened internal surface. This records a conversation, so it goes when the
+    // person goes — keeping a deleted customer's chat logs is the harder thing to
+    // defend, not the easier one.
+    await tx.delete(aiViolations).where(eq(aiViolations.userId, targetId));
     // Their paid tier. The Administrator Log entry recording the grant is NOT
     // deleted — like the employee audit log, it is the record that an admin did
     // something, and it survives the account it was done to (target_user_id goes

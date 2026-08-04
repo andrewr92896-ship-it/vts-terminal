@@ -109,7 +109,8 @@ import {
 } from '../ai/claude.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { generateBrief } from '../ai/brief.js';
-import { getPrompt, withStyle } from '../ai/prompts.js';
+import { getPrompt } from '../ai/prompts.js';
+import { withGuardrails } from '../ai/guardrails.js';
 import { TRADE_SIDES, TRADE_STATUSES, BROKER_CONNECTION_KINDS } from '../db/schema.js';
 
 const side = z.enum(TRADE_SIDES);
@@ -332,7 +333,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       m.breaches.daily ? 'Daily drawdown breached.' : '',
       m.breaches.max ? 'Max drawdown breached.' : '',
     ].filter(Boolean).join('\n');
-    const system = await withStyle(await getPrompt('metrics_coach'));
+    const system = await withGuardrails(await getPrompt('metrics_coach'));
     try {
       return { brief: await generateBrief(u.id, 'metrics_brief', system, data) };
     } catch (err) {
@@ -779,7 +780,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     const data = parts.join('\n\n');
     if (!data) return { brief: 'Nothing in this feed yet to summarize — it fills in as the feeds update.' };
 
-    const system = await withStyle((await getPrompt('market_overview')).replace(/\{label\}/g, label));
+    const system = await withGuardrails((await getPrompt('market_overview')).replace(/\{label\}/g, label));
     try {
       const brief = await generateBrief(request.currentUser!.id, 'feed_brief', system, data);
       return { brief };

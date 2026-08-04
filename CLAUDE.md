@@ -1908,6 +1908,80 @@ control — the server is still the enforcer.
     swallows its own errors so metering can never take down the poll it measures.
   - Surfaced to **admins only**, as `system` on `GET /api/ai/usage` and a line in
     the Ask VTS AI panel. Not a budget — nothing caps it.
+- **Financial-advice guardrails (`ai/guardrails.ts`) — NOT editable, and that is
+  the point.** Every prompt in `prompts.ts` is admin-editable, which is right for
+  tone and feature guidance and wrong for the rules that keep the product out of
+  regulated advice. Those have to survive a well-meaning edit, a careless paste
+  and a compromised admin account. So the editable prompts keep their own advice
+  language (it helps, and it is visible where an admin works) and `withGuardrails`
+  welds the real rules on afterwards. **There is no route, screen or setting that
+  can strip them.** Developer Terminal ▸ AI Instructions displays them read-only,
+  so an admin can see what is already enforced instead of writing it again by hand.
+  - **Use `withGuardrails` instead of `withStyle`** on every surface where a user
+    can type. It includes the style, so it replaces rather than joins it. Applied
+    to: the assistant, the tutor, both support intakes, the prop-challenge coach,
+    the market overview and the To Do command bar.
+  - **The MODEL is the detector**, via a sentinel (`REFUSAL_SENTINEL`) it puts at
+    the very start of a reply when it refuses an advice request. The server strips
+    it before the user sees anything and records the refusal. This is deliberate
+    against the two obvious alternatives: keyword matching cannot tell "what does
+    a market order do?" from "should I market-buy right now?", and every false
+    positive is a paying customer locked out for half an hour; a classifier call
+    before every message would double the AI bill on every turn. The model already
+    has the conversation, the workspace and the rules.
+    - It **degrades safely both ways**: a model that forgets the sentinel still
+      refuses (the part that protects the product) and merely goes unlogged; a
+      model that emits it spuriously costs that user a warning and grants nobody
+      anything.
+    - **Only matched at the START of the reply, never in user text.** A user who
+      learns the sentinel exists can provoke a warning for themselves — that is
+      self-harm, not an exploit — but a quoted one cannot write a record about
+      anyone else.
+    - **Structured prompts are told never to emit it** (`withGuardrails(…, {
+      structured: true })`). They feed straight to `JSON.parse`, so a marker on
+      the front breaks the parse — which on support intake means a user reporting
+      a bug gets an error instead of a ticket. The limits still apply; only the
+      marking is off, and those surfaces record no violation anyway.
+- **Rule breaking (`ai/violations.ts`, `ai_violations`, migration `0101`).**
+  - **Warn first, time out second.** The first refusal in a **24-hour window** is
+    a warning with no timeout; a second within it carries **30 minutes**. Both are
+    recorded and both reach the review screen, so nothing is lost in visibility —
+    what is given up is punishing somebody the first time the system might have
+    misread them. That is the owner's "benefit of the doubt", made concrete.
+  - **The timeout covers Ask VTS AI and the tutor, never support.** A user who
+    cannot reach help is a user who cannot tell you the guardrail misfired. Same
+    rule that already keeps the complaints channel off the AI paywall.
+  - **423, not 429.** The client needs to tell "paused for breaking a rule" from
+    "monthly allowance spent" — they want completely different things said. The
+    timeout is checked **before** the model call: the point of pausing somebody is
+    not to spend the money.
+  - **This is the ONLY AI conversation storage in the terminal.** Ordinary chats
+    are still never persisted. Only a conversation that actually tripped the
+    limits is kept, because a reviewer cannot judge "did we get this right?" from
+    a timestamp. It **is** in the `admin/service.ts` per-user delete list —
+    deliberately unlike `credential_audit` and `employee_audit_log`, which outlive
+    the account because they record access to money and to a hardened surface.
+    A stored chat log of a deleted customer is the harder thing to defend.
+  - **"I think the AI made a mistake"** (`disputeViolation`) flags the row for a
+    human and does **not** lift the timeout. Both halves are deliberate: lifting
+    it automatically makes the penalty opt-out for anyone who reads the button,
+    and ignoring the press wastes the only signal the terminal gets that its own
+    guardrails misfire. An admin clears it from the review screen.
+  - **Admin ▸ Rule Breaking** (`ad_rules`) shows the conversation, sorts disputed
+    cases first, and rides the admin bell. Its sidebar dot follows a **live open
+    count**, like Bug Reports — reviewing the last one has to clear it, and a
+    last-seen stamp only moves forward. Clearing the pause is a separate control
+    from the outcome, so dismissing a borderline case does not silently hand back
+    the thirty minutes.
+  - **The user-facing copy is forgiving on purpose** (`GuardrailNotice.tsx`).
+    Somebody asking "is now a good time to buy" is a customer using a trading
+    terminal in the most natural way imaginable, not an attacker. The card says
+    what happened, says outright that the system gets this wrong sometimes, offers
+    the button, and only then mentions the pause. It also carries the two privacy
+    facts, which the Ask VTS AI panel states up front as well: **these
+    conversations are reviewable, and trading data is not** — positions, results,
+    balances and broker keys are never read by administrators, only by a software
+    developer securing them.
 - **Editable prompts** (`ai/prompts.ts`, `PROMPT_DEFS`): shipped default here,
   admin-editable live from **Admin ▸ AI Instructions** (override in
   `app_settings` under `ai.<id>`; blank value resets to default). Edit the

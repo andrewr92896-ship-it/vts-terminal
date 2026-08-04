@@ -8,7 +8,8 @@ import {
   type SupportRequestMessageRow,
 } from '../db/schema.js';
 import { aiConfigured, chatClaude, extractJson } from '../ai/claude.js';
-import { getPrompt, withStyle } from '../ai/prompts.js';
+import { getPrompt } from '../ai/prompts.js';
+import { withGuardrails } from '../ai/guardrails.js';
 import { addSuggestion, fileBugReportFromConversation } from '../feedback/service.js';
 
 // The chat-bubble Support tab. A user picks a category — bug, suggestion, or a
@@ -76,7 +77,7 @@ async function triage(
   const forceFile = userTurns >= FORCE_FILE_AT;
   if (!aiConfigured()) return fallbackReply(kind, !forceFile && userTurns <= 1);
 
-  const system = await withStyle((await getPrompt('support_intake')).replaceAll('{kind}', kindLabel(kind)), {
+  const system = await withGuardrails((await getPrompt('support_intake')).replaceAll('{kind}', kindLabel(kind)), {
     structured: true,
   });
   const messages = conversation.map((m) => ({

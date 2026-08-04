@@ -169,6 +169,10 @@ export const NAV: NavWorkspace[] = [
       { key: 'ad_log', label: 'Administrator Log', icon: 'file-clock' },
       // The rules admins work to, and how to handle common situations.
       { key: 'ad_guidelines', label: 'Admin Guidelines', icon: 'list-checks' },
+      // Where VTS AI declined a request for financial or investment advice.
+      // Sits beside the log and the guidelines because it is the same job:
+      // what has happened, and what is waiting on somebody.
+      { key: 'ad_rules', label: 'Rule Breaking', icon: 'shield' },
       { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
       { key: 'ad_badges', label: 'Badges', icon: 'star' },
       { key: 'ad_templates', label: 'Message Templates', icon: 'message-square' },

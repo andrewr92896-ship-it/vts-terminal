@@ -1,4 +1,7 @@
 import type {
+  AiViolation,
+  GuardrailHit,
+  ViolationStatus,
   AdminUser,
   UserFeatures,
   EarlyAccessRequest,
@@ -160,9 +163,20 @@ export interface FeedBriefPayload {
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /**
+   * The parsed error body, when the server sent one.
+   *
+   * `request` already parses it to pull `error` out for the message, so carrying
+   * it costs nothing and saves a second round-trip whenever a failure has
+   * structure worth reading — the guardrail pause sends back `timeoutUntil`, and
+   * the paywall sends back `upgrade`. Callers should still treat it as unknown
+   * and narrow it themselves; nothing guarantees a shape.
+   */
+  body: unknown;
+  constructor(status: number, message: string, body?: unknown) {
     super(message);
     this.status = status;
+    this.body = body;
   }
 }
 
@@ -196,7 +210,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       (body && typeof body === 'object' && 'error' in body
         ? String((body as { error: unknown }).error)
         : null) || `Request failed (${res.status})`;
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, body);
   }
 
   return body as T;
@@ -407,7 +421,9 @@ export const api = {
   },
 
   // ---- AI instructions (admin-editable system prompts) ----
-  adminAiPrompts(): Promise<{ prompts: AiPrompt[] }> {
+  // `guardrails` is the read-only financial-advice block welded onto every
+  // prompt at send time. There is deliberately no method to change it.
+  adminAiPrompts(): Promise<{ prompts: AiPrompt[]; guardrails: string }> {
     return request('/api/admin/ai-prompts');
   },
   adminSaveAiPrompt(id: string, value: string): Promise<{ value: string; overridden: boolean }> {
@@ -490,7 +506,12 @@ export const api = {
   brokerStatus(): Promise<{ brokers: BrokerStatus[]; stage: number; note: string }> {
     return request('/api/brokers/status');
   },
-  askAi(messages: { role: 'user' | 'assistant'; content: string }[], workspace?: string): Promise<{ reply: string }> {
+  // `guardrail` is present only when the reply was a refusal of a
+  // financial-advice request — the reply itself still comes back either way.
+  askAi(
+    messages: { role: 'user' | 'assistant'; content: string }[],
+    workspace?: string,
+  ): Promise<{ reply: string; guardrail?: GuardrailHit }> {
     return request('/api/ai/ask', { method: 'POST', body: JSON.stringify({ messages, workspace }) });
   },
   aiUsage(): Promise<AiUsage> {
@@ -953,8 +974,38 @@ export const api = {
     bugs: number;
     bugsAwaiting: number;
     support: number;
+    violations: number;
+    // Live count of guardrail violations still awaiting review — same shape as
+    // bugsAwaiting, so reviewing the last one clears the sidebar dot.
+    violationsOpen: number;
   }> {
     return request('/api/chat/activity');
+  },
+
+  // ---- AI guardrails ----
+
+  /** The caller's own AI standing — non-null when they are inside a pause. */
+  aiGuardrailStatus(): Promise<{ timeoutUntil: number | null }> {
+    return request('/api/ai/guardrail/status');
+  },
+  /** "I think the AI made a mistake" — flags the violation for a human. */
+  disputeGuardrail(violationId: string, note?: string): Promise<{ ok: true }> {
+    return request(`/api/ai/guardrail/${violationId}/dispute`, {
+      method: 'POST',
+      body: JSON.stringify({ note }),
+    });
+  },
+  listAiViolations(): Promise<{ violations: AiViolation[] }> {
+    return request('/api/admin/ai-violations');
+  },
+  reviewAiViolation(
+    id: string,
+    input: { status: ViolationStatus; note?: string; clearTimeout?: boolean },
+  ): Promise<{ violations: AiViolation[] }> {
+    return request(`/api/admin/ai-violations/${id}/review`, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
   },
   tradingTruth(): Promise<{ posts: TruthPost[] }> {
     return request('/api/trading/truth');

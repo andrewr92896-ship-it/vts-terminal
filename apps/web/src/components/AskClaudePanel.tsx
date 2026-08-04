@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
-import type { AiUsage } from '../api/types';
+import type { AiUsage, GuardrailHit } from '../api/types';
 import type { Theme } from '../theme/themes';
 import { accentGradient } from '../theme/themes';
 import { api, ApiError } from '../api/client';
@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { hasEntitlement, tierOfFeature } from '../auth/access';
 import { UpgradeNotice } from './UpgradeNotice';
 import { TierMark } from './TierMark';
+import { GuardrailNotice, GuardrailPaused } from './GuardrailNotice';
 
 interface AskClaudePanelProps {
   open: boolean;
@@ -21,6 +22,10 @@ interface AskClaudePanelProps {
 interface Msg {
   role: 'user' | 'assistant';
   content: string;
+  // Set on an assistant turn that was a financial-advice refusal, so the notice
+  // stays attached to the exchange it is about rather than floating at the
+  // bottom of the panel where a later message would orphan it.
+  guardrail?: GuardrailHit;
 }
 
 // Suggested prompts tailored to the current workspace.
@@ -49,6 +54,10 @@ export function AskClaudePanel({
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Non-null while AI features are paused after repeated financial-advice
+  // requests. Read on open as well as set on a rejected send, so re-opening the
+  // panel inside a pause explains itself rather than looking broken.
+  const [pausedUntil, setPausedUntil] = useState<number | null>(null);
   const [remaining, setRemaining] = useState<number | null>(null);
   // The whole usage payload: the text allowance this panel spends, the separate
   // screenshot allowance, and — for an admin — what the terminal spent on its
@@ -59,6 +68,25 @@ export function AskClaudePanel({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, busy]);
+
+  // The guardrail pause, read when the panel opens: a user who tripped it in
+  // another tab (or reloaded) should meet the explanation, not a composer that
+  // rejects everything they type.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    api
+      .aiGuardrailStatus()
+      .then((r) => {
+        if (alive) setPausedUntil(r.timeoutUntil);
+      })
+      .catch(() => {
+        /* best effort — the send path reports it too */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
 
   // Load the monthly-usage counter when the panel opens.
   useEffect(() => {
@@ -88,8 +116,9 @@ export function AskClaudePanel({
     setBusy(true);
     setError(null);
     try {
-      const { reply } = await api.askAi(next, workspace);
-      setMessages([...next, { role: 'assistant', content: reply }]);
+      const { reply, guardrail } = await api.askAi(next, workspace);
+      setMessages([...next, { role: 'assistant', content: reply, guardrail }]);
+      if (guardrail?.timeoutUntil) setPausedUntil(guardrail.timeoutUntil);
       api
         .aiUsage()
         .then((u) => {
@@ -100,13 +129,20 @@ export function AskClaudePanel({
           /* keep the last figures */
         });
     } catch (e) {
+      // 423 is the guardrail pause and is NOT an error to show in red — the
+      // user is not broken, they are waiting. It gets its own card, so the
+      // message list is left alone and the composer explains itself.
+      if (e instanceof ApiError && e.status === 423) {
+        const until = (e.body as { timeoutUntil?: number } | null)?.timeoutUntil;
+        setPausedUntil(typeof until === 'number' ? until : Date.now() + 30 * 60 * 1000);
+        setMessages(next);
+        return;
+      }
       const msg =
         e instanceof ApiError
           ? e.status === 503
             ? 'VTS AI isn’t configured yet — an API key needs to be set on the server.'
-            : e.status === 429
-              ? e.message
-              : e.message
+            : e.message
           : 'Request failed';
       setError(msg);
       if (e instanceof ApiError && e.status === 429) setRemaining(0);
@@ -198,6 +234,18 @@ export function AskClaudePanel({
                   <button key={s} onClick={() => void send(s)} style={chip(theme)}>{s}</button>
                 ))}
               </div>
+              {/* Stated up front, not only after somebody trips a limit. Two
+                  facts, and the second matters as much as the first: the team can
+                  read these conversations, and the team cannot read your trading
+                  data. Saying only the first would be a warning; saying both is
+                  the actual arrangement. */}
+              <p style={privacyLine}>
+                VTS AI explains things — it can’t give financial or investment advice.
+                These conversations aren’t private and can be reviewed by the team.
+                Your trading data is separate: positions, results, balances and broker
+                keys are never read by administrators, and only a software developer
+                can reach them, only to keep them secure.
+              </p>
             </div>
           )}
           {messages.map((m, i) => (
@@ -216,9 +264,22 @@ export function AskClaudePanel({
               >
                 {m.content}
               </div>
+              {/* Attached to the exchange it is about, so a later message does
+                  not orphan it at the bottom of the panel. */}
+              {m.guardrail && <GuardrailNotice hit={m.guardrail} />}
             </div>
           ))}
           {busy && <div style={{ alignSelf: 'flex-start', color: '#7488b5', fontSize: 12, fontStyle: 'italic' }}>VTS AI is thinking…</div>}
+          {/* The standing pause, for a panel opened inside one. Suppressed when
+              the last turn already carries its own notice, which says the same
+              thing with more context. */}
+          {pausedUntil != null &&
+            pausedUntil > Date.now() &&
+            !messages[messages.length - 1]?.guardrail && (
+              <div style={{ alignSelf: 'stretch' }}>
+                <GuardrailPaused until={pausedUntil} />
+              </div>
+            )}
           {error && <div style={{ color: '#ffb4ab', fontSize: 12.5, background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 11px' }}>{error}</div>}
         </div>
 
@@ -251,6 +312,16 @@ export function AskClaudePanel({
     </>
   );
 }
+
+const privacyLine: CSSProperties = {
+  marginTop: 16,
+  marginBottom: 0,
+  paddingTop: 12,
+  borderTop: '1px solid #1d3560',
+  fontSize: 10.5,
+  lineHeight: 1.6,
+  color: '#7488b5',
+};
 
 function chip(theme: Theme): CSSProperties {
   return {

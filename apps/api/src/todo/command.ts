@@ -9,7 +9,7 @@ import {
   type MoveTarget,
 } from './service.js';
 import { askClaude, extractJson } from '../ai/claude.js';
-import { withStyle } from '../ai/prompts.js';
+import { withGuardrails } from '../ai/guardrails.js';
 import type { SectionType } from '../db/schema.js';
 
 // Natural-language / shorthand command bar for the To Do list. Claude (Sonnet)
@@ -99,7 +99,7 @@ export async function runCommand(userId: string, command: string): Promise<Comma
   }
 
   const context = buildContext(sections);
-  const raw = await askClaude(`${context}\n\nCOMMAND: ${text}`, await withStyle(SYSTEM, { structured: true }));
+  const raw = await askClaude(`${context}\n\nCOMMAND: ${text}`, await withGuardrails(SYSTEM, { structured: true }));
   const parsed = extractJson(raw) as { actions?: unknown; reply?: unknown } | null;
 
   const reply = typeof parsed?.reply === 'string' ? parsed.reply.slice(0, 300) : '';

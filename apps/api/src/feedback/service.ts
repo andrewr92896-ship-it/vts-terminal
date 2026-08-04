@@ -10,7 +10,8 @@ import {
   type SuggestionRow,
 } from '../db/schema.js';
 import { aiConfigured, chatClaude, extractJson } from '../ai/claude.js';
-import { getPrompt, withStyle } from '../ai/prompts.js';
+import { getPrompt } from '../ai/prompts.js';
+import { withGuardrails } from '../ai/guardrails.js';
 import { sendToUsers } from '../notifications/push.js';
 import { sendPushoverToUsers } from '../notifications/pushover.js';
 
@@ -160,7 +161,7 @@ async function triage(
     });
   }
   try {
-    const raw = await chatClaude(messages, await withStyle(await getPrompt('support'), { structured: true }));
+    const raw = await chatClaude(messages, await withGuardrails(await getPrompt('support'), { structured: true }));
     const parsed = extractJson(raw) as { needMore?: unknown; reply?: unknown } | null;
     const reply = parsed && typeof parsed.reply === 'string' && parsed.reply.trim() ? parsed.reply.trim() : '';
     const needMore = !forceFile && parsed?.needMore === true;

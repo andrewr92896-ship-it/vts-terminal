@@ -11,7 +11,15 @@ import {
 } from '../memberships/tiers.js';
 import { featuresForUser } from '../features/service.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
-import { getPrompt, withStyle } from '../ai/prompts.js';
+import { getPrompt } from '../ai/prompts.js';
+import { checkRefusal, withGuardrails } from '../ai/guardrails.js';
+import {
+  AiTimeoutError,
+  activeTimeout,
+  disputeViolation,
+  enforceAiTimeout,
+  recordViolation,
+} from '../ai/violations.js';
 import { AiLimitError, enforceAiLimit, getAiUsage } from '../ai/usage.js';
 
 const schema = z.object({
@@ -47,7 +55,7 @@ async function systemPrompt(workspaceKey: string | undefined, displayName: strin
     // Collapse any double spaces left when a placeholder resolved to empty.
     .replace(/\s{2,}/g, ' ')
     .trim();
-  return withStyle(persona);
+  return withGuardrails(persona);
 }
 
 const tutorSchema = z.object({
@@ -130,10 +138,36 @@ export async function aiRoutes(app: FastifyInstance) {
         : canAccessWorkspace(parseRoles(user), wsKey as WorkspaceKey);
     const ws = wsKey && wsKey in WORKSPACE_GUIDE && wsAllowed ? wsKey : undefined;
     try {
+      // Timeout BEFORE the spend: the point of pausing somebody is not to make
+      // the call. 423 rather than 429 so the client can tell "you are paused for
+      // breaking a rule" from "you have used your monthly allowance" — they need
+      // completely different things said to them.
+      await enforceAiTimeout(user.id);
       await enforceAiLimit(user.id, 'ask');
-      const text = await chatClaude(parsed.data.messages, await systemPrompt(ws, user.displayName));
-      return { reply: text };
+      const raw = await chatClaude(parsed.data.messages, await systemPrompt(ws, user.displayName));
+      const { reply: text, refused } = checkRefusal(raw);
+      if (!refused) return { reply: text };
+      const v = await recordViolation({
+        userId: user.id,
+        surface: 'ask',
+        messages: parsed.data.messages,
+        reply: text,
+      });
+      // The refusal itself still reaches the user — they asked a question and the
+      // assistant answered it, however unwelcome the answer. `guardrail` is what
+      // the panel uses to draw the warning card beneath it.
+      return {
+        reply: text,
+        guardrail: {
+          violationId: v.id,
+          timedOut: v.timedOut,
+          timeoutUntil: v.timeoutUntil,
+        },
+      };
     } catch (err) {
+      if (err instanceof AiTimeoutError) {
+        return reply.code(423).send({ error: 'AI access is paused', timeoutUntil: err.until });
+      }
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
     }
@@ -186,12 +220,49 @@ export async function aiRoutes(app: FastifyInstance) {
       messages = [{ role: 'user', content: prompt }];
     }
     try {
+      await enforceAiTimeout(request.currentUser!.id);
       await enforceAiLimit(request.currentUser!.id, 'studies_tutor');
-      return { reply: await chatClaude(messages, await withStyle(await getPrompt('tutor'))) };
+      const raw = await chatClaude(messages, await withGuardrails(await getPrompt('tutor')));
+      const { reply: text, refused } = checkRefusal(raw);
+      if (!refused) return { reply: text };
+      const v = await recordViolation({
+        userId: request.currentUser!.id,
+        surface: 'tutor',
+        messages,
+        reply: text,
+      });
+      return {
+        reply: text,
+        guardrail: { violationId: v.id, timedOut: v.timedOut, timeoutUntil: v.timeoutUntil },
+      };
     } catch (err) {
+      if (err instanceof AiTimeoutError) {
+        return reply.code(423).send({ error: 'AI access is paused', timeoutUntil: err.until });
+      }
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'AI request failed' });
     }
   });
 
+  // The user pressing "I think the AI made a mistake" on a warning.
+  //
+  // Scoped to their own violations by the service; there is no parameter that
+  // widens it. It flags the row for a human and does not lift the timeout —
+  // see disputeViolation for why both halves of that are deliberate.
+  app.post('/api/ai/guardrail/:id/dispute', { preHandler: requireAuth }, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const parsed = z
+      .object({ note: z.string().trim().max(1000).optional() })
+      .safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid note' });
+    const ok = await disputeViolation(request.currentUser!.id, id, parsed.data.note ?? null);
+    if (!ok) return reply.code(404).send({ error: 'Not found' });
+    return { ok: true };
+  });
+
+  // The caller's own AI standing, so the panel can draw the paused state on load
+  // rather than only after a rejected send.
+  app.get('/api/ai/guardrail/status', { preHandler: requireAuth }, async (request) => {
+    return { timeoutUntil: await activeTimeout(request.currentUser!.id) };
+  });
 }

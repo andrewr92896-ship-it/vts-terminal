@@ -11,6 +11,9 @@ import { Badge, SectionHeader, fieldLabel, ghostBtn, inputStyle, msgStyle, panel
 export function AdminAiInstructions({ theme }: { theme: Theme }) {
   const accentGrad = accentGradient(theme);
   const [prompts, setPrompts] = useState<AiPrompt[]>([]);
+  // The financial-advice block. Read-only by design — see the panel below.
+  const [guardrails, setGuardrails] = useState('');
+  const [showGuardrails, setShowGuardrails] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   // Per-prompt working copy, save state, and message.
@@ -25,6 +28,7 @@ export function AdminAiInstructions({ theme }: { theme: Theme }) {
       .then((r) => {
         if (!alive) return;
         setPrompts(r.prompts);
+        setGuardrails(r.guardrails);
         setDrafts(Object.fromEntries(r.prompts.map((p) => [p.id, p.value])));
       })
       .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load prompts'))
@@ -90,6 +94,61 @@ export function AdminAiInstructions({ theme }: { theme: Theme }) {
         title="AI Instructions"
         subtitle="Edit what each AI feature is told to do. Changes apply the next time the feature runs. Reset any prompt to restore the built-in wording. Keep any {tokens} and JSON-format instructions intact."
       />
+
+      {/* The one set of instructions nobody can edit. Shown here rather than
+          hidden in the code because an administrator writing these prompts has
+          to know what is already enforced — otherwise they write the same rules
+          again by hand, and wonder why removing them changes nothing. */}
+      <div style={{ ...panel(theme), marginBottom: 22, borderColor: '#5a4d2a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 6 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#eef3ff' }}>
+            Financial-advice limits
+          </span>
+          <Badge color="#EBCB74">Always on · cannot be edited</Badge>
+        </div>
+        <p style={{ margin: '0 0 10px', fontSize: 12, color: '#9fb0d6', lineHeight: 1.6 }}>
+          These rules are added to every AI feature in the terminal, after whatever
+          you write below. They cannot be changed, weakened or switched off from
+          any screen — including this one. When VTS AI declines a request under
+          them, it is recorded in Admin ▸ Rule Breaking.
+        </p>
+        <button
+          type="button"
+          onClick={() => setShowGuardrails((v) => !v)}
+          style={{
+            background: 'transparent',
+            border: '1px solid #2c4b7d',
+            borderRadius: 8,
+            color: '#cfe0ff',
+            fontSize: 11.5,
+            padding: '6px 11px',
+            cursor: 'pointer',
+          }}
+        >
+          {showGuardrails ? 'Hide the rules' : 'Show the rules'}
+        </button>
+        {showGuardrails && (
+          <pre
+            style={{
+              marginTop: 10,
+              marginBottom: 0,
+              whiteSpace: 'pre-wrap',
+              fontFamily: "'IBM Plex Mono', monospace",
+              fontSize: 11,
+              lineHeight: 1.6,
+              color: '#aebcd8',
+              background: 'rgba(3,8,20,.4)',
+              border: '1px solid #1d3560',
+              borderRadius: 8,
+              padding: '10px 12px',
+              maxHeight: 340,
+              overflowY: 'auto',
+            }}
+          >
+            {guardrails}
+          </pre>
+        )}
+      </div>
 
       {groups.map(({ group, items }) => (
         <div key={group} style={{ marginBottom: 22 }}>
