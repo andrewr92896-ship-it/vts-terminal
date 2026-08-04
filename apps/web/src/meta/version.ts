@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.64';
+export const APP_VERSION = 'Beta V 6.65';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.65',
+    date: 'August 4, 2026',
+    notes: [
+      'VTS AI now holds firm financial-advice limits across every AI feature in the terminal. It will explain how anything works, but it will not tell anyone what to buy or sell, when to trade, or how to size a position. These limits are built in and cannot be edited or switched off from any screen.',
+      'If VTS AI declines a request, you get a plain note explaining why. The first one is only a warning. A second within a day pauses AI features for 30 minutes — support and bug reports always stay open. Every notice carries an "I think the AI made a mistake" button, because the system does get it wrong sometimes.',
+      'The Ask VTS AI panel now states plainly that conversations are not private and can be reviewed, and that your trading data is separate — positions, results, balances and broker keys are never read by administrators.',
+      'New for admins: Admin Terminal ▸ Rule Breaking shows each declined request with the conversation behind it, flags the ones the user disputes, and lets you end a pause when the terminal got it wrong.',
+    ],
+  },
   {
     version: 'Beta V 6.64',
     date: 'August 4, 2026',

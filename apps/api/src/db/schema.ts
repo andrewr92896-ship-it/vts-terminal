@@ -757,6 +757,42 @@ export const aiUsage = sqliteTable('ai_usage', {
 });
 export type AiUsageRow = typeof aiUsage.$inferSelect;
 
+// ---- AI guardrail violations (migration 0101) ----
+// One row each time VTS AI refuses a request for financial or investment advice.
+//
+// This is the ONLY place an AI conversation is stored in the terminal. Ordinary
+// chats are not persisted at all — the client holds them and posts them each
+// turn — and that stays true. Only a conversation that actually tripped the
+// limits is kept, because an administrator reviewing "did the terminal get this
+// right?" cannot answer it from a timestamp, and because the second offense
+// costs the user thirty minutes of AI access.
+export const aiViolations = sqliteTable('ai_violations', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // 'ask' | 'tutor'. Support intake is never here, deliberately.
+  surface: text('surface').notNull(),
+  // The conversation as it stood, JSON [{ role, content }], trimmed by the writer.
+  conversation: text('conversation').notNull(),
+  reply: text('reply').notNull(),
+  // The first violation in a window is a warning only — see aiGuardrailState.
+  timedOut: integer('timed_out', { mode: 'boolean' }).notNull().default(false),
+  timeoutUntil: integer('timeout_until', { mode: 'timestamp_ms' }),
+  // 'open' | 'dismissed' | 'warned' | 'actioned'
+  status: text('status').notNull().default('open'),
+  reviewedBy: text('reviewed_by').references(() => users.id, { onDelete: 'set null' }),
+  reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+  reviewNote: text('review_note'),
+  // "I think the AI made a mistake". Flags the row for a human; it does not
+  // itself lift anything.
+  disputed: integer('disputed', { mode: 'boolean' }).notNull().default(false),
+  disputedAt: integer('disputed_at', { mode: 'timestamp_ms' }),
+  disputeNote: text('dispute_note'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type AiViolationRow = typeof aiViolations.$inferSelect;
+
 // ---- Studies: learned flashcard terms (per user) ----
 // One row per vocabulary term the user has marked as known, so their flashcard
 // progress follows them across devices. The client also keeps a local copy for

@@ -61,6 +61,7 @@ const NOTIF_ICON: Record<NotificationItem['kind'], string> = {
   suggestion: 'lightbulb',
   bug: 'bug',
   support: 'life-buoy',
+  violation: 'shield',
 };
 
 const iconBtn = (active: boolean): CSSProperties => ({

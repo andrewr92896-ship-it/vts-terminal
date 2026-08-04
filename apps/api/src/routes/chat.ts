@@ -29,6 +29,7 @@ import {
   listAllBugReports,
 } from '../feedback/service.js';
 import { latestSupportRequestAt, listSupportRequests } from '../support/service.js';
+import { countOpenViolations, latestViolationAt, listViolations } from '../ai/violations.js';
 
 const messageSchema = z.object({ body: z.string().trim().min(1).max(1000) });
 const announcementSchema = z.object({
@@ -142,7 +143,7 @@ export async function chatRoutes(app: FastifyInstance) {
     const elig = await teamChatEligibility(u);
     type Item = {
       id: string;
-      kind: 'chat' | 'suggestion' | 'bug' | 'support';
+      kind: 'chat' | 'suggestion' | 'bug' | 'support' | 'violation';
       title: string;
       body: string;
       author: string;
@@ -160,7 +161,27 @@ export async function chatRoutes(app: FastifyInstance) {
     }
 
     if (admin) {
-      const [sugg, bugs, support] = await Promise.all([listSuggestions(), listAllBugReports(), listSupportRequests()]);
+      const [sugg, bugs, support, violations] = await Promise.all([
+        listSuggestions(),
+        listAllBugReports(),
+        listSupportRequests(),
+        listViolations(15),
+      ]);
+      // Rule breaking rides the same bell as bug reports, which is what the
+      // owner asked for: these are reviewed, not merely filed. Only the OPEN
+      // ones — a reviewed violation has had its human look and should stop
+      // asking for another.
+      for (const v of violations.filter((x) => x.status === 'open')) {
+        items.push({
+          id: `violation:${v.id}`,
+          kind: 'violation',
+          title: v.disputed ? 'Rule breaking — user disputes it' : 'Rule breaking',
+          body: `VTS AI declined a financial-advice request from ${v.userName}.${v.timedOut ? ' Timed out for 30 minutes.' : ''}`,
+          author: v.userName,
+          avatar: null,
+          createdAt: v.createdAt,
+        });
+      }
       for (const s of sugg.slice(0, 15)) {
         items.push({ id: `suggestion:${s.id}`, kind: 'suggestion', title: 'New suggestion', body: s.body, author: s.author, avatar: null, createdAt: s.createdAt });
       }
@@ -183,7 +204,7 @@ export async function chatRoutes(app: FastifyInstance) {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
     const elig = await teamChatEligibility(u);
-    const [chat, adminChat, announcements, suggestions, bugs, bugsAwaiting, support] = await Promise.all([
+    const [chat, adminChat, announcements, suggestions, bugs, bugsAwaiting, support, violations, violationsOpen] = await Promise.all([
       elig.eligible ? latestTeamMessageAt(u.teamId) : Promise.resolve(0),
       admin ? latestAdminMessageAt() : Promise.resolve(0),
       latestAnnouncementAt(),
@@ -194,8 +215,23 @@ export async function chatRoutes(app: FastifyInstance) {
       // report has to clear the dot, and a stamp can only ever move forward.
       admin ? countBugReportsAwaiting() : Promise.resolve(0),
       admin ? latestSupportRequestAt() : Promise.resolve(0),
+      admin ? latestViolationAt() : Promise.resolve(0),
+      // Like bugsAwaiting: a live count of what is still open, so reviewing the
+      // last one clears the sidebar dot. A last-activity stamp only moves
+      // forward and could never do that.
+      admin ? countOpenViolations() : Promise.resolve(0),
     ]);
-    return { chat, adminChat, announcements, suggestions, bugs, bugsAwaiting, support };
+    return {
+      chat,
+      adminChat,
+      announcements,
+      suggestions,
+      bugs,
+      bugsAwaiting,
+      support,
+      violations,
+      violationsOpen,
+    };
   });
 
   app.get('/api/announcements', auth, async (request) => {

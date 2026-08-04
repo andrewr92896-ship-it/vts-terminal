@@ -15,6 +15,7 @@ import { MEMBERSHIP_TIERS, MembershipError } from '../memberships/service.js';
 import { parseRoles } from '../auth/rbac.js';
 import { TeamError, createTeam, deleteTeam, listTeams, renameTeam } from '../teams/service.js';
 import { setTradingTeamsGrant } from '../features/service.js';
+import { listViolations, reviewViolation } from '../ai/violations.js';
 
 const createSchema = z.object({
   username: z.string().trim().min(1).max(64),
@@ -27,6 +28,16 @@ const createSchema = z.object({
 });
 
 const tradingTeamsSchema = z.object({ granted: z.boolean() });
+
+// An administrator's decision on one guardrail violation. `clearTimeout` is
+// separate from the outcome on purpose: dismissing a borderline case should not
+// silently hand back the thirty minutes, and agreeing the terminal misfired
+// should not require also picking a label for it.
+const violationReviewSchema = z.object({
+  status: z.enum(['open', 'dismissed', 'warned', 'actioned']),
+  note: z.string().trim().max(1000).optional(),
+  clearTimeout: z.boolean().optional(),
+});
 
 const updateSchema = z.object({
   displayName: z.string().trim().min(1).max(120).optional(),
@@ -187,6 +198,24 @@ export async function adminRoutes(app: FastifyInstance) {
       if (err instanceof AdminError) return reply.code(400).send({ error: err.message });
       throw err;
     }
+  });
+
+  // ---- Rule Breaking (AI guardrail violations) ----
+  //
+  // Plain `guard` (any admin), unlike the Trading Teams grant above: reviewing
+  // whether the terminal misjudged somebody is ordinary administration, and the
+  // reason the review screen exists is that a human should look at these.
+  app.get('/api/admin/ai-violations', guard, async () => {
+    return { violations: await listViolations() };
+  });
+
+  app.post('/api/admin/ai-violations/:id/review', guard, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const parsed = violationReviewSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Pick an outcome' });
+    const ok = await reviewViolation(request.currentUser!.id, id, parsed.data);
+    if (!ok) return reply.code(404).send({ error: 'Not found' });
+    return { violations: await listViolations() };
   });
 
   // ---- Administrator Log ----

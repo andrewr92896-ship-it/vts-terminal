@@ -46,6 +46,7 @@ import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
 import { AdminSupport } from '../workspaces/admin/AdminSupport';
 import { AdminLog } from '../workspaces/admin/AdminLog';
 import { AdminGuidelines } from '../workspaces/admin/AdminGuidelines';
+import { AdminRuleBreaking } from '../workspaces/admin/AdminRuleBreaking';
 import { DevBlog } from '../workspaces/admin/DevBlog';
 import {
   HelpHowTo,
@@ -170,6 +171,8 @@ function renderScreen(
       return <AdminLog theme={theme} />;
     case 'ad_guidelines':
       return <AdminGuidelines theme={theme} />;
+    case 'ad_rules':
+      return <AdminRuleBreaking theme={theme} />;
     case 'ad_blog':
       return <DevBlog theme={theme} />;
     case 'ad_teams':
@@ -204,6 +207,10 @@ const SECTION_ACTIVITY: Record<string, 'suggestions' | 'support'> = {
 // one is handled — opening the section does not clear it, because the work is
 // still outstanding until somebody replies or closes the report.
 const BUG_DOT_SECTION = 'ad_bugs';
+// Rule Breaking's dot follows the same live-count rule as Bug Reports rather
+// than a last-seen stamp: reviewing the last violation has to clear it, and a
+// stamp only ever moves forward.
+const RULES_DOT_SECTION = 'ad_rules';
 
 // Where a sign-in lands: My Terminal, which opens on the Live Wall — the one
 // board that draws on every workspace, so it is the most useful thing to open on
@@ -300,6 +307,7 @@ export function Portal() {
     suggestions: number;
     bugsAwaiting: number;
     support: number;
+    violationsOpen: number;
   } | null>(null);
   const [adminSeen, setAdminSeen] = useState<Record<string, number>>(() => {
     const out: Record<string, number> = {};
@@ -334,7 +342,12 @@ export function Portal() {
     void api
       .hubActivity()
       .then((a) =>
-        setAdminActivity({ suggestions: a.suggestions, bugsAwaiting: a.bugsAwaiting ?? 0, support: a.support }),
+        setAdminActivity({
+          suggestions: a.suggestions,
+          bugsAwaiting: a.bugsAwaiting ?? 0,
+          support: a.support,
+          violationsOpen: a.violationsOpen ?? 0,
+        }),
       )
       .catch(() => {
         /* transient — keep last values */
@@ -358,6 +371,7 @@ export function Portal() {
         if (adminActivity[src] > (adminSeen[key] ?? 0)) dots.add(key);
       }
       if (adminActivity.bugsAwaiting > 0) dots.add(BUG_DOT_SECTION);
+      if (adminActivity.violationsOpen > 0) dots.add(RULES_DOT_SECTION);
     }
     return dots;
   }, [adminActivity, adminSeen]);

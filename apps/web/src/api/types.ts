@@ -1648,7 +1648,7 @@ export interface TeamChatFeed {
 
 // One in-terminal notification (shown in the top-bar bell). Chat notifications
 // carry the teammate's avatar; suggestion/bug notifications are admin-only.
-export type NotificationKind = 'chat' | 'suggestion' | 'bug' | 'support';
+export type NotificationKind = 'chat' | 'suggestion' | 'bug' | 'support' | 'violation';
 export interface NotificationItem {
   id: string;
   kind: NotificationKind;
@@ -1656,6 +1656,42 @@ export interface NotificationItem {
   body: string;
   author: string;
   avatar: string | null;
+  createdAt: number;
+}
+
+// ---- AI guardrails ----
+
+// What the server sends back when VTS AI refused a financial-advice request.
+// Present on an otherwise-normal AI reply: the refusal still reaches the user,
+// and this is what draws the warning beneath it.
+export interface GuardrailHit {
+  violationId: string;
+  /** Whether this one carried the 30-minute pause (the second in 24 hours). */
+  timedOut: boolean;
+  timeoutUntil: number | null;
+}
+
+export type ViolationStatus = 'open' | 'dismissed' | 'warned' | 'actioned';
+
+// One recorded guardrail violation, for Admin ▸ Rule Breaking. Carries the
+// conversation that produced it — the only AI conversation the terminal stores.
+export interface AiViolation {
+  id: string;
+  userId: string;
+  userName: string;
+  surface: string;
+  conversation: { role: string; content: string }[];
+  reply: string;
+  timedOut: boolean;
+  timeoutUntil: number | null;
+  status: ViolationStatus;
+  reviewedByName: string | null;
+  reviewedAt: number | null;
+  reviewNote: string | null;
+  /** The user pressed "I think the AI made a mistake". */
+  disputed: boolean;
+  disputedAt: number | null;
+  disputeNote: string | null;
   createdAt: number;
 }
 
