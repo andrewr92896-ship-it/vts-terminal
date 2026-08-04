@@ -52,7 +52,7 @@ export function isOwnerUser(u: Pick<UserRow, 'username' | 'createdUsername'>): b
 //   • founder            — sits above admin; the terminal's owners. Founder-level
 //                          also carries every admin capability plus the
 //                          founder-only tools (Founder Terminal: AI Instructions,
-//                          Site Wording, View as role, the site-wording editor).
+//                          Site Wording, Suggestions, the site-wording editor).
 //   • software_developer — permission-equivalent to founder (same access).
 //   • admin              — user/team management and the Admin Terminal.
 //   • employee           — grants access to the separate, hardened Employee

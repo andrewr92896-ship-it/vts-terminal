@@ -11,7 +11,15 @@ import {
   zoomLabel,
   zoomOut,
 } from '../theme/zoom';
-import { rolesSummary, TIER_GLYPHS, tierOfFeature } from '../auth/access';
+import {
+  ALL_ROLES,
+  isFounder,
+  ROLE_DESCRIPTIONS,
+  ROLE_LABELS,
+  rolesSummary,
+  TIER_GLYPHS,
+  tierOfFeature,
+} from '../auth/access';
 import { api } from '../api/client';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { Clock } from './Clock';
@@ -23,6 +31,7 @@ interface TopBarProps {
   user: User;
   effectiveRoles: RoleKey[];
   actingRole: RoleKey | null;
+  onSetActingRole: (r: RoleKey | null) => void;
   workspaceLabel: string;
   sectionLabel: string;
   accent: string;
@@ -207,11 +216,77 @@ function ZoomControl() {
   );
 }
 
+// "View as role", in the account menu. Emulate someone holding only the one
+// selected role, to see exactly what they see. Pure UI gating — the server still
+// enforces your real roles on every request.
+//
+// **It lives here, and it has to** (owner decision, 2026-08). It was a Developer
+// Terminal section, which is the one place a preview hides: choosing Member makes
+// the Developer Terminal disappear, taking the control for getting back out with
+// it. The account menu is on every screen in every role, so the way in and the
+// way out are the same two taps whatever you are previewing.
+//
+// Shown on the reader's REAL roles (`user.roles`), never the effective ones —
+// that is the whole point, and reading the effective roles here would recreate
+// the trap it was moved to escape.
+function ViewAsRole({
+  actingRole,
+  onPick,
+}: {
+  actingRole: RoleKey | null;
+  onPick: (r: RoleKey | null) => void;
+}) {
+  const row = (active: boolean, label: string, title: string, onClick: () => void) => (
+    <button
+      key={label}
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        ...menuItem,
+        gap: 9,
+        fontSize: 12,
+        padding: '6px 9px',
+        color: active ? C.gold : C.text,
+        fontWeight: active ? 700 : 500,
+      }}
+    >
+      <span
+        style={{
+          width: 11,
+          height: 11,
+          flex: 'none',
+          borderRadius: '50%',
+          border: `2px solid ${active ? C.gold : '#5e7098'}`,
+          background: active ? C.gold : 'transparent',
+        }}
+      />
+      {label}
+    </button>
+  );
+
+  return (
+    <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 9px 4px' }}>
+        <Icon name="eye" size={14} color={C.faint} />
+        <span style={{ fontSize: 12.5, fontWeight: 500, color: C.text }}>{"View as role"}</span>
+      </div>
+      {row(!actingRole, 'My access', 'Your normal view, with every role you hold', () => onPick(null))}
+      {ALL_ROLES.map((r: RoleKey) =>
+        row(actingRole === r, ROLE_LABELS[r], ROLE_DESCRIPTIONS[r], () =>
+          onPick(actingRole === r ? null : r),
+        ),
+      )}
+    </div>
+  );
+}
+
 export function TopBar(props: TopBarProps) {
   const {
     user,
     effectiveRoles,
     actingRole,
+    onSetActingRole,
     workspaceLabel,
     sectionLabel,
     accent,
@@ -506,10 +581,28 @@ export function TopBar(props: TopBarProps) {
               Signed in as <b style={{ color: C.text }}>{user.email ?? user.username}</b>
               <br />
               Roles: {rolesSummary(user.roles)}
-              {actingRole && <><br />Previewing as a member role · manage in Admin → View as role</>}
+              {actingRole && (
+                <>
+                  <br />
+                  Previewing as <b style={{ color: C.gold }}>{ROLE_LABELS[actingRole]}</b> · switch
+                  back below
+                </>
+              )}
             </div>
 
             <ZoomControl />
+
+            {/* Founder-level only, and gated on the REAL roles so it survives a
+                preview of a role that would not otherwise see it. */}
+            {isFounder(user.roles) && (
+              <ViewAsRole
+                actingRole={actingRole}
+                onPick={(r) => {
+                  setMenuOpen(false);
+                  onSetActingRole(r);
+                }}
+              />
+            )}
 
             <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
               <button

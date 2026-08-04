@@ -40,7 +40,6 @@ import { AdminAiInstructions } from '../workspaces/admin/AdminAiInstructions';
 import { AdminPatchNotes } from '../workspaces/admin/AdminPatchNotes';
 import { AdminContent } from '../workspaces/admin/AdminContent';
 import { AdminEarlyAccess } from '../workspaces/admin/AdminEarlyAccess';
-import { AdminViewAs } from '../workspaces/admin/AdminViewAs';
 import { AdminSuggestions } from '../workspaces/admin/AdminSuggestions';
 import { AdminMessageTemplates } from '../workspaces/admin/AdminMessageTemplates';
 import { AdminBugReports } from '../workspaces/admin/AdminBugReports';
@@ -531,8 +530,6 @@ export function Portal() {
         return <HelpTerms theme={theme} />;
       case 'hp_privacy':
         return <HelpPrivacy theme={theme} />;
-      case 'ad_viewas':
-        return <AdminViewAs theme={theme} actingRole={actingRole} onSetActingRole={changeActingRole} />;
       case 'ad_templates':
         return <AdminMessageTemplates theme={theme} />;
       case 'ad_suggestions':
@@ -569,6 +566,7 @@ export function Portal() {
       user={user!}
       effectiveRoles={effectiveRoles}
       actingRole={actingRole}
+      onSetActingRole={changeActingRole}
       workspaceLabel={WORKSPACE_LABELS[workspace]}
       sectionLabel={sectionLabelFor(workspace, screen)}
       accent={accent}

@@ -57,7 +57,7 @@ export const requireAdmin: preHandlerHookHandler = async (
 
 // Reject unless the logged-in user is founder-level (founder or the
 // permission-equivalent software_developer). Guards the founder-only tools:
-// the Founder Terminal (AI Instructions, Site Wording, View as role) and the
+// the Founder Terminal (AI Instructions, Site Wording, Suggestions) and the
 // site-wording copy overrides. Plain admins are rejected here.
 export const requireFounder: preHandlerHookHandler = async (
   request: FastifyRequest,

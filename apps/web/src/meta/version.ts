@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.61';
+export const APP_VERSION = 'Beta V 6.62';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.62',
+    date: 'August 4, 2026',
+    notes: [
+      'The study tutor is now a paid feature, split in two. “Break this down” — the one-tap explanation of the question or flashcard in front of you — needs Premium and carries the gold star. Typing your own question or a follow-up needs Max and carries the diamond. Both buttons still show on every account with their badge, so you can see what each costs, and both are listed on My Terminal ▸ Premium Features. Answering questions, your streak, level and progress are unchanged and still free.',
+      'View as role moved out of the Developer Terminal and into the account menu, under your name in the top right. Previewing as a lower role used to hide the very screen you switch back from; now the way in and the way out are in the same place on every screen.',
+    ],
+  },
   {
     version: 'Beta V 6.61',
     date: 'August 4, 2026',

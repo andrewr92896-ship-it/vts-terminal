@@ -1014,9 +1014,22 @@ workspaces list** (see `theme/nav.ts` order).
   AI Instructions, Site Wording,
   **Suggestions** (`ad_suggestions` — moved out of the Admin Terminal; the
   `/api/admin/suggestions` read/patch/delete routes are `requireFounder` to
-  match, while *sending* a suggestion from Site Help stays open to everyone),
-  View as role. **Founder-level only** (`isFounder`). Displayed as "Developer Terminal";
+  match, while *sending* a suggestion from Site Help stays open to everyone).
+  **Founder-level only** (`isFounder`). Displayed as "Developer Terminal";
   the internal key and role are still `founder` (unchanged gating).
+  - **View as role left this workspace** (owner decision, 2026-08) and is now in
+    the **account menu**, under the zoom control — `ViewAsRole` in
+    `components/TopBar.tsx`, fed by `changeActingRole` in `Portal.tsx`. It was the
+    `ad_viewas` section here, and a preview control is the one thing that cannot
+    live in a workspace a preview hides: choosing Member removed the Developer
+    Terminal and the way back out with it. The menu is on every screen in every
+    role, so getting in and getting out are the same two taps.
+    - It gates on the reader's **real** roles (`isFounder(user.roles)`), never the
+      effective ones — reading the effective roles would rebuild the trap exactly.
+    - `changeActingRole` moves you to a workspace the previewed role can reach
+      when the current one goes out of reach, so the screen never blanks.
+    - The section key `ad_viewas` and `AdminViewAs.tsx` are **deleted**, not
+      aliased: nothing in the terminal linked to that screen.
   - **Developer Blog** (`ad_blog`, `workspaces/admin/DevBlog.tsx` over
     `devBlog/service.ts`, routes `/api/dev-blog/*`) — the idea board. Posts with
     replies, founder-level throughout including reads. Tables `dev_blog_posts` /
@@ -1056,17 +1069,31 @@ They are split because `service.ts` asks `rbac.ts` who is an admin and `rbac.ts`
 needs the membership *type* for the public user — importing each other would be a
 cycle.
 
-- **`FEATURE_TIER` is the entire paywall, in one object.** Eight paid features
-  (owner decisions, 2026-08). **Max:** `ai`, `tradeDesk`, `teams`, `teamChat`,
-  `customStreams`, `brokerConnections` (**Trade Analysis ▸ Live Brokers carries
-  its diamond**), `pushover`. **Premium:** `funded`, `studyCreation`,
-  `customBoards`, `premiumBadges`, `strategySessions`, `marketData`,
-  `presetStreams`, `suggestions`, `supportChat`. Everything absent
+- **`FEATURE_TIER` is the entire paywall, in one object.** Eighteen paid features
+  (owner decisions, 2026-08). **Max:** `ai`, `studyAsk`, `tradeDesk`, `teams`,
+  `teamChat`, `customStreams`, `brokerConnections` (**Trade Analysis ▸ Live
+  Brokers carries its diamond**), `pushover`. **Premium:** `funded`,
+  `studyExplain`, `studyCreation`, `customBoards`, `premiumBadges`,
+  `strategySessions`, `marketData`, `presetStreams`, `suggestions`,
+  `supportChat`. Everything absent
   from that map is included with every account. **Moving a feature between tiers
   is a one-word edit there** and every guard, lock icon and upgrade prompt
   follows — that is the whole reason features ask `hasEntitlement(user, 'ai')` and
   never "is this user premium". The owner is still deciding what belongs where, so
   keep it editable like this.
+- **Adding a paid feature is FOUR maps, not one, and the fourth is what the user
+  reads.** `PREMIUM_FEATURES` (the key), `FEATURE_TIER` (what it costs),
+  `FEATURE_LABELS` (what it is called) and `FEATURE_BLURBS` (one line on what it
+  buys) — plus the same four mirrored in the web's `api/types.ts` and
+  `auth/access.ts`. **My Terminal ▸ Premium Features is generated from exactly
+  those**, so a feature is only listed on the screen that exists to say what
+  Premium and Max include once the label and the blurb are written. **Never make
+  something paid without adding it there** (owner instruction, 2026-08): a lock
+  the user meets in the terminal but cannot find on the memberships screen reads
+  as a fault rather than a price. `Record<PremiumFeature, string>` makes the two
+  maps a compile error to forget — do not weaken those types to a partial.
+  Then mark it (see the sidebar/table below); a paid feature with no visible mark
+  is the same failure one screen further along.
 - **Anything that takes the user's own API key or credential is Max** (owner
   instruction, 2026-08). Not for what it costs to run — for what it means to
   hold. A key of somebody else's is a responsibility, and the worst case is their
@@ -1186,7 +1213,7 @@ cycle.
       what the reader already has.
   - **Only wholly-gated sections are marked** in the sidebar. Several paid
     features have no section of their own, and each is marked **at its own
-    control** instead (audited 2026-08 — every one of the sixteen paid features
+    control** instead (audited 2026-08 — every one of the eighteen paid features
     now carries its mark somewhere a user can see before they hit the paywall):
     | feature | where it is marked |
     | --- | --- |
@@ -1198,6 +1225,8 @@ cycle.
     | `premiumBadges` | the **Badge** button in My Terminal ▸ Trading Team |
     | `customBoards` | the Live Wall's "Build your own" button |
     | `studyCreation` | the Studies **Create** `ActionTile` |
+    | `studyExplain` | the tutor's one-tap opener ("Break this down" / "More Details") |
+    | `studyAsk` | beside the tutor's send button, on the field you type into |
     | `presetStreams`, `customStreams` | the Market News channel rail |
     Everything else is a nav row (`tradeDesk`, `teams`, `marketData`,
     `strategySessions`, `funded`, `studyCreation`) and marked there.
@@ -1253,6 +1282,22 @@ cycle.
   decision, 2026-08), and a locked tile is **shown with its tier badge, never
   hidden** — somebody on a free account has to be able to see what upgrading
   would let them do. `workspaces/studies/ActionTile.tsx` is that tile.
+  - **The tutor is the exception, and it is split across two tiers** (owner
+    decision, 2026-08). `TutorChat` is one component serving both the study game
+    and the flashcard player, and its two controls cost different things: the
+    **one-tap opener** — "Break this down" / "More Details" — is `studyExplain`
+    (**Premium**, star), while **typing your own question**, opener or follow-up,
+    is `studyAsk` (**Max**, diamond). The everything-else-about-Studies rule still
+    holds: answering questions, keeping your streak, level and progress stay free.
+  - **The server splits them on the SHAPE of the request, not the client's word
+    for it** (`neededForTutor` in `routes/ai.ts`). One endpoint serves both, so it
+    gates inside the handler the way `/api/support/message` gates by intake kind
+    rather than by a preHandler. `explain` is the structured form whose prompt the
+    route composes, so it carries no user text at all; `seed` is the canned opener
+    and only counts as one on an opening turn. Everything else — free text, a
+    running thread, a `seed` flag on a conversation already underway — is the Max
+    half. **The tutor is therefore no longer part of `ai`**, whose blurb said "and
+    the study tutor" and no longer does.
 - **The Ask VTS AI button stays in the top bar for everyone** (owner instruction).
   Hiding it would leave a free account unable to discover the feature exists, so
   the panel opens as normal and the composer is replaced by the upgrade notice.

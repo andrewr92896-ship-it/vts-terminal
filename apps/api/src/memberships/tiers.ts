@@ -49,6 +49,7 @@ export const TIER_LABELS: Record<MembershipTier, string> = {
 export const PREMIUM_FEATURES = [
   // Max
   'ai',
+  'studyAsk',
   'tradeDesk',
   'teams',
   'teamChat',
@@ -57,6 +58,7 @@ export const PREMIUM_FEATURES = [
   'pushover',
   // Premium
   'funded',
+  'studyExplain',
   'studyCreation',
   'customBoards',
   'premiumBadges',
@@ -70,12 +72,18 @@ export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
 export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // ---- Max ----
-  // Every AI surface EXCEPT customer support. Support stays free deliberately: a
-  // user who cannot reach help is a user who cannot tell you their payment
-  // failed, and locking the complaints channel behind the thing being complained
-  // about is how a paid product loses an account permanently. AI is at Max
-  // because it is the one feature here with a real per-use cost to run.
+  // Every AI surface EXCEPT customer support and the study tutor's one-tap
+  // explanation. Support stays free deliberately: a user who cannot reach help is
+  // a user who cannot tell you their payment failed, and locking the complaints
+  // channel behind the thing being complained about is how a paid product loses
+  // an account permanently. AI is at Max because it is the one feature here with
+  // a real per-use cost to run.
   ai: 'max',
+  // Typing your own question to the study tutor — the back-and-forth, and every
+  // follow-up. Open-ended, so it is the half of the tutor with no ceiling on what
+  // one learner can spend, which is what puts it at the top tier while the canned
+  // breakdown below sits at Premium.
+  studyAsk: 'max',
   // Placing an order. The ladder the owner chose is Premium TRACKS and Max
   // EXECUTES: a Premium member connects a broker and reviews their trading,
   // while actually sending an order is the top tier. It also puts the
@@ -109,6 +117,11 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // ---- Premium ----
   // The prop-firm challenge tracker.
   funded: 'premium',
+  // "Break this down" / "More Details" — the one-tap explanation of the question
+  // or term already on screen. One canned opener with a bounded cost, and the
+  // thing a learner who got an answer wrong actually needs, so it is reachable a
+  // tier below the open-ended conversation it starts.
+  studyExplain: 'premium',
   // Building your own study games, flashcard sets and guides. Playing the
   // built-in ones stays free.
   studyCreation: 'premium',
@@ -141,6 +154,7 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
 // is — not a sales pitch, and not instructions for using it.
 export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   ai: 'VTS AI',
+  studyAsk: 'Study tutor chat',
   tradeDesk: 'Trade Desk',
   teams: 'Trading teams',
   teamChat: 'Team chat',
@@ -148,6 +162,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   brokerConnections: 'Broker connections',
   pushover: 'Pushover notifications',
   funded: 'Funded Account tracking',
+  studyExplain: 'Study explanations',
   studyCreation: 'Study creation',
   customBoards: 'Custom Live Wall boards',
   premiumBadges: 'Badges',
@@ -161,7 +176,8 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
 // A one-line description of what each buys, for the tier boxes on the Premium
 // Features screen. States what the feature IS — never how to use it.
 export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
-  ai: 'Ask VTS AI anywhere in the terminal, and the study tutor.',
+  ai: 'Ask VTS AI anywhere in the terminal.',
+  studyAsk: 'Ask the study tutor your own questions about a question or term, and keep going.',
   tradeDesk: 'Place, close and amend real orders through your own broker.',
   teams: 'Share a desk: one book, one leaderboard, one set of study content.',
   teamChat: 'The private conversation with your desk.',
@@ -169,6 +185,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   brokerConnections: 'Connect OANDA and Kraken to stream your positions and balances.',
   pushover: 'Trade and alert notifications through Pushover, with your own sound.',
   funded: 'Track a prop-firm challenge: equity, target, and drawdown left.',
+  studyExplain: 'A plain-language breakdown of the study question or term in front of you.',
   studyCreation: 'Build your own study games, flashcard sets and guides.',
   customBoards: 'Save your own Live Wall arrangements instead of the presets.',
   premiumBadges: 'Recognition badges beside your name.',

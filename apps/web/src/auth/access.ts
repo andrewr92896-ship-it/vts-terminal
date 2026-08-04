@@ -167,6 +167,7 @@ export const TIER_LABELS: Record<MembershipTier, string> = {
 // feature is, never instructions for using it.
 export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   ai: 'VTS AI',
+  studyAsk: 'Study tutor chat',
   tradeDesk: 'Trade Desk',
   teams: 'Trading teams',
   teamChat: 'Team chat',
@@ -174,6 +175,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   brokerConnections: 'Broker connections',
   pushover: 'Pushover notifications',
   funded: 'Funded Account tracking',
+  studyExplain: 'Study explanations',
   studyCreation: 'Study creation',
   customBoards: 'Custom Live Wall boards',
   premiumBadges: 'Badges',
@@ -187,7 +189,8 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
 // One line on what each buys, for the tier boxes on the Premium Features screen.
 // States what the feature IS — never how to use it.
 export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
-  ai: 'Ask VTS AI anywhere in the terminal, and the study tutor.',
+  ai: 'Ask VTS AI anywhere in the terminal.',
+  studyAsk: 'Ask the study tutor your own questions about a question or term, and keep going.',
   tradeDesk: 'Place, close and amend real orders through your own broker.',
   teams: 'Share a desk: one book, one leaderboard, one set of study content.',
   teamChat: 'The private conversation with your desk.',
@@ -195,6 +198,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   brokerConnections: 'Connect OANDA and Kraken to stream your positions and balances.',
   pushover: 'Trade and alert notifications through Pushover, with your own sound.',
   funded: 'Track a prop-firm challenge: equity, target, and drawdown left.',
+  studyExplain: 'A plain-language breakdown of the study question or term in front of you.',
   studyCreation: 'Build your own study games, flashcard sets and guides.',
   customBoards: 'Save your own Live Wall arrangements instead of the presets.',
   premiumBadges: 'Recognition badges beside your name.',

@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
+import { hasEntitlement } from '../../auth/access';
+import type { PremiumFeature } from '../../api/types';
+import { TierMark } from '../../components/TierMark';
+import { UpgradeNotice } from '../../components/UpgradeNotice';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 
@@ -10,6 +15,15 @@ type Msg = { role: 'user' | 'assistant'; content: string };
 // that is folded into the first user turn so every reply stays on-topic, while
 // the user only ever sees what they typed. Mount with a `key` (question id or
 // term) so switching cards starts a fresh conversation.
+//
+// **The two halves are on different tiers** (owner decision, 2026-08). The
+// one-tap opener — "Break this down" in the study game, "More Details" on a
+// flashcard — is `studyExplain` (Premium); typing your own question, opener or
+// follow-up, is `studyAsk` (Max). Both controls are drawn for everyone with their
+// star / diamond, the same rule the sidebar rows and the Studies tiles follow: a
+// free account has to be able to see what upgrading would give it. The server
+// enforces it on the shape of the request (`routes/ai.ts`), so this is the
+// signposting, not the gate.
 export function TutorChat({
   theme,
   context,
@@ -32,10 +46,16 @@ export function TutorChat({
   onActivity?: () => void;
 }) {
   const accentGrad = accentGradient(theme);
+  const { user } = useAuth();
+  const canExplain = hasEntitlement(user, 'studyExplain');
+  const canAsk = hasEntitlement(user, 'studyAsk');
   const [chat, setChat] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Which feature the reader just reached without the tier for it, so the prompt
+  // names the right one. Cleared as soon as they use the half they do hold.
+  const [locked, setLocked] = useState<PremiumFeature | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
 
   // Keep the latest turn in view as the conversation grows.
@@ -44,9 +64,16 @@ export function TutorChat({
     if (el) el.scrollTop = el.scrollHeight;
   }, [chat, busy]);
 
-  async function send(text: string) {
+  async function send(text: string, seed = false) {
     const t = text.trim();
     if (!t || busy) return;
+    // A follow-up is always the typed half, whatever opened the thread.
+    const needed: PremiumFeature = seed && chat.length === 0 ? 'studyExplain' : 'studyAsk';
+    if (!(needed === 'studyExplain' ? canExplain : canAsk)) {
+      setLocked(needed);
+      return;
+    }
+    setLocked(null);
     onActivity?.();
     const nextDisplay: Msg[] = [...chat, { role: 'user', content: t }];
     setChat(nextDisplay);
@@ -58,9 +85,20 @@ export function TutorChat({
       const payload: Msg[] = nextDisplay.map((m, i) =>
         i === 0 && m.role === 'user' ? { role: 'user', content: `${context}\n\n${m.content}` } : m,
       );
-      const { reply } = await api.studyTutorChat(payload);
+      const { reply } = await api.studyTutorChat(payload, { seed });
       setChat([...nextDisplay, { role: 'assistant', content: reply }]);
     } catch (e) {
+      // The server is the enforcer, so honour its answer over the entitlement
+      // this client read at mount — a membership that lapsed mid-session shows
+      // the upgrade prompt rather than a bare error.
+      if (e instanceof ApiError && e.status === 402) {
+        // Put the thread and the box back the way they were: nothing was sent,
+        // so nothing should look sent.
+        setChat(chat);
+        if (!seed) setInput(t);
+        setLocked(needed);
+        return;
+      }
       setErr(
         e instanceof ApiError
           ? e.status === 503
@@ -118,15 +156,20 @@ export function TutorChat({
         </div>
       )}
 
+      {/* Shown in place of nothing happening when a locked control is pressed —
+          the control itself stays where it was, marked, rather than disappearing. */}
+      {locked && <UpgradeNotice feature={locked} compact />}
+
       <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', alignItems: 'center' }}>
         {seedLabel && seedPrompt && chat.length === 0 && (
           <button
-            onClick={() => void send(seedPrompt)}
+            onClick={() => void send(seedPrompt, true)}
             disabled={busy}
             style={{ ...detailBtn(theme), opacity: busy ? 0.6 : 1 }}
             title="Get a plain-language explanation, then ask follow-ups"
           >
             {seedLabel}
+            <TierMark tier="premium" size={12} dim={!canExplain} />
           </button>
         )}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flex: 1, minWidth: 180 }}>
@@ -174,6 +217,10 @@ export function TutorChat({
           >
             →
           </button>
+          {/* Marks the typed half. It sits after the send button rather than on
+              it, so the diamond reads as the price of the field beside it and not
+              as decoration on an arrow. */}
+          <TierMark tier="max" size={13} dim={!canAsk} />
         </div>
       </div>
     </div>
@@ -214,6 +261,9 @@ function assistantBubble(theme: Theme, isPhone: boolean): CSSProperties {
 
 function detailBtn(theme: Theme): CSSProperties {
   return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 7,
     border: `1px solid ${theme.accent}`,
     background: 'rgba(255,255,255,.05)',
     color: '#fff',

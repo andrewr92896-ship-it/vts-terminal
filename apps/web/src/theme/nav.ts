@@ -197,7 +197,10 @@ export const NAV: NavWorkspace[] = [
       // sidebar's order — workspaces and the sections within each — and the only
       // way to change it is to edit it here and deploy. Owner decision, 2026-08.)
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
-      { key: 'ad_viewas', label: 'View as role', icon: 'eye' },
+      // (There is deliberately no "View as role" row. It lives in the account
+      // menu instead — owner decision, 2026-08: previewing as Member hides this
+      // very workspace, so a control for leaving the preview cannot live inside
+      // it. See `ViewAsRole` in components/TopBar.tsx.)
     ],
   },
   // Site Help — available to every signed-in user. Consolidates the how-to
