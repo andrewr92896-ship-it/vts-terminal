@@ -76,6 +76,26 @@ body {
   min-height: var(--app-h);
 }
 
+/* ...and it stops at an embedded document.
+
+   `zoom` and a nested browsing context do not compose in WebKit: the framed
+   document is laid out against one box and painted into another, so at any zoom
+   other than 100% the embed covers only `zoom` of the iframe's area and the
+   browser's own white backdrop shows through the rest. Measured off an iPhone at
+   90%: the Live Wall's watchlist drew its ticker across exactly 90% of the tile,
+   with a white band down the right edge and along the bottom. Chromium composes
+   the two correctly, which is why this is invisible on a desktop — the same trap
+   as `lib/measure.ts`, one layer further in.
+
+   Cancelling the factor here leaves every embed at an effective zoom of 1, where
+   there are no two spaces left to disagree, whatever the engine does with them.
+   The trade is that a TradingView chart, a watchlist strip and a YouTube stream
+   keep their native size while the terminal around them scales. At the default
+   100% this rule is an identity and nothing moves at all. */
+#root iframe {
+  zoom: calc(1 / var(--vts-zoom, 1));
+}
+
 button {
   font-family: inherit;
 }

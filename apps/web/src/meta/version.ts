@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.60';
+export const APP_VERSION = 'Beta V 6.61';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.61',
+    date: 'August 4, 2026',
+    notes: [
+      'Fixed the Live Wall watchlist on iPhone. With the terminal zoomed to anything other than 100%, the ticker was drawn short of the tile and a white band showed down the right side and along the bottom — the same fault hit the chart and live-stream tiles. Embedded windows now ignore the terminal zoom instead of being scaled twice. A scrolling watchlist also no longer gets padded out to a tall tile on a phone: it is a fixed-height strip, so it keeps the height you gave it.',
+    ],
+  },
   {
     version: 'Beta V 6.60',
     date: 'August 3, 2026',

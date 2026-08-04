@@ -2864,6 +2864,30 @@ desktop (the fallback is roughly right) and unusable on a phone. Verified by
 driving a real browser at 1440 / 768 / 390 / 320 and checking the cells actually
 track the viewport — a typecheck cannot see this, and neither can a desktop.
 
+**The terminal zoom stops at an embedded document** (`#root iframe` in
+`global.css`). One layer past the measurement trap above, `zoom` and a nested
+browsing context do not compose in WebKit either: the framed document is laid out
+against one box and painted into another, so at any zoom but 100% an embed covers
+only `zoom` of the iframe's area and the browser's own **white** backdrop shows
+through the rest. Measured off an iPhone at 90%, the Live Wall's watchlist drew
+its ticker across exactly 90% of the tile with a white band down the right edge
+and along the bottom; the chart and live-stream tiles share the fault. Chromium
+composes the two correctly, which is again why a desktop cannot see it. The rule
+cancels the factor so every embed sits at an effective zoom of **1** — there are
+then no two spaces left to disagree, whatever the engine does with them. The trade
+is that a TradingView chart, a watchlist strip and a YouTube stream keep their
+native size while the terminal around them scales; at the default 100% the rule is
+an identity. Do not "fix" this by counter-sizing the iframe against a measured
+factor — that is engine-dependent, and correcting for WebKit would break Chromium.
+
+**A tile whose content is a fixed-height strip is exempt from the phone height
+floor** (`isTickerStrip` in `ChartBoard.tsx`). Every tile is floored to six rows
+on a phone so a tile that was a wide strip on the desktop is not a stub — but
+TradingView's ticker tape is one fixed height and does not grow into a taller
+tile, so the floor could only pad it with two thirds of a tile of nothing. A
+watchlist in **static** mode is the quote list, which does fill, and is floored
+like everything else.
+
 ### Mobile input zoom (iOS)
 
 iOS Safari auto-zooms the viewport whenever a focused text field has a
