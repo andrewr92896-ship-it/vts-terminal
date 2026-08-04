@@ -559,7 +559,18 @@ export const NEWS_IMPACTS = ['high', 'medium', 'low'] as const;
 export type NewsImpact = (typeof NEWS_IMPACTS)[number];
 export const NEWS_BIASES = ['bullish', 'bearish', 'neutral'] as const;
 export type NewsBias = (typeof NEWS_BIASES)[number];
-export const NEWS_CATEGORIES = ['markets', 'geopolitical', 'economic', 'crypto', 'other'] as const;
+// `world` and `politics` were added for the News workspace (2026-08). The column
+// is plain TEXT — drizzle's `enum` here is a TypeScript type, not a database
+// constraint — so widening this list needs no migration.
+export const NEWS_CATEGORIES = [
+  'markets',
+  'geopolitical',
+  'economic',
+  'crypto',
+  'world',
+  'politics',
+  'other',
+] as const;
 export type NewsCategory = (typeof NEWS_CATEGORIES)[number];
 
 export const tradingNews = sqliteTable('trading_news', {
@@ -2191,3 +2202,55 @@ export const credentialAudit = sqliteTable('credential_audit', {
   error: text('error'),
 });
 export type CredentialAuditRow = typeof credentialAudit.$inferSelect;
+
+// ---- Finances: budgeting (migration 0104) ----
+//
+// Personal, never team-scoped — every query filters on the caller, the same rule
+// the Investments workspace follows. Manual entry today, with `source` and
+// `externalId` on an entry as the seam for a read-only aggregator later.
+export const BUDGET_KINDS = ['income', 'expense'] as const;
+export type BudgetKind = (typeof BUDGET_KINDS)[number];
+
+export const budgetCategories = sqliteTable('budget_categories', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  // The SIGN lives here, never on an amount. See budgetEntries.
+  kind: text('kind', { enum: BUDGET_KINDS }).notNull(),
+  // Expected monthly figure in cents, or null for "no target".
+  monthlyLimit: integer('monthly_limit'),
+  icon: text('icon'),
+  sortOrder: integer('sort_order').notNull().default(0),
+  archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type BudgetCategoryRow = typeof budgetCategories.$inferSelect;
+
+export const budgetEntries = sqliteTable('budget_entries', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  categoryId: text('category_id')
+    .notNull()
+    .references(() => budgetCategories.id, { onDelete: 'cascade' }),
+  // ALWAYS POSITIVE, in CENTS. The category's kind carries the sign (the same
+  // rule net_worth_items follows), and integers rather than reals because a
+  // budget adds and subtracts the same values repeatedly — binary floats
+  // accumulate visible error doing that.
+  amountCents: integer('amount_cents').notNull(),
+  note: text('note'),
+  // ET calendar day as YYYY-MM-DD. A date string, not a timestamp: a budget is
+  // bucketed by month and nothing here cares what time of day something
+  // happened, so storing an instant would mean picking a zone on every read.
+  occurredOn: text('occurred_on').notNull(),
+  // 'manual' today; the aggregator seam. The client can never set this.
+  source: text('source').notNull().default('manual'),
+  externalId: text('external_id'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type BudgetEntryRow = typeof budgetEntries.$inferSelect;

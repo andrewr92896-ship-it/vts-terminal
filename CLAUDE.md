@@ -796,6 +796,70 @@ workspaces list** (see `theme/nav.ts` order).
       negative cache on unresolved handles (else a typo'd handle is re-queried
       every tick forever). A cached live reading older than 30 min is treated as
       unknown, so a stalled poller can never leave a channel stuck showing LIVE.
+- **Finances** (green, key `finances`) — personal money for an ordinary person.
+  **Deliberately separate from Investments** (owner decision, 2026-08):
+  Investments answers "what do I own", Finances answers "what do I earn and
+  spend". Folding them together makes one very long sidebar list in which
+  neither job is obvious, and Finances is the workspace the average public user
+  opens first.
+  - **Net Worth** (`fin_networth`) moved here from My Terminal. The screen and
+    its route are unchanged; `my_networth` still resolves, so in-app links keep
+    working.
+  - **Budget** (`fin_budget`, `workspaces/finances/Budget.tsx` over
+    `finances/budget.ts` → `/api/finances/budget/*`, migration `0104`).
+    - **Money is CENTS, as integers, everywhere below the route.** A budget adds
+      and subtracts the same figures repeatedly and binary floats accumulate
+      visible error doing that. Dollars are converted to cents at the route and
+      back at the formatter, so nothing in between can drift.
+    - **An amount is ALWAYS POSITIVE; the category's `kind` carries the sign.**
+      Same rule `net_worth_items` follows, for the same reason: a negative
+      stored amount reads fine until something sums the column without checking
+      the kind, and then the mistake is invisible.
+    - **A month is Eastern**, like History's day buckets. A month boundary has to
+      be one fact rather than a per-reader one — otherwise December's spending
+      moves into November when somebody changes their display zone, and the
+      figures appear to change with nothing entered or edited.
+    - `occurred_on` is a **date string** (`YYYY-MM-DD`), not a timestamp: the
+      feature buckets by month and nothing cares what time of day a coffee was
+      bought, so storing an instant would mean picking a zone on every read.
+      String comparison then works because that format sorts chronologically.
+    - **Archiving keeps history; deleting removes it.** An archived category with
+      activity in the month being viewed is still listed, because dropping it
+      would silently change a past month's total — the one thing a record of what
+      you spent must never do. Delete is for a category created by mistake.
+    - **Everything is per user**, like Investments and unlike Trading. Every query
+      filters on the caller and no function takes a "whose" parameter. Do not add
+      a team dimension.
+    - **The aggregator seam is already there**: an entry carries `source` and a
+      unique `(user_id, external_id)`, so a read-only provider lands as a second
+      writer into the same tables rather than a rewrite. The client can never set
+      `source`.
+    - **It gives no advice.** No "you are overspending on dining", no suggested
+      budgets. A budgeting screen is the easiest place in a finance app to cross
+      that line by accident. It states what is true and stops.
+- **News** (slate-blue, key `news`) — Market News moved out of My Terminal
+  (owner decision, 2026-08), and the workspace is built to grow past markets.
+  - **Market News** (`news`) is the same screen with the same key and route —
+    only the workspace around it changed, so the `howto` wording and every
+    in-app link keep working. **Market Data stayed in My Terminal**: it is a
+    board of rates and prices rather than a feed of stories.
+  - **World** (`news_world`) and **Politics** (`news_politics`) are one component
+    (`workspaces/news/GeneralNews.tsx`) parameterized by topic.
+    - **WIRE SERVICES ONLY** (owner decision). Reuters and AP report rather than
+      opine, which is the one editorial position defensible to everybody —
+      whichever outlets appear here are read as a stance by somebody. **Do not
+      add opinion or commentary outlets to these categories.**
+    - **No bias glyph, no impact chip, no read-through, no AI summary.** Market
+      News earns those because a rate decision genuinely moves an instrument; a
+      flood or an election has no read-through the terminal can honestly supply,
+      and inventing one is exactly the advice-flavoured surface the product
+      avoids.
+    - They share `trading_news` — one ingest path, one table — so
+      `getMarketNews` **excludes** them explicitly via
+      `GENERAL_NEWS_CATEGORIES`. Without that, a Reuters world feed quietly puts
+      "Floods displace thousands" in the middle of a trader's headline list.
+      The `category` column is plain TEXT (drizzle's `enum` is a TS type, not a
+      DB constraint), so widening that list needs no migration.
 - **Investments** (teal, key `investments`): a read-only, layman-friendly
   **long-term portfolio tracker** — 401(k), IRA, ESA, and general holdings. This
   is the platform's intended "bread and butter" for a future public/App Store
@@ -876,7 +940,15 @@ workspaces list** (see `theme/nav.ts` order).
   - `npm run verify:investments` checks the portfolio math offline against
     hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
     touching `math.ts` or `limits.ts`.
-- **My Terminal** (emerald) holds the **Live Wall** (`live`) — the terminal's one
+- **My Terminal** (emerald) — **the Live Wall is PINNED TO THE TOP of its
+  section list** (owner instruction, 2026-08), above the paid rows. It is the
+  single exception to the Max → Premium → free stacking every other workspace
+  follows: this is the terminal's biggest feature and what a sign-in opens on, so
+  burying it under rows a free account cannot use read as though the product led
+  with its paywall. Its icon is `zap` rather than `layout-dashboard` so the row
+  carries some weight against the paid marks beside it. Net Worth left for the
+  Finances workspace and Market News for the News workspace; both keys still
+  resolve. It holds the **Live Wall** (`live`) — the terminal's one
   centralized board and what a sign-in opens on; see its own section below. (Its
   nav row sits under Trading Team since the tier stacking flipped — the workspace
   still *opens* on the wall, see Memberships ▸ the sidebar marking.) It also holds **Premium

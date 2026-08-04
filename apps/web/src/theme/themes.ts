@@ -5,6 +5,14 @@
 export type WorkspaceKey =
   | 'trading'
   | 'investments'
+  // Personal money — net worth and budgeting. Separate from `investments`,
+  // which stays the portfolio tracker: what you OWN versus what you earn and
+  // spend are different jobs, and the second is the one an average person opens
+  // first (owner decision, 2026-08).
+  | 'finances'
+  // General news. Market News moved here from My Terminal and the workspace is
+  // built to grow past markets — world and politics from wire services.
+  | 'news'
   | 'studies'
   | 'myportal'
   | 'help'
@@ -50,6 +58,30 @@ export const THEMES: Record<WorkspaceKey, Theme> = {
   // tracker (401k / IRA / ESA / general holdings). Distinct from the Advanced
   // Trading gold and My Terminal's greener emerald — teal signals steady, long-hold
   // growth rather than active-desk urgency.
+  // Personal money. A warmer green than Investments' teal so the two money
+  // workspaces are told apart at a glance in the sidebar.
+  finances: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#0a2f1f 0%,#04160f 60%)',
+    headerBg: 'linear-gradient(90deg,#082a1d 0%,#0d4630 100%)',
+    headerBorder: '#155e40',
+    navBg: '#052016',
+    navBorder: '#0e3a2a',
+    accent: '#4ADE80',
+    accent2: '#22C55E',
+    accentText: '#04210f',
+  },
+  // News. A cool slate-blue — deliberately not a market accent, since the
+  // workspace covers world and politics as well as markets.
+  news: {
+    pageBg: 'radial-gradient(1200px 600px at 70% -10%,#111d33 0%,#080d18 60%)',
+    headerBg: 'linear-gradient(90deg,#101b30 0%,#1b2c4d 100%)',
+    headerBorder: '#2a3f66',
+    navBg: '#0a1526',
+    navBorder: '#1c2c4a',
+    accent: '#93B4FF',
+    accent2: '#6C9EFF',
+    accentText: '#08152e',
+  },
   investments: {
     pageBg: 'radial-gradient(1200px 600px at 70% -10%,#052e33 0%,#04141a 60%)',
     headerBg: 'linear-gradient(90deg,#052a30 0%,#083f46 100%)',
@@ -117,6 +149,8 @@ export function accentGradient(t: Theme): string {
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
   trading: 'tradedesk',
   investments: 'inv_overview',
+  finances: 'fin_networth',
+  news: 'news',
   studies: 'st_game',
   // The Live Wall is the terminal's centralized board and the first thing in
   // My Terminal, so it is what this workspace opens on.
@@ -129,6 +163,8 @@ export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
 export const WORKSPACE_LABELS: Record<WorkspaceKey, string> = {
   trading: 'Advanced Trading',
   investments: 'Investments',
+  finances: 'Finances',
+  news: 'News',
   studies: 'Studies',
   myportal: 'My Terminal',
   admin: 'Admin Terminal',

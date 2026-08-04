@@ -1,4 +1,6 @@
 import type {
+  BudgetMonth,
+  NewsItem,
   AiViolation,
   GuardrailHit,
   ViolationStatus,
@@ -1008,6 +1010,62 @@ export const api = {
       body: JSON.stringify(input),
     });
   },
+  // World / politics headlines for the News workspace. Deliberately thinner than
+  // the market feed — headlines only, no calendar and no instrument relevance.
+  generalNews(topic: 'world' | 'politics'): Promise<{ headlines: NewsItem[] }> {
+    return request(`/api/news/general?topic=${encodeURIComponent(topic)}`);
+  },
+  // ---- Finances: budget ----
+  //
+  // Every write answers with the whole month, so the screen never has to merge
+  // a partial response into local state and cannot drift from the server.
+  budgetMonth(month?: string): Promise<BudgetMonth> {
+    return request(`/api/finances/budget${month ? `?month=${encodeURIComponent(month)}` : ''}`);
+  },
+  addBudgetCategory(input: {
+    name: string;
+    kind: 'income' | 'expense';
+    monthlyLimit?: number | null;
+  }): Promise<BudgetMonth> {
+    return request('/api/finances/budget/categories', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  updateBudgetCategory(
+    id: string,
+    patch: { name?: string; monthlyLimit?: number | null; archived?: boolean },
+    month?: string,
+  ): Promise<BudgetMonth> {
+    return request(
+      `/api/finances/budget/categories/${id}${month ? `?month=${encodeURIComponent(month)}` : ''}`,
+      { method: 'PATCH', body: JSON.stringify(patch) },
+    );
+  },
+  removeBudgetCategory(id: string, month?: string): Promise<BudgetMonth> {
+    return request(
+      `/api/finances/budget/categories/${id}${month ? `?month=${encodeURIComponent(month)}` : ''}`,
+      { method: 'DELETE' },
+    );
+  },
+  addBudgetEntry(input: {
+    categoryId: string;
+    amount: number;
+    note?: string | null;
+    occurredOn?: string;
+  }): Promise<BudgetMonth> {
+    return request('/api/finances/budget/entries', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    });
+  },
+  removeBudgetEntry(id: string, month?: string): Promise<BudgetMonth> {
+    return request(
+      `/api/finances/budget/entries/${id}${month ? `?month=${encodeURIComponent(month)}` : ''}`,
+      { method: 'DELETE' },
+    );
+  },
+
   tradingTruth(): Promise<{ posts: TruthPost[] }> {
     return request('/api/trading/truth');
   },

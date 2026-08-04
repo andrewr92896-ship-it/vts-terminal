@@ -22,6 +22,8 @@ import {
   sessionAlertPrefs,
   userFeatures,
   aiViolations,
+  budgetCategories,
+  budgetEntries,
   userMemberships,
   marketDataLayout,
   marketNewsStreams,
@@ -494,6 +496,11 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // person goes — keeping a deleted customer's chat logs is the harder thing to
     // defend, not the easier one.
     await tx.delete(aiViolations).where(eq(aiViolations.userId, targetId));
+    // Their budget. Entries cascade from the categories, but both are deleted
+    // explicitly — this repo has no ON DELETE CASCADE convention to rely on for
+    // per-user cleanup, and an unlisted table is how one gets left behind.
+    await tx.delete(budgetEntries).where(eq(budgetEntries.userId, targetId));
+    await tx.delete(budgetCategories).where(eq(budgetCategories.userId, targetId));
     // Their paid tier. The Administrator Log entry recording the grant is NOT
     // deleted — like the employee audit log, it is the record that an admin did
     // something, and it survives the account it was done to (target_user_id goes

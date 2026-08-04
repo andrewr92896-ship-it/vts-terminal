@@ -74,6 +74,8 @@ import {
 import { BOARD_TILE_KINDS, DESK_TILE_KINDS } from '../trading/boardTiles.js';
 import {
   getMarketNews,
+  GENERAL_NEWS_CATEGORIES,
+  getGeneralNews,
   addNews,
   updateNews,
   removeNews,
@@ -687,6 +689,17 @@ export async function tradingRoutes(app: FastifyInstance) {
 
   // ---- Market News (shared desk feed: headlines + economic calendar) ----
   app.get('/api/trading/news', markets, async () => getMarketNews());
+
+  // The News workspace's world / politics feeds. On `markets` (signed in) like
+  // the market feed — general news is included with every account and holds no
+  // trade, broker or balance.
+  app.get('/api/news/general', markets, async (request, reply) => {
+    const parsed = z
+      .object({ topic: z.enum(GENERAL_NEWS_CATEGORIES) })
+      .safeParse(request.query);
+    if (!parsed.success) return reply.code(400).send({ error: 'Unknown topic' });
+    return getGeneralNews(parsed.data.topic);
+  });
 
   // Mirrored Truth Social posts (populated by the background poller).
   app.get('/api/trading/truth', read, async () => ({ posts: await listTruthPosts() }));

@@ -33,40 +33,30 @@ export const NAV: NavWorkspace[] = [
     accent: '#34D399',
     group: 'My Terminal',
     sections: [
-      // Max — first, per the Max → Premium → free stacking below.
-      { key: 'my_team', label: 'Trading Team', icon: 'users' },
-      // The two market-watching screens, kept **adjacent** (owner decision,
-      // 2026-08) — they came here together when the Markets workspace was
-      // dissolved, and they are read as a pair. That is why Market News leads
-      // the free rows rather than the Live Wall: `data` is Premium and has to
-      // sit above the free rows per the stacking below, so the only way the pair
-      // stays together is for `news` to follow it. Both read public market data
-      // — no trade, no broker, no balance — and their keys stay `data` and
-      // `news`, so the howto wording and every in-app link keep working.
+      // THE LIVE WALL IS PINNED TO THE TOP, above the paid rows (owner
+      // instruction, 2026-08). It is the single exception to the Max → Premium →
+      // free stacking every other workspace follows, and it is deliberate: this
+      // is the terminal's biggest feature and what a sign-in opens on, so
+      // burying it beneath rows a free account cannot use read as though the
+      // product led with its paywall. `zap` rather than `layout-dashboard` so
+      // the row carries some weight against the paid marks beside it.
       //
+      // The key stays `live`, so the howto wording and every in-app link keep
+      // working — the same reason `desk` stayed `desk`.
+      { key: 'live', label: 'Live Wall', icon: 'zap' },
+      // Max.
+      { key: 'my_team', label: 'Trading Team', icon: 'users' },
       // Premium — the series board. The economic calendar and the FOMC
-      // countdown on that same screen stay free.
+      // countdown on that same screen stay free. Market News left for the News
+      // workspace; Market Data stayed, because it is a board of rates and prices
+      // rather than a feed of stories (owner decision, 2026-08).
       { key: 'data', label: 'Market Data', icon: 'line-chart' },
-      // Free.
-      { key: 'news', label: 'Market News', icon: 'newspaper' },
-      // Free. The Live Wall is the terminal's one centralized board (owner
-      // decision, 2026-08) and is still what a sign-in opens on —
-      // DEFAULT_SCREEN.myportal is `live`, which is a separate thing from where
-      // the row sits in this list. It was a Markets section until 2026-08; the
-      // key stays `live`, so saved nav.order overrides, the howto wording and
-      // every in-app link keep working — the same reason `desk` stayed `desk`.
-      { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
-      // The whole-life roll-up: everything you own minus everything you owe.
-      // (There is deliberately no Investment Holdings section here — the
-      // Investments workspace already tracks the portfolio, and a second screen
-      // saying the same thing was duplication rather than a roll-up. The server
-      // module behind it, myportal/holdings.ts, is still very much alive: Net
-      // Worth reads the portfolio and trading equity through it.)
-      { key: 'my_networth', label: 'Net Worth', icon: 'scale' },
       // Moved here from Advanced Trading (owner decision, 2026-08): a to-do list
       // is personal, not a desk instrument. The key stays `td_trading` so saved
       // nav.order overrides and in-app links keep working.
       { key: 'td_trading', label: 'To Do', icon: 'list-todo' },
+      // (Net Worth moved to the Finances workspace. Its key is still
+      // `my_networth`, so in-app links keep working.)
       // Memberships and the optional parts of the terminal. The key stays
       // `my_access` though the label is now Premium Features, so a founder's
       // saved nav.order override keeps pointing at it.
@@ -111,6 +101,44 @@ export const NAV: NavWorkspace[] = [
       // plenty of traders keep a manual book without ever running a challenge.
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
       { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
+    ],
+  },
+  // Finances (green) — personal money for an ordinary person: what you are worth
+  // and where it goes. Deliberately SEPARATE from Investments (owner decision,
+  // 2026-08): Investments answers "what do I own", this answers "what do I earn
+  // and spend", and folding them together makes one very long sidebar list in
+  // which neither job is obvious. This is the workspace the average public user
+  // opens first, so it leads the money pair.
+  {
+    key: 'finances',
+    label: 'Finances',
+    icon: 'piggy-bank',
+    accent: '#4ADE80',
+    group: 'Finances',
+    sections: [
+      // Moved out of My Terminal (owner decision, 2026-08). The key stays
+      // `my_networth` on the screen it routes to, so in-app links keep working;
+      // the section key is new because it is a new row in a new workspace.
+      { key: 'fin_networth', label: 'Net Worth', icon: 'scale' },
+      { key: 'fin_budget', label: 'Budget', icon: 'receipt' },
+    ],
+  },
+  // News (slate-blue) — Market News moved out of My Terminal, and the workspace
+  // is built to grow past markets. World and politics come from wire services
+  // only (owner decision, 2026-08): factual reporting rather than opinion, which
+  // keeps the terminal out of an editorial position it has no reason to hold.
+  {
+    key: 'news',
+    label: 'News',
+    icon: 'newspaper',
+    accent: '#93B4FF',
+    group: 'News',
+    sections: [
+      // The key stays `news` — the same screen, the same route, the same howto
+      // wording. Only the workspace around it changed.
+      { key: 'news', label: 'Market News', icon: 'line-chart' },
+      { key: 'news_world', label: 'World', icon: 'globe' },
+      { key: 'news_politics', label: 'Politics', icon: 'landmark' },
     ],
   },
   // Investments (teal) — a read-only, long-term portfolio tracker for the layman:
