@@ -205,6 +205,9 @@ export interface PublicUser {
   // Eastern default, so the client has one value to format with and no
   // "unset" state to reason about.
   displayTimezone: string;
+  // Off the public study leaderboards. The board still shows them their own
+  // row — opting out hides you from other people, not from yourself.
+  hideFromLeaderboards: boolean;
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards; the name is resolved from trading_teams by the caller.
   teamId: string | null;
@@ -281,6 +284,7 @@ export function toPublicUser(
     // come off the same payload.
     badges: withMembershipBadge(parseBadges(u), membership.tier),
     displayTimezone: u.displayTimezone ?? DEFAULT_DISPLAY_TIMEZONE,
+    hideFromLeaderboards: u.hideFromLeaderboards,
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,
     viewBrokerage: u.viewBrokerage,

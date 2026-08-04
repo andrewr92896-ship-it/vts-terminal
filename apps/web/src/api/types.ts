@@ -91,6 +91,9 @@ export interface User {
   username: string;
   displayName: string;
   email: string | null;
+  // Off the public study leaderboards. Set in My Terminal ▸ Preferences; the
+  // board still shows you your own row either way.
+  hideFromLeaderboards: boolean;
   // The user's profile picture as a data URL, or null when unset.
   avatarUrl: string | null;
   roles: RoleKey[];

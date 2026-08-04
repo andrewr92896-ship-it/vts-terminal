@@ -267,6 +267,7 @@ export const api = {
     avatar?: string;
     // 'auto', or an IANA zone name. The server refuses a name it cannot format.
     displayTimezone?: string;
+    hideFromLeaderboards?: boolean;
   }): Promise<{ user: User }> {
     return request('/api/auth/profile', {
       method: 'PATCH',

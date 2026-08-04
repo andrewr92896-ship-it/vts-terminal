@@ -40,6 +40,8 @@ export function Preferences({ theme }: { theme: Theme }) {
 
       <TimeZoneCard theme={theme} />
 
+      <LeaderboardCard theme={theme} />
+
       <section style={{ ...panel(theme), marginTop: 16 }}>
         <div style={panelLabel}>
           {"Trade Log layout"}
@@ -68,6 +70,69 @@ export function Preferences({ theme }: { theme: Theme }) {
         </div>
       </section>
     </div>
+  );
+}
+
+// Whether this account appears on the public study leaderboards.
+//
+// Stored on the ACCOUNT, so it follows the person between devices — and because
+// what it governs is what strangers can see, which is not a per-device question.
+// Opting out never hides your own row from you: it is about being findable, not
+// about losing your standing.
+function LeaderboardCard({ theme }: { theme: Theme }) {
+  const { user, updateProfile } = useAuth();
+  const hidden = !!user?.hideFromLeaderboards;
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const readOnly = !!user?.isDemo;
+
+  async function toggle() {
+    setSaving(true);
+    setError(null);
+    try {
+      await updateProfile({ hideFromLeaderboards: !hidden });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not save that');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <section style={{ ...panel(theme), marginTop: 16 }}>
+      <div style={panelLabel}>{"Public leaderboards"}</div>
+      <div style={{ fontSize: 12.5, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+        {"The terminal's built-in study games rank every player on one board. Your display name and score are visible to anyone playing the same game."}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12.5, color: hidden ? '#8298c4' : '#8fe3c0' }}>
+          {hidden ? 'Hidden from other players' : 'Shown on the board'}
+        </span>
+        <button
+          type="button"
+          onClick={() => void toggle()}
+          disabled={saving || readOnly}
+          style={{
+            background: 'transparent',
+            border: `1px solid ${theme.navBorder}`,
+            borderRadius: 8,
+            color: '#cfe0ff',
+            fontSize: 12,
+            padding: '7px 13px',
+            cursor: readOnly ? 'not-allowed' : 'pointer',
+            opacity: saving || readOnly ? 0.6 : 1,
+          }}
+        >
+          {saving ? 'Saving…' : hidden ? 'Show me on the board' : 'Hide me from the board'}
+        </button>
+      </div>
+      {hidden && (
+        <div style={{ fontSize: 11.5, color: C.muted, marginTop: 9, lineHeight: 1.5 }}>
+          {"You still see your own rank — this only affects what other players see."}
+        </div>
+      )}
+      {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginTop: 9 }}>{error}</div>}
+    </section>
   );
 }
 

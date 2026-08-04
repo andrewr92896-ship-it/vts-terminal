@@ -1,0 +1,13 @@
+-- Public leaderboards for the terminal's built-in study games.
+--
+-- Opting out of them. Default 0 — on the board — because a leaderboard nobody is
+-- on is not a leaderboard, and the figures it shows (a display name, an accuracy
+-- percentage, a level) are about a study game rather than about anybody's money.
+-- Anyone who would rather not be findable can switch it off and still see their
+-- own rank.
+--
+-- On `users` rather than `user_features` deliberately: this is a property of the
+-- person, not one of the optional parts of the terminal they have switched on,
+-- and it needs to be readable in the same query that reads their display name —
+-- the leaderboard join would otherwise need a second table for one boolean.
+ALTER TABLE users ADD COLUMN hide_from_leaderboards INTEGER NOT NULL DEFAULT 0;

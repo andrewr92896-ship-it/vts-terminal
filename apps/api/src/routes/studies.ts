@@ -530,11 +530,21 @@ export async function studiesRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // The per-deck leaderboard (all players of a deck are teammates by design).
+  // The leaderboard for a BUILT-IN study game — public, spanning every account
+  // on the install (owner decision, 2026-08).
+  //
+  // User-made games have no leaderboard: 404, not an empty list, so the client
+  // can hide the tab entirely rather than showing an empty board that looks
+  // broken. The caller must still own a copy of the deck to ask, which is what
+  // stops this being a way to probe deck ids.
   app.get('/api/studies/decks/:id/leaderboard', guard, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!(await getDeck(id, contentScopeId(me)))) return reply.code(404).send({ error: 'Not found' });
+    const deck = await getDeck(id, contentScopeId(me));
+    if (!deck) return reply.code(404).send({ error: 'Not found' });
+    if (!isBakedInSource(deck.source)) {
+      return reply.code(404).send({ error: 'This study game has no leaderboard' });
+    }
     return { entries: await getDeckLeaderboard(id, me.id) };
   });
 

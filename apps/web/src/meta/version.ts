@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.66';
+export const APP_VERSION = 'Beta V 6.67';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.67',
+    date: 'August 4, 2026',
+    notes: [
+      'The terminal\u2019s built-in study games now have public leaderboards — every player on the platform ranked together on one board, rather than only the people around you.',
+      'Games you make yourself have no leaderboard for now. The tab simply does not appear on them.',
+      'You can take yourself off the public boards from My Terminal \u25b8 Preferences. You still see your own rank; other players just will not see you.',
+    ],
+  },
   {
     version: 'Beta V 6.66',
     date: 'August 4, 2026',

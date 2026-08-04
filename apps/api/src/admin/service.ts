@@ -327,6 +327,8 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     badges: null,
     // Never chosen — resolves to Eastern until they pick one in Preferences.
     displayTimezone: null,
+    // On the public study leaderboards by default; switched off in Preferences.
+    hideFromLeaderboards: false,
     teamId,
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,

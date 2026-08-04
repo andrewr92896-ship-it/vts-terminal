@@ -1,15 +1,21 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { studyDeckGame, studyDeckRuns, users } from '../db/schema.js';
+import { studyDeckGame, studyDeckRuns, studyDecks, users } from '../db/schema.js';
 import { accuracyOf, statsFromState } from './gameStats.js';
+import { BAKED_IN_SOURCE, isBakedInSource } from './bakedGames.js';
 import type { LeaderboardEntry } from './game.js';
 
-// Per-user, per-deck Study Game state for team decks — the exact same opaque
-// per-game state blob, keyed by (userId, deckId). The
-// leaderboard mirrors game.ts's, filtered to one deck; everyone who has played a
-// deck is a teammate by construction (the deck is team-scoped), so ranking by
-// deck already ranks within the team.
+// Per-user, per-deck Study Game state — the opaque per-game state blob, keyed by
+// (userId, deckId).
+//
+// The LEADERBOARD is a different shape since 2026-08 (owner decision). It used
+// to rank one deck id, which was implicitly a team board because a deck belonged
+// to a team. Now:
+//   • The terminal's BUILT-IN games have a PUBLIC board spanning the whole
+//     install — see leaderboardDeckIds for why that means ranking across every
+//     copy of the game rather than one id.
+//   • User-made games have NO board at all. The route refuses them.
 
 export async function getDeckGame(userId: string, deckId: string): Promise<string | null> {
   const rows = await db
@@ -46,24 +52,71 @@ export async function archiveDeckRun(userId: string, deckId: string, raw: string
   });
 }
 
-// The high-score table for one deck: every player's current run plus every
-// banked past run, ranked by lifetime accuracy then correct count. The caller's
-// live row is flagged so the client can highlight it.
+/**
+ * Which deck ids a leaderboard for `deckId` should rank across.
+ *
+ * THIS IS THE WHOLE DESIGN OF THE PUBLIC LEADERBOARD, and it exists because a
+ * built-in game is not one deck. The terminal's example games are seeded into
+ * every scope separately (see bakedGames.ts), so a copy of "Market Terminology
+ * 101" exists per user and per team, each with its own id. Ranking on one id
+ * would rank a person against nobody.
+ *
+ * So a built-in game resolves to EVERY copy of itself, matched on the name that
+ * identifies it in code, and the board spans the whole install. A user-made deck
+ * resolves to nothing — see the route: custom games have no leaderboard at all
+ * for now (owner decision, 2026-08).
+ */
+export async function leaderboardDeckIds(deckId: string): Promise<string[]> {
+  const deck = (
+    await db
+      .select({ name: studyDecks.name, source: studyDecks.source })
+      .from(studyDecks)
+      .where(eq(studyDecks.id, deckId))
+      .limit(1)
+  )[0];
+  if (!deck || !isBakedInSource(deck.source)) return [];
+  const copies = await db
+    .select({ id: studyDecks.id })
+    .from(studyDecks)
+    .where(and(eq(studyDecks.name, deck.name), eq(studyDecks.source, BAKED_IN_SOURCE)));
+  return copies.map((c) => c.id);
+}
+
+// The high-score table for a built-in study game: every player's current run
+// plus every banked past run, across EVERY copy of that game on the install,
+// ranked by lifetime accuracy then correct count. The caller's live row is
+// flagged so the client can highlight it.
+//
+// Two people can appear with the same display name only if two accounts hold
+// one, which migration 0102 made impossible.
+//
+// Anyone with `hideFromLeaderboards` is filtered out — except the caller, who
+// always sees their own row. Opting out means other people cannot find you on
+// the board, not that you lose your own standing.
 export async function getDeckLeaderboard(
   deckId: string,
   currentUserId: string,
 ): Promise<LeaderboardEntry[]> {
+  const deckIds = await leaderboardDeckIds(deckId);
+  if (deckIds.length === 0) return [];
+
   const [liveRows, runRows] = await Promise.all([
     db
-      .select({ userId: studyDeckGame.userId, name: users.displayName, state: studyDeckGame.state })
+      .select({
+        userId: studyDeckGame.userId,
+        name: users.displayName,
+        hidden: users.hideFromLeaderboards,
+        state: studyDeckGame.state,
+      })
       .from(studyDeckGame)
       .innerJoin(users, eq(users.id, studyDeckGame.userId))
-      .where(eq(studyDeckGame.deckId, deckId)),
+      .where(inArray(studyDeckGame.deckId, deckIds)),
     db
       .select({
         id: studyDeckRuns.id,
         userId: studyDeckRuns.userId,
         name: users.displayName,
+        hidden: users.hideFromLeaderboards,
         attempted: studyDeckRuns.attempted,
         correct: studyDeckRuns.correct,
         bestStep: studyDeckRuns.bestStep,
@@ -71,12 +124,13 @@ export async function getDeckLeaderboard(
       })
       .from(studyDeckRuns)
       .innerJoin(users, eq(users.id, studyDeckRuns.userId))
-      .where(eq(studyDeckRuns.deckId, deckId)),
+      .where(inArray(studyDeckRuns.deckId, deckIds)),
   ]);
 
   const entries: LeaderboardEntry[] = [];
 
   for (const row of liveRows) {
+    if (row.hidden && row.userId !== currentUserId) continue;
     const stats = statsFromState(row.state);
     if (!stats) continue;
     entries.push({
@@ -97,6 +151,10 @@ export async function getDeckLeaderboard(
   }
 
   for (const row of runRows) {
+    // A banked run is somebody's past attempt; `isMe` is always false on these,
+    // so an opted-out player's history goes even for themselves. Their live row
+    // above is the one that carries their standing.
+    if (row.hidden) continue;
     if (row.attempted <= 0) continue;
     entries.push({
       id: `run:${row.id}`,
