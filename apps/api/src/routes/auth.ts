@@ -17,6 +17,7 @@ import { DEMO_USERNAME } from '../demo/identity.js';
 import { ensureDemoAccount } from '../seed.js';
 import { getTeamName } from '../teams/service.js';
 import { featuresForUser } from '../features/service.js';
+import { assertDisplayNameFree } from '../admin/service.js';
 import { getMembershipView } from '../memberships/service.js';
 
 // Build the browser-safe user: the trading-team name from the user's teamId, the
@@ -246,7 +247,15 @@ export async function authRoutes(app: FastifyInstance) {
       patch.username = username;
     }
     if (parsed.data.displayName != null) {
-      patch.displayName = parsed.data.displayName.trim();
+      const dn = parsed.data.displayName.trim();
+      // Same rule as the admin path, checked here too: this is the route a user
+      // changes their OWN name on, and it is the one most people will use.
+      try {
+        await assertDisplayNameFree(dn, me.id);
+      } catch {
+        return reply.code(400).send({ error: 'That display name is already taken' });
+      }
+      patch.displayName = dn;
     }
     if (parsed.data.email != null) {
       const email = parsed.data.email.toLowerCase();

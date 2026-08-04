@@ -860,48 +860,66 @@ export const RULES: RulesDoc = {
       items: [
         'VTS Terminal is an informational and educational tracker and workspace — not financial, investment, ' +
           'or trading advice, and not a place for tips, signals, or recommendations.',
-        'It exists so that people who already know and trust each other can track and discuss their own ' +
-          'trading together. Only work with people you personally know.',
+        'It is a place to track and think about your own trading and finances. What you track is ' +
+          'yours — nobody else on the terminal sees your positions or your results.',
         'You are always responsible for your own trading and financial decisions. Trading carries a real ' +
           'risk of loss, and past results never guarantee future results.',
       ],
     },
     {
-      heading: 'Trading with your team',
+      heading: 'What you can trade here',
       items: [
-        'Do not pay anyone to place or copy trades for you, and do not accept payment to trade for others. ' +
-          'Paid copy-trading and signal services are not allowed.',
-        'Do not use webhooks, bots, or automation to relay or copy anyone else’s trades. Any trade you ' +
-          'place must be entered by you, manually and independently, in your own broker account — never ' +
-          'wired up to execute automatically.',
-        'You can share your own trade information and results with your team for troubleshooting, ' +
-          'journaling, and reference — but never to get others to copy your trades or pay for them.',
-        'You may only see your own team’s data. Viewing the trades, results, or information of anyone ' +
-          'outside your team is strictly prohibited.',
+        'The trading desk connects to forex and cryptocurrency accounts only. Those are the ' +
+          'instruments VTS Terminal can place an order for or read a position from.',
+        'You can still track anything else — stocks, funds, retirement accounts — but those are ' +
+          'entered by hand, and the terminal has no connection to them. Nothing it shows about them ' +
+          'is verified.',
+        'Do not share hand-entered positions or results with anyone else on the platform. They ' +
+          'cannot be checked by anybody, which makes them the easiest thing to misrepresent.',
       ],
     },
     {
-      heading: 'Data and metrics',
+      heading: 'Your trading is yours alone',
       items: [
-        'By design, you can add trades manually, edit your information, and delete trades — so you can keep ' +
-          'records that are accurate and meaningful for your own goals (for example, clearing out test or ' +
-          'mistaken entries).',
-        'Because of that same flexibility, trade data is not verified and is not proof of performance. ' +
-          'Metrics are for your own and your team’s reference only — never to advertise or demonstrate a ' +
-          'track record.',
-        'Do not trust someone just because of the numbers they show; those numbers can be changed or ' +
-          'mistaken, and relying on them can lead to losses.',
+        'Nobody else on the terminal can see your positions, your trade log, your history, or your ' +
+          'balances. Not other members, not a team you belong to, not a team leader.',
+        'Do not pay anyone to place or copy trades for you, and do not accept payment to trade for ' +
+          'others. Paid copy-trading and signal services are not allowed.',
+        'Do not use webhooks, bots, or automation to relay or copy anyone else’s trades. Any trade ' +
+          'you place must be entered by you, manually and independently, in your own broker ' +
+          'account — never wired up to execute automatically.',
+      ],
+    },
+    {
+      heading: 'Metrics are not proof of anything',
+      items: [
+        'By design you can add trades by hand, edit them, and delete them — so your records can stay ' +
+          'accurate and useful to you (clearing out test entries, fixing mistakes).',
+        'Because of that, no figure in this terminal is verified, and none of it is proof of ' +
+          'performance. Your metrics are for your own reference and nothing else.',
+        'Do not post your VTS Terminal results publicly, or share them anywhere, to establish ' +
+          'credibility, attract followers, solicit money, or advertise a track record. Content doing ' +
+          'that will be removed and the account behind it can be removed with it.',
+        'Do not trust anyone else’s numbers either, wherever you see them. They can be edited or ' +
+          'simply wrong, and acting on them can lose you money.',
       ],
     },
     {
       heading: 'AI, news, and advice',
       items: [
-        'The AI assistants, market news, and any "brief," bias, or coaching content are informational only ' +
-          'and are not advice. Do not act on them as advice.',
-        'The AI will refuse to give financial or investment advice. Do not try to trick it or work around ' +
-          'its limits — doing so can get you removed from the platform.',
-        'AI chats and support conversations are not private: admins can review them, and the system may ' +
-          'flag attempts to misuse the AI for review. (Team chat among teammates is private.)',
+        'VTS AI, market news, and any brief or coaching content are informational only and are not ' +
+          'advice. Do not act on them as advice.',
+        'VTS AI will not tell you what to buy or sell, when to trade, or how to size a position. ' +
+          'These limits are built in and cannot be switched off by anyone.',
+        'If it declines a request, the first time is only a warning. A second within a day pauses AI ' +
+          'features for 30 minutes — support and bug reports always stay open. Every notice has a ' +
+          'button to tell us if you think the system got it wrong, and it does sometimes.',
+        'Do not try to talk around those limits with hypotheticals, roleplay, or "not as advice" ' +
+          'framing. Repeated attempts can lead to removal from the platform.',
+        'Conversations with VTS AI are not private — the team can review them, and a conversation ' +
+          'that trips the advice limits is recorded for review. Your trading data is separate: ' +
+          'positions, results, balances, and broker keys are never read by administrators, and only ' +
+          'a software developer can reach them, only to keep them secure.',
       ],
     },
     {

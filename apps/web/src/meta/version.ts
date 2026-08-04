@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.65';
+export const APP_VERSION = 'Beta V 6.66';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.66',
+    date: 'August 4, 2026',
+    notes: [
+      'Display names are now unique — no two accounts can share one. If yours clashed with somebody who had it first, a number was added to yours and you can change it to anything free from Settings.',
+      'Site Rules now sit in My Terminal as well as Site Help. It is the same document in both places, updated to say what the terminal actually does: the desk trades forex and crypto only, anything else is tracked by hand and should not be shared, and desk metrics are never proof of performance.',
+      'Added plainly: posting your results anywhere to build credibility or attract money will have the content removed. Trades can be edited and deleted here, so no figure in the terminal is verified.',
+      'Nobody else can see your email address. That was already true and is now stated in the rules.',
+    ],
+  },
   {
     version: 'Beta V 6.65',
     date: 'August 4, 2026',

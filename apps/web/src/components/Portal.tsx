@@ -546,6 +546,9 @@ export function Portal() {
         return <HelpBugReport theme={theme} user={user!} />;
       case 'hp_suggest':
         return <HelpSuggestion theme={theme} user={user!} />;
+      // My Terminal ▸ Site Rules and Site Help ▸ Rules & Conduct render the SAME
+      // document. Deliberately one screen behind two keys rather than a copy.
+      case 'my_rules':
       case 'hp_rules':
         return <HelpRules theme={theme} />;
       case 'hp_terms':

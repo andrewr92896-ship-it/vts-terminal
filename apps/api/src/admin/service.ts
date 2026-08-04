@@ -259,6 +259,22 @@ export interface CreateUserInput {
 
 export class AdminError extends Error {}
 
+// Reject a display name already used by another account (case-insensitive,
+// ignoring surrounding space). Display names are the terminal's ONE public
+// identity — the name on a public study leaderboard, in a roster, on an invite —
+// so two people cannot hold the same one (migration 0102).
+//
+// Compared the same way the unique index compares: lower(trim(...)). If those
+// ever disagree, the index throws a raw SQLite error instead of this readable
+// message, so keep them in step.
+export async function assertDisplayNameFree(displayName: string, exceptId?: string): Promise<void> {
+  const target = displayName.trim().toLowerCase();
+  const rows = await db.select({ id: users.id, displayName: users.displayName }).from(users);
+  if (rows.some((r) => r.id !== exceptId && r.displayName.trim().toLowerCase() === target)) {
+    throw new AdminError('That display name is already taken');
+  }
+}
+
 // Reject an email already used by another account (case-insensitive). Emails are
 // the sign-in identifier, so they must be unique. `exceptId` skips the account
 // being edited.
@@ -272,6 +288,7 @@ async function assertEmailFree(email: string, exceptId?: string): Promise<void> 
 export async function createUser(actingUserId: string, input: CreateUserInput): Promise<AdminUserView> {
   const username = input.username.trim().toLowerCase();
   const displayName = input.displayName.trim();
+  await assertDisplayNameFree(displayName);
   const email = input.email.trim().toLowerCase();
   if (!username) throw new AdminError('Username is required');
   if (!displayName) throw new AdminError('Display name is required');
@@ -375,6 +392,7 @@ export async function updateUser(
 
   if (input.displayName != null) {
     const dn = input.displayName.trim();
+    await assertDisplayNameFree(dn, targetId);
     if (!dn) throw new AdminError('Display name cannot be empty');
     patch.displayName = dn;
   }

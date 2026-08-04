@@ -71,6 +71,11 @@ export const NAV: NavWorkspace[] = [
       // `my_access` though the label is now Premium Features, so a founder's
       // saved nav.order override keeps pointing at it.
       { key: 'my_access', label: 'Premium Features', icon: 'gem' },
+      // The same Rules & Conduct document Site Help carries, surfaced here too
+      // (owner decision, 2026-08). ONE document rendered in two places rather
+      // than two documents — two rules pages disagree within a month, and the
+      // one people read is always the wrong one. See RulesBody.
+      { key: 'my_rules', label: 'Site Rules', icon: 'list-checks' },
       { key: 'my_prefs', label: 'Preferences', icon: 'settings-2' },
       { key: 'my_settings', label: 'Settings', icon: 'settings' },
     ],
