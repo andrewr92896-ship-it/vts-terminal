@@ -80,8 +80,17 @@ On your OANDA tab.
 - Generate it. It looks like `123456789abcdef0-123456789abcdef0`. Copy it.
 - Say plainly: **this is generated once and shown once.** If you lose it you
   generate a new one, which revokes the old.
-- **Grab the Account ID too** — the `001-001-1234567-001` looking number on your
-  account list. Practice accounts usually start `101-`. You need both pieces.
+- **Grab the Account ID too.** This is the **v20 account number** — the long
+  hyphenated one, `101-001-1234567-001` on practice, `001-001-1234567-001` on
+  live. Find it under **Accounts** in the hub, and it's usually shown on the same
+  Manage API Access page as the token. You need both pieces.
+  - Call out the trap on camera: OANDA also shows a **short** account number like
+    `1234567`, and that is not the one — it's the middle chunk of the long one.
+  - Good sanity check: the first block says which side you're on. `101-` is
+    practice, `001-` is live. If it doesn't match the Practice/Live dropdown, the
+    connection comes back red.
+  - One token covers all your sub-accounts, so the account ID is what decides
+    which one actually gets traded.
 - Two things to say out loud while it's on screen:
   - A token can **trade**, not just read. Treat it like a password. Anyone with
     it can place orders on that account.
