@@ -5,7 +5,7 @@ import { hasEntitlement, tierOfFeature } from '../../../auth/access';
 import { Icon } from '../../../components/Icon';
 import { TierMark } from '../../../components/TierMark';
 import type { BoardTileKind } from '../../../api/types';
-import { TILE_CATALOG, TILE_GROUPS, tileLock, type TileDef, type TileGroup } from '../tileCatalog';
+import { TILE_GROUPS, tileLock, visibleTiles, type TileDef, type TileGroup } from '../tileCatalog';
 import { BORDER2, FAINT, GOLD, MUTED, TEXT } from '../tvChart';
 
 // The "add a tile" catalog.
@@ -59,7 +59,7 @@ export function TilePicker({
     };
   }, [open]);
 
-  const features = user?.access.features ?? { advancedTrading: false, funded: false };
+  const features = user?.access.features ?? { advancedTrading: false, funded: false, tradingTeams: false };
   const entitled = (f: Parameters<typeof hasEntitlement>[1]) => hasEntitlement(user, f);
   const membership = user?.access.membership;
 
@@ -75,8 +75,8 @@ export function TilePicker({
   // silently only covered the current tab would read as "no such tile".
   const q = query.trim().toLowerCase();
   const rows = q
-    ? TILE_CATALOG.filter((t) => t.label.toLowerCase().includes(q) || t.blurb.toLowerCase().includes(q))
-    : TILE_CATALOG.filter((t) => t.group === group);
+    ? visibleTiles(features).filter((t) => t.label.toLowerCase().includes(q) || t.blurb.toLowerCase().includes(q))
+    : visibleTiles(features).filter((t) => t.group === group);
 
   return (
     <>

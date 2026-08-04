@@ -154,9 +154,17 @@ export interface AdminUserView {
   // row: admins, software developers and founders are always Max by role and
   // have no row at all, so a missing membership does NOT mean Free.
   membership: Membership;
+  // Whether this account has been granted Trading Teams. Resolved the same way
+  // membership is — founder-level accounts hold it by role with no stored row —
+  // so a false here really does mean "cannot see teams", not "no row yet".
+  tradingTeams: boolean;
 }
 
-function toView(u: typeof users.$inferSelect, membership: Membership): AdminUserView {
+function toView(
+  u: typeof users.$inferSelect,
+  membership: Membership,
+  tradingTeams: boolean,
+): AdminUserView {
   return {
     id: u.id,
     username: u.username,
@@ -171,6 +179,7 @@ function toView(u: typeof users.$inferSelect, membership: Membership): AdminUser
     mustChangePassword: u.mustChangePassword,
     createdAt: u.createdAt.getTime(),
     membership,
+    tradingTeams,
   };
 }
 
@@ -205,10 +214,36 @@ function cleanRoles(roles: string[]): RoleKey[] {
   return [...new Set(roles.filter(isRoleKey))];
 }
 
+// The stored Trading Teams grant for one account, ignoring roles. Callers add
+// the founder-level resolution themselves so the two rules stay visible at the
+// call site rather than hidden in here.
+async function rawTradingTeamsGrant(userId: string): Promise<boolean> {
+  const row = (
+    await db
+      .select({ granted: userFeatures.tradingTeams })
+      .from(userFeatures)
+      .where(eq(userFeatures.userId, userId))
+      .limit(1)
+  )[0];
+  return row?.granted ?? false;
+}
+
 export async function listUsers(): Promise<AdminUserView[]> {
-  const [rows, stored] = await Promise.all([db.select().from(users), membershipsByUserId()]);
+  const [rows, stored, grants] = await Promise.all([
+    db.select().from(users),
+    membershipsByUserId(),
+    db.select({ userId: userFeatures.userId, granted: userFeatures.tradingTeams }).from(userFeatures),
+  ]);
+  const grantByUser = new Map(grants.map((g) => [g.userId, g.granted]));
   rows.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  return rows.map((u) => toView(u, membershipForRow(u, stored)));
+  return rows.map((u) =>
+    toView(
+      u,
+      membershipForRow(u, stored),
+      // Founder-level by role, or an explicit grant. Mirrors featuresForUser.
+      isFounder(parseRoles(u)) || (grantByUser.get(u.id) ?? false),
+    ),
+  );
 }
 
 export interface CreateUserInput {
@@ -287,8 +322,9 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     updatedAt: now,
   };
   await db.insert(users).values(row);
-  // A brand-new account has no grant yet, so its tier comes from its roles.
-  return toView(row, membershipForRow(row, new Map()));
+  // A brand-new account has no grant yet, so its tier — and its Trading Teams
+  // access — come from its roles alone.
+  return toView(row, membershipForRow(row, new Map()), isFounder(parseRoles(row)));
 }
 
 export interface UpdateUserInput {
@@ -372,8 +408,12 @@ export async function updateUser(
     await db.select().from(users).where(eq(users.id, targetId)).limit(1)
   )[0];
   // Re-resolved rather than carried over: a role change here can move the
-  // account to or from Max on its own.
-  return toView(updated, membershipForRow(updated, await membershipsByUserId()));
+  // account to or from Max, and to or from Trading Teams, on its own.
+  return toView(
+    updated,
+    membershipForRow(updated, await membershipsByUserId()),
+    isFounder(parseRoles(updated)) || (await rawTradingTeamsGrant(targetId)),
+  );
 }
 
 // Permanently delete a user and all of their data. Unlike deactivation (which
@@ -611,5 +651,9 @@ export async function grantMembership(
     target: { id: target.id, name: target.displayName },
   });
 
-  return toView(target, membership);
+  return toView(
+    target,
+    membership,
+    isFounder(parseRoles(target)) || (await rawTradingTeamsGrant(target.id)),
+  );
 }

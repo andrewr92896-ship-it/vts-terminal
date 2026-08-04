@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAdmin } from '../auth/middleware.js';
+import { requireAdmin, requireFounder } from '../auth/middleware.js';
 import { ROLE_KEYS } from '../auth/rbac.js';
 import {
   AdminError,
@@ -14,6 +14,7 @@ import { listAdminLog, resolveAdminLogEntry } from '../admin/adminLog.js';
 import { MEMBERSHIP_TIERS, MembershipError } from '../memberships/service.js';
 import { parseRoles } from '../auth/rbac.js';
 import { TeamError, createTeam, deleteTeam, listTeams, renameTeam } from '../teams/service.js';
+import { setTradingTeamsGrant } from '../features/service.js';
 
 const createSchema = z.object({
   username: z.string().trim().min(1).max(64),
@@ -24,6 +25,8 @@ const createSchema = z.object({
   viewBrokerage: z.boolean().optional(),
   teamId: z.string().min(1).max(64).nullable().optional(),
 });
+
+const tradingTeamsSchema = z.object({ granted: z.boolean() });
 
 const updateSchema = z.object({
   displayName: z.string().trim().min(1).max(120).optional(),
@@ -51,6 +54,9 @@ const teamRenameSchema = z.object({ name: z.string().trim().min(1).max(80) });
 
 export async function adminRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireAdmin };
+  // Founder-level only — software developers and founders. Used by the Trading
+  // Teams grant below, which is deliberately not something a plain admin holds.
+  const founderGuard = { preHandler: requireFounder };
 
   app.get('/api/admin/users', guard, async () => {
     return { users: await listUsers() };
@@ -159,6 +165,26 @@ export async function adminRoutes(app: FastifyInstance) {
       if (err instanceof MembershipError || err instanceof AdminError) {
         return reply.code(400).send({ error: err.message });
       }
+      throw err;
+    }
+  });
+
+  // ---- Trading Teams grant ----
+  //
+  // Founder-level only, deliberately narrower than the rest of this file. Teams
+  // are hidden at public launch and handed out by hand; letting any admin grant
+  // them would make "manually and manually only" mean "whoever has the Admin
+  // Terminal". It is not a membership and not for sale — see
+  // requireTradingTeams.
+  app.post('/api/admin/users/:id/trading-teams', founderGuard, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const parsed = tradingTeamsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Say whether to grant or revoke' });
+    try {
+      await setTradingTeamsGrant(id, parsed.data.granted);
+      return { users: await listUsers() };
+    } catch (err) {
+      if (err instanceof AdminError) return reply.code(400).send({ error: err.message });
       throw err;
     }
   });

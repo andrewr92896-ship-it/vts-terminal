@@ -1332,6 +1332,17 @@ export const api = {
     });
   },
 
+  // Grant or revoke Trading Teams. Founder-level only on the server — teams are
+  // hidden at launch and handed out by hand, so this is deliberately not
+  // something every admin can do. Not a membership: there is no tier that buys
+  // it and no expiry.
+  setTradingTeamsGrant(userId: string, granted: boolean): Promise<{ users: AdminUser[] }> {
+    return request(`/api/admin/users/${userId}/trading-teams`, {
+      method: 'POST',
+      body: JSON.stringify({ granted }),
+    });
+  },
+
   // ---- Administrator Log ----
   adminLog(): Promise<{ entries: AdminLogEntry[] }> {
     return request('/api/admin/log');

@@ -39,13 +39,18 @@ export interface UserFeatures {
   funded: boolean;
   // When the user acknowledged what the desk does (ms), or null if never.
   tradingAckAt: number | null;
-  // Private mode, inverted: false (the default) keeps this trader's book to
-  // themselves. Deliberately NOT nested under advancedTrading — a trader who
-  // switches the desk off still has closed trades on the team's Trade Log, and
-  // their answer about who may see them should not depend on another switch.
+  // Private mode. RETIRED as a user-facing switch (owner decision, 2026-08):
+  // with trade visibility now self-only (trading/scope.ts) there is nothing left
+  // for it to hide, so offering the choice would have been promising something
+  // already true. The field is kept, and kept honest, so the column and the
+  // acknowledgement stamp survive if a shared desk ever returns.
   shareBook: boolean;
   // When the user acknowledged what sharing exposes (ms), or null if never.
   bookAckAt: number | null;
+  // Trading Teams — GRANTED by a software developer, never chosen. See the
+  // schema comment and `setUserFeatures` below: the self-service route refuses
+  // to set this, so the only way to hold it is for a founder to grant it.
+  tradingTeams: boolean;
 }
 
 export const DEFAULT_FEATURES: UserFeatures = {
@@ -54,16 +59,17 @@ export const DEFAULT_FEATURES: UserFeatures = {
   tradingAckAt: null,
   shareBook: false,
   bookAckAt: null,
+  tradingTeams: false,
 };
 
+// What the self-service route may change. Deliberately short: `shareBook` and
+// its acknowledgement are gone with private mode, and `tradingTeams` was never
+// here — it is granted, not chosen.
 export interface FeaturePatch {
   advancedTrading?: boolean;
   funded?: boolean;
   // Set with (or before) advancedTrading: true. Records the acknowledgement.
   acknowledgeTrading?: boolean;
-  shareBook?: boolean;
-  // Set with (or before) shareBook: true. Records the acknowledgement.
-  acknowledgeBook?: boolean;
 }
 
 // The stored row, verbatim. `funded` here is the user's own tick, which is kept
@@ -81,6 +87,7 @@ async function rawFeatures(userId: string): Promise<UserFeatures> {
     tradingAckAt: row.tradingAckAt ? row.tradingAckAt.getTime() : null,
     shareBook: row.shareBook,
     bookAckAt: row.bookAckAt ? row.bookAckAt.getTime() : null,
+    tradingTeams: row.tradingTeams,
   };
 }
 
@@ -92,43 +99,56 @@ export async function getUserFeatures(userId: string): Promise<UserFeatures> {
   return { ...raw, funded: raw.funded && raw.advancedTrading };
 }
 
-// The features as they should be presented for a given account. The public demo
-// is a look-only showcase: it sees the desk so the tour is complete, but never
-// the Funded tracker (a private feature, same as before — see requireFunded).
-// It is shown as sharing so the tour's Trading Team screen doesn't open on a
-// "you are private" notice about an account nobody can change.
+// Whether these roles are founder-level (founder or software developer).
+//
+// Deliberately a LOCAL check rather than an import of auth/rbac.ts's isFounder:
+// rbac.ts already imports DEFAULT_FEATURES from this file, so importing it back
+// would be a genuine runtime cycle — the same one memberships/tiers.ts was split
+// out to avoid. The two role strings are stable keys in `users.roles` and are
+// asserted against ROLE_KEYS by the typecheck at every other call site.
+function rolesAreFounderLevel(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return false;
+    return parsed.includes('founder') || parsed.includes('software_developer');
+  } catch {
+    return false;
+  }
+}
+
+// The features as they should be presented for a given account.
+//
+// Two accounts are resolved rather than read:
+//   • The public demo is a look-only showcase: it sees the desk so the tour is
+//     complete, but never the Funded tracker (see requireFunded), and never
+//     Trading Teams — the tour must show what a public account actually gets.
+//   • Founder-level accounts always hold Trading Teams, with no stored grant,
+//     the same way getMembership resolves an admin to Max. That is what keeps
+//     the owner from being able to lock themselves out of the feature they are
+//     the one granting.
 export async function featuresForUser(user: {
   id: string;
   username: string;
+  roles?: string | null;
 }): Promise<UserFeatures> {
   const stored = await getUserFeatures(user.id);
   if (isDemoUser(user)) {
-    return { ...stored, advancedTrading: true, funded: false, shareBook: true };
+    return { ...stored, advancedTrading: true, funded: false, tradingTeams: false };
+  }
+  if (rolesAreFounderLevel(user.roles)) {
+    return { ...stored, tradingTeams: true };
   }
   return stored;
 }
 
-// Which of `userIds` are currently sharing their book with their teammates.
-// The one bulk read behind trading/scope.ts's visibleTraderIds, kept here so the
-// demo override above and the visibility filter can never disagree about who is
-// sharing.
-//
-// LEFT JOIN, not a select over user_features: a user with no row at all is a
-// perfectly ordinary account that has never touched a switch, and the absence of
-// a row has to read as private — the same answer rawFeatures gives it.
-export async function sharingBookUserIds(userIds: Set<string>): Promise<Set<string>> {
-  if (userIds.size === 0) return new Set();
-  const rows = await db
-    .select({ id: users.id, username: users.username, shareBook: userFeatures.shareBook })
-    .from(users)
-    .leftJoin(userFeatures, eq(userFeatures.userId, users.id))
-    .where(inArray(users.id, [...userIds]));
-  const sharing = new Set<string>();
-  for (const r of rows) {
-    if (r.shareBook || isDemoUser({ username: r.username })) sharing.add(r.id);
-  }
-  return sharing;
-}
+// (`sharingBookUserIds` used to live here — the bulk read behind private mode's
+// visibility filter. It is deleted rather than left exported with no callers:
+// trade visibility is self-only now, so nothing asks who is sharing, and a live
+// exported query reads like a working feature to the next person through. The
+// `share_book` column and its acknowledgement stamp are untouched, so bringing
+// the filter back means writing this query again against data that never went
+// away.)
 
 export class FeatureError extends Error {}
 
@@ -154,14 +174,19 @@ export async function setUserFeatures(userId: string, patch: FeaturePatch): Prom
     throw new FeatureError('Funded Account needs Advanced Trading turned on first');
   }
 
-  // Private mode, same acknowledgement rule as the desk: a book cannot start
-  // being shared without the user having read what a teammate would see. The
-  // stamp is kept when they go private again, so returning does not ask twice.
-  const bookAckAt = patch.acknowledgeBook ? now.getTime() : current.bookAckAt;
-  const shareBook = patch.shareBook ?? current.shareBook;
-  if (shareBook && !bookAckAt) {
-    throw new FeatureError('Acknowledge what your team would see before sharing your book');
-  }
+  // Private mode is retired as a switch, so nothing self-service changes it any
+  // more. The stored value and its acknowledgement stamp are carried through
+  // untouched rather than defaulted, so a re-enabled shared desk would find them
+  // exactly as the user last left them.
+  const bookAckAt = current.bookAckAt;
+  const shareBook = current.shareBook;
+
+  // Trading Teams is NOT in FeaturePatch and is NOT read from `patch` here.
+  // It is a grant a software developer makes from Admin ▸ Users, so the
+  // self-service route has no way to set it however the request is shaped — the
+  // stored value is carried straight through. Keep it that way: the moment this
+  // reads from the patch, the "manually and manually only" rule is gone.
+  const tradingTeams = current.tradingTeams;
 
   await db
     .insert(userFeatures)
@@ -173,6 +198,7 @@ export async function setUserFeatures(userId: string, patch: FeaturePatch): Prom
       tradingAckAt: ackAt ? new Date(ackAt) : null,
       shareBook,
       bookAckAt: bookAckAt ? new Date(bookAckAt) : null,
+      tradingTeams,
       createdAt: now,
       updatedAt: now,
     })
@@ -184,6 +210,7 @@ export async function setUserFeatures(userId: string, patch: FeaturePatch): Prom
         tradingAckAt: ackAt ? new Date(ackAt) : null,
         shareBook,
         bookAckAt: bookAckAt ? new Date(bookAckAt) : null,
+        tradingTeams,
         updatedAt: now,
       },
     });
@@ -196,5 +223,37 @@ export async function setUserFeatures(userId: string, patch: FeaturePatch): Prom
     tradingAckAt: ackAt,
     shareBook,
     bookAckAt,
+    tradingTeams,
   };
+}
+
+// Grant or revoke Trading Teams for `userId`. The ONLY way this flag changes.
+//
+// Authorization is the caller's job — this is reached from Admin ▸ Users behind
+// `requireFounder`, matching the rule that only a software developer or founder
+// hands the feature out. Revoking does not touch the user's team membership or
+// any content: it hides the surfaces, exactly like every other feature switch in
+// this file, so re-granting restores what was there.
+export async function setTradingTeamsGrant(userId: string, granted: boolean): Promise<UserFeatures> {
+  const current = await rawFeatures(userId);
+  const now = new Date();
+  await db
+    .insert(userFeatures)
+    .values({
+      id: crypto.randomUUID(),
+      userId,
+      advancedTrading: current.advancedTrading,
+      funded: current.funded,
+      tradingAckAt: current.tradingAckAt ? new Date(current.tradingAckAt) : null,
+      shareBook: current.shareBook,
+      bookAckAt: current.bookAckAt ? new Date(current.bookAckAt) : null,
+      tradingTeams: granted,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: userFeatures.userId,
+      set: { tradingTeams: granted, updatedAt: now },
+    });
+  return { ...current, funded: current.funded && current.advancedTrading, tradingTeams: granted };
 }

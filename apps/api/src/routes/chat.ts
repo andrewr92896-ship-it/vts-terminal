@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requireAdmin, requirePremium } from '../auth/middleware.js';
+import { requireAuth, requireAdmin, requirePremium, requireTradingTeams } from '../auth/middleware.js';
+import { featuresForUser } from '../features/service.js';
 import { canAccessWorkspace, isAdmin, isFounder, parseRoles } from '../auth/rbac.js';
 import { getTeamName } from '../teams/service.js';
 import {
@@ -35,12 +36,20 @@ const announcementSchema = z.object({
   body: z.string().trim().min(1).max(4000),
 });
 
-// Whether a user may use the Team Chat: they need Trading-workspace access AND a
-// trading team. Anyone else is shown the "what is a trading team" explanation.
-function teamChatEligibility(u: {
+// Whether this account may use the team chat at all.
+//
+// `unavailable` is the launch state for almost everybody: Trading Teams are
+// hidden behind a developer grant, and an account without it should not be told
+// there is a team chat it is missing — the client hides the tab on this reason
+// rather than explaining it. The other two reasons are the pre-existing ones and
+// still describe a granted account that simply has no team yet.
+async function teamChatEligibility(u: {
+  id: string;
+  username: string;
   roles: string | null;
   teamId: string | null;
-}): { eligible: boolean; reason: 'ok' | 'no_trading' | 'no_team' } {
+}): Promise<{ eligible: boolean; reason: 'ok' | 'unavailable' | 'no_trading' | 'no_team' }> {
+  if (!(await featuresForUser(u)).tradingTeams) return { eligible: false, reason: 'unavailable' };
   if (!canAccessWorkspace(parseRoles(u), 'trading')) return { eligible: false, reason: 'no_trading' };
   if (!u.teamId) return { eligible: false, reason: 'no_team' };
   return { eligible: true, reason: 'ok' };
@@ -53,13 +62,13 @@ export async function chatRoutes(app: FastifyInstance) {
   // team but not message it would be a feature that half-works. The GET stays on
   // plain `auth` so the panel can still render the "not on a team" explanation
   // and the upgrade notice rather than erroring.
-  const teamChat = { preHandler: [requireAuth, requirePremium('teamChat')] };
+  const teamChat = { preHandler: [requireAuth, requireTradingTeams, requirePremium('teamChat')] };
 
   // The team chat feed. Always 200: a non-eligible user gets an empty feed plus
   // the reason, so the client can render the trading-team explanation instead.
   app.get('/api/chat/team', auth, async (request) => {
     const u = request.currentUser!;
-    const elig = teamChatEligibility(u);
+    const elig = await teamChatEligibility(u);
     const teamName = await getTeamName(u.teamId);
     const messages = elig.eligible ? await listTeamMessages(u.teamId, u.id) : [];
     return { eligible: elig.eligible, reason: elig.reason, teamName, messages };
@@ -67,7 +76,7 @@ export async function chatRoutes(app: FastifyInstance) {
 
   app.post('/api/chat/team', teamChat, async (request, reply) => {
     const u = request.currentUser!;
-    const elig = teamChatEligibility(u);
+    const elig = await teamChatEligibility(u);
     if (!elig.eligible) return reply.code(403).send({ error: 'You are not on a trading team yet' });
     const parsed = messageSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Type a message to send' });
@@ -80,7 +89,7 @@ export async function chatRoutes(app: FastifyInstance) {
 
   app.delete('/api/chat/team/:id', teamChat, async (request, reply) => {
     const u = request.currentUser!;
-    const elig = teamChatEligibility(u);
+    const elig = await teamChatEligibility(u);
     if (!elig.eligible) return reply.code(403).send({ error: 'You are not on a trading team yet' });
     const id = (request.params as { id: string }).id;
     try {
@@ -130,7 +139,7 @@ export async function chatRoutes(app: FastifyInstance) {
   app.get('/api/notifications', auth, async (request) => {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
-    const elig = teamChatEligibility(u);
+    const elig = await teamChatEligibility(u);
     type Item = {
       id: string;
       kind: 'chat' | 'suggestion' | 'bug' | 'support';
@@ -173,7 +182,7 @@ export async function chatRoutes(app: FastifyInstance) {
   app.get('/api/chat/activity', auth, async (request) => {
     const u = request.currentUser!;
     const admin = isAdmin(parseRoles(u));
-    const elig = teamChatEligibility(u);
+    const elig = await teamChatEligibility(u);
     const [chat, adminChat, announcements, suggestions, bugs, bugsAwaiting, support] = await Promise.all([
       elig.eligible ? latestTeamMessageAt(u.teamId) : Promise.resolve(0),
       admin ? latestAdminMessageAt() : Promise.resolve(0),

@@ -73,7 +73,7 @@ function rowsForPx(px: number): number {
 export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; onOpenMembership?: () => void }) {
   const { user } = useAuth();
   const { isPhone } = useResponsive();
-  const features = user?.access.features ?? { advancedTrading: desk, funded: false };
+  const features = user?.access.features ?? { advancedTrading: desk, funded: false, tradingTeams: false };
   const entitled = useCallback((f: PremiumFeature) => hasEntitlement(user, f), [user]);
   // Saving your own arrangement is the paid part. Without it the reader gets the
   // built-in layouts instead of an empty grid and a locked save button.

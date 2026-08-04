@@ -207,7 +207,7 @@ export function TradeDesk() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <ScreenTitle>Trade Desk</ScreenTitle>
-          <span style={{ fontSize: 11.5, color: FAINT }}>{"Place trades on your own account, beside your team’s open book"}</span>
+          <span style={{ fontSize: 11.5, color: FAINT }}>{"Place trades on your own account, beside your open book"}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>

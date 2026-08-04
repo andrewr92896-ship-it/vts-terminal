@@ -934,6 +934,15 @@ export const userFeatures = sqliteTable('user_features', {
   // `bookAckAt` stamps the consent, and survives switching back to private.
   shareBook: integer('share_book', { mode: 'boolean' }).notNull().default(false),
   bookAckAt: integer('book_ack_at', { mode: 'timestamp_ms' }),
+  // Trading Teams — a GRANT, not an opt-in, and the difference matters. Every
+  // other flag in this table is the user's own choice, set from My Terminal ▸
+  // Premium Features. This one can only be set by a software developer from
+  // Admin ▸ Users; `setUserFeatures` refuses it outright, so the self-service
+  // route cannot turn it on however the request is shaped (migration 0100).
+  //
+  // Founder-level accounts do not need a row set — getUserFeatures resolves them
+  // to true, the same way getMembership resolves an admin to Max.
+  tradingTeams: integer('trading_teams', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

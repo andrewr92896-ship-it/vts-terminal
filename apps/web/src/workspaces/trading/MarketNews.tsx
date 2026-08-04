@@ -1154,7 +1154,7 @@ function AddChannelForm({
       <AlwaysOnToggle checked={alwaysOn} onChange={setAlwaysOn} />
       {err && <div style={{ fontSize: 11, color: '#ffb4ab', lineHeight: 1.45, marginTop: 7 }}>{err}</div>}
       <div style={{ fontSize: 10, color: C.faint, lineHeight: 1.45, marginTop: 7 }}>
-        Any form works — youtube.com/@name or /channel/UC…. It joins the whole desk's wall.
+        Any form works — youtube.com/@name or /channel/UC….
       </div>
       <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
         <button

@@ -281,9 +281,10 @@ workspaces list** (see `theme/nav.ts` order).
       refused — and is broker-agnostic. **A third venue is a new adapter, not new
       conditionals in orderDesk.** Do not reintroduce per-broker branching there.
     - **The split in what the two halves may do is the design.** *Watching* is
-      team-wide: the book is the same team-scoped `/api/trading/live` feed every
-      other screen reads, so the visibility boundary stays defined once
-      (`trading/scope.ts`). *Acting* is personal: every write resolves its
+      the same `/api/trading/live` feed every other screen reads, so the
+      visibility boundary stays defined once (`trading/scope.ts`) — and since
+      2026-08 that boundary is self-only, so the "team book" beside the ticket is
+      the trader's own open positions. *Acting* is personal too: every write resolves its
       connection through `getActiveDecrypted(userId)`, which is keyed on the
       caller, so **there is no code path that trades a teammate's account** —
       teammates' rows on the book are watch-only by construction. Do not add an
@@ -816,8 +817,8 @@ workspaces list** (see `theme/nav.ts` order).
   what to do about it. Every advice-flavored surface carries an "informational
   only, not investment advice" disclaimer (`Disclaimer` in
   `workspaces/investments/ui.tsx`).
-  - **Everything is personal, never team-scoped.** Unlike Trading, where the
-    whole desk watches one book, an investment account belongs to one user:
+  - **Everything is personal, never team-scoped.** An investment account belongs
+    to one user:
     every table carries `user_id`, every query filters on the caller, and
     `scopedTraderIds` deliberately does not appear in this workspace. Do not add
     a team dimension here.
@@ -947,7 +948,7 @@ workspaces list** (see `theme/nav.ts` order).
   you pick one, opens the chosen experience — the quiz+leaderboard player
   (`TeamStudyGame`), a graded test (`DeckTestMode`, configurable size + pass line),
   or a progress summary (`DeckProgress`). The list separates games by source with
-  two colors — your team's own games (violet) vs. the terminal's built-in example
+  two colors — your own games (violet) vs. the terminal's built-in example
   games (blue, `isSample`). Built-in games are **not** shown by default: a **Browse
   Study Games** tile in the grid opens a gallery of them, and the learner adds
   the ones they want into their own list. That add/remove set is a personal,
@@ -1342,17 +1343,14 @@ account" rather than hiding them, so the screen reads as the whole picture.
   orders with the user's own broker — **the desk cannot be enabled without it**
   (`FeatureError`), and the stamp survives an opt-out so returning does not ask
   twice.
-  - **The table also holds `shareBook` / `bookAckAt` (migration `0093`) — private
-    mode — which is NOT an opt-in and is NOT edited from this screen.** It is a
-    privacy setting about the team, so its switch lives in **My Terminal ▸ Trading
-    Team**; it rides this row because the plumbing is identical (one row per user,
-    a switch beside an acknowledgement stamp, already in the per-user delete list,
-    already carried to the client on `user.access.features`). It follows the same
-    acknowledgement rule as the desk, and is deliberately **not nested** under
-    `advancedTrading`: a trader who switches the desk off still has closed trades
-    on the team's Trade Log, and their answer about who may read them should not
-    depend on another switch. What it actually gates is in **Teams ▸ Private
-    mode** above — read that before touching `trading/scope.ts`.
+  - **The table also holds two things that are NOT opt-ins and are NOT edited
+    from this screen.** `shareBook` / `bookAckAt` (migration `0093`) is retired
+    private mode — stored, never read, see Teams above. `tradingTeams`
+    (migration `0100`) is the **grant**: `setUserFeatures` refuses it and the
+    route's schema omits it, so the only writer is `setTradingTeamsGrant` from
+    Admin ▸ Users. Both ride this row because the plumbing is identical (one row
+    per user, already in the per-user delete list, already carried to the client
+    on `user.access.features`).
 - **Turning a feature off only hides it.** No trade, account or setting is
   touched, so re-enabling restores the workspace exactly as it was. Do not add a
   destructive opt-out.
@@ -1636,66 +1634,132 @@ once, and stayed that way until the owner noticed Pushover was missing. Making i
 required is what turns the next one into a compile error. Same for
 `workspacesForRoles` and `canAccessFunded`.
 
-## Teams (`teams/service.ts`) — scope almost everything
+## Teams (`teams/service.ts`) — hidden at launch, and no longer a trade boundary
 
 A **trading team** is a group a user belongs to at most one of (`users.team_id`).
-Teams scope **all trade data** (Live Wall, Trade Log, History, broker capital),
-Studies **leaderboards**, **team chat** (but *not* the Administrator chat — see
-below), and notification recipients — a trader
-only ever sees their own team's data (or just their own if team-less). Default
-team `team-vitalis` / "Vitalis Trading Team" (seeded on boot; team-less users are
-adopted into it). Study games, flashcard sets, and guides are all team-scoped —
-a team only sees its own. `trading/scope.ts` is the single
-place the boundary is defined; everything funnels through it.
+Two owner decisions (2026-08) reshaped what a team *is*, and both matter more
+than anything else in this section:
 
-### Private mode, and why `scope.ts` has two functions
+- **Nobody sees anybody else's trade metrics — ever.** Not a teammate's, not a
+  member's if you lead the team, not another founder's.
+- **Teams are hidden from the average account** and handed out by a software
+  developer, by hand. They are not for sale and no opt-in reveals them.
 
-Being on a team no longer means broadcasting your book to it. **`shareBook`**
-(`user_features.share_book`, migration `0093`) is a per-user privacy switch: while
-it is off, that trader's positions are absent from every teammate's Live Wall,
-Trade Log, History, Deleted Trades and broker capital — **including the team
-leader's**, since leading a team is not a right to read a member's positions.
-Administrators keep their install-wide reach for support (their paths never come
-through here).
+### Trade visibility is self-only (`trading/scope.ts`)
 
-- **Privacy is the default and the consent is real.** A new member starts
-  private; their book appears only after they tick the acknowledgement naming
-  what a teammate would see (instrument, direction, entry, size, stop, target,
-  live P&L, open time). Migration `0093` **grandfathers everyone already on a
-  team** into sharing with a stamped acknowledgement — they have been sharing all
-  along, so nobody's wall goes dark on deploy — and deliberately leaves team-less
-  traders private, since they have nobody to share with yet. `seed.ts` does the
-  same for the first-boot owner, as `0083` did. The stamp survives going private
-  again, so returning does not ask twice. The demo is forced to sharing.
-- **The switch lives in My Terminal ▸ Trading Team**, not Premium Features: it is
-  a question about those people, not about which parts of the terminal you have
-  switched on. Storage location and UI location deliberately differ.
+`visibleTraderIds(viewer)` **returns exactly the viewer**, always. Positions, the
+Trade Log, History, Deleted Trades and live broker capital are each trader's own.
+The reason is regulatory: a screen showing one trader's results to another is the
+raw material for an implied track record, which is a long way from the
+informational-only posture the product holds at public launch — and the same
+reason the Site Help rules say desk metrics are not proof of performance.
 
-**`scope.ts` exports two functions and they are not interchangeable.** The team
-set is used in two opposite directions, and private mode belongs on only one:
+The function is **kept rather than deleted** so the boundary stays defined in one
+place and stays easy to widen. Eight call sites read it; if a shared desk ever
+returns, it returns here and every read follows.
+
+**`scope.ts` exports three functions and they are NOT interchangeable:**
 
 - **`visibleTraderIds(viewer)` — visibility.** "Whose trade data may this viewer
-  *see*." Private members removed, the viewer's own id always kept. Use this on a
-  **read**: the Live Wall (`service.ts` — and so the Trade Desk's team book, which
-  reads the same `/api/trading/live` feed), Trade Log, History, Deleted Trades,
-  broker capital, the desk-settings instrument list, the "notify me about a
-  trader" picker, and `deleteAccess.ts` (a leader must not be able to delete a
-  trade they cannot see).
-- **`scopedTraderIds(viewer)` — recipients.** "Who should *receive* this." Private
-  members **kept**. Use this on a **send**. `trading/alerts.ts` is the reason this
-  split exists: a TradingView alert is a team-wide signal, not a report of anyone's
-  book, so filtering it would cut a private trader off from the alerts their desk
-  is sending them. **Do not "tidy" alerts.ts onto the filtered function.**
-- **`notifyTraderIds(ownerId)` — the third case**, for a notification that *is* a
-  send but whose entire content is one trader's position (the open / close /
-  stop-moved buzzes in `history.ts`). Their team normally; **just them** while
-  private. A private trader whose fills still buzzed every teammate's phone would
-  not be private in any sense that matters, however clean their Live Wall row
-  looked.
+  *see*." The viewer alone. Use on a **read**.
+- **`scopedTraderIds(viewer)` — recipients.** "Who should *receive* this."
+  **Still team-wide, deliberately.** A TradingView alert is a signal the desk
+  sends its members, not a report of anyone's book, so narrowing it would cut a
+  trader off from the alerts their own desk is sending them. `trading/alerts.ts`
+  is the reason the split exists — **do not "tidy" it onto the visibility
+  function.**
+- **`notifyTraderIds(ownerId)` — a send whose whole content is one trader's
+  position** (the open / close / stop-moved buzzes in `history.ts`). Follows
+  *visibility*, so: just that trader. Hiding the Live Wall row while still
+  buzzing a teammate's phone would have moved the disclosure, not removed it.
+
+**Private mode is retired.** `shareBook` / `bookAckAt` (`user_features`,
+migration `0093`) existed to keep a trader's book off teammates' screens. With
+visibility self-only there was nothing left for it to hide, so the switch offered
+a choice about something already true. The columns, the stored values and the
+consent stamps are **untouched**; the switch, its acknowledgement modal and
+`sharingBookUserIds` are gone. Bringing a shared desk back means writing that
+query again against data that never went away.
+
+### Trading Teams is a GRANT (`user_features.trading_teams`, migration `0100`)
+
+A **fourth axis**, and confusing it with the other three is the classic mistake:
+a **role** says what you are trusted with, an **opt-in** says what you have asked
+to see, a **membership** says what you have paid for, and a **grant** is none of
+those — a software developer hands it out from **Admin ▸ Users**, and no amount
+of money or self-service switching obtains it.
+
+- **`requireTradingTeams`** (`auth/middleware.ts`) guards **every** route in
+  `routes/userTeams.ts` (reads included), the team chat, and the shared-board
+  payload. It answers **403, not 402** — this is not for sale, so an upgrade
+  prompt would be a lie.
+- **Two routes stay ungated on purpose:** `team/leave` and
+  `invites/:id/respond`. Revoking somebody's grant must never strand them on a
+  team with no way off it. Both act only on the caller's own membership.
+- **`setUserFeatures` refuses it.** The flag is not in `FeaturePatch`, not in the
+  `PUT /api/features` Zod schema, and the service carries the stored value
+  straight through. `setTradingTeamsGrant` is the only writer. **Keep it that
+  way** — the moment the self-service path reads it from a patch, "manually and
+  manually only" is gone.
+- **Founder-level accounts resolve to granted with no stored row**, the same way
+  `getMembership` resolves an admin to Max. That is what stops the owner locking
+  themselves out of the feature they hand out. The check is a **local roles
+  parse** in `features/service.ts`, not an `isFounder` import — `rbac.ts` already
+  imports `DEFAULT_FEATURES` from there, so importing back would be a real cycle.
+- **Migration `0100` grandfathers everyone already on a team**, so the Vitalis
+  Trading Team and its members are unchanged on deploy.
+- **The UI hides, it does not lock.** `TEAM_ONLY_SECTIONS` (`theme/nav.ts`) drops
+  the row; `visibleTiles` (`tileCatalog.ts`) drops the Team Chat tile from the
+  picker; the chat panel drops its Team tab on reason `unavailable`. This is the
+  **opposite** of how the opt-in workspaces behave, and it is deliberate: a
+  padlock advertises, and an ordinary account should not learn teams exist. There
+  is nothing to buy, so a lock would only raise a ticket nobody can resolve.
+- The demo is forced to **false** — the tour must show what a public account
+  actually gets.
+
+### The content scope (`teams/contentScope.ts`)
+
+**`seedDefaultTeam()` no longer adopts anyone.** It used to end with an
+unconditional `UPDATE users SET team_id = 'team-vitalis' WHERE team_id IS NULL`
+on every boot. On a private terminal that was a convenience; at public launch it
+is a data leak with no mitigation — every stranger who signed up would land in
+the same scope as every other stranger, sharing one study library they could each
+edit and delete, one channel list and one chat room.
+
+`contentScopeId(viewer)` returns `viewer.teamId ?? user:<id>`. That is **not a
+team** and no `trading_teams` row exists for it — it is a scope KEY stored in the
+same text column, which is what lets a personal library and a team library share
+one table and one set of queries. **None of those columns carry a foreign key**,
+which is what makes this safe. Market News channels have worked this way since
+they were built; the module is that rule extracted so study content follows it
+too. `routes/studies.ts` derives every scope through it.
+
+Consequence worth knowing: a user later granted a team does **not** bring their
+personal content with them. That is the safe direction to fail — content never
+leaks into a shared library by accident — but "move my games onto the team" is a
+deliberate copy, not something that happens on its own.
+
+### Who may delete a trade (`trading/deleteAccess.ts`)
+
+A trader deletes their own; admins keep install-wide reach for support. **Nothing
+in between.** The team `canDeleteTrades` permission is gone from the UI and the
+resolver: it was always bounded by what the holder could *see*, so self-only
+visibility had already collapsed it to "your own trades". It is written out
+rather than left to resolve to nothing — a permission that silently does nothing
+is worse than an absent one, because the toggle stays on screen and gets handed
+out in good faith.
+
+### What a team still is
+
+Everything that is not somebody else's numbers: a shared study library, the team
+chat, **shared Live Wall layouts** (only the arrangement travels — every tile
+fetches as the reader, and the notes tile is emptied on the way out), invites,
+badges, and the member roster. Default team `team-vitalis` / "Vitalis Trading
+Team", seeded on boot.
 
 Worth preserving: `service.ts` hands the visible set to `getAllActiveDecrypted`,
-so a private trader's broker credentials are **never decrypted** to serve a
-teammate's poll. Private mode stops the read at the connection, not at the render.
+so another trader's broker credentials are **never decrypted** to serve your
+poll. The boundary stops the read at the connection, not at the render.
 
 **`getAllActiveDecrypted(scope)` requires its scope, and `ALL_USERS` is the only
 way to ask for the whole install.** It used to be an optional parameter, which
@@ -2005,7 +2069,9 @@ for founders, software developers and admins — **Administrator chat**.
   the team chat still has its own inline copy, which is where that markup came
   from.
 
-- **Notifications** fire (web push + Pushover together, team-scoped, demo
+- **Notifications** fire (web push + Pushover together, scoped per
+  `trading/scope.ts` — a trade event reaches only its own trader, a TradingView
+  alert reaches the team; demo
   excluded, best-effort) on: a new TradingView alert, and per-trade events during
   reconcile — **opened**, **closed**, and a stop/target change split into
   **placeSl / moveSl / placeTp / moveTp** (a trade whose SL and TP both change

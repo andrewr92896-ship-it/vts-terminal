@@ -425,7 +425,7 @@ export function DeskSettingsModal({
                 <div style={sectionLabel}>Per-instrument buffers</div>
                 <div style={{ fontSize: 11.5, color: MUTED, marginTop: 4, lineHeight: 1.5 }}>
                   Override the default for a specific instrument. The instrument list is filled in
-                  automatically from what your team has traded — just pick one, no typing.
+                  automatically from what you have traded — just pick one, no typing.
                 </div>
 
                 {overrides.length > 0 && (
@@ -489,7 +489,7 @@ export function DeskSettingsModal({
 
                 {knownInstruments.length === 0 ? (
                   <div style={{ fontSize: 11.5, color: FAINT, marginTop: 12, lineHeight: 1.5 }}>
-                    No instruments in your team's trade history yet — once a trade is logged, its instrument
+                    No instruments in your trade history yet — once a trade is logged, its instrument
                     appears here automatically.
                   </div>
                 ) : (

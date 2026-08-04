@@ -416,7 +416,23 @@ export type TileLock =
 // Only the two opt-ins are read, so the parameter names them rather than taking
 // the whole `UserFeatures` — a caller with a signed-out fallback should not have
 // to invent an acknowledgement stamp to ask what a tile costs.
-export type TileFeatures = Pick<UserFeatures, 'advancedTrading' | 'funded'>;
+export type TileFeatures = Pick<UserFeatures, 'advancedTrading' | 'funded' | 'tradingTeams'>;
+
+// Tiles that exist only for an account granted Trading Teams.
+//
+// These are HIDDEN, not locked, and that is the difference between this and
+// `tileLock`. A lock is an advertisement — it tells the reader what they would
+// get by upgrading or by turning an opt-in on, which is right for everything
+// else in the catalog. Trading Teams cannot be bought or switched on, so a
+// padlock on this tile would name a feature with no way to reach it. Filter with
+// `visibleTiles` wherever the catalog is enumerated.
+const GRANT_ONLY_KINDS = new Set<BoardTileKind>(['teamchat']);
+
+// The catalog as this account should see it. Use this rather than TILE_CATALOG
+// directly anywhere a list of tile kinds is shown to a user.
+export function visibleTiles(features: TileFeatures): TileDef[] {
+  return TILE_CATALOG.filter((t) => features.tradingTeams || !GRANT_ONLY_KINDS.has(t.kind));
+}
 
 export function tileLock(
   kind: BoardTileKind,
@@ -425,6 +441,12 @@ export function tileLock(
 ): TileLock | null {
   const def = BY_KIND.get(kind);
   if (!def) return null;
+  // A grant-only tile the account does not hold reads as locked for anything
+  // that still has one on a board (a saved layout from when the grant was held).
+  // The picker never offers it — see visibleTiles.
+  if (GRANT_ONLY_KINDS.has(kind) && !features.tradingTeams) {
+    return { reason: 'feature', feature: 'teamChat' };
+  }
   if (def.desk && !features.advancedTrading) return { reason: 'optIn', what: 'advancedTrading' };
   if (def.funded && !features.funded) return { reason: 'optIn', what: 'funded' };
   if (def.feature && !entitled(def.feature)) return { reason: 'feature', feature: def.feature };

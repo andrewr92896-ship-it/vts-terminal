@@ -556,7 +556,7 @@ export function TradeLog() {
         <div style={{ ...card, textAlign: 'center', padding: '40px 20px', color: MUTED, fontSize: 13 }}>
           {selectedTraderName
             ? `No trades logged by @${selectedTraderName}.`
-            : `No trades logged for your team yet.${!readOnly ? ' Use “+ Log a trade” to add the first one.' : ''}`}
+            : `No trades logged yet.${!readOnly ? ' Use “+ Log a trade” to add the first one.' : ''}`}
         </div>
       ) : layout === 'deck' ? (
         <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(auto-fill,minmax(290px,1fr))', gap: 13 }}>

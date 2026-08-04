@@ -392,30 +392,36 @@ function PerUserNotificationsSection({ accent, accentText }: { accent: string; a
 
   return (
     <section>
-      <div style={sectionLabel}>Notify me about a trader</div>
+      <div style={sectionLabel}>Trade notifications</div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
-        Pick a teammate and choose exactly which of their trade actions buzz your phone. Everyone’s
-        on by default — turn off what you don’t want to hear about.
+        Choose exactly which of your trade actions buzz your phone. All on by default — turn off
+        what you don’t want to hear about.
       </p>
 
       {targets == null ? (
         <div style={hintStyle}>Loading…</div>
       ) : targets.length === 0 ? (
-        <div style={hintStyle}>No teammates to watch yet.</div>
+        <div style={hintStyle}>Nothing to notify on yet.</div>
       ) : (
         <>
-          <select
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-            style={{ ...inputStyle, marginBottom: 14, cursor: 'pointer' }}
-          >
-            {targets.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-                {t.isSelf ? ' (you)' : ''}
-              </option>
-            ))}
-          </select>
+          {/* The picker only earns its place when there is a choice to make.
+              Trade visibility is self-only, so this is normally a list of one —
+              and a dropdown holding your own name and nothing else is a control
+              that asks a question with a single answer. */}
+          {targets.length > 1 && (
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              style={{ ...inputStyle, marginBottom: 14, cursor: 'pointer' }}
+            >
+              {targets.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.isSelf ? ' (you)' : ''}
+                </option>
+              ))}
+            </select>
+          )}
 
           {flags && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>

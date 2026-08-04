@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import type { WorkspaceKey } from '../theme/themes';
 import type { MembershipTier } from '../api/types';
-import { NAV, navFor, FUNDED_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
+import { NAV, navFor, FUNDED_ONLY_SECTIONS, TEAM_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
 import { SECTION_FEATURE, WORKSPACE_FEATURE, tierForKey } from '../auth/access';
 import { useAuth } from '../auth/AuthContext';
@@ -69,8 +69,17 @@ export function Sidebar(props: SidebarProps) {
   // Sidebar Layout editor that used to override this is gone.
   const current = navFor(workspace);
   const accent = current?.accent ?? C.gold;
-  // Hide the private Funded section from anyone without the `funded` role.
-  const sections = (current?.sections ?? []).filter((s) => canFunded || !FUNDED_ONLY_SECTIONS.has(s.key));
+  // Trading Teams is a granted feature, hidden from everyone else — see
+  // TEAM_ONLY_SECTIONS for why it is hidden rather than locked. Read off the
+  // signed-in user rather than threaded as a prop, the same way `membership` is.
+  const canTeams = !!user?.access.features.tradingTeams;
+  // Hide the private Funded section from anyone without the Funded opt-in, and
+  // the team section from anyone without the grant.
+  const sections = (current?.sections ?? []).filter(
+    (s) =>
+      (canFunded || !FUNDED_ONLY_SECTIONS.has(s.key)) &&
+      (canTeams || !TEAM_ONLY_SECTIONS.has(s.key)),
+  );
   // The workspaces this user can access, plus any opt-in workspace they have not
   // turned on (drawn locked), all in nav order.
   const visible: NavWorkspace[] = NAV.filter(

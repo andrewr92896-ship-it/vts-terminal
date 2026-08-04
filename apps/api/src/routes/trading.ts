@@ -485,15 +485,23 @@ export async function tradingRoutes(app: FastifyInstance) {
   // free account cannot build a layout, but adopting the one their desk already
   // uses costs nothing to allow and is the most useful thing a team can hand a
   // new member.
-  const boardsPayload = async (userId: string) => {
-    const team = await getUserTeamContext(userId);
+  //
+  // Sharing follows the Trading Teams GRANT as well as team membership. Without
+  // the grant there is no team surface anywhere in the terminal, so publishing a
+  // layout "to your team" would be the one place a hidden feature announced
+  // itself. A revoked grant therefore hides the share button and the shared
+  // list; it does not unshare anything already published, so restoring the grant
+  // restores the state.
+  const boardsPayload = async (userId: string, user: { id: string; username: string; roles: string | null }) => {
+    const granted = (await featuresForUser(user)).tradingTeams;
+    const team = granted ? await getUserTeamContext(userId) : null;
     return {
       boards: await listBoards(userId),
-      teamBoards: await listTeamBoards(userId, team?.teamId ?? null),
+      teamBoards: granted ? await listTeamBoards(userId, team?.teamId ?? null) : [],
       onTeam: !!team?.teamId,
     };
   };
-  app.get('/api/trading/boards', markets, async (request) => boardsPayload(request.currentUser!.id));
+  app.get('/api/trading/boards', markets, async (request) => boardsPayload(request.currentUser!.id, request.currentUser!));
   app.post('/api/trading/boards/:id/share', boardWrite, async (request, reply) => {
     const parsed = z.object({ shared: z.boolean() }).safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Say whether to share it' });
@@ -501,7 +509,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     const team = await getUserTeamContext(userId);
     try {
       await shareBoard(userId, (request.params as { id: string }).id, team?.teamId ?? null, parsed.data.shared);
-      return boardsPayload(userId);
+      return boardsPayload(userId, request.currentUser!);
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not share that board' });
     }
@@ -513,7 +521,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     const team = await getUserTeamContext(userId);
     try {
       const board = await copyTeamBoard(userId, team?.teamId ?? null, (request.params as { id: string }).id);
-      return { board, ...(await boardsPayload(userId)) };
+      return { board, ...(await boardsPayload(userId, request.currentUser!)) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not copy that layout' });
     }
@@ -534,7 +542,7 @@ export async function tradingRoutes(app: FastifyInstance) {
     // What the desk still decides is which TILES a board may carry, below.
     try {
       const board = await createBoard(userId, { ...parsed.data, layout: allowedLayout(parsed.data.layout, full) });
-      return { board, ...(await boardsPayload(userId)) };
+      return { board, ...(await boardsPayload(userId, request.currentUser!)) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save board' });
     }
@@ -549,14 +557,14 @@ export async function tradingRoutes(app: FastifyInstance) {
         ...parsed.data,
         layout: allowedLayout(parsed.data.layout, full),
       });
-      return { board, ...(await boardsPayload(userId)) };
+      return { board, ...(await boardsPayload(userId, request.currentUser!)) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update board' });
     }
   });
   app.delete('/api/trading/boards/:id', boardWrite, async (request) => {
     await removeBoard(request.currentUser!.id, (request.params as { id: string }).id);
-    return boardsPayload(request.currentUser!.id);
+    return boardsPayload(request.currentUser!.id, request.currentUser!);
   });
 
   // ---- Market Data (the series catalog + this trader's board arrangement) ----
