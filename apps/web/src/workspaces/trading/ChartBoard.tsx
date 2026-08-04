@@ -37,6 +37,15 @@ function isExpandPositions(t: BoardTile): boolean {
   return t.kind === 'positions' && (t.positionsView === 'list-expand' || t.positionsView === 'cards-expand');
 }
 
+// A watchlist in scrolling mode is TradingView's ticker tape, which is a strip of
+// ONE fixed height — it does not grow to fill a taller tile the way the static
+// quote list does. So the phone's minimum-height floor below is the one thing it
+// must not be subject to: floored to six rows it drew a short tape above two
+// thirds of a tile of nothing.
+function isTickerStrip(t: BoardTile): boolean {
+  return t.kind === 'watchlist' && (t.watchlistMode ?? 'scroll') !== 'static';
+}
+
 // Grid rows needed to fit `px` of content: a cell of h rows is
 // ROW_H*h + MARGIN*(h-1) px tall, so solve for the smallest h that fits.
 function rowsForPx(px: number): number {
@@ -256,9 +265,12 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
       let y = 0;
       return ordered.map((t) => {
         const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
-        // Give every tile a floor on a phone: a 3-row watchlist is legible in a
-        // 12-wide strip and unreadable as a full-width stub.
-        const h = Math.max(auto ?? t.h, tileDef(t.kind)?.minH ?? 4, 6);
+        // Give every tile a floor on a phone: a 3-row tile is legible in a
+        // 12-wide strip and unreadable as a full-width stub. The exception is a
+        // tile whose content is a fixed-height strip, which the floor can only
+        // pad out with empty tile.
+        const floor = isTickerStrip(t) ? 0 : 6;
+        const h = Math.max(auto ?? t.h, tileDef(t.kind)?.minH ?? 4, floor);
         const row = { i: t.id, x: 0, y, w: 1, h, minW: 1, minH: h, static: true };
         y += h;
         return row;

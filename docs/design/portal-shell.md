@@ -222,7 +222,7 @@ with nothing.
 - **Admin Terminal** — Users · Administrator Log · Admin Guidelines · Teams ·
   Badges · Message Templates · Patch Notes · Early Access · Bug Reports · Support
 - **Developer Terminal** — Developer Blog · AI Instructions · Site Wording ·
-  Suggestions · View as role
+  Suggestions
 - **Site Help** — How to · Announcements · Patch notes · Report a bug ·
   Suggestion · Rules & Conduct · Terms of Service · Privacy Policy
 

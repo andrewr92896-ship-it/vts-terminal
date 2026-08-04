@@ -503,8 +503,15 @@ export const api = {
     return request('/api/ai/tutor', { method: 'POST', body: JSON.stringify(body) });
   },
   // Multi-turn study tutor chat (back-and-forth about a question or term).
-  studyTutorChat(messages: { role: 'user' | 'assistant'; content: string }[]): Promise<{ reply: string }> {
-    return request('/api/ai/tutor', { method: 'POST', body: JSON.stringify({ messages }) });
+  // `seed` marks the canned one-tap opener, which is the Premium half of the
+  // tutor; anything the learner typed is the Max half. The server decides from
+  // the shape of the request, so this flag only ever costs less when it is
+  // telling the truth.
+  studyTutorChat(
+    messages: { role: 'user' | 'assistant'; content: string }[],
+    opts?: { seed?: boolean },
+  ): Promise<{ reply: string }> {
+    return request('/api/ai/tutor', { method: 'POST', body: JSON.stringify({ messages, seed: opts?.seed }) });
   },
   liveWall(): Promise<LiveWall> {
     return request('/api/trading/live');

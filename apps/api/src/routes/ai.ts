@@ -2,6 +2,13 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireAuth, requireWorkspace, requirePremium } from '../auth/middleware.js';
 import { canAccessWorkspace, isAdmin, parseRoles, type WorkspaceKey } from '../auth/rbac.js';
+import { hasEntitlement } from '../memberships/service.js';
+import {
+  FEATURE_LABELS,
+  FEATURE_TIER,
+  TIER_LABELS,
+  type PremiumFeature,
+} from '../memberships/tiers.js';
 import { featuresForUser } from '../features/service.js';
 import { aiConfigured, chatClaude } from '../ai/claude.js';
 import { getPrompt, withStyle } from '../ai/prompts.js';
@@ -44,6 +51,10 @@ async function systemPrompt(workspaceKey: string | undefined, displayName: strin
 }
 
 const tutorSchema = z.object({
+  // The learner pressed the canned opener ("Break this down" / "More Details")
+  // rather than typing something. It only reaches the cheaper Premium tier when
+  // it is what it claims to be — one opening turn, see `neededForTutor` below.
+  seed: z.boolean().optional(),
   explain: z
     .object({
       stem: z.string().trim().min(1).max(1500),
@@ -63,6 +74,24 @@ const tutorSchema = z.object({
     .max(40)
     .optional(),
 }).refine((v) => v.explain || v.ask || v.messages, { message: 'Provide a question to explain or ask' });
+
+// Which tier a tutor request costs. The study tutor is split across two paid
+// features (owner decision, 2026-08): the **one-tap breakdown** of the question
+// already on screen is Premium, and **typing your own question** — the opener as
+// well as every follow-up — is Max.
+//
+// The split is enforced on the SHAPE of the request, not on the client's word for
+// it. `explain` is the structured form whose prompt this file composes, so there
+// is no user text in it at all; `seed` is the canned opener, and it only counts
+// as one when it really is an opening turn. Anything else — free-form `ask`, a
+// running conversation, a `seed` flag on a thread already underway — is the Max
+// half. So the worst a hand-rolled request can buy is a single canned-shaped
+// turn, which is what the tier it claims already pays for.
+function neededForTutor(body: z.infer<typeof tutorSchema>): PremiumFeature {
+  if (body.explain) return 'studyExplain';
+  if (body.seed && !body.ask && (body.messages?.length ?? 0) <= 1) return 'studyExplain';
+  return 'studyAsk';
+}
 
 export async function aiRoutes(app: FastifyInstance) {
   // Current user's AI usage against the two monthly caps (for the UI to show).
@@ -111,13 +140,28 @@ export async function aiRoutes(app: FastifyInstance) {
   });
 
   // Study tutor — explain a question or answer a study question.
-  app.post('/api/ai/tutor', { preHandler: [requireWorkspace('studies'), requirePremium('ai')] }, async (request, reply) => {
+  //
+  // Gated by REQUEST SHAPE inside the handler rather than by a preHandler, the
+  // same way `/api/support/message` gates by intake kind: one endpoint serves
+  // both halves of the tutor and they sit on different tiers. See
+  // `neededForTutor` above for which is which.
+  app.post('/api/ai/tutor', { preHandler: [requireWorkspace('studies')] }, async (request, reply) => {
     if (!aiConfigured()) {
       return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     }
     const parsed = tutorSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Provide a question to explain or ask' });
+    }
+    const needed = neededForTutor(parsed.data);
+    if (!(await hasEntitlement(request.currentUser!, needed))) {
+      // 402, not 403: the client turns this into an upgrade prompt, while a 403
+      // would tell a would-be customer they are forbidden from the thing they
+      // would have paid for.
+      return reply.code(402).send({
+        error: `${FEATURE_LABELS[needed]} needs a ${TIER_LABELS[FEATURE_TIER[needed]]} membership`,
+        upgrade: { feature: needed, requiredTier: FEATURE_TIER[needed] },
+      });
     }
     // A running chat takes precedence; otherwise build a single user turn from
     // the structured "explain" request or the free-form "ask".

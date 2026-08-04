@@ -2159,6 +2159,7 @@ export type MembershipTier = (typeof MEMBERSHIP_TIERS)[number];
 // and how the tier boxes read on the Premium Features screen.
 export const PREMIUM_FEATURES = [
   'ai',
+  'studyAsk',
   'tradeDesk',
   'teams',
   'teamChat',
@@ -2168,6 +2169,7 @@ export const PREMIUM_FEATURES = [
   'brokerConnections',
   'pushover',
   'funded',
+  'studyExplain',
   'studyCreation',
   'customBoards',
   'premiumBadges',
