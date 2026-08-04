@@ -66,6 +66,7 @@ import { StrategySessions } from '../workspaces/trading/StrategySessions';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
+import { GeneralNews } from '../workspaces/news/GeneralNews';
 import { INVESTMENT_SCREENS } from '../workspaces/investments/screens';
 import { PremiumFeatures } from '../workspaces/myportal/PremiumFeatures';
 
@@ -105,6 +106,11 @@ const InvestmentsWorkspace = lazy(() =>
 // Investments UI kit.
 const NetWorthScreen = lazy(() =>
   import('../workspaces/myportal/NetWorth').then((m) => ({ default: m.NetWorthScreen })),
+);
+// Personal budgeting — lazy, since it pulls in the shared Investments UI kit the
+// same way Net Worth does.
+const BudgetScreen = lazy(() =>
+  import('../workspaces/finances/Budget').then((m) => ({ default: m.BudgetScreen })),
 );
 
 // Screens that have real implementations; everything else falls back to the
@@ -146,6 +152,12 @@ function renderScreen(
       return <MarketData />;
     case 'news':
       return <MarketNews onOpenMembership={() => onNavigate('my_access')} />;
+    // World and Politics read the same wire-service feed with a different
+    // topic. One screen, two keys — see GeneralNews.
+    case 'news_world':
+      return <GeneralNews key="news_world" topic="world" />;
+    case 'news_politics':
+      return <GeneralNews key="news_politics" topic="politics" />;
     case 'td_trading':
       return <TradingTodo />;
     // The Study Game, Test Mode, and Progress sections are all deck launchers
@@ -524,8 +536,13 @@ export function Portal() {
     // The Investments workspace — the long-term portfolio tracker.
     if (INVESTMENT_SCREENS.has(scr)) return <InvestmentsWorkspace screen={scr} onNavigate={selectScreen} />;
     switch (scr) {
+      // Net Worth moved to the Finances workspace; `my_networth` still resolves
+      // so in-app links and any saved reference keep landing on it.
+      case 'fin_networth':
       case 'my_networth':
         return <NetWorthScreen onNavigate={goToSection} />;
+      case 'fin_budget':
+        return <BudgetScreen onNavigate={goToSection} />;
       case 'my_team':
         return <TradingTeam theme={theme} user={user!} />;
       case 'my_access':

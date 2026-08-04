@@ -150,6 +150,17 @@ const RSS_FEEDS: RssFeed[] = [
   { url: 'https://cointelegraph.com/rss', source: 'Cointelegraph', category: 'crypto', impact: 'medium' },
   // USD/EUR and broader forex.
   { url: 'https://www.fxstreet.com/rss/news', source: 'FXStreet', category: 'markets', impact: 'medium' },
+
+  // ---- The News workspace: world and politics ----
+  //
+  // WIRE SERVICES ONLY (owner decision, 2026-08). Reuters and AP report rather
+  // than opine, which keeps the terminal out of an editorial position it has no
+  // reason to hold — whichever outlets appear here are read as a stance by
+  // somebody, and a wire is the one answer that is defensible to everyone.
+  // Do not add opinion or commentary outlets to these two categories.
+  { url: 'https://feeds.reuters.com/reuters/worldNews', source: 'Reuters', category: 'world', impact: 'medium' },
+  { url: 'https://feeds.reuters.com/Reuters/PoliticsNews', source: 'Reuters', category: 'politics', impact: 'medium' },
+  { url: 'https://rsshub.app/apnews/topics/apf-topnews', source: 'Associated Press', category: 'world', impact: 'medium' },
 ];
 
 // Unwrap a `<![CDATA[ ... ]]>` payload, or return the string unchanged.

@@ -722,6 +722,13 @@
       "when": 1782343436908,
       "tag": "0103_public_leaderboards",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "6",
+      "when": 1782343536908,
+      "tag": "0104_budget",
+      "breakpoints": true
     }
   ]
 }

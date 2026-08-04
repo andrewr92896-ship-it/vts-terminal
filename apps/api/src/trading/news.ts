@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { desc, eq, gte } from 'drizzle-orm';
+import { desc, eq, gte, notInArray } from 'drizzle-orm';
 import { aiConfigured } from '../ai/claude.js';
 import { newsAiEnabled } from './feeds.js';
 import { db } from '../db/index.js';
@@ -111,13 +111,28 @@ function toEvent(row: TradingCalendarRow): CalendarEvent {
   };
 }
 
+// The categories that belong to the News workspace rather than to Market News.
+//
+// They share `trading_news` — one ingest path, one tagger, one table — so the
+// market feed has to EXCLUDE them explicitly. Without this, adding a Reuters
+// world feed would quietly put "Floods displace thousands" in the middle of a
+// trader's headline list, which is the kind of thing that looks like a bug in
+// the market feed rather than a new feature elsewhere.
+export const GENERAL_NEWS_CATEGORIES = ['world', 'politics'] as const;
+export type GeneralNewsTopic = (typeof GENERAL_NEWS_CATEGORIES)[number];
+
 export async function getMarketNews(): Promise<MarketNewsData> {
   // The calendar is forward-looking, and the Forex Factory poller keeps it
   // densely populated, so window it to the last week plus everything upcoming —
   // ordered earliest-first — rather than letting old events crowd out the cap.
   const calWindowStart = new Date(Date.now() - 7 * 24 * 3600 * 1000);
   const [headRows, calRows] = await Promise.all([
-    db.select().from(tradingNews).orderBy(desc(tradingNews.publishedAt)).limit(200),
+    db
+      .select()
+      .from(tradingNews)
+      .where(notInArray(tradingNews.category, [...GENERAL_NEWS_CATEGORIES]))
+      .orderBy(desc(tradingNews.publishedAt))
+      .limit(200),
     db
       .select()
       .from(tradingCalendar)
@@ -130,6 +145,25 @@ export async function getMarketNews(): Promise<MarketNewsData> {
     calendar: calRows.map(toEvent),
     aiTagging: newsAiEnabled() && aiConfigured(),
   };
+}
+
+/**
+ * Headlines for one News-workspace topic.
+ *
+ * Deliberately thin: no calendar, no AI tagging flag, no instrument relevance.
+ * World and politics coverage is here to be READ, and the terminal has nothing
+ * useful to say about how a flood or an election "affects the desk" — inventing
+ * a read-through would be exactly the advice-flavoured surface the product is
+ * built to avoid.
+ */
+export async function getGeneralNews(topic: GeneralNewsTopic): Promise<{ headlines: NewsItem[] }> {
+  const rows = await db
+    .select()
+    .from(tradingNews)
+    .where(eq(tradingNews.category, topic))
+    .orderBy(desc(tradingNews.publishedAt))
+    .limit(120);
+  return { headlines: rows.map(toNews) };
 }
 
 // Timestamp (ms) of the most recently published headline, or 0 when there are

@@ -32,6 +32,7 @@ import { userTeamRoutes } from './routes/userTeams.js';
 import { messageTemplateRoutes } from './routes/messageTemplates.js';
 import { employeeRoutes } from './routes/employee.js';
 import { featureRoutes } from './routes/features.js';
+import { budgetRoutes } from './routes/budget.js';
 import { investmentRoutes } from './routes/investments.js';
 import { myPortalRoutes } from './routes/myPortal.js';
 import { applyEmployeeSecurityHeaders, enforceIpAllowlist } from './employee/guard.js';
@@ -121,6 +122,7 @@ export async function buildServer() {
   await app.register(messageTemplateRoutes);
   await app.register(employeeRoutes);
   await app.register(featureRoutes);
+  await app.register(budgetRoutes);
   await app.register(investmentRoutes);
   await app.register(myPortalRoutes);
   await app.register(devBlogRoutes);

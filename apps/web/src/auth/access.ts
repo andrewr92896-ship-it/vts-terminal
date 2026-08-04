@@ -123,6 +123,10 @@ export function workspacesForRoles(roles: RoleKey[], features: UserFeatures): Wo
 export const ALL_WORKSPACES: WorkspaceKey[] = [
   'trading',
   'investments',
+  // Included with every account, like Investments and Studies — personal money
+  // and general news hold no credential and place no order.
+  'finances',
+  'news',
   'studies',
   'myportal',
   'help',

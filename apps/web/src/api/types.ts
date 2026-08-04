@@ -2341,3 +2341,48 @@ export interface CredentialAuditEntry {
   ok: boolean;
   error: string | null;
 }
+
+// ---- Finances: budgeting ----
+//
+// Money is CENTS everywhere on these types, as integers. The API takes dollars
+// on the way in (what the user typed) and answers in cents; conversion happens
+// at the edges so nothing in between can drift.
+export type BudgetKind = 'income' | 'expense';
+
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  kind: BudgetKind;
+  /** Expected monthly figure in cents, or null for "no target". */
+  monthlyLimit: number | null;
+  icon: string | null;
+  sortOrder: number;
+  archived: boolean;
+  actualCents: number;
+  entryCount: number;
+}
+
+export interface BudgetEntry {
+  id: string;
+  categoryId: string;
+  categoryName: string;
+  kind: BudgetKind;
+  amountCents: number;
+  note: string | null;
+  occurredOn: string;
+  source: string;
+}
+
+export interface BudgetMonth {
+  month: string;
+  categories: BudgetCategory[];
+  entries: BudgetEntry[];
+  incomeCents: number;
+  spentCents: number;
+  netCents: number;
+  plannedIncomeCents: number;
+  plannedSpendCents: number;
+  plannedNetCents: number;
+  /** Whether any expense category has a target — see the service comment. */
+  hasTargets: boolean;
+}

@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.67';
+export const APP_VERSION = 'Beta V 6.68';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.68',
+    date: 'August 4, 2026',
+    notes: [
+      'The Live Wall now sits at the very top of My Terminal, above everything else, with an icon that stands out. It is the biggest thing the terminal does and it was buried.',
+      'New Finances workspace: your Net Worth moved here, and there is now a Budget — set up what money comes in and goes out on, record amounts as the month goes, and see what is left over. Entered by hand for now; nothing is connected to a bank.',
+      'New News workspace. Market News moved here, joined by World and Politics from the wire services (Reuters and AP) — reporting only, no opinion outlets and no commentary from us. Market Data stays in My Terminal.',
+    ],
+  },
   {
     version: 'Beta V 6.67',
     date: 'August 4, 2026',
