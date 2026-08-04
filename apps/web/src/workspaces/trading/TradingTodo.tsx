@@ -94,7 +94,7 @@ export function TradingTodo() {
     <div style={{ maxWidth: 720, color: '#dfe6f5', animation: 'fadeIn .25s ease' }}>
       <h2 style={{ margin: '0 0 4px', fontSize: 19, fontWeight: 700, color: '#eef3ff' }}>{"Trading To-Do"}</h2>
       <p style={{ margin: '0 0 16px', fontSize: 12.5, color: '#8b97b3' }}>
-        {"Trading tasks and reminders, shared with your team."}
+        {"Trading tasks and reminders."}
       </p>
 
       {actionError && (

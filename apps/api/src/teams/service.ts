@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq, isNull } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingTeams, users } from '../db/schema.js';
 import { parseRoles, type RoleKey } from '../auth/rbac.js';
@@ -148,10 +148,25 @@ async function teamByName(name: string): Promise<{ id: string } | null> {
   return hit ? { id: hit.id } : null;
 }
 
-// Ensure the default team exists and adopt any team-less accounts into it. The
-// migration seeds this too, but on a brand-new database the admin/demo users are
-// created after migrations run (with no team), so this backfills them on boot.
-// Idempotent and best-effort — never blocks startup.
+// Ensure the default team exists. Idempotent and best-effort — never blocks
+// startup.
+//
+// IT NO LONGER ADOPTS ANYONE. This function used to end with an unconditional
+// `UPDATE users SET team_id = 'team-vitalis' WHERE team_id IS NULL`, which ran
+// on every boot — so every account that had not been put on a team explicitly
+// was swept into one shared team. On a private terminal with a handful of
+// invited users that was a convenience. At public launch it is a data leak with
+// no mitigation: team scope is what separates study libraries, Market News
+// channel lists and team chat, so every stranger who signed up would land in the
+// same scope as every other stranger, able to read, edit and delete each other's
+// content.
+//
+// A team-less account now resolves to a private scope of its own instead — see
+// teams/contentScope.ts. Being on a team is something granted, never something
+// that happens to you on the next restart.
+//
+// The default team row is still created (existing members keep it, and it is the
+// one real team today), and existing members are left exactly where they are.
 export async function seedDefaultTeam(): Promise<void> {
   const existing = (
     await db.select({ id: tradingTeams.id }).from(tradingTeams).where(eq(tradingTeams.id, DEFAULT_TEAM_ID)).limit(1)
@@ -165,6 +180,4 @@ export async function seedDefaultTeam(): Promise<void> {
       updatedAt: now,
     });
   }
-  // Adopt any account that has no team yet.
-  await db.update(users).set({ teamId: DEFAULT_TEAM_ID, updatedAt: now }).where(isNull(users.teamId));
 }

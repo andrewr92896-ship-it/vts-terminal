@@ -72,12 +72,17 @@ export interface UserFeatures {
   funded: boolean;
   // When the user acknowledged what the trading desk does (ms), or null.
   tradingAckAt: number | null;
-  // Private mode, inverted. False — the default — keeps this trader's book off
-  // their teammates' screens. Edited from My Terminal ▸ Trading Team; the server
-  // is what actually filters (trading/scope.ts), this only drives the UI.
+  // Private mode. Retired as a switch — trade visibility is self-only now, so
+  // there was nothing left for it to hide. Still sent by the server, still
+  // stored, but nothing in the UI reads it.
   shareBook: boolean;
   // When the user acknowledged what sharing exposes (ms), or null.
   bookAckAt: number | null;
+  // Trading Teams — GRANTED by a software developer, never chosen. This is the
+  // one flag on this object the user cannot change about themselves, and it is
+  // what every team surface in the terminal is hidden behind. False for almost
+  // every account at launch; founder-level accounts always read true.
+  tradingTeams: boolean;
 }
 
 // Matches the backend's PublicUser shape (auth/rbac.ts).
@@ -286,6 +291,13 @@ export interface AdminUser {
    * grant, so a missing membership does not mean Free.
    */
   membership: Membership;
+  /**
+   * Whether this account has been granted Trading Teams. Resolved the same way
+   * membership is — founder-level accounts hold it by role with no stored row —
+   * so false really means "cannot see teams", not "no row yet". Granted from
+   * Admin ▸ Users by a software developer, and nowhere else.
+   */
+  tradingTeams: boolean;
 }
 
 // Raw data returned when an item is removed, so the client can offer "undo".
@@ -1623,7 +1635,10 @@ export interface ChatMessage {
 
 // The team-chat feed response. `eligible` is false when the viewer is not on a
 // trading team (see `reason`), so the UI can explain the trading-team feature.
-export type TeamChatReason = 'ok' | 'no_trading' | 'no_team';
+// `unavailable` is the launch state for almost every account: Trading Teams are
+// hidden behind a developer grant, so the chat panel hides the tab entirely
+// rather than explaining a feature the reader cannot have.
+export type TeamChatReason = 'ok' | 'unavailable' | 'no_trading' | 'no_team';
 export interface TeamChatFeed {
   eligible: boolean;
   reason: TeamChatReason;

@@ -59,13 +59,24 @@ export function TeamChat({
   });
   const [toast, setToast] = useState<ChatMessage | null>(null);
 
-  // Three tabs: Team chat (default), Support, and — for founders, developers and
-  // admins — Administrator chat. Team chat is the one open by default every time
-  // the panel is opened.
+  // Trading Teams are hidden behind a developer grant at launch, and the server
+  // says so with reason `unavailable`. The whole Team chat tab goes with them —
+  // an account that cannot have a team should not be shown a chat tab for one,
+  // and the "what is a trading team" explanation would be advertising a feature
+  // there is no way to obtain.
+  const teamChatAvailable = reason !== 'unavailable';
+
+  // Up to three tabs: Team chat (where available), Support, and — for founders,
+  // developers and admins — Administrator chat. The panel opens on Team chat
+  // when there is one, and on Support otherwise.
   const [tab, setTab] = useState<'team' | 'support' | 'admin'>('team');
   useEffect(() => {
-    if (open) setTab('team');
-  }, [open]);
+    if (open) setTab(teamChatAvailable ? 'team' : 'support');
+  }, [open, teamChatAvailable]);
+  // A grant revoked mid-session leaves the panel parked on a tab that is gone.
+  useEffect(() => {
+    if (!teamChatAvailable && tab === 'team') setTab('support');
+  }, [teamChatAvailable, tab]);
 
   // The administrator room. Install-wide rather than team-scoped, so it has its
   // own feed rather than sharing the team one — an admin on one desk needs to
@@ -341,7 +352,9 @@ export function TeamChat({
                   upgrade notice replaces the feed rather than the tab — so the
                   mark is what says the feed costs something. Support carries
                   its own per-kind marks inside (a bug report is free). */}
-              <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} tier={tierOfFeature('teamChat', user.access.membership)} />
+              {teamChatAvailable && (
+                <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} tier={tierOfFeature('teamChat', user.access.membership)} />
+              )}
               <TabBtn active={tab === 'support'} onClick={() => setTab('support')} icon="life-buoy" label="Support" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
               {canModerate && (
                 <TabBtn active={tab === 'admin'} onClick={() => setTab('admin')} icon="shield-check" label="Admin" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />

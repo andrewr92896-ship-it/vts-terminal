@@ -166,7 +166,7 @@ function TraderPicker({
       <button
         ref={btnRef}
         onClick={toggle}
-        title="Show metrics for the whole desk or one trader"
+        title="Show metrics across your instruments or one at a time"
         style={pickerBtn}
       >
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{current.name}</span>

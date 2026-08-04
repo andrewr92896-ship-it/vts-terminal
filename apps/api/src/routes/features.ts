@@ -8,24 +8,22 @@ import { FeatureError, featuresForUser, setUserFeatures } from '../features/serv
 // changes anyone else's account. The demo never reaches the write: demoGuard
 // refuses every non-GET before this runs.
 
+// Only the two real opt-ins. `shareBook`/`acknowledgeBook` are gone with private
+// mode, and `tradingTeams` is deliberately absent — it is granted by a software
+// developer from Admin ▸ Users, so it must not be reachable from a route the
+// account holder can call about themselves. Zod strips unknown keys, so a
+// hand-rolled body naming it changes nothing.
 const patchSchema = z
   .object({
     advancedTrading: z.boolean().optional(),
     funded: z.boolean().optional(),
     acknowledgeTrading: z.boolean().optional(),
-    // Private mode, edited from My Terminal ▸ Trading Team rather than the
-    // Premium Features screen — it is a privacy setting about the team, not an
-    // opt-in. It rides this endpoint because it rides the same row.
-    shareBook: z.boolean().optional(),
-    acknowledgeBook: z.boolean().optional(),
   })
   .refine(
     (v) =>
       v.advancedTrading !== undefined ||
       v.funded !== undefined ||
-      v.acknowledgeTrading !== undefined ||
-      v.shareBook !== undefined ||
-      v.acknowledgeBook !== undefined,
+      v.acknowledgeTrading !== undefined,
     { message: 'Nothing to change' },
   );
 

@@ -1,19 +1,24 @@
 import type { UserRow } from '../db/schema.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
-import { getEffectivePermissions } from '../userTeams/service.js';
-import { visibleTraderIds } from './scope.js';
 
 // Who may delete (and restore) whose trades.
 //
-// A trader can always remove their own. Removing somebody else's is a team
-// grant, handed out from My Terminal ▸ Trading Team: the **team leader** holds
-// every permission implicitly, and they can give the **Delete trades**
-// permission (`canDeleteTrades`) to any member. Admins keep their install-wide
-// reach over the shared desk, as they always had.
+// A trader deletes their own. Admins keep their install-wide reach for support.
+// There is nothing in between.
 //
-// Every non-admin grant is bounded by the team's trade-visibility boundary
-// (trading/scope.ts), so a leader can only ever clear rows their own desk can
-// already see — the permission widens *whose* trades, never *which* desk.
+// THE TEAM GRANT IS GONE (owner decision, 2026-08). A team leader used to be
+// able to hand out a "Delete trades" permission reaching any member's rows, and
+// that permission was always bounded by what the holder could SEE — deleting
+// something you are not allowed to look at was never a power a team grant should
+// carry. Trade visibility is self-only now (trading/scope.ts), so that bound had
+// already collapsed the permission to "your own trades": it kept resolving
+// through `visibleTraderIds`, which returns exactly the caller.
+//
+// It is written out rather than left to resolve to nothing, because a permission
+// that silently does nothing is worse than one that is absent — the toggle stays
+// on screen, an admin hands it out believing it works, and nobody finds out
+// until somebody needs it. `canDeleteTrades` is off the team permissions UI for
+// the same reason.
 
 export interface TradeDeleteScope {
   // Unrestricted: an admin may clear any row on the install.
@@ -21,7 +26,8 @@ export interface TradeDeleteScope {
   // The owners whose trades may be removed; always contains the caller.
   ownerIds: Set<string>;
   // Whether the caller may remove somebody else's trade — what the UI needs to
-  // decide if a Delete control belongs on a teammate's row.
+  // decide if a Delete control belongs on another trader's row. Only ever true
+  // for an admin now.
   others: boolean;
 }
 
@@ -37,16 +43,5 @@ export async function tradeDeleteScope(actor: UserRow): Promise<TradeDeleteScope
   if (isAdmin(parseRoles(actor))) {
     return { any: true, ownerIds: new Set([actor.id]), others: true };
   }
-  // Leader ⇒ every permission (getEffectivePermissions resolves that for us).
-  const perms = await getEffectivePermissions(actor.id);
-  if (!perms?.canDeleteTrades) return ownTradesOnly(actor.id);
-  // Bounded by what the actor can SEE, not merely by their team: a leader with
-  // the delete permission cannot reach the trades of a member running in private
-  // mode, because those trades are not on their desk to begin with. Deleting
-  // something you are not allowed to look at is not a power a team grant should
-  // carry. Admins never reach here — they took the `any` path above.
-  const ownerIds = await visibleTraderIds(actor);
-  ownerIds.add(actor.id);
-  // A solo trader with the permission still only has their own trades to reach.
-  return { any: false, ownerIds, others: ownerIds.size > 1 };
+  return ownTradesOnly(actor.id);
 }

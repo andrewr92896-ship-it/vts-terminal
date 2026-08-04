@@ -9,7 +9,7 @@ import {
   type WorkspaceKey,
   type Theme,
 } from '../theme/themes';
-import { NAV, navFor, accentFor, OPT_IN_WORKSPACES } from '../theme/nav';
+import { NAV, navFor, accentFor, OPT_IN_WORKSPACES, TEAM_ONLY_SECTIONS } from '../theme/nav';
 import { C } from '../theme/tokens';
 import {
   canAccessEmployeePortal,
@@ -468,6 +468,11 @@ export function Portal() {
 
   // The nested Funded Account opt-in. Never revealed to the demo.
   const canFunded = !user!.isDemo && canAccessFunded(features);
+  // The Trading Teams grant. Not a role, not an opt-in, not a membership — a
+  // software developer hands it out from Admin ▸ Users. Every team surface in
+  // the terminal is hidden behind it; the server enforces the same on each
+  // /api/my-portal/team* route.
+  const canTeams = !!features.tradingTeams;
 
   // The Employee Portal row above the workspaces list. Needs the `employee` role
   // AND a company-domain sign-in email; follows the same "view as role" preview
@@ -489,10 +494,13 @@ export function Portal() {
     const nav = navFor(workspace);
     if (!nav) return;
     const fundedLocked = screen === 'prop' && !canFunded;
-    if (!nav.sections.some((s) => s.key === screen) || fundedLocked) {
+    // Trading Teams is granted, not chosen. Bounce off the screen if the grant
+    // is not held — covers a revoked grant leaving somebody parked on it.
+    const teamLocked = TEAM_ONLY_SECTIONS.has(screen) && !canTeams;
+    if (!nav.sections.some((s) => s.key === screen) || fundedLocked || teamLocked) {
       setScreen(DEFAULT_SCREEN[workspace]);
     }
-  }, [workspace, screen, canFunded, allowed]);
+  }, [workspace, screen, canFunded, canTeams, allowed]);
 
   // Screens that need the live user or the acting-role controls (which the
   // stateless renderScreen doesn't have): the Site Help workspace and the Admin

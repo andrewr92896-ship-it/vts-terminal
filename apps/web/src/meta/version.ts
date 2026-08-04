@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.63';
+export const APP_VERSION = 'Beta V 6.64';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.64',
+    date: 'August 4, 2026',
+    notes: [
+      'Your trading results are now yours alone. Positions, the trade log, history, deleted trades and broker capital are visible only to you — nobody else on the terminal sees another person\u2019s numbers, and trade notifications go only to the trader they are about.',
+      'New accounts now start in their own private space. Study games, flashcard sets, presentations and your news channel list belong to you rather than to a shared group, so nothing you make is visible to, or editable by, anyone else.',
+      'Trading Teams are hidden for now and handed out by a software developer. The Vitalis Trading Team and everyone already on it are unchanged.',
+      'Private mode has been retired from the Trading Team screen. It existed to keep your book off other people\u2019s screens, and that is now simply how the terminal works.',
+    ],
+  },
   {
     version: 'Beta V 6.63',
     date: 'August 4, 2026',

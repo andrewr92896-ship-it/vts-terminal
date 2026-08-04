@@ -143,6 +143,31 @@ export const requireFunded: preHandlerHookHandler = async (
   }
 };
 
+// Reject unless the account has been GRANTED Trading Teams.
+//
+// A fourth axis, and deliberately not any of the other three: not a role (it is
+// per-account, and an admin does not get it for being an admin), not an opt-in
+// (nothing self-service turns it on), and not a membership (no amount of money
+// buys it). A software developer grants it by hand from Admin ▸ Users, and
+// founder-level accounts resolve to it without a stored row.
+//
+// 403, not 402: this is not for sale, so an upgrade prompt would be a lie. The
+// client hides every team surface from an account without the grant, so reaching
+// one of these endpoints at all means a hand-rolled request.
+export const requireTradingTeams: preHandlerHookHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const user = request.currentUser;
+  if (!user) {
+    return reply.code(401).send({ error: 'Not authenticated' });
+  }
+  const features = await featuresForUser(user);
+  if (!features.tradingTeams) {
+    return reply.code(403).send({ error: 'Forbidden' });
+  }
+};
+
 // Reject unless the account's membership reaches a paid feature.
 //
 // This is the paywall, and it is a THIRD axis alongside roles and feature

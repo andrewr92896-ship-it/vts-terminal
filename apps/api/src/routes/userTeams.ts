@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireAuth, requirePremium } from '../auth/middleware.js';
+import { requireAuth, requirePremium, requireTradingTeams } from '../auth/middleware.js';
 import {
   UserTeamError,
   BADGE_PRESETS,
@@ -36,15 +36,25 @@ const permsSchema = z.object({
 // My Terminal — user-created Trading Teams. All routes require a signed-in user;
 // the global demo guard already refuses demo writes.
 export async function userTeamRoutes(app: FastifyInstance) {
-  const guard = { preHandler: requireAuth };
+  // Trading Teams are hidden at public launch and handed out by a software
+  // developer (see requireTradingTeams). EVERY route here sits behind that
+  // grant, reads included: without it there is no team screen, so a read
+  // reaching this file is a hand-rolled request and there is nothing it should
+  // be told. The two exceptions below are deliberate.
+  const guard = { preHandler: [requireAuth, requireTradingTeams] };
   // Running a team is paid; being ON one is not. The team's owner pays, and the
   // people they invite join for free — so `team` guards creating, renaming,
   // inviting and moving members around, while responding to an invite and
   // leaving stay on `guard`. Leaving is never gated on purpose: a lapsed
   // membership must not be able to trap somebody on a desk they want off.
-  const team = { preHandler: [requireAuth, requirePremium('teams')] };
+  const team = { preHandler: [requireAuth, requireTradingTeams, requirePremium('teams')] };
   // The cosmetic member badges are their own paid feature.
-  const badges = { preHandler: [requireAuth, requirePremium('premiumBadges')] };
+  const badges = { preHandler: [requireAuth, requireTradingTeams, requirePremium('premiumBadges')] };
+  // Leaving a team and answering an invite stay reachable WITHOUT the grant, for
+  // the same reason leaving is not gated on the membership: revoking somebody's
+  // grant must never strand them on a team with no way off it. Both routes act
+  // only on the caller's own membership.
+  const selfOnly = { preHandler: requireAuth };
 
   const fail = (reply: import('fastify').FastifyReply, err: unknown) => {
     if (err instanceof UserTeamError) return reply.code(400).send({ error: err.message });
@@ -106,7 +116,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
   });
 
   // The invited user accepts or declines an invitation addressed to them.
-  app.post('/api/my-portal/invites/:id/respond', guard, async (request, reply) => {
+  app.post('/api/my-portal/invites/:id/respond', selfOnly, async (request, reply) => {
     const id = (request.params as { id: string }).id;
     const parsed = respondSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid response' });
@@ -118,7 +128,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     }
   });
 
-  app.post('/api/my-portal/team/leave', guard, async (request, reply) => {
+  app.post('/api/my-portal/team/leave', selfOnly, async (request, reply) => {
     try {
       await leaveTeam(request.currentUser!.id);
       return { ok: true };

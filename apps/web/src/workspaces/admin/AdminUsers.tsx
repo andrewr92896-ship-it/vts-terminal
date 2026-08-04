@@ -565,6 +565,19 @@ export function AdminUsers({ theme }: { theme: Theme }) {
                 onError={setActionError}
               />
 
+              {/* Trading Teams. Founder-level only, and shown to nobody else —
+                  a plain admin cannot grant it, so a disabled control would just
+                  raise a question they cannot act on. */}
+              {me?.access.founder && (
+                <TradingTeamsGrant
+                  theme={theme}
+                  accentGrad={accentGrad}
+                  user={u}
+                  onChanged={setUsers}
+                  onError={setActionError}
+                />
+              )}
+
               {resetFor === u.id && (
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
                   <input
@@ -588,6 +601,71 @@ export function AdminUsers({ theme }: { theme: Theme }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// Grant or revoke Trading Teams for one account.
+//
+// Not a membership and not an opt-in: teams are hidden at public launch and a
+// software developer hands them out by hand. There is no tier that buys this and
+// no expiry to set, which is why it is a plain switch rather than the form
+// below.
+//
+// A founder-level account always holds it by role, so there is nothing to change
+// on one — the switch says so rather than offering a control the server would
+// ignore.
+function TradingTeamsGrant({
+  theme,
+  accentGrad,
+  user,
+  onChanged,
+  onError,
+}: {
+  theme: Theme;
+  accentGrad: string;
+  user: AdminUser;
+  onChanged: (users: AdminUser[]) => void;
+  onError: (msg: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const byRole = user.roles.includes('founder') || user.roles.includes('software_developer');
+
+  async function toggle() {
+    setBusy(true);
+    onError('');
+    try {
+      const r = await api.setTradingTeamsGrant(user.id, !user.tradingTeams);
+      onChanged(r.users);
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : 'Could not change Trading Teams access');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ ...fieldLabel, marginBottom: 8 }}>Trading Teams</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: user.tradingTeams ? '#8fe3c0' : '#7e92c0' }}>
+          {byRole
+            ? 'Always on — founder level'
+            : user.tradingTeams
+              ? 'Granted'
+              : 'Not granted'}
+        </span>
+        {!byRole && (
+          <button
+            type="button"
+            onClick={() => void toggle()}
+            disabled={busy}
+            style={user.tradingTeams ? ghostBtn : primaryBtn(theme, accentGrad)}
+          >
+            {busy ? 'Saving…' : user.tradingTeams ? 'Revoke' : 'Grant'}
+          </button>
+        )}
       </div>
     </div>
   );

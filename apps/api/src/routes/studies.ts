@@ -27,6 +27,7 @@ import {
   parseDeckFromText,
   parseFlashcardsFromText,
 } from '../ai/claude.js';
+import { contentScopeId } from '../teams/contentScope.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { styleGuide } from '../ai/prompts.js';
 import { getTeamName } from '../teams/service.js';
@@ -276,8 +277,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // The list of the caller's team decks.
   app.get('/api/studies/decks', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.send({ decks: [] });
+    const teamId = contentScopeId(request.currentUser!);
     // Make sure this team has the built-in example game(s) — covers teams created
     // after the last boot. Best-effort: never block the list on seeding.
     try {
@@ -290,8 +290,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Create a deck by generating questions from a topic with Claude.
   app.post('/api/studies/decks/generate', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = deckGenerateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name, topic, and question count are required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -324,8 +323,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // questions the author can review before anything is saved. Returns the
   // questions (with display sequence numbers) but does NOT create a deck.
   app.post('/api/studies/decks/import/preview', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = deckImportPreviewSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'The file text is required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -349,8 +347,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // the deck is created. No AI call — the questions were already formatted in
   // the preview step and are re-validated by the schema.
   app.post('/api/studies/decks/import/confirm', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study game.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = deckConfirmSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one question are required' });
     try {
@@ -378,22 +375,21 @@ export async function studiesRoutes(app: FastifyInstance) {
   // questions. Registered before the ":id" routes so the literal path wins.
   app.post('/api/studies/decks/merge', create, async (request, reply) => {
     const me = request.currentUser!;
-    if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team to combine study games.' });
     const parsed = deckMergeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one game are required' });
     try {
       const deck = await mergeDecks({
-        teamId: me.teamId,
+        teamId: contentScopeId(me),
         name: parsed.data.name,
         createdBy: me.id,
         deckIds: parsed.data.deckIds,
         tagSource: parsed.data.tagSource ?? false,
       });
       if (deck.questionCount === 0) {
-        await deleteDeck(deck.id, me.teamId, me.id, true);
+        await deleteDeck(deck.id, contentScopeId(me), me.id, true);
         return reply.code(422).send({ error: 'None of the chosen games had questions to combine.' });
       }
-      return { deck, decks: await listDecks(me.teamId) };
+      return { deck, decks: await listDecks(contentScopeId(me)) };
     } catch (err) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not combine the study games' });
     }
@@ -403,7 +399,6 @@ export async function studiesRoutes(app: FastifyInstance) {
   // for the author to review before saving — it does not modify the deck.
   app.post('/api/studies/decks/categorize', create, async (request, reply) => {
     const me = request.currentUser!;
-    if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
     const parsed = deckCategorizeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Questions are required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -427,7 +422,6 @@ export async function studiesRoutes(app: FastifyInstance) {
   // path wins.
   app.post('/api/studies/decks/audit', create, async (request, reply) => {
     const me = request.currentUser!;
-    if (!me.teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
     const parsed = deckAuditSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Questions are required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -451,9 +445,8 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // One deck with its questions (team-scoped).
   app.get('/api/studies/decks/:id', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
+    const teamId = contentScopeId(request.currentUser!);
     const id = (request.params as { id: string }).id;
-    if (!teamId) return reply.code(404).send({ error: 'Not found' });
     const deck = await getDeck(id, teamId);
     if (!deck) return reply.code(404).send({ error: 'Study game not found' });
     return { deck };
@@ -464,15 +457,14 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.patch('/api/studies/decks/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
     const parsed = deckUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
     // Built-in example games are code-owned and locked — nobody edits them here.
-    const target = await getDeck(id, me.teamId);
+    const target = await getDeck(id, contentScopeId(me));
     if (target && isBakedInSource(target.source)) {
       return reply.code(403).send({ error: 'This is a built-in example game and can’t be edited.' });
     }
-    const deck = await updateDeck(id, me.teamId, me.id, isAdmin(parseRoles(me)), {
+    const deck = await updateDeck(id, contentScopeId(me), me.id, isAdmin(parseRoles(me)), {
       name: parsed.data.name,
       description: parsed.data.description,
       categories: parsed.data.categories,
@@ -486,7 +478,7 @@ export async function studiesRoutes(app: FastifyInstance) {
       })),
     });
     if (!deck) return reply.code(403).send({ error: 'You can only edit study games you created.' });
-    return { deck, decks: await listDecks(me.teamId) };
+    return { deck, decks: await listDecks(contentScopeId(me)) };
   });
 
   // Delete a deck. Only the Trading Team leader (or an admin/founder) may delete
@@ -494,31 +486,30 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.delete('/api/studies/decks/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
     // Built-in example games are permanent — they can't be removed by anyone.
-    const target = await getDeck(id, me.teamId);
+    const target = await getDeck(id, contentScopeId(me));
     if (target && isBakedInSource(target.source)) {
       return reply.code(403).send({ error: 'This is a built-in example game and can’t be removed.' });
     }
     const mode = await studiesDeleteMode(me);
     if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
-    const ok = await deleteDeck(id, me.teamId, me.id, mode === 'any');
+    const ok = await deleteDeck(id, contentScopeId(me), me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete study games you created.' });
-    return { decks: await listDecks(me.teamId) };
+    return { decks: await listDecks(contentScopeId(me)) };
   });
 
   // Per-user, per-deck game state.
   app.get('/api/studies/decks/:id/game', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
+    const teamId = contentScopeId(request.currentUser!);
     const id = (request.params as { id: string }).id;
-    if (!teamId || !(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    if (!(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
     return { state: await getDeckGame(request.currentUser!.id, id) };
   });
 
   app.put('/api/studies/decks/:id/game', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
+    const teamId = contentScopeId(request.currentUser!);
     const id = (request.params as { id: string }).id;
-    if (!teamId || !(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    if (!(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
     const parsed = gameSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
     const state = normalizeState(parsed.data.state);
@@ -528,9 +519,9 @@ export async function studiesRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/studies/decks/:id/game/archive', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
+    const teamId = contentScopeId(request.currentUser!);
     const id = (request.params as { id: string }).id;
-    if (!teamId || !(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    if (!(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
     const parsed = gameSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
     const state = normalizeState(parsed.data.state);
@@ -543,7 +534,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.get('/api/studies/decks/:id/leaderboard', guard, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!me.teamId || !(await getDeck(id, me.teamId))) return reply.code(404).send({ error: 'Not found' });
+    if (!(await getDeck(id, contentScopeId(me)))) return reply.code(404).send({ error: 'Not found' });
     return { entries: await getDeckLeaderboard(id, me.id) };
   });
 
@@ -555,8 +546,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // The list of the caller's team flashcard sets.
   app.get('/api/studies/flashcards', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.send({ sets: [] });
+    const teamId = contentScopeId(request.currentUser!);
     return { sets: await listFlashcardSets(teamId) };
   });
 
@@ -564,8 +554,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // reviewed output of a file upload. No AI call — the cards are re-validated by
   // the schema and card numbers/ids are assigned server-side.
   app.post('/api/studies/flashcards', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = flashcardCreateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one card are required' });
     try {
@@ -585,8 +574,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // Create a set by generating cards from a topic with Claude.
   app.post('/api/studies/flashcards/generate', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = flashcardGenerateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name, topic, and card count are required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -619,8 +607,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // cards the author can review before anything is saved. Returns the cards (with
   // display sequence numbers) but does NOT create a set.
   app.post('/api/studies/flashcards/import/preview', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a flashcard set.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = flashcardImportPreviewSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'The file text is required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -644,8 +631,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // vocabulary from its questions and write definitions. Returns cards (with
   // display sequence numbers) for review; no set is created yet.
   app.post('/api/studies/flashcards/from-deck', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = flashcardFromDeckSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A study game is required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -678,9 +664,8 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // One set with its cards (team-scoped).
   app.get('/api/studies/flashcards/:id', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
+    const teamId = contentScopeId(request.currentUser!);
     const id = (request.params as { id: string }).id;
-    if (!teamId) return reply.code(404).send({ error: 'Not found' });
     const set = await getFlashcardSet(id, teamId);
     if (!set) return reply.code(404).send({ error: 'Flashcard set not found' });
     return { set };
@@ -690,16 +675,15 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.patch('/api/studies/flashcards/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
     const parsed = flashcardUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
-    const set = await updateFlashcardSet(id, me.teamId, me.id, isAdmin(parseRoles(me)), {
+    const set = await updateFlashcardSet(id, contentScopeId(me), me.id, isAdmin(parseRoles(me)), {
       name: parsed.data.name,
       description: parsed.data.description,
       cards: parsed.data.cards?.map((c) => ({ term: c.term, def: c.def, topic: c.topic ?? null })),
     });
     if (!set) return reply.code(403).send({ error: 'You can only edit flashcard sets you created.' });
-    return { set, sets: await listFlashcardSets(me.teamId) };
+    return { set, sets: await listFlashcardSets(contentScopeId(me)) };
   });
 
   // Delete a set. Only the Trading Team leader (or an admin/founder) may delete
@@ -707,12 +691,11 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.delete('/api/studies/flashcards/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
     const mode = await studiesDeleteMode(me);
     if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
-    const ok = await deleteFlashcardSet(id, me.teamId, me.id, mode === 'any');
+    const ok = await deleteFlashcardSet(id, contentScopeId(me), me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete flashcard sets you created.' });
-    return { sets: await listFlashcardSets(me.teamId) };
+    return { sets: await listFlashcardSets(contentScopeId(me)) };
   });
 
   // ---- Team study guides (slide presentations) ----
@@ -721,8 +704,7 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // The list of the caller's team guides (metadata only — no slide blob).
   app.get('/api/studies/guides', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.send({ guides: [] });
+    const teamId = contentScopeId(request.currentUser!);
     return { guides: await listGuides(teamId) };
   });
 
@@ -730,8 +712,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // plus the complete current slide draft. Persists nothing — the client saves
   // the finished guide with POST /guides once the author is happy.
   app.post('/api/studies/guides/chat', create, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study guide.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = guideChatSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A conversation message is required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
@@ -748,8 +729,7 @@ export async function studiesRoutes(app: FastifyInstance) {
   // Save a finished guide (slides + any attached screenshots). The larger body
   // limit accommodates the embedded base64 screenshots.
   app.post('/api/studies/guides', { ...create, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
-    if (!teamId) return reply.code(400).send({ error: 'You need to be on a team to build a study guide.' });
+    const teamId = contentScopeId(request.currentUser!);
     const parsed = guideCreateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one slide are required' });
     const guide = await createGuide({
@@ -769,9 +749,8 @@ export async function studiesRoutes(app: FastifyInstance) {
 
   // One guide with its slides (team-scoped).
   app.get('/api/studies/guides/:id', guard, async (request, reply) => {
-    const teamId = request.currentUser!.teamId;
+    const teamId = contentScopeId(request.currentUser!);
     const id = (request.params as { id: string }).id;
-    if (!teamId) return reply.code(404).send({ error: 'Not found' });
     const guide = await getGuide(id, teamId);
     if (!guide) return reply.code(404).send({ error: 'Study guide not found' });
     return { guide };
@@ -781,16 +760,15 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.put('/api/studies/guides/:id', { ...create, bodyLimit: 25 * 1024 * 1024 }, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
     const parsed = guideUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
-    const guide = await updateGuide(id, me.teamId, me.id, isAdmin(parseRoles(me)), {
+    const guide = await updateGuide(id, contentScopeId(me), me.id, isAdmin(parseRoles(me)), {
       name: parsed.data.name,
       description: parsed.data.description,
       slides: parsed.data.slides?.map((s) => ({ title: s.title ?? '', body: s.body ?? '', image: s.image ?? null })),
     });
     if (!guide) return reply.code(403).send({ error: 'You can only edit study guides you created.' });
-    return { guide, guides: await listGuides(me.teamId) };
+    return { guide, guides: await listGuides(contentScopeId(me)) };
   });
 
   // Delete a guide. Only the Trading Team leader (or an admin/founder) may delete
@@ -798,12 +776,11 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.delete('/api/studies/guides/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!me.teamId) return reply.code(404).send({ error: 'Not found' });
     const mode = await studiesDeleteMode(me);
     if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
-    const ok = await deleteGuide(id, me.teamId, me.id, mode === 'any');
+    const ok = await deleteGuide(id, contentScopeId(me), me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete study guides you created.' });
-    return { guides: await listGuides(me.teamId) };
+    return { guides: await listGuides(contentScopeId(me)) };
   });
 
   app.get('/api/studies/learned', guard, async (request) => {
@@ -956,8 +933,8 @@ export async function studiesRoutes(app: FastifyInstance) {
   // where they stand and compare progress with each other.
   app.get('/api/studies/leaderboard', guard, async (request) => {
     const me = request.currentUser!;
-    const [entries, teamName] = await Promise.all([getLeaderboard(me.id), getTeamName(me.teamId)]);
-    return { entries, team: teamName ? { id: me.teamId!, name: teamName } : null };
+    const [entries, teamName] = await Promise.all([getLeaderboard(me.id), getTeamName(contentScopeId(me))]);
+    return { entries, team: teamName ? { id: contentScopeId(me)!, name: teamName } : null };
   });
 
   // ---- Mock tests ----
@@ -985,9 +962,9 @@ export async function studiesRoutes(app: FastifyInstance) {
     const [entries, mine, teamName] = await Promise.all([
       getTestLeaderboard(me.id),
       listMyTests(me.id),
-      getTeamName(me.teamId),
+      getTeamName(contentScopeId(me)),
     ]);
-    return { entries, mine, team: teamName ? { id: me.teamId!, name: teamName } : null };
+    return { entries, mine, team: teamName ? { id: contentScopeId(me)!, name: teamName } : null };
   });
 
   // In-progress test state, stored as one JSON blob per user so an unfinished
