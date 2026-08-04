@@ -971,7 +971,13 @@ workspaces list** (see `theme/nav.ts` order).
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
-  Suggestion. Available to **every** signed-in user.
+  Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
+  user.
+  - **Rules & Conduct is ONE document rendered in two places** — here and My
+    Terminal ▸ Site Rules (`my_rules`), both returning `HelpRules` from the same
+    `RULES` object in `legal/content.ts`. Deliberately not a copy: two rules
+    pages disagree within a month, and the one people read is always the wrong
+    one. Edit `RULES` and both follow.
 - **Admin** (rose): Users, **Administrator Log**, **Admin Guidelines**, Teams,
   Badges, Message Templates, Patch Notes, Early Access, Bug Reports, Support.
   **Admins only.**
@@ -1561,6 +1567,41 @@ what lets a tile go on showing the previous reading. `useTileData`'s first
 argument is the key, and it must name everything that varies the request —
 `studies:leaderboard:<deckId>`, never `studies:leaderboard`, or every leaderboard
 tile shows the first deck's standings.
+
+## Identity — display names and email
+
+**Display names are unique across the platform** (migration `0102`, a unique
+index on `lower(trim(display_name))`). They are the terminal's one public
+identity: the name on a public study leaderboard, in a roster, on an invite. Two
+people called "Andrew" is a confusion the moment any of that is visible to a
+stranger.
+
+- **Enforced in three places and they must agree:** the index, and
+  `assertDisplayNameFree` called from both write paths (`admin/service.ts`'s
+  create/update and `PATCH /api/auth/profile`). The service compares
+  `lower(trim(…))` because the index does; if they drift, a user meets a raw
+  SQLite error on one path and a readable message on the other.
+- **The migration resolves collisions BEFORE building the index**, and that
+  ordering is the whole file — a unique index added to a table that already
+  violates it fails, and a failed migration on boot is an outage. The oldest
+  holder keeps the name exactly as typed; later ones get a number appended.
+  A second pass falls back to the row id for exact `created_at` ties, which is
+  what guarantees the index can build.
+  - **`||` binds tighter than `+` in SQLite.** `name || ' ' || (SELECT …) + 1`
+    parses as `(name || ' ' || count) + 1`, coerces the whole string to a number
+    and yields `1` — so every duplicate was renamed to "1" rather than
+    "Andrew 2". Caught only by applying the migration to a database seeded with
+    real duplicates. **Test a data-rewriting migration against data**, not
+    against an empty schema.
+
+**Email is already private between users, and that is a property of the payloads
+rather than a rule somebody enforces.** `toPublicUser` is used for exactly one
+thing — the signed-in user's own record (`routes/auth.ts`) — and every
+member-facing view (`userTeams/service.ts`'s `TeamMemberView`, chat authors,
+leaderboard rows) carries `username` and `displayName` and no email column. The
+only other place an address leaves the server is the Admin ▸ Users list, behind
+`requireAdmin`. **Do not add an email field to a member-facing payload**; there
+is no screen that needs one.
 
 ## Roles & access (`auth/rbac.ts`)
 
