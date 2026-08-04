@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { ApiError } from '../api/client';
 import { THEMES } from '../theme/themes';
+import { useResponsive } from '../hooks/useMediaQuery';
+import { Icon } from '../components/Icon';
 import { LegalDocBody, RulesBody } from '../workspaces/help/LegalScreens';
 import { TERMS, PRIVACY, LEGAL_EFFECTIVE_DATE, LEGAL_VERSION, COMPANY } from '../legal/content';
 
@@ -12,24 +14,53 @@ import { TERMS, PRIVACY, LEGAL_EFFECTIVE_DATE, LEGAL_VERSION, COMPANY } from '..
 export function AcceptTerms() {
   const { user, acceptTerms, logout } = useAuth();
   const theme = THEMES.help;
+  const { isPhone } = useResponsive();
   const [agreed, setAgreed] = useState(false);
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
 
-  // Enable the agree checkbox only once the user has scrolled through the
-  // documents (proper clickwrap: a genuine opportunity to review). If the
-  // content somehow fits without scrolling, unlock immediately.
+  // Unlock the agree checkbox once the reader has reached the end of the
+  // documents — proper clickwrap, a genuine opportunity to review.
+  //
+  // THIS IS DONE WITH AN INTERSECTION OBSERVER ON A MARKER AT THE END, not by
+  // watching a scroll position, and that is the whole fix. The previous version
+  // listened for `scroll` on the inner box alone. On a phone the card is taller
+  // than the viewport, so the PAGE scrolls and the inner box never does: the
+  // handler never fired, the checkbox never enabled, and there was no way off
+  // the screen at all. An end marker is indifferent to which element moved — it
+  // answers "has the reader got to the bottom", which is the actual question.
+  //
+  // On a phone there is now no inner scroller either (see the container below),
+  // so the marker is observed against the viewport; on a desktop the box is the
+  // root. Either way, one scroller and one signal.
+  useEffect(() => {
+    const marker = endRef.current;
+    if (!marker) return;
+    // No IntersectionObserver (very old browser) — unlock rather than trap.
+    if (typeof IntersectionObserver === 'undefined') {
+      setScrolledToEnd(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setScrolledToEnd(true);
+      },
+      { root: isPhone ? null : scrollRef.current, rootMargin: '0px 0px 64px 0px' },
+    );
+    observer.observe(marker);
+    return () => observer.disconnect();
+  }, [isPhone]);
+
+  // Belt and braces: if the documents fit without scrolling at all, there is
+  // nothing to scroll to and the observer may never report an intersection
+  // change. Unlock immediately in that case.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el && el.scrollHeight <= el.clientHeight + 4) setScrolledToEnd(true);
-  }, []);
-
-  function onScroll(e: React.UIEvent<HTMLDivElement>) {
-    const el = e.currentTarget;
-    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 48) setScrolledToEnd(true);
-  }
+    if (!isPhone && el && el.scrollHeight <= el.clientHeight + 4) setScrolledToEnd(true);
+  }, [isPhone]);
 
   async function onAccept() {
     if (!agreed || busy) return;
@@ -48,10 +79,12 @@ export function AcceptTerms() {
       style={{
         minHeight: 'var(--app-h)',
         display: 'flex',
-        alignItems: 'center',
+        // `center` on a card taller than the screen clips its top off with no
+        // way to scroll back up. Start it at the top wherever it does not fit.
+        alignItems: isPhone ? 'flex-start' : 'center',
         justifyContent: 'center',
         background: theme.pageBg,
-        padding: 24,
+        padding: isPhone ? 16 : 24,
       }}
     >
       <div
@@ -66,7 +99,9 @@ export function AcceptTerms() {
           animation: 'popIn .4s ease',
           display: 'flex',
           flexDirection: 'column',
-          maxHeight: 'calc(var(--app-h) - 48px)',
+          // Only cap the card where the inner box is the scroller. On a phone
+          // the card is as tall as its content and the page scrolls it.
+          ...(isPhone ? null : { maxHeight: 'calc(var(--app-h) - 48px)' }),
         }}
       >
         <h1 style={{ margin: '0 0 6px', fontSize: 20, fontWeight: 700, color: '#eef3ff' }}>
@@ -89,13 +124,48 @@ export function AcceptTerms() {
           {COMPANY.entity} · Effective {LEGAL_EFFECTIVE_DATE} · v{LEGAL_VERSION}
         </div>
 
+        {/* Say up front what has to happen. The checkbox at the bottom already
+            explains itself, but that is the wrong place for it: somebody who has
+            not scrolled yet cannot see it, so they meet a disabled checkbox with
+            no idea why. This is the one instruction on the screen and it belongs
+            where the reader starts. It disappears once they get there — at that
+            point it is telling them to do something they have already done. */}
+        {!scrolledToEnd && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 9,
+              marginBottom: 14,
+              padding: '10px 13px',
+              borderRadius: 9,
+              border: '1px solid rgba(235,203,116,.35)',
+              background: 'rgba(235,203,116,.08)',
+              fontSize: 12.5,
+              lineHeight: 1.5,
+              color: '#EBCB74',
+            }}
+          >
+            <Icon name="chevron-down" size={15} color="#EBCB74" />
+            <span>Scroll to the bottom to accept.</span>
+          </div>
+        )}
+
+        {/* On a phone this is NOT a scroller — the page scrolls, which is how
+            reading works on a phone and removes the nested-scroll trap that made
+            this screen impossible to get past. On a desktop it keeps its own
+            scroll area so the buttons stay in view.
+
+            `minHeight: 0` on the desktop branch is load-bearing: a flex child
+            defaults to `min-height: auto` and will not shrink below its content,
+            so without it the box grows to fit all three documents and pushes the
+            controls off the card instead of scrolling. */}
         <div
           ref={scrollRef}
-          onScroll={onScroll}
           style={{
-            flex: 1,
-            minHeight: 220,
-            overflowY: 'auto',
+            ...(isPhone
+              ? { overflow: 'visible' }
+              : { flex: 1, minHeight: 0, overflowY: 'auto' }),
             padding: '18px 20px',
             borderRadius: 12,
             border: `1px solid ${theme.navBorder}`,
@@ -107,6 +177,8 @@ export function AcceptTerms() {
           <LegalDocBody doc={TERMS} theme={theme} />
           <div style={{ height: 28 }} />
           <LegalDocBody doc={PRIVACY} theme={theme} />
+          {/* The end marker. Reaching this is what unlocks the checkbox. */}
+          <div ref={endRef} aria-hidden style={{ height: 1 }} />
         </div>
 
         {error && (
@@ -149,7 +221,7 @@ export function AcceptTerms() {
             is an informational and educational tool only and does not provide financial or investment advice.
             {!scrolledToEnd && (
               <span style={{ display: 'block', fontSize: 11, color: '#7488b5', marginTop: 3 }}>
-                Scroll through the documents above to enable this.
+                Read to the end of the documents to enable this.
               </span>
             )}
           </span>

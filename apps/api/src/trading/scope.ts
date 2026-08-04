@@ -1,6 +1,28 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { users } from '../db/schema.js';
+import { userFeatures, users } from '../db/schema.js';
+import { isFounder, parseRoles } from '../auth/rbac.js';
+
+// Whether this account holds the Trading Teams grant — the gate on shared trade
+// visibility below.
+//
+// Read directly rather than through featuresForUser to avoid an import cycle
+// (features/service.ts is imported by rbac.ts). Founder-level resolves to true
+// with no stored row, matching featuresForUser exactly; if that rule ever
+// changes, change it in both places.
+async function hasTradingTeamsGrant(userId: string): Promise<boolean> {
+  const row = (
+    await db
+      .select({ roles: users.roles, granted: userFeatures.tradingTeams })
+      .from(users)
+      .leftJoin(userFeatures, eq(userFeatures.userId, users.id))
+      .where(eq(users.id, userId))
+      .limit(1)
+  )[0];
+  if (!row) return false;
+  if (isFounder(parseRoles({ roles: row.roles }))) return true;
+  return !!row.granted;
+}
 
 
 // Trade-data visibility boundary. Every shared read funnels its owner filter
@@ -20,10 +42,10 @@ import { users } from '../db/schema.js';
 // notifyTraderIds is the one case that is neither: a send whose whole content is
 // one trader's own position, so it follows visibility. See its comment.
 //
-// Private mode (`shareBook`) used to filter the visibility set. It is gone: with
-// visibility self-only there was nothing left for it to hide, so a switch
-// offering the choice would have been promising something already true. The
-// column survives untouched — see features/service.ts.
+// Private mode (`shareBook`) is not consulted. It was retired when visibility
+// went self-only, and a granted team is a group that deliberately shares a book
+// — reviving a per-member opt-out is a real decision, not something to infer.
+// The column survives untouched, so it is there if that decision is ever made.
 
 export interface Viewer {
   id: string;
@@ -56,34 +78,32 @@ export async function scopedTraderIdsForUser(userId: string): Promise<Set<string
 
 // The set of trader userIds whose trade data `viewer` may SEE.
 //
-// SINCE 2026-08 THIS IS ALWAYS EXACTLY THE VIEWER (owner decision). Nobody sees
-// anybody else's trade metrics — not a teammate's, not a team member's if you
-// lead the team, not another founder's. Positions, the trade log, history,
-// deleted trades and live broker capital are each trader's own and nobody
-// else's.
+// SELF-ONLY BY DEFAULT, and team-wide only for an account that has been GRANTED
+// Trading Teams (owner decision, 2026-08).
 //
-// The reason is regulatory rather than technical. A screen showing one trader's
-// results to another is the raw material for an implied track record, and a
-// platform that publishes one is a long way from "informational only" — which is
-// the posture the whole product is built to hold at public launch. It is also
-// why the desk's own metrics carry the "not proof of performance" rule in Site
-// Help: they can be edited and trades can be deleted, so they were never
-// evidence of anything to begin with.
+// The default is what matters for public launch: a screen showing one trader's
+// results to another is the raw material for an implied track record, which is a
+// long way from the informational-only posture the product holds. Since teams
+// are hidden and handed out by a software developer, every ordinary account —
+// and every public signup — resolves to itself and nothing else.
 //
-// This function is kept — rather than deleted and its eight call sites changed
-// to pass the viewer's own id — precisely so the boundary stays defined in one
-// place and stays easy to widen again. If a shared desk ever comes back, it
-// comes back here and every read follows.
+// A granted team is a different situation and the owner asked for it back: those
+// are people who already know each other, working a desk together, and the whole
+// reason they were put on a team is to work from the same book. The grant is the
+// gate, so widening this cannot reach anyone who was not deliberately given it.
 //
 // Administrators are unaffected: their install-wide reach for support comes from
 // isAdmin() paths that never pass through this file.
 //
-// NOTE the contrast with scopedTraderIds above, which is unchanged and still
-// team-wide. That one answers "who should RECEIVE this" — a TradingView alert is
-// a signal the desk is sending its members, not a report of anyone's book, so it
-// still reaches the team. Do not collapse the two.
+// NOTE the contrast with scopedTraderIds above, which has always been team-wide.
+// That one answers "who should RECEIVE this" — a TradingView alert is a signal
+// the desk sends its members, not a report of anyone's book. Do not collapse the
+// two: they agree for a granted team and disagree for everyone else, which is
+// exactly the point.
 export async function visibleTraderIds(viewer: Viewer): Promise<Set<string>> {
-  return new Set([viewer.id]);
+  if (!viewer.teamId) return new Set([viewer.id]);
+  if (!(await hasTradingTeamsGrant(viewer.id))) return new Set([viewer.id]);
+  return scopedTraderIds(viewer);
 }
 
 // The recipients of a notification ABOUT `ownerId`'s own trading — a fill, a
@@ -101,5 +121,12 @@ export async function visibleTraderIds(viewer: Viewer): Promise<Set<string>> {
 // TradingView alerts — use scopedTraderIdsForUser instead and still reach
 // everyone on the team, which is the whole point of the split.
 export async function notifyTraderIds(ownerId: string): Promise<Set<string>> {
-  return new Set([ownerId]);
+  // Follows VISIBILITY, so it widens with it: on a granted team a fill reaches
+  // the teammates who can already see the position on the Live Wall, and
+  // nowhere else. Buzzing a phone about a book the recipient is not allowed to
+  // look at would move the disclosure rather than remove it.
+  const row = (
+    await db.select({ teamId: users.teamId }).from(users).where(eq(users.id, ownerId)).limit(1)
+  )[0];
+  return visibleTraderIds({ id: ownerId, teamId: row?.teamId ?? null });
 }

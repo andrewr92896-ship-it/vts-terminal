@@ -860,7 +860,7 @@ export const PRIVACY: LegalDoc = {
 };
 
 // ===========================================================================
-//  RULES & CONDUCT (plain-English overview shown in Site Help)
+//  RULES & CONDUCT (shown in Site Help and in My Terminal ▸ Site Rules)
 // ===========================================================================
 
 export interface RulesGroup {
@@ -879,12 +879,11 @@ export interface RulesDoc {
 export const RULES: RulesDoc = {
   title: 'Rules & Conduct',
   intro:
-    `A plain-English summary of how ${COMPANY.product} is meant to be used. This overview is for ` +
-    'convenience only — the full, binding rules are in the Terms of Service and Privacy Policy, also in ' +
-    'Site Help. If anything here seems to conflict with those documents, the full documents control.',
+    `These rules govern your use of ${COMPANY.product}. They apply to every account and are enforced. ` +
+    'Where they overlap with the Terms of Service or the Privacy Policy, those documents control.',
   groups: [
     {
-      heading: 'The big picture',
+      heading: 'What this platform is',
       items: [
         'VTS Terminal is an informational and educational tracker and workspace — not financial, investment, ' +
           'or trading advice, and not a place for tips, signals, or recommendations.',
@@ -895,7 +894,7 @@ export const RULES: RulesDoc = {
       ],
     },
     {
-      heading: 'What you can trade here',
+      heading: 'Supported markets',
       items: [
         'The trading desk connects to forex and cryptocurrency accounts only. Those are the ' +
           'instruments VTS Terminal can place an order for or read a position from.',
@@ -907,7 +906,7 @@ export const RULES: RulesDoc = {
       ],
     },
     {
-      heading: 'Your trading is yours alone',
+      heading: 'Privacy of your trading activity',
       items: [
         'Nobody else on the terminal can see your positions, your trade log, your history, or your ' +
           'balances. Not other members, not a team you belong to, not a team leader.',
@@ -919,7 +918,7 @@ export const RULES: RulesDoc = {
       ],
     },
     {
-      heading: 'Metrics are not proof of anything',
+      heading: 'Trade data and performance claims',
       items: [
         'By design you can add trades by hand, edit them, and delete them — so your records can stay ' +
           'accurate and useful to you (clearing out test entries, fixing mistakes).',
@@ -933,7 +932,7 @@ export const RULES: RulesDoc = {
       ],
     },
     {
-      heading: 'AI, news, and advice',
+      heading: 'AI features and market information',
       items: [
         'VTS AI, market news, and any brief or coaching content are informational only and are not ' +
           'advice. Do not act on them as advice.',
@@ -962,6 +961,6 @@ export const RULES: RulesDoc = {
     },
   ],
   closing:
-    'Breaking these rules can lead to a warning, suspension, or permanent removal from the platform. ' +
-    'When in doubt, read the full Terms of Service and Privacy Policy, or ask an admin.',
+    'Violations may result in a warning, suspension, or permanent removal of your account. Questions about ' +
+    'these rules should be directed to support.',
 };

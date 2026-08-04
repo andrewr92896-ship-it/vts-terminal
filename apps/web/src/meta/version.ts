@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.70';
+export const APP_VERSION = 'Beta V 6.71';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.71',
+    date: 'August 4, 2026',
+    notes: [
+      'The terms screen now says up front that you need to scroll to the bottom before you can accept — previously the only explanation sat beside the checkbox, which you could not see until you got there.',
+      'Fixed that same screen on a phone: scrolling the page did not enable the checkbox, only scrolling inside the document box did.',
+      'Reworded the rules page so it reads like a policy document rather than a summary of one.',
+      'Trading teams can see each other\u2019s trades again. This applies only to accounts granted trading teams — every other account, and anyone signing up publicly, still sees their own trading and nobody else\u2019s.',
+    ],
+  },
   {
     version: 'Beta V 6.70',
     date: 'August 4, 2026',
