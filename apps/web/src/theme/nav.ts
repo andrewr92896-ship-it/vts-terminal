@@ -229,6 +229,10 @@ export const NAV: NavWorkspace[] = [
       // arrive with a deploy (see devBlog/seeded.ts).
       { key: 'ad_blog', label: 'Developer Blog', icon: 'book-open' },
       { key: 'ad_ai', label: 'AI Instructions', icon: 'message-square' },
+      // The default Live Wall layouts every account chooses between — and the
+      // only boards a free account gets. Draft-then-publish, so editing one does
+      // not change what members see until it is published.
+      { key: 'ad_walls', label: 'Live Wall Templates', icon: 'layout-dashboard' },
       { key: 'ad_content', label: 'Site Wording', icon: 'book-open' },
       // (There is deliberately no Sidebar Layout editor. This array IS the
       // sidebar's order — workspaces and the sections within each — and the only

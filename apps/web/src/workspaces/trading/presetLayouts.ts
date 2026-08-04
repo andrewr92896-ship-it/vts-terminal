@@ -35,6 +35,17 @@ interface PresetTile {
   patch?: Partial<BoardTile>;
 }
 
+// The built-in layouts.
+//
+// SINCE 2026-08 THESE ARE ONLY A FALLBACK. The live list comes from the server
+// (`GET /api/wall-templates`), which is what the Developer Terminal's template
+// builder edits — so the owner can change the default boards without a deploy.
+// These stay for the moment before that request answers, and for the case where
+// it fails: a board that renders three finished layouts from memory is a much
+// better failure than an empty picker.
+//
+// The server seeds the same three from its own copy in `wallTemplateSeed.ts` on
+// first boot, so an untouched install shows exactly this.
 export const PRESET_LAYOUTS: PresetLayout[] = [
   {
     key: 'markets',

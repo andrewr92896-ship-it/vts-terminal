@@ -1,5 +1,8 @@
 import type {
   BudgetMonth,
+  PublishedWallTemplate,
+  TemplateTile,
+  WallTemplate,
   NewsItem,
   AiViolation,
   GuardrailHit,
@@ -1064,6 +1067,35 @@ export const api = {
       `/api/finances/budget/entries/${id}${month ? `?month=${encodeURIComponent(month)}` : ''}`,
       { method: 'DELETE' },
     );
+  },
+
+  // ---- Live Wall templates ----
+  //
+  // The member read returns PUBLISHED layouts only; a draft is never on this
+  // response. Every developer write answers with the whole list.
+  wallTemplates(): Promise<{ templates: PublishedWallTemplate[] }> {
+    return request('/api/wall-templates');
+  },
+  adminWallTemplates(): Promise<{ templates: WallTemplate[] }> {
+    return request('/api/admin/wall-templates');
+  },
+  createWallTemplate(input: { key: string; label: string; blurb: string }): Promise<{ templates: WallTemplate[] }> {
+    return request('/api/admin/wall-templates', { method: 'POST', body: JSON.stringify(input) });
+  },
+  saveWallTemplateDraft(
+    id: string,
+    patch: { label?: string; blurb?: string; tiles?: TemplateTile[]; hidden?: boolean },
+  ): Promise<{ templates: WallTemplate[] }> {
+    return request(`/api/admin/wall-templates/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  publishWallTemplate(id: string): Promise<{ templates: WallTemplate[] }> {
+    return request(`/api/admin/wall-templates/${id}/publish`, { method: 'POST' });
+  },
+  discardWallTemplateDraft(id: string): Promise<{ templates: WallTemplate[] }> {
+    return request(`/api/admin/wall-templates/${id}/discard`, { method: 'POST' });
+  },
+  removeWallTemplate(id: string): Promise<{ templates: WallTemplate[] }> {
+    return request(`/api/admin/wall-templates/${id}`, { method: 'DELETE' });
   },
 
   tradingTruth(): Promise<{ posts: TruthPost[] }> {

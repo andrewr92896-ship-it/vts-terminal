@@ -2254,3 +2254,34 @@ export const budgetEntries = sqliteTable('budget_entries', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type BudgetEntryRow = typeof budgetEntries.$inferSelect;
+
+// ---- Live Wall templates (migration 0105) ----
+//
+// The default layouts a free account gets, editable from the Developer Terminal.
+// Draft-then-publish: `publishedTiles` is what everybody opens, `draftTiles` is
+// the work in progress, and only Publish moves one to the other — otherwise a
+// half-arranged board is what every unpaid user sees while somebody is still
+// moving tiles around.
+//
+// The code presets in presetLayouts.ts remain the SEED (same pattern as the
+// built-in study games): they fill in what is missing on boot and are not
+// consulted again.
+export const wallTemplates = sqliteTable('wall_templates', {
+  id: text('id').primaryKey(),
+  // Stable, and matching the code preset it was seeded from — a free account's
+  // remembered layout choice is stored against this.
+  key: text('key').notNull().unique(),
+  label: text('label').notNull(),
+  blurb: text('blurb').notNull(),
+  // JSON [{ kind, x, y, w, h }] — the ARRANGEMENT only. A template never carries
+  // anybody's data.
+  publishedTiles: text('published_tiles').notNull(),
+  draftTiles: text('draft_tiles').notNull(),
+  hasDraft: integer('has_draft', { mode: 'boolean' }).notNull().default(false),
+  sortOrder: integer('sort_order').notNull().default(0),
+  hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+  updatedBy: text('updated_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type WallTemplateRow = typeof wallTemplates.$inferSelect;

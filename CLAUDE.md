@@ -1524,6 +1524,51 @@ again, and do not make a new surface treat "not sample" as "live".
 - The **demo** is unaffected: it is forced down the sample path so its tour is
   complete.
 
+**The three built-in layouts now live in the DATABASE** (`wall_templates`,
+migration `0105`), edited from **Developer Terminal ▸ Live Wall Templates**, so
+the owner can change the default boards without a deploy.
+
+- **DRAFT THEN PUBLISH.** Every edit writes `draftTiles`; only Publish copies it
+  to `publishedTiles`, and `listPublishedTemplates` — the only thing a member's
+  picker reads — never touches a draft. Without the split, a half-moved tile is
+  what every unpaid account opens on for as long as somebody is arranging the
+  board, and arranging takes a few passes.
+- **`hasDraft` compares against what is LIVE**, not against the previous draft,
+  so dragging a tile and dragging it back leaves the template reading as
+  unchanged — because it is.
+- **The code presets are the SEED, not the source** (`wallTemplateSeed.ts`, plus
+  the web's `presetLayouts.ts` as the client's fallback). `seedWallTemplates`
+  creates what is missing on boot and **never overwrites**: once a template is in
+  the table it belongs to whoever edits it, and re-applying the code version each
+  deploy would silently undo their work. Consequence worth knowing: deleting one
+  of the three seeded keys is not really a delete — it returns on the next boot.
+  **Hiding is the action that sticks.**
+- The web keeps `PRESET_LAYOUTS` as a **fallback** for before the request answers
+  and for when it fails. A picker showing three finished layouts from memory is a
+  far better failure than an empty one.
+- A template with **no tiles stays hidden** however many times Publish is
+  pressed, so an empty board is never offered.
+- `parseTiles` **clamps** geometry rather than rejecting a layout (a template is
+  authored by dragging; refusing the lot over one stray pixel is hostile) but
+  **drops an unknown kind** outright — that is not a near-miss, it is a tile the
+  terminal cannot render, and keeping it puts a hole in every free board.
+
+**Resizing is from all four CORNERS** (owner instruction, 2026-08), not just the
+south-east one. Dragging only from the bottom-right means a tile at the right
+edge can be grown but not shrunk from the side you are looking at, and a tile low
+on a long board has its one handle off screen. **Corners only, not edges**: an
+edge handle runs the whole side of a tile and overlaps its scrollable body, so a
+drag meant for the content starts a resize instead. `react-resizable` ships
+visuals for the SE handle alone, so `PLACEHOLDER_CSS` draws the bracket on all
+four — an invisible hit area is worse than no handle, because the tile resizes
+from a corner with nothing to say so.
+
+**Edit mode has to look different from reading mode.** Tiles carry a dashed
+outline while editing and the header takes a `grab` cursor; **Escape leaves edit
+mode**. Before that the two states were visually identical and the only clue
+anything could be dragged was the cursor changing once you were already over a
+header.
+
 **Four files carry the design, and adding a tile kind touches all of them:**
 
 - **`workspaces/trading/tileCatalog.ts`** — the single source of truth for what a

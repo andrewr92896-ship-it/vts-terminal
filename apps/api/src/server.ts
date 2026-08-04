@@ -33,6 +33,9 @@ import { messageTemplateRoutes } from './routes/messageTemplates.js';
 import { employeeRoutes } from './routes/employee.js';
 import { featureRoutes } from './routes/features.js';
 import { budgetRoutes } from './routes/budget.js';
+import { wallTemplateRoutes } from './routes/wallTemplates.js';
+import { seedWallTemplates } from './trading/wallTemplates.js';
+import { WALL_TEMPLATE_SEED } from './trading/wallTemplateSeed.js';
 import { investmentRoutes } from './routes/investments.js';
 import { myPortalRoutes } from './routes/myPortal.js';
 import { applyEmployeeSecurityHeaders, enforceIpAllowlist } from './employee/guard.js';
@@ -123,6 +126,7 @@ export async function buildServer() {
   await app.register(employeeRoutes);
   await app.register(featureRoutes);
   await app.register(budgetRoutes);
+  await app.register(wallTemplateRoutes);
   await app.register(investmentRoutes);
   await app.register(myPortalRoutes);
   await app.register(devBlogRoutes);
@@ -189,6 +193,10 @@ async function bootstrapDatabase(): Promise<void> {
   // (the admin/demo users are seeded after migrations, so they need this on a
   // fresh database).
   await seedDefaultTeam();
+  // Create-if-absent, never overwrite — once a template is in the table it
+  // belongs to whoever edits it from the Developer Terminal, and re-applying the
+  // code version every deploy would silently undo their work.
+  await seedWallTemplates(WALL_TEMPLATE_SEED);
   // Give every existing trading team a My Terminal leader so it shows as a managed
   // team (the My Terminal Trading Team is now the same team that scopes trades).
   await backfillTeamLeaders();
