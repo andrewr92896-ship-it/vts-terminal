@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.62';
+export const APP_VERSION = 'Beta V 6.63';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.63',
+    date: 'August 4, 2026',
+    notes: [
+      'Every position on the Trade Desk now states its stop loss and take profit outright — including when there are none, which used to show as nothing at all. Each level carries what it is worth from your fill in money and pips (points on crypto and indices), plus the risk-to-reward when both are set, and the price line now says what a pip of movement is worth at that size.',
+      'The stop/target editor opens on the levels your broker is holding right now rather than the ones that were there when the screen loaded, so a stop moved since then can no longer be wiped by saving. What you type is priced as you type it.',
+    ],
+  },
   {
     version: 'Beta V 6.62',
     date: 'August 4, 2026',

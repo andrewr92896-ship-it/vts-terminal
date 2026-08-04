@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { fmtMoney, fmtPrice, fmtUnits } from './TradeCard';
+import { fmtPerStep, fmtSteps, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
 import { TradeTimesCell, etSince } from './tradeTime';
 import type { DeskHolding, DeskOrderRecord, DeskWorkingOrder, LiveTrade } from '../../api/types';
 
@@ -139,6 +140,33 @@ function PositionRow({
   // or funded row has no broker to send the instruction to.
   const actionable = own && !readOnly && trade.broker === 'oanda';
 
+  // What a unit of price movement is worth on this position — pips on a currency
+  // pair, points on anything else — and what the stop and target are therefore
+  // worth. The same reading the ticket showed when the trade was placed, so a
+  // trader amending a stop sees the risk in money rather than in price alone.
+  const move = movementFor(trade, currency);
+  const risk = movementLeg(trade.entryPrice, trade.stopLoss, move);
+  const reward = movementLeg(trade.entryPrice, trade.takeProfit, move);
+  const rr = risk && reward && risk.steps > 0 ? reward.steps / risk.steps : null;
+
+  // Seed the editor from the position as it stands *now*, not as it stood when
+  // this row first rendered: the book refreshes underneath, so a stop placed or
+  // moved since mount would otherwise open as an empty box — and saving an empty
+  // box means "remove that order".
+  const openEditor = () => {
+    setSl(trade.stopLoss == null ? '' : String(trade.stopLoss));
+    setTp(trade.takeProfit == null ? '' : String(trade.takeProfit));
+    setError(null);
+    setEditing(true);
+  };
+
+  // What the levels being typed into the editor are worth, live.
+  const draftLeg = (text: string): MovementLeg | null => {
+    const value = text.trim() === '' ? null : Number(text);
+    if (value == null || !Number.isFinite(value)) return null;
+    return movementLeg(trade.entryPrice, value, move);
+  };
+
   const close = async () => {
     setBusy(true);
     setError(null);
@@ -220,16 +248,15 @@ function PositionRow({
           {fmtPrice(trade.entryPrice)}
           <span style={{ color: FAINT }}>{" · now "}</span>
           {fmtPrice(trade.currentPrice)}
-          {trade.stopLoss != null && (
+          {/* What one pip (or one point) of movement is worth at this size — the
+              figure the trade was sized by, kept beside the prices it moves
+              between. Money, so the Hide-$ toggle takes it with the P/L. */}
+          {!hideMoney && move.perStep != null && (
             <>
-              <span style={{ color: FAINT }}>{" · sl "}</span>
-              {fmtPrice(trade.stopLoss)}
-            </>
-          )}
-          {trade.takeProfit != null && (
-            <>
-              <span style={{ color: FAINT }}>{" · tp "}</span>
-              {fmtPrice(trade.takeProfit)}
+              <span style={{ color: FAINT }}>{" · "}</span>
+              <span title={`What one ${move.unit} of price movement is worth at this size`}>
+                {`${fmtPerStep(move.perStep, move.currency)} / ${move.unit}`}
+              </span>
             </>
           )}
         </div>
@@ -239,14 +266,37 @@ function PositionRow({
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+      {/* Stop and target, always drawn — including when there are none. A
+          position with no protection on it is the single most important thing
+          this panel can say, and saying it by omission (the old inline "· sl
+          1.14908", absent when unset) meant an unprotected position looked
+          exactly like one whose stop had simply scrolled off the line. */}
+      {!editing && (
+        <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+          <Protection label="Stop loss" price={trade.stopLoss} leg={risk} move={move} hideMoney={hideMoney} color={RED} />
+          <Protection label="Take profit" price={trade.takeProfit} leg={reward} move={move} hideMoney={hideMoney} color={GREEN} />
+          {trade.trailingStopLoss != null && (
+            <Protection label="Trailing stop" price={trade.trailingStopLoss} leg={null} move={move} hideMoney={hideMoney} color={GOLD} />
+          )}
+          {rr != null && (
+            <div style={protectionCell}>
+              <div style={miniLabel}>{"Risk / reward"}</div>
+              <div style={{ fontFamily: MONO, fontSize: 12.5, color: GOLD }}>{`1:${Number(rr.toFixed(2))}`}</div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 10.5, color: FAINT }}>
           {own ? trade.brokerName : `${trade.owner} · ${trade.brokerName}`}
         </span>
         <span style={{ flex: 1 }} />
         {actionable && !editing && !confirmClose && (
           <>
-            <button onClick={() => setEditing(true)} style={miniBtn}>{"Stop / target"}</button>
+            <button onClick={openEditor} style={miniBtn}>
+              {trade.stopLoss == null && trade.takeProfit == null ? 'Add stop / target' : 'Stop / target'}
+            </button>
             <button onClick={() => setConfirmClose(true)} style={{ ...miniBtn, color: RED, borderColor: 'rgba(239,84,104,.45)' }}>
               {"Close"}
             </button>
@@ -264,19 +314,27 @@ function PositionRow({
       </div>
 
       {editing && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          {/* Each box opens on the level the broker is holding right now, and
+              prices what is typed into it as it is typed — the same money · pips
+              reading the order ticket gives, so amending a stop is scored the
+              same way as setting one. */}
           <label style={miniField}>
-            <span style={miniLabel}>{"Stop"}</span>
+            <span style={miniLabel}>{"Stop loss"}</span>
             <input value={sl} onChange={(e) => setSl(e.target.value)} inputMode="decimal" placeholder="none" style={miniInput} />
+            <LegReading leg={draftLeg(sl)} move={move} hideMoney={hideMoney} color={RED} />
           </label>
           <label style={miniField}>
-            <span style={miniLabel}>{"Target"}</span>
+            <span style={miniLabel}>{"Take profit"}</span>
             <input value={tp} onChange={(e) => setTp(e.target.value)} inputMode="decimal" placeholder="none" style={miniInput} />
+            <LegReading leg={draftLeg(tp)} move={move} hideMoney={hideMoney} color={GREEN} />
           </label>
-          <button onClick={() => setEditing(false)} style={miniBtn} disabled={busy}>{"Cancel"}</button>
-          <button onClick={() => void saveProtection()} disabled={busy} style={{ ...miniBtn, color: '#0c2768', background: GOLD, borderColor: GOLD, fontWeight: 700 }}>
-            {busy ? 'Saving…' : 'Save'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 16 }}>
+            <button onClick={() => setEditing(false)} style={miniBtn} disabled={busy}>{"Cancel"}</button>
+            <button onClick={() => void saveProtection()} disabled={busy} style={{ ...miniBtn, color: '#0c2768', background: GOLD, borderColor: GOLD, fontWeight: 700 }}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
           <div style={{ fontSize: 10, color: FAINT, width: '100%' }}>
             {"Leave a box empty to remove that order."}
           </div>
@@ -284,6 +342,60 @@ function PositionRow({
       )}
 
       {error && <div style={{ fontSize: 11, color: RED, marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}
+
+// One protective level on an open position: the price it sits at, and what it is
+// worth from here — money and distance, in the unit that instrument is read in.
+// An unset level says "none" rather than disappearing, because a position with
+// no stop on it is exactly what a trader needs to notice.
+function Protection({
+  label,
+  price,
+  leg,
+  move,
+  hideMoney,
+  color,
+}: {
+  label: string;
+  price: number | null;
+  leg: MovementLeg | null;
+  move: Movement;
+  hideMoney: boolean;
+  color: string;
+}) {
+  return (
+    <div style={protectionCell}>
+      <div style={miniLabel}>{label}</div>
+      <div style={{ fontFamily: MONO, fontSize: 12.5, color: price == null ? FAINT : color }}>
+        {price == null ? 'none' : fmtPrice(price)}
+      </div>
+      <LegReading leg={leg} move={move} hideMoney={hideMoney} color={MUTED} />
+    </div>
+  );
+}
+
+// The money and distance of one leg, e.g. "$60.00 · 15 pips". The blank line is
+// kept when there is nothing to say so a row of these does not jump about as
+// levels are typed in and cleared.
+function LegReading({
+  leg,
+  move,
+  hideMoney,
+  color,
+}: {
+  leg: MovementLeg | null;
+  move: Movement;
+  hideMoney: boolean;
+  color: string;
+}) {
+  const money = leg && !hideMoney && leg.money != null ? fmtMoney(leg.money, move.currency) : null;
+  if (!leg) return <div style={{ height: 14 }} />;
+  return (
+    <div style={{ fontSize: 10, color, fontFamily: MONO, marginTop: 2, height: 14 }} title="Distance from your fill">
+      {money != null ? `${money} · ` : ''}
+      {fmtSteps(leg.steps, move)}
     </div>
   );
 }
@@ -479,5 +591,9 @@ const instrumentBtn: CSSProperties = { background: 'none', border: 'none', color
 const sidePill: CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '.4px', border: '1px solid', borderRadius: 999, padding: '2px 8px', fontFamily: MONO };
 const miniBtn: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, color: '#dfe7fa', fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' };
 const miniField: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 3 };
+// Wide enough for the level, its money reading, and the editor's own input box,
+// so the stop and target line up as columns from row to row and stay put when a
+// row is opened for editing.
+const protectionCell: CSSProperties = { minWidth: 126 };
 const miniLabel: CSSProperties = { fontSize: 9.5, color: FAINT, letterSpacing: '.4px', textTransform: 'uppercase' };
 const miniInput: CSSProperties = { background: 'rgba(3,12,32,.8)', border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 13, padding: '6px 8px', outline: 'none', fontFamily: MONO, width: 104 };
