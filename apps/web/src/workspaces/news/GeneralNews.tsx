@@ -123,7 +123,12 @@ export function GeneralNews({ topic }: { topic: 'world' | 'politics' }) {
         <div style={{ color: '#8298c4', fontSize: 13 }}>Loading…</div>
       ) : shown.length === 0 && !error ? (
         <div style={emptyBox}>
-          Nothing here yet. Headlines arrive as the wires publish them.
+          {/* Deliberately NOT "the wires haven't published anything" — that is a
+              claim about the world, and an empty list only establishes that this
+              feed has delivered nothing. Same rule the Live Wall follows when it
+              refuses to say "no open positions" about a book it could not read. */}
+          No stories have come through yet. If this stays empty for more than a
+          few hours, the source feed is likely unreachable rather than quiet.
         </div>
       ) : (
         days.map((d) => (
