@@ -63,6 +63,14 @@ export interface BoardTile {
 
 export interface BoardLayout {
   tiles: BoardTile[];
+  // The workspace width in grid columns — the dotted workspace area the board
+  // is arranged inside. Absent = 12, the width every board before it existed
+  // was built on; wider packs more, narrower columns onto the same screen so a
+  // television shows tiles side by side. The client owns keeping it consistent
+  // with the tiles' own extent; the server keeps it a sane number
+  // (boardLayoutSchema) and carries it wherever the tiles go — shares and
+  // copies included. Phones ignore it entirely (one flattened column).
+  cols?: number;
 }
 
 export interface TradingBoard {
@@ -91,7 +99,12 @@ function parseLayout(raw: string): BoardLayout {
   try {
     const v = JSON.parse(raw);
     if (v && typeof v === 'object' && Array.isArray((v as BoardLayout).tiles)) {
-      return v as BoardLayout;
+      const { tiles, cols } = v as BoardLayout;
+      // Same range the write schema enforces, re-applied on read so a blob that
+      // predates the rule (or was hand-edited) can never render off the rails.
+      return typeof cols === 'number' && Number.isFinite(cols)
+        ? { tiles, cols: Math.min(36, Math.max(6, Math.round(cols))) }
+        : { tiles };
     }
   } catch {
     // fall through
@@ -123,6 +136,7 @@ function toBoard(row: TradingBoardRow): TradingBoard {
 // is kept (the arrangement is the point) and emptied.
 function shareableLayout(layout: BoardLayout): BoardLayout {
   return {
+    ...layout, // the workspace width travels with the arrangement
     tiles: layout.tiles.map((t) => (t.kind === 'notes' ? { ...t, noteText: '' } : t)),
   };
 }

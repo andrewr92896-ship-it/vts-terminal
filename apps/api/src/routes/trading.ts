@@ -1694,7 +1694,16 @@ const boardTileSchema = z.object({
 // The wall carries far more kinds than it used to, so the cap is per board and
 // generous rather than tight — 40 was set when there were seven kinds to choose
 // between.
-const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(60) });
+//
+// `cols` is the workspace width — the dotted workspace area the board is
+// arranged inside. Absent = 12 (every board saved before it existed). Range-
+// capped like the tile geometry; the client keeps it consistent with the tiles'
+// own extent, and the board renders fit-to-width, so an out-of-range value can
+// only ever change density, never leak or scroll.
+const boardLayoutSchema = z.object({
+  tiles: z.array(boardTileSchema).max(60),
+  cols: z.number().int().min(6).max(36).optional(),
+});
 
 // A user without Advanced Trading has the desk-reading tiles dropped from
 // anything they save, so a hand-made request can't put a positions tile on their
@@ -1709,11 +1718,12 @@ const boardLayoutSchema = z.object({ tiles: z.array(boardTileSchema).max(60) });
 // membership is. Nothing leaks by keeping it: every paid tile's DATA is gated at
 // its own endpoint.
 function allowedLayout(
-  layout: { tiles: z.infer<typeof boardTileSchema>[] } | undefined,
+  layout: z.infer<typeof boardLayoutSchema> | undefined,
   advancedTrading: boolean,
 ) {
   if (!layout || advancedTrading) return layout;
-  return { tiles: layout.tiles.filter((t) => !DESK_TILE_KINDS.has(t.kind)) };
+  // Spread first so the workspace width survives the stripping.
+  return { ...layout, tiles: layout.tiles.filter((t) => !DESK_TILE_KINDS.has(t.kind)) };
 }
 const createBoardSchema = z.object({
   name: z.string().trim().min(1).max(80),

@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.79';
+export const APP_VERSION = 'Beta V 6.80';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.80',
+    date: 'August 6, 2026',
+    notes: [
+      'The Live Wall now has a workspace area. While editing a layout, a dotted outline shows the canvas your tiles sit in — locked in place so arranging tiles can never change it by accident. A small pencil on its top corner unlocks it; drag either side (or use the − / + steppers) to widen the workspace by whole columns, then lock it again.',
+      'A wider workspace fits more tiles side by side on the same screen — built for a desktop or a television running the wall. Each layout keeps its own width and saves with it; layouts you never touch stay exactly as they are, and phones keep the single-column view either way.',
+    ],
+  },
   {
     version: 'Beta V 6.79',
     date: 'August 6, 2026',

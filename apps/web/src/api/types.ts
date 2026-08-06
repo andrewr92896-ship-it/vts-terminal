@@ -1221,6 +1221,12 @@ export interface BoardTile {
 
 export interface BoardLayout {
   tiles: BoardTile[];
+  // The workspace width in grid columns — the dotted workspace area the board
+  // is arranged inside (ChartBoard). Absent = 12, the width every earlier board
+  // was built on; wider packs more, narrower columns onto the same screen so a
+  // television shows tiles side by side. Phones ignore it (one flattened
+  // column).
+  cols?: number;
 }
 
 export interface TradingBoard {
