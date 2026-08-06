@@ -471,6 +471,11 @@ export const fundedTrades = sqliteTable('funded_trades', {
   entryPrice: real('entry_price'),
   exitPrice: real('exit_price'),
   realizedPl: real('realized_pl'),
+  // The protective orders sitting on the position at the prop firm, read off the
+  // screenshot it was imported from. Null means "no stop is known of" — which is
+  // what the desk says out loud, so these being absent is never cosmetic.
+  stopLoss: real('stop_loss'),
+  takeProfit: real('take_profit'),
   // 'open' = a live position tracked on the Live Wall; 'closed' = a completed
   // trade. Defaults to 'closed' so every existing row stays a historical trade.
   status: text('status', { enum: FUNDED_TRADE_STATUSES }).notNull().default('closed'),

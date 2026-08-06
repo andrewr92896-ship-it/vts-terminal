@@ -964,6 +964,10 @@ export interface FundedTrade {
   entryPrice: number | null;
   exitPrice: number | null;
   realizedPl: number | null;
+  // The stop and target held at the prop firm, read off the screenshot the
+  // position was imported from. Null means none is known of.
+  stopLoss: number | null;
+  takeProfit: number | null;
   status: FundedTradeStatus; // 'open' = a live position shown on the Live Wall
   openedAt: number | null;
   closedAt: number | null;
