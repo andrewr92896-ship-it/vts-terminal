@@ -1,0 +1,21 @@
+-- The ET trading day the daily-drawdown floor is measured from.
+--
+-- `day_start_equity` is what the Funded screen's "Daily Drawdown" gauge measures
+-- against: the floor is that figure minus the daily allowance. Nothing ever
+-- moved it. It was written once when the challenge row was created and changed
+-- only if the trader opened Edit and retyped it by hand — so a gauge labelled
+-- "Resets daily" was in fact measuring the entire loss since the challenge
+-- began, and every day that passed made it wronger.
+--
+-- The failure it produced is the worst one available to this particular gauge:
+-- an account down 4,259 since the start but flat on the day showed a daily
+-- buffer of 47%, amber, on a day nothing at all had been lost. A drawdown
+-- warning that cries wolf is worse than no warning, because the one breach it
+-- exists to prevent is the one that ends a challenge outright.
+--
+-- NULL means "never stamped", which is every row that exists today: the next
+-- read rolls the floor onto the current equity and stamps the current ET day.
+-- Deliberately NOT backfilled here — SQLite's `date('now')` is UTC and the day
+-- boundary this column records is Eastern, so the code that knows the rule is
+-- the only thing that should ever write it.
+ALTER TABLE `trading_challenges` ADD `day_start_on` text;

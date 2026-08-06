@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { tradingChallenges, tradingTrades, type TradingChallengeRow } from '../db/schema.js';
+import { etDayStamp } from './sessions.js';
 
 // The FTP-style funded-account challenge dashboard. One row per user. Equity is
 // maintained by the trader (FTP has no API) or pulled from the Trade Log; all
@@ -55,15 +56,47 @@ const DEFAULTS = {
 
 const bpToPct = (bp: number) => bp / 100;
 
+// The daily drawdown is the one gauge here that is supposed to forget yesterday,
+// and it did not: `dayStartEquity` was written once and then only ever changed by
+// hand, so the "Daily Drawdown" gauge quietly measured the whole challenge. An
+// account down for the month but flat on the day read as most of its daily
+// allowance spent — a breach warning on a day nothing had been lost.
+//
+// So the day-start rolls forward on read: the first read of a new ET day sets it
+// to the equity the account is carrying at that moment and stamps the day. That
+// figure is the last equity the trader recorded, which is precisely what "what
+// this account started today on" means for a book with no API behind it — the
+// terminal never invents a number it was not given.
+//
+// The ET calendar day is the boundary, matching how every other trading-day
+// bucket in the terminal is cut (see codes.ts, pnl.ts). A weekend roll is a
+// no-op assignment: nothing traded, so the equity has not moved.
+async function rollDayStart(row: TradingChallengeRow): Promise<TradingChallengeRow> {
+  const today = etDayStamp();
+  if (row.dayStartOn === today) return row;
+  const patch = { dayStartEquity: row.currentEquity, dayStartOn: today };
+  await db.update(tradingChallenges).set(patch).where(eq(tradingChallenges.userId, row.userId));
+  // `updatedAt` is deliberately untouched — it records when the trader last
+  // changed something, and the day turning over is not that.
+  return { ...row, ...patch };
+}
+
 async function ensureChallenge(userId: string): Promise<TradingChallengeRow> {
   const existing = (
     await db.select().from(tradingChallenges).where(eq(tradingChallenges.userId, userId)).limit(1)
   )[0];
-  if (existing) return existing;
+  if (existing) return rollDayStart(existing);
   const now = new Date();
   await db
     .insert(tradingChallenges)
-    .values({ userId, ...DEFAULTS, startedAt: now, createdAt: now, updatedAt: now })
+    .values({
+      userId,
+      ...DEFAULTS,
+      dayStartOn: etDayStamp(now),
+      startedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
     .onConflictDoNothing();
   return (
     await db.select().from(tradingChallenges).where(eq(tradingChallenges.userId, userId)).limit(1)
@@ -169,7 +202,13 @@ export async function updateChallenge(
   if (input.trailing != null) patch.trailing = input.trailing;
   if (input.currentEquity != null) patch.currentEquity = money(input.currentEquity);
   if (input.peakEquity != null) patch.peakEquity = money(input.peakEquity);
-  if (input.dayStartEquity != null) patch.dayStartEquity = money(input.dayStartEquity);
+  // A hand-typed day-start belongs to the day it was typed on, so it is stamped
+  // with it — otherwise the next read would read it as yesterday's and roll the
+  // trader's own correction straight back off.
+  if (input.dayStartEquity != null) {
+    patch.dayStartEquity = money(input.dayStartEquity);
+    patch.dayStartOn = etDayStamp();
+  }
   if (input.startedAt != null) patch.startedAt = new Date(input.startedAt);
 
   // Trailing drawdown: the peak only ever ratchets up. Auto-bump it whenever

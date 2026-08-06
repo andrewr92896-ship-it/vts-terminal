@@ -743,6 +743,13 @@
       "when": 1782343736908,
       "tag": "0106_funded_trade_protection",
       "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "6",
+      "when": 1782343836908,
+      "tag": "0107_challenge_daily_reset",
+      "breakpoints": true
     }
   ]
 }
