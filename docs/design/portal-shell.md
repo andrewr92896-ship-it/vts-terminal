@@ -213,7 +213,7 @@ with nothing.
   *(Market Data and Market News are kept adjacent — they are read as a pair, so
   Market News leads the free rows rather than the Live Wall.)*
 - **Advanced Trading** — Trade Desk *(gem)* · Strategy Sessions *(star)* ·
-  Funded Account *(star, nested opt-in)* · Trading Alerts · Trade Analysis ·
+  Funded Account *(star, nested opt-in)* · Trading Alerts · Trade History ·
   Manual Trades · Deleted Trades
 - **Investments** — Portfolio Overview · Accounts · Holdings · Allocation ·
   Performance · Dividends & Income · Contributions & Goals · Projections

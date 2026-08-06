@@ -57,7 +57,7 @@ export interface BoardTile {
   limit?: number;
   // To Do tiles — which section to show.
   todoSectionId?: string;
-  // Trade Analysis / closed-trade tiles — the window scored.
+  // Trade History / closed-trade tiles — the window scored.
   range?: '7d' | '30d' | '90d' | 'all';
 }
 

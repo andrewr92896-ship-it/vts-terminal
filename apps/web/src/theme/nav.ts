@@ -95,7 +95,7 @@ export const NAV: NavWorkspace[] = [
       { key: 'prop', label: 'Funded Account', icon: 'shield-check' },
       // Free with the desk opt-in.
       { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
-      { key: 'desk', label: 'Trade Analysis', icon: 'candlestick-chart' },
+      { key: 'desk', label: 'Trade History', icon: 'candlestick-chart' },
       // Manual Trades is a plain Advanced Trading section — your own book, kept
       // by hand. It is deliberately independent of the Funded opt-in above:
       // plenty of traders keep a manual book without ever running a challenge.

@@ -366,7 +366,7 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
       const mine = stored.filter((c) => c.ownerId === user.id);
       const note =
         mine.length > 0
-          ? `${mine.map((c) => c.label).join(', ')} ${mine.length > 1 ? 'are' : 'is'} not being read, so no live positions can be shown. Open Trade Analysis ▸ Live Brokers and re-enter the account key to reconnect.`
+          ? `${mine.map((c) => c.label).join(', ')} ${mine.length > 1 ? 'are' : 'is'} not being read, so no live positions can be shown. Open Trade History ▸ Live Brokers and re-enter the account key to reconnect.`
           : 'No broker on this desk is being read, so no live positions can be shown.';
       return {
         source: 'unavailable',

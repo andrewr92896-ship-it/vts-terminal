@@ -103,7 +103,7 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // tier for that reason alone rather than for what they cost to run.
   //
   // Connecting a broker, and the live account capital that comes with it
-  // (Trade Analysis ▸ Live Brokers). The key can trade; it sits beside the Trade
+  // (Trade History ▸ Live Brokers). The key can trade; it sits beside the Trade
   // Desk that spends it.
   brokerConnections: 'max',
   // Pushover, which the user connects by pasting their own user key. Lower

@@ -231,12 +231,14 @@ workspaces list** (see `theme/nav.ts` order).
     stored against.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
   its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
-  **Trade Desk** (`tradedesk` — placing real orders, see below), Trade Analysis
+  **Trade Desk** (`tradedesk` — placing real orders, see below), Trade History
   (`desk` — **two tabs, Trade Log + Live Brokers**; legacy keys
-  `log`/`history`/`metrics` alias into it. **The key stayed `desk` when the label
-  changed** from "Trade Desk" to "Trade Analysis", so the `howto.desk` wording
-  and every in-app link keep pointing at the review screen; the new placement
-  screen took the *new* key `tradedesk`.
+  `log`/`history`/`metrics` alias into it. **The key stayed `desk` through both
+  label changes** — "Trade Desk" → "Trade Analysis" (2026-08) → "Trade History"
+  (2026-08) — so the `howto.desk` wording and every in-app link keep pointing at
+  the review screen; the new placement screen took the *new* key `tradedesk`.
+  The file is `TradeHistory.tsx`; a search for the old names finds only patch
+  notes, which are a dated record and stay as written.
   **History was removed** — owner decision, 2026-08: it listed the same closed
   trades the Trade Log already carried, from the same rows, so two screens
   answered one question and were free to disagree about it. Everything it had
@@ -387,7 +389,7 @@ workspaces list** (see `theme/nav.ts` order).
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
-  - **Trade Analysis settings are per trader** (`trading/settings.ts`,
+  - **Trade History settings are per trader** (`trading/settings.ts`,
     `getDeskSettings(userId)` / `updateDeskSettings(userId, patch)`): the
     break-even buffer, per-instrument buffers (`trading_be_overrides`, keyed
     `(owner_id, instrument)`; `owner_id = userId`, or `'desk'` for the shared
@@ -1208,7 +1210,7 @@ cycle.
 
 - **`FEATURE_TIER` is the entire paywall, in one object.** Eighteen paid features
   (owner decisions, 2026-08). **Max:** `ai`, `studyAsk`, `tradeDesk`, `teams`,
-  `teamChat`, `customStreams`, `brokerConnections` (**Trade Analysis ▸ Live
+  `teamChat`, `customStreams`, `brokerConnections` (**Trade History ▸ Live
   Brokers carries its diamond**), `pushover`. **Premium:** `funded`,
   `studyExplain`, `studyCreation`, `customBoards`, `premiumBadges`,
   `strategySessions`, `marketData`, `presetStreams`, `suggestions`,
@@ -1357,7 +1359,7 @@ cycle.
     | `ai` | the Ask VTS AI panel header |
     | `teamChat` | the chat bubble's Team chat tab |
     | `suggestions`, `supportChat` | the intake choices in `SupportTab` |
-    | `brokerConnections` | Trade Analysis ▸ Live Brokers, **and** the Settings section |
+    | `brokerConnections` | Trade History ▸ Live Brokers, **and** the Settings section |
     | `pushover` | its row in `DeviceSettings` |
     | `premiumBadges` | the **Badge** button in My Terminal ▸ Trading Team |
     | `customBoards` | the Live Wall's "Build your own" button |
@@ -1531,7 +1533,7 @@ mirrored in the web `api/types.ts` and on the widget payload):
   stored secret will not decrypt under the current key. **No trades are invented
   here.** The wall says the feed is not being read, names the trader's *own*
   broken connections with the reason already recorded on the row, and points at
-  Trade Analysis ▸ Live Brokers.
+  Trade History ▸ Live Brokers.
 
 The last two used to be one state — `conns.length === 0` → sample — and merging
 them was a real fault. After the credential reset a desk with a perfectly good
@@ -1718,7 +1720,7 @@ mistake here:**
   - **A tile can be MARKED with a tier it is not GATED by** — `markFeature`
     beside `feature` in the catalog. Broker Capital is the case: connecting a
     broker is Max, but *reading* an account you already connected is not. Its
-    endpoint serves any desk user and Trade Analysis ▸ Live Brokers shows the
+    endpoint serves any desk user and Trade History ▸ Live Brokers shows the
     same figures behind nothing but a marker, so gating the tile would have
     locked a lapsed member out of a connection they still hold — the exact thing
     "reading its status and disconnecting stay open" exists to prevent. Reach for
@@ -1799,7 +1801,7 @@ layout switch ask "discard unsaved changes?" about changes nobody had made.
 
 **Tiles fetch through `tiles/tileFeed.ts`, so two tiles reading one endpoint make
 one request.** The wall changed the economics of a poll: a realistic board has
-Trade Analysis beside Closed Trades (both the closed-trade history), Net Worth
+Trade History beside Closed Trades (both the closed-trade history), Net Worth
 beside Portfolio, two Market Data tiles off one catalog. `sharedFetch` shares an
 **in-flight** request (the mount case — a board opens and fires everything at
 once) and an answer younger than the **caller's own** staleness bound (the
@@ -2122,7 +2124,7 @@ They were one feature spanning three layers, and **all three are removed**:
   person; `tileTint` moved into `TradeCard.tsx`, its only remaining caller.
   Trade open/close notifications name the trader and nothing more.
 - **The permission.** Holding a designation used to make a trader a *desk lead*
-  (able to edit teammates' Trade Analysis settings). `isDeskLead` is now team
+  (able to edit teammates' Trade History settings). `isDeskLead` is now team
   leader or admin/founder only. **Do not add a badge-derived permission here** —
   a cosmetic label should never be an access-control input.
 
@@ -3053,7 +3055,7 @@ at all. Nowhere else.
     `/api/my-portal` routes, `MyPortalData`, `Portal.tsx`, `MyPortalSettings.tsx`,
     `workspaces/myportal/`. The workspace key is what `DEFAULT_SCREEN`, the
     routing switch and every in-app link are keyed on — the same reason `desk`
-    stayed `desk` when Trade Desk became Trade Analysis. Rename the label, never
+    stayed `desk` when Trade Desk became Trade History. Rename the label, never
     the key.
   - **React's `createPortal`** is a DOM concept, not the product.
   Two things carry the old name in stored data and are repaired on boot rather

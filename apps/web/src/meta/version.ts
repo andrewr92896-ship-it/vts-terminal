@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.75';
+export const APP_VERSION = 'Beta V 6.76';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.76',
+    date: 'August 6, 2026',
+    notes: [
+      'Advanced Trading ▸ Trade Analysis is now called Trade History. Nothing about the screen changed — the Trade Log and Live Brokers are still there, and every link to it still works.',
+    ],
+  },
   {
     version: 'Beta V 6.75',
     date: 'August 6, 2026',

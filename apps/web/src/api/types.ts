@@ -1197,7 +1197,7 @@ export interface BoardTile {
   limit?: number;
   // To Do tiles — which section to show. Undefined → every section.
   todoSectionId?: string;
-  // Trade Analysis / closed-trade tiles — the window they score.
+  // Trade History / closed-trade tiles — the window they score.
   range?: '7d' | '30d' | '90d' | 'all';
 }
 

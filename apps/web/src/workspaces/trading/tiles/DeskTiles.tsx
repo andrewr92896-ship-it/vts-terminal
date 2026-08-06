@@ -26,7 +26,7 @@ import type { TileProps } from './PersonalTiles';
 const MEDIUM = 60_000;
 const SLOW = 120_000;
 
-// ---- Trade Analysis ------------------------------------------------------
+// ---- Trade History -------------------------------------------------------
 //
 // The record over a window: how many trades, how many won, and what they made.
 // Deliberately the SAME numbers the Trade Log shows — read from the same
@@ -41,7 +41,7 @@ export function TradeLogTile({ tile, editing, onChange, onRemove }: TileProps) {
 
   return (
     <TileFrame
-      title={tile.title || 'Trade Analysis'}
+      title={tile.title || 'Trade History'}
       icon="bar-chart-3"
       editing={editing}
       onRemove={onRemove}
