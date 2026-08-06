@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.83';
+export const APP_VERSION = 'Beta V 6.84';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.84',
+    date: 'August 6, 2026',
+    notes: [
+      'On Live Trades, the stop loss and take profit can now be set in pips instead of price — a Price / Pips toggle sits beside the two fields, and the reading underneath each shows the price your distance lands on. Anything that is not a currency pair asks for points instead, the same unit the rest of the desk quotes it in.',
+      'You never type which way the level goes: a stop is placed on the losing side and a target on the winning side of your entry, so switching between buy and sell moves both to the right place. Distances are measured from the price the order will actually transact at — the ask on a buy, the bid on a sell, or your trigger price on a resting order.',
+      'The heading on Closed Trades & Metrics now matches its sidebar row.',
+    ],
+  },
   {
     version: 'Beta V 6.83',
     date: 'August 6, 2026',

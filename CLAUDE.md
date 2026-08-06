@@ -242,9 +242,9 @@ workspaces list** (see `theme/nav.ts` order).
   touching its key. **Rename a label, never a key** is the whole rule here.
   The file is `TradeHistory.tsx`; a search for the old names finds only patch
   notes, which are a dated record and stay as written.
-  **The screen's own heading reads "Trade History & Metrics"** while the sidebar
-  row reads "Closed Trades & Metrics" — owner instruction, 2026-08, naming each
-  place separately; they are the same screen.
+  **The heading matches the sidebar row exactly** — "Closed Trades & Metrics"
+  in both places. It briefly read "Trade History & Metrics" at the top; one
+  screen carries one name.
   **Live Brokers stopped being a tab** (owner instruction, 2026-08): the two
   answer one question between them — what the trades did, and what the accounts
   behind them hold — and a tab meant only half the answer was ever on screen.
@@ -420,6 +420,26 @@ workspaces list** (see `theme/nav.ts` order).
       (`TradeCard.tsx`), which keeps more decimals the smaller the size — the
       default locale format prints 0.00042 of a bitcoin as "0". Keep all of this
       when adding stocks or another broker.
+    - **The stop and target take a PRICE or a DISTANCE**, chosen by the
+      Price/Pips toggle beside them (owner request, 2026-08) — "Points" on
+      anything that is not a currency pair, off the same `forexPair` switch as
+      everything above. Three rules carry it:
+      - **The order still carries prices.** A distance is converted in the
+        ticket against `reference` — the ask for a buy, the bid for a sell, a
+        resting order's own trigger — which is the very price the server
+        validates the levels against, so the two cannot disagree.
+      - **Direction is never typed.** A stop goes on the losing side and a
+        target on the winning one, derived from the side, so a mistyped sign
+        cannot put a stop above a long's entry. It also means flipping
+        long↔short re-derives both levels correctly instead of stranding a
+        price from the other side.
+      - **A derived level is rounded to the venue's `displayPrecision`**, since
+        an over-precise price is rejected outright by both brokers — validation,
+        not tidying. And a distance typed with **nothing to measure from** (a
+        limit order with no trigger yet) resolves to no level, which must never
+        read as "no stop wanted": `unresolved` refuses the order rather than
+        sending a naked position. Switching units converts what is already
+        typed rather than clearing it.
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
