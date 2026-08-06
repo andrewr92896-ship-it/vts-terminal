@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.81';
+export const APP_VERSION = 'Beta V 6.82';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.82',
+    date: 'August 6, 2026',
+    notes: [
+      'Every Live Wall tile can now be zoomed on its own. While editing a layout, hover a tile and a small − 100% + control appears at the bottom of it: zoom out to fit more into the same tile, or in to make a chart or a figure readable across the room. The percentage button puts it back to 100%, and each tile’s zoom saves with the layout.',
+      'Fixed: an Open Positions tile on one of the ↕ views could not be resized taller or shorter — it locked itself to whatever height it already had, most visibly when you had no open positions. It now grows to fit your trades as intended while still letting you drag it to whatever height you want.',
+    ],
+  },
   {
     version: 'Beta V 6.81',
     date: 'August 6, 2026',

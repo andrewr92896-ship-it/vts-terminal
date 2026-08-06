@@ -78,6 +78,15 @@ export function PositionsTile({
   // In an expand view, measure the natural (unscrolled) tile height and hand it
   // to the board so it can grow the grid cell to fit every trade. Re-measures on
   // trade changes via the ResizeObserver; clears the override when not expanding.
+  //
+  // **Measure the CHILDREN, never this wrapper.** The wrapper carries
+  // `minHeight: 100%` so a tile with little in it still fills its cell rather
+  // than floating short of it — which means its own height, and therefore its
+  // `scrollHeight`, is the CELL's height whenever the content is shorter. Read
+  // that way, "how tall is the content" always answered "exactly as tall as it
+  // already is", so the board pinned the cell to whatever height it happened to
+  // have and the tile could not be resized in either direction. The body is
+  // `flex: 0 0 auto` in this view, so the children are the real content.
   const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!onMeasure) return;
@@ -87,10 +96,23 @@ export function PositionsTile({
     }
     const el = wrapRef.current;
     if (!el) return;
-    const report = () => onMeasure(el.scrollHeight);
+    const report = () => {
+      const cs = getComputedStyle(el);
+      const frame =
+        parseFloat(cs.paddingTop) +
+        parseFloat(cs.paddingBottom) +
+        parseFloat(cs.borderTopWidth) +
+        parseFloat(cs.borderBottomWidth);
+      let inner = 0;
+      for (const child of Array.from(el.children)) inner += (child as HTMLElement).offsetHeight;
+      onMeasure(inner + (Number.isFinite(frame) ? frame : 0));
+    };
     report();
+    // Observe the children rather than the wrapper: the wrapper's box is pinned
+    // to the cell, so it does not resize when a trade arrives and an observer on
+    // it would simply never fire.
     const ro = new ResizeObserver(report);
-    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child);
     return () => ro.disconnect();
   }, [expand, onMeasure, view, data]);
 

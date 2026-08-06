@@ -1946,6 +1946,62 @@ resize handle and the button is hidden. It is hover-revealed on a pointer device
 and permanently visible under `@media (hover: none)`, since a touch device gets
 no chance to discover a hover-only control.
 
+**Each tile carries its own zoom** (`BoardTile.zoom`, 0.5–2, absent = 1; owner
+request, 2026-08) — how large its contents are drawn, independently of how big
+the tile is on the board. Zoomed out a feed tile carries more rows in the same
+cell; zoomed in a chart or a P/L figure is legible across a room. Both are what a
+wall on a television is for.
+
+- **`transform: scale` on a box sized `1/z`, NEVER CSS `zoom`**, and that is the
+  whole implementation decision. `zoom` and a nested browsing context do not
+  compose in WebKit — the trap `global.css` documents and cancels for the
+  terminal's own zoom — so a per-tile `zoom` would leave the chart, watchlist and
+  live-stream embeds painted across a fraction of their tile with the browser's
+  white backdrop beside them, and **the global `#root iframe` rule cannot cancel
+  a factor it does not know about**. A transform scales the framed document
+  whole. Verified in Chromium that the embedded document re-lays out at the
+  compensated size (a 600px box at 70% frames a document 857px wide and paints it
+  down), which is what makes zooming out show *more* chart rather than a squashed
+  one.
+- The compensating width/height is what makes this a **zoom rather than a
+  shrink**: the content still lays out to fill the tile, so zooming out fits more
+  in. Without it the tile would just have smaller content and empty space.
+- **In the CELL, like the expand button**, for the same reason — a component per
+  tile kind, so this way every kind zooms with no per-tile change. The wrapper is
+  **always rendered**, identity styles and all: swapping it in and out with the
+  zoom changes the tree shape, which remounts the tile — and remounting a
+  TradingView embed reloads the chart on every press of the button.
+- The control is **bottom-centre and edit-mode only**: all four corners are
+  resize handles while editing, the header is what a tile is dragged by, and this
+  writes to the tile like every other tile setting — Save is what keeps it, and
+  Save only exists in edit mode. It is deliberately **not** applied to the
+  maximized overlay, which is already the "show me this bigger" action.
+- **A content-measured tile must scale its measurement** (`px * z` in
+  `ChartBoard`): the tile reports its height in its own stretched space, so the
+  rows the cell needs is that height *painted*.
+
+**A content-sized tile's measurement is a FLOOR, not a pin** (the positions tile
+in its `-expand` views). Two rules that read as one and are not:
+
+- The rule worth keeping is "every trade is visible without an inner scroll",
+  which only requires the cell never be **shorter** than the content (`minH`).
+  Pinning `maxH` to the same figure additionally forbade dragging the tile
+  **taller** — a different rule, never wanted, and a resize handle that refuses
+  to move reads as broken.
+- **Measure the CHILDREN, never the wrapper** (`PositionsTile`). The wrapper
+  carries `minHeight: 100%` so a near-empty tile still fills its cell, which
+  means its own `scrollHeight` is the CELL's height whenever the content is
+  shorter. Read that way, "how tall is the content" always answered "exactly as
+  tall as it already is", so the board pinned the cell to whatever height it
+  happened to have and the tile could not be resized in **either** direction —
+  the fault the owner hit on a tile showing no open positions. The body is
+  `flex: 0 0 auto` in this view, so the children are the real content, and the
+  `ResizeObserver` watches them for the same reason: the wrapper's box never
+  changes when a trade arrives, so an observer on it would simply never fire.
+- `onResizeStop` is then the **only** writer of such a tile's stored height —
+  `onLayoutChange` cannot tell a deliberate drag from a content reflow, so it
+  keeps ignoring `h` for them, and a drag is the trader stating what they want.
+
 **A layout can be published to the team** (`shared_team_id`, migration `0097`).
 `GET /api/trading/boards` answers with `{ boards, teamBoards, onTeam }` — one
 shape every board route returns via `boardsPayload`, so no route can hand the

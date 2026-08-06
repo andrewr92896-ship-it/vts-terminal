@@ -91,6 +91,47 @@ function rowsForPx(px: number): number {
   return Math.max(1, Math.ceil((px + MARGIN) / (ROW_H + MARGIN)));
 }
 
+// ---- Per-tile zoom ----------------------------------------------------------
+// How large one tile's contents are drawn, independently of the tile's size on
+// the board. Zoomed out, a news or calendar tile carries more rows in the same
+// cell; zoomed in, a chart or a P/L figure is legible across a room. Both are
+// what a wall on a television is for.
+//
+// It is `transform: scale` on a box sized 1/z, NOT CSS `zoom`, and that is the
+// whole implementation decision. `zoom` and a nested browsing context do not
+// compose in WebKit — the trap global.css documents and cancels for the
+// terminal's own zoom — so a per-tile `zoom` would leave the chart, watchlist
+// and live-stream embeds painted across a fraction of their tile with the
+// browser's white backdrop beside them, and the global rule cannot cancel a
+// factor it does not know about. A transform scales the framed document whole,
+// which is exactly what is wanted, and the compensating width/height means the
+// content still LAYS OUT to fill the tile — so zooming out genuinely fits more
+// in rather than just shrinking what is there.
+const ZOOM_MIN = 0.5;
+const ZOOM_MAX = 2;
+const ZOOM_STEP = 0.1;
+
+function tileZoom(t: BoardTile): number {
+  const z = typeof t.zoom === 'number' && Number.isFinite(t.zoom) ? t.zoom : 1;
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
+}
+function stepZoom(z: number, by: number): number {
+  return Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((z + by) * 10) / 10));
+}
+// The wrapper is ALWAYS rendered, identity styles and all: swapping it in and
+// out with the zoom would change the tree shape, which remounts the tile — and
+// remounting a TradingView embed reloads the chart on every press of the
+// button. Only the styles may change.
+function zoomWrap(z: number): CSSProperties {
+  if (z === 1) return { width: '100%', height: '100%' };
+  return {
+    width: `${100 / z}%`,
+    height: `${100 / z}%`,
+    transform: `scale(${z})`,
+    transformOrigin: 'top left',
+  };
+}
+
 // The Live Wall's board: a drag-resize grid (react-grid-layout) of tiles drawn
 // from every part of the terminal — charts and quotes, the desk's open trades
 // and its record, the reader's own net worth and list, their study progress, the
@@ -451,9 +492,15 @@ export function ChartBoard({
       });
     }
     return tiles.map((t) => {
-      // Expand positions tiles are sized by their measured content: lock the
-      // grid height to the reported row count so the cell grows per trade and
-      // can't be hand-resized shorter (which would reintroduce a scroll).
+      // An expand positions tile is sized by its measured content — but as a
+      // FLOOR, not as a pin. The rule it exists to keep is "every trade is
+      // visible without an inner scroll", and that only requires the cell never
+      // be SHORTER than its content (`minH`). Pinning `maxH` to the same figure
+      // additionally forbade dragging it TALLER, which is not the same rule and
+      // is not wanted: on a wall of empty positions the tile could not be given
+      // the room the arrangement needed, and a resize handle that refuses to
+      // move reads as broken. Extra height is just space — it reintroduces no
+      // scroll.
       const auto = isExpandPositions(t) ? autoRows[t.id] : undefined;
       const def = tileDef(t.kind);
       return {
@@ -461,10 +508,11 @@ export function ChartBoard({
         x: t.x,
         y: t.y,
         w: t.w,
-        h: auto ?? t.h,
+        h: Math.max(t.h, auto ?? 0),
         minW: def?.minW ?? 3,
-        minH: auto ?? def?.minH ?? 4,
-        ...(auto ? { maxH: auto } : {}),
+        // The content floor and the kind's own floor, whichever is larger — a
+        // tile with one trade in it still may not be shrunk to a sliver.
+        minH: Math.max(auto ?? 0, def?.minH ?? 4),
       };
     });
   }, [tiles, autoRows, isPhone]);
@@ -483,7 +531,9 @@ export function ChartBoard({
           const l = next.find((n) => n.i === t.id);
           if (!l) return t;
           // Keep an expand tile's saved base height — its live height is content-
-          // driven, so don't bake the auto-grown value into the preset.
+          // driven, so don't bake the auto-grown value into the preset. A
+          // deliberate drag is a different thing and is recorded by
+          // `onResizeStop`, which is the only writer of an expand tile's height.
           return { ...t, x: l.x, y: l.y, w: l.w, h: isExpandPositions(t) ? t.h : l.h };
         }),
       );
@@ -545,6 +595,17 @@ export function ChartBoard({
       /* already released */
     }
   }, []);
+
+  // A finished resize, recorded as the trader's own choice of height. Needed
+  // because `onLayoutChange` cannot tell a deliberate drag from a content
+  // reflow, and for a content-sized tile it has to ignore the latter.
+  const onResizeStop = useCallback(
+    (_layout: Layout[], _old: Layout, item: Layout) => {
+      if (!editing || wsUnlocked) return;
+      setTiles((prev) => prev.map((t) => (t.id === item.i ? { ...t, w: item.w, h: item.h } : t)));
+    },
+    [editing, wsUnlocked],
+  );
 
   const patchTile = useCallback((id: string, patch: Partial<BoardTile>) => {
     setTiles((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -925,23 +986,76 @@ export function ChartBoard({
               draggableHandle=".tile-header"
               draggableCancel=".no-drag"
               onLayoutChange={onLayoutChange}
+              // The one writer of an expand tile's stored height. Its live
+              // height follows its content, so `onLayoutChange` deliberately
+              // ignores `h` for those — but a drag is the trader stating what
+              // they want, and that has to survive the next content reflow.
+              onResizeStop={onResizeStop}
               compactType="vertical"
             >
-              {tiles.map((t) => (
+              {tiles.map((t) => {
+                const z = tileZoom(t);
+                return (
                 <div
                   key={t.id}
                   className={`wall-cell${editing ? ' wall-cell-editing' : ''}`}
                   style={{ overflow: 'hidden', position: 'relative' }}
                 >
-                  <BoardTileView
-                    tile={t}
-                    editing={editing}
-                    lock={locks.get(t.id) ?? null}
-                    onChange={(p) => patchTile(t.id, p)}
-                    onRemove={() => removeTile(t.id)}
-                    onMeasure={(px) => measureTile(t.id, px)}
-                    onOpenMembership={onOpenMembership}
-                  />
+                  {/* The zoom wrapper. In the CELL rather than in the tile, for
+                      the same reason the expand button is: there is a component
+                      per tile kind and this way every one of them zooms with no
+                      per-tile change. */}
+                  <div style={zoomWrap(z)}>
+                    <BoardTileView
+                      tile={t}
+                      editing={editing}
+                      lock={locks.get(t.id) ?? null}
+                      onChange={(p) => patchTile(t.id, p)}
+                      onRemove={() => removeTile(t.id)}
+                      // The tile reports its content height in its OWN space,
+                      // which the zoom has already stretched — so the rows the
+                      // cell actually needs is that height painted, not laid
+                      // out. Without the factor a zoomed-out expand tile grows
+                      // rows for content that now takes far less room.
+                      onMeasure={(px) => measureTile(t.id, px == null ? null : px * z)}
+                      onOpenMembership={onOpenMembership}
+                    />
+                  </div>
+                  {/* Zoom, while editing. Deliberately bottom-CENTRE: all four
+                      corners are resize handles in edit mode, and the header is
+                      what a tile is dragged by. Edit mode rather than reading
+                      mode because this writes to the tile like every other tile
+                      setting — Save is what keeps it, and Save only exists here.
+                      Outside the zoom wrapper, so the control itself is always
+                      the same size whatever the tile is set to. */}
+                  {editing && canEdit && (
+                    <div className="wall-zoom no-drag">
+                      <button
+                        onClick={() => patchTile(t.id, { zoom: stepZoom(z, -ZOOM_STEP) })}
+                        disabled={z <= ZOOM_MIN}
+                        style={{ ...zoomBtn, ...(z <= ZOOM_MIN ? { opacity: 0.35, cursor: 'default' } : null) }}
+                        aria-label={`Zoom out ${tileLabel(t.kind)}`}
+                      >
+                        {"−"}
+                      </button>
+                      <button
+                        onClick={() => patchTile(t.id, { zoom: undefined })}
+                        style={{ ...zoomBtn, width: 40, fontSize: 10.5, fontWeight: 700 }}
+                        title="Back to 100%"
+                        aria-label={`${tileLabel(t.kind)} zoom ${Math.round(z * 100)} percent, reset`}
+                      >
+                        {`${Math.round(z * 100)}%`}
+                      </button>
+                      <button
+                        onClick={() => patchTile(t.id, { zoom: stepZoom(z, ZOOM_STEP) })}
+                        disabled={z >= ZOOM_MAX}
+                        style={{ ...zoomBtn, ...(z >= ZOOM_MAX ? { opacity: 0.35, cursor: 'default' } : null) }}
+                        aria-label={`Zoom in ${tileLabel(t.kind)}`}
+                      >
+                        {"+"}
+                      </button>
+                    </div>
+                  )}
                   {/* Full-screen, in the cell's bottom-right corner.
                       Deliberately NOT in the tile header: the headers belong to
                       a component per tile kind, seven of which predate
@@ -960,7 +1074,8 @@ export function ChartBoard({
                     </button>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </RGL>
             {/* The workspace frame: the dotted line around the area the tiles
                 live in, drawn only while editing. It is LOCKED even then — the
@@ -1380,6 +1495,19 @@ const PLACEHOLDER_CSS = `
 .wall-cell:hover .wall-expand, .wall-expand:focus-visible { opacity: 1; }
 @media (hover: none) { .wall-expand { opacity: .55; } }
 
+/* Per-tile zoom, bottom-centre while editing — clear of all four resize
+   corners and of the header the tile is dragged by. Revealed on hover like the
+   expand button, and left visible where there is no hover to reveal it. */
+.wall-zoom {
+  position: absolute; left: 50%; bottom: 6px; transform: translateX(-50%); z-index: 6;
+  display: inline-flex; align-items: center; gap: 2px; padding: 2px;
+  background: rgba(9,20,46,.94); border: 1px solid ${BORDER2}; border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.4);
+  opacity: 0; transition: opacity .15s ease;
+}
+.wall-cell:hover .wall-zoom, .wall-zoom:focus-within { opacity: 1; }
+@media (hover: none) { .wall-zoom { opacity: .6; } }
+
 /* While the workspace is being sized, the tiles freeze — the frame's own
    handles are the only live controls, the mirror of the workspace being locked
    while tiles are arranged. */
@@ -1462,6 +1590,23 @@ const wsChip: CSSProperties = {
   pointerEvents: 'auto',
   boxShadow: '0 4px 12px rgba(0,0,0,.35)',
 };
+const zoomBtn: CSSProperties = {
+  width: 20,
+  height: 20,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  background: 'rgba(255,255,255,.06)',
+  border: `1px solid ${BORDER2}`,
+  borderRadius: 5,
+  color: '#cfe0ff',
+  fontSize: 13,
+  lineHeight: 1,
+  fontFamily: 'inherit',
+  cursor: 'pointer',
+};
+
 const wsStepBtn: CSSProperties = {
   width: 18,
   height: 18,
