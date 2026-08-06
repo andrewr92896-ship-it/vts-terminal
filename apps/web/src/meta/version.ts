@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.73';
+export const APP_VERSION = 'Beta V 6.74';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.74',
+    date: 'August 6, 2026',
+    notes: [
+      'Trade Desk: each open position now shows how many pips it is up or down, beside its profit. Forex only — crypto and index positions have no pip size and show money alone.',
+    ],
+  },
   {
     version: 'Beta V 6.73',
     date: 'August 6, 2026',

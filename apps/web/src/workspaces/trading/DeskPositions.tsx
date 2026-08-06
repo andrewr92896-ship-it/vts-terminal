@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { fmtMoney, fmtPrice, fmtUnits } from './TradeCard';
-import { fmtPerStep, fmtSteps, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
+import { fmtPerStep, fmtPips, fmtSteps, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
 import { TradeTimesCell, etSince } from './tradeTime';
 import type { DeskHolding, DeskOrderRecord, DeskWorkingOrder, LiveTrade } from '../../api/types';
 
@@ -230,7 +230,21 @@ function PositionRow({
           {long ? 'LONG' : 'SHORT'} {fmtUnits(trade.units)}
         </span>
         <span style={{ flex: 1 }} />
-        <span style={{ textAlign: 'right', fontFamily: MONO, fontSize: 12 }}>
+        {/* How far the position has moved, beside what that is worth. Pips only
+            — `forex.pipsOpen` is computed server-side for genuine currency pairs
+            and is null for crypto, metals and indices, which have no pip size
+            and are read in points instead. Not gated on Hide $: a pip is a
+            distance in price, not a money figure, which is the same reason the
+            stop and target keep their pip readings when the money is hidden. */}
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontFamily: MONO, fontSize: 12 }}>
+          {trade.forex?.pipsOpen != null && (
+            <span
+              style={{ fontSize: 11.5, fontWeight: 600, color: trade.forex.pipsOpen > 0 ? GREEN : trade.forex.pipsOpen < 0 ? RED : MUTED }}
+              title="Open profit/loss in pips"
+            >
+              {fmtPips(trade.forex.pipsOpen, true)}
+            </span>
+          )}
           {hideMoney || pl == null ? (
             <span style={{ color: FAINT }}>{"•••"}</span>
           ) : (
