@@ -40,6 +40,7 @@ import {
   removeFundedAccount,
   addFundedTrade,
   removeFundedTrade,
+  setFundedTradeProtection,
   closeFundedTrade,
   importFundedTrades,
 } from '../trading/funded.js';
@@ -1172,6 +1173,20 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
+  // Correct the stop/target the screenshot import read (or missed) on a funded
+  // position. Owner-scoped in the service, so this can only ever reach a row the
+  // caller entered themselves.
+  app.patch('/api/trading/funded/trades/:id', write, async (request, reply) => {
+    const parsed = fundedProtectionSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the stop and target and try again' });
+    const id = (request.params as { id: string }).id;
+    try {
+      return await setFundedTradeProtection(request.currentUser!.id, id, parsed.data);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update trade' });
+    }
+  });
+
   app.delete('/api/trading/funded/trades/:id', write, async (request) => {
     const id = (request.params as { id: string }).id;
     return removeFundedTrade(request.currentUser!.id, id);
@@ -1443,6 +1458,16 @@ const fundedTradeSchema = z.object({
   closedAt: ts.nullish(),
   notes: z.string().trim().max(2000).nullish(),
 });
+
+// Setting a funded position's stop/target by hand. Protection only — see
+// setFundedTradeProtection for why the fill, size and side are not editable.
+// `.nullish()` carries the whole semantic: omitted leaves a level alone, an
+// explicit null clears it.
+const fundedProtectionSchema = z
+  .object({ stopLoss: price.nullish(), takeProfit: price.nullish() })
+  .refine((v) => v.stopLoss !== undefined || v.takeProfit !== undefined, {
+    message: 'Nothing to update',
+  });
 
 const hhmm = z.string().regex(/^\d{1,2}:\d{2}$/);
 // A day window: either an explicit open/close, or `allDay` for the full 24 hours

@@ -772,6 +772,15 @@ export const api = {
   removeFundedTrade(id: string): Promise<FundedData> {
     return request(`/api/trading/funded/trades/${id}`, { method: 'DELETE' });
   },
+  // Set a funded position's stop/target by hand, when the screenshot import read
+  // one wrong or the platform showed it somewhere the picture did not reach.
+  // Omit a level to leave it alone; pass null to clear it.
+  setFundedTradeProtection(
+    tradeId: string,
+    patch: { stopLoss?: number | null; takeProfit?: number | null },
+  ): Promise<FundedData> {
+    return request(`/api/trading/funded/trades/${tradeId}`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
   // Close an open funded position from a trade-result screenshot: Claude reads the
   // exit price / P/L and finalizes that one trade (dropping it off the Live Wall).
   closeFundedTrade(tradeId: string, image: { imageBase64: string; mediaType: string }): Promise<FundedCloseResult> {
