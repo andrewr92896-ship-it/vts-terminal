@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.80';
+export const APP_VERSION = 'Beta V 6.81';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.81',
+    date: 'August 6, 2026',
+    notes: [
+      'Widening the Live Wall’s workspace now makes the board itself bigger: the dotted box grows out across the screen and your tiles keep their size, instead of squeezing more, thinner columns into the same width. On a wide screen or a television the wall now fills it rather than sitting in a strip down the middle.',
+      'Expanding stops once the workspace fills the screen you are on, so it can never reach a point where widening starts shrinking your tiles. A board arranged wide still opens on a laptop or phone — it just fits itself to the smaller screen.',
+    ],
+  },
   {
     version: 'Beta V 6.80',
     date: 'August 6, 2026',

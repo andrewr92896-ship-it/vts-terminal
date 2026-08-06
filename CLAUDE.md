@@ -1787,11 +1787,37 @@ header.
 
 **The workspace area — a board's width is its own saved setting** (`layout.cols`,
 default 12; owner request, 2026-08). Twelve columns is the "mobile width" every
-earlier board was built on and stays the default; a wider workspace packs more,
-narrower columns onto the same screen, and the board always renders **fit to
-width** — never a sideways scroll — so widening is how a television shows tiles
-side by side instead of a tall middle strip. In edit mode a dotted outline draws
-the workspace around the grid.
+earlier board was built on and stays the default. In edit mode a dotted outline
+draws the workspace around the grid.
+
+- **A COLUMN IS A FIXED SLICE OF WIDTH, NOT A FRACTION OF A FIXED BOARD**, and
+  this is the whole point of the feature. The Live Wall screen is capped at
+  `WALL_W` (1280) and centred (`LiveWall.tsx`), so on a television the board was
+  a strip down the middle with most of the screen unused. Widening the workspace
+  therefore **lifts that cap** — 12 columns asks for 1280, 18 asks for 1920 —
+  via `baseWidth` / `onWorkspaceWidth` between `LiveWall` and `ChartBoard`. The
+  dotted box **grows** and the tiles keep their size.
+  - The first cut got this backwards: it added columns *inside* the 1280 cap, so
+    every extra column made all the existing ones thinner and the whole board
+    shrank — the opposite of what widening is for. Shipped in Beta V 6.80 and
+    fixed in 6.81. **Do not reintroduce a width that subdivides a fixed board.**
+  - Consequence worth knowing: the two numbers must stay one number. `WALL_W` is
+    both the screen's default cap and the pixel width of the default 12-column
+    workspace, which is why it is **passed into** `ChartBoard` rather than
+    restated there. `LiveWall` is also where the cap is applied, so the
+    **Positions view keeps the default width** whatever the board is set to.
+- **The screen is the ceiling, and it is clamped against rather than discovered
+  by overshooting it.** `availWidth` — the content area measured on a full-width
+  wrapper *outside* the capped wall, since the wall can never report space it is
+  not allowed to occupy — gives `maxCols = floor(availWidth / (WALL_W / 12))`.
+  Growing stops one column before anything would have to get thinner, so
+  reaching the edge of the screen costs no tile width at all. (Reacting to a
+  board that came back narrower than it asked for also works, and was tried; it
+  costs a visible column of shrink every time somebody reaches the edge.)
+- **Only growing is capped, never rendering.** A board arranged on a television
+  and opened on a laptop still renders — it fits itself to the width, denser,
+  exactly as before — and its stored `cols` is left alone. Nothing on a smaller
+  screen may rewrite the width a board was built at.
 
 - **The workspace is LOCKED even in edit mode**, deliberately: arranging tiles
   and sizing the canvas are different acts, and a drag meant for a tile must
@@ -1801,15 +1827,15 @@ the workspace around the grid.
   workspace back up before it will leave edit mode**. Leaving edit mode, or
   switching layouts, always relocks.
 - **Sizing is by whole columns from either side**: drag a side handle (notched,
-  ~48px per column — a feel constant, since the grid re-fits live) or step with
-  the − / + beside the width readout. Growing the **left** inserts columns there
+  ~48px per column) or step with the − / + beside the width readout. Growing the **left** inserts columns there
   and shifts every tile right, so the arrangement keeps its place; shrinking
   only ever removes **empty** columns, clamped against the geometry recorded at
   pointer-down (a left drag shifts the tiles, so mid-drag geometry is the wrong
-  clamp). Bounds 6–36. While unlocked the board pulls in from the sides
-  (plain padding — deliberately no transform, which would reopen the
-  two-coordinate-space trap `lib/measure.ts` closes) so the frame's handles sit
-  in reachable gutters.
+  clamp). Bounds 6–36, and the screen's own ceiling above. While unlocked the
+  board pulls in 44px from each side (plain padding — deliberately no transform,
+  which would reopen the two-coordinate-space trap `lib/measure.ts` closes) so
+  the frame's handles sit in reachable gutters rather than against the edge of
+  the screen.
 - **Phones are untouched.** The flatten-to-one-column render ignores `cols`
   entirely, and `canEdit` already keeps the whole editor off phones, so nothing
   on a phone can write a width back.

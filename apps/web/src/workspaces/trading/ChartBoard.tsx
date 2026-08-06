@@ -109,7 +109,29 @@ function rowsForPx(px: number): number {
 // than a tier — it decides whether the desk-reading tiles are offered at all.
 // Every limit here is applied server-side too (routes/trading.ts); this only
 // decides what is offered.
-export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; onOpenMembership?: () => void }) {
+export function ChartBoard({
+  desk = true,
+  onOpenMembership,
+  baseWidth,
+  availWidth,
+  onWorkspaceWidth,
+}: {
+  desk?: boolean;
+  onOpenMembership?: () => void;
+  /** The width the Live Wall screen is capped at by default — the pixel width
+   *  of the DEFAULT 12-column workspace. Passed in rather than restated here so
+   *  the screen's cap and the workspace's idea of a column are one number. */
+  baseWidth: number;
+  /** How wide the screen's content area actually is, measured. The ceiling on
+   *  how far the workspace can grow — clamped against rather than discovered by
+   *  overshooting, so widening never costs a column of tile width. */
+  availWidth: number;
+  /** The pixel width this board wants the screen to give it, or null for the
+   *  default. Widening the workspace has to widen the SCREEN's cap — otherwise
+   *  more columns only subdivide a fixed width, which shrinks every tile
+   *  instead of growing the board. */
+  onWorkspaceWidth?: (px: number | null) => void;
+}) {
   const { user } = useAuth();
   const { isPhone } = useResponsive();
   const features = user?.access.features ?? { advancedTrading: desk, funded: false, tradingTeams: false };
@@ -235,12 +257,47 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   // see lib/measure.ts for why that distinction is the whole bug on iPhone.
   const boardRef = useRef<HTMLDivElement | null>(null);
   const boardW = useContentWidth(boardRef, 1120);
+
+  // ---- What the workspace width actually DOES -------------------------------
+  // A column is a fixed slice of width, not a fraction of a fixed board: 12
+  // columns is `baseWidth`, so 18 columns asks the screen for half again as
+  // much room. That is the whole point — the dotted box GROWS and the tiles
+  // keep their size, rather than the same width being cut into thinner columns
+  // (which shrinks every tile, and is what this replaced).
+  //
+  // Phones never ask: they render one flattened column and ignore `cols`.
+  const wantWallW = isPhone ? null : Math.round((baseWidth * cols) / COLS);
+  useEffect(() => {
+    if (!onWorkspaceWidth) return;
+    onWorkspaceWidth(wantWallW);
+    return () => onWorkspaceWidth(null);
+  }, [wantWallW, onWorkspaceWidth]);
+
+  // The screen is the ceiling, and it is CLAMPED AGAINST rather than discovered
+  // by overshooting it: the widest workspace that fits is whole columns of
+  // `baseWidth / COLS` into the measured content area, so growing stops one
+  // column before anything would have to get thinner. (Reacting to a board that
+  // came back narrower than asked would work too, but costs a visible column of
+  // tile width every time somebody reaches the edge.) Measured, never assumed —
+  // the terminal zoom means the layout space available is not the number of
+  // pixels on the glass; see lib/measure.ts.
+  const fitCols = Math.floor((availWidth * COLS) / Math.max(1, baseWidth));
+  const maxCols = Math.max(MIN_WS_COLS, Math.min(MAX_WS_COLS, fitCols));
+  // A board arranged wider than this screen still renders here — it just fits
+  // itself to the width, the same as it always has. Only GROWING is capped, and
+  // only while somebody is sizing the workspace, so opening a television board
+  // on a laptop never rewrites the width it was built at.
+  const atScreenLimit = cols >= maxCols;
+  // Read by the drag, which cannot re-read state mid-gesture.
+  const maxColsRef = useRef(MAX_WS_COLS);
+  maxColsRef.current = Math.max(maxCols, cols);
+
   // While the workspace is unlocked the board pulls in from the sides, so the
   // dotted frame reads as an object floating on the page with its side handles
   // in reach — pressed against the container edge there is nothing to grab.
   // Plain padding, deliberately no transform: a scale would reopen the two-
   // coordinate-space trap lib/measure.ts exists to close.
-  const wsGutter = wsUnlocked ? Math.round(Math.min(140, Math.max(56, boardW * 0.07))) : 0;
+  const wsGutter = wsUnlocked ? 44 : 0;
   // Locked, the grid takes the measured width exactly as it always has — the
   // floor only guards the unlocked state's subtraction.
   const gridW = wsUnlocked ? Math.max(320, boardW - wsGutter * 2) : boardW;
@@ -442,7 +499,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   const stepWorkspace = useCallback(
     (side: 'left' | 'right', by: number) => {
       const room = wsRooms(tiles, cols)[side];
-      const d = Math.max(Math.max(-room, MIN_WS_COLS - cols), Math.min(MAX_WS_COLS - cols, by));
+      const d = Math.max(Math.max(-room, MIN_WS_COLS - cols), Math.min(maxColsRef.current - cols, by));
       if (d === 0) return;
       setCols(cols + d);
       if (side === 'left') setTiles((prev) => prev.map((t) => ({ ...t, x: t.x + d })));
@@ -467,9 +524,12 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     // recorded at pointer-down (`room`), and applied as an absolute delta from
     // there, so a burst of moves between renders cannot double-apply.
     const wanted = Math.round((drag.side === 'right' ? raw : -raw) / WS_NOTCH_PX);
+    // The upper clamp is read live: once the box fills the screen, `maxColsRef`
+    // freezes at the current width, so dragging further simply does nothing
+    // rather than thinning the columns. Shrinking is always allowed.
     const d = Math.max(
       Math.max(-drag.room, MIN_WS_COLS - drag.startCols),
-      Math.min(MAX_WS_COLS - drag.startCols, wanted),
+      Math.min(maxColsRef.current - drag.startCols, wanted),
     );
     if (d === drag.applied) return;
     const shift = drag.side === 'left' ? d - drag.applied : 0;
@@ -961,9 +1021,12 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
                       <button
                         type="button"
                         onClick={() => stepWorkspace('right', 1)}
-                        disabled={cols >= MAX_WS_COLS}
+                        disabled={atScreenLimit}
                         aria-label="Add a column"
-                        style={{ ...wsStepBtn, ...(cols >= MAX_WS_COLS ? { opacity: 0.35, cursor: 'default' } : null) }}
+                        title={
+                          cols >= MAX_WS_COLS ? undefined : atScreenLimit ? 'The workspace already fills this screen' : undefined
+                        }
+                        style={{ ...wsStepBtn, ...(atScreenLimit ? { opacity: 0.35, cursor: 'default' } : null) }}
                       >
                         {"+"}
                       </button>
