@@ -307,7 +307,7 @@ function ChallengeForm({ data, busy, onSave, onSync }: { data: ChallengeData; bu
         <button onClick={save} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>{"Save"}</button>
         <button onClick={onSync} disabled={busy} style={ghostBtn} title="Set equity to account size + realized P/L from your Trade Log">{"Pull equity from Trade Log"}</button>
       </div>
-      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>{"No API here — keep equity current from your prop dashboard, or pull it from the Trade Log. Day-start equity drives the daily-drawdown floor; reset it each trading day."}</div>
+      <div style={{ fontSize: 10.5, color: FAINT, marginTop: 8 }}>{"No API here — keep equity current from your prop dashboard, or pull it from the Trade Log. Day-start equity drives the daily-drawdown floor and rolls onto your current equity at the start of each Eastern trading day."}</div>
     </div>
   );
 }

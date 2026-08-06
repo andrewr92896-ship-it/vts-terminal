@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.74';
+export const APP_VERSION = 'Beta V 6.75';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.75',
+    date: 'August 6, 2026',
+    notes: [
+      'Funded Account: the daily drawdown gauge now actually resets daily. It was measuring the whole loss since the challenge started, so an account that was down overall but flat on the day read as most of its daily allowance already spent.',
+      'Day-start equity rolls onto your current equity at the start of each Eastern trading day. You can still set it by hand, and a figure you type stays put for the rest of that day.',
+    ],
+  },
   {
     version: 'Beta V 6.74',
     date: 'August 6, 2026',

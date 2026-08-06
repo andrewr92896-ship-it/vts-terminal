@@ -410,6 +410,31 @@ workspaces list** (see `theme/nav.ts` order).
       team surface had vanished. `isDeskLead` and `canEditDeskSettingsFor` both
       check the grant now. Admins are unaffected — their reach never depended on
       a team.
+  - **The Funded Account's daily drawdown resets on its own**
+    (`trading/challenge.ts`, `rollDayStart`; `trading_challenges.day_start_on`,
+    migration `0107`). `dayStartEquity` is what the daily gauge measures against,
+    and nothing used to move it: it was written once when the challenge row was
+    created and changed only if the trader retyped it by hand, so a gauge
+    labelled "Resets daily" was really reporting the whole loss since the
+    challenge began — an account down since the start but flat on the day showed
+    half its daily allowance spent, in amber, having lost nothing. On the one
+    gauge that exists to warn about the breach that ends a challenge, a false
+    alarm is the worst failure available.
+    - The **first read of a new ET day** rolls the day-start onto the equity the
+      account is carrying and stamps the day. That figure is the last equity the
+      trader recorded, which is exactly what "what this account started today on"
+      means for a book with no API behind it — nothing is invented.
+    - The boundary is the **ET calendar day**, matching every other trading-day
+      bucket in the terminal (`codes.ts`, `pnl.ts`). A weekend roll is a no-op:
+      nothing traded, so the equity has not moved.
+    - **A hand-typed day-start is stamped with the day it was typed on**, so the
+      next read reads it as today's and leaves the trader's correction alone.
+      `updatedAt` is deliberately not bumped by a roll — it records when the
+      trader last changed something, and the day turning over is not that.
+    - **`day_start_on` is not backfilled by the migration**, on purpose: SQLite's
+      `date('now')` is UTC and this boundary is Eastern, so the code that knows
+      the rule is the only thing that ever writes the column. A null simply rolls
+      on the next read.
   - **Market Data** (`data`, `workspaces/trading/MarketData.tsx` — now a
     **My Terminal** section, files unchanged) is the desk's
     read-only board of every rate, print and price it watches: 75 series across

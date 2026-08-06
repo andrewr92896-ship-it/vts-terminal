@@ -370,6 +370,10 @@ export const tradingChallenges = sqliteTable('trading_challenges', {
   currentEquity: real('current_equity').notNull().default(200000),
   peakEquity: real('peak_equity').notNull().default(200000), // for trailing DD
   dayStartEquity: real('day_start_equity').notNull().default(200000), // for daily DD
+  // The ET calendar day `dayStartEquity` belongs to ('YYYY-MM-DD'), so the daily
+  // drawdown actually resets daily instead of measuring the whole challenge.
+  // Null = never stamped; the next read rolls it forward. See challenge.ts.
+  dayStartOn: text('day_start_on'),
   startedAt: integer('started_at', { mode: 'timestamp_ms' }).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
