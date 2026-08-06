@@ -418,6 +418,19 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
   // default row must never answer this, since one trader's deposit is not
   // another trader's.
   depositedCapital: real('deposited_capital'),
+  // The other side of it: money the trader has taken back out (migration 0110).
+  withdrawnCapital: real('withdrawn_capital'),
+  // Whether each figure is TYPED or SYNCED from the broker's funding history.
+  // Per figure rather than one switch, so syncing one card never quietly
+  // changes what the other is doing.
+  depositedSync: integer('deposited_sync', { mode: 'boolean' }).notNull().default(false),
+  withdrawnSync: integer('withdrawn_sync', { mode: 'boolean' }).notNull().default(false),
+  // The last GOOD broker reading, kept apart from the typed figures above so
+  // turning sync off restores the trader's own number, and a failed refresh
+  // leaves the last one standing rather than blanking it to zero.
+  syncedDeposited: real('synced_deposited'),
+  syncedWithdrawn: real('synced_withdrawn'),
+  capitalSyncedAt: integer('capital_synced_at', { mode: 'timestamp_ms' }),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;
@@ -2200,6 +2213,9 @@ export const CREDENTIAL_AUDIT_PURPOSES = [
   'reconcile',
   'backfill',
   'capital',
+  // Reading the account's funding history to keep deposited/withdrawn capital
+  // in step with the broker. A person asked for it, so it gets its own row.
+  'funding',
 ] as const;
 export type CredentialAuditPurpose = (typeof CREDENTIAL_AUDIT_PURPOSES)[number];
 

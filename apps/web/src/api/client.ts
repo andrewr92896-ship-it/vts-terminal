@@ -39,7 +39,9 @@ import type {
   FundedPositionResult,
   FundedCloseResult,
   ConnectionInput,
+  CapitalPatch,
   DeskSettings,
+  TraderCapital,
   ManualPosition,
   ManualPositionInput,
   AnalyzePositionResult,
@@ -615,6 +617,18 @@ export const api = {
   updateDeskSettings(patch: Partial<DeskSettings>, userId?: string): Promise<DeskSettings> {
     const body = userId ? { ...patch, userId } : patch;
     return request('/api/trading/desk-settings', { method: 'PATCH', body: JSON.stringify(body) });
+  },
+  // The viewer's own capital: deposited, withdrawn, and what their connected
+  // accounts hold right now. Self-only — there is no userId parameter.
+  traderCapital(): Promise<TraderCapital> {
+    return request('/api/trading/capital');
+  },
+  updateTraderCapital(patch: CapitalPatch): Promise<TraderCapital> {
+    return request('/api/trading/capital', { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  // Turn syncing on for one figure and pull it from the broker now.
+  syncTraderCapital(figure: 'deposited' | 'withdrawn'): Promise<TraderCapital> {
+    return request('/api/trading/capital/sync', { method: 'POST', body: JSON.stringify({ figure }) });
   },
   tradingSessions(): Promise<{ sessions: StrategySession[] }> {
     return request('/api/trading/sessions');
