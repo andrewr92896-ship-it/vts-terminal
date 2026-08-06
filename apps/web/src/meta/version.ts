@@ -11,9 +11,35 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.81';
+export const APP_VERSION = 'Beta V 6.84';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.84',
+    date: 'August 6, 2026',
+    notes: [
+      'On Live Trades, the stop loss and take profit can now be set in pips instead of price — a Price / Pips toggle sits beside the two fields, and the reading underneath each shows the price your distance lands on. Anything that is not a currency pair asks for points instead, the same unit the rest of the desk quotes it in.',
+      'You never type which way the level goes: a stop is placed on the losing side and a target on the winning side of your entry, so switching between buy and sell moves both to the right place. Distances are measured from the price the order will actually transact at — the ask on a buy, the bid on a sell, or your trigger price on a resting order.',
+      'The heading on Closed Trades & Metrics now matches its sidebar row.',
+    ],
+  },
+  {
+    version: 'Beta V 6.83',
+    date: 'August 6, 2026',
+    notes: [
+      'Advanced Trading is renamed and reordered to follow a trade’s own life: Live Trades, Closed Trades & Metrics, Funded Trades, Manual Trades, Deleted Trades, then Strategy Sessions.',
+      'Live Brokers is no longer a separate tab — your live broker capital now sits at the bottom of Closed Trades & Metrics, on the same page as the trades it was earned on.',
+      'Trading Alerts has been removed. The two settings that lived there did not go with it: session open/close/pre-open alerts are now on the Strategy Sessions screen, and price alerts moved to My Terminal ▸ Settings with your other notification controls — where an account without Advanced Trading can finally reach them.',
+    ],
+  },
+  {
+    version: 'Beta V 6.82',
+    date: 'August 6, 2026',
+    notes: [
+      'Every Live Wall tile can now be zoomed on its own. While editing a layout, hover a tile and a small − 100% + control appears at the bottom of it: zoom out to fit more into the same tile, or in to make a chart or a figure readable across the room. The percentage button puts it back to 100%, and each tile’s zoom saves with the layout.',
+      'Fixed: an Open Positions tile on one of the ↕ views could not be resized taller or shorter — it locked itself to whatever height it already had, most visibly when you had no open positions. It now grows to fit your trades as intended while still letting you drag it to whatever height you want.',
+    ],
+  },
   {
     version: 'Beta V 6.81',
     date: 'August 6, 2026',

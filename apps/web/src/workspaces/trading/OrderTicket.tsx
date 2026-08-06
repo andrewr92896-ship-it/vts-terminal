@@ -103,6 +103,9 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const [priceText, setPriceText] = useState('');
   const [slText, setSlText] = useState('');
   const [tpText, setTpText] = useState('');
+  // Whether the stop/target fields take an absolute price or a distance from
+  // the entry in pips (points on anything that is not a currency pair).
+  const [protectMode, setProtectMode] = useState<'price' | 'dist'>('price');
   const [riskText, setRiskText] = useState('');
   const [quote, setQuote] = useState<DeskQuote | null>(null);
   const [quoteError, setQuoteError] = useState(false);
@@ -166,8 +169,9 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
 
   const units = Number(unitsText.replace(/[, ]/g, ''));
   const limitPrice = priceText.trim() === '' ? null : Number(priceText);
-  const stopLoss = slText.trim() === '' ? null : Number(slText);
-  const takeProfit = tpText.trim() === '' ? null : Number(tpText);
+  const typedNum = (t: string): number | null => (t.trim() === '' ? null : Number(t));
+  const slInput = typedNum(slText);
+  const tpInput = typedNum(tpText);
 
   // The price this order actually transacts at: a buy pays the ask, a sell hits
   // the bid, and a resting order works off its own trigger level.
@@ -194,6 +198,53 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const step = isForex ? pipSize : 1;
   const stepName = isForex ? 'pip' : 'point'; // "$1.00 / pip"
   const stepPlural = isForex ? 'pips' : 'pts'; // "43.5 pips", "1,355 pts"
+
+  // ---- Stop and target: a price, or a DISTANCE from the entry ---------------
+  // A trader sizes a stop in pips ("20 pips") far more often than in absolute
+  // price, and every other reading on this ticket is already in that unit — so
+  // the two fields take either, chosen by the toggle beside them. Points rather
+  // than pips on anything that is not a currency pair, which is the same single
+  // rule (`forexPair`) the rest of the desk scores by.
+  //
+  // **The order still carries PRICES.** The distance is converted here, against
+  // the very price the order will transact at — the ask for a buy, the bid for
+  // a sell, or a resting order's own trigger — which is exactly what the server
+  // validates the levels against, so the two cannot disagree.
+  const long = side === 'long';
+  // An over-precise price is rejected outright by both brokers, so rounding a
+  // derived level to the venue's own precision is validation, not tidying.
+  const roundPx = (v: number): number => Number(v.toFixed(spec?.displayPrecision ?? 5));
+  // Which way each level sits is NOT typed: a stop is on the losing side and a
+  // target on the winning one, which is the rule the server enforces anyway. So
+  // a distance is always read as a magnitude and a mistyped sign cannot put a
+  // stop above a long's entry.
+  const levelFromDistance = (d: number | null, kind: 'stop' | 'target'): number | null => {
+    if (d == null || !Number.isFinite(d) || reference == null) return null;
+    const away = kind === 'stop' ? (long ? -1 : 1) : long ? 1 : -1;
+    return roundPx(reference + away * Math.abs(d) * step);
+  };
+  const stopLoss = protectMode === 'price' ? slInput : levelFromDistance(slInput, 'stop');
+  const takeProfit = protectMode === 'price' ? tpInput : levelFromDistance(tpInput, 'target');
+  // A distance with nothing to measure from resolves to no level at all. That
+  // must not read as "no stop wanted" — see the `problem` check below.
+  const unresolved =
+    protectMode === 'dist' && ((slInput != null && stopLoss == null) || (tpInput != null && takeProfit == null));
+
+  // Switching units carries what is typed across rather than clearing it: the
+  // trader stated a level, and it is the same level in either unit.
+  const switchProtectMode = (next: 'price' | 'dist') => {
+    if (next === protectMode) return;
+    const carry = (text: string, kind: 'stop' | 'target'): string => {
+      const v = typedNum(text);
+      if (v == null || !Number.isFinite(v) || reference == null) return '';
+      if (next === 'dist') return String(Number((Math.abs(v - reference) / step).toFixed(1)));
+      const level = levelFromDistance(v, kind);
+      return level == null ? '' : String(level);
+    };
+    setSlText(carry(slText, 'stop'));
+    setTpText(carry(tpText, 'target'));
+    setProtectMode(next);
+  };
 
   // What one of those units is worth at this size, in the account's currency —
   // the figure a trader sizes by. Needs the quote for the currency conversion,
@@ -269,6 +320,14 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
     }
     if (type !== 'market' && (limitPrice == null || !Number.isFinite(limitPrice) || limitPrice <= 0)) {
       return 'Enter a trigger price';
+    }
+    // A distance typed with nothing to measure it from would otherwise send the
+    // order with no protection at all — the trader asked for a stop and would
+    // get a naked position. Refuse instead.
+    if (unresolved) {
+      return type === 'market'
+        ? 'Waiting for a price to measure the stop and target from'
+        : 'Enter the trigger price first — the stop and target are measured from it';
     }
     if (quote && !quote.tradeable) return `${instrument} is closed right now`;
     // A minimum order *value*, where the venue has one: a size above the size
@@ -461,27 +520,60 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         </div>
       </div>
 
-      {/* Stop / target. A venue that attaches only one of them to a fill says so
-          here rather than silently dropping the other at the exchange. */}
+      {/* Stop / target, in price or in distance from the entry. A venue that
+          attaches only one of them to a fill says so here rather than silently
+          dropping the other at the exchange. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', marginBottom: -4 }}>
+        <div style={unitToggle}>
+          {([
+            ['price', 'Price'],
+            ['dist', isForex ? 'Pips' : 'Points'],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              onClick={() => switchProtectMode(mode)}
+              style={{ ...unitBtn, ...(protectMode === mode ? unitBtnOn : null) }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
         <Field label="Stop loss">
-          <input value={slText} onChange={(e) => setSlText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
+          <input
+            value={slText}
+            onChange={(e) => setSlText(e.target.value)}
+            inputMode="decimal"
+            placeholder={protectMode === 'dist' ? stepPlural : '—'}
+            style={{ ...input, width: '100%', boxSizing: 'border-box' }}
+          />
           <SubReading
             money={riskMoney}
             steps={riskDistance == null ? null : Math.abs(riskDistance) / step}
             unit={stepPlural}
             ccy={account.currency}
             color={RED}
+            // Typing a distance, the useful reciprocal is the price it lands on
+            // — which is the level the broker will actually hold.
+            at={protectMode === 'dist' && stopLoss != null ? px(stopLoss) : null}
           />
         </Field>
         <Field label="Take profit">
-          <input value={tpText} onChange={(e) => setTpText(e.target.value)} inputMode="decimal" placeholder="—" style={{ ...input, width: '100%', boxSizing: 'border-box' }} />
+          <input
+            value={tpText}
+            onChange={(e) => setTpText(e.target.value)}
+            inputMode="decimal"
+            placeholder={protectMode === 'dist' ? stepPlural : '—'}
+            style={{ ...input, width: '100%', boxSizing: 'border-box' }}
+          />
           <SubReading
             money={rewardMoney}
             steps={rewardDistance == null ? null : Math.abs(rewardDistance) / step}
             unit={stepPlural}
             ccy={account.currency}
             color={GREEN}
+            at={protectMode === 'dist' && takeProfit != null ? px(takeProfit) : null}
           />
         </Field>
       </div>
@@ -760,19 +852,24 @@ function SubReading({
   unit,
   ccy,
   color,
+  at,
 }: {
   money: number | null;
   steps: number | null;
   unit: string;
   ccy: string;
   color: string;
+  /** The price a typed distance lands on, when the field is taking a distance. */
+  at?: string | null;
 }) {
-  if (money == null && steps == null) return <div style={{ height: 15 }} />;
+  if (money == null && steps == null && !at) return <div style={{ height: 15 }} />;
   return (
     <div style={{ fontSize: 10.5, color, marginTop: 4, fontFamily: MONO }}>
       {money != null ? fmtMoney(money, ccy) : ''}
-      {money != null && steps != null ? ' · ' : ''}
-      {steps != null ? `${fmtSteps(steps)} ${unit}` : ''}
+      {money != null && (steps != null || at) ? ' · ' : ''}
+      {/* Typing a distance, the distance is already on screen — the price is
+          the fact worth adding. Typing a price, it is the other way round. */}
+      {at ? at : steps != null ? `${fmtSteps(steps)} ${unit}` : ''}
     </div>
   );
 }
@@ -797,6 +894,11 @@ const segBtn: CSSProperties = { flex: 1, background: 'none', border: 'none', col
 const segActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 15, padding: '9px 11px', outline: 'none', fontFamily: MONO };
 const chip: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, color: '#dfe7fa', fontSize: 11.5, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: 'pointer' };
+// Price ⇄ pips for the stop and target pair. Small and to the right of the two
+// fields, since it governs both of them rather than either one.
+const unitToggle: CSSProperties = { display: 'inline-flex', background: 'rgba(255,255,255,.04)', border: `1px solid ${BORDER2}`, borderRadius: 7, overflow: 'hidden' };
+const unitBtn: CSSProperties = { background: 'none', border: 'none', color: MUTED, fontSize: 10.5, fontWeight: 700, letterSpacing: '.3px', padding: '4px 10px', cursor: 'pointer', fontFamily: 'inherit' };
+const unitBtnOn: CSSProperties = { background: 'rgba(235,203,116,.16)', color: GOLD };
 const summaryBox: CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '9px 12px', background: INPUT_BG, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '11px 12px' };
 const confirmBox: CSSProperties = { background: 'rgba(3,12,32,.75)', border: `1px solid ${BORDER2}`, borderRadius: 10, padding: 14 };
 const placeBtn: CSSProperties = { border: 'none', fontWeight: 700, fontSize: 13, padding: '12px 18px', borderRadius: 8, cursor: 'pointer', flex: 1 };

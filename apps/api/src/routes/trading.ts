@@ -1690,6 +1690,9 @@ const boardTileSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
   todoSectionId: z.string().trim().max(64).optional(),
   range: z.enum(['7d', '30d', '90d', 'all']).optional(),
+  // How large the tile's contents are drawn. Bounded rather than free so a
+  // hand-rolled board cannot save a tile at 40x and paint over the screen.
+  zoom: z.number().min(0.5).max(2).optional(),
 });
 // The wall carries far more kinds than it used to, so the cap is per board and
 // generous rather than tight — 40 was set when there were seven kinds to choose

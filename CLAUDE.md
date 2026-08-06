@@ -122,7 +122,7 @@ Agreed **lowest-liability** shape for that public launch (research done 2026-07)
 - **Before public launch:** Organization Apple account + D-U-N-S under the LLC;
   ToS + privacy policy; in-app account deletion (Guideline **5.1.1(v)**); AI-use
   disclosure; "informational only, not investment advice" disclaimers on
-  advice-flavored features (Trading Alerts, session bias, AI coaching); and a
+  advice-flavored features (session bias, AI coaching); and a
   **securities/fintech attorney** review of those advice-flavored features
   (potential RIA/CFTC-CTA exposure). Consider E&O/tech/cyber **insurance** to
   transfer residual liability. (None of this is legal advice.)
@@ -230,15 +230,26 @@ workspaces list** (see `theme/nav.ts` order).
     and the preset key is what a free account's remembered layout choice is
     stored against.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
-  its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
-  **Trade Desk** (`tradedesk` — placing real orders, see below), Trade History
-  (`desk` — **two tabs, Trade Log + Live Brokers**; legacy keys
-  `log`/`history`/`metrics` alias into it. **The key stayed `desk` through both
-  label changes** — "Trade Desk" → "Trade Analysis" (2026-08) → "Trade History"
-  (2026-08) — so the `howto.desk` wording and every in-app link keep pointing at
-  the review screen; the new placement screen took the *new* key `tradedesk`.
+  its parts are **paid** — see Memberships):
+  **Live Trades** (`tradedesk` — placing real orders, see below),
+  **Closed Trades & Metrics**
+  (`desk` — **ONE page**, the trade log with Live Brokers below it; legacy keys
+  `log`/`history`/`metrics` alias into it. **The key stayed `desk` through every
+  label change** — "Trade Desk" → "Trade Analysis" → "Trade History" → "Closed
+  Trades & Metrics" (all 2026-08) — so the `howto.desk` wording and every in-app
+  link keep pointing at the review screen; the placement screen took the *new*
+  key `tradedesk` and was itself renamed "Trade Desk" → "Live Trades" without
+  touching its key. **Rename a label, never a key** is the whole rule here.
   The file is `TradeHistory.tsx`; a search for the old names finds only patch
   notes, which are a dated record and stay as written.
+  **The heading matches the sidebar row exactly** — "Closed Trades & Metrics"
+  in both places. It briefly read "Trade History & Metrics" at the top; one
+  screen carries one name.
+  **Live Brokers stopped being a tab** (owner instruction, 2026-08): the two
+  answer one question between them — what the trades did, and what the accounts
+  behind them hold — and a tab meant only half the answer was ever on screen.
+  `DeskView` survives because `initialView` is still passed by in-app links;
+  every value lands on the one page and `brokers` scrolls to that panel.
   **History was removed** — owner decision, 2026-08: it listed the same closed
   trades the Trade Log already carried, from the same rows, so two screens
   answered one question and were free to disagree about it. Everything it had
@@ -256,9 +267,31 @@ workspaces list** (see `theme/nav.ts` order).
   Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
-  Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
-  Manual Trades (`funded` key, `FundedScreen`), **Funded Account**
-  (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below).
+  Open/close/pre-open notifications are opt-in from a card on this same screen
+  — see below),
+  Manual Trades (`funded` key, `FundedScreen`), **Funded Trades**
+  (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below.
+  Labelled "Funded Account" until 2026-08; the key, the opt-in and the paid
+  feature are all still `funded`/`prop`).
+  **The sidebar order here follows the TRADE'S LIFE, not the tier stacking**
+  (owner instruction, 2026-08): Live Trades → Closed Trades & Metrics → Funded
+  Trades → Manual Trades → Deleted Trades → Strategy Sessions. It is the one
+  workspace that does not stack Max → Premium → free, because a trader reads
+  these rows as a sequence rather than as a price list; Strategy Sessions comes
+  last as the only row that is not a record of trades.
+  **Trading Alerts (`alerts`) was REMOVED outright** (owner instruction,
+  2026-08) — the screen, its route, its how-to guide, its demo-tour step and
+  `Alerts.tsx` are gone, and the key routes nowhere. **Two things on it were
+  kept, because neither was a TradingView alert and each was the only way to
+  reach a real feature:** the **session open/close/pre-open settings** moved to
+  the Strategy Sessions screen, and **price alerts** moved to My Terminal ▸
+  Settings — a better home regardless, since a price alert is included with
+  every account and is deliberately not behind the desk opt-in, so on the old
+  screen an account without Advanced Trading could never reach it. Both live in
+  `workspaces/trading/alertSettings.tsx`. **The alert plumbing is untouched**:
+  the TradingView webhook, the `trading_alerts` table, the alert sound and the
+  Live Wall's Alerts tile all still work — so the wall can still show alerts
+  even though the section is gone.
   **To Do moved
   to My Terminal** (owner decision, 2026-08 — a to-do list is personal, not a
   desk instrument); its key is still `td_trading`, so in-app links keep working.
@@ -387,6 +420,26 @@ workspaces list** (see `theme/nav.ts` order).
       (`TradeCard.tsx`), which keeps more decimals the smaller the size — the
       default locale format prints 0.00042 of a bitcoin as "0". Keep all of this
       when adding stocks or another broker.
+    - **The stop and target take a PRICE or a DISTANCE**, chosen by the
+      Price/Pips toggle beside them (owner request, 2026-08) — "Points" on
+      anything that is not a currency pair, off the same `forexPair` switch as
+      everything above. Three rules carry it:
+      - **The order still carries prices.** A distance is converted in the
+        ticket against `reference` — the ask for a buy, the bid for a sell, a
+        resting order's own trigger — which is the very price the server
+        validates the levels against, so the two cannot disagree.
+      - **Direction is never typed.** A stop goes on the losing side and a
+        target on the winning one, derived from the side, so a mistyped sign
+        cannot put a stop above a long's entry. It also means flipping
+        long↔short re-derives both levels correctly instead of stranding a
+        price from the other side.
+      - **A derived level is rounded to the venue's `displayPrecision`**, since
+        an over-precise price is rejected outright by both brokers — validation,
+        not tidying. And a distance typed with **nothing to measure from** (a
+        limit order with no trigger yet) resolves to no level, which must never
+        read as "no stop wanted": `unresolved` refuses the order rather than
+        sending a naked position. Switching units converts what is already
+        typed rather than clearing it.
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
@@ -1946,6 +1999,62 @@ resize handle and the button is hidden. It is hover-revealed on a pointer device
 and permanently visible under `@media (hover: none)`, since a touch device gets
 no chance to discover a hover-only control.
 
+**Each tile carries its own zoom** (`BoardTile.zoom`, 0.5–2, absent = 1; owner
+request, 2026-08) — how large its contents are drawn, independently of how big
+the tile is on the board. Zoomed out a feed tile carries more rows in the same
+cell; zoomed in a chart or a P/L figure is legible across a room. Both are what a
+wall on a television is for.
+
+- **`transform: scale` on a box sized `1/z`, NEVER CSS `zoom`**, and that is the
+  whole implementation decision. `zoom` and a nested browsing context do not
+  compose in WebKit — the trap `global.css` documents and cancels for the
+  terminal's own zoom — so a per-tile `zoom` would leave the chart, watchlist and
+  live-stream embeds painted across a fraction of their tile with the browser's
+  white backdrop beside them, and **the global `#root iframe` rule cannot cancel
+  a factor it does not know about**. A transform scales the framed document
+  whole. Verified in Chromium that the embedded document re-lays out at the
+  compensated size (a 600px box at 70% frames a document 857px wide and paints it
+  down), which is what makes zooming out show *more* chart rather than a squashed
+  one.
+- The compensating width/height is what makes this a **zoom rather than a
+  shrink**: the content still lays out to fill the tile, so zooming out fits more
+  in. Without it the tile would just have smaller content and empty space.
+- **In the CELL, like the expand button**, for the same reason — a component per
+  tile kind, so this way every kind zooms with no per-tile change. The wrapper is
+  **always rendered**, identity styles and all: swapping it in and out with the
+  zoom changes the tree shape, which remounts the tile — and remounting a
+  TradingView embed reloads the chart on every press of the button.
+- The control is **bottom-centre and edit-mode only**: all four corners are
+  resize handles while editing, the header is what a tile is dragged by, and this
+  writes to the tile like every other tile setting — Save is what keeps it, and
+  Save only exists in edit mode. It is deliberately **not** applied to the
+  maximized overlay, which is already the "show me this bigger" action.
+- **A content-measured tile must scale its measurement** (`px * z` in
+  `ChartBoard`): the tile reports its height in its own stretched space, so the
+  rows the cell needs is that height *painted*.
+
+**A content-sized tile's measurement is a FLOOR, not a pin** (the positions tile
+in its `-expand` views). Two rules that read as one and are not:
+
+- The rule worth keeping is "every trade is visible without an inner scroll",
+  which only requires the cell never be **shorter** than the content (`minH`).
+  Pinning `maxH` to the same figure additionally forbade dragging the tile
+  **taller** — a different rule, never wanted, and a resize handle that refuses
+  to move reads as broken.
+- **Measure the CHILDREN, never the wrapper** (`PositionsTile`). The wrapper
+  carries `minHeight: 100%` so a near-empty tile still fills its cell, which
+  means its own `scrollHeight` is the CELL's height whenever the content is
+  shorter. Read that way, "how tall is the content" always answered "exactly as
+  tall as it already is", so the board pinned the cell to whatever height it
+  happened to have and the tile could not be resized in **either** direction —
+  the fault the owner hit on a tile showing no open positions. The body is
+  `flex: 0 0 auto` in this view, so the children are the real content, and the
+  `ResizeObserver` watches them for the same reason: the wrapper's box never
+  changes when a trade arrives, so an observer on it would simply never fire.
+- `onResizeStop` is then the **only** writer of such a tile's stored height —
+  `onLayoutChange` cannot tell a deliberate drag from a content reflow, so it
+  keeps ignoring `h` for them, and a drag is the trader stating what they want.
+
 **A layout can be published to the team** (`shared_team_id`, migration `0097`).
 `GET /api/trading/boards` answers with `{ boards, teamBoards, onTeam }` — one
 shape every board route returns via `boardsPayload`, so no route can hand the
@@ -2651,7 +2760,8 @@ for founders, software developers and admins — **Administrator chat**.
   table, one row per user): per-user opt-in toggles for **session open / close /
   pre-open** plus a `preOpenLeadMin` (1–240, default 30). Routes
   `GET|PUT /api/trading/session-alert-prefs`; UI is the collapsible "Strategy
-  session alerts" card at the top of the Trading Alerts screen (`Alerts.tsx`).
+  session alerts" card at the top of the Strategy Sessions screen
+  (`alertSettings.tsx`, rendered by `StrategySessions.tsx`).
   All default **off** (opt-in). The session watch reads these to fire a trader's
   own session notifications.
 

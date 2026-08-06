@@ -59,6 +59,11 @@ export interface BoardTile {
   todoSectionId?: string;
   // Trade History / closed-trade tiles — the window scored.
   range?: '7d' | '30d' | '90d' | 'all';
+  // How large this tile's contents are drawn, 0.5–2 (absent = 1). Below 1 the
+  // tile lays out in a bigger box and is painted down to fit, so it carries
+  // more; above 1 it carries less, larger. A display property of the tile, so
+  // it travels with the arrangement like every other tile setting.
+  zoom?: number;
 }
 
 export interface BoardLayout {

@@ -432,7 +432,11 @@ export function TradeLog() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <ScreenTitle>Trade Log</ScreenTitle>
+          {/* The heading for the whole review screen, which now carries the
+              broker capital below it as well (owner instruction, 2026-08 — it
+              read "Trade Log" when this was one of two tabs). It matches the
+              sidebar row exactly: one screen, one name. */}
+          <ScreenTitle>Closed Trades &amp; Metrics</ScreenTitle>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {traders.length > 1 && (

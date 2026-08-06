@@ -318,7 +318,7 @@ export function BrokerConnectionsPanel({ onChanged }: { onChanged?: () => void }
                 style={{ ...input, flex: '1 1 100%' }}
               />
               <div style={{ flex: '1 1 100%', fontSize: 11.5, color: FAINT, lineHeight: 1.5 }}>
-                For the Trade Desk the key needs Query funds, Query open orders &amp; trades, and Create
+                For Live Trades the key needs Query funds, Query open orders &amp; trades, and Create
                 &amp; modify orders. Leave margin trading off — the desk trades Kraken spot only and never
                 asks for leverage. Without the order permission the connection still works read-only.
               </div>
@@ -357,7 +357,7 @@ const PURPOSE_LABELS: Record<CredentialAuditPurpose, string> = {
   order_close: 'Position closed',
   order_amend: 'Stop or target changed',
   order_cancel: 'Order cancelled',
-  desk_read: 'Trade Desk opened',
+  desk_read: 'Live Trades opened',
   holdings: 'Holdings read',
   quotes: 'Prices read',
   wall_read: 'Live Wall refresh',

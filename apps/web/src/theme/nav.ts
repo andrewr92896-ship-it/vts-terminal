@@ -76,7 +76,14 @@ export const NAV: NavWorkspace[] = [
   // keys and their routes are unchanged, so the howto wording and every in-app
   // link still resolve.)
   // Advanced Trading — opt-in (My Terminal ▸ Premium Features). The desk: placing
-  // trades, reviewing them, alerts, sessions, and the hand-kept manual book.
+  // trades, reviewing them, sessions, and the hand-kept manual book.
+  //
+  // **This list is ordered by the TRADE'S OWN LIFE, not by tier** (owner
+  // instruction, 2026-08): what is open now, what is closed and what it scored,
+  // then the funded book, the hand-kept book, and what was thrown away. It is
+  // the one workspace that does not stack Max → Premium → free, because a
+  // trader reads these rows as a sequence rather than as a price list. Strategy
+  // Sessions follows them: it is a plan for trading rather than a record of it.
   {
     key: 'trading',
     label: 'Advanced Trading',
@@ -84,23 +91,34 @@ export const NAV: NavWorkspace[] = [
     accent: C.gold,
     group: 'Advanced Trading',
     sections: [
-      // Max — placing an order. The section key is `tradedesk`; `desk` below is
-      // the review screen that used to carry this name, and keeps its key so
-      // saved sidebar orders, how-to wording and in-app links stay pointed at it.
-      { key: 'tradedesk', label: 'Trade Desk', icon: 'zap' },
-      // Premium.
-      { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
+      // Placing an order and watching what is open. Renamed from "Trade Desk"
+      // (owner, 2026-08); the key stays `tradedesk`, as `desk` below stayed
+      // `desk` through its own two renames — rename a label, never a key.
+      { key: 'tradedesk', label: 'Live Trades', icon: 'zap' },
+      // The review screen: the closed trades and what they scored, with the
+      // connected brokers' capital on the same page (the Live Brokers tab was
+      // folded in, owner instruction 2026-08). Key unchanged through "Trade
+      // Desk" → "Trade Analysis" → "Trade History" → this, so `howto.desk` and
+      // every in-app link still resolve.
+      { key: 'desk', label: 'Closed Trades & Metrics', icon: 'candlestick-chart' },
       // The nested opt-in: shown only when Funded Account is turned on as well
       // (see FUNDED_ONLY_SECTIONS + the sidebar filter). Never shown to the demo.
-      { key: 'prop', label: 'Funded Account', icon: 'shield-check' },
-      // Free with the desk opt-in.
-      { key: 'alerts', label: 'Trading Alerts', icon: 'bell' },
-      { key: 'desk', label: 'Trade History', icon: 'candlestick-chart' },
+      { key: 'prop', label: 'Funded Trades', icon: 'shield-check' },
       // Manual Trades is a plain Advanced Trading section — your own book, kept
       // by hand. It is deliberately independent of the Funded opt-in above:
       // plenty of traders keep a manual book without ever running a challenge.
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
       { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
+      // Premium. Last because it is the one row here that is not a record of
+      // trades.
+      { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
+      // (Trading Alerts was removed outright — owner instruction, 2026-08. The
+      // two settings that lived on it and had no other home moved rather than
+      // going with it: the session open/close/pre-open alerts are on Strategy
+      // Sessions, and price alerts are in My Terminal ▸ Settings beside the
+      // other notification controls. The TradingView alert feed, its screen and
+      // its how-to entry are gone; the webhook, the `trading_alerts` table and
+      // the Live Wall's Alerts tile are untouched.)
     ],
   },
   // Finances (green) — personal money for an ordinary person: what you are worth

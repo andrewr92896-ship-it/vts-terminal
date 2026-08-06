@@ -295,7 +295,7 @@ export function DeskSettingsModal({
             borderBottom: `1px solid ${BORDER2}`,
           }}
         >
-          <strong style={{ fontSize: 15, color: '#fff' }}>Trade Desk Settings</strong>
+          <strong style={{ fontSize: 15, color: '#fff' }}>Trade Settings</strong>
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: MUTED, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>
             ×
           </button>

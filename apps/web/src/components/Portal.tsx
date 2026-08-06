@@ -60,7 +60,6 @@ import { HelpRules, HelpTerms, HelpPrivacy } from '../workspaces/help/LegalScree
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradeDesk } from '../workspaces/trading/TradeDesk';
 import { TradeHistory } from '../workspaces/trading/TradeHistory';
-import { Alerts } from '../workspaces/trading/Alerts';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
 import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
@@ -134,11 +133,13 @@ function renderScreen(
   switch (screen) {
     case 'live':
       return <LiveWall onOpenMembership={() => onNavigate('my_access')} />;
-    case 'alerts':
-      return <Alerts onNavigate={onNavigate} />;
-    // Placing trades (Trade Desk) and reviewing them (Trade History) are two
-    // screens. `desk` stays on the review screen, which is what that key has
-    // always routed to.
+    // (`alerts` — Trading Alerts — was removed outright, owner instruction
+    // 2026-08. The key routes nowhere and falls through to the placeholder,
+    // which is correct: the screen is gone rather than moved, so there is
+    // nothing for a stale link to land on.)
+    // Placing trades (Live Trades) and reviewing them (Closed Trades & Metrics)
+    // are two screens. `desk` stays on the review screen, which is what that key
+    // has always routed to.
     case 'tradedesk':
       return <TradeDesk />;
     case 'desk':

@@ -206,7 +206,7 @@ export function TradeDesk() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <ScreenTitle>Trade Desk</ScreenTitle>
+          <ScreenTitle>Live Trades</ScreenTitle>
           <span style={{ fontSize: 11.5, color: FAINT }}>{"Place trades on your own account, beside your open book"}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -257,7 +257,7 @@ export function TradeDesk() {
         <div style={{ ...panel, marginBottom: 14 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 6 }}>{"No tradeable account connected"}</div>
           <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.6, marginBottom: 12 }}>
-            {"The Trade Desk places orders through your own broker account — OANDA for forex, Kraken for crypto. Add one under Connections and it will appear here. Your keys are encrypted on the server and never sent to the browser."}
+            {"Orders are placed through your own broker account — OANDA for forex, Kraken for crypto. Add one under Connections and it will appear here. Your keys are encrypted on the server and never sent to the browser."}
           </div>
           <div style={{ fontSize: 11.5, color: FAINT, lineHeight: 1.6, marginBottom: 12 }}>
             {"A Kraken key needs the ‘Query funds’, ‘Query open orders & trades’ and ‘Create & modify orders’ permissions. It does not need margin trading, and the desk never asks Kraken for leverage."}

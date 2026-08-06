@@ -9,6 +9,7 @@ import { useCheckForUpdates } from '../../hooks/useCheckForUpdates';
 import { useAuth } from '../../auth/AuthContext';
 import { canAccessWorkspace } from '../../auth/access';
 import { NotificationsConnectionsPanel } from '../../components/DeviceSettings';
+import { PriceAlertSettings } from '../trading/alertSettings';
 import { SectionHeader, panel, panelLabel } from '../admin/adminUi';
 
 function brokerDotColor(status: BrokerStatus['status']): string {
@@ -244,6 +245,13 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
             {"Notifications &amp; connections"}
           </div>
           <NotificationsConnectionsPanel theme={theme} />
+          {/* Price alerts. They were on the Trading Alerts screen, which was
+              removed (owner instruction, 2026-08) — and this is the better home
+              for them regardless: a price alert is included with every account
+              and is deliberately not behind the Advanced Trading opt-in, so on
+              that screen an account without the desk could never reach it. The
+              demo is excluded because every write of its own would be refused. */}
+          {!user?.isDemo && <PriceAlertSettings />}
         </section>
 
         {/* App updates */}
