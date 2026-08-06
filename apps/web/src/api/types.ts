@@ -878,7 +878,14 @@ export interface ChallengeMetrics {
   breaches: { target: boolean; daily: boolean; max: boolean };
 }
 
+// One funded (prop-firm) account. There can be several — the trader's own, and
+// their teammates' on a desk holding the Trading Teams grant. `isMine` is the
+// server's answer to "may I edit this", not a UI convenience.
 export interface ChallengeData {
+  id: string;
+  ownerId: string;
+  owner: string;
+  isMine: boolean;
   label: string;
   trailing: boolean;
   startedAt: number;
@@ -891,6 +898,11 @@ export interface ChallengeData {
   peakEquity: number | null;
   dayStartEquity: number | null;
   metrics: ChallengeMetrics;
+}
+
+// Every funded account the viewer may see, their own first.
+export interface ChallengesData {
+  challenges: ChallengeData[];
 }
 
 export interface ChallengeInput {
@@ -976,6 +988,12 @@ export interface FundedTrade {
 }
 export interface FundedAccount {
   id: string;
+  // Whose account this is. The funded book is shared across a desk holding the
+  // Trading Teams grant, so a card says whose it is; `isMine` is the server's
+  // answer to "may I edit this".
+  ownerId: string;
+  owner: string;
+  isMine: boolean;
   platform: string;
   label: string;
   currency: string;

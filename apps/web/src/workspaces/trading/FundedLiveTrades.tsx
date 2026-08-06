@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
-import { useLivePrices, type LiveMark } from './useLivePrices';
+import { type LiveMark, type LivePrices } from './useLivePrices';
 import { etStamp, etStampFull, etSince } from './tradeTime';
 import type { FundedAccount, FundedData, FundedTrade } from '../../api/types';
 
@@ -43,23 +43,28 @@ interface OpenRow {
 
 // A read-only viewer never gets funded data (the API is write-gated), so this is
 // only ever rendered for a full trader — `readOnly` just hides the write buttons.
-export function FundedLiveTrades({ showMoney, readOnly }: { showMoney: boolean; readOnly: boolean }) {
-  const live = useLivePrices();
-  const [data, setData] = useState<FundedData | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+//
+// The book and the wall's marks are owned by the Funded screen and handed down,
+// so the stats, this table and the past-trades list read one copy: closing a
+// trade here updates the metrics above it, and the screen polls the Live Wall
+// once rather than once per card.
+export function FundedLiveTrades({
+  data,
+  loadError,
+  live,
+  onData,
+  showMoney,
+  readOnly,
+}: {
+  data: FundedData | null;
+  loadError: string | null;
+  live: LivePrices;
+  onData: (d: FundedData) => void;
+  showMoney: boolean;
+  readOnly: boolean;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [tracking, setTracking] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    api
-      .funded()
-      .then((d) => alive && setData(d))
-      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load funded trades'));
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const openRows: OpenRow[] = data
     ? data.accounts.flatMap((a) => a.trades.filter((t) => t.status === 'open').map((t) => ({ trade: t, account: a })))
@@ -71,8 +76,9 @@ export function FundedLiveTrades({ showMoney, readOnly }: { showMoney: boolean; 
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>Live funded trades</div>
           <div style={{ fontSize: 11, color: FAINT, marginTop: 4, maxWidth: 560 }}>
-            Open positions on your funded accounts, marked against the desk’s live price. Close a trade by pasting or
-            uploading its result screenshot — VTS AI reads the exit and P/L, adjusts the trade, and closes it.
+            Open positions on the desk’s funded accounts, marked against the live price. Close a trade by pasting or
+            uploading its result screenshot — VTS AI reads the exit and P/L, adjusts the trade, and closes it. Only the
+            trader who owns a position can close it.
           </div>
         </div>
         {!readOnly && data && (
@@ -85,9 +91,10 @@ export function FundedLiveTrades({ showMoney, readOnly }: { showMoney: boolean; 
       {error && <div onClick={() => setError(null)} style={warnBanner}>{error} — click to dismiss.</div>}
 
       {!readOnly && tracking && data && (
+        // Only the caller's own accounts can be posted to.
         <TrackLivePanel
-          accounts={data.accounts}
-          onData={setData}
+          accounts={data.accounts.filter((a) => a.isMine)}
+          onData={onData}
           onError={setError}
           onDone={() => setTracking(false)}
         />
@@ -121,9 +128,12 @@ export function FundedLiveTrades({ showMoney, readOnly }: { showMoney: boolean; 
               trade={trade}
               account={account}
               showMoney={showMoney}
-              readOnly={readOnly}
+              // A teammate's position is watch-only: the server refuses a close
+              // or a stop change on a row the caller does not own, so the row
+              // must not offer either.
+              readOnly={readOnly || !account.isMine}
               liveMark={live.priceFor(trade.instrument)}
-              onData={setData}
+              onData={onData}
               onError={setError}
             />
           ))}
@@ -232,7 +242,10 @@ function LiveTradeRow({
         <span style={{ flex: '1 1 120px', fontWeight: 600, color: TEXT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {trade.instrument}
           <span style={openPill} title="Open position — marked live against the desk price">OPEN</span>
-          <span style={{ color: FAINT, fontWeight: 400, fontSize: 10 }}>{account.label}</span>
+          <span style={{ color: FAINT, fontWeight: 400, fontSize: 10 }}>
+            {account.label}
+            {!account.isMine && ` · ${account.owner}`}
+          </span>
         </span>
         <span style={{ ...col, color: long ? GREEN : RED, fontWeight: 700 }}>{long ? 'L' : 'S'}</span>
         <span style={col}>{fmtPrice(trade.entryPrice)}</span>

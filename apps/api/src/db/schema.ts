@@ -357,9 +357,16 @@ export type ManualPositionRow = typeof manualPositions.$inferSelect;
 // target percentages are stored as basis points (1000 = 10%); money is stored
 // as reals (challenge equity is tracked to the cent). Equity is maintained by
 // the trader (FTP has no API) or pulled from the Trade Log.
+// A funded (prop-firm) account: its size, its target, and the two drawdown
+// floors that end it. There can be SEVERAL per trader and several per desk —
+// `user_id` was the primary key until migration 0108, which said "one per
+// person" when the truth is that a trader can run more than one prop account and
+// a desk can have a trader on each of its own. Owner-written, team-readable:
+// reads resolve through visibleTraderIds, writes always check the owner.
 export const tradingChallenges = sqliteTable('trading_challenges', {
+  id: text('id').primaryKey(),
   userId: text('user_id')
-    .primaryKey()
+    .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   label: text('label').notNull().default('FTP Challenge'),
   accountSize: real('account_size').notNull().default(200000),

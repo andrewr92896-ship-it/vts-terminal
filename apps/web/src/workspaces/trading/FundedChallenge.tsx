@@ -6,7 +6,10 @@ import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
 import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
 import { FundedLiveTrades } from './FundedLiveTrades';
-import type { ChallengeData, ChallengeInput } from '../../api/types';
+import { FundedPastTrades } from './FundedPastTrades';
+import { FundedStats } from './FundedStats';
+import { useLivePrices } from './useLivePrices';
+import type { ChallengeData, ChallengeInput, FundedData } from '../../api/types';
 
 // The private Funded section: a prop-firm challenge dashboard (equity vs. target
 // + daily / max drawdown buffers). Revealed only to holders of the admin-assigned
@@ -41,76 +44,56 @@ const STATUS: Record<ChallengeData['metrics']['status'], { label: string; color:
   breached: { label: 'Breached', color: RED },
 };
 
+// The Funded screen: every funded account the trader's desk is running.
+//
+// **A funded account is shared with the team and owned by one trader.** The
+// server answers with the caller's own accounts plus their teammates' — the
+// latter only on a desk holding the Trading Teams grant, so an ordinary account
+// still sees exactly its own. A teammate's card is watch-only, and that is
+// enforced on the server (every write matches the account against the caller);
+// `isMine` only decides whether the controls are drawn at all.
 export function FundedChallengeScreen() {
-  const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
   const { user } = useAuth();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
-  const [data, setData] = useState<ChallengeData | null>(null);
+  const [challenges, setChallenges] = useState<ChallengeData[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [hideMoney, setHideMoney] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [shotBusy, setShotBusy] = useState(false);
-  const [shotMsg, setShotMsg] = useState<string | null>(null);
   const ai = useAiBrief(api.tradingMetricsBrief);
 
   useEffect(() => {
     let alive = true;
-    api.tradingChallenge().then((d) => alive && setData(d)).catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load'));
+    api
+      .tradingChallenges()
+      .then((d) => alive && setChallenges(d.challenges))
+      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load'));
     return () => { alive = false; };
   }, []);
 
-  // Ctrl/Cmd+V anywhere on this screen reads a balance off the pasted screenshot.
-  useEffect(() => {
-    if (readOnly) return;
-    const onPaste = (e: ClipboardEvent) => {
-      const file = imageFromPasteEvent(e);
-      if (file) { e.preventDefault(); readBalanceShot(file); }
-    };
-    window.addEventListener('paste', onPaste);
-    return () => window.removeEventListener('paste', onPaste);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly]);
+  // One card's save/sync/screenshot, folded back into the list by id so the
+  // other accounts on screen are left exactly as they were.
+  function replace(next: ChallengeData) {
+    setChallenges((list) => (list ?? []).map((c) => (c.id === next.id ? next : c)));
+  }
 
-  async function run(p: Promise<ChallengeData>) {
+  async function runList(p: Promise<{ challenges: ChallengeData[] }>) {
     setBusy(true);
-    try { setData(await p); setActionError(null); return true; }
+    try { setChallenges((await p).challenges); setActionError(null); return true; }
     catch (e) { setActionError(e instanceof ApiError ? e.message : 'Action failed'); return false; }
     finally { setBusy(false); }
   }
 
-  // Read the current balance off an account screenshot and set the equity.
-  function readBalanceShot(file: File | null | undefined) {
-    if (!file || !file.type.startsWith('image/')) return;
-    setShotMsg(null);
-    const reader = new FileReader();
-    reader.onload = async () => {
-      setShotBusy(true);
-      setActionError(null);
-      try {
-        const res = await api.analyzeChallengeBalance({ imageBase64: reader.result as string, mediaType: file.type });
-        setData(res.challenge);
-        const read = res.parsed.equity ?? res.parsed.balance;
-        setShotMsg(read != null ? `Equity set to ${usd(read)} — ${res.parsed.summary}` : res.parsed.summary);
-      } catch (e) {
-        setActionError(e instanceof ApiError ? e.message : 'Could not read that screenshot');
-      } finally {
-        setShotBusy(false);
-      }
-    };
-    reader.readAsDataURL(file);
-  }
-
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading challenge…"}</div>;
+  if (!challenges) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading funded accounts…"}</div>;
 
-  const canSee = data.canSeeBalances;
-  const showMoney = canSee && !privacy && !hideMoney; // challenge figures (brokerage-view gated)
-  const m = data.metrics;
-  const st = STATUS[m.status];
-  const dollars = (n: number | null) => (n == null ? '—' : showMoney ? usd(n) : '•••••');
+  // The brokerage-view gate is the same answer on every card, so the page-level
+  // money toggle reads it off the first.
+  const canSee = challenges[0]?.canSeeBalances ?? true;
+  const showMoney = canSee && !privacy && !hideMoney;
+  const mine = challenges.filter((c) => c.isMine);
+  const theirs = challenges.filter((c) => !c.isMine);
 
   return (
     <div style={{ maxWidth: 1080, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
@@ -118,19 +101,22 @@ export function FundedChallengeScreen() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{"Funded"}</h2>
-            <span style={{ ...pill, color: st.color, border: `1px solid ${st.color}` }}>{data.label} · {st.label}</span>
             <span style={privatePill} title="Private section — visible only to accounts an admin has granted the Funded role">{"Private"}</span>
           </div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-            Your {data.label} prop-firm challenge in one place
-            ({canSee ? `${usd(data.accountSize ?? 0)} account` : 'funded account'} · {data.targetPct}% target · {data.dailyDdPct}% daily / {data.maxDdPct}% {data.trailing ? 'trailing' : 'max'} drawdown).
-            Hand-logged trades live on the Manual Trades tab.
+            {theirs.length > 0
+              ? `Your desk’s prop-firm accounts — ${mine.length} of yours and ${theirs.length} of your teammates’. You can watch theirs; only they can change them.`
+              : 'Your prop-firm accounts — equity against target, and how much drawdown is left on each.'}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
-          {!readOnly && <button onClick={() => setEditing((v) => !v)} style={goldBtn}>{editing ? "Close" : "Edit"}</button>}
+          {!readOnly && (
+            <button onClick={() => void runList(api.addChallenge())} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>
+              {"＋ Add a funded account"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -139,21 +125,157 @@ export function FundedChallengeScreen() {
 
       {actionError && <div onClick={() => setActionError(null)} style={banner}>{actionError} — click to dismiss.</div>}
 
-      {editing && (
+      <div style={{ display: 'grid', gap: 18 }}>
+        {challenges.map((c) => (
+          <ChallengeCard
+            key={c.id}
+            data={c}
+            showMoney={showMoney}
+            readOnly={readOnly}
+            // Only the trader's own single account takes a window-wide paste:
+            // with several on screen, a paste that silently lands on one of them
+            // is a trap rather than a shortcut.
+            windowPaste={c.isMine && mine.length === 1}
+            onChanged={replace}
+            onRemoved={() => runList(api.removeChallenge(c.id))}
+            onError={setActionError}
+          />
+        ))}
+      </div>
+
+      {/* The funded book: its own stats, its open positions, and its completed
+          trades — shared across the desk the same way the accounts above are.
+          Only for full traders — the funded book is write-gated, so a read-only
+          viewer would get a 403 and an empty card. */}
+      {!readOnly && <FundedBook showMoney={showMoney} readOnly={readOnly} />}
+
+      {!canSee && (
+        <div style={{ ...panel, marginTop: 14, fontSize: 12, color: MUTED }}>
+          {"Dollar figures are hidden because your account doesn’t have the brokerage-view permission. Targets and drawdown buffers are still shown as percentages."}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// One funded account: its equity against target, its two drawdown floors, and —
+// when the viewer owns it — the controls that keep it current.
+function ChallengeCard({
+  data,
+  showMoney,
+  readOnly,
+  windowPaste,
+  onChanged,
+  onRemoved,
+  onError,
+}: {
+  data: ChallengeData;
+  showMoney: boolean;
+  readOnly: boolean;
+  windowPaste: boolean;
+  onChanged: (c: ChallengeData) => void;
+  onRemoved: () => void;
+  onError: (e: string | null) => void;
+}) {
+  const { isPhone } = useResponsive();
+  const [editing, setEditing] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [shotBusy, setShotBusy] = useState(false);
+  const [shotMsg, setShotMsg] = useState<string | null>(null);
+  const canWrite = data.isMine && !readOnly;
+
+  // Read the current balance off an account screenshot and set this account's
+  // equity from it.
+  function readBalanceShot(file: File | null | undefined) {
+    if (!file || !file.type.startsWith('image/') || !canWrite) return;
+    setShotMsg(null);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setShotBusy(true);
+      onError(null);
+      try {
+        const res = await api.analyzeChallengeBalance(data.id, { imageBase64: reader.result as string, mediaType: file.type });
+        onChanged(res.challenge);
+        const read = res.parsed.equity ?? res.parsed.balance;
+        setShotMsg(read != null ? `Equity set to ${usd(read)} — ${res.parsed.summary}` : res.parsed.summary);
+      } catch (e) {
+        onError(e instanceof ApiError ? e.message : 'Could not read that screenshot');
+      } finally {
+        setShotBusy(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Ctrl/Cmd+V anywhere on the screen reads a balance onto this account — only
+  // when it is the trader's one and only, so the paste has a single obvious home.
+  useEffect(() => {
+    if (!canWrite || !windowPaste) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const file = imageFromPasteEvent(e);
+      if (file) { e.preventDefault(); readBalanceShot(file); }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canWrite, windowPaste, data.id]);
+
+  async function run(p: Promise<ChallengeData>) {
+    setBusy(true);
+    try { onChanged(await p); onError(null); return true; }
+    catch (e) { onError(e instanceof ApiError ? e.message : 'Action failed'); return false; }
+    finally { setBusy(false); }
+  }
+
+  const canSee = data.canSeeBalances;
+  const m = data.metrics;
+  const st = STATUS[m.status];
+  const dollars = (n: number | null) => (n == null ? '—' : showMoney ? usd(n) : '•••••');
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>{data.label}</span>
+          <span style={{ ...pill, color: st.color, border: `1px solid ${st.color}` }}>{st.label}</span>
+          {/* Whose account this is. Only drawn on a teammate's — labelling your
+              own "you" on a solo desk is noise. */}
+          {!data.isMine && <span style={ownerPill}>{data.owner}</span>}
+          <span style={{ fontSize: 11, color: FAINT }}>
+            {canSee ? `${usd(data.accountSize ?? 0)} account` : 'funded account'} · {data.targetPct}% target ·{' '}
+            {data.dailyDdPct}% daily / {data.maxDdPct}% {data.trailing ? 'trailing' : 'max'}
+          </span>
+        </div>
+        {canWrite && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button onClick={() => setEditing((v) => !v)} style={ghostBtn}>{editing ? 'Close' : 'Edit'}</button>
+            <button
+              onClick={() => {
+                if (window.confirm(`Remove the “${data.label}” funded account? Its settings and equity go with it.`)) onRemoved();
+              }}
+              style={{ ...ghostBtn, color: '#cf6a78' }}
+            >
+              {"Remove"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {editing && canWrite && (
         <ChallengeForm
           data={data}
           busy={busy}
-          onSave={async (patch) => { if (await run(api.updateChallenge(patch))) setEditing(false); }}
-          onSync={() => run(api.syncChallengeEquity())}
+          onSave={async (patch) => { if (await run(api.updateChallenge(data.id, patch))) setEditing(false); }}
+          onSync={() => run(api.syncChallengeEquity(data.id))}
         />
       )}
 
-      {!readOnly && (
+      {canWrite && (
         <div style={{ ...panel, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <div style={{ flex: '1 1 240px' }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: TEXT }}>{"Update balance from a screenshot"}</div>
             <div style={{ fontSize: 11, color: FAINT, marginTop: 3 }}>
-              {"No API here — upload or paste (⌘/Ctrl+V) a screenshot of your account and VTS AI reads the balance, then sets your equity here."}
+              {"No API here — VTS AI reads the balance off a screenshot of your account and sets this equity from it."}
             </div>
             {shotMsg && <div style={{ fontSize: 11.5, color: GREEN, marginTop: 6 }}>{shotMsg}</div>}
           </div>
@@ -162,7 +284,7 @@ export function FundedChallengeScreen() {
               onClick={async () => {
                 const file = await readClipboardImage();
                 if (file) readBalanceShot(file);
-                else setActionError('No image found on the clipboard — copy a screenshot first, or use Upload.');
+                else onError('No image found on the clipboard — copy a screenshot first, or use Upload.');
               }}
               disabled={shotBusy}
               style={{ ...ghostBtn, opacity: shotBusy ? 0.6 : 1 }}
@@ -209,17 +331,43 @@ export function FundedChallengeScreen() {
         <Gauge title="Max Drawdown" subtitle={`${data.trailing ? 'Trailing' : 'Static'} · ${data.maxDdPct}%`} floorLabel="Floor" floor={dollars(m.maxFloor)} headroom={dollars(m.maxHeadroom)} headroomPct={m.maxHeadroomPct} breached={m.breaches.max} canSee={canSee} showMoney={showMoney} />
         <Gauge title="Daily Drawdown" subtitle={`Resets daily · ${data.dailyDdPct}%`} floorLabel="Today's floor" floor={dollars(m.dailyFloor)} headroom={dollars(m.dailyHeadroom)} headroomPct={m.dailyHeadroomPct} breached={m.breaches.daily} canSee={canSee} showMoney={showMoney} />
       </div>
-
-      {/* Live funded trades: open positions marked live, closed from a result
-          screenshot. Only for full traders — the funded book is write-gated. */}
-      {!readOnly && <FundedLiveTrades showMoney={showMoney} readOnly={readOnly} />}
-
-      {!canSee && (
-        <div style={{ ...panel, marginTop: 14, fontSize: 12, color: MUTED }}>
-          {"Dollar figures are hidden because your account doesn’t have the brokerage-view permission. Targets and drawdown buffers are still shown as percentages."}
-        </div>
-      )}
     </div>
+  );
+}
+
+// The funded book, on one copy of the data.
+//
+// The three cards below all read the same trades — the stats score them, the
+// live card watches the open ones, the past card lists the closed ones — so the
+// fetch lives here rather than in each. Closing a trade from the live card
+// therefore moves the win rate above it in the same render, and the screen polls
+// the Live Wall once instead of once per card.
+//
+// These figures are the FUNDED account alone. A funded trade never reconciles
+// into trading_positions, so it reaches neither the Trade Log nor Live Brokers,
+// and nothing here is ever added to the desk's own numbers.
+function FundedBook({ showMoney, readOnly }: { showMoney: boolean; readOnly: boolean }) {
+  const live = useLivePrices();
+  const [data, setData] = useState<FundedData | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .funded()
+      .then((d) => alive && setData(d))
+      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load funded trades'));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return (
+    <>
+      {data && <FundedStats accounts={data.accounts} showMoney={showMoney} live={live} />}
+      <FundedLiveTrades data={data} loadError={loadError} live={live} onData={setData} showMoney={showMoney} readOnly={readOnly} />
+      <FundedPastTrades data={data} loadError={loadError} onData={setData} showMoney={showMoney} readOnly={readOnly} />
+    </>
   );
 }
 
@@ -327,6 +475,8 @@ const label: CSSProperties = { fontSize: 10, letterSpacing: '0.6px', textTransfo
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const pill: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', borderRadius: 5, padding: '2px 8px' };
 const privatePill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, background: 'rgba(159,176,214,.1)', border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 8px' };
+// Whose account a card is — drawn only on a teammate's.
+const ownerPill: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.4px', color: '#bcd0ff', background: 'rgba(90,200,250,.1)', border: '1px solid rgba(90,200,250,.35)', borderRadius: 5, padding: '2px 8px' };
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '8px 14px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const banner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };

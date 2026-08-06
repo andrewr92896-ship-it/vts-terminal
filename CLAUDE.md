@@ -146,7 +146,7 @@ Tech:
 
 - **DB:** SQLite via **Drizzle ORM** on the **libsql** driver (`@libsql/client`);
   file at `DATABASE_URL` (default `file:./data/vts.db`; prod uses a Railway
-  volume). Schema in `apps/api/src/db/schema.ts`; ~86 SQL migrations in
+  volume). Schema in `apps/api/src/db/schema.ts`; ~108 SQL migrations in
   `apps/api/migrations` (`db:migrate`), seed with `db:seed`. Per-user deletes
   are **explicit** in `admin/service.ts` (no `ON DELETE CASCADE`) — when you add
   a per-user table, add it to that delete list too.
@@ -258,7 +258,8 @@ workspaces list** (see `theme/nav.ts` order).
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
   Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
   Manual Trades (`funded` key, `FundedScreen`), **Funded Account**
-  (`prop` key — the nested opt-in; prop-firm challenge dashboard). **To Do moved
+  (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below).
+  **To Do moved
   to My Terminal** (owner decision, 2026-08 — a to-do list is personal, not a
   desk instrument); its key is still `td_trading`, so in-app links keep working.
   Market Data and Market News left this workspace long ago and now live in **My
@@ -412,6 +413,69 @@ workspaces list** (see `theme/nav.ts` order).
       team surface had vanished. `isDeskLead` and `canEditDeskSettingsFor` both
       check the grant now. Admins are unaffected — their reach never depended on
       a team.
+  - **A funded account is SHARED WITH THE TEAM and owned by ONE TRADER, and
+    there can be SEVERAL** (owner decision, 2026-08). `trading_challenges` was
+    keyed by `user_id` as its primary key, which said "one prop account per
+    person" — wrong twice over, since a trader can run more than one at a time
+    and a desk can have a trader on each of their own. Migration `0108` rebuilds
+    the table with its own `id` and `user_id` as an ordinary owner column; the
+    existing row keeps `id = user_id`, so nothing stored changes hands.
+    - **Reads resolve through `visibleTraderIds`, writes match the caller.**
+      That is the whole access model, and it means the sharing cannot reach
+      anybody who was not deliberately given the **Trading Teams grant** — a
+      public signup resolves to itself by construction rather than by a filter
+      somebody has to remember. `listChallenges` returns the caller's accounts
+      first, then their teammates'; every write (`updateChallenge`,
+      `removeChallenge`, `syncEquityFromTradeLog`, the balance screenshot) takes
+      the account id **and** the caller and matches on both, answering **404
+      rather than 403** so an id the caller does not own cannot be probed for.
+      A teammate's card is watch-only because no write path can reach it, not
+      because the screen hides a button.
+    - **The funded BOOK is shared the same way** (`getFunded` over
+      `visibleTraderIdsForUser`): a teammate's Manual Trades accounts and their
+      trades appear, owner-tagged (`ownerId` / `owner` / `isMine`), and every
+      write still resolves ownership from the caller. Two deletes were tightened
+      when this landed — `removeFundedTrade` and `removeFundedAccount` used to
+      delete with the owner in the `WHERE` clause, which **silently matched
+      nothing** on a teammate's row and answered 200. That was invisible while
+      the book was self-only (no teammate could learn an id to aim at) and is a
+      lie the client would repeat now that the desk reads each other's books.
+      Look the row up, then refuse.
+    - **A new account's equity, peak and day-start all start AT its account
+      size.** Seeding the 200,000 default into a 50,000 account puts both
+      drawdown floors above the equity, so the card opens reading **"Breached"**
+      on an account that has never traded. Caught by running the endpoint, not
+      by the typecheck — `newRow` takes the size for exactly this reason.
+    - `MAX_PER_TRADER` (12) is a runaway-input guard, not a licence question.
+  - **The Funded screen carries the funded book's own STATS and its PAST
+    TRADES** (`FundedStats.tsx`, `FundedPastTrades.tsx`, both under `FundedBook`
+    in `FundedChallenge.tsx`). Funded trades never reconcile into
+    `trading_positions`, so they reach neither the Trade Log nor Live Brokers —
+    which left the screen stating a challenge with no record behind it.
+    - The stats are the **Trade History KPI row scored over the funded book
+      alone**: trades, win rate, realized and unrealized P/L, gross profit and
+      loss, profit factor and projected PF. Computed by the same
+      `tradeStats.ts` functions the desk uses (their input widened to a
+      structural `ScoredTrade`, which `TradeRecord` already satisfies), with the
+      viewer's own break-even buffer, so a win means the same thing on both
+      screens. **Deliberately no Avg Slippage card** — slippage is entry vs.
+      plan and a funded trade has no planned entry, so that card could only ever
+      read "—".
+    - An open funded position's live P/L is **read back off the Live Wall**
+      (`fundedPlFor` in `useLivePrices`, keyed on the `funded:<id>` ids the wall
+      gives them) rather than derived again here: only the server knows the
+      money-per-pip and the FTP lot-to-unit scaling, so deriving it twice is how
+      two screens come to disagree about one position.
+    - **Money is not totalled across currencies** — accounts kept in different
+      ones leave the money cards at "—" with a line saying so, the same rule Net
+      Worth follows. Positions the desk could not mark are counted and named
+      rather than quietly left out of the total.
+    - Past trades are listed newest-first across the desk's accounts, and this
+      is also where a **previously completed trade is loaded in** — from a
+      trade-history screenshot (the existing AI import) or typed in **with its
+      open and close times**. Those two fields are why the form is not the
+      Manual Trades one: that form stamps no dates, so a trade entered there
+      cannot sit in a day, a month, or the account's P/L windows.
   - **The Funded Account's daily drawdown resets on its own**
     (`trading/challenge.ts`, `rollDayStart`; `trading_challenges.day_start_on`,
     migration `0107`). `dayStartEquity` is what the daily gauge measures against,
@@ -1955,10 +2019,14 @@ through `featuresForUser`, because `rbac.ts` already imports from
 true with no stored row, matching `featuresForUser` exactly — **if that rule
 changes, change it in both places.**
 
-**`scope.ts` exports three functions and they are NOT interchangeable:**
+**`scope.ts` exports four functions and they are NOT interchangeable:**
 
 - **`visibleTraderIds(viewer)` — visibility.** "Whose trade data may this viewer
   *see*." The viewer alone. Use on a **read**.
+- **`visibleTraderIdsForUser(userId)`** — the same boundary, keyed by an id when
+  the caller holds no viewer. The counterpart of `scopedTraderIdsForUser`, and it
+  exists for the funded book: every function there is handed the owner rather
+  than the request, and still has to answer a read with the whole visible desk.
 - **`scopedTraderIds(viewer)` — recipients.** "Who should *receive* this."
   **Still team-wide, deliberately.** A TradingView alert is a signal the desk
   sends its members, not a report of anyone's book, so narrowing it would cut a
@@ -2055,6 +2123,12 @@ chat, **shared Live Wall layouts** (only the arrangement travels — every tile
 fetches as the reader, and the notes tile is emptied on the way out), invites,
 badges, and the member roster. Default team `team-vitalis` / "Vitalis Trading
 Team", seeded on boot.
+
+Plus, on a team holding the **grant**, the things that follow `visibleTraderIds`
+because the grant is what widens them: the open positions on the Live Wall, and
+the **funded accounts and funded book** (owner decision, 2026-08 — see Advanced
+Trading ▸ Funded Account). Those are read by the desk and written only by the
+trader who owns them.
 
 Worth preserving: `service.ts` hands the visible set to `getAllActiveDecrypted`,
 so another trader's broker credentials are **never decrypted** to serve your

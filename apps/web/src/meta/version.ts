@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.76';
+export const APP_VERSION = 'Beta V 6.77';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.77',
+    date: 'August 6, 2026',
+    notes: [
+      'Funded accounts are now shared with your trading team, and you can keep more than one. Each account belongs to the trader who set it up — everyone on the desk can see them, only the owner can change one.',
+      'The Funded screen now carries the funded book’s own stats — trades, win rate, realized and unrealized P/L, gross profit and loss, profit factor — scored over funded trades only, and kept completely separate from the desk’s numbers.',
+      'It also lists your completed funded trades, and lets you load older ones in: from a trade-history screenshot, or typed in with the dates the trade actually ran.',
+    ],
+  },
   {
     version: 'Beta V 6.76',
     date: 'August 6, 2026',

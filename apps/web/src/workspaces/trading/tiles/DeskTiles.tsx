@@ -320,9 +320,14 @@ export function ManualBookTile({ tile, editing, onChange, onRemove }: TileProps)
 //
 // The balance here is the FIRM's capital, not the trader's own, which is exactly
 // why Net Worth excludes a funded account and names it rather than adding it in.
+// A desk can now run several funded accounts (its own and its teammates'), so
+// the tile shows the FIRST one the payload carries — which the server sorts to
+// the viewer's own. A tile is too small to be a list, and a teammate's drawdown
+// is not what a glance at your own board should report.
 export function ChallengeTile({ tile, editing, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData('trading:challenge', () => api.tradingChallenge(), SLOW);
+  const { data: all, error } = useTileData('trading:challenge', () => api.tradingChallenges(), SLOW);
+  const data = all?.challenges[0] ?? null;
   const m = data?.metrics;
   const hide = privacy || (data ? !data.canSeeBalances : true);
 

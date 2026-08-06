@@ -750,6 +750,13 @@
       "when": 1782343836908,
       "tag": "0107_challenge_daily_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "6",
+      "when": 1782343936908,
+      "tag": "0108_funded_accounts_shared",
+      "breakpoints": true
     }
   ]
 }
