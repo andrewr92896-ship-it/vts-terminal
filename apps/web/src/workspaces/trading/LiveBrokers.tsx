@@ -25,7 +25,7 @@ const fmtCcy = (n: number, ccy: string) => {
 
 // Live broker capital (OANDA). Pulled from the broker API, so it updates as
 // trades are placed. The FTP prop challenge and funded/prop accounts live on
-// the dedicated Funded tab — this screen is just the live brokerage view.
+// the Funded Trades screen — this panel is just the live brokerage view.
 export function LiveBrokers() {
   const { isPhone } = useResponsive();
   const { privacy } = usePrivacy();
@@ -63,7 +63,7 @@ export function LiveBrokers() {
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>{"Live Brokers"}</h2>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
-            {"Your team’s live brokerage capital, each account tagged with its trader, pulled from the broker API so it updates as trades are placed. Hand-kept accounts are on the Manual Trades tab."}
+            {"Your team’s live brokerage capital, each account tagged with its trader, pulled from the broker API so it updates as trades are placed. Hand-kept accounts are in Manual Trades."}
           </div>
         </div>
         {!readOnly && oanda?.configured && (

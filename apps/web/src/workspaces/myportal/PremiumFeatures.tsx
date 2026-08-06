@@ -279,7 +279,7 @@ function TradingAcknowledgement({
         </h3>
         <ul style={{ margin: '14px 0 0', padding: '0 0 0 18px', color: C.muted, fontSize: 13, lineHeight: 1.7 }}>
           <li>
-            The Trade Desk places <b style={{ color: C.text }}>real orders</b> with
+            Live Trades places <b style={{ color: C.text }}>real orders</b> with
             your own broker, under your own credentials. An order sent here is a
             live position.
           </li>

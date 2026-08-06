@@ -32,21 +32,15 @@ export const DEMO_STEPS: TourStep[] = [
   },
   {
     workspace: 'trading',
-    screen: 'alerts',
-    title: 'Alerts — VTS AI trade analysis',
-    body: 'TradingView alerts land here by webhook. Paste a chart screenshot and VTS AI grades the trade: fill vs. planned entry, slippage, setup quality, risk, and a verdict. One alert here is already analyzed so you can see the result.',
-  },
-  {
-    workspace: 'trading',
     screen: 'tradedesk',
-    title: 'Trade Desk',
+    title: 'Live Trades',
     body: 'Where a trade gets placed. The ticket sends the order to your own connected broker account — size it from the risk you’re willing to take, see the stop and target priced in real money, and confirm on a review panel that states the trade in one sentence. Beside it sits your team’s open book, so you never size a position blind to what the desk already holds. The demo is read-only, so nothing here can be sent.',
   },
   {
     workspace: 'trading',
     screen: 'desk',
-    title: 'Trade History',
-    body: 'The Trade Log and Live Brokers in one place — a full journal of every fill with slippage and realized P/L, breakdowns by strategy and instrument, and live broker capital. Log trades in plain English and get recaps from VTS AI.',
+    title: 'Closed Trades & Metrics',
+    body: 'Your closed trades and the accounts behind them on one page — a full journal of every fill with slippage and realized P/L, breakdowns by strategy and instrument, and live broker capital. Log trades in plain English and get recaps from VTS AI.',
   },
   {
     workspace: 'trading',

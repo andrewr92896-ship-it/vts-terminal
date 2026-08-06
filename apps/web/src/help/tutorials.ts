@@ -24,7 +24,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
     steps: [
       {
         title: 'Advanced Trading',
-        body: 'The trading desk: placing and managing real orders through your own broker, your trade history and performance, strategy sessions, alerts, and the manual trade book. The first time you turn it on you are shown what the desk does and asked to confirm — it places live orders, so nobody should arrive there by accident.',
+        body: 'The trading desk: placing and managing real orders through your own broker, your closed trades and performance, strategy sessions, and the manual trade book. The first time you turn it on you are shown what the desk does and asked to confirm — it places live orders, so nobody should arrive there by accident.',
       },
       {
         title: 'Funded Account',
@@ -48,7 +48,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
     steps: [
       {
         title: 'Choose a layout',
-        body: 'Three layouts come built in: Markets (charts, quotes, headlines, the calendar), Trading Desk (open trades, the record, alerts) and My Terminal (your money, your list, what is new). Pick one from the Layout menu. A layout only ever shows tiles your account actually has, so it never opens with gaps where something you have not turned on would be.',
+        body: 'Three layouts come built in: Markets (charts, quotes, headlines, the calendar), Trading Desk (open trades, the record, desk metrics) and My Terminal (your money, your list, what is new). Pick one from the Layout menu. A layout only ever shows tiles your account actually has, so it never opens with gaps where something you have not turned on would be.',
       },
       {
         title: 'Add a tile',
@@ -69,32 +69,6 @@ export const TUTORIALS: Record<string, Tutorial> = {
     ],
   },
 
-  alerts: {
-    title: 'Using Alerts',
-    intro: 'TradingView alerts arrive here automatically by webhook (the prop/FTP trades that have no broker API). Paste a chart screenshot and VTS AI analyzes the trade and logs it for you.',
-    steps: [
-      {
-        title: 'Connect TradingView',
-        body: 'In a TradingView alert, set the Webhook URL to https://vitalistradingsystems.com/api/webhooks/tradingview and put your shared secret plus the trade fields in the alert message (JSON). New alerts show up at the top of this list. Webhooks require a paid TradingView plan.',
-      },
-      {
-        title: 'Paste a screenshot',
-        body: 'On a new alert, paste a chart screenshot (Ctrl/Cmd-V) into the drop area, or use Upload. A preview appears so you can confirm it before analyzing.',
-      },
-      {
-        title: 'Analyze with VTS AI',
-        body: 'Click “Analyze with VTS AI”. VTS AI reads the chart against the alert and reports the fill vs. planned price, slippage, setup quality, risk, and a verdict.',
-      },
-      {
-        title: 'It lands in your Trade Log',
-        body: 'Each analyzed alert automatically creates a Trade Log entry (planned entry from the alert; fill, exit, and notes from the analysis). Use “View in Trade Log” to open it.',
-      },
-      {
-        title: 'Dismiss',
-        body: 'Use Dismiss to clear an alert you don’t want to log.',
-      },
-    ],
-  },
 
   sessions: {
     title: 'Strategy Sessions',
@@ -219,7 +193,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
   tradedesk: {
-    title: 'The Trade Desk',
+    title: 'Live Trades',
     intro: 'Where you place a trade. The ticket on the left sends the order to your own connected broker account; the panel beside it shows every position your team currently has open, so you size a trade knowing what the desk already holds.',
     steps: [
       {
@@ -250,24 +224,24 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
   desk: {
-    title: 'Trade History',
-    intro: 'Reviewing what has already been traded: the Trade Log, Live Brokers, and History views in one place. Use the switch at the top to move between them — logging and reviewing trades, and your live broker capital, all under one tab. (Placing a trade is the Trade Desk, above.)',
+    title: 'Closed Trades & Metrics',
+    intro: 'Reviewing what has already been traded: every closed trade, what it scored, and the capital in the accounts behind it — all on one page. (Placing a trade, and watching what is open, is Live Trades above.)',
     steps: [
       {
-        title: 'Trade Log',
-        body: 'Your record of every trade — planned vs. actual entry, slippage, and realized P/L, with a per-trader filter and Deck / Tape layouts. Click “+ Log a trade” to add one; trades from a connected broker show up automatically.',
+        title: 'The record',
+        body: 'Every trade — planned vs. actual entry, slippage, and realized P/L, with a per-trader filter and Deck / Tape layouts. Click “+ Log a trade” to add one; trades from a connected broker show up automatically.',
+      },
+      {
+        title: 'Metrics and breakdowns',
+        body: 'Win rate, profit factor, gross profit and loss, and your deposited, withdrawn and total capital, over whatever the current filters select. “By Strategy” and “By Instrument” break the same trades down so you can see what is working.',
       },
       {
         title: 'Live Brokers',
-        body: 'Your live broker capital (OANDA NAV, balance, open P/L), pulled from the broker API so it updates as trades are placed, with Today / This week / 30-day P/L. Shown to full traders only.',
-      },
-      {
-        title: 'History',
-        body: 'Closed trades across your team, recorded automatically when a Live Wall position closes, with “By Strategy” and “By Instrument” breakdowns so you can see what’s working.',
+        body: 'At the bottom of the page: your live broker capital (OANDA NAV, balance, open P/L), pulled from the broker API so it updates as trades are placed, with Today / This week / 30-day P/L.',
       },
       {
         title: 'Hide dollar details',
-        body: 'Each view has a “Hide $” toggle, and Privacy mode masks every figure at once — handy on a screen-share.',
+        body: 'The page has a “Hide $” toggle, and Privacy mode masks every figure at once — handy on a screen-share.',
       },
     ],
   },
@@ -435,9 +409,8 @@ export const HOWTO_TOPICS: { key: string; label: string }[] = [
   // saved sidebar orders and in-app links keep working.
   { key: 'my_access', label: 'Premium Features' },
   { key: 'live', label: 'Live Wall' },
-  { key: 'alerts', label: 'Trading Alerts' },
-  { key: 'tradedesk', label: 'Trade Desk' },
-  { key: 'desk', label: 'Trade History' },
+  { key: 'tradedesk', label: 'Live Trades' },
+  { key: 'desk', label: 'Closed Trades & Metrics' },
   { key: 'sessions', label: 'Strategy Sessions' },
   { key: 'funded', label: 'Manual Trades' },
   { key: 'news', label: 'Market News' },

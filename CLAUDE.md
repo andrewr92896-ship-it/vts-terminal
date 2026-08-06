@@ -122,7 +122,7 @@ Agreed **lowest-liability** shape for that public launch (research done 2026-07)
 - **Before public launch:** Organization Apple account + D-U-N-S under the LLC;
   ToS + privacy policy; in-app account deletion (Guideline **5.1.1(v)**); AI-use
   disclosure; "informational only, not investment advice" disclaimers on
-  advice-flavored features (Trading Alerts, session bias, AI coaching); and a
+  advice-flavored features (session bias, AI coaching); and a
   **securities/fintech attorney** review of those advice-flavored features
   (potential RIA/CFTC-CTA exposure). Consider E&O/tech/cyber **insurance** to
   transfer residual liability. (None of this is legal advice.)
@@ -230,15 +230,26 @@ workspaces list** (see `theme/nav.ts` order).
     and the preset key is what a free account's remembered layout choice is
     stored against.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
-  its parts are **paid** — see Memberships): Trading Alerts (`alerts`),
-  **Trade Desk** (`tradedesk` — placing real orders, see below), Trade History
-  (`desk` — **two tabs, Trade Log + Live Brokers**; legacy keys
-  `log`/`history`/`metrics` alias into it. **The key stayed `desk` through both
-  label changes** — "Trade Desk" → "Trade Analysis" (2026-08) → "Trade History"
-  (2026-08) — so the `howto.desk` wording and every in-app link keep pointing at
-  the review screen; the new placement screen took the *new* key `tradedesk`.
+  its parts are **paid** — see Memberships):
+  **Live Trades** (`tradedesk` — placing real orders, see below),
+  **Closed Trades & Metrics**
+  (`desk` — **ONE page**, the trade log with Live Brokers below it; legacy keys
+  `log`/`history`/`metrics` alias into it. **The key stayed `desk` through every
+  label change** — "Trade Desk" → "Trade Analysis" → "Trade History" → "Closed
+  Trades & Metrics" (all 2026-08) — so the `howto.desk` wording and every in-app
+  link keep pointing at the review screen; the placement screen took the *new*
+  key `tradedesk` and was itself renamed "Trade Desk" → "Live Trades" without
+  touching its key. **Rename a label, never a key** is the whole rule here.
   The file is `TradeHistory.tsx`; a search for the old names finds only patch
   notes, which are a dated record and stay as written.
+  **The screen's own heading reads "Trade History & Metrics"** while the sidebar
+  row reads "Closed Trades & Metrics" — owner instruction, 2026-08, naming each
+  place separately; they are the same screen.
+  **Live Brokers stopped being a tab** (owner instruction, 2026-08): the two
+  answer one question between them — what the trades did, and what the accounts
+  behind them hold — and a tab meant only half the answer was ever on screen.
+  `DeskView` survives because `initialView` is still passed by in-app links;
+  every value lands on the one page and `brokers` scrolls to that panel.
   **History was removed** — owner decision, 2026-08: it listed the same closed
   trades the Trade Log already carried, from the same rows, so two screens
   answered one question and were free to disagree about it. Everything it had
@@ -256,9 +267,31 @@ workspaces list** (see `theme/nav.ts` order).
   Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
-  Open/close/pre-open notifications are opt-in from Trading Alerts — see below),
-  Manual Trades (`funded` key, `FundedScreen`), **Funded Account**
-  (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below).
+  Open/close/pre-open notifications are opt-in from a card on this same screen
+  — see below),
+  Manual Trades (`funded` key, `FundedScreen`), **Funded Trades**
+  (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below.
+  Labelled "Funded Account" until 2026-08; the key, the opt-in and the paid
+  feature are all still `funded`/`prop`).
+  **The sidebar order here follows the TRADE'S LIFE, not the tier stacking**
+  (owner instruction, 2026-08): Live Trades → Closed Trades & Metrics → Funded
+  Trades → Manual Trades → Deleted Trades → Strategy Sessions. It is the one
+  workspace that does not stack Max → Premium → free, because a trader reads
+  these rows as a sequence rather than as a price list; Strategy Sessions comes
+  last as the only row that is not a record of trades.
+  **Trading Alerts (`alerts`) was REMOVED outright** (owner instruction,
+  2026-08) — the screen, its route, its how-to guide, its demo-tour step and
+  `Alerts.tsx` are gone, and the key routes nowhere. **Two things on it were
+  kept, because neither was a TradingView alert and each was the only way to
+  reach a real feature:** the **session open/close/pre-open settings** moved to
+  the Strategy Sessions screen, and **price alerts** moved to My Terminal ▸
+  Settings — a better home regardless, since a price alert is included with
+  every account and is deliberately not behind the desk opt-in, so on the old
+  screen an account without Advanced Trading could never reach it. Both live in
+  `workspaces/trading/alertSettings.tsx`. **The alert plumbing is untouched**:
+  the TradingView webhook, the `trading_alerts` table, the alert sound and the
+  Live Wall's Alerts tile all still work — so the wall can still show alerts
+  even though the section is gone.
   **To Do moved
   to My Terminal** (owner decision, 2026-08 — a to-do list is personal, not a
   desk instrument); its key is still `td_trading`, so in-app links keep working.
@@ -2707,7 +2740,8 @@ for founders, software developers and admins — **Administrator chat**.
   table, one row per user): per-user opt-in toggles for **session open / close /
   pre-open** plus a `preOpenLeadMin` (1–240, default 30). Routes
   `GET|PUT /api/trading/session-alert-prefs`; UI is the collapsible "Strategy
-  session alerts" card at the top of the Trading Alerts screen (`Alerts.tsx`).
+  session alerts" card at the top of the Strategy Sessions screen
+  (`alertSettings.tsx`, rendered by `StrategySessions.tsx`).
   All default **off** (opt-in). The session watch reads these to fire a trader's
   own session notifications.
 

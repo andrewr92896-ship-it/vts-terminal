@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.82';
+export const APP_VERSION = 'Beta V 6.83';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.83',
+    date: 'August 6, 2026',
+    notes: [
+      'Advanced Trading is renamed and reordered to follow a trade’s own life: Live Trades, Closed Trades & Metrics, Funded Trades, Manual Trades, Deleted Trades, then Strategy Sessions.',
+      'Live Brokers is no longer a separate tab — your live broker capital now sits at the bottom of Closed Trades & Metrics, on the same page as the trades it was earned on.',
+      'Trading Alerts has been removed. The two settings that lived there did not go with it: session open/close/pre-open alerts are now on the Strategy Sessions screen, and price alerts moved to My Terminal ▸ Settings with your other notification controls — where an account without Advanced Trading can finally reach them.',
+    ],
+  },
   {
     version: 'Beta V 6.82',
     date: 'August 6, 2026',

@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { ScreenTitle } from './ScreenTitle';
+import { SessionAlertSettings } from './alertSettings';
 import type {
   DayWindow,
   SessionBias,
@@ -121,6 +122,12 @@ export function StrategySessions() {
       </div>
 
       {err && <div onClick={() => setErr(null)} style={banner}>{err} — click to dismiss.</div>}
+
+      {/* The open / close / pre-open notifications for these sessions. It was
+          the top card on Trading Alerts, which was removed (owner instruction,
+          2026-08); this is the screen the sessions themselves live on, and it
+          was the only control for them. */}
+      {!readOnly && <SessionAlertSettings />}
 
       {adding && (
         <SessionForm busy={busy} submitLabel="Add session" onSubmit={async (input) => { if (await run(api.addSession(input))) setAdding(false); }} onCancel={() => setAdding(false)} />
