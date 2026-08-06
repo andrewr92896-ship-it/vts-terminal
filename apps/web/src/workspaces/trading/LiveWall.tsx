@@ -8,6 +8,7 @@ import { DeskSettingsModal } from './DeskSettingsModal';
 import { configFrom } from './outcome';
 import { TradeCard } from './TradeCard';
 import { ScreenTitle } from './ScreenTitle';
+import { useContentWidth } from '../../lib/measure';
 import { zoneAbbr, zoneFmt } from '../../lib/timezone';
 import type { LiveWall as LiveWallData } from '../../api/types';
 
@@ -24,6 +25,15 @@ const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
 const REFRESH_MS = 10_000;
+
+// The screen's default width — and, because the board is arranged in columns
+// across it, the pixel width of the DEFAULT 12-column workspace. A board
+// arranged on a wider workspace lifts this cap (see `wallW` below) so the extra
+// columns are extra ROOM rather than the same room cut into thinner slices; it
+// still only ever grows into space the content area actually has, so the page
+// never scrolls sideways. One number, passed to the board as `baseWidth`, so
+// the cap and the board's idea of a column can never drift apart.
+const WALL_W = 1280;
 
 // When the wall last refreshed, on the reader's chosen clock (Eastern by
 // default). Not Market Data's `etTime`, which stays fixed to Eastern because it
@@ -72,6 +82,16 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
   // Two views on the wall: the customizable multi-chart board with saved
   // presets ("Master", the default) and the live positions grid.
   const [view, setView] = useState<'positions' | 'charts'>('charts');
+  // What the open board's workspace width asks the screen for, or null for the
+  // default. Only the board half is arranged in columns, so the Positions view
+  // keeps the default width whatever the board is set to.
+  const [wallW, setWallW] = useState<number | null>(null);
+  // The room the screen actually has — measured on a full-width wrapper OUTSIDE
+  // the capped wall, since the wall itself cannot be wider than its own cap and
+  // so can never report how much space is left. It is the ceiling the workspace
+  // editor clamps against. Layout space, not painted space (lib/measure.ts).
+  const wallAreaRef = useRef<HTMLDivElement | null>(null);
+  const availW = useContentWidth(wallAreaRef, WALL_W);
   const firstLoad = useRef(true);
   // Positions is the desk half of the wall. Without Advanced Trading it is not
   // offered, and the effective view is pinned to the board.
@@ -110,7 +130,15 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
+    <div ref={wallAreaRef}>
+    <div
+      style={{
+        maxWidth: showPositions ? WALL_W : (wallW ?? WALL_W),
+        margin: '0 auto',
+        color: TEXT,
+        animation: 'fadeIn .25s ease',
+      }}
+    >
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -164,7 +192,13 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
           switching to Positions and back. */}
       <div style={{ display: showPositions ? 'none' : 'block' }}>
         <Suspense fallback={<div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading your board…"}</div>}>
-          <ChartBoard desk={desk} onOpenMembership={onOpenMembership} />
+          <ChartBoard
+            desk={desk}
+            onOpenMembership={onOpenMembership}
+            baseWidth={WALL_W}
+            availWidth={availW}
+            onWorkspaceWidth={setWallW}
+          />
         </Suspense>
       </div>
 
@@ -215,6 +249,7 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
             )}
           </>
         ))}
+    </div>
     </div>
   );
 }
