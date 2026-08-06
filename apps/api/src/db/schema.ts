@@ -411,6 +411,13 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
   // (stats and list) — the desk's "these are test trades" floor, so 1-unit
   // connection tests don't skew win rate, profit factor, or pips. 0 = keep all.
   minTradeUnits: real('min_trade_units').notNull().default(0),
+  // What this trader has put into their trading account out of their own pocket
+  // (migration 0109). NULL = not stated, which is not the same as 0 — the Trade
+  // History card shows no return rather than one measured against a deposit
+  // nobody entered. Read from the trader's OWN row only: the shared 'desk'
+  // default row must never answer this, since one trader's deposit is not
+  // another trader's.
+  depositedCapital: real('deposited_capital'),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;

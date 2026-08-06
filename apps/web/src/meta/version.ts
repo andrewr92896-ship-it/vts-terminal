@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.77';
+export const APP_VERSION = 'Beta V 6.78';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.78',
+    date: 'August 6, 2026',
+    notes: [
+      'Trade History has a Deposited Capital card you fill in yourself — what you put into the account out of your own pocket. Once it is set, the card shows what your own closed trades have returned on it as a percentage.',
+    ],
+  },
   {
     version: 'Beta V 6.77',
     date: 'August 6, 2026',

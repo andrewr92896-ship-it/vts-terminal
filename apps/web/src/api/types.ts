@@ -604,6 +604,9 @@ export interface DeskSettings {
   // Ignore broker fills under this many units in the Trade Log / History (the
   // trader's "test trade" floor). 0 = keep everything.
   minTradeUnits: number;
+  // What this trader deposited out of their own pocket. `null` = not stated
+  // (never inherited from the shared desk default), and sending null clears it.
+  depositedCapital: number | null;
   // Every instrument the team has traded (from the Trade Log + History), so the
   // per-instrument buffer picker can offer them. Auto-derived server-side.
   instruments: string[];
@@ -1527,6 +1530,10 @@ export interface TradeLogData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  // What the VIEWER deposited out of their own pocket, or null when they have
+  // not said. Never inherited from the shared desk default — see the server's
+  // DeskSettings.
+  depositedCapital: number | null;
   // The viewer may remove a teammate's trade, not just their own (team leader,
   // a member granted "Delete trades", or an admin).
   canDeleteAny: boolean;

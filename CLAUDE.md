@@ -390,6 +390,26 @@ workspaces list** (see `theme/nav.ts` order).
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
+  - **Deposited capital is the trader's own figure, entered on the KPI row**
+    (`CapitalCard` in `TradeLog.tsx`, `trading_desk_settings.deposited_capital`,
+    migration `0109`). The row could say what the trades made and never what
+    they were made **on**, so "+$378 realized" read the same on a $2,000 account
+    as on a $200,000 one.
+    - **Null is "not stated" and is NEVER inherited.** Every other desk setting
+      falls back to the shared `'desk'` row; this one is read from the trader's
+      **own** row only, because one trader's deposit is not another's —
+      inheriting it would put somebody else's money on your screen and compute
+      your return against it. **Zero is a real answer** (a funded account the
+      trader paid nothing into) and stays distinct from null: the card then
+      shows the money with no percentage rather than dividing by zero.
+    - **The return is measured over the viewer's OWN closed rows** within
+      whatever the filters have selected (`t.isMine`), never the desk's. On a
+      granted team the log carries teammates' trades, and dividing the desk's
+      P/L by one person's deposit is a return nobody earned.
+    - It rides the Trade Log payload rather than a second request — it is the
+      viewer's setting, so it does not vary with whose rows are on screen — and
+      the desk-settings modal deliberately does not offer it: the modal sends a
+      narrow patch, so saving a break-even band leaves the deposit alone.
   - **Trade History settings are per trader** (`trading/settings.ts`,
     `getDeskSettings(userId)` / `updateDeskSettings(userId, patch)`): the
     break-even buffer, per-instrument buffers (`trading_be_overrides`, keyed

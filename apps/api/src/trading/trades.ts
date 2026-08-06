@@ -93,6 +93,10 @@ export interface TradeLogData {
   // The desk's "test trade" floor (units). Broker fills under it are already
   // excluded from `trades` + `summary`; sent so the client can note it. 0 = off.
   minTradeUnits: number;
+  // What the VIEWER deposited out of their own pocket, or null when they have
+  // not said. Their own setting, so it does not vary with whose rows are being
+  // looked at — which is why it rides this payload rather than each trade.
+  depositedCapital: number | null;
 }
 
 export interface TradeInput {
@@ -347,6 +351,10 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     breakEvenAmount: settings.breakEvenAmount,
     breakEvenOverrides: settings.breakEvenOverrides,
     minTradeUnits: settings.minTradeUnits,
+    // The viewer's own deposit, carried on the payload the KPI row already reads
+    // rather than fetched separately — it is the viewer's setting, so it never
+    // varies with which trader's rows are being looked at.
+    depositedCapital: settings.depositedCapital,
   };
 }
 

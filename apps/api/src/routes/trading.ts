@@ -1463,6 +1463,10 @@ const deskSettingsSchema = z
     // The full per-instrument override list; when present it replaces the stored
     // set. Capped so one request can't insert an unbounded number of rows.
     breakEvenOverrides: z.array(beOverrideSchema).max(200).optional(),
+    // What the trader deposited out of their own pocket. `null` clears it back
+    // to "not stated"; omitted leaves it alone. Nullable rather than optional-
+    // only, because clearing it has to be expressible.
+    depositedCapital: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 

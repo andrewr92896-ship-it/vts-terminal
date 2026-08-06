@@ -757,6 +757,13 @@
       "when": 1782343936908,
       "tag": "0108_funded_accounts_shared",
       "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "6",
+      "when": 1782344036908,
+      "tag": "0109_deposited_capital",
+      "breakpoints": true
     }
   ]
 }
