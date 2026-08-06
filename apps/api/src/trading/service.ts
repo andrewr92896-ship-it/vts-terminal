@@ -75,17 +75,38 @@ function enrichForex(trades: LiveTrade[], accountCurrency: string): LiveTrade[] 
   return trades.map((t) => (t.forex !== undefined ? t : { ...t, forex: computeForex(t, accountCurrency) }));
 }
 
-// Manual positions are entered by hand on a funded account with no API, so they
-// often have no live mark. When a manual trade is missing its current price,
-// borrow the mark from another open position on the same instrument elsewhere on
-// the desk (preferring a broker-streamed price over another hand-entered one) so
-// its pip math and open P/L still compute against the same price the rest of the
-// desk sees. Manual positions are assumed to be USD-account for the pip math.
-function fillManualMarks(trades: LiveTrade[]): LiveTrade[] {
+// A position the desk keeps by hand rather than streaming from an API: a
+// `manual` connection, or a `ftp` prop-firm position imported from a screenshot.
+// Neither has a broker to poll, so both depend on being marked from elsewhere.
+function isHandKept(t: LiveTrade): boolean {
+  return t.broker === 'manual' || t.broker === 'ftp';
+}
+
+// Hand-kept positions are entered on an account with no API, so they often have
+// no live mark. When one is missing its current price, borrow the mark from
+// another open position on the same instrument elsewhere on the desk (preferring
+// a broker-streamed price over another hand-entered one) so its pip math and open
+// P/L still compute against the same price the rest of the desk sees. Hand-kept
+// positions are assumed to be USD-account for the pip math.
+//
+// This is the safety net under the funded rows' own pricing call, which marks
+// them through the install's OANDA pricing account — that call is best-effort and
+// silently yields nothing when the account is unset, unreachable, or does not
+// carry the instrument. A funded EUR/USD position was reading "now —" with no P/L
+// while two live EUR/USD marks sat on the same screen.
+//
+// Only ever call this over REAL positions. The sample feed carries prices too,
+// and letting a hand-kept position borrow one would put an invented mark, and an
+// invented P/L, on a trade the trader actually holds.
+function fillHandKeptMarks(trades: LiveTrade[]): LiveTrade[] {
   const marks = new Map<string, { price: number; fromManual: boolean }>();
   for (const t of trades) {
     if (t.currentPrice == null) continue;
-    const key = t.instrument.toUpperCase();
+    // Matched on the normalized symbol, so a funded row saved as "EURUSD" still
+    // finds the broker's "EUR/USD" — the two sides of this reach the table by
+    // different routes (a screenshot read by AI vs. the OANDA feed) and are under
+    // no obligation to have written the pair the same way.
+    const key = normSym(t.instrument);
     const fromManual = t.broker === 'manual';
     const existing = marks.get(key);
     // Broker-streamed marks win over hand-entered ones for the same instrument.
@@ -94,8 +115,8 @@ function fillManualMarks(trades: LiveTrade[]): LiveTrade[] {
     }
   }
   return trades.map((t) => {
-    if (t.broker !== 'manual' || t.currentPrice != null) return t;
-    const mark = marks.get(t.instrument.toUpperCase());
+    if (!isHandKept(t) || t.currentPrice != null) return t;
+    const mark = marks.get(normSym(t.instrument));
     if (!mark) return t;
     const filled: LiveTrade = { ...t, currentPrice: mark.price };
     const forex = computeForex(filled, 'USD');
@@ -193,8 +214,12 @@ async function loadFundedLiveTrades(conns: OwnedConnection[], scopeIds: Set<stri
       plannedEntry: null,
       entryPrice: p.entryPrice,
       currentPrice: mark,
-      takeProfit: null,
-      stopLoss: null,
+      // What the prop firm is actually holding on the position, read off the
+      // screenshot it was imported from. These were hard-coded null, so a trade
+      // sitting behind a stop was drawn on the desk as an unprotected one — in
+      // the same "none" the desk reserves for a position genuinely running naked.
+      takeProfit: p.takeProfit,
+      stopLoss: p.stopLoss,
       trailingStopLoss: null,
       slippage: null,
       unrealizedPl: null,
@@ -411,7 +436,7 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
     const { brokers, raw: loaded } = await loadDesk(conns);
     // Backfill missing marks on hand-entered manual positions from the rest of
     // the desk's open trades, so their P/L and pip math render like any other.
-    const withSlip = withSlippage(fillManualMarks(loaded));
+    const withSlip = withSlippage(fillHandKeptMarks(loaded));
     // Reconcile open positions → History, keyed per owner so each teammate's
     // positions feed their own History. Now runs at most once per TTL per team
     // (not once per viewer per poll), which also eases DB write pressure.
@@ -425,7 +450,16 @@ export async function getLiveWall(user: UserRow): Promise<LiveWall> {
   // but never land in tradingPositions (Trade Log / History / Live Brokers).
   // Gate/sort stay per-viewer (cheap), so each viewer's card is unchanged;
   // funded is per-viewer too and never pollutes the cached snapshot.
-  const trades = gateBalances([...snap.withSlip, ...fundedLive], canSeeBalances).sort(byWallOrder);
+  //
+  // The mark backfill runs again HERE, over the combined list, because that is
+  // the first point at which the funded rows and the broker rows are in the same
+  // array — the pass inside the snapshot sees only the broker feed, so a funded
+  // position could never borrow from it. Filling is idempotent (a row that
+  // already has a price is returned untouched), so the manual rows marked in
+  // there are unaffected. Deliberately not folded into the snapshot: funded is
+  // per-viewer and must not pollute the team-shared cache.
+  const marked = fillHandKeptMarks([...snap.withSlip, ...fundedLive]);
+  const trades = gateBalances(marked, canSeeBalances).sort(byWallOrder);
 
   return { source: 'live', generatedAt: snap.generatedAt, canSeeBalances, brokers: snap.brokers, trades, note: snap.note, breakEvenPct, breakEvenMode, breakEvenAmount, breakEvenOverrides };
 }
@@ -488,7 +522,7 @@ export async function reconcileDeskPositions(): Promise<void> {
   const conns = await getAllActiveDecrypted(ALL_USERS, { purpose: 'reconcile' });
   if (conns.length === 0) return;
   const { brokers, raw } = await loadDesk(conns);
-  const withSlip = withSlippage(fillManualMarks(raw));
+  const withSlip = withSlippage(fillHandKeptMarks(raw));
   await reconcilePerOwner(conns, brokers, withSlip);
   // Also fold in any closed trades the live pass missed (opened+closed between
   // polls). Self-throttled per connection, so calling it every tick is cheap.

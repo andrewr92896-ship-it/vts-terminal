@@ -30,6 +30,9 @@ export interface FundedTradeView {
   entryPrice: number | null;
   exitPrice: number | null;
   realizedPl: number | null;
+  // The stop and target held at the prop firm. Null means none is known of.
+  stopLoss: number | null;
+  takeProfit: number | null;
   status: FundedTradeStatus;
   openedAt: number | null;
   closedAt: number | null;
@@ -77,6 +80,8 @@ export interface FundedTradeInput {
   entryPrice?: number | null;
   exitPrice?: number | null;
   realizedPl?: number | null;
+  stopLoss?: number | null;
+  takeProfit?: number | null;
   status?: FundedTradeStatus;
   openedAt?: number | null;
   closedAt?: number | null;
@@ -142,6 +147,8 @@ function toTradeView(row: FundedTradeRow): FundedTradeView {
     entryPrice: row.entryPrice,
     exitPrice: row.exitPrice,
     realizedPl: row.realizedPl,
+    stopLoss: row.stopLoss,
+    takeProfit: row.takeProfit,
     status: row.status,
     openedAt: row.openedAt ? row.openedAt.getTime() : null,
     closedAt: row.closedAt ? row.closedAt.getTime() : null,
@@ -275,6 +282,8 @@ export async function addFundedTrade(
   const side: TradeSide = isSide(input.side) ? input.side : 'long';
   const units = cleanNum(input.units) ?? 0;
   const status: FundedTradeStatus = input.status === 'open' ? 'open' : 'closed';
+  const stopLoss = cleanNum(input.stopLoss);
+  const takeProfit = cleanNum(input.takeProfit);
   const fields = {
     instrument: instrument.slice(0, 40),
     side,
@@ -285,7 +294,7 @@ export async function addFundedTrade(
     openedAt: cleanNum(input.openedAt),
     closedAt: cleanNum(input.closedAt),
   };
-  await db
+  const insert = db
     .insert(fundedTrades)
     .values({
       id: crypto.randomUUID(),
@@ -297,14 +306,37 @@ export async function addFundedTrade(
       entryPrice: fields.entryPrice,
       exitPrice: fields.exitPrice,
       realizedPl: fields.realizedPl,
+      stopLoss,
+      takeProfit,
       status,
       openedAt: fields.openedAt != null ? new Date(fields.openedAt) : null,
       closedAt: fields.closedAt != null ? new Date(fields.closedAt) : null,
       dedupKey: dedupKeyOf(fields),
       notes: cleanText(input.notes, 2000),
       createdAt: new Date(),
-    })
-    .onConflictDoNothing();
+    });
+  // An OPEN position dedupes on instrument + side + fill price and NOT on time,
+  // so re-pasting a screenshot of a trade already on the wall is the same row.
+  // Doing nothing there was right when the row held nothing that could change;
+  // now that it carries the stop and target it is wrong — moving a stop at the
+  // prop firm and re-pasting has to reach the desk, and it was the only remedy
+  // for a position imported before this column existed. Only the protective
+  // levels are refreshed: the fill, size and open time are what identify the
+  // position, so a re-paste must not quietly rewrite those.
+  //
+  // A screenshot with no stop visible therefore CLEARS a stop read earlier, and
+  // that is the right direction rather than a gap: the picture is the source of
+  // truth for what the firm is holding, and erring towards "none" under-claims
+  // protection where the alternative would draw a stop that may not exist.
+  //
+  // A CLOSED trade keeps do-nothing. Those dedupe on time + profit and re-posting
+  // a history batch must never rewrite what was already logged.
+  await (status === 'open'
+    ? insert.onConflictDoUpdate({
+        target: [fundedTrades.accountId, fundedTrades.dedupKey],
+        set: { stopLoss, takeProfit },
+      })
+    : insert.onConflictDoNothing());
   return getFunded(userId);
 }
 
@@ -407,6 +439,8 @@ export interface FundedOpenPosition {
   side: TradeSide;
   units: number;
   entryPrice: number;
+  stopLoss: number | null;
+  takeProfit: number | null;
   openedAt: number | null;
 }
 
@@ -436,6 +470,8 @@ export async function getDeskFundedOpenPositions(scopeIds: Set<string>): Promise
       side: isSide(r.t.side) ? r.t.side : 'long',
       units: r.t.units,
       entryPrice: r.t.entryPrice,
+      stopLoss: r.t.stopLoss,
+      takeProfit: r.t.takeProfit,
       openedAt: r.t.openedAt ? r.t.openedAt.getTime() : null,
     });
   }

@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.71';
+export const APP_VERSION = 'Beta V 6.72';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.72',
+    date: 'August 6, 2026',
+    notes: [
+      'A funded position now shows the stop and target it is actually sitting behind. VTS AI was already reading them off the screenshot, but there was nowhere to keep them, so every funded trade was drawn as having no stop at all.',
+      'Re-pasting a screenshot of a funded position you are already tracking now updates its stop and target instead of doing nothing — which is how you move a stop at the prop firm and have the desk follow.',
+      'Funded positions now show a live price and open P/L again. They could be left unpriced even when the same instrument was being priced elsewhere on the desk.',
+    ],
+  },
   {
     version: 'Beta V 6.71',
     date: 'August 4, 2026',

@@ -1532,6 +1532,57 @@ again, and do not make a new surface treat "not sample" as "live".
 - The **demo** is unaffected: it is forced down the sample path so its tour is
   complete.
 
+**A hand-kept position is marked from the rest of the desk, and that backfill is
+a safety net rather than a nicety** (`fillHandKeptMarks` in `trading/service.ts`).
+"Hand-kept" is `manual` **and** `ftp` — a prop-firm position imported from a
+screenshot has no more of an API behind it than a manual one does.
+
+- Funded rows are marked by `loadFundedLiveTrades` through the **install's OANDA
+  pricing account**, which is best-effort and yields nothing when that account is
+  unset, unreachable, or does not carry the instrument (most OANDA entities are
+  narrower than you would guess — see Market Data ▸ Prices). When it yields
+  nothing the row keeps a null price, so it renders "now —" with no P/L.
+- So the backfill runs **twice**: once inside the cached desk snapshot (broker
+  rows only, which is what reconcile reads), and again over
+  `[...snap.withSlip, ...fundedLive]` — the first point at which the funded rows
+  and the broker rows are in the same array. Filling is idempotent, so the second
+  pass leaves the first pass's work alone. Funded stays out of the snapshot on
+  purpose: it is per-viewer and must not pollute a team-shared cache.
+- **Never run it over the sample feed.** Sample trades carry prices, and letting a
+  real hand-kept position borrow one would put an invented mark and an invented
+  P/L on a trade somebody actually holds — the same rule the `source` union above
+  exists to enforce.
+- Matching is on the **normalized** symbol (`normSym`), not the raw string: a
+  funded instrument is written by an AI reading a screenshot and a broker's is
+  written by the OANDA feed, so "EURUSD" and "EUR/USD" have to meet.
+- Consequence worth stating: a funded row's P/L is **the market move only**,
+  derived from pip math against an OANDA mid. It carries no commission and marks
+  off a different feed than the prop firm's, so it will not tie out to the
+  platform's own figure to the cent.
+
+**A funded position carries the stop and target it is sitting behind**
+(`funded_trades.stop_loss` / `take_profit`, migration `0106`). The screenshot
+parser (`ParsedPosition`) had always read both; there was nowhere to put them, so
+the route dropped them and `loadFundedLiveTrades` hard-coded a null stop on every
+funded position. That is worse than an omission — the desk draws "Stop loss:
+none" deliberately, because a position with no protection on it is the most
+important thing that panel can say, so a protected trade was being reported as a
+naked one in the words reserved for genuine danger. Do not re-hardcode them.
+
+- **Re-pasting an active-trade screenshot UPDATES the protective levels**
+  (`onConflictDoUpdate` in `addFundedTrade`). An open position dedupes on
+  instrument + side + fill price and deliberately not on time, so a re-paste is
+  the same row; doing nothing was right only while the row held nothing that
+  could change. It is how a stop moved at the prop firm reaches the desk, and it
+  was the only remedy for a position imported before the columns existed. **Only**
+  the stop and target are refreshed — the fill, size and open time identify the
+  position, so a re-paste must never quietly rewrite those.
+- A **closed** trade keeps `onConflictDoNothing`: those dedupe on time + profit,
+  and re-posting a history batch must never rewrite what was already logged.
+- There is still **no by-hand edit** of a funded position's stop. If the parser
+  misses one, the remedy is a clearer screenshot re-pasted, or delete and
+  re-import.
+
 **The three built-in layouts now live in the DATABASE** (`wall_templates`,
 migration `0105`), edited from **Developer Terminal ▸ Live Wall Templates**, so
 the owner can change the default boards without a deploy.

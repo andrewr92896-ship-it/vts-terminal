@@ -1248,6 +1248,11 @@ export async function tradingRoutes(app: FastifyInstance) {
           side: p.side === 'short' ? 'short' : 'long',
           units: p.units ?? 0,
           entryPrice: p.entryPrice,
+          // The parser has always read these off the screenshot; until the row
+          // had somewhere to keep them they were dropped here, and the desk then
+          // reported every funded position as carrying no stop.
+          stopLoss: p.stopLoss,
+          takeProfit: p.takeProfit,
           status: 'open',
           openedAt: Date.now(),
         });
