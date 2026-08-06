@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.74';
+export const APP_VERSION = 'Beta V 6.75';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.75',
+    date: 'August 6, 2026',
+    notes: [
+      'You can now edit a Live Wall board from your phone. Edit layout adds and removes tiles, changes a tile’s settings, and moves a tile up or down with the arrows in its bottom-right corner — then saves, all without a computer.',
+      'Dragging and resizing stay on the larger screen: a phone shows the board as one column, and a drag there would flatten the arrangement you built. Moving a tile on a phone swaps it with its neighbour instead, so the board keeps its shape on a desktop.',
+    ],
+  },
   {
     version: 'Beta V 6.74',
     date: 'August 6, 2026',

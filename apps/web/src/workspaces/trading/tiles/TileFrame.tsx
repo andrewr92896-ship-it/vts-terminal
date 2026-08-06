@@ -43,7 +43,10 @@ export function TileFrame({
     <div style={tileWrap}>
       <div className="tile-header" style={{ ...header, cursor: editing ? 'move' : 'default' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-          {editing && <span style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>⠿</span>}
+          {/* Classed so the board can hide it where the header is not a drag
+              handle — a phone, where the tile moves with the cell's arrows. A
+              grip that promises a drag which does nothing is worse than none. */}
+          {editing && <span className="tile-grip" style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>⠿</span>}
           {icon && !editing && <Icon name={icon} size={13} color={FAINT} />}
           <span style={titleText}>{title}</span>
           {count !== undefined && count !== null && <span style={countChip}>{count}</span>}

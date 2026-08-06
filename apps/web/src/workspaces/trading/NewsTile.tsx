@@ -93,7 +93,13 @@ export function NewsTile({
     <div style={tileWrap}>
       <div className="tile-header" style={{ ...header, cursor: editing ? 'move' : 'default' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          {editing && <span style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>⠿</span>}
+          {editing && (
+            // Classed so the board can hide it where the header is not a drag
+            // handle — a phone, where the tile moves with the cell's arrows.
+            <span className="tile-grip" style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>
+              ⠿
+            </span>
+          )}
           <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{tile.title || 'Market News'}</span>
           {headlines && <span style={countChip}>{shown.length}</span>}
         </div>

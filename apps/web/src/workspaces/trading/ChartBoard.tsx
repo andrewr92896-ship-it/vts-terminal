@@ -78,10 +78,14 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   // Saving your own arrangement is the paid part. Without it the reader gets the
   // built-in layouts instead of an empty grid and a locked save button.
   const canCustomize = hasEntitlement(user, 'customBoards');
-  // Arranging a board is a desktop action. On a phone the wall renders as one
-  // column (see `layout`), and a drag there would write that flattened order
-  // back over the real arrangement — so editing is simply not offered.
-  const canEdit = canCustomize && !isPhone;
+  const canEdit = canCustomize;
+  // DRAGGING is the desktop-only half, not editing. On a phone the wall renders
+  // as one column (see `layout`), and a drag there would write that flattened
+  // order back over the real arrangement — so the grid stays fixed and a phone
+  // reorders with the per-tile arrows instead (see `movePhoneTile`). Everything
+  // else edit mode does — adding a tile, removing one, a tile's own settings,
+  // naming, sharing and saving the board — works the same on either.
+  const canDrag = canEdit && !isPhone;
 
   // Remember the last-opened preset per user (per device) so returning to the
   // board — after toggling to Positions, a reload, or a new session — lands on
@@ -284,6 +288,13 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     return m;
   }, [tiles, features, entitled]);
 
+  // The phone's reading order, so the reorder arrows know which tile is first
+  // and which is last. The same sort the phone branch of `layout` renders in.
+  const phoneOrder = useMemo(
+    () => (isPhone ? [...tiles].sort((a, b) => a.y - b.y || a.x - b.x).map((t) => t.id) : []),
+    [tiles, isPhone],
+  );
+
   const layout: Layout[] = useMemo(() => {
     // A phone gets ONE column, in the board's own reading order.
     //
@@ -295,8 +306,9 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     //
     // The stored x/y/w are untouched: the phone only changes what is RENDERED,
     // so opening the same board on a desktop finds the arrangement intact. That
-    // is also why editing is off here (see `canEdit`) — a drag on the phone
-    // would otherwise write this flattened order back over the real one.
+    // is also why every row here is `static` and `onLayoutChange` ignores a
+    // phone — a drag here would otherwise write this flattened order back over
+    // the real one.
     if (isPhone) {
       const ordered = [...tiles].sort((a, b) => a.y - b.y || a.x - b.x);
       let y = 0;
@@ -337,7 +349,13 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
       // Only persist layout while editing. Outside edit mode the only layout
       // changes come from expand tiles auto-growing (and reflowing others); those
       // are transient and must not dirty the board or overwrite saved positions.
-      if (!editing) return;
+      //
+      // NEVER on a phone, whatever the mode. What the grid reports there is the
+      // flattened one-column render (x:0, w:1, floored heights), not the board —
+      // writing it back would destroy the desktop arrangement the moment somebody
+      // opened edit mode on their phone. This guard is the reason phone editing
+      // is safe at all; the phone reorders through `movePhoneTile`.
+      if (!editing || isPhone) return;
       setTiles((prev) =>
         prev.map((t) => {
           const l = next.find((n) => n.i === t.id);
@@ -348,8 +366,43 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
         }),
       );
     },
-    [editing],
+    [editing, isPhone],
   );
+
+  // Move a tile one place in the phone's reading order.
+  //
+  // "Up" and "down" mean that order, not grid coordinates — a phone renders the
+  // board as one column and has no x to speak of. The move is a SWAP of the two
+  // tiles' grid geometry, deliberately, rather than a rewrite of the board into
+  // a column: the set of slots the trader arranged on a desktop is left exactly
+  // as it was, and only which tile occupies which slot changes. The obvious
+  // implementation — renumber y down the column and set every x to 0 — is the
+  // one thing a phone must never do, since it would flatten a desktop board
+  // from the small screen with no way to get it back.
+  //
+  // Heights are clamped to each tile's own minimum on the way in: the two slots
+  // can differ a lot (a ticker strip's two rows against a chart's eight), and a
+  // chart dropped into a two-row slot is a stub. Growing one can overlap what
+  // sits below it, which the grid's vertical compaction resolves on the desktop.
+  const movePhoneTile = useCallback((id: string, dir: -1 | 1) => {
+    setTiles((prev) => {
+      const order = [...prev].sort((a, b) => a.y - b.y || a.x - b.x);
+      const i = order.findIndex((t) => t.id === id);
+      if (i < 0) return prev;
+      const j = i + dir;
+      if (j < 0 || j >= order.length) return prev;
+      const a = order[i];
+      const b = order[j];
+      const fit = (t: BoardTile, slot: BoardTile): BoardTile => ({
+        ...t,
+        x: slot.x,
+        y: slot.y,
+        w: slot.w,
+        h: Math.max(slot.h, tileDef(t.kind)?.minH ?? 4),
+      });
+      return prev.map((t) => (t.id === a.id ? fit(a, b) : t.id === b.id ? fit(b, a) : t));
+    });
+  }, []);
 
   const patchTile = useCallback((id: string, patch: Partial<BoardTile>) => {
     setTiles((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -633,12 +686,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
               </div>
             )}
           </>
-        ) : canCustomize ? (
-          // A member on a phone: they already hold this, they simply cannot
-          // arrange a grid here. Showing them the upsell would be telling a
-          // paying customer to buy what they have bought.
-          <span style={{ fontSize: 11, color: FAINT }}>{"Arrange this board on a larger screen"}</span>
-        ) : (
+        ) : canCustomize ? null : (
           // The paid half, stated rather than hidden: the reader can see that
           // arranging their own board is what a membership adds.
           <button onClick={onOpenMembership} style={{ ...ghostBtn, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -697,12 +745,13 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
               cols={isPhone ? 1 : COLS}
               rowHeight={ROW_H}
               margin={[10, 10]}
-              // `canEdit` as well as `editing`: a board left in edit mode on a
+              // `canDrag` as well as `editing`: a board left in edit mode on a
               // desktop and then narrowed to a phone would otherwise stay
               // draggable, and a drag there writes the flattened one-column
-              // order back over the real arrangement.
-              isDraggable={editing && canEdit}
-              isResizable={editing && canEdit}
+              // order back over the real arrangement. A phone edits through the
+              // per-cell arrows below instead.
+              isDraggable={editing && canDrag}
+              isResizable={editing && canDrag}
               // ALL FOUR CORNERS, not just the bottom-right (owner instruction,
               // 2026-08). Dragging only from the south-east corner means a tile
               // at the right edge of the board can be made bigger but not
@@ -723,7 +772,9 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
               {tiles.map((t) => (
                 <div
                   key={t.id}
-                  className={`wall-cell${editing ? ' wall-cell-editing' : ''}`}
+                  className={`wall-cell${editing ? ' wall-cell-editing' : ''}${
+                    editing && isPhone ? ' wall-cell-fixed' : ''
+                  }`}
                   style={{ overflow: 'hidden', position: 'relative' }}
                 >
                   <BoardTileView
@@ -751,6 +802,32 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
                     >
                       <Icon name="maximize-2" size={11} color="#cfe0ff" />
                     </button>
+                  )}
+                  {/* The phone's reorder control, in the same corner the expand
+                      button uses and free for exactly the same reason: while
+                      editing there is no expand button, and on a phone there are
+                      no resize handles either. In the cell rather than the tile
+                      header because there is a component per tile kind and this
+                      way every one of them gets the control unchanged. */}
+                  {editing && isPhone && (
+                    <div className="wall-move no-drag">
+                      <button
+                        onClick={() => movePhoneTile(t.id, -1)}
+                        disabled={phoneOrder.indexOf(t.id) <= 0}
+                        title={`Move ${tileLabel(t.kind)} up`}
+                        aria-label={`Move ${tileLabel(t.kind)} up`}
+                      >
+                        <Icon name="chevron-up" size={13} color="#cfe0ff" />
+                      </button>
+                      <button
+                        onClick={() => movePhoneTile(t.id, 1)}
+                        disabled={phoneOrder.indexOf(t.id) >= phoneOrder.length - 1}
+                        title={`Move ${tileLabel(t.kind)} down`}
+                        aria-label={`Move ${tileLabel(t.kind)} down`}
+                      >
+                        <Icon name="chevron-down" size={13} color="#cfe0ff" />
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -1097,6 +1174,29 @@ const PLACEHOLDER_CSS = `
 }
 .wall-cell:hover .wall-expand, .wall-expand:focus-visible { opacity: 1; }
 @media (hover: none) { .wall-expand { opacity: .55; } }
+
+/* A cell that cannot be dragged — edit mode on a phone. The header's grip glyph
+   and grab cursor both promise a drag that will not happen there, and the tile
+   moves with the arrows instead. */
+.wall-cell-fixed .tile-grip { display: none; }
+.wall-cell-fixed .tile-header, .wall-cell-fixed .tile-header:active { cursor: default; }
+
+/* The phone's reorder arrows. Full strength always: this is a touch-only
+   control, so there is no hover to reveal it with. */
+.wall-move {
+  position: absolute; right: 6px; bottom: 6px; z-index: 5;
+  display: inline-flex; align-items: stretch;
+  background: rgba(9,20,46,.96); border: 1px solid ${BORDER2}; border-radius: 7px;
+  overflow: hidden;
+}
+.wall-move button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 30px; padding: 0;
+  background: transparent; border: none; cursor: pointer;
+}
+.wall-move button + button { border-left: 1px solid ${BORDER2}; }
+.wall-move button:disabled { opacity: .3; cursor: default; }
+.wall-move button:active:not(:disabled) { background: rgba(235,203,116,.18); }
 `;
 
 const maxWrap: CSSProperties = {

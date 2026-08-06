@@ -1727,11 +1727,38 @@ and the tile catalog above.
 idea — at twelve columns a four-wide tile is a third of a 390px screen. So on a
 phone the same tiles stack full-width, ordered `y` then `x` (how the desktop
 board reads anyway), each with a height floor. The stored `x`/`y`/`w` are
-untouched: the phone changes what is **rendered**, never what is saved. That is
-also why `canEdit` is `customBoards && !isPhone` and why `isDraggable` tests
-`canEdit` as well as `editing` — a drag on the phone would write the flattened
-order over the real arrangement, including for a board merely left in edit mode
-on a desktop and then narrowed.
+untouched: the phone changes what is **rendered**, never what is saved.
+
+**A phone CAN edit the board; what it cannot do is DRAG** (owner request,
+2026-08 — editing was off there entirely until then). The split is `canEdit`
+(the membership alone) versus `canDrag` (`canEdit && !isPhone`), and everything
+edit mode does other than moving a tile — adding one, removing one, a tile's own
+settings, naming, sharing, saving — works identically on either.
+
+- **`onLayoutChange` returns early on a phone whatever the mode, and that guard
+  is what makes the rest safe.** What the grid reports there is the flattened
+  one-column render (`x:0`, `w:1`, floored heights), not the board; writing it
+  back would destroy the desktop arrangement the moment somebody opened edit
+  mode on their phone. `isDraggable`/`isResizable` test `canDrag` for the same
+  reason, which also covers a board left in edit mode on a desktop and then
+  narrowed. Every phone layout row is `static` on top of that.
+- **Moving a tile is `movePhoneTile`, and it SWAPS the two tiles' grid geometry**
+  rather than rewriting the board into a column. The set of slots the trader
+  arranged on a desktop survives untouched; only which tile sits in which slot
+  changes. Renumbering `y` down the column and zeroing every `x` — the obvious
+  implementation — is the one thing a phone must never do. Heights are clamped
+  to each tile's own `minH` on the way in (a chart dropped into a ticker strip's
+  two-row slot is a stub); growing one can overlap what is below it, which the
+  grid's vertical compaction resolves on the desktop.
+- The arrows live in the grid **cell**, like the expand button and for the same
+  reason — a component per tile kind — and that corner is free because while
+  editing there is no expand button and on a phone no resize handles either.
+- **The `⠿` grip is hidden wherever the header is not a drag handle**
+  (`.tile-grip` + `.wall-cell-fixed` in `PLACEHOLDER_CSS`). A grip promising a
+  drag that does nothing is worse than no grip. Nine tile headers draw one —
+  `TileFrame` plus the seven that predate it plus `tiles/index.tsx` — so a new
+  tile header that draws its own must carry the class. (`MarketData.tsx`'s grip
+  is a different feature, the pinned-strip reorder, and is not one of them.)
 
 **Any tile can be expanded to fill the screen**, and the control is in the grid
 **cell**, not the tile header. Deliberately: there is a component per tile kind,

@@ -162,7 +162,13 @@ function LockedTile({
     <div style={wrap}>
       <div className="tile-header" style={{ ...header, cursor: editing ? 'move' : 'default' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-          {editing && <span style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>⠿</span>}
+          {editing && (
+            // Classed so the board can hide it where the header is not a drag
+            // handle — a phone, where the tile moves with the cell's arrows.
+            <span className="tile-grip" style={{ color: FAINT, fontSize: 13, lineHeight: 1 }}>
+              ⠿
+            </span>
+          )}
           <Icon name="lock" size={13} color={FAINT} />
           <span style={{ fontSize: 12.5, fontWeight: 700, color: MUTED, whiteSpace: 'nowrap' }}>
             {tile.title || tileLabel(tile.kind)}
