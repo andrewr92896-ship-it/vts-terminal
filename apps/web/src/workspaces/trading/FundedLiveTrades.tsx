@@ -110,8 +110,10 @@ export function FundedLiveTrades({ showMoney, readOnly }: { showMoney: boolean; 
             <span style={col}>Entry</span>
             <span style={col}>Live</span>
             <span style={col}>Size</span>
+            <span style={col}>Stop</span>
+            <span style={col}>Target</span>
             <span style={{ ...timeCol, textAlign: 'right' }}>Opened</span>
-            {!readOnly && <span style={{ flex: '0 0 90px' }} />}
+            {!readOnly && <span style={actionCol} />}
           </div>
           {openRows.map(({ trade, account }) => (
             <LiveTradeRow
@@ -151,9 +153,54 @@ function LiveTradeRow({
   const long = trade.side === 'long';
   const ccy = account.currency || 'USD';
   const [closing, setClosing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [sl, setSl] = useState('');
+  const [tp, setTp] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  // Seed from the position as it stands NOW rather than as it stood at mount:
+  // the book refreshes underneath, so a level changed since would otherwise open
+  // as an empty box — and an empty box saved means "remove that level".
+  function openEditor() {
+    setSl(trade.stopLoss == null ? '' : String(trade.stopLoss));
+    setTp(trade.takeProfit == null ? '' : String(trade.takeProfit));
+    setMsg(null);
+    setClosing(false);
+    setEditing(true);
+  }
+
+  async function saveProtection() {
+    // A level left exactly as it was is omitted, so saving after changing only
+    // the stop never rewrites the target. A cleared box is an explicit null.
+    const next = (text: string, current: number | null) => {
+      const value = text.trim() === '' ? null : Number(text);
+      if (value === current) return undefined;
+      if (value != null && !Number.isFinite(value)) return undefined;
+      return value;
+    };
+    const stopLoss = next(sl, trade.stopLoss);
+    const takeProfit = next(tp, trade.takeProfit);
+    if (stopLoss === undefined && takeProfit === undefined) {
+      setEditing(false);
+      return;
+    }
+    setBusy(true);
+    onError(null);
+    try {
+      const d = await api.setFundedTradeProtection(trade.id, {
+        ...(stopLoss === undefined ? {} : { stopLoss }),
+        ...(takeProfit === undefined ? {} : { takeProfit }),
+      });
+      onData(d);
+      setEditing(false);
+    } catch (e) {
+      onError(e instanceof ApiError ? e.message : 'Could not save the stop or target');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function closeFromShot(file: File | null | undefined) {
     if (!file || !file.type.startsWith('image/')) return;
@@ -179,7 +226,9 @@ function LiveTradeRow({
 
   return (
     <>
-      <div style={{ ...row, borderBottom: closing ? 'none' : `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+      {/* Either panel below carries the divider itself, so the row drops its own
+          rather than drawing a line between a row and its own open editor. */}
+      <div style={{ ...row, borderBottom: closing || editing ? 'none' : `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
         <span style={{ flex: '1 1 120px', fontWeight: 600, color: TEXT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {trade.instrument}
           <span style={openPill} title="Open position — marked live against the desk price">OPEN</span>
@@ -198,6 +247,10 @@ function LiveTradeRow({
           )}
         </span>
         <span style={col}>{trade.units || '—'}</span>
+        {/* The protective levels the prop firm is holding. Coloured like the
+            desk's, and an unset one stays faint rather than reading as a price. */}
+        <span style={{ ...col, color: trade.stopLoss == null ? FAINT : RED }}>{fmtPrice(trade.stopLoss)}</span>
+        <span style={{ ...col, color: trade.takeProfit == null ? FAINT : GREEN }}>{fmtPrice(trade.takeProfit)}</span>
         {/* When it opened, with how long it has been running underneath. */}
         <span style={{ ...timeCol, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, lineHeight: 1.35 }}>
           <span style={{ color: MUTED, whiteSpace: 'nowrap' }} title={`Opened ${etStampFull(trade.openedAt ?? trade.createdAt)}`}>
@@ -206,9 +259,17 @@ function LiveTradeRow({
           <span style={{ color: FAINT, whiteSpace: 'nowrap' }}>{etSince(trade.openedAt ?? trade.createdAt)}</span>
         </span>
         {!readOnly && (
-          <span style={{ flex: '0 0 90px', display: 'inline-flex', justifyContent: 'flex-end' }}>
+          <span style={{ ...actionCol, display: 'inline-flex', justifyContent: 'flex-end', gap: 6, flexWrap: 'wrap' }}>
             <button
-              onClick={() => { setMsg(null); setClosing((v) => !v); }}
+              onClick={() => (editing ? setEditing(false) : openEditor())}
+              disabled={busy}
+              title="Set this position's stop and target by hand"
+              style={editBtn}
+            >
+              {editing ? 'Cancel' : 'Stop / target'}
+            </button>
+            <button
+              onClick={() => { setMsg(null); setEditing(false); setClosing((v) => !v); }}
               disabled={busy}
               title="Close this trade using its result screenshot"
               style={closeTradeBtn}
@@ -218,6 +279,28 @@ function LiveTradeRow({
           </span>
         )}
       </div>
+
+      {!readOnly && editing && (
+        <div style={{ padding: '0 12px 12px', borderBottom: `1px solid ${BORDER}` }}>
+          <div style={panel}>
+            <div style={panelLabel}>{trade.instrument} — stop and target</div>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '0 0 130px' }}>
+                <span style={miniLabel}>{"Stop loss"}</span>
+                <input value={sl} onChange={(e) => setSl(e.target.value)} inputMode="decimal" placeholder="none" style={input} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: '0 0 130px' }}>
+                <span style={miniLabel}>{"Take profit"}</span>
+                <input value={tp} onChange={(e) => setTp(e.target.value)} inputMode="decimal" placeholder="none" style={input} />
+              </label>
+              <button onClick={() => void saveProtection()} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>
+                {busy ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setEditing(false)} disabled={busy} style={ghostBtn}>{"Cancel"}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {!readOnly && closing && (
         <div style={{ padding: '0 12px 12px', borderBottom: `1px solid ${BORDER}` }}>
@@ -370,6 +453,10 @@ const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7
 const closeTradeBtn: CSSProperties = { fontSize: 10.5, fontWeight: 700, color: '#bff0d4', background: 'rgba(53,196,123,.1)', border: '1px solid rgba(53,196,123,.5)', padding: '4px 9px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' };
 const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', fontSize: 11.5, fontFamily: MONO };
 const col: CSSProperties = { flex: '0 0 60px' };
+// Holds the two row controls side by side; wraps rather than truncating either.
+const actionCol: CSSProperties = { flex: '0 0 172px' };
+const miniLabel: CSSProperties = { fontSize: 9.5, color: FAINT, letterSpacing: '.4px', textTransform: 'uppercase' };
+const editBtn: CSSProperties = { fontSize: 10.5, fontWeight: 700, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '4px 9px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' };
 // Wider than the rest: it carries the open stamp with the running time beneath.
 const timeCol: CSSProperties = { flex: '0 0 118px' };
 const openPill: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.5px', color: GREEN, background: 'rgba(53,196,123,.12)', border: '1px solid rgba(53,196,123,.45)', borderRadius: 4, padding: '1px 5px' };

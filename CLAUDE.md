@@ -1579,9 +1579,25 @@ naked one in the words reserved for genuine danger. Do not re-hardcode them.
   position, so a re-paste must never quietly rewrite those.
 - A **closed** trade keeps `onConflictDoNothing`: those dedupe on time + profit,
   and re-posting a history batch must never rewrite what was already logged.
-- There is still **no by-hand edit** of a funded position's stop. If the parser
-  misses one, the remedy is a clearer screenshot re-pasted, or delete and
-  re-import.
+- **The stop and target can also be typed in by hand**, from the Stop / target
+  control on each row of Manual Trades ▸ Live funded trades
+  (`setFundedTradeProtection` → `PATCH /api/trading/funded/trades/:id`, guarded
+  by the same `write` the sibling funded routes use, and owner-scoped in the
+  service so it can only ever reach a row the caller entered). A parser that
+  misreads a level, or a platform that shows it somewhere the screenshot does not
+  reach, otherwise left deleting and re-importing as the only remedy.
+  - **Protection only, deliberately.** The fill, size, side and open time
+    identify the position and three of them build the dedupe key, so letting them
+    be typed over would detach the row from the screenshot it came from and
+    quietly break the re-paste path. Correcting one of those is still a delete
+    and re-import.
+  - **`undefined` leaves a level alone, `null` clears it** — through the Zod
+    `.nullish()`, the service patch and the client method alike. Saving after
+    changing only the stop must never blank the target by omission.
+  - **Not offered on the Trade Desk**, whose row controls send an instruction to
+    a broker (`actionable` is `oanda`-only). Editing a note about what a prop
+    firm is holding is a different act, and one button meaning both would be
+    worse than the walk to the screen that owns the position.
 
 **The three built-in layouts now live in the DATABASE** (`wall_templates`,
 migration `0105`), edited from **Developer Terminal ▸ Live Wall Templates**, so

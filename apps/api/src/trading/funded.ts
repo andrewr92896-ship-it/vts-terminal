@@ -340,6 +340,48 @@ export async function addFundedTrade(
   return getFunded(userId);
 }
 
+// Set the stop and target on a funded position by hand.
+//
+// The screenshot import is the usual way these arrive, and re-pasting refreshes
+// them — but a parser that misreads a level, or a platform that shows it
+// somewhere the picture does not reach, otherwise leaves the trader with no
+// remedy but deleting the position and importing it again. That is a bad trade
+// for a record that is only ever a note about what the prop firm is holding.
+//
+// Deliberately protection-only. Everything else about a funded position — the
+// fill, the size, the side, the open time — is what identifies it, and the
+// dedupe key is built from three of those; letting them be typed over would
+// detach the row from the screenshot it came from and quietly break the
+// re-paste path. Correcting one of those is still a delete and re-import.
+//
+// `undefined` leaves a level alone, `null` clears it. So a caller changing only
+// the stop cannot blank the target by omission.
+export async function setFundedTradeProtection(
+  userId: string,
+  tradeId: string,
+  patch: { stopLoss?: number | null; takeProfit?: number | null },
+): Promise<FundedData> {
+  const row = (
+    await db
+      .select()
+      .from(fundedTrades)
+      .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!row) throw new Error('Trade not found');
+
+  const set: Partial<typeof fundedTrades.$inferInsert> = {};
+  if (patch.stopLoss !== undefined) set.stopLoss = cleanNum(patch.stopLoss);
+  if (patch.takeProfit !== undefined) set.takeProfit = cleanNum(patch.takeProfit);
+  if (Object.keys(set).length === 0) return getFunded(userId);
+
+  await db
+    .update(fundedTrades)
+    .set(set)
+    .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)));
+  return getFunded(userId);
+}
+
 export async function removeFundedTrade(userId: string, tradeId: string): Promise<FundedData> {
   await db
     .delete(fundedTrades)

@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.72';
+export const APP_VERSION = 'Beta V 6.73';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.73',
+    date: 'August 6, 2026',
+    notes: [
+      'You can now set a funded position’s stop and target by hand, from the row it sits on in Manual Trades. Until now the only fix for a level VTS AI read wrong was deleting the trade and importing it again.',
+      'Those two levels now show on the live funded trades table as well, beside the entry and live price.',
+    ],
+  },
   {
     version: 'Beta V 6.72',
     date: 'August 6, 2026',
