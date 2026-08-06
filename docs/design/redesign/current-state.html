@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VTS Terminal — current state (cosmetic handoff)</title>
+    <!--
+      THE VTS TERMINAL AS IT LOOKS TODAY. Beta V 6.80 / cb1afcc.
+
+      Self-contained: no CDN, no external font, no script. Open it, screenshot
+      it, or hand the file straight to a design tool.
+
+      Every value here was copied out of the running code:
+        theme/tokens.ts · theme/themes.ts · theme/nav.ts · styles/global.css
+        components/{Sidebar,TopBar,Portal,Icon,TierMark}.tsx
+        workspaces/investments/ui.tsx   — the one shared primitives module
+        workspaces/trading/TradeCard.tsx — the signature component
+
+      Where the code is inconsistent, THIS FILE IS INCONSISTENT TOO. That is the
+      point — see the "Two palettes" panel at the end. Do not tidy it here; tidy
+      it in the design and let the code follow.
+
+      The app styles with inline React styles, not classes. Classes are used here
+      only to keep the file readable.
+
+      NOT SHOWN (separate surfaces, not the shell): the Ask VTS AI slide-over,
+      Team Chat, the mobile drawer, the Live Wall's drag-resize grid, and
+      /employee — which has its own design language entirely.
+    -->
+    <style>
+      :root {
+        /* Live tokens — theme/tokens.ts + global.css */
+        --bg: #050b18;
+        --side: #071021;
+        --panel: #0a1426;
+        --panel-2: #0c1930;
+        --line: #152139;
+        --line-2: #1e2e52;
+        --hover: #24365f;
+        --text: #e9effb;
+        --muted: #93a5c9;
+        --faint: #5e7098;
+        --gold: #ebcb74;
+        --gold-2: #c9a24b;
+        --gold-text: #241a05;
+        --green: #2fc77e;
+        --red: #f0596e;
+        --amber: #e5a43b;
+        --info: #6c9eff;
+        --violet: #b69cff;
+        --tier-max: #b9f2ff;
+        --employee: #c25a38;
+
+        --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+        /* The active workspace accent. Swap this one value to preview another:
+           My Terminal #34D399 · Advanced Trading #EBCB74 · Finances #4ADE80 ·
+           News #93B4FF · Investments #2DD4BF · Studies #B69CFF ·
+           Admin #E0708F · Developer #F5A524 · Site Help #6C9EFF */
+        --accent: #34d399;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+      ::-webkit-scrollbar { width: 9px; height: 9px; }
+      ::-webkit-scrollbar-track { background: #0a1730; }
+      ::-webkit-scrollbar-thumb { background: #1d3560; border-radius: 5px; }
+
+      /* ---------- SHELL: Portal.tsx is a 248px + 1fr grid, 100vh, no page
+                    scroll — only the content column scrolls. ---------- */
+      .shell {
+        display: grid;
+        grid-template-columns: 248px 1fr;
+        height: 100vh;
+        overflow: hidden;
+      }
+
+      /* ---------- SIDEBAR (Sidebar.tsx) ---------- */
+      .rail {
+        background: var(--side);
+        border-right: 1px solid var(--line);
+        padding: 22px 16px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+        overflow-y: auto;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8;
+        padding: 2px 4px 0;
+        min-height: 30px;
+      }
+      /* The app renders /brand/vitalis-wordmark.png at 148px wide. Drawn as
+         text here so this file stays self-contained. */
+      .wordmark {
+        font-family: var(--mono);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--gold);
+        letter-spacing: 2px;
+      }
+      .toggle {
+        width: 30px; height: 30px; flex: none;
+        display: flex; align-items: center; justify-content: center;
+        border-radius: 8px; cursor: pointer; color: var(--faint);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--line-2);
+      }
+      .nav-label {
+        font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase;
+        color: var(--faint); font-weight: 600; padding: 0 10px; margin-bottom: 8px;
+      }
+      .row {
+        display: flex; align-items: center; gap: 11px;
+        padding: 9px 10px; border-radius: 8px;
+        font-size: 13.5px; font-weight: 500; color: var(--muted);
+        cursor: pointer; margin-bottom: 2px; position: relative;
+        transition: background-color 0.15s ease, color 0.15s ease;
+      }
+      .row:hover { background: rgba(255, 255, 255, 0.03); color: var(--text); }
+      .row .ico { flex: none; color: var(--faint); }
+      .row .lbl { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* Active WORKSPACE: flat white wash, icon takes the workspace accent. */
+      .row.ws-active { background: rgba(255, 255, 255, 0.045); color: var(--text); font-weight: 600; }
+      .row.ws-active .ico { color: var(--accent); }
+      /* Active SECTION: accent gradient pill, text AND icon in the accent. */
+      .row.sec-active {
+        background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 16%, transparent),
+                                             color-mix(in srgb, var(--accent) 8%, transparent));
+        color: var(--accent); font-weight: 600;
+      }
+      .row.sec-active .ico { color: var(--accent); }
+      .row.locked { opacity: 0.5; }
+      /* Employee Portal — a standalone row ABOVE the workspaces list. Not a
+         workspace and not a section: it opens a separate site in a new tab. */
+      .row.employee {
+        border-radius: 9px; padding: 10px 11px; font-weight: 600;
+        background: color-mix(in srgb, var(--employee) 5%, transparent);
+        border: 1px solid color-mix(in srgb, var(--employee) 22%, transparent);
+      }
+      .row.employee .ico { color: var(--employee); }
+      .foot {
+        margin-top: auto; display: flex; align-items: center; gap: 8px;
+        padding: 12px 10px 0; border-top: 1px solid var(--line);
+      }
+      .foot .name { font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.5px; }
+      .foot .ver {
+        margin-left: auto; font-family: var(--mono); font-size: 9.5px; color: var(--gold);
+        border: 1px solid rgba(235, 203, 116, 0.35); border-radius: 4px; padding: 2px 7px;
+      }
+
+      /* ---------- TOP BAR (TopBar.tsx) — 64px, same bg as the rail ---------- */
+      .main { display: flex; flex-direction: column; overflow: hidden; }
+      .topbar {
+        height: 64px; flex: none;
+        background: var(--side); border-bottom: 1px solid var(--line);
+        display: flex; align-items: center; gap: 14px; padding: 0 24px 0 28px;
+      }
+      .crumb { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--faint); }
+      .crumb .cur { color: var(--text); font-weight: 600; }
+      .search {
+        margin-left: auto; width: 240px; display: flex; align-items: center; gap: 8px;
+        background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px;
+        padding: 8px 10px; font-size: 12.5px; color: var(--faint);
+      }
+      .kbd {
+        margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--faint);
+        border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px;
+      }
+      .clock { text-align: right; font-family: var(--mono); line-height: 1.3; }
+      .clock .t { font-size: 12.5px; color: var(--text); }
+      .clock .d { font-size: 10px; color: var(--faint); }
+      .btn-gold {
+        display: inline-flex; align-items: center; gap: 7px;
+        background: linear-gradient(180deg, var(--gold), var(--gold-2));
+        color: var(--gold-text); border: none; border-radius: 7px;
+        padding: 8px 14px; font-size: 12px; font-weight: 700;
+        font-family: var(--sans); cursor: pointer;
+      }
+      .icon-btn {
+        position: relative; width: 36px; height: 36px; flex: none;
+        display: flex; align-items: center; justify-content: center;
+        color: var(--muted); background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--line-2); border-radius: 8px; cursor: pointer;
+      }
+      .bubble {
+        position: absolute; top: -4px; right: -4px; min-width: 15px; height: 15px;
+        border-radius: 99px; background: var(--red); color: #fff;
+        font-family: var(--mono); font-size: 9px; font-weight: 600;
+        display: flex; align-items: center; justify-content: center; padding: 0 4px;
+      }
+      .avatar {
+        width: 32px; height: 32px; flex: none; border-radius: 50%;
+        background: #12233f; border: 2px solid var(--accent);
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--text);
+        cursor: pointer;
+      }
+
+      /* ---------- CONTENT ---------- */
+      .content { overflow-y: auto; padding: 22px 26px 0; }
+      h2.screen { margin: 0; font-size: 19px; font-weight: 700; color: #fff; }
+      .blurb { font-size: 12px; color: var(--muted); margin-top: 6px; max-width: 680px; line-height: 1.55; }
+
+      /* ---------- COMPONENT PRIMITIVES ----------
+         Taken from workspaces/investments/ui.tsx, the one shared module. Note
+         `panel` there is a GRADIENT, while portal-shell.md documents a card as
+         flat #0A1426 — that drift is real and reproduced here. */
+      .card {
+        background: linear-gradient(180deg, rgba(9, 26, 42, 0.5), rgba(6, 18, 30, 0.6));
+        border: 1px solid var(--line); border-radius: 12px; padding: 16px;
+      }
+      .card-flat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+      .card-title {
+        font-size: 10.5px; letter-spacing: 0.6px; text-transform: uppercase;
+        color: var(--faint); font-family: var(--mono); margin-bottom: 12px;
+      }
+      .grid { display: grid; gap: 12px; }
+      .stat { padding: 13px 15px; }
+      .stat .lab {
+        font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase;
+        color: var(--faint); font-family: var(--mono); margin-bottom: 7px;
+      }
+      .stat .fig { font-size: 21px; font-weight: 700; color: var(--text); font-family: var(--mono); line-height: 1.15; }
+      .stat .sub { font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+      .up { color: var(--green); }
+      .down { color: var(--red); }
+
+      .btn-primary {
+        background: #2dd4bf; color: #04231f; border: none; border-radius: 7px;
+        padding: 8px 14px; font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: var(--sans);
+      }
+      .btn-ghost {
+        background: rgba(255, 255, 255, 0.05); color: var(--muted);
+        border: 1px solid var(--line-2); border-radius: 7px;
+        padding: 8px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: var(--sans);
+      }
+      .btn-danger { color: var(--red); border-color: rgba(240, 89, 110, 0.35); }
+      .input {
+        background: #091633; border: 1px solid var(--line-2); border-radius: 7px;
+        color: var(--text); padding: 8px 10px; font-size: 13px; font-family: var(--sans); width: 100%;
+      }
+      .label {
+        display: block; font-size: 10.5px; letter-spacing: 0.5px; text-transform: uppercase;
+        color: var(--faint); font-family: var(--mono); margin-bottom: 5px;
+      }
+      .chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        font-size: 9.5px; font-weight: 700; color: var(--muted);
+        border: 1px solid var(--line-2); border-radius: 5px; padding: 2px 7px;
+      }
+      .tag {
+        display: inline-flex; align-items: center; gap: 5px; font-size: 10px;
+        font-family: var(--mono); border-radius: 5px; padding: 2px 6px; white-space: nowrap;
+      }
+      .dot { width: 5px; height: 5px; border-radius: 99px; flex: none; }
+      .bar { background: rgba(255, 255, 255, 0.06); border-radius: 99px; height: 7px; overflow: hidden; }
+      .bar > i { display: block; height: 100%; border-radius: 99px; background: #2dd4bf; }
+      .disclaimer {
+        margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);
+        font-size: 11px; line-height: 1.6; color: var(--faint); font-family: var(--mono);
+      }
+      table.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+      table.tbl th {
+        text-align: left; font-size: 10px; letter-spacing: 0.6px; text-transform: uppercase;
+        color: var(--faint); font-family: var(--mono); font-weight: 600;
+        padding: 0 10px 8px; border-bottom: 1px solid var(--line);
+      }
+      table.tbl td { padding: 9px 10px; border-bottom: 1px solid var(--line); color: var(--muted); }
+      table.tbl td.num { font-family: var(--mono); color: var(--text); text-align: right; }
+
+      /* ---------- Gallery chrome (NOT part of the app) ---------- */
+      .gallery { padding: 30px 26px 60px; border-top: 1px solid var(--line); margin-top: 28px; }
+      .g-h {
+        font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase;
+        color: var(--faint); font-weight: 600; margin: 30px 0 12px;
+      }
+      .g-h:first-child { margin-top: 0; }
+      .note { font-size: 11.5px; color: var(--muted); line-height: 1.6; margin: 0 0 12px; max-width: 720px; }
+      .swatch { display: flex; align-items: center; gap: 9px; font-size: 11px; font-family: var(--mono); color: var(--muted); }
+      .swatch b { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--line-2); flex: none; }
+      .bad { color: var(--red); }
+      .ok { color: var(--green); }
+    </style>
+  </head>
+  <body>
+    <!-- Inline Lucide sprite. The app draws these from components/Icon.tsx —
+         56 glyphs, 16px default, stroke 1.75, round caps/joins. -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g id="i-briefcase"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></g>
+        <g id="i-candles"><path d="M9 5v4M9 15v4M15 3v6M15 15v6" /><rect x="6" y="9" width="6" height="6" rx="1" /><rect x="12" y="9" width="6" height="6" rx="1" /></g>
+        <g id="i-piggy"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 1 3.3 2.5 4.3V19a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-.5h3V19a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2.5c.7-.6 1.3-1.4 1.6-2.5H22V9h-2c0-.9-.4-1.7-1-2.3V5Z" /><circle cx="8" cy="10" r="1" /></g>
+        <g id="i-news"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V8h4" /><path d="M10 6h8M10 10h8M10 14h4" /></g>
+        <g id="i-landmark"><path d="M3 22h18M4 10v8M9 10v8M15 10v8M20 10v8M2 10h20L12 3 2 10Z" /></g>
+        <g id="i-cap"><path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5" /></g>
+        <g id="i-shield"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" /><path d="m9 12 2 2 4-4" /></g>
+        <g id="i-crown"><path d="M2 18h20M3 6l4 5 5-7 5 7 4-5v11H3V6Z" /></g>
+        <g id="i-buoy"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="4" /><path d="m5 5 4.2 4.2M14.8 14.8 19 19M19 5l-4.2 4.2M9.2 14.8 5 19" /></g>
+        <g id="i-zap"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z" /></g>
+        <g id="i-users"><circle cx="9" cy="8" r="3" /><path d="M2 21v-2a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v2M17 5.3a3 3 0 0 1 0 5.4M22 21v-2a5 5 0 0 0-3-4.6" /></g>
+        <g id="i-linechart"><path d="M3 3v18h18" /><path d="m7 15 4-5 3 3 5-7" /></g>
+        <g id="i-todo"><path d="M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13" /></g>
+        <g id="i-gem"><path d="m6 3 6 18 6-18M2 9h20M6 3h12l4 6-10 12L2 9l4-6Z" /></g>
+        <g id="i-checks"><path d="M3 5h.01M3 12h.01M3 19h.01" /><path d="m7 5 2 2 3-3M8 12h13M8 19h13" /></g>
+        <g id="i-settings2"><path d="M4 7h11M4 17h7" /><circle cx="18" cy="7" r="2.5" /><circle cx="14" cy="17" r="2.5" /></g>
+        <g id="i-settings"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2 2 2 0 1 1-4 0 1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 4.6 15a2 2 0 1 1 0-4 1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 11.5 4a2 2 0 1 1 4 0 1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.9 2 2 0 1 1 0 4Z" /></g>
+        <g id="i-chevron"><path d="m9 18 6-6-6-6" /></g>
+        <g id="i-bell"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0" /></g>
+        <g id="i-search"><circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /></g>
+        <g id="i-star"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.9L12 17.8 5.8 21l1.2-6.9-5-4.9 6.9-1L12 2Z" /></g>
+        <g id="i-lock"><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></g>
+        <g id="i-external"><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></g>
+        <g id="i-panel"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 3v18M16 9l-3 3 3 3" /></g>
+        <g id="i-scale"><path d="M12 3v18M7 21h10M5 7h14M5 7 2 14h6L5 7Zm14 0-3 7h6l-3-7Z" /></g>
+        <g id="i-receipt"><path d="M4 2v20l2-1.5L8 22l2-1.5L12 22l2-1.5L16 22l2-1.5L20 22V2l-2 1.5L16 2l-2 1.5L12 2l-2 1.5L8 2 6 3.5 4 2Z" /><path d="M8 8h8M8 12h8M8 16h5" /></g>
+        <g id="i-globe"><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20Z" /></g>
+        <g id="i-alert"><path d="M12 3 2 20h20L12 3Z" /><path d="M12 10v4M12 17h.01" /></g>
+        <g id="i-inbox"><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.5 5.5 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.5A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.5Z" /></g>
+      </defs>
+    </svg>
+
+    <div class="shell">
+      <!-- ================= SIDEBAR ================= -->
+      <aside class="rail">
+        <div class="brand">
+          <span class="wordmark">VITALIS</span>
+          <span class="toggle"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-panel" /></svg></span>
+        </div>
+
+        <!-- Standalone, above the workspaces list. Conditional on the employee
+             role + a company-domain email. Opens /employee in a NEW TAB. -->
+        <div class="row employee">
+          <svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield" /></svg>
+          <span class="lbl">Employee Portal</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-external" /></svg>
+        </div>
+
+        <nav>
+          <div class="nav-label">Workspaces</div>
+          <!-- Order is theme/nav.ts verbatim. My Terminal is pinned first. -->
+          <div class="row ws-active"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-briefcase" /></svg><span class="lbl">My Terminal</span></div>
+          <!-- Advanced Trading is the one OPT-IN workspace. Off => dimmed with a
+               padlock, still drawn, and it leads to Premium Features. -->
+          <div class="row locked"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-candles" /></svg><span class="lbl">Advanced Trading</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-lock" /></svg></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-piggy" /></svg><span class="lbl">Finances</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-news" /></svg><span class="lbl">News</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-landmark" /></svg><span class="lbl">Investments</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cap" /></svg><span class="lbl">Studies</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield" /></svg><span class="lbl">Admin Terminal</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-crown" /></svg><span class="lbl">Developer Terminal</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-buoy" /></svg><span class="lbl">Site Help</span></div>
+        </nav>
+
+        <nav>
+          <div class="nav-label">My Terminal</div>
+          <!-- Live Wall is PINNED TOP — the one exception to the Max→Premium→free
+               stacking, and what a sign-in opens on. -->
+          <div class="row sec-active"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-zap" /></svg><span class="lbl">Live Wall</span></div>
+          <!-- Tier marks sit at the RIGHT of the row and are drawn for everyone,
+               including a member who already holds the tier. -->
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-users" /></svg><span class="lbl">Trading Team</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--tier-max)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gem" /></svg></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-linechart" /></svg><span class="lbl">Market Data</span><svg width="12" height="12" viewBox="0 0 24 24" fill="var(--gold)" stroke="var(--gold)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-star" /></svg></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-todo" /></svg><span class="lbl">To Do</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gem" /></svg><span class="lbl">Premium Features</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-checks" /></svg><span class="lbl">Site Rules</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings2" /></svg><span class="lbl">Preferences</span></div>
+          <div class="row"><svg class="ico" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings" /></svg><span class="lbl">Settings</span></div>
+        </nav>
+
+        <div class="foot">
+          <span class="name">VTS Terminal</span>
+          <span class="ver">Beta V 6.80</span>
+        </div>
+      </aside>
+
+      <!-- ================= MAIN ================= -->
+      <div class="main">
+        <div class="topbar">
+          <!-- The bar's ONLY navigational content. No tabs anywhere. -->
+          <div class="crumb">
+            <span>Vitalis Trading Team</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chevron" /></svg>
+            <span>My Terminal</span>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-chevron" /></svg>
+            <span class="cur">Live Wall</span>
+          </div>
+          <div class="search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-search" /></svg>
+            <span>Search</span><span class="kbd">⌘K</span>
+          </div>
+          <div class="clock">
+            <div class="t">14:32:07 ET</div>
+            <div class="d">Thu 6 Aug ET</div>
+          </div>
+          <!-- The one gold button in the shell. `gem` glyph — VTS AI is Max. -->
+          <button class="btn-gold">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gem" /></svg>
+            Ask VTS AI
+          </button>
+          <span class="icon-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bell" /></svg>
+            <span class="bubble">3</span>
+          </span>
+          <span class="avatar">AR</span>
+        </div>
+
+        <div class="content">
+          <h2 class="screen">Live Wall</h2>
+          <div class="blurb">
+            The terminal's one board. Every part of the terminal can be put on it, which is why it
+            is the screen a sign-in opens on.
+          </div>
+
+          <!-- ============ COMPONENT GALLERY ============ -->
+          <div class="gallery">
+            <div class="g-h">1 · Stat tiles — the KPI row</div>
+            <p class="note">
+              <code>StatTile</code> from <code>investments/ui.tsx</code>. Every figure on a screen is
+              mono — a price or P&amp;L set in the sans face is wrong. A null renders an em dash, never
+              “$0”: the difference between “we don't know” and “it's worth nothing” has to survive to
+              the pixel.
+            </p>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr))">
+              <div class="card stat"><div class="lab">Total Capital</div><div class="fig">$182,440</div><div class="sub">across 2 connections</div></div>
+              <div class="card stat"><div class="lab">Realized P/L</div><div class="fig up">+$3,782</div><div class="sub">42 trades this month</div></div>
+              <div class="card stat"><div class="lab">Open P/L</div><div class="fig down">−$412</div><div class="sub">6 positions</div></div>
+              <div class="card stat"><div class="lab">Win rate</div><div class="fig">61.9%</div><div class="sub">26 W · 16 L</div></div>
+              <div class="card stat"><div class="lab">Deposited</div><div class="fig">—</div><div class="sub">not stated</div></div>
+            </div>
+
+            <div class="g-h">2 · Cards — and the drift inside them</div>
+            <p class="note">
+              Two card treatments are in the tree at once. <span class="bad">Left</span> is
+              <code>investments/ui.tsx</code>'s <code>panel</code> (a gradient). <span class="bad">Right</span>
+              is what <code>portal-shell.md</code> documents (flat <code>--panel</code>). 70 files
+              independently define something card-shaped.
+            </p>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))">
+              <div class="card">
+                <div class="card-title">Gradient card — investments/ui.tsx</div>
+                <div style="font-size: 12.5px; color: var(--muted); line-height: 1.6">
+                  background: linear-gradient(180deg, rgba(9,26,42,.5), rgba(6,18,30,.6))
+                </div>
+              </div>
+              <div class="card-flat">
+                <div class="card-title">Flat card — as documented</div>
+                <div style="font-size: 12.5px; color: var(--muted); line-height: 1.6">background: #0A1426</div>
+              </div>
+            </div>
+
+            <div class="g-h">3 · Trade card — the signature component</div>
+            <p class="note">
+              <code>workspaces/trading/TradeCard.tsx</code>. Renders on the Live Wall, Trade Log, Trade
+              History, Trade Desk and the funded book. <span class="bad">It does not import the token
+              set at all</span> — every colour below is a local literal that near-misses a token.
+              Note the rule the terminal follows everywhere: a position always shows when it opened,
+              and once closed, when it closed.
+            </p>
+            <div style="max-width: 400px; background: rgba(13, 31, 68, 0.5); border: 1px solid #16294f; border-radius: 12px; overflow: hidden">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 11px 14px 9px">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span style="font-size: 15px; font-weight: 700; color: #fff">EUR/USD</span>
+                  <span style="font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 2px 6px; border-radius: 5px; color: #35c47b; border: 1px solid #35c47b">LONG</span>
+                </div>
+                <span style="font-size: 15px; font-weight: 700; font-family: var(--mono); color: #35c47b">+$412.60</span>
+              </div>
+              <div style="padding: 0 14px 10px; display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12.5px; color: #eef3ff">
+                <span>1.08421</span><span style="color: #6f84b0; font-size: 13px">→</span><span>1.08833</span>
+                <span style="margin-left: auto; font-size: 11px; font-weight: 600; color: #6f84b0">+0.3 slip</span>
+              </div>
+              <div style="display: flex; gap: 14px; padding: 0 14px 10px; flex-wrap: wrap">
+                <div style="display: flex; flex-direction: column"><span style="font-size: 8.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #6f84b0">Size</span><span style="font-size: 12.5px; font-weight: 500; color: #eef3ff; font-family: var(--mono)">100,000</span></div>
+                <div style="display: flex; flex-direction: column"><span style="font-size: 8.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #6f84b0">Stop</span><span style="font-size: 12.5px; font-weight: 500; color: #ef5468; font-family: var(--mono)">1.08200</span></div>
+                <div style="display: flex; flex-direction: column"><span style="font-size: 8.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #6f84b0">Target</span><span style="font-size: 12.5px; font-weight: 500; color: #35c47b; font-family: var(--mono)">1.09100</span></div>
+                <div style="display: flex; flex-direction: column"><span style="font-size: 8.5px; letter-spacing: 0.5px; text-transform: uppercase; color: #6f84b0">R:R</span><span style="font-size: 13px; font-weight: 700; color: #ebcb74; font-family: var(--mono)">1:3.1</span></div>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px; border-top: 1px solid #16294f; background: rgba(11, 26, 58, 0.5)">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span style="font-size: 9px; letter-spacing: 0.5px; text-transform: uppercase; color: #6f84b0">Open P/L</span>
+                  <span style="font-size: 12px; font-weight: 600; font-family: var(--mono); color: #35c47b">+41.2 pips</span>
+                </div>
+                <div style="text-align: right; font-family: var(--mono); font-size: 10.5px; color: #6f84b0; line-height: 1.4">
+                  <div>09:14 · 6 Aug</div>
+                  <div>5h 18m ago</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="g-h">4 · Buttons</div>
+            <p class="note">
+              One gold action per view; everything secondary is a ghost. Note the primary button is
+              <em>teal</em> inside Investments and <em>gold</em> in the shell — the primary colour
+              currently follows the workspace, which is part of why the app reads inconsistent.
+            </p>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center">
+              <button class="btn-gold"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-gem" /></svg>Ask VTS AI</button>
+              <button class="btn-primary">Save changes</button>
+              <button class="btn-ghost">Cancel</button>
+              <button class="btn-ghost btn-danger">Delete</button>
+              <span class="icon-btn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-bell" /></svg></span>
+            </div>
+
+            <div class="g-h">5 · Form controls</div>
+            <p class="note">
+              Every text input is floored at <strong>16px on touch devices</strong> site-wide so iOS
+              never zooms on focus. Do not design a smaller mobile input.
+            </p>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); max-width: 720px">
+              <div><span class="label">Instrument</span><input class="input" value="EUR/USD" /></div>
+              <div><span class="label">Size</span><input class="input" value="100000" /></div>
+              <div><span class="label">Order type</span><select class="input"><option>Market</option><option>Limit</option></select></div>
+            </div>
+
+            <div class="g-h">6 · Chips, tags and tier marks</div>
+            <p class="note">
+              A star means Premium (<code>#EBCB74</code>), a gem means Max (<code>#B9F2FF</code>) —
+              terminal-wide, in the sidebar, the tile picker and the channel rail alike. Provenance
+              tags are not decoration: a portfolio priced live is a different object from one priced
+              off a figure typed three months ago, and the screens must never let those look the same.
+            </p>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center">
+              <span class="chip">PIPS</span>
+              <span class="chip">SPOT</span>
+              <span class="tag" style="color: var(--green); border: 1px solid rgba(47, 199, 126, 0.35); background: rgba(47, 199, 126, 0.08)"><span class="dot" style="background: var(--green)"></span>Live price</span>
+              <span class="tag" style="color: var(--amber); border: 1px solid rgba(229, 164, 59, 0.35); background: rgba(229, 164, 59, 0.08)"><span class="dot" style="background: var(--amber)"></span>Your price · 3d ago</span>
+              <span class="tag" style="color: var(--faint); border: 1px solid rgba(94, 112, 152, 0.35); background: rgba(94, 112, 152, 0.08)"><span class="dot" style="background: var(--faint)"></span>Sample</span>
+              <span class="tag" style="color: var(--gold); border: 1px solid rgba(235, 203, 116, 0.35)"><svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.75"><use href="#i-star" /></svg>Premium</span>
+              <span class="tag" style="color: var(--tier-max); border: 1px solid rgba(185, 242, 255, 0.35)"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><use href="#i-gem" /></svg>Max</span>
+            </div>
+
+            <div class="g-h">7 · Table</div>
+            <div class="card" style="padding: 16px 6px 4px">
+              <table class="tbl">
+                <thead><tr><th style="padding-left: 10px">Instrument</th><th>Side</th><th>Opened</th><th style="text-align: right">Size</th><th style="text-align: right">P/L</th></tr></thead>
+                <tbody>
+                  <tr><td style="color: var(--text); font-weight: 600">EUR/USD</td><td><span style="color: var(--green)">LONG</span></td><td style="font-family: var(--mono); font-size: 11.5px">09:14 · 6 Aug</td><td class="num">100,000</td><td class="num up">+$412.60</td></tr>
+                  <tr><td style="color: var(--text); font-weight: 600">XAU/USD</td><td><span style="color: var(--red)">SHORT</span></td><td style="font-family: var(--mono); font-size: 11.5px">11:02 · 6 Aug</td><td class="num">12</td><td class="num down">−$188.20</td></tr>
+                  <tr><td style="color: var(--text); font-weight: 600">BTC/USD</td><td><span style="color: var(--green)">LONG</span></td><td style="font-family: var(--mono); font-size: 11.5px">08:41 · 5 Aug</td><td class="num">0.0425</td><td class="num up">+$1,204.00</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="g-h">8 · Progress, notices and the disclaimer</div>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(280px, 1fr))">
+              <div class="card">
+                <div class="card-title">Allocation</div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px"><span style="color: var(--muted)">US stocks</span><span style="font-family: var(--mono); color: var(--text)">68%</span></div>
+                <div class="bar"><i style="width: 68%"></i></div>
+              </div>
+              <div>
+                <!-- The banner shown whenever part of a portfolio could not be priced. A
+                     total that silently excludes holdings is a wrong total unless it says so. -->
+                <div style="display: flex; align-items: center; gap: 9px; flex-wrap: wrap; background: rgba(229, 164, 59, 0.08); border: 1px solid rgba(229, 164, 59, 0.3); border-radius: 9px; padding: 9px 12px; font-size: 12px; color: var(--amber)">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-alert" /></svg>
+                  <span>3 holdings have no price yet, so they are left out of the totals below.</span>
+                </div>
+              </div>
+            </div>
+            <div class="disclaimer">
+              Informational only. Investments is a read-only tracker — it never places trades or moves
+              money, and nothing here is investment, tax, or financial advice.
+            </div>
+
+            <div class="g-h">9 · Empty state</div>
+            <p class="note">
+              An empty state naming the action available is not a “tip” and stays. The terminal
+              deliberately carries <strong>no</strong> instructional captions anywhere else — no
+              “Use the arrows to reorder”, no “Click a slide to select it”.
+            </p>
+            <div class="card" style="padding: 34px 26px; text-align: center; max-width: 520px">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-inbox" /></svg>
+              <div style="font-size: 14.5px; font-weight: 600; color: var(--text); margin: 12px 0 6px">No sessions yet</div>
+              <div style="font-size: 12.5px; color: var(--muted); line-height: 1.6; max-width: 460px; margin: 0 auto">Add one to have the terminal watch its open and close for you.</div>
+            </div>
+
+            <div class="g-h">10 · Floating layer — dropdown / modal</div>
+            <p class="note">Borders carry the structure everywhere; shadows appear <em>only</em> here.</p>
+            <div style="width: 260px; background: #0c1c3c; border: 1px solid var(--line-2); border-radius: 10px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); padding: 8px">
+              <div style="font-size: 9.5px; letter-spacing: 1px; text-transform: uppercase; color: var(--faint); font-weight: 600; padding: 4px 9px">Account</div>
+              <div style="display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 6px; font-size: 12.5px; font-weight: 500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-settings" /></svg>Settings</div>
+              <div style="display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 6px; font-size: 12.5px; font-weight: 500"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><use href="#i-shield" /></svg>View as role</div>
+              <div style="border-top: 1px solid var(--line-2); padding-top: 6px; margin-top: 6px; display: flex; align-items: center; gap: 6px; padding: 6px 9px">
+                <span style="font-size: 12.5px; flex: 1">Zoom</span>
+                <span style="font-family: var(--mono); font-size: 11.5px; color: var(--muted)">100%</span>
+              </div>
+            </div>
+
+            <div class="g-h">11 · The nine workspace accents</div>
+            <p class="note">
+              The only thing that changes between workspaces. Backgrounds never do — the shell is one
+              navy everywhere. <code>themes.ts</code> also carries per-workspace <code>pageBg</code> /
+              <code>headerBg</code> values; those are <strong>dead</strong> outside the Accept-Terms
+              page and the Studies level-tint. Do not design against them.
+            </p>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); max-width: 900px">
+              <div class="swatch"><b style="background: #34d399"></b>#34D399 · My Terminal</div>
+              <div class="swatch"><b style="background: #ebcb74"></b>#EBCB74 · Advanced Trading</div>
+              <div class="swatch"><b style="background: #4ade80"></b>#4ADE80 · Finances</div>
+              <div class="swatch"><b style="background: #93b4ff"></b>#93B4FF · News</div>
+              <div class="swatch"><b style="background: #2dd4bf"></b>#2DD4BF · Investments</div>
+              <div class="swatch"><b style="background: #b69cff"></b>#B69CFF · Studies</div>
+              <div class="swatch"><b style="background: #e0708f"></b>#E0708F · Admin Terminal</div>
+              <div class="swatch"><b style="background: #f5a524"></b>#F5A524 · Developer Terminal</div>
+              <div class="swatch"><b style="background: #6c9eff"></b>#6C9EFF · Site Help</div>
+            </div>
+
+            <div class="g-h">12 · Two palettes — the thing to fix</div>
+            <p class="note">
+              Left is the token. Right is the literal the code actually uses, and how many times. None
+              of the differences is large enough to look deliberate — they just look like nobody was
+              in charge. <strong>63% of colour decisions in the app bypass the token set.</strong>
+            </p>
+            <div class="grid" style="grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); max-width: 900px">
+              <div class="swatch"><b style="background: #e9effb"></b><span class="ok">#E9EFFB --text</span> &nbsp;vs&nbsp; <b style="background: #eef3ff"></b><span class="bad">#eef3ff ×126</span></div>
+              <div class="swatch"><b style="background: #93a5c9"></b><span class="ok">#93A5C9 --muted</span> &nbsp;vs&nbsp; <b style="background: #9fb0d6"></b><span class="bad">#9fb0d6 ×47</span></div>
+              <div class="swatch"><b style="background: #5e7098"></b><span class="ok">#5E7098 --faint</span> &nbsp;vs&nbsp; <b style="background: #7488b5"></b><span class="bad">#7488b5 ×66</span></div>
+              <div class="swatch"><b style="background: #2fc77e"></b><span class="ok">#2FC77E --green</span> &nbsp;vs&nbsp; <b style="background: #35c47b"></b><span class="bad">#35c47b ×24</span></div>
+              <div class="swatch"><b style="background: #f0596e"></b><span class="ok">#F0596E --red</span> &nbsp;vs&nbsp; <b style="background: #ef5468"></b><span class="bad">#ef5468 ×38</span></div>
+              <div class="swatch"><b style="background: #f0596e"></b><span class="ok">#F0596E --red</span> &nbsp;vs&nbsp; <b style="background: #ffb4ab"></b><span class="bad">#ffb4ab ×90</span></div>
+            </div>
+
+            <div class="g-h">13 · Type</div>
+            <p class="note">
+              IBM Plex Sans for UI, IBM Plex Mono for every figure, time, ticker and version — both
+              self-hosted, no CDN. There are <strong>25 distinct font sizes</strong> in the tree;
+              12 / 12.5 / 13 alone account for 839 declarations and are indistinguishable.
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 7px; max-width: 720px">
+              <div style="font-size: 19px; font-weight: 700; color: #fff">19 · Screen title</div>
+              <div style="font-size: 21px; font-weight: 700; font-family: var(--mono)">21 · Stat figure (mono)</div>
+              <div style="font-size: 15px; font-weight: 700">15 · Card heading / instrument</div>
+              <div style="font-size: 13px; color: var(--muted)">13 · Body and table cell</div>
+              <div style="font-size: 12.5px; color: var(--muted)">12.5 · Buttons and dense body — the most-used size in the app</div>
+              <div style="font-size: 11.5px; color: var(--muted)">11.5 · Metadata</div>
+              <div style="font-size: 10.5px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--faint); font-weight: 600">10.5 · Uppercase micro-label</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

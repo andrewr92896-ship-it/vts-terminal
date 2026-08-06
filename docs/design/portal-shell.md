@@ -8,6 +8,13 @@ designing inside.
 Keep this file current when the shell changes. Everything in it is taken from
 `apps/web/src/theme/*` and `apps/web/src/components/{Sidebar,TopBar,Portal}.tsx`.
 
+> **For a cosmetic overhaul, use `docs/design/redesign/` instead** — it carries a
+> measured audit of where the code has drifted from this brief, the whole
+> component inventory as a static page, and the constraints a restyle must hold.
+> This file describes the shell as **designed**; that bundle describes it as
+> **built**, and the two differ in places (a card is documented here as flat
+> `#0A1426`, while the shared primitives module draws it as a gradient).
+
 ---
 
 ## Read this first — what is NOT the design any more
@@ -171,15 +178,24 @@ the active-section pill, `0.12` for a tinted chip, `0.35–0.4` for a tinted bor
 
 The **only** thing that changes between workspaces. Backgrounds never do.
 
+In nav order, which is the sidebar's order:
+
 | Workspace | Accent | Icon | Sidebar group label |
 |---|---|---|---|
 | My Terminal *(pinned first)* | `#34D399` emerald | `briefcase` | My Terminal |
 | Advanced Trading *(opt-in)* | `#EBCB74` gold | `candlestick-chart` | Advanced Trading |
+| Finances | `#4ADE80` green | `piggy-bank` | Finances |
+| News | `#93B4FF` slate-blue | `newspaper` | News |
 | Investments | `#2DD4BF` teal | `landmark` | Investments |
 | Studies | `#B69CFF` violet | `graduation-cap` | Studies |
 | Admin Terminal *(admins)* | `#E0708F` rose | `shield-check` | Administration |
 | Developer Terminal *(founder)* | `#F5A524` amber | `crown` | Developer |
 | Site Help *(everyone)* | `#6C9EFF` blue | `life-buoy` | Help & support |
+
+Finances and Investments are deliberately separate and deliberately a matched
+pair of greens: Investments answers "what do I own", Finances answers "what do I
+earn and spend". Finances leads, because it is the workspace an average public
+user opens first.
 
 Advanced Trading is the one workspace a user turns on for themselves. Until they
 do, its row is still drawn — **dimmed, with a padlock at the left** — because the
@@ -208,27 +224,35 @@ The marker is drawn for everyone, including a member who already holds the tier:
 its job is to say what a row costs, not to act as a lock. A free row is marked
 with nothing.
 
-- **My Terminal** — Trading Team *(gem)* · Market Data *(star)* · Market News ·
-  **Live Wall** · Net Worth · To Do · Premium Features · Preferences · Settings
-  *(Market Data and Market News are kept adjacent — they are read as a pair, so
-  Market News leads the free rows rather than the Live Wall.)*
+- **My Terminal** — **Live Wall** · Trading Team *(gem)* · Market Data *(star)* ·
+  To Do · Premium Features · Site Rules · Preferences · Settings
+  *(The Live Wall is pinned to the very top — the single exception to the
+  Max → Premium → free stacking, because it is the terminal's biggest feature and
+  what a sign-in opens on. Net Worth left for Finances and Market News for News;
+  both keys still resolve.)*
 - **Advanced Trading** — Trade Desk *(gem)* · Strategy Sessions *(star)* ·
   Funded Account *(star, nested opt-in)* · Trading Alerts · Trade History ·
   Manual Trades · Deleted Trades
+- **Finances** — Net Worth · Budget
+- **News** — Market News · World · Politics
+  *(World and Politics are wire services only — Reuters and AP. They carry no
+  bias glyph, no impact chip and no AI summary, unlike Market News.)*
 - **Investments** — Portfolio Overview · Accounts · Holdings · Allocation ·
   Performance · Dividends & Income · Contributions & Goals · Projections
 - **Studies** — Study Creation *(star)* · Study Game · Flashcards ·
   Practice Tests · Study Presentations · Progress
-- **Admin Terminal** — Users · Administrator Log · Admin Guidelines · Teams ·
-  Badges · Message Templates · Patch Notes · Early Access · Bug Reports · Support
-- **Developer Terminal** — Developer Blog · AI Instructions · Site Wording ·
-  Suggestions
+- **Admin Terminal** — Users · Administrator Log · Admin Guidelines ·
+  Rule Breaking · Teams · Badges · Message Templates · Patch Notes ·
+  Early Access · Bug Reports · Support
+- **Developer Terminal** — Developer Blog · AI Instructions · Live Wall
+  Templates · Site Wording · Suggestions
 - **Site Help** — How to · Announcements · Patch notes · Report a bug ·
   Suggestion · Rules & Conduct · Terms of Service · Privacy Policy
 
-The **Live Wall is the screen a sign-in opens on** (My Terminal's row order puts
-the paid Trading Team and the market-watching pair above it; what a workspace
-opens on is a separate thing from what sits at the top of its list). It is the terminal's one board: a drag-resize grid of tiles drawn from every workspace
+The **Live Wall is the screen a sign-in opens on**, and it is pinned to the top
+of My Terminal's list — the one row that breaks the Max → Premium → free stacking
+every other workspace follows, because burying the product's biggest feature
+under rows a free account cannot use reads as leading with the paywall. It is the terminal's one board: a drag-resize grid of tiles drawn from every workspace
 — charts, quotes, headlines and the calendar, the desk's open and closed trades,
 the reader's net worth, portfolio and to-do list, study progress, team messages.
 Every account gets three built-in layouts; arranging and saving your own is

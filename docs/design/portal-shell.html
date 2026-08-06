@@ -56,10 +56,11 @@
         --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
         --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 
-        /* The active workspace's accent. Swap this one value to preview another
-           workspace: Advanced Trading #EBCB74 · Investments #2DD4BF ·
-           Studies #B69CFF · Admin #E0708F · Developer #F5A524 ·
-           Site Help #6C9EFF */
+        /* The active workspace's accent — the ONLY thing that changes between
+           workspaces. Swap this one value to preview another:
+           My Terminal #34D399 · Advanced Trading #EBCB74 · Finances #4ADE80 ·
+           News #93B4FF · Investments #2DD4BF · Studies #B69CFF ·
+           Admin #E0708F · Developer #F5A524 · Site Help #6C9EFF */
         --accent: #34d399;
       }
 
@@ -454,6 +455,22 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           </button>
 
+          <!-- Finances and Investments are deliberately separate, and a matched
+               pair of greens: Investments answers "what do I own", Finances
+               answers "what do I earn and spend". Finances leads — it is the
+               workspace an average public user opens first. -->
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 1 3.3 2.5 4.3V19a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-.5h3V19a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-2.5c.7-.6 1.3-1.4 1.6-2.5H22V9h-2c0-.9-.4-1.7-1-2.3V5Z"/><circle cx="8" cy="10" r="1"/></svg>
+            <span class="label">Finances</span>
+          </button>
+
+          <!-- News. Slate-blue deliberately, not a market accent — the workspace
+               covers world and politics as well as markets. -->
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-4 0V8h4"/><path d="M10 6h8M10 10h8M10 14h4"/></svg>
+            <span class="label">News</span>
+          </button>
+
           <button class="row">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/></svg>
             <span class="label">Investments</span>
@@ -492,6 +509,18 @@
         <nav>
           <div class="nav-label">My Terminal</div>
 
+          <!-- THE LIVE WALL IS PINNED TO THE TOP, above the paid rows. It is the
+               single exception to the Max -> Premium -> free stacking every other
+               workspace follows: this is the terminal's biggest feature and what
+               a sign-in opens on, so burying it under rows a free account cannot
+               use read as though the product led with its paywall. The icon is
+               `zap` rather than `layout-dashboard` so the row carries some weight
+               against the paid marks beside it. -->
+          <button class="row sec-active">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h8l-1 8 10-12h-8l1-8Z"/></svg>
+            <span class="label">Live Wall</span>
+          </button>
+
           <button class="row">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
             <span class="label">Trading Team</span>
@@ -506,24 +535,9 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#EBCB74" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="margin-left:auto"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>
           </button>
 
-          <!-- Market Data and Market News are kept adjacent: they are read as a
-               pair, so Market News leads the free rows rather than the Live
-               Wall. (The wall is still what a sign-in opens on — where a
-               workspace's list starts is not what it opens on.) -->
-          <button class="row sec-active">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#34D399" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>
-            <span class="label">Market News</span>
-          </button>
-
-          <button class="row">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
-            <span class="label">Live Wall</span>
-          </button>
-
-          <button class="row">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
-            <span class="label">Net Worth</span>
-          </button>
+          <!-- (Market News moved to the News workspace and Net Worth to
+               Finances. Both keys still resolve, so in-app links keep working —
+               only the workspace around them changed.) -->
 
           <button class="row">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="6" height="6" rx="1"/><path d="m3 17 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>
@@ -533,6 +547,13 @@
           <button class="row">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9Z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>
             <span class="label">Premium Features</span>
+          </button>
+
+          <!-- The same Rules & Conduct document Site Help carries, surfaced here
+               too — ONE document rendered in two places, not two documents. -->
+          <button class="row">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h.01M3 12h.01M3 19h.01"/><path d="m7 5 2 2 3-3M8 12h13M8 19h13"/></svg>
+            <span class="label">Site Rules</span>
           </button>
 
           <button class="row">
@@ -562,7 +583,7 @@
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
             <span>My Terminal</span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#5E7098" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-            <b>Market News</b>
+            <b>Live Wall</b>
           </div>
 
           <div class="search">
@@ -597,16 +618,18 @@
           <div class="screen">
             <div style="display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap">
               <div style="min-width: 0">
-                <h2 class="title">Market News</h2>
+                <h2 class="title">Live Wall</h2>
                 <p class="subtitle">
-                  Headlines, the Forex Factory calendar, and a board of the rates and prints you choose to watch —
-                  every time Eastern.
+                  The terminal's one board. Every part of the terminal can be put on it, which is why it is
+                  the screen a sign-in opens on.
                 </p>
               </div>
               <div style="margin-left: auto; display: flex; align-items: center; gap: 8px">
-                <span style="font-family: var(--mono); font-size: 11px; color: var(--faint)">Data as of 3:54:03 PM ET</span>
+                <span style="font-family: var(--mono); font-size: 11px; color: var(--faint)">Updated 3:54:03 PM ET</span>
                 <button class="ghost-btn">Refresh</button>
-                <button class="gold-btn">Brief me</button>
+                <!-- One gold action per view. (The old "Brief me" AI overview was
+                     removed and is not to be reintroduced.) -->
+                <button class="gold-btn">Edit layout</button>
               </div>
             </div>
 

@@ -1,0 +1,181 @@
+/* ===========================================================================
+   VTS Terminal — the live token set, as of Beta V 6.80 (cb1afcc)
+   ---------------------------------------------------------------------------
+   This file is the CURRENT state, not a proposal. It is a faithful copy of
+   apps/web/src/theme/tokens.ts (the `C` object) and the :root block in
+   apps/web/src/styles/global.css, which are already mirrors of each other.
+
+   Give this to Claude Design as the starting palette. What comes back should be
+   this same set of NAMES with new VALUES — the names are load-bearing, because
+   `C.text` is referenced 91 times, `C.faint` 163 times and so on across the app.
+   Renaming a token is a code change in every file that reads it; changing its
+   value is a change in one place.
+
+   The two blocks at the bottom are the parts that do NOT exist yet and are the
+   real ask: a type scale, a radius scale and an elevation scale.
+   =========================================================================== */
+
+:root {
+  /* ---- Surfaces (blue-tinted dark) ------------------------------------- */
+  --bg: #050b18; /* app background — the page behind everything */
+  --side: #071021; /* sidebar AND top bar (same value, deliberately) */
+  --panel: #0a1426; /* cards */
+  --panel-2: #0c1930; /* nested panels, footer strips */
+
+  /* ---- Hairlines & borders --------------------------------------------- */
+  --line: #152139; /* default card border / divider */
+  --line-2: #1e2e52; /* stronger border — inputs, chips */
+  --hover: #24365f; /* card border on hover */
+
+  /* ---- Text ------------------------------------------------------------ */
+  --text: #e9effb; /* primary */
+  --muted: #93a5c9; /* secondary */
+  --faint: #5e7098; /* labels, metadata, uppercase micro-labels */
+
+  /* ---- Brand + semantic ------------------------------------------------ */
+  --gold: #ebcb74; /* PRIMARY action, active nav, Advanced Trading accent */
+  --gold-2: #c9a24b; /* gold gradient bottom stop */
+  --gold-text: #241a05; /* text ON a gold button */
+  --green: #2fc77e; /* long / positive / live */
+  --red: #f0596e; /* short / negative / high impact */
+  --amber: #e5a43b; /* warnings */
+  --info: #6c9eff; /* Site Help accent */
+  --violet: #b69cff; /* Studies accent */
+
+  /* ---- Type families --------------------------------------------------- */
+  /* Self-hosted via @fontsource. The terminal makes NO external font request —
+     do not propose a CDN or a webfont service. Sans 400/600/700, mono 400/600. */
+  --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: 'IBM Plex Mono', monospace;
+}
+
+/* ===========================================================================
+   WORKSPACE ACCENTS
+   ---------------------------------------------------------------------------
+   The ONLY thing that changes between workspaces. Backgrounds never do — the
+   shell is one navy everywhere. (theme/themes.ts also carries per-workspace
+   `pageBg` / `headerBg` / `navBg` values; those are DEAD except on the
+   AcceptTerms page and the Studies level-tint. Do not design against them.)
+
+   Set by theme/nav.ts, which is the single source of truth for nav order too.
+   =========================================================================== */
+
+:root {
+  --ws-myportal: #34d399; /* My Terminal      — emerald   · briefcase          */
+  --ws-trading: #ebcb74; /* Advanced Trading — gold      · candlestick-chart  */
+  --ws-finances: #4ade80; /* Finances         — green     · piggy-bank         */
+  --ws-news: #93b4ff; /* News             — slate-blue· newspaper          */
+  --ws-investments: #2dd4bf; /* Investments      — teal      · landmark           */
+  --ws-studies: #b69cff; /* Studies          — violet    · graduation-cap     */
+  --ws-admin: #e0708f; /* Admin Terminal   — rose      · shield-check       */
+  --ws-founder: #f5a524; /* Developer Term.  — amber     · crown              */
+  --ws-help: #6c9eff; /* Site Help        — blue      · life-buoy          */
+
+  /* Not a workspace — a standalone row above the workspaces list that opens
+     the separate /employee site in a new tab. Its own design language entirely
+     (docs/design/employee-portal/); this is only the row's accent. */
+  --employee: #c25a38; /* terracotta */
+
+  /* Membership tier marks. Kept deliberately icier/warmer than --info (#6C9EFF)
+     so a tier marker is never misread as a market-watching signal. */
+  --tier-premium: #ebcb74; /* gold star  — Premium */
+  --tier-max: #b9f2ff; /* icy gem    — Max     */
+}
+
+/* ===========================================================================
+   THE SHADOW PALETTE — delete these, do not restyle them
+   ---------------------------------------------------------------------------
+   ~1,298 hardcoded hex literals across the .tsx files, 63% of all colour
+   decisions. They are near-misses of the tokens above, not a second design.
+   The left column is what is in the code today; the right is what it should
+   collapse onto. See AUDIT.md for per-value counts.
+
+   This block is documentation, not a stylesheet to ship.
+   =========================================================================== */
+
+/*
+  #eef3ff  ─┐
+  #dfe7fa  ─┴──────────────────────────────────────────────►  --text    #e9effb
+  #cfe0ff  ─┘
+
+  #9fb0d6  ─┐
+  #8ea3cc  ─┤
+  #aebcd8  ─┼──────────────────────────────────────────────►  --muted   #93a5c9
+  #8298c4  ─┘
+
+  #7488b5  ─┐
+  #6f84b0  ─┴──────────────────────────────────────────────►  --faint   #5e7098
+
+  #35c47b  ────────────────────────────────────────────────►  --green   #2fc77e
+
+  #ef5468  ─┐
+  #ffb4ab  ─┼──────────────────────────────────────────────►  --red     #f0596e
+  #ff9a9a  ─┘
+
+  #e0a23a  ────────────────────────────────────────────────►  --amber   #e5a43b
+
+  #16294f  ────────────────────────────────────────────────►  --line-2  #1e2e52
+  #1d3560  ────────────────────────────────────────────────►  --hover   #24365f
+  #091633  ────────────────────────────────────────────────►  --panel   #0a1426
+  rgba(13,31,68,.5)  ──────────────────────────────────────►  --panel   #0a1426
+  rgba(11,26,58,.5)  ──────────────────────────────────────►  --panel-2 #0c1930
+
+  #0c2768 / #1c3a7a  — the old per-workspace trading header/border. Dead; these
+                       belong to themes.ts's unused headerBg/headerBorder.
+*/
+
+/* ===========================================================================
+   DOES NOT EXIST YET — this is the ask
+   ---------------------------------------------------------------------------
+   Today: 25 distinct font sizes, 17 radii, 12 surface-tint alphas, all inline.
+   Below is the shape of what should replace them. The VALUES are placeholders
+   taken from the most-used sizes in the current code — Claude Design should
+   set the real ones. What matters is that the SET is small and named.
+   =========================================================================== */
+
+:root {
+  /* ---- Type scale ------------------------------------------------------
+     Current usage clusters hard: 12 / 12.5 / 13 alone are 839 of the 1,880
+     declarations and are visually indistinguishable. Collapse to ~7 steps. */
+  --fs-display: 19px; /* screen title (h2, weight 700, pure #fff)        */
+  --fs-figure: 21px; /* the big number on a stat tile (mono, 700)       */
+  --fs-lg: 15px; /* card heading, instrument symbol                 */
+  --fs-body: 13px; /* default body / table cell                      */
+  --fs-sm: 12.5px; /* buttons, dense body — the single most-used size */
+  --fs-xs: 11.5px; /* metadata, secondary row text                    */
+  --fs-micro: 10.5px; /* UPPERCASE labels, footer, chips                 */
+
+  /* Uppercase micro-label — appears everywhere, always this shape:
+     size ~10.5, weight 600, letter-spacing 1.4px (nav) / 0.5-0.6px (cards),
+     colour --faint, often mono. */
+  --ls-label: 1.4px;
+  --ls-label-tight: 0.6px;
+
+  /* ---- Radius scale ----------------------------------------------------
+     Current: 0,2,3,4,5,6,7,8,9,10,11,12,13,14,16,99,999. Collapse to 5. */
+  --r-chip: 5px; /* chips, small pills, tier marks   */
+  --r-input: 7px; /* inputs, small buttons            */
+  --r-row: 8px; /* nav rows, icon buttons           */
+  --r-panel: 10px; /* nested panels, dropdowns         */
+  --r-card: 12px; /* cards, tiles                     */
+  --r-pill: 999px; /* fully round — pick ONE of 99/999 */
+
+  /* ---- Surface tints ---------------------------------------------------
+     Current: 12 different alphas of white. Collapse to 3. */
+  --tint-1: rgba(255, 255, 255, 0.03); /* row hover, subtle input bg */
+  --tint-2: rgba(255, 255, 255, 0.05); /* ghost button, raised chip  */
+  --tint-3: rgba(255, 255, 255, 0.08); /* pressed / selected         */
+
+  /* ---- Elevation -------------------------------------------------------
+     Borders carry structure in this design; shadows appear ONLY on floating
+     layers. There is currently one shadow value in use, plus an ad-hoc
+     tooltip one. Keep it to two. */
+  --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.5); /* dropdown, modal   */
+  --shadow-tip: 0 8px 24px rgba(0, 0, 0, 0.5); /* tooltip           */
+
+  /* ---- Motion ----------------------------------------------------------
+     Short. Colour .15s, layout .18s. Nothing in the terminal animates longer
+     than .3s and nothing should start to. */
+  --t-color: 0.15s ease;
+  --t-layout: 0.18s ease;
+}
