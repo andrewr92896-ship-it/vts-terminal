@@ -15,7 +15,7 @@ const PANEL = 'rgba(11,26,58,.5)';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 
-// Trade Analysis — reviewing what has already been traded: the desk's trades and
+// Trade History — reviewing what has already been traded: the desk's trades and
 // the capital behind them, switched with the segmented control.
 //
 // **History was removed** (owner decision, 2026-08). It listed the same closed
@@ -29,8 +29,9 @@ const BORDER2 = '#1c3a7a';
 // nothing.
 //
 // Placing a trade is the other screen: Trade Desk (TradeDesk.tsx). This one was
-// called "Trade Desk" until that screen existed; its section key is still `desk`
-// so saved sidebar orders, how-to wording and links keep pointing at it.
+// called "Trade Desk" until that screen existed, then "Trade Analysis"; its
+// section key is still `desk` through both renames, so the how-to wording and
+// every in-app link keep pointing at it.
 export type DeskView = 'log' | 'brokers' | 'history';
 
 // The tabs actually drawn. `history` is deliberately absent — it is still an
@@ -43,7 +44,7 @@ const VIEWS: { key: Exclude<DeskView, 'history'>; label: string; feature?: Premi
   { key: 'brokers', label: 'Live Brokers', feature: 'brokerConnections' },
 ];
 
-export function TradeAnalysis({ initialView = 'log' }: { initialView?: DeskView }) {
+export function TradeHistory({ initialView = 'log' }: { initialView?: DeskView }) {
   const { user } = useAuth();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
   // `history` folds into the log — the tab is gone, the key still resolves.
@@ -62,7 +63,7 @@ export function TradeAnalysis({ initialView = 'log' }: { initialView?: DeskView 
           button for the whole desk. */}
       <div style={{ maxWidth: 1280, margin: '0 auto 18px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
         <div>
-          <div style={segWrap} role="tablist" aria-label="Trade analysis views">
+          <div style={segWrap} role="tablist" aria-label="Trade history views">
             {VIEWS.map((v) => (
               <button
                 key={v.key}
@@ -77,7 +78,7 @@ export function TradeAnalysis({ initialView = 'log' }: { initialView?: DeskView 
             ))}
           </div>
         </div>
-        <button onClick={() => setSettingsOpen(true)} style={gearBtn} title="Trade analysis settings">
+        <button onClick={() => setSettingsOpen(true)} style={gearBtn} title="Trade history settings">
           <span aria-hidden style={{ fontSize: 14 }}>⚙</span> {"Settings"}
         </button>
       </div>

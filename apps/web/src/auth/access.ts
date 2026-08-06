@@ -259,7 +259,7 @@ export const SECTION_FEATURE: Record<string, PremiumFeature> = {
 
 // The same, for a whole WORKSPACE. Empty today — no workspace is entirely paid,
 // and marking one that is not would be a false claim about every free section
-// inside it (Advanced Trading holds Trade Analysis, alerts and the manual book).
+// inside it (Advanced Trading holds Trade History, alerts and the manual book).
 // It is the seam for when one is: add a key here and its row is marked.
 export const WORKSPACE_FEATURE: Record<string, PremiumFeature> = {};
 

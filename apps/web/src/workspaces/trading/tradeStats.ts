@@ -1,11 +1,28 @@
-import type { TradeRecord, TradeSummary } from '../../api/types';
+import type { TradeSide, TradeStatus, TradeSummary } from '../../api/types';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
 import { tradePips } from './pips';
+
+// Everything these readings need from a trade, and nothing else. A structural
+// subset of TradeRecord, so the desk's own rows satisfy it as they are — and so
+// a book that is NOT desk data can be scored by exactly the same math. The
+// funded/prop book is the case: its trades never reach the Trade Log (see the
+// Funded section), but a win rate has to mean the same thing on both screens.
+export interface ScoredTrade {
+  status: TradeStatus;
+  side: TradeSide;
+  instrument: string;
+  entryPrice: number | null;
+  exitPrice: number | null;
+  realizedPl: number | null;
+  unrealizedPl: number | null;
+  units: number | null;
+  slippage?: number | null;
+}
 
 // Recompute the KPI summary for a subset of trades (e.g. one trader's, or a
 // board tile's), mirroring the backend's desk-wide summarize() so every view
 // reads the same way — including totals for realized and open (unrealized) P/L.
-export function summarizeTrades(trades: TradeRecord[], config: BreakEvenConfig): TradeSummary {
+export function summarizeTrades(trades: ScoredTrade[], config: BreakEvenConfig): TradeSummary {
   let open = 0, closed = 0, wins = 0, losses = 0, breakeven = 0, totalPl = 0, unrealPl = 0, slipSum = 0, slipCount = 0;
   for (const t of trades) {
     if (t.status === 'open') open += 1;
@@ -62,7 +79,7 @@ export type ProfitFactor = {
   scaledLoss: number;
 };
 
-export function profitFactorStats(trades: TradeRecord[], config: BreakEvenConfig): ProfitFactor {
+export function profitFactorStats(trades: ScoredTrade[], config: BreakEvenConfig): ProfitFactor {
   let grossProfit = 0;
   let grossLoss = 0;
   let grossProfitPips = 0;
@@ -118,7 +135,7 @@ export function scaledProfitFactorText(pf: ProfitFactor): string {
 // currently-open positions (winners' open gains ÷ losers' open losses) rather
 // than closed trades. Returns a ProfitFactor so it reuses the text helpers
 // above — including the per-unit "scaled" version. Pip fields are unused here.
-export function unrealizedProfitFactorStats(trades: TradeRecord[]): ProfitFactor {
+export function unrealizedProfitFactorStats(trades: ScoredTrade[]): ProfitFactor {
   let grossProfit = 0;
   let grossLoss = 0;
   let scaledProfit = 0;
@@ -155,7 +172,7 @@ export function unrealizedProfitFactorStats(trades: TradeRecord[]): ProfitFactor
 // Reuses the two builders above (each already looks at only its own trade kind —
 // closed vs. open) and sums them, so it matches the realized/unrealized cards
 // exactly. Pip fields carry the closed-trade pips (open positions have none).
-export function projectedProfitFactorStats(trades: TradeRecord[], config: BreakEvenConfig): ProfitFactor {
+export function projectedProfitFactorStats(trades: ScoredTrade[], config: BreakEvenConfig): ProfitFactor {
   const closed = profitFactorStats(trades, config);
   const open = unrealizedProfitFactorStats(trades);
   const grossProfit = closed.grossProfit + open.grossProfit;

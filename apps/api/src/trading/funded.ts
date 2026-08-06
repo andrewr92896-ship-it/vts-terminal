@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   fundedAccounts,
@@ -15,11 +15,17 @@ import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { DEMO_USERNAME } from '../demo/identity.js';
 import type { ParsedHistoryTrade } from '../ai/claude.js';
 import { pnlWindows, type PnlWindows } from './pnl.js';
+import { visibleTraderIdsForUser } from './scope.js';
 
 // Funded platforms (FTP and other prop accounts) are tracked separately from the
 // Live Wall / Trade Log: they have no usable API, so the trader keeps the balance
-// current by hand and logs trades from screenshots Claude parses. Everything here
-// is owner-scoped (userId) so one trader never touches another's funded data.
+// current by hand and logs trades from screenshots Claude parses.
+//
+// **Read by the desk, written by the owner.** A read resolves through
+// visibleTraderIds — the whole team on a desk holding the Trading Teams grant,
+// the caller alone for everybody else — while every write still matches the
+// account or trade against the caller's own id. So a teammate's funded account
+// appears on the screen and no code path can edit it.
 
 export interface FundedTradeView {
   id: string;
@@ -42,6 +48,12 @@ export interface FundedTradeView {
 
 export interface FundedAccountView {
   id: string;
+  // Who the account belongs to. A desk reads each other's funded books (see
+  // getFunded), so every account says whose it is and whether the viewer may
+  // act on it.
+  ownerId: string;
+  owner: string; // the owning trader's display name
+  isMine: boolean;
   platform: string;
   label: string;
   currency: string;
@@ -157,7 +169,13 @@ function toTradeView(row: FundedTradeRow): FundedTradeView {
   };
 }
 
-function toAccountView(row: FundedAccountRow, trades: FundedTradeView[], now: number): FundedAccountView {
+function toAccountView(
+  row: FundedAccountRow,
+  trades: FundedTradeView[],
+  now: number,
+  viewerId: string,
+  owner: string,
+): FundedAccountView {
   const realizedPl = trades.reduce((sum, t) => sum + (t.realizedPl ?? 0), 0);
   // Window P/L keyed off when each trade closed (fall back to its open time, then
   // the time it was logged), counting only trades that carry a realized P/L.
@@ -166,6 +184,9 @@ function toAccountView(row: FundedAccountRow, trades: FundedTradeView[], now: nu
     .map((t) => ({ ms: t.closedAt ?? t.openedAt ?? t.createdAt, pl: t.realizedPl as number }));
   return {
     id: row.id,
+    ownerId: row.userId,
+    owner,
+    isMine: row.userId === viewerId,
     platform: row.platform,
     label: row.label,
     currency: row.currency,
@@ -181,16 +202,29 @@ function toAccountView(row: FundedAccountRow, trades: FundedTradeView[], now: nu
   };
 }
 
+// The funded book the caller may SEE: their own accounts, and their teammates'
+// when the account holds the Trading Teams grant — which is what makes a desk's
+// funded accounts shared. Self-only for everybody else, by construction rather
+// than by a filter somebody has to remember to write.
+//
+// Every write in this file still resolves ownership from the caller's own id, so
+// widening the read widens nothing else: a teammate's account is watch-only
+// because no write path can reach it, not because the UI hides a button.
+//
+// Takes a userId rather than a viewer because every write path here is handed
+// the owner and answers with the refreshed book — see visibleTraderIdsForUser.
 export async function getFunded(userId: string): Promise<FundedData> {
+  const scope = [...(await visibleTraderIdsForUser(userId))];
   const accounts = await db
-    .select()
+    .select({ acct: fundedAccounts, username: users.username, displayName: users.displayName })
     .from(fundedAccounts)
-    .where(eq(fundedAccounts.userId, userId))
+    .innerJoin(users, eq(users.id, fundedAccounts.userId))
+    .where(inArray(fundedAccounts.userId, scope))
     .orderBy(asc(fundedAccounts.createdAt));
   const trades = await db
     .select()
     .from(fundedTrades)
-    .where(eq(fundedTrades.userId, userId))
+    .where(inArray(fundedTrades.userId, scope))
     .orderBy(desc(fundedTrades.closedAt), desc(fundedTrades.createdAt));
   const byAccount = new Map<string, FundedTradeView[]>();
   for (const t of trades) {
@@ -199,7 +233,14 @@ export async function getFunded(userId: string): Promise<FundedData> {
     byAccount.set(t.accountId, list);
   }
   const now = Date.now();
-  return { accounts: accounts.map((a) => toAccountView(a, byAccount.get(a.id) ?? [], now)) };
+  return {
+    accounts: accounts
+      .map((r) =>
+        toAccountView(r.acct, byAccount.get(r.acct.id) ?? [], now, userId, r.displayName || r.username),
+      )
+      // The viewer's own first — they are the ones they act on.
+      .sort((a, b) => Number(b.isMine) - Number(a.isMine)),
+  };
 }
 
 export async function addFundedAccount(userId: string, input: FundedAccountInput): Promise<FundedData> {
@@ -252,10 +293,12 @@ export async function updateFundedAccount(
   return getFunded(userId);
 }
 
+// Remove one of the caller's own funded accounts. Refused rather than silently
+// matching nothing when the account is a teammate's — same reason as
+// removeFundedTrade below: the desk can see each other's books now.
 export async function removeFundedAccount(userId: string, id: string): Promise<FundedData> {
-  await db
-    .delete(fundedAccounts)
-    .where(and(eq(fundedAccounts.id, id), eq(fundedAccounts.userId, userId)));
+  if (!(await ownsAccount(userId, id))) throw new Error('Account not found');
+  await db.delete(fundedAccounts).where(eq(fundedAccounts.id, id));
   return getFunded(userId);
 }
 
@@ -382,10 +425,24 @@ export async function setFundedTradeProtection(
   return getFunded(userId);
 }
 
+// Remove one of the caller's own funded trades.
+//
+// The owner check is a lookup rather than a bare `WHERE user_id = ?` on the
+// delete, so a trade belonging to somebody else is REFUSED instead of quietly
+// matching nothing. That distinction did not exist while the book was
+// self-only — a teammate could never learn an id to aim at — but the desk now
+// reads each other's funded books, so a delete that reports success while
+// deleting nothing is a lie the client would faithfully repeat.
 export async function removeFundedTrade(userId: string, tradeId: string): Promise<FundedData> {
-  await db
-    .delete(fundedTrades)
-    .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)));
+  const row = (
+    await db
+      .select({ id: fundedTrades.id })
+      .from(fundedTrades)
+      .where(and(eq(fundedTrades.id, tradeId), eq(fundedTrades.userId, userId)))
+      .limit(1)
+  )[0];
+  if (!row) throw new Error('Trade not found');
+  await db.delete(fundedTrades).where(eq(fundedTrades.id, tradeId));
   return getFunded(userId);
 }
 

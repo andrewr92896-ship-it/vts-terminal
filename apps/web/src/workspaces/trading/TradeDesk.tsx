@@ -18,7 +18,7 @@ import type {
 } from '../../api/types';
 
 // The Trade Desk — where a trade is *placed*, not reviewed. (Reviewing past
-// trades is Trade Analysis, the screen this one used to share a name with.)
+// trades is Trade History, the screen this one used to share a name with.)
 //
 // Two things sit side by side on purpose: the order ticket, which acts on the
 // trader's own broker account, and the desk's live book, which shows every

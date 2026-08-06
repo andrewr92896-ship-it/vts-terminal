@@ -30,7 +30,14 @@ import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trad
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { visibleTraderIds } from '../trading/scope.js';
-import { getChallenge, syncEquityFromTradeLog, updateChallenge } from '../trading/challenge.js';
+import {
+  addChallenge,
+  getOwnChallenge,
+  listChallenges,
+  removeChallenge,
+  syncEquityFromTradeLog,
+  updateChallenge,
+} from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
 import { getAllCredentialAudit, getOwnCredentialAudit } from '../trading/credentialAudit.js';
 import {
@@ -315,17 +322,43 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { ...settings, instruments, userId: target, editableMembers };
   });
 
-  // ---- Account Metrics (prop-firm challenge) — private, `funded`-role only ----
+  // ---- Funded accounts (prop-firm challenges) — behind the Funded opt-in ----
+  //
+  // A read answers with EVERY funded account the caller may see: their own, and
+  // their teammates' when the account holds the Trading Teams grant. Every write
+  // names one account by id and the service matches it against the caller, so a
+  // teammate's card is watch-only by construction rather than by the UI hiding a
+  // button.
   app.get('/api/trading/challenge', fundedRead, async (request) => {
-    const u = request.currentUser!;
-    return getChallenge(u.id, SEE_BALANCES);
+    return listChallenges(request.currentUser!, SEE_BALANCES);
+  });
+
+  app.post('/api/trading/challenge', fundedWrite, async (request, reply) => {
+    const parsed = challengeCreateSchema.safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Check the account settings and try again' });
+    try {
+      return await addChallenge(request.currentUser!, parsed.data, SEE_BALANCES);
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not add that account' });
+    }
+  });
+
+  app.delete('/api/trading/challenge/:id', fundedWrite, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    try {
+      return await removeChallenge(request.currentUser!, id, SEE_BALANCES);
+    } catch (err) {
+      return reply.code(404).send({ error: err instanceof Error ? err.message : 'Funded account not found' });
+    }
   });
 
   // Claude (Sonnet) read of the prop-challenge dashboard.
   app.post('/api/trading/metrics/brief', fundedRead, async (request, reply) => {
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
     const u = request.currentUser!;
-    const c = await getChallenge(u.id, SEE_BALANCES);
+    // The coach reads the caller's OWN account. A brief about a teammate's
+    // drawdown is coaching somebody else's trading, which is not what this is.
+    const c = await getOwnChallenge(u.id, SEE_BALANCES);
     const m = c.metrics;
     const pctOrDash = (v: number) => `${v.toFixed(1)}%`;
     const data = [
@@ -345,18 +378,26 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
-  app.patch('/api/trading/challenge', fundedWrite, async (request, reply) => {
+  app.patch('/api/trading/challenge/:id', fundedWrite, async (request, reply) => {
     const parsed = challengeSchema.safeParse(request.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'Check the challenge settings and try again' });
     }
-    const u = request.currentUser!;
-    return updateChallenge(u.id, parsed.data, SEE_BALANCES);
+    const id = (request.params as { id: string }).id;
+    try {
+      return await updateChallenge(request.currentUser!.id, id, parsed.data, SEE_BALANCES);
+    } catch (err) {
+      return reply.code(404).send({ error: err instanceof Error ? err.message : 'Funded account not found' });
+    }
   });
 
-  app.post('/api/trading/challenge/sync-equity', fundedWrite, async (request) => {
-    const u = request.currentUser!;
-    return syncEquityFromTradeLog(u.id, SEE_BALANCES);
+  app.post('/api/trading/challenge/:id/sync-equity', fundedWrite, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    try {
+      return await syncEquityFromTradeLog(request.currentUser!.id, id, SEE_BALANCES);
+    } catch (err) {
+      return reply.code(404).send({ error: err instanceof Error ? err.message : 'Funded account not found' });
+    }
   });
 
   // Live OANDA account capital (NAV/balance), pulled from the OANDA API so it
@@ -377,7 +418,7 @@ export async function tradingRoutes(app: FastifyInstance) {
   // vision) and set the challenge equity to it — FTP has no API, so this keeps
   // Account Metrics current from the prop dashboard. Screenshots are sizeable.
   app.post(
-    '/api/trading/challenge/analyze',
+    '/api/trading/challenge/:id/analyze',
     { preHandler: [requireWorkspaceWrite('trading'), requireFunded], bodyLimit: 12 * 1024 * 1024 },
     async (request, reply) => {
       if (!aiConfigured()) {
@@ -407,7 +448,8 @@ export async function tradingRoutes(app: FastifyInstance) {
             parsed: p,
           });
         }
-        const challenge = await updateChallenge(u.id, { currentEquity: value }, SEE_BALANCES);
+        const id = (request.params as { id: string }).id;
+        const challenge = await updateChallenge(u.id, id, { currentEquity: value }, SEE_BALANCES);
         return { challenge, parsed: p, model };
       } catch (err) {
         if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
@@ -1157,9 +1199,13 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete('/api/trading/funded/accounts/:id', write, async (request) => {
+  app.delete('/api/trading/funded/accounts/:id', write, async (request, reply) => {
     const id = (request.params as { id: string }).id;
-    return removeFundedAccount(request.currentUser!.id, id);
+    try {
+      return await removeFundedAccount(request.currentUser!.id, id);
+    } catch (err) {
+      return reply.code(404).send({ error: err instanceof Error ? err.message : 'Account not found' });
+    }
   });
 
   app.post('/api/trading/funded/accounts/:id/trades', write, async (request, reply) => {
@@ -1187,9 +1233,13 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
-  app.delete('/api/trading/funded/trades/:id', write, async (request) => {
+  app.delete('/api/trading/funded/trades/:id', write, async (request, reply) => {
     const id = (request.params as { id: string }).id;
-    return removeFundedTrade(request.currentUser!.id, id);
+    try {
+      return await removeFundedTrade(request.currentUser!.id, id);
+    } catch (err) {
+      return reply.code(404).send({ error: err instanceof Error ? err.message : 'Trade not found' });
+    }
   });
 
   // Read trades off a funded-account trade-history screenshot (Opus 4.8 vision)
@@ -1369,20 +1419,26 @@ const editPositionSchema = addPositionSchema.partial().refine(
 
 const pct = z.number().finite().min(0).max(100);
 const dollars = z.number().finite().min(0).max(1_000_000_000);
-const challengeSchema = z
-  .object({
-    label: z.string().trim().min(1).max(80).optional(),
-    accountSize: dollars.optional(),
-    targetPct: pct.optional(),
-    dailyDdPct: pct.optional(),
-    maxDdPct: pct.optional(),
-    trailing: z.boolean().optional(),
-    currentEquity: dollars.optional(),
-    peakEquity: dollars.optional(),
-    dayStartEquity: dollars.optional(),
-    startedAt: z.number().int().optional(),
-  })
-  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+const challengeFields = z.object({
+  label: z.string().trim().min(1).max(80).optional(),
+  accountSize: dollars.optional(),
+  targetPct: pct.optional(),
+  dailyDdPct: pct.optional(),
+  maxDdPct: pct.optional(),
+  trailing: z.boolean().optional(),
+  currentEquity: dollars.optional(),
+  peakEquity: dollars.optional(),
+  dayStartEquity: dollars.optional(),
+  startedAt: z.number().int().optional(),
+});
+// An UPDATE naming nothing is a mistake worth refusing; a CREATE naming nothing
+// is the ordinary case — "add a funded account" makes one on the defaults and
+// the trader edits it after. Same fields, two rules, so the create path cannot
+// inherit a refusal written for the other one.
+const challengeSchema = challengeFields.refine((v) => Object.values(v).some((x) => x !== undefined), {
+  message: 'Nothing to update',
+});
+const challengeCreateSchema = challengeFields;
 
 const analyzeSchema = z.object({
   imageBase64: z.string().min(1),
@@ -1407,6 +1463,10 @@ const deskSettingsSchema = z
     // The full per-instrument override list; when present it replaces the stored
     // set. Capped so one request can't insert an unbounded number of rows.
     breakEvenOverrides: z.array(beOverrideSchema).max(200).optional(),
+    // What the trader deposited out of their own pocket. `null` clears it back
+    // to "not stated"; omitted leaves it alone. Nullable rather than optional-
+    // only, because clearing it has to be expressible.
+    depositedCapital: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 

@@ -250,7 +250,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
   desk: {
-    title: 'Trade Analysis',
+    title: 'Trade History',
     intro: 'Reviewing what has already been traded: the Trade Log, Live Brokers, and History views in one place. Use the switch at the top to move between them — logging and reviewing trades, and your live broker capital, all under one tab. (Placing a trade is the Trade Desk, above.)',
     steps: [
       {
@@ -437,7 +437,7 @@ export const HOWTO_TOPICS: { key: string; label: string }[] = [
   { key: 'live', label: 'Live Wall' },
   { key: 'alerts', label: 'Trading Alerts' },
   { key: 'tradedesk', label: 'Trade Desk' },
-  { key: 'desk', label: 'Trade Analysis' },
+  { key: 'desk', label: 'Trade History' },
   { key: 'sessions', label: 'Strategy Sessions' },
   { key: 'funded', label: 'Manual Trades' },
   { key: 'news', label: 'Market News' },

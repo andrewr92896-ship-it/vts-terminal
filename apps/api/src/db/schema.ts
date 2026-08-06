@@ -357,9 +357,16 @@ export type ManualPositionRow = typeof manualPositions.$inferSelect;
 // target percentages are stored as basis points (1000 = 10%); money is stored
 // as reals (challenge equity is tracked to the cent). Equity is maintained by
 // the trader (FTP has no API) or pulled from the Trade Log.
+// A funded (prop-firm) account: its size, its target, and the two drawdown
+// floors that end it. There can be SEVERAL per trader and several per desk —
+// `user_id` was the primary key until migration 0108, which said "one per
+// person" when the truth is that a trader can run more than one prop account and
+// a desk can have a trader on each of its own. Owner-written, team-readable:
+// reads resolve through visibleTraderIds, writes always check the owner.
 export const tradingChallenges = sqliteTable('trading_challenges', {
+  id: text('id').primaryKey(),
   userId: text('user_id')
-    .primaryKey()
+    .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   label: text('label').notNull().default('FTP Challenge'),
   accountSize: real('account_size').notNull().default(200000),
@@ -404,6 +411,13 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
   // (stats and list) — the desk's "these are test trades" floor, so 1-unit
   // connection tests don't skew win rate, profit factor, or pips. 0 = keep all.
   minTradeUnits: real('min_trade_units').notNull().default(0),
+  // What this trader has put into their trading account out of their own pocket
+  // (migration 0109). NULL = not stated, which is not the same as 0 — the Trade
+  // History card shows no return rather than one measured against a deposit
+  // nobody entered. Read from the trader's OWN row only: the shared 'desk'
+  // default row must never answer this, since one trader's deposit is not
+  // another trader's.
+  depositedCapital: real('deposited_capital'),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;

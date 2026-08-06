@@ -141,7 +141,7 @@ export function PositionsTile({
         {data && data.trades.length === 0 && (
           <div style={hint}>
             {data.source === 'unavailable'
-              ? 'Your broker is not being read, so open positions can’t be shown. Reconnect it in Trade Analysis ▸ Live Brokers.'
+              ? 'Your broker is not being read, so open positions can’t be shown. Reconnect it in Trade History ▸ Live Brokers.'
               : 'No open positions right now. New fills appear here automatically.'}
           </div>
         )}

@@ -51,6 +51,16 @@ export interface DeskSettings {
   // The desk's "test trade" floor: 1-unit connection tests stop skewing the
   // stats (and drop out of the list). 0 = keep every trade (the default).
   minTradeUnits: number;
+  // What this trader deposited into their account out of their own pocket, so
+  // Trade History can state a return rather than only a dollar figure.
+  //
+  // **Null means NOT STATED, and it is never inherited.** Every other setting
+  // here falls back to the shared 'desk' row when a trader has not customized;
+  // this one must not, because one trader's deposit is not another trader's —
+  // inheriting it would put somebody else's money on your screen and compute
+  // your return against it. Zero is a real answer (a funded account paid for by
+  // the firm) and is kept distinct from null.
+  depositedCapital: number | null;
 }
 
 async function getOverrides(ownerId: string): Promise<BreakEvenOverride[]> {
@@ -87,6 +97,9 @@ export async function getDeskSettings(userId: string): Promise<DeskSettings> {
     breakEvenAmount: r?.breakEvenAmount ?? 0,
     breakEvenOverrides,
     minTradeUnits: r?.minTradeUnits ?? 0,
+    // From the trader's OWN row only — never the shared default. See the field's
+    // comment: an inherited deposit would be somebody else's money.
+    depositedCapital: own?.depositedCapital ?? null,
   };
 }
 
@@ -109,7 +122,15 @@ export async function updateDeskSettings(userId: string, patch: Partial<DeskSett
   // The test-trade floor is a non-negative unit count; 0 turns it off.
   const rawMin = patch.minTradeUnits ?? current.minTradeUnits;
   const minTradeUnits = Number.isFinite(rawMin) ? Math.max(0, rawMin) : current.minTradeUnits;
-  const values = { breakEvenMode, breakEvenPct, breakEvenAmount, minTradeUnits, updatedAt: now };
+  // Deposited capital: `undefined` leaves it alone, an explicit `null` clears it
+  // back to "not stated". Money put in cannot be negative.
+  const depositedCapital =
+    patch.depositedCapital === undefined
+      ? current.depositedCapital
+      : patch.depositedCapital === null || !Number.isFinite(patch.depositedCapital)
+        ? null
+        : Math.max(0, patch.depositedCapital);
+  const values = { breakEvenMode, breakEvenPct, breakEvenAmount, minTradeUnits, depositedCapital, updatedAt: now };
   await db
     .insert(tradingDeskSettings)
     .values({ id: userId, ...values })

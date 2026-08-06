@@ -1,11 +1,20 @@
-import { and, eq } from 'drizzle-orm';
+import crypto from 'node:crypto';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingChallenges, tradingTrades, type TradingChallengeRow } from '../db/schema.js';
+import { tradingChallenges, tradingTrades, users, type TradingChallengeRow } from '../db/schema.js';
 import { etDayStamp } from './sessions.js';
+import { visibleTraderIds, type Viewer } from './scope.js';
 
-// The FTP-style funded-account challenge dashboard. One row per user. Equity is
-// maintained by the trader (FTP has no API) or pulled from the Trade Log; all
-// the target/drawdown numbers are derived from it.
+// The prop-firm funded-account dashboard. Equity is maintained by the trader
+// (a prop firm has no API) or pulled from the Trade Log; every target and
+// drawdown figure is derived from it.
+//
+// **A funded account is owned by one trader and read by their desk.** Several
+// per trader, several per team: `visibleTraderIds` decides whose are returned,
+// which is self-only until an account holds the Trading Teams grant — so a
+// public signup sees exactly its own by construction rather than by a filter
+// somebody has to remember. Every write takes the challenge id AND the caller,
+// and matches on both, so there is no path that edits a teammate's account.
 
 export interface ChallengeMetrics {
   profit: number | null;
@@ -27,6 +36,10 @@ export interface ChallengeMetrics {
 }
 
 export interface ChallengeData {
+  id: string;
+  ownerId: string;
+  owner: string; // the owning trader's display name, shown on a teammate's card
+  isMine: boolean; // the viewer owns it, so may edit it
   label: string;
   trailing: boolean;
   startedAt: number;
@@ -40,6 +53,11 @@ export interface ChallengeData {
   peakEquity: number | null;
   dayStartEquity: number | null;
   metrics: ChallengeMetrics;
+}
+
+// Every funded account the viewer may see, theirs first.
+export interface ChallengesData {
+  challenges: ChallengeData[];
 }
 
 const DEFAULTS = {
@@ -71,36 +89,87 @@ const bpToPct = (bp: number) => bp / 100;
 // The ET calendar day is the boundary, matching how every other trading-day
 // bucket in the terminal is cut (see codes.ts, pnl.ts). A weekend roll is a
 // no-op assignment: nothing traded, so the equity has not moved.
+//
+// A teammate's read rolls it too, and that is correct rather than a liberty: the
+// roll is derived entirely from the row's own equity, so it lands on the same
+// figure whoever triggers it — and a gauge that waits for its owner to log in
+// before it resets is the stale gauge this fixed.
 async function rollDayStart(row: TradingChallengeRow): Promise<TradingChallengeRow> {
   const today = etDayStamp();
   if (row.dayStartOn === today) return row;
   const patch = { dayStartEquity: row.currentEquity, dayStartOn: today };
-  await db.update(tradingChallenges).set(patch).where(eq(tradingChallenges.userId, row.userId));
+  await db.update(tradingChallenges).set(patch).where(eq(tradingChallenges.id, row.id));
   // `updatedAt` is deliberately untouched — it records when the trader last
   // changed something, and the day turning over is not that.
   return { ...row, ...patch };
 }
 
-async function ensureChallenge(userId: string): Promise<TradingChallengeRow> {
-  const existing = (
-    await db.select().from(tradingChallenges).where(eq(tradingChallenges.userId, userId)).limit(1)
+async function ownedChallenges(userId: string): Promise<TradingChallengeRow[]> {
+  return db
+    .select()
+    .from(tradingChallenges)
+    .where(eq(tradingChallenges.userId, userId))
+    .orderBy(asc(tradingChallenges.createdAt));
+}
+
+const finite = (v: number | undefined): number | undefined =>
+  v != null && Number.isFinite(v) ? v : undefined;
+
+// A fresh account row.
+//
+// **Its equity, peak and day-start all start AT its account size**, which is the
+// one thing about this that is not cosmetic: those three are what the drawdown
+// floors are measured from. Seeding the 200,000 default into a 50,000 account
+// puts both floors far above the equity, so the card opens reading "Breached"
+// on an account that has never traded — which is exactly what it did before the
+// size was threaded through here.
+function newRow(
+  userId: string,
+  now: Date,
+  opts: { accountSize?: number; equity?: number; label?: string } = {},
+): typeof tradingChallenges.$inferInsert {
+  const accountSize = finite(opts.accountSize) ?? DEFAULTS.accountSize;
+  const currentEquity = finite(opts.equity) ?? accountSize;
+  return {
+    id: crypto.randomUUID(),
+    userId,
+    ...DEFAULTS,
+    label: opts.label ?? DEFAULTS.label,
+    accountSize,
+    currentEquity,
+    peakEquity: currentEquity,
+    dayStartEquity: currentEquity,
+    dayStartOn: etDayStamp(now),
+    startedAt: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+// The caller's own account, created on first read the way it always has been —
+// opening the screen has never required setting one up first. Only ever creates
+// for the CALLER: reading a teammate's desk must not mint them an account they
+// never asked for.
+async function ensureOwnChallenge(userId: string): Promise<TradingChallengeRow[]> {
+  const existing = await ownedChallenges(userId);
+  if (existing.length > 0) return existing;
+  await db.insert(tradingChallenges).values(newRow(userId, new Date()));
+  return ownedChallenges(userId);
+}
+
+// The row a write is aimed at, refused unless the caller owns it. Both halves
+// matter: an id the caller does not own reads as "not found" rather than as a
+// permission error, so this cannot be used to discover another desk's ids.
+async function ownedRow(userId: string, id: string): Promise<TradingChallengeRow> {
+  const row = (
+    await db
+      .select()
+      .from(tradingChallenges)
+      .where(and(eq(tradingChallenges.id, id), eq(tradingChallenges.userId, userId)))
+      .limit(1)
   )[0];
-  if (existing) return rollDayStart(existing);
-  const now = new Date();
-  await db
-    .insert(tradingChallenges)
-    .values({
-      userId,
-      ...DEFAULTS,
-      dayStartOn: etDayStamp(now),
-      startedAt: now,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing();
-  return (
-    await db.select().from(tradingChallenges).where(eq(tradingChallenges.userId, userId)).limit(1)
-  )[0];
+  if (!row) throw new Error('Funded account not found');
+  return row;
 }
 
 function gate(v: number, canSee: boolean): number | null {
@@ -148,8 +217,12 @@ function computeMetrics(row: TradingChallengeRow, canSee: boolean): ChallengeMet
   };
 }
 
-function toData(row: TradingChallengeRow, canSee: boolean): ChallengeData {
+function toData(row: TradingChallengeRow, viewerId: string, owner: string, canSee: boolean): ChallengeData {
   return {
+    id: row.id,
+    ownerId: row.userId,
+    owner,
+    isMine: row.userId === viewerId,
     label: row.label,
     trailing: row.trailing,
     startedAt: row.startedAt.getTime(),
@@ -165,9 +238,46 @@ function toData(row: TradingChallengeRow, canSee: boolean): ChallengeData {
   };
 }
 
-export async function getChallenge(userId: string, canSeeBalances: boolean): Promise<ChallengeData> {
-  const row = await ensureChallenge(userId);
-  return toData(row, canSeeBalances);
+// Display names for a set of owners, so a teammate's card can say whose account
+// it is. Falls back to the username, which every row has.
+async function ownerNames(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: users.id, username: users.username, displayName: users.displayName })
+    .from(users)
+    .where(inArray(users.id, ids));
+  return new Map(rows.map((r) => [r.id, r.displayName || r.username]));
+}
+
+// Every funded account the viewer may see: their own (created on first read),
+// then their teammates' — which resolves to nothing at all unless the viewer
+// holds the Trading Teams grant.
+export async function listChallenges(viewer: Viewer, canSeeBalances: boolean): Promise<ChallengesData> {
+  await ensureOwnChallenge(viewer.id);
+  const scope = await visibleTraderIds(viewer);
+  const rows = await db
+    .select()
+    .from(tradingChallenges)
+    .where(inArray(tradingChallenges.userId, [...scope]))
+    .orderBy(asc(tradingChallenges.createdAt));
+  const rolled = await Promise.all(rows.map((r) => rollDayStart(r)));
+  const names = await ownerNames([...new Set(rolled.map((r) => r.userId))]);
+  return {
+    challenges: rolled
+      .map((r) => toData(r, viewer.id, names.get(r.userId) ?? 'Trader', canSeeBalances))
+      // The viewer's own first: it is the one they act on, and a desk of six
+      // would otherwise bury it in creation order.
+      .sort((a, b) => Number(b.isMine) - Number(a.isMine)),
+  };
+}
+
+// The caller's own primary account — what a surface needing ONE challenge reads
+// (the AI coaching brief). Never a teammate's.
+export async function getOwnChallenge(userId: string, canSeeBalances: boolean): Promise<ChallengeData> {
+  const rows = await ensureOwnChallenge(userId);
+  const row = await rollDayStart(rows[0]);
+  const names = await ownerNames([userId]);
+  return toData(row, userId, names.get(userId) ?? 'Trader', canSeeBalances);
 }
 
 export interface ChallengeInput {
@@ -186,12 +296,42 @@ export interface ChallengeInput {
 const pctToBp = (pct: number) => Math.max(0, Math.round(pct * 100));
 const money = (v: number) => (Number.isFinite(v) ? v : 0);
 
+// How many funded accounts one trader may keep. Not a licence question — a
+// runaway-input guard, the same shape as MAX_TEAM_CHANNELS.
+const MAX_PER_TRADER = 12;
+
+export async function addChallenge(
+  viewer: Viewer,
+  input: ChallengeInput,
+  canSeeBalances: boolean,
+): Promise<ChallengesData> {
+  const own = await ownedChallenges(viewer.id);
+  if (own.length >= MAX_PER_TRADER) {
+    throw new Error(`You can keep up to ${MAX_PER_TRADER} funded accounts`);
+  }
+  const now = new Date();
+  const row = newRow(viewer.id, now, {
+    accountSize: input.accountSize,
+    equity: input.currentEquity,
+    // A second account named the same as the first is two identical cards. The
+    // very first one keeps the historical default name.
+    label: input.label ?? (own.length > 0 ? `Funded account ${own.length + 1}` : undefined),
+  });
+  await db.insert(tradingChallenges).values(row);
+  // Everything else the trader typed goes through the ordinary update path, so
+  // the label trimming, the basis-point conversion and the peak ratchet are
+  // written once rather than once here and once there.
+  if (Object.keys(input).length > 0) await updateChallenge(viewer.id, row.id, input, canSeeBalances);
+  return listChallenges(viewer, canSeeBalances);
+}
+
 export async function updateChallenge(
   userId: string,
+  id: string,
   input: ChallengeInput,
   canSeeBalances: boolean,
 ): Promise<ChallengeData> {
-  const row = await ensureChallenge(userId);
+  const row = await ownedRow(userId, id);
   const patch: Partial<typeof tradingChallenges.$inferInsert> = { updatedAt: new Date() };
 
   if (input.label != null) patch.label = input.label.trim().slice(0, 80) || 'FTP Challenge';
@@ -217,20 +357,30 @@ export async function updateChallenge(
   const basePeak = patch.peakEquity ?? row.peakEquity;
   if (nextEquity > basePeak) patch.peakEquity = nextEquity;
 
-  await db.update(tradingChallenges).set(patch).where(eq(tradingChallenges.userId, userId));
-  const updated = (
-    await db.select().from(tradingChallenges).where(eq(tradingChallenges.userId, userId)).limit(1)
-  )[0];
-  return toData(updated, canSeeBalances);
+  await db.update(tradingChallenges).set(patch).where(eq(tradingChallenges.id, id));
+  const updated = await ownedRow(userId, id);
+  const names = await ownerNames([userId]);
+  return toData(updated, userId, names.get(userId) ?? 'Trader', canSeeBalances);
+}
+
+export async function removeChallenge(
+  viewer: Viewer,
+  id: string,
+  canSeeBalances: boolean,
+): Promise<ChallengesData> {
+  await ownedRow(viewer.id, id); // refuses anything the caller does not own
+  await db.delete(tradingChallenges).where(eq(tradingChallenges.id, id));
+  return listChallenges(viewer, canSeeBalances);
 }
 
 // Set equity to account size + realized P/L of closed Trade Log trades since the
 // challenge start. A convenience — the trader can always type the exact figure.
 export async function syncEquityFromTradeLog(
   userId: string,
+  id: string,
   canSeeBalances: boolean,
 ): Promise<ChallengeData> {
-  const row = await ensureChallenge(userId);
+  const row = await ownedRow(userId, id);
   const closed = await db
     .select()
     .from(tradingTrades)
@@ -241,5 +391,5 @@ export async function syncEquityFromTradeLog(
     const when = (t.closedAt ?? t.openedAt).getTime();
     if (when >= startMs && t.realizedPl != null) realized += t.realizedPl;
   }
-  return updateChallenge(userId, { currentEquity: row.accountSize + realized }, canSeeBalances);
+  return updateChallenge(userId, id, { currentEquity: row.accountSize + realized }, canSeeBalances);
 }

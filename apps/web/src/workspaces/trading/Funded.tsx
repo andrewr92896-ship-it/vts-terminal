@@ -84,6 +84,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>{"Accounts"}</div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4 }}>
             {"Kept by hand — set the balance and place trades by typing them in or pasting a trade-history photo. “Track live trade” posts an open position to the Live Wall with OANDA-priced P/L (kept off the Trade Log and Live Brokers). Duplicates are skipped by time + profit."}
+            {data.accounts.some((a) => !a.isMine) && " Your teammates’ accounts are shown too; only they can change them."}
           </div>
         </div>
         {!readOnly && (
@@ -115,7 +116,11 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
               a={a}
               isPhone={isPhone}
               showMoney={showMoney}
-              readOnly={readOnly}
+              // A teammate's funded account is watch-only. The server refuses
+              // every write against a row the caller does not own, so this only
+              // decides whether the controls are drawn — but drawing a Delete
+              // button that always errors is its own kind of lie.
+              readOnly={readOnly || !a.isMine}
               busy={busy}
               setBusy={setBusy}
               onData={setData}
@@ -227,6 +232,9 @@ function AccountCard({
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>{a.label}</span>
             <span style={platformPill}>{a.platform}</span>
+            {/* Whose book this is. Drawn only on a teammate's — labelling your
+                own "you" on a solo desk is noise. */}
+            {!a.isMine && <span style={ownerPill}>{a.owner}</span>}
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 10, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{"Balance"}</span>
@@ -654,5 +662,6 @@ const col: CSSProperties = { flex: '0 0 64px' };
 // ("Jul 29, 9:31 AM" / "→ Jul 29, 2:49 PM"), and reads "→ open" while it runs.
 const timeCol: CSSProperties = { flex: '0 0 118px' };
 const platformPill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.4px', textTransform: 'uppercase', color: GOLD, background: 'rgba(235,203,116,.12)', border: '1px solid rgba(235,203,116,.4)', borderRadius: 4, padding: '2px 7px' };
+const ownerPill: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.4px', color: '#bcd0ff', background: 'rgba(90,200,250,.1)', border: '1px solid rgba(90,200,250,.35)', borderRadius: 4, padding: '2px 7px' };
 const openPill: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.5px', color: GREEN, background: 'rgba(53,196,123,.12)', border: '1px solid rgba(53,196,123,.45)', borderRadius: 4, padding: '1px 5px' };
 const warnBanner: CSSProperties = { marginBottom: 14, fontSize: 12.5, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '9px 12px', cursor: 'pointer' };

@@ -604,6 +604,9 @@ export interface DeskSettings {
   // Ignore broker fills under this many units in the Trade Log / History (the
   // trader's "test trade" floor). 0 = keep everything.
   minTradeUnits: number;
+  // What this trader deposited out of their own pocket. `null` = not stated
+  // (never inherited from the shared desk default), and sending null clears it.
+  depositedCapital: number | null;
   // Every instrument the team has traded (from the Trade Log + History), so the
   // per-instrument buffer picker can offer them. Auto-derived server-side.
   instruments: string[];
@@ -878,7 +881,14 @@ export interface ChallengeMetrics {
   breaches: { target: boolean; daily: boolean; max: boolean };
 }
 
+// One funded (prop-firm) account. There can be several — the trader's own, and
+// their teammates' on a desk holding the Trading Teams grant. `isMine` is the
+// server's answer to "may I edit this", not a UI convenience.
 export interface ChallengeData {
+  id: string;
+  ownerId: string;
+  owner: string;
+  isMine: boolean;
   label: string;
   trailing: boolean;
   startedAt: number;
@@ -891,6 +901,11 @@ export interface ChallengeData {
   peakEquity: number | null;
   dayStartEquity: number | null;
   metrics: ChallengeMetrics;
+}
+
+// Every funded account the viewer may see, their own first.
+export interface ChallengesData {
+  challenges: ChallengeData[];
 }
 
 export interface ChallengeInput {
@@ -976,6 +991,12 @@ export interface FundedTrade {
 }
 export interface FundedAccount {
   id: string;
+  // Whose account this is. The funded book is shared across a desk holding the
+  // Trading Teams grant, so a card says whose it is; `isMine` is the server's
+  // answer to "may I edit this".
+  ownerId: string;
+  owner: string;
+  isMine: boolean;
   platform: string;
   label: string;
   currency: string;
@@ -1197,7 +1218,7 @@ export interface BoardTile {
   limit?: number;
   // To Do tiles — which section to show. Undefined → every section.
   todoSectionId?: string;
-  // Trade Analysis / closed-trade tiles — the window they score.
+  // Trade History / closed-trade tiles — the window they score.
   range?: '7d' | '30d' | '90d' | 'all';
 }
 
@@ -1509,6 +1530,10 @@ export interface TradeLogData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  // What the VIEWER deposited out of their own pocket, or null when they have
+  // not said. Never inherited from the shared desk default — see the server's
+  // DeskSettings.
+  depositedCapital: number | null;
   // The viewer may remove a teammate's trade, not just their own (team leader,
   // a member granted "Delete trades", or an admin).
   canDeleteAny: boolean;

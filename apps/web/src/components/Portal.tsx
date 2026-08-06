@@ -59,7 +59,7 @@ import {
 import { HelpRules, HelpTerms, HelpPrivacy } from '../workspaces/help/LegalScreens';
 import { LiveWall } from '../workspaces/trading/LiveWall';
 import { TradeDesk } from '../workspaces/trading/TradeDesk';
-import { TradeAnalysis } from '../workspaces/trading/TradeAnalysis';
+import { TradeHistory } from '../workspaces/trading/TradeHistory';
 import { Alerts } from '../workspaces/trading/Alerts';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
 import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
@@ -136,13 +136,13 @@ function renderScreen(
       return <LiveWall onOpenMembership={() => onNavigate('my_access')} />;
     case 'alerts':
       return <Alerts onNavigate={onNavigate} />;
-    // Placing trades (Trade Desk) and reviewing them (Trade Analysis) are two
+    // Placing trades (Trade Desk) and reviewing them (Trade History) are two
     // screens. `desk` stays on the review screen, which is what that key has
     // always routed to.
     case 'tradedesk':
       return <TradeDesk />;
     case 'desk':
-      return <TradeAnalysis />;
+      return <TradeHistory />;
     case 'funded':
       return <FundedScreen />;
     case 'prop':

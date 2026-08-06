@@ -106,6 +106,18 @@ export async function visibleTraderIds(viewer: Viewer): Promise<Set<string>> {
   return scopedTraderIds(viewer);
 }
 
+// The same visibility boundary, keyed by a userId when the caller only holds the
+// id. The counterpart of scopedTraderIdsForUser above, and it exists for the
+// same reason: a service reached through a write path (the funded book, whose
+// every function is handed the owner rather than the request) still has to
+// answer a read with the whole visible desk.
+export async function visibleTraderIdsForUser(userId: string): Promise<Set<string>> {
+  const row = (
+    await db.select({ teamId: users.teamId }).from(users).where(eq(users.id, userId)).limit(1)
+  )[0];
+  return visibleTraderIds({ id: userId, teamId: row?.teamId ?? null });
+}
+
 // The recipients of a notification ABOUT `ownerId`'s own trading — a fill, a
 // close, a stop moved. Always just that trader.
 //

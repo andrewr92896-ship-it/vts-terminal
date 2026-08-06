@@ -26,7 +26,7 @@ import type { TileProps } from './PersonalTiles';
 const MEDIUM = 60_000;
 const SLOW = 120_000;
 
-// ---- Trade Analysis ------------------------------------------------------
+// ---- Trade History -------------------------------------------------------
 //
 // The record over a window: how many trades, how many won, and what they made.
 // Deliberately the SAME numbers the Trade Log shows — read from the same
@@ -41,7 +41,7 @@ export function TradeLogTile({ tile, editing, onChange, onRemove }: TileProps) {
 
   return (
     <TileFrame
-      title={tile.title || 'Trade Analysis'}
+      title={tile.title || 'Trade History'}
       icon="bar-chart-3"
       editing={editing}
       onRemove={onRemove}
@@ -320,9 +320,14 @@ export function ManualBookTile({ tile, editing, onChange, onRemove }: TileProps)
 //
 // The balance here is the FIRM's capital, not the trader's own, which is exactly
 // why Net Worth excludes a funded account and names it rather than adding it in.
+// A desk can now run several funded accounts (its own and its teammates'), so
+// the tile shows the FIRST one the payload carries — which the server sorts to
+// the viewer's own. A tile is too small to be a list, and a teammate's drawdown
+// is not what a glance at your own board should report.
 export function ChallengeTile({ tile, editing, onRemove }: TileProps) {
   const { privacy } = usePrivacy();
-  const { data, error } = useTileData('trading:challenge', () => api.tradingChallenge(), SLOW);
+  const { data: all, error } = useTileData('trading:challenge', () => api.tradingChallenges(), SLOW);
+  const data = all?.challenges[0] ?? null;
   const m = data?.metrics;
   const hide = privacy || (data ? !data.canSeeBalances : true);
 

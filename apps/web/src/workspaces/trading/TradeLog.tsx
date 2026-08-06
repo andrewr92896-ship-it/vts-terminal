@@ -414,6 +414,18 @@ export function TradeLog() {
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
   ];
 
+  // What the viewer put in, and what their own closed trades have made on it.
+  //
+  // Measured over the viewer's OWN rows within whatever is on screen
+  // (`t.isMine`), never the desk's: on a team the log carries teammates' trades
+  // too, and dividing the desk's P/L by one person's deposit would be a return
+  // nobody earned. The day/month filters still apply, so the reading always
+  // describes the selection in front of you.
+  const myClosedPl = shownTrades
+    .filter((t) => t.isMine && t.status === 'closed' && t.realizedPl != null)
+    .reduce((sum, t) => sum + (t.realizedPl as number), 0);
+  const deposited = data.depositedCapital;
+
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       {/* Header */}
@@ -527,6 +539,19 @@ export function TradeLog() {
             <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>{k.sub}</div>
           </div>
         ))}
+        <CapitalCard
+          deposited={deposited}
+          realizedPl={myClosedPl}
+          showMoney={showMoney}
+          readOnly={readOnly}
+          onSave={async (value) => {
+            const next = await api.updateDeskSettings({ depositedCapital: value });
+            // The log is re-read rather than patched locally: the figure lives
+            // in desk settings, and the payload here is where every other
+            // reader of it gets it from.
+            setData((d) => (d ? { ...d, depositedCapital: next.depositedCapital } : d));
+          }}
+        />
       </div>
 
       {/* Per-strategy / per-instrument breakdown, folded in from History. Only
@@ -1164,6 +1189,117 @@ function ExportPanel({
   );
 }
 
+// Deposited capital: the one KPI card the trader fills in themselves.
+//
+// It sits in the KPI row rather than in the desk-settings modal because it is
+// read as a metric, not configured as a preference — and because the figure it
+// gives meaning to (return on what you put in) is on that row. Stored in the
+// trader's desk settings all the same, so it is theirs and follows them.
+//
+// Two states with different meanings, kept apart: **not stated** (null) shows no
+// return at all, while **zero** is a real answer — a funded account the trader
+// paid nothing into — and shows the money made with no percentage, since
+// dividing by it would be nonsense rather than infinity.
+function CapitalCard({
+  deposited,
+  realizedPl,
+  showMoney,
+  readOnly,
+  onSave,
+}: {
+  deposited: number | null;
+  realizedPl: number;
+  showMoney: boolean;
+  readOnly: boolean;
+  onSave: (value: number | null) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function open() {
+    setText(deposited == null ? '' : String(deposited));
+    setError(null);
+    setEditing(true);
+  }
+
+  async function save() {
+    const raw = text.trim();
+    // An emptied box clears the figure back to "not stated" rather than storing
+    // a zero, which would be a claim the trader did not make.
+    const value = raw === '' ? null : Number(raw);
+    if (value != null && (!Number.isFinite(value) || value < 0)) {
+      setError('Enter an amount');
+      return;
+    }
+    setBusy(true);
+    try {
+      await onSave(value);
+      setEditing(false);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not save');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const pct = deposited != null && deposited > 0 ? (realizedPl / deposited) * 100 : null;
+
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+        <span style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>
+          {"Deposited Capital"}
+        </span>
+        {!readOnly && !editing && (
+          <button onClick={open} style={miniGhost}>{deposited == null ? 'Set' : 'Edit'}</button>
+        )}
+      </div>
+
+      {editing ? (
+        <div style={{ marginTop: 6 }}>
+          <input
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void save();
+              if (e.key === 'Escape') setEditing(false);
+            }}
+            type="number"
+            step="any"
+            min="0"
+            autoFocus
+            placeholder="0.00"
+            style={{ ...inputBase, width: '100%', fontFamily: "'IBM Plex Mono', monospace" }}
+          />
+          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+            <button onClick={() => void save()} disabled={busy} style={{ ...miniGold, opacity: busy ? 0.6 : 1 }}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button onClick={() => setEditing(false)} style={miniGhost}>{"Cancel"}</button>
+          </div>
+          {error && <div style={{ fontSize: 10.5, color: '#ffb4ab', marginTop: 6 }}>{error}</div>}
+        </div>
+      ) : (
+        <>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 22, fontWeight: 600, color: '#fff', marginTop: 6 }}>
+            {deposited == null ? '—' : showMoney ? usd(deposited) : '•••••'}
+          </div>
+          {pct != null && (
+            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 600, color: pct >= 0 ? GREEN : RED, marginTop: 3 }}>
+              {pct >= 0 ? '+' : ''}{pct.toFixed(1)}% return
+            </div>
+          )}
+          <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>
+            {deposited == null ? 'not set' : 'your own closed trades'}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
 const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' };
 const panelLabel: CSSProperties = { fontSize: 10.5, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 };
@@ -1171,6 +1307,9 @@ const inputBase: CSSProperties = { background: INPUT_BG, border: `1px solid ${BO
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '8px 14px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const iconBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 13, lineHeight: 1, padding: '4px 7px', borderRadius: 6, cursor: 'pointer' };
+// Small enough to sit inside a KPI card without crowding the figure.
+const miniGhost: CSSProperties = { ...ghostBtn, padding: '3px 8px', fontSize: 10.5 };
+const miniGold: CSSProperties = { ...goldBtn, padding: '5px 11px', fontSize: 11 };
 const codeChip: CSSProperties = { fontSize: 9.5, fontWeight: 700, color: '#bcd0ff', background: 'rgba(120,150,220,.12)', border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 6px', fontFamily: "'IBM Plex Mono', monospace" };
 const sideBadge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '3px 8px' };

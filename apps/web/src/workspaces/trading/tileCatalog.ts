@@ -36,7 +36,7 @@ export interface TileDef {
    * The two are genuinely different, and conflating them locks people out of
    * their own data. Broker Capital is the case: connecting a broker is Max, but
    * *reading* an account you already connected is not — the endpoint serves any
-   * desk user, and Trade Analysis ▸ Live Brokers shows the same figures behind
+   * desk user, and Trade History ▸ Live Brokers shows the same figures behind
    * nothing but a marker. That is the terminal's standing rule for a credential
    * feature: reading its status and disconnecting stay open, so a lapsed member
    * is never locked away from what they already have.
@@ -167,7 +167,7 @@ export const TILE_CATALOG: TileDef[] = [
   },
   {
     kind: 'tradelog',
-    label: 'Trade Analysis',
+    label: 'Trade History',
     group: 'desk',
     icon: 'bar-chart-3',
     blurb: 'Win rate, realized P&L and the record over a window.',

@@ -1,0 +1,18 @@
+-- What the trader actually put into the account, out of their own pocket.
+--
+-- The Trade History KPI row could say what the trades made and never what they
+-- were made ON, so "+$378 realized" reads the same on a $2,000 account as on a
+-- $200,000 one. This is the figure that turns it into a return.
+--
+-- NULLABLE on purpose, and null is NOT zero: null means "not stated", which is
+-- every row that exists today, and the card shows nothing rather than a return
+-- computed against a deposit nobody entered. Zero is a real answer the trader
+-- can give (a funded account they paid nothing into), and dividing by it is
+-- refused rather than rendered as infinity.
+--
+-- It rides `trading_desk_settings` because that is already the per-trader row
+-- for how a trader reads their own desk, keyed by their userId. The reserved
+-- `desk` row is the shared DEFAULT for the break-even settings — it must never
+-- serve this one, since one trader's deposit is not another's, so the read is
+-- deliberately taken from the trader's OWN row only (see trading/settings.ts).
+ALTER TABLE `trading_desk_settings` ADD `deposited_capital` real;

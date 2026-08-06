@@ -28,6 +28,7 @@ import type {
   BrokerConnection,
   BrokerStatus,
   ChallengeData,
+  ChallengesData,
   ChallengeInput,
   AnalyzeAccountResult,
   OandaCapital,
@@ -733,21 +734,30 @@ export const api = {
   feedBrief(payload: FeedBriefPayload): Promise<{ brief: string }> {
     return request('/api/trading/feed/brief', { method: 'POST', body: JSON.stringify(payload) });
   },
-  tradingChallenge(): Promise<ChallengeData> {
+  // Every funded account the caller may see — their own, plus their teammates'
+  // on a desk holding the Trading Teams grant. Each write below names one by id;
+  // the server matches it against the caller, so a teammate's is read-only.
+  tradingChallenges(): Promise<ChallengesData> {
     return request('/api/trading/challenge');
+  },
+  addChallenge(input: ChallengeInput = {}): Promise<ChallengesData> {
+    return request('/api/trading/challenge', { method: 'POST', body: JSON.stringify(input) });
+  },
+  removeChallenge(id: string): Promise<ChallengesData> {
+    return request(`/api/trading/challenge/${id}`, { method: 'DELETE' });
   },
   tradingMetricsBrief(): Promise<{ brief: string }> {
     return request('/api/trading/metrics/brief', { method: 'POST', body: JSON.stringify({}) });
   },
-  updateChallenge(patch: ChallengeInput): Promise<ChallengeData> {
-    return request('/api/trading/challenge', { method: 'PATCH', body: JSON.stringify(patch) });
+  updateChallenge(id: string, patch: ChallengeInput): Promise<ChallengeData> {
+    return request(`/api/trading/challenge/${id}`, { method: 'PATCH', body: JSON.stringify(patch) });
   },
-  syncChallengeEquity(): Promise<ChallengeData> {
-    return request('/api/trading/challenge/sync-equity', { method: 'POST', body: JSON.stringify({}) });
+  syncChallengeEquity(id: string): Promise<ChallengeData> {
+    return request(`/api/trading/challenge/${id}/sync-equity`, { method: 'POST', body: JSON.stringify({}) });
   },
   // Read the current balance off an FTP-account screenshot and set the equity.
-  analyzeChallengeBalance(image: { imageBase64: string; mediaType: string }): Promise<AnalyzeAccountResult> {
-    return request('/api/trading/challenge/analyze', { method: 'POST', body: JSON.stringify(image) });
+  analyzeChallengeBalance(id: string, image: { imageBase64: string; mediaType: string }): Promise<AnalyzeAccountResult> {
+    return request(`/api/trading/challenge/${id}/analyze`, { method: 'POST', body: JSON.stringify(image) });
   },
   // Live OANDA account capital (full traders only — 403 for view-only).
   oandaCapital(): Promise<OandaCapital> {
