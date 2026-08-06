@@ -1785,6 +1785,43 @@ mode**. Before that the two states were visually identical and the only clue
 anything could be dragged was the cursor changing once you were already over a
 header.
 
+**The workspace area — a board's width is its own saved setting** (`layout.cols`,
+default 12; owner request, 2026-08). Twelve columns is the "mobile width" every
+earlier board was built on and stays the default; a wider workspace packs more,
+narrower columns onto the same screen, and the board always renders **fit to
+width** — never a sideways scroll — so widening is how a television shows tiles
+side by side instead of a tall middle strip. In edit mode a dotted outline draws
+the workspace around the grid.
+
+- **The workspace is LOCKED even in edit mode**, deliberately: arranging tiles
+  and sizing the canvas are different acts, and a drag meant for a tile must
+  never change the canvas under it. The tiny pencil on the frame's top-right
+  corner is the only way in. While unlocked the mirror rule applies — the
+  **tiles freeze** (RGL drags off, pointer-events off) — and **Escape locks the
+  workspace back up before it will leave edit mode**. Leaving edit mode, or
+  switching layouts, always relocks.
+- **Sizing is by whole columns from either side**: drag a side handle (notched,
+  ~48px per column — a feel constant, since the grid re-fits live) or step with
+  the − / + beside the width readout. Growing the **left** inserts columns there
+  and shifts every tile right, so the arrangement keeps its place; shrinking
+  only ever removes **empty** columns, clamped against the geometry recorded at
+  pointer-down (a left drag shifts the tiles, so mid-drag geometry is the wrong
+  clamp). Bounds 6–36. While unlocked the board pulls in from the sides
+  (plain padding — deliberately no transform, which would reopen the
+  two-coordinate-space trap `lib/measure.ts` closes) so the frame's handles sit
+  in reachable gutters.
+- **Phones are untouched.** The flatten-to-one-column render ignores `cols`
+  entirely, and `canEdit` already keeps the whole editor off phones, so nothing
+  on a phone can write a width back.
+- `cols` rides in the layout blob: capped 6–36 in `boardLayoutSchema`, carried
+  through `allowedLayout` and `shareableLayout` (a share or a copy keeps the
+  width it was arranged on), re-clamped in `parseLayout`, and normalized on the
+  client (`workspaceCols` floors it to the tiles' own extent, which is what the
+  resize clamps get to assume). The **dirty baseline is `{cols, tiles}`**, so a
+  width change is an unsaved change like any other. The three built-in
+  templates stay at 12 — `wall_templates` and the template editor are
+  untouched, and `buildPreset` is width-agnostic.
+
 **Four files carry the design, and adding a tile kind touches all of them:**
 
 - **`workspaces/trading/tileCatalog.ts`** — the single source of truth for what a

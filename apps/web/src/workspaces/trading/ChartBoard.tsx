@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react';
 import { createPortal } from 'react-dom';
 import GridLayout, { type Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -30,6 +30,45 @@ const COLS = 12;
 const ROW_H = 30;
 const MARGIN = 10;
 const MENU_W = 260; // preset dropdown width, clamped to the viewport when narrower
+
+// ---- The workspace area -----------------------------------------------------
+// Each board carries its own width in grid columns (`layout.cols`). 12 is the
+// default — the exact canvas every board before the setting existed was built
+// on, and the width that flattens well to a phone — while a wider workspace
+// packs more, narrower columns onto the same screen. The board always renders
+// FIT TO WIDTH (the page must never scroll sideways), so widening the workspace
+// is how a television shows tiles side by side instead of a tall strip.
+const MIN_WS_COLS = 6;
+const MAX_WS_COLS = 36;
+// Workspace resize drag: one column per this many px of pointer travel. The
+// grid re-fits live as it goes, so this is a feel constant, not geometry.
+const WS_NOTCH_PX = 48;
+
+// The width a layout renders at. Floored to the tiles' own extent so a board
+// can never open narrower than the tiles it carries (however the blob got that
+// way), which is what the resize clamps below get to assume.
+function workspaceCols(layout: { tiles?: BoardTile[] | null; cols?: number }): number {
+  const tiles = layout.tiles ?? [];
+  const extent = tiles.reduce((m, t) => Math.max(m, t.x + t.w), 0);
+  const stored =
+    typeof layout.cols === 'number' && Number.isFinite(layout.cols) ? Math.round(layout.cols) : COLS;
+  return Math.max(MIN_WS_COLS, Math.min(MAX_WS_COLS, stored), Math.min(extent, 96));
+}
+
+// The saved-state baseline (and the dirty comparison) covers the workspace
+// width as well as the tiles — widening the workspace is a change worth a Save.
+function layoutJson(cols: number, tiles: BoardTile[]): string {
+  return JSON.stringify({ cols, tiles });
+}
+
+// How many EMPTY columns each side of the arrangement has — the most a shrink
+// may take, because shrinking must never cut into a tile.
+function wsRooms(tiles: BoardTile[], cols: number): { left: number; right: number } {
+  if (tiles.length === 0) return { left: 0, right: Math.max(0, cols - MIN_WS_COLS) };
+  const minX = tiles.reduce((m, t) => Math.min(m, t.x), Number.POSITIVE_INFINITY);
+  const maxX = tiles.reduce((m, t) => Math.max(m, t.x + t.w), 0);
+  return { left: Number.isFinite(minX) ? minX : 0, right: Math.max(0, cols - maxX) };
+}
 
 // A positions tile set to grow to fit its trades (rather than scroll in a fixed
 // cell). Its grid height is driven by measured content, not the stored h.
@@ -136,8 +175,31 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   }, []);
 
   const [tiles, setTiles] = useState<BoardTile[]>([]);
+  // The workspace width this board renders at — see workspaceCols above.
+  const [cols, setCols] = useState<number>(COLS);
   const [savedTilesJson, setSavedTilesJson] = useState<string>(''); // '' → never saved
   const [editing, setEditing] = useState(false);
+  // Whether the workspace frame itself may be resized. LOCKED even in edit
+  // mode, deliberately: arranging tiles and sizing the canvas are different
+  // acts, and a drag meant for a tile must never change the canvas under it.
+  // The pencil on the frame's corner is the only way in, and leaving edit mode
+  // always locks it back up.
+  const [wsUnlocked, setWsUnlocked] = useState(false);
+  const wsDrag = useRef<{
+    side: 'left' | 'right';
+    startX: number;
+    startCols: number;
+    /** Clamp baselines taken at pointer-down — a left drag shifts the tiles,
+     *  so mid-drag geometry is the wrong thing to clamp against. */
+    room: number;
+    applied: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!editing || !canEdit) setWsUnlocked(false);
+  }, [editing, canEdit]);
+  useEffect(() => {
+    if (!wsUnlocked) wsDrag.current = null;
+  }, [wsUnlocked]);
 
   // Escape leaves edit mode. Every other layer of this screen that can be open
   // (the tile picker, a settings modal, the maximized tile) handles Escape
@@ -147,11 +209,15 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   useEffect(() => {
     if (!editing) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented) setEditing(false);
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Locking the workspace back up comes first, so Escape mid-sizing does
+      // not also throw the reader out of edit mode.
+      if (wsUnlocked) setWsUnlocked(false);
+      else setEditing(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editing]);
+  }, [editing, wsUnlocked]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -169,6 +235,15 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   // see lib/measure.ts for why that distinction is the whole bug on iPhone.
   const boardRef = useRef<HTMLDivElement | null>(null);
   const boardW = useContentWidth(boardRef, 1120);
+  // While the workspace is unlocked the board pulls in from the sides, so the
+  // dotted frame reads as an object floating on the page with its side handles
+  // in reach — pressed against the container edge there is nothing to grab.
+  // Plain padding, deliberately no transform: a scale would reopen the two-
+  // coordinate-space trap lib/measure.ts exists to close.
+  const wsGutter = wsUnlocked ? Math.round(Math.min(140, Math.max(56, boardW * 0.07))) : 0;
+  // Locked, the grid takes the measured width exactly as it always has — the
+  // floor only guards the unlocked state's subtraction.
+  const gridW = wsUnlocked ? Math.max(320, boardW - wsGutter * 2) : boardW;
 
   const applyBoard = useCallback(
     (b: TradingBoard) => {
@@ -176,7 +251,9 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
       setSharedId(null);
       setName(b.name);
       setTiles(b.layout.tiles ?? []);
-      setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
+      setCols(workspaceCols(b.layout));
+      setWsUnlocked(false);
+      setSavedTilesJson(layoutJson(workspaceCols(b.layout), b.layout.tiles ?? []));
       setNamePrompt(null);
       if (lastKey) {
         try {
@@ -200,10 +277,13 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
       setName(p.label);
       const built = buildPreset(p, features, entitled);
       setTiles(built);
+      // The built-in templates are authored on the default canvas.
+      setCols(COLS);
+      setWsUnlocked(false);
       // Baseline the comparison against what was just applied, so an untouched
       // built-in layout is not "modified". Without this every layout switch
       // asked "discard unsaved changes?" about changes nobody had made.
-      setSavedTilesJson(JSON.stringify(built));
+      setSavedTilesJson(layoutJson(COLS, built));
       if (builtInKey) {
         try {
           localStorage.setItem(builtInKey, key);
@@ -268,12 +348,12 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
   // overlay rather than leaving it showing something the board no longer has.
   const maxTile = maxId ? (tiles.find((t) => t.id === maxId) ?? null) : null;
 
-  const tilesJson = useMemo(() => JSON.stringify(tiles), [tiles]);
+  const boardJson = useMemo(() => layoutJson(cols, tiles), [cols, tiles]);
   const isUnsaved = activeId == null;
   // Modified since it was applied — deliberately NOT "unsaved". A built-in
   // layout is permanently unsaved and is nonetheless untouched, and conflating
   // the two made every layout switch warn about discarding nothing.
-  const dirty = tilesJson !== savedTilesJson;
+  const dirty = boardJson !== savedTilesJson;
   const activeBoard = activeId ? (boards.find((b) => b.id === activeId) ?? null) : null;
 
   // Which tiles this reader cannot reach, resolved once per render rather than
@@ -337,7 +417,10 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
       // Only persist layout while editing. Outside edit mode the only layout
       // changes come from expand tiles auto-growing (and reflowing others); those
       // are transient and must not dirty the board or overwrite saved positions.
-      if (!editing) return;
+      // While the WORKSPACE is being sized the resize is the only writer — the
+      // grid re-fits on every column change, and its echoes of that reflow must
+      // not write tile geometry mid-shift.
+      if (!editing || wsUnlocked) return;
       setTiles((prev) =>
         prev.map((t) => {
           const l = next.find((n) => n.i === t.id);
@@ -348,8 +431,60 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
         }),
       );
     },
-    [editing],
+    [editing, wsUnlocked],
   );
+
+  // ---- Sizing the workspace ------------------------------------------------
+  // Both entrances — the side-handle drag and the − / + steppers — move the
+  // frame by whole columns on ONE side. Growing the left inserts columns there
+  // and shifts every tile right, so the arrangement keeps its place against the
+  // right edge; shrinking only ever removes EMPTY columns on that side.
+  const stepWorkspace = useCallback(
+    (side: 'left' | 'right', by: number) => {
+      const room = wsRooms(tiles, cols)[side];
+      const d = Math.max(Math.max(-room, MIN_WS_COLS - cols), Math.min(MAX_WS_COLS - cols, by));
+      if (d === 0) return;
+      setCols(cols + d);
+      if (side === 'left') setTiles((prev) => prev.map((t) => ({ ...t, x: t.x + d })));
+    },
+    [tiles, cols],
+  );
+
+  const wsHandleDown = useCallback(
+    (side: 'left' | 'right') => (e: ReactPointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.currentTarget.setPointerCapture(e.pointerId);
+      wsDrag.current = { side, startX: e.clientX, startCols: cols, room: wsRooms(tiles, cols)[side], applied: 0 };
+    },
+    [tiles, cols],
+  );
+  const wsHandleMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = wsDrag.current;
+    if (!drag) return;
+    const raw = e.clientX - drag.startX;
+    // Dragging a side OUTWARD grows that side. Clamped against the geometry
+    // recorded at pointer-down (`room`), and applied as an absolute delta from
+    // there, so a burst of moves between renders cannot double-apply.
+    const wanted = Math.round((drag.side === 'right' ? raw : -raw) / WS_NOTCH_PX);
+    const d = Math.max(
+      Math.max(-drag.room, MIN_WS_COLS - drag.startCols),
+      Math.min(MAX_WS_COLS - drag.startCols, wanted),
+    );
+    if (d === drag.applied) return;
+    const shift = drag.side === 'left' ? d - drag.applied : 0;
+    drag.applied = d;
+    setCols(drag.startCols + d);
+    if (shift !== 0) setTiles((prev) => prev.map((t) => ({ ...t, x: t.x + shift })));
+  }, []);
+  const wsHandleUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    wsDrag.current = null;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      /* already released */
+    }
+  }, []);
 
   const patchTile = useCallback((id: string, patch: Partial<BoardTile>) => {
     setTiles((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
@@ -414,10 +549,10 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     }
     setSaving(true);
     try {
-      const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { layout: { tiles } });
+      const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { layout: { tiles, cols } });
       setBoards(list);
       setTeamBoards(shared);
-      setSavedTilesJson(JSON.stringify(board.layout.tiles ?? []));
+      setSavedTilesJson(layoutJson(workspaceCols(board.layout), board.layout.tiles ?? []));
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not save the board');
@@ -433,7 +568,7 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     setSaving(true);
     try {
       if (namePrompt.mode === 'create') {
-        const { board, boards: list, teamBoards: shared } = await api.createBoard({ name: nm, layout: { tiles }, isDefault: boards.length === 0 });
+        const { board, boards: list, teamBoards: shared } = await api.createBoard({ name: nm, layout: { tiles, cols }, isDefault: boards.length === 0 });
         setBoards(list);
         setTeamBoards(shared);
         applyBoard(board);
@@ -462,9 +597,13 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
     setSharedId(b.id);
     setName(b.name);
     setTiles(b.layout.tiles ?? []);
+    // A shared layout keeps the width its author arranged it on — the
+    // arrangement is the point, and the width is part of it.
+    setCols(workspaceCols(b.layout));
+    setWsUnlocked(false);
     // Baselined for the same reason as a built-in: opening a teammate's layout
     // is not an edit.
-    setSavedTilesJson(JSON.stringify(b.layout.tiles ?? []));
+    setSavedTilesJson(layoutJson(workspaceCols(b.layout), b.layout.tiles ?? []));
     setNamePrompt(null);
     setEditing(false);
   }, []);
@@ -690,19 +829,27 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
           </div>
         ) : (
           <>
+            {/* The workspace area. The padded outer box gives the unlocked
+                frame its side gutters; the relative inner box is what the
+                dotted outline and its controls anchor to, so they always wrap
+                the grid exactly whatever height it grows to. */}
+            <div style={{ paddingTop: editing && canEdit ? 16 : 0, paddingLeft: wsGutter, paddingRight: wsGutter }}>
+            <div style={{ position: 'relative' }} className={wsUnlocked ? 'ws-sizing' : undefined}>
             <RGL
               className="layout"
-              width={boardW}
+              width={gridW}
               layout={layout}
-              cols={isPhone ? 1 : COLS}
+              cols={isPhone ? 1 : cols}
               rowHeight={ROW_H}
               margin={[10, 10]}
               // `canEdit` as well as `editing`: a board left in edit mode on a
               // desktop and then narrowed to a phone would otherwise stay
               // draggable, and a drag there writes the flattened one-column
-              // order back over the real arrangement.
-              isDraggable={editing && canEdit}
-              isResizable={editing && canEdit}
+              // order back over the real arrangement. `!wsUnlocked` for the
+              // mirror of the reason the workspace is locked while tiles are
+              // arranged: while the CANVAS is being sized, the tiles freeze.
+              isDraggable={editing && canEdit && !wsUnlocked}
+              isResizable={editing && canEdit && !wsUnlocked}
               // ALL FOUR CORNERS, not just the bottom-right (owner instruction,
               // 2026-08). Dragging only from the south-east corner means a tile
               // at the right edge of the board can be made bigger but not
@@ -755,6 +902,78 @@ export function ChartBoard({ desk = true, onOpenMembership }: { desk?: boolean; 
                 </div>
               ))}
             </RGL>
+            {/* The workspace frame: the dotted line around the area the tiles
+                live in, drawn only while editing. It is LOCKED even then — the
+                pencil on its corner is the one way to size it, so a drag meant
+                for a tile can never change the canvas underneath it. */}
+            {editing && canEdit && (
+              <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 40 }}>
+                <div style={wsOutline(wsUnlocked)} />
+                <button
+                  type="button"
+                  onClick={() => setWsUnlocked((v) => !v)}
+                  title={wsUnlocked ? 'Lock the workspace' : 'Resize the workspace'}
+                  aria-label={wsUnlocked ? 'Lock the workspace' : 'Resize the workspace'}
+                  style={wsPencilBtn(wsUnlocked)}
+                >
+                  <Icon name={wsUnlocked ? 'check' : 'pencil'} size={11} color={wsUnlocked ? '#10224A' : GOLD} />
+                </button>
+                {wsUnlocked && (
+                  <>
+                    {(['left', 'right'] as const).map((side) => (
+                      <div
+                        key={side}
+                        onPointerDown={wsHandleDown(side)}
+                        onPointerMove={wsHandleMove}
+                        onPointerUp={wsHandleUp}
+                        onPointerCancel={wsHandleUp}
+                        role="separator"
+                        aria-label={side === 'left' ? 'Workspace left edge' : 'Workspace right edge'}
+                        style={wsEdgeStrip(side)}
+                      >
+                        <div style={wsGripPill}>
+                          <Icon name="grip-vertical" size={11} color={GOLD} />
+                        </div>
+                      </div>
+                    ))}
+                    <div style={wsChip}>
+                      <button
+                        type="button"
+                        onClick={() => stepWorkspace('right', -1)}
+                        disabled={cols <= MIN_WS_COLS || wsRooms(tiles, cols).right <= 0}
+                        aria-label="Remove a column"
+                        style={{
+                          ...wsStepBtn,
+                          ...(cols <= MIN_WS_COLS || wsRooms(tiles, cols).right <= 0
+                            ? { opacity: 0.35, cursor: 'default' }
+                            : null),
+                        }}
+                      >
+                        {"−"}
+                      </button>
+                      <span>
+                        {cols === COLS
+                          ? `Mobile width · ${COLS} columns`
+                          : cols > COLS
+                            ? `Desktop width · ${cols} columns`
+                            : `Narrow width · ${cols} columns`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => stepWorkspace('right', 1)}
+                        disabled={cols >= MAX_WS_COLS}
+                        aria-label="Add a column"
+                        style={{ ...wsStepBtn, ...(cols >= MAX_WS_COLS ? { opacity: 0.35, cursor: 'default' } : null) }}
+                      >
+                        {"+"}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            </div>
+            </div>
             {/* While editing, keep a little breathing room below the grid so the
                 bottom-row tile's resize handle isn't jammed against the footer
                 and can be dragged down to grow the cell. */}
@@ -1097,7 +1316,105 @@ const PLACEHOLDER_CSS = `
 }
 .wall-cell:hover .wall-expand, .wall-expand:focus-visible { opacity: 1; }
 @media (hover: none) { .wall-expand { opacity: .55; } }
+
+/* While the workspace is being sized, the tiles freeze — the frame's own
+   handles are the only live controls, the mirror of the workspace being locked
+   while tiles are arranged. */
+.ws-sizing .react-grid-item { pointer-events: none; opacity: .82; transition: opacity .15s ease; }
 `;
+
+// ---- Workspace frame chrome -------------------------------------------------
+// The dotted line sits in the grid's own 10px container padding, so tiles never
+// touch it; everything interactive re-enables pointer events individually on
+// top of the overlay's pointerEvents: 'none'.
+const wsOutline = (unlocked: boolean): CSSProperties => ({
+  position: 'absolute',
+  inset: 0,
+  borderRadius: 14,
+  border: unlocked ? `1.5px dashed ${GOLD}` : '1.5px dashed rgba(235,203,116,.35)',
+  boxShadow: unlocked ? '0 0 0 4px rgba(235,203,116,.06)' : undefined,
+  transition: 'border-color .15s ease',
+});
+const wsPencilBtn = (unlocked: boolean): CSSProperties => ({
+  position: 'absolute',
+  top: -12,
+  right: 10,
+  width: 24,
+  height: 24,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  background: unlocked ? GOLD : 'rgba(9,20,46,.95)',
+  border: `1px solid ${unlocked ? GOLD : 'rgba(235,203,116,.55)'}`,
+  borderRadius: 7,
+  cursor: 'pointer',
+  pointerEvents: 'auto',
+  boxShadow: '0 4px 12px rgba(0,0,0,.35)',
+});
+// The grab surface runs most of the side; the visible pill near the top is the
+// affordance, kept high so it is on screen the moment the frame unlocks.
+const wsEdgeStrip = (side: 'left' | 'right'): CSSProperties => ({
+  position: 'absolute',
+  top: 24,
+  bottom: 24,
+  [side]: -9,
+  width: 18,
+  cursor: 'ew-resize',
+  pointerEvents: 'auto',
+  touchAction: 'none',
+});
+const wsGripPill: CSSProperties = {
+  position: 'absolute',
+  top: 64,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  width: 16,
+  height: 56,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: 'rgba(9,20,46,.95)',
+  border: `1px solid ${GOLD}`,
+  borderRadius: 8,
+  boxShadow: '0 4px 12px rgba(0,0,0,.35)',
+  pointerEvents: 'none',
+};
+const wsChip: CSSProperties = {
+  position: 'absolute',
+  top: -13,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '3px 6px',
+  background: 'rgba(9,20,46,.95)',
+  border: '1px solid rgba(235,203,116,.55)',
+  borderRadius: 8,
+  fontSize: 11,
+  fontWeight: 600,
+  color: '#EFDFAF',
+  whiteSpace: 'nowrap',
+  pointerEvents: 'auto',
+  boxShadow: '0 4px 12px rgba(0,0,0,.35)',
+};
+const wsStepBtn: CSSProperties = {
+  width: 18,
+  height: 18,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 0,
+  background: 'rgba(235,203,116,.14)',
+  border: '1px solid rgba(235,203,116,.5)',
+  borderRadius: 5,
+  color: '#EFDFAF',
+  fontSize: 13,
+  lineHeight: 1,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+};
 
 const maxWrap: CSSProperties = {
   position: 'fixed',
