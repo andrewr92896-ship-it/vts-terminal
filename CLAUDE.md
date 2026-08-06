@@ -390,26 +390,56 @@ workspaces list** (see `theme/nav.ts` order).
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
-  - **Deposited capital is the trader's own figure, entered on the KPI row**
-    (`CapitalCard` in `TradeLog.tsx`, `trading_desk_settings.deposited_capital`,
-    migration `0109`). The row could say what the trades made and never what
-    they were made **on**, so "+$378 realized" read the same on a $2,000 account
-    as on a $200,000 one.
+  - **The trader's own money is three KPI cards on the Trade Log** — Deposited
+    Capital, Withdrawn Capital, and Total Capital (`CapitalCards` in
+    `TradeLog.tsx`, served by `trading/traderCapital.ts` over
+    `GET|PATCH /api/trading/capital` + `POST /api/trading/capital/sync`;
+    columns on `trading_desk_settings`, migrations `0109`/`0110`). The row could
+    say what the trades made and never what they were made **on**, so "+$378
+    realized" read the same on a $2,000 account as on a $200,000 one.
+    - **Always the VIEWER'S own, and never the desk's** — unlike Live Brokers,
+      which is deliberately desk-wide. The service takes a single id, there is
+      no parameter that could widen it, and the cards do not change with the
+      trader filter. The return on the Deposited card is likewise measured over
+      the viewer's **own** closed rows within the current filters (`t.isMine`):
+      dividing the desk's P/L by one person's deposit is a return nobody earned.
+    - **Deposited and Withdrawn are each TYPED or SYNCED, chosen per figure**
+      (`deposited_sync` / `withdrawn_sync`). Synced reads the connected OANDA
+      account's funding history — `fetchOandaFunding` in `brokers/oanda.ts`
+      counts **only `CLIENT_FUNDING`** transfers, because OANDA also files
+      transfers between the trader's own sub-accounts and entity migrations as
+      funding, and summing those answers a different question than "what did I
+      put in". Excluded events are counted and surfaced (`otherTransfers`), and
+      a truncated history walk says so rather than understating silently.
+    - **The typed and synced figures are SEPARATE columns** (`deposited_capital`
+      vs `synced_deposited`), so turning sync off hands back the trader's own
+      number, and typing a figure returns that card to manual. The synced pair
+      is the **last good reading**: a failed refresh keeps it, stamped, instead
+      of blanking to zero (`stale-while-revalidate`, refreshed on read past a
+      15-minute TTL and immediately by the Sync button — which sits behind an
+      "Are you sure you want to sync?" confirm). Kraken deliberately does not
+      feed the sync: its ledger records "0.5 BTC in", and turning that into
+      dollars needs the price on the day it landed, which the terminal does not
+      have.
     - **Null is "not stated" and is NEVER inherited.** Every other desk setting
-      falls back to the shared `'desk'` row; this one is read from the trader's
-      **own** row only, because one trader's deposit is not another's —
-      inheriting it would put somebody else's money on your screen and compute
-      your return against it. **Zero is a real answer** (a funded account the
-      trader paid nothing into) and stays distinct from null: the card then
-      shows the money with no percentage rather than dividing by zero.
-    - **The return is measured over the viewer's OWN closed rows** within
-      whatever the filters have selected (`t.isMine`), never the desk's. On a
-      granted team the log carries teammates' trades, and dividing the desk's
-      P/L by one person's deposit is a return nobody earned.
-    - It rides the Trade Log payload rather than a second request — it is the
-      viewer's setting, so it does not vary with whose rows are on screen — and
-      the desk-settings modal deliberately does not offer it: the modal sends a
-      narrow patch, so saving a break-even band leaves the deposit alone.
+      falls back to the shared `'desk'` row; these are read from the trader's
+      **own** row only, because one trader's deposit is not another's. **Zero is
+      a real answer** and stays distinct from null: the card shows the money
+      with no percentage rather than dividing by zero. These fields are owned by
+      `traderCapital.ts` and deliberately **not** part of
+      `DeskSettings`/`updateDeskSettings` — they have a second, broker-driven
+      writer, and two write paths into one number is how the two disagree.
+    - **Total Capital is what the trader holds right now**: OANDA NAV plus a
+      Kraken account's USD-valued equity (`fetchKrakenTradeBalance`), summed
+      across their own connections, cached ~60s per trader. Accounts in
+      different currencies refuse the total (Kraken's reading is a USD
+      valuation, so it only joins a USD desk), and a connection that will not
+      answer is **left out and counted** (`unreadable`, named on the card) —
+      the Net Worth rule, since a total quietly missing an account looks
+      complete while understating.
+    - The funding read is audited as its own `credential_audit` purpose
+      (`funding`, individual rows — a person asked for it); the NAV read rides
+      the existing hourly-aggregated `capital` purpose.
   - **Trade History settings are per trader** (`trading/settings.ts`,
     `getDeskSettings(userId)` / `updateDeskSettings(userId, patch)`): the
     break-even buffer, per-instrument buffers (`trading_be_overrides`, keyed

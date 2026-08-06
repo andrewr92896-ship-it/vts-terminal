@@ -152,6 +152,113 @@ export async function fetchOandaClosedTrades(cfg: OandaConfig): Promise<OandaClo
   return rows.map((r) => ({ realizedPl: r.realizedPl, closeTimeMs: r.closeTimeMs }));
 }
 
+// ---- Funding: what the trader actually put into the account ----------------
+//
+// OANDA records money moving in or out of an account as a TRANSFER_FUNDS
+// transaction, so "how much have I deposited" is a real question the API can
+// answer rather than one the trader has to remember.
+//
+// **Only CLIENT_FUNDING is counted, and that is the whole point of this read.**
+// OANDA files several other things as funding: a transfer between the trader's
+// own OANDA sub-accounts (ACCOUNT_TRANSFER), an account moved between OANDA
+// entities (DIVISION_MIGRATION / SITE_MIGRATION), and broker adjustments
+// (ADJUSTMENT). Summing all of them would answer "how much money has ever
+// arrived in this account", which reads plausibly and is not what anybody means
+// by "capital I deposited" — moving your own money between two of your own
+// accounts is not a deposit. The others are counted and reported so the figure
+// can say what it left out instead of quietly disagreeing with the trader's
+// OANDA statement.
+export interface OandaFunding {
+  currency: string;
+  deposits: number; // client money in
+  withdrawals: number; // client money out, as a positive number
+  events: number; // client funding transactions counted
+  // Funding that was NOT the client putting money in or taking it out.
+  otherTransfers: number;
+  // The history was longer than we walked. Reported rather than hidden: a
+  // truncated total is understated, and silently understating deposits would
+  // overstate the return computed from it.
+  truncated: boolean;
+}
+
+interface OandaTransferFunds {
+  type?: string;
+  amount?: string;
+  fundingReason?: string;
+  accountBalance?: string;
+}
+interface OandaTransactionPages {
+  pages?: string[];
+}
+interface OandaTransactionPage {
+  transactions?: OandaTransferFunds[];
+}
+interface OandaAccountCreated {
+  account?: { currency?: string; createdTime?: string };
+}
+
+// A funding history longer than this is not walked further. 20 pages of 1,000
+// is 20,000 funding events — far past any real account, and a bound on what one
+// screen load can cost.
+const MAX_FUNDING_PAGES = 20;
+
+export async function fetchOandaFunding(cfg: OandaConfig): Promise<OandaFunding> {
+  const auth = { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' };
+
+  // The window has to start at the account's own beginning: OANDA refuses a
+  // `from` earlier than the account existed, so a hardcoded old date 400s on
+  // some accounts and silently narrows the range on others.
+  const sumRes = await fetch(`${cfg.base}/v3/accounts/${cfg.accountId}/summary`, { headers: auth });
+  if (!sumRes.ok) throw new Error(`OANDA responded ${sumRes.status}`);
+  const summary = (await sumRes.json()) as OandaAccountCreated;
+  const currency = summary.account?.currency ?? 'USD';
+  const from = summary.account?.createdTime;
+
+  const query = new URLSearchParams({ type: 'TRANSFER_FUNDS', pageSize: '1000' });
+  if (from) query.set('from', from);
+  const listRes = await fetch(`${cfg.base}/v3/accounts/${cfg.accountId}/transactions?${query}`, {
+    headers: auth,
+  });
+  if (!listRes.ok) throw new Error(`OANDA responded ${listRes.status}`);
+  const list = (await listRes.json()) as OandaTransactionPages;
+  const pages = list.pages ?? [];
+
+  let deposits = 0;
+  let withdrawals = 0;
+  let events = 0;
+  let otherTransfers = 0;
+  for (const url of pages.slice(0, MAX_FUNDING_PAGES)) {
+    // The page URLs are handed back by OANDA. Refuse any that does not point at
+    // the host we are already talking to — a bearer token must never be sent
+    // somewhere the response chose.
+    if (!url.startsWith(`${cfg.base}/`)) continue;
+    const pageRes = await fetch(url, { headers: auth });
+    if (!pageRes.ok) throw new Error(`OANDA responded ${pageRes.status}`);
+    const page = (await pageRes.json()) as OandaTransactionPage;
+    for (const t of page.transactions ?? []) {
+      if (t.type !== 'TRANSFER_FUNDS') continue;
+      const amount = num(t.amount);
+      if (amount == null || amount === 0) continue;
+      if (t.fundingReason !== 'CLIENT_FUNDING') {
+        otherTransfers += 1;
+        continue;
+      }
+      events += 1;
+      if (amount > 0) deposits += amount;
+      else withdrawals += Math.abs(amount);
+    }
+  }
+
+  return {
+    currency,
+    deposits: Number(deposits.toFixed(2)),
+    withdrawals: Number(withdrawals.toFixed(2)),
+    events,
+    otherTransfers,
+    truncated: pages.length > MAX_FUNDING_PAGES,
+  };
+}
+
 export async function fetchOandaAccountSummary(cfg: OandaConfig): Promise<OandaAccountCapital> {
   const res = await fetch(`${cfg.base}/v3/accounts/${cfg.accountId}/summary`, {
     headers: { Authorization: `Bearer ${cfg.token}`, 'Content-Type': 'application/json' },

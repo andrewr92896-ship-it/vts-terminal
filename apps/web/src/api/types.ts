@@ -604,9 +604,6 @@ export interface DeskSettings {
   // Ignore broker fills under this many units in the Trade Log / History (the
   // trader's "test trade" floor). 0 = keep everything.
   minTradeUnits: number;
-  // What this trader deposited out of their own pocket. `null` = not stated
-  // (never inherited from the shared desk default), and sending null clears it.
-  depositedCapital: number | null;
   // Every instrument the team has traded (from the Trade Log + History), so the
   // per-instrument buffer picker can offer them. Auto-derived server-side.
   instruments: string[];
@@ -1530,13 +1527,40 @@ export interface TradeLogData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
-  // What the VIEWER deposited out of their own pocket, or null when they have
-  // not said. Never inherited from the shared desk default — see the server's
-  // DeskSettings.
-  depositedCapital: number | null;
   // The viewer may remove a teammate's trade, not just their own (team leader,
   // a member granted "Delete trades", or an admin).
   canDeleteAny: boolean;
+}
+
+// ---- Trading — the viewer's own capital (mirror of apps/api/src/trading/traderCapital.ts) ----
+// Deposited, withdrawn, and what their connected accounts hold right now. Always
+// the CALLER'S own — a teammate's deposits are their business.
+export type CapitalMode = 'manual' | 'synced';
+export interface CapitalFigure {
+  value: number | null; // what to show; null = not stated
+  mode: CapitalMode;
+  manual: number | null; // the typed figure, kept while synced
+  synced: number | null; // the last good broker reading
+}
+export interface TraderCapital {
+  deposited: CapitalFigure;
+  withdrawn: CapitalFigure;
+  // NAV summed across the viewer's own connected accounts. Null when nothing is
+  // connected, nothing answered, or the accounts are kept in mixed currencies.
+  total: number | null;
+  accounts: number;
+  unreadable: number; // connected accounts that did not answer, left out of the total
+  currency: string | null;
+  canSync: boolean; // a connected OANDA account exists to sync from
+  syncedAt: number | null;
+  otherTransfers: number; // funding events that were not client deposits/withdrawals
+  note: string | null; // why a synced figure is stale or partial
+}
+export interface CapitalPatch {
+  deposited?: number | null; // a number also returns the figure to manual mode
+  withdrawn?: number | null;
+  depositedSync?: boolean;
+  withdrawnSync?: boolean;
 }
 
 // The Deleted Trades payload — soft-deleted rows plus the viewer's reach over

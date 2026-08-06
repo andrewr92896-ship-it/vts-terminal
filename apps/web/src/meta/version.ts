@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.78';
+export const APP_VERSION = 'Beta V 6.79';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.79',
+    date: 'August 6, 2026',
+    notes: [
+      'Trade History’s capital cards grew up: Deposited Capital gained a Withdrawn Capital card beside it, and both can now be typed in with Edit or synced from your connected OANDA account’s deposit history with Sync. Synced figures keep themselves current; typing a number switches that card back to manual, and nothing you typed is lost by trying sync.',
+      'A Total Capital card shows what your connected broker accounts hold right now, combined — OANDA and Kraken. Accounts in different currencies, or one that will not answer, are called out rather than silently mistotalled.',
+      'Only real deposits count in a sync: transfers between your own OANDA accounts and account migrations are excluded and noted, so the figure means what you actually put in.',
+    ],
+  },
   {
     version: 'Beta V 6.78',
     date: 'August 6, 2026',

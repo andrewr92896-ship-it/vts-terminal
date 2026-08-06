@@ -28,6 +28,7 @@ const INDIVIDUAL: ReadonlySet<CredentialAuditPurpose> = new Set([
   'desk_read',
   'holdings',
   'quotes',
+  'funding',
 ]);
 
 // Everything else is background polling and is counted by the hour. A row per

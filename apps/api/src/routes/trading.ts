@@ -30,6 +30,7 @@ import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trad
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { visibleTraderIds } from '../trading/scope.js';
+import { getTraderCapital, syncCapital, updateTraderCapital } from '../trading/traderCapital.js';
 import {
   addChallenge,
   getOwnChallenge,
@@ -39,7 +40,7 @@ import {
   updateChallenge,
 } from '../trading/challenge.js';
 import { getOandaCapital } from '../trading/capital.js';
-import { getAllCredentialAudit, getOwnCredentialAudit } from '../trading/credentialAudit.js';
+import { auditActorFor, getAllCredentialAudit, getOwnCredentialAudit } from '../trading/credentialAudit.js';
 import {
   getFunded,
   addFundedAccount,
@@ -320,6 +321,33 @@ export async function tradingRoutes(app: FastifyInstance) {
       editableDeskMembers(me),
     ]);
     return { ...settings, instruments, userId: target, editableMembers };
+  });
+
+  // ---- The trader's own capital: put in, taken out, held now ----------------
+  //
+  // Self-only, unlike the desk-wide OANDA capital below: this is one person's
+  // money by definition. On the `write` guard for the same reason that one is —
+  // it reports balances, and that is the floor the desk asked for.
+  app.get('/api/trading/capital', write, async (request) =>
+    getTraderCapital(request.currentUser!.id, { actor: auditActorFor(request) }),
+  );
+
+  app.patch('/api/trading/capital', write, async (request, reply) => {
+    const parsed = capitalSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Enter an amount of 0 or more' });
+    return updateTraderCapital(request.currentUser!.id, parsed.data, { actor: auditActorFor(request) });
+  });
+
+  // The Sync button: turn syncing on for one figure and pull it now, so the
+  // trader's one press does the whole thing.
+  app.post('/api/trading/capital/sync', write, async (request, reply) => {
+    const parsed = capitalSyncSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Pick a figure to sync' });
+    try {
+      return await syncCapital(request.currentUser!.id, parsed.data.figure, auditActorFor(request));
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not sync' });
+    }
   });
 
   // ---- Funded accounts (prop-firm challenges) — behind the Funded opt-in ----
@@ -1463,12 +1491,24 @@ const deskSettingsSchema = z
     // The full per-instrument override list; when present it replaces the stored
     // set. Capped so one request can't insert an unbounded number of rows.
     breakEvenOverrides: z.array(beOverrideSchema).max(200).optional(),
-    // What the trader deposited out of their own pocket. `null` clears it back
-    // to "not stated"; omitted leaves it alone. Nullable rather than optional-
-    // only, because clearing it has to be expressible.
-    depositedCapital: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+// Deposited / withdrawn capital and the sync switches. Deliberately its OWN
+// route rather than more fields on the desk-settings patch: those figures have a
+// second, broker-driven writer (the sync), and two write paths into one number
+// is how the two come to disagree. `null` clears a figure back to "not stated".
+const capitalSchema = z
+  .object({
+    deposited: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
+    withdrawn: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
+    depositedSync: z.boolean().optional(),
+    withdrawnSync: z.boolean().optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+// Which figure the Sync button was pressed on.
+const capitalSyncSchema = z.object({ figure: z.enum(['deposited', 'withdrawn']) });
 
 // Editing a closed trade in History: the same shape as a hand-logged trade minus
 // the fields History doesn't own (broker/status/notes are managed elsewhere).
