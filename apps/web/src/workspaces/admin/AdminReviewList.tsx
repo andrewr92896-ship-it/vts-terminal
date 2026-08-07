@@ -45,15 +45,15 @@ const LABELS: Record<ReviewKey, string> = {
 const WHERE: Record<ReviewKey, string> = {
   tradeDesk: 'Advanced Trading ▸ Live Trades, in the sidebar',
   brokerConnections: 'My Terminal ▸ Settings ▸ Broker connections',
-  teams: 'My Terminal ▸ Trading Team, and the Live Wall’s Preset Settings',
-  teamChat: 'The chat bubble’s Team chat tab, and the Team Chat wall tile',
+  teams: 'My Terminal ▸ My Group, and the Live Wall’s Preset Settings',
+  teamChat: 'The chat bubble’s Group chat tab, and the Group Chat wall tile',
   tradingAlerts: 'The Alerts tile in the Live Wall’s tile picker',
   strategySessions: 'Advanced Trading ▸ Strategy Sessions, in the sidebar',
   newsBias: 'News ▸ Market News, at the foot of the feed',
   ai: 'The Ask VTS AI panel header',
   metricsCoach: 'Advanced Trading ▸ Funded Trades, beside the AI read',
   funded: 'Advanced Trading ▸ Funded Trades, in the sidebar',
-  leadTraderBadge: 'My Terminal ▸ Trading Team ▸ Badge',
+  leadTraderBadge: 'My Terminal ▸ My Group ▸ Badge',
   legalCredentials: 'Nowhere — it is a claim in the documents, not a control',
 };
 

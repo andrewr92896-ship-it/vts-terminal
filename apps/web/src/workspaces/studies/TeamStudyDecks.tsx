@@ -80,10 +80,10 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-            {"Team Study Games"}
+            {"Study Games"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build and edit your team’s own quizzes here — play them from the <strong>Study Game</strong> section.
+            Build and edit your own quizzes here — play them from the <strong>Study Game</strong> section.
           </p>
         </div>
         {!readOnly && (
@@ -128,11 +128,11 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          {"Loading your team’s study games…"}
+          {"Loading your study games…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          {"Couldn’t load your team’s study games. Try again in a moment."}
+          {"Couldn’t load your study games. Try again in a moment."}
         </div>
       ) : decks.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
@@ -142,7 +142,7 @@ export function TeamStudyDecks({ theme }: { theme: Theme }) {
           </div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 420, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? "A team builds its own study games here — AI-generated from a topic, or from an uploaded file."
+              ? "Study games are built here — AI-generated from a topic, or from an uploaded file."
               : "Build your first one: have AI generate questions from a topic, or upload a text file of your own questions or notes."}
           </div>
           {!readOnly && (
@@ -672,7 +672,7 @@ function DeckComposer({
 
         <div style={{ fontSize: 11, color: muted, lineHeight: 1.5 }}>
           {mode === 'ai' ? (
-            "AI writes the questions and answer key — review them before your team relies on them."
+            "AI writes the questions and answer key — review them before anyone relies on them."
           ) : mode === 'file' ? (
             "Upload a text file and AI formats the questions from it. You review them before the game is created."
           ) : (

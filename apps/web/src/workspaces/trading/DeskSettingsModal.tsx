@@ -303,7 +303,7 @@ export function DeskSettingsModal({
 
         <div style={{ padding: 18 }}>
           {/* Whose settings — a desk lead (team leader / admin) can pick a
-              teammate and edit theirs. Hidden for everyone else, who only ever
+              person in the group and edit theirs. Hidden for everyone else, who only ever
               see their own. */}
           {members.length > 1 && (
             <div style={{ marginBottom: 16 }}>
@@ -325,7 +325,7 @@ export function DeskSettingsModal({
               </select>
               {!editingSelf && (
                 <div style={{ fontSize: 11.5, color: GOLD, marginTop: 6 }}>
-                  Editing {members.find((m) => m.id === targetId)?.name ?? 'a teammate'}'s desk settings.
+                  Editing {members.find((m) => m.id === targetId)?.name ?? 'somebody else'}'s desk settings.
                 </div>
               )}
             </div>

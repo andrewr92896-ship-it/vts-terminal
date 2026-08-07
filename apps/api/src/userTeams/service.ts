@@ -128,7 +128,7 @@ async function teamIdOf(userId: string): Promise<string | null> {
 
 async function teamName(teamId: string): Promise<string> {
   const row = (await db.select({ name: tradingTeams.name }).from(tradingTeams).where(eq(tradingTeams.id, teamId)).limit(1))[0];
-  return row?.name ?? 'Trading Team';
+  return row?.name ?? 'Private Group';
 }
 
 // The active, non-demo members of a team — the roster, straight from team_id.
@@ -308,7 +308,7 @@ export async function getMyPortal(
         incomingRows.map(async (i) => ({
           id: i.id,
           teamId: i.teamId,
-          teamName: (await teamName(i.teamId)) || teamMap.get(i.teamId)?.name || 'a team',
+          teamName: (await teamName(i.teamId)) || teamMap.get(i.teamId)?.name || 'a group',
           invitedByName: i.invitedBy ? inviterMap.get(i.invitedBy)?.displayName ?? null : null,
           createdAt: i.createdAt.getTime(),
         })),
@@ -322,9 +322,9 @@ export async function getMyPortal(
 // Ensure the acting user leads the given team, or holds the named permission.
 async function requirePerm(teamId: string, userId: string, perm: keyof MemberPermissions): Promise<void> {
   const meta = await ensureTeamMeta(teamId);
-  if (!meta) throw new UserTeamError('That team no longer exists');
+  if (!meta) throw new UserTeamError('That group no longer exists');
   if (meta.leaderId === userId) return; // leader can do everything
-  if ((await teamIdOf(userId)) !== teamId) throw new UserTeamError('You are not on this team');
+  if ((await teamIdOf(userId)) !== teamId) throw new UserTeamError('You are not in this group');
   const mr = (await memberMeta(teamId, [userId])).get(userId);
   const perms = mr ? permsFromRow(mr) : NO_PERMS;
   if (!perms[perm]) throw new UserTeamError('You do not have permission to do that');
@@ -332,8 +332,8 @@ async function requirePerm(teamId: string, userId: string, perm: keyof MemberPer
 
 async function requireLeader(teamId: string, userId: string): Promise<void> {
   const meta = await ensureTeamMeta(teamId);
-  if (!meta) throw new UserTeamError('That team no longer exists');
-  if (meta.leaderId !== userId) throw new UserTeamError('Only the team leader can do that');
+  if (!meta) throw new UserTeamError('That group no longer exists');
+  if (meta.leaderId !== userId) throw new UserTeamError('Only the group leader can do that');
 }
 
 // Create a brand-new team and move the creator onto it as leader. Reachable only
@@ -341,14 +341,14 @@ async function requireLeader(teamId: string, userId: string): Promise<void> {
 // in the merged model everyone already has a team, so this is the spin-off path.
 export async function createTeam(userId: string, rawName: string): Promise<MyTeamView> {
   const name = rawName.trim();
-  if (!name) throw new UserTeamError('A team name is required');
-  if (name.length > 80) throw new UserTeamError('That team name is too long');
+  if (!name) throw new UserTeamError('A group name is required');
+  if (name.length > 80) throw new UserTeamError('That group name is too long');
 
   const currentTeamId = await teamIdOf(userId);
   if (currentTeamId) {
     const others = (await teamMembers(currentTeamId)).filter((m) => m.id !== userId);
     if (others.length > 0) {
-      throw new UserTeamError('You are already on a trading team. Leave it before creating a new one.');
+      throw new UserTeamError('You are already in a group. Leave it before creating a new one.');
     }
   }
 
@@ -370,7 +370,7 @@ export async function createTeam(userId: string, rawName: string): Promise<MyTea
     });
   });
   const view = await buildTeamView(teamId, userId);
-  if (!view) throw new UserTeamError('Could not create the team');
+  if (!view) throw new UserTeamError('Could not create the group');
   return view;
 }
 
@@ -383,7 +383,7 @@ export async function inviteByUsername(
 
   const count = (await teamMembers(teamId)).length;
   if (count >= MAX_TEAM_MEMBERS) {
-    throw new UserTeamError(`A team can have at most ${MAX_TEAM_MEMBERS} members`);
+    throw new UserTeamError(`A group can have at most ${MAX_TEAM_MEMBERS} people in it`);
   }
 
   const username = rawUsername.trim().toLowerCase();
@@ -393,7 +393,7 @@ export async function inviteByUsername(
   if (invitee.id === actingUserId) throw new UserTeamError('You cannot invite yourself');
   if (!invitee.active) throw new UserTeamError('That account is not active');
   if (isDemoUser({ username: invitee.username })) throw new UserTeamError('You cannot invite the demo account');
-  if (invitee.teamId === teamId) throw new UserTeamError('That user is already on your team');
+  if (invitee.teamId === teamId) throw new UserTeamError('That person is already in your group');
 
   const existing = (
     await db
@@ -421,7 +421,7 @@ export async function inviteByUsername(
     });
   }
   const view = await buildTeamView(teamId, actingUserId);
-  if (!view) throw new UserTeamError('That team no longer exists');
+  if (!view) throw new UserTeamError('That group no longer exists');
   return view;
 }
 
@@ -432,7 +432,7 @@ export async function cancelInvite(actingUserId: string, inviteId: string): Prom
   await requirePerm(invite.teamId, actingUserId, 'canInvite');
   await db.delete(userTeamInvites).where(eq(userTeamInvites.id, inviteId));
   const view = await buildTeamView(invite.teamId, actingUserId);
-  if (!view) throw new UserTeamError('That team no longer exists');
+  if (!view) throw new UserTeamError('That group no longer exists');
   return view;
 }
 
@@ -450,7 +450,7 @@ export async function respondToInvite(userId: string, inviteId: string, accept: 
   }
 
   const count = (await teamMembers(invite.teamId)).length;
-  if (count >= MAX_TEAM_MEMBERS) throw new UserTeamError('That team is already full');
+  if (count >= MAX_TEAM_MEMBERS) throw new UserTeamError('That group is already full');
 
   await db.transaction(async (tx) => {
     await tx.update(users).set({ teamId: invite.teamId, updatedAt: now }).where(eq(users.id, userId));
@@ -472,7 +472,7 @@ export async function respondToInvite(userId: string, inviteId: string, accept: 
 // trades). The leader must hand off leadership first when other members remain.
 export async function leaveTeam(userId: string): Promise<void> {
   const teamId = await teamIdOf(userId);
-  if (!teamId) throw new UserTeamError('You are not in a Trading Team');
+  if (!teamId) throw new UserTeamError('You are not in a group');
   const meta = await ensureTeamMeta(teamId);
   if (meta && meta.leaderId === userId) {
     const others = meta.members.filter((m) => m.id !== userId);
@@ -487,13 +487,13 @@ export async function leaveTeam(userId: string): Promise<void> {
 
 export async function removeMember(actingUserId: string, memberUserId: string): Promise<MyTeamView> {
   const teamId = await teamIdOf(actingUserId);
-  if (!teamId) throw new UserTeamError('You are not in a Trading Team');
+  if (!teamId) throw new UserTeamError('You are not in a group');
   await requirePerm(teamId, actingUserId, 'canRemoveMembers');
   const meta = await ensureTeamMeta(teamId);
-  if (!meta) throw new UserTeamError('That team no longer exists');
-  if (memberUserId === meta.leaderId) throw new UserTeamError('The team leader cannot be removed');
-  if (memberUserId === actingUserId) throw new UserTeamError('Use “Leave team” to remove yourself');
-  if ((await teamIdOf(memberUserId)) !== teamId) throw new UserTeamError('That member is not on your team');
+  if (!meta) throw new UserTeamError('That group no longer exists');
+  if (memberUserId === meta.leaderId) throw new UserTeamError('The group leader cannot be removed');
+  if (memberUserId === actingUserId) throw new UserTeamError('Use “Leave group” to remove yourself');
+  if ((await teamIdOf(memberUserId)) !== teamId) throw new UserTeamError('That person is not in your group');
 
   const now = new Date();
   await db.transaction(async (tx) => {
@@ -501,19 +501,19 @@ export async function removeMember(actingUserId: string, memberUserId: string): 
     await tx.delete(userTeamMembers).where(eq(userTeamMembers.userId, memberUserId));
   });
   const view = await buildTeamView(teamId, actingUserId);
-  if (!view) throw new UserTeamError('That team no longer exists');
+  if (!view) throw new UserTeamError('That group no longer exists');
   return view;
 }
 
 export async function transferLeadership(actingUserId: string, newLeaderUserId: string): Promise<MyTeamView> {
   const teamId = await teamIdOf(actingUserId);
-  if (!teamId) throw new UserTeamError('You are not in a Trading Team');
+  if (!teamId) throw new UserTeamError('You are not in a group');
   await requireLeader(teamId, actingUserId);
   if (newLeaderUserId === actingUserId) throw new UserTeamError('You are already the leader');
-  if ((await teamIdOf(newLeaderUserId)) !== teamId) throw new UserTeamError('Pick a member of your team');
+  if ((await teamIdOf(newLeaderUserId)) !== teamId) throw new UserTeamError('Pick someone in your group');
   await db.update(userTeams).set({ leaderId: newLeaderUserId, updatedAt: new Date() }).where(eq(userTeams.id, teamId));
   const view = await buildTeamView(teamId, actingUserId);
-  if (!view) throw new UserTeamError('That team no longer exists');
+  if (!view) throw new UserTeamError('That group no longer exists');
   return view;
 }
 
@@ -548,9 +548,9 @@ export async function setMemberBadge(
   rawBadge: string | null,
 ): Promise<MyTeamView> {
   const teamId = await teamIdOf(actingUserId);
-  if (!teamId) throw new UserTeamError('You are not in a Trading Team');
+  if (!teamId) throw new UserTeamError('You are not in a group');
   await requirePerm(teamId, actingUserId, 'canManageBadges');
-  if ((await teamIdOf(memberUserId)) !== teamId) throw new UserTeamError('That member is not on your team');
+  if ((await teamIdOf(memberUserId)) !== teamId) throw new UserTeamError('That person is not in your group');
   let badge: string | null = null;
   if (rawBadge != null) {
     badge = rawBadge.trim();
@@ -559,7 +559,7 @@ export async function setMemberBadge(
   }
   await writeMemberMeta(teamId, memberUserId, { badge });
   const view = await buildTeamView(teamId, actingUserId);
-  if (!view) throw new UserTeamError('That team no longer exists');
+  if (!view) throw new UserTeamError('That group no longer exists');
   return view;
 }
 
@@ -569,13 +569,13 @@ export async function setMemberPermissions(
   perms: Partial<MemberPermissions>,
 ): Promise<MyTeamView> {
   const teamId = await teamIdOf(actingUserId);
-  if (!teamId) throw new UserTeamError('You are not in a Trading Team');
+  if (!teamId) throw new UserTeamError('You are not in a group');
   await requireLeader(teamId, actingUserId);
   const meta = await ensureTeamMeta(teamId);
   if (meta && meta.leaderId === memberUserId) {
     throw new UserTeamError('The leader already has every permission');
   }
-  if ((await teamIdOf(memberUserId)) !== teamId) throw new UserTeamError('That member is not on your team');
+  if ((await teamIdOf(memberUserId)) !== teamId) throw new UserTeamError('That person is not in your group');
   const patch: Partial<MemberPermissions> = {};
   if (perms.canCreateStudyGuides != null) patch.canCreateStudyGuides = perms.canCreateStudyGuides;
   if (perms.canInvite != null) patch.canInvite = perms.canInvite;
@@ -585,24 +585,24 @@ export async function setMemberPermissions(
   if (perms.canDeleteTrades != null) patch.canDeleteTrades = perms.canDeleteTrades;
   if (Object.keys(patch).length) await writeMemberMeta(teamId, memberUserId, patch);
   const view = await buildTeamView(teamId, actingUserId);
-  if (!view) throw new UserTeamError('That team no longer exists');
+  if (!view) throw new UserTeamError('That group no longer exists');
   return view;
 }
 
 export async function renameTeam(actingUserId: string, rawName: string): Promise<MyTeamView> {
   const teamId = await teamIdOf(actingUserId);
-  if (!teamId) throw new UserTeamError('You are not in a Trading Team');
+  if (!teamId) throw new UserTeamError('You are not in a group');
   await requirePerm(teamId, actingUserId, 'canEditTeam');
   const name = rawName.trim();
-  if (!name) throw new UserTeamError('A team name is required');
-  if (name.length > 80) throw new UserTeamError('That team name is too long');
+  if (!name) throw new UserTeamError('A group name is required');
+  if (name.length > 80) throw new UserTeamError('That group name is too long');
   const now = new Date();
   // Rename the authoritative trading team (shared with the admin panel) and keep
   // the metadata row's name in sync.
   await db.update(tradingTeams).set({ name, updatedAt: now }).where(eq(tradingTeams.id, teamId));
   await db.update(userTeams).set({ name, updatedAt: now }).where(eq(userTeams.id, teamId));
   const view = await buildTeamView(teamId, actingUserId);
-  if (!view) throw new UserTeamError('That team no longer exists');
+  if (!view) throw new UserTeamError('That group no longer exists');
   return view;
 }
 

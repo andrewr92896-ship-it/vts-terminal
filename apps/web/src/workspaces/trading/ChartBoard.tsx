@@ -1649,7 +1649,7 @@ function PresetSettingsMenu({
     // server-side on the way out.
     {
       key: 'share',
-      label: shared ? 'Shared with team' : 'Share with team',
+      label: shared ? 'Shared with group' : 'Share with group',
       icon: 'users',
       run: onShare,
       disabled: isUnsaved || saving,
@@ -1895,7 +1895,7 @@ function LayoutPicker({
               {teamBoards.length > 0 && (
                 <>
                   <div style={{ ...menuHeading, display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span>Shared with your team</span>
+                    <span>Shared with your group</span>
                     <ReviewMark id="teams" size={11} />
                   </div>
                   {teamBoards.map((b) => {

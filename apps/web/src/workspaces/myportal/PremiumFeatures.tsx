@@ -147,7 +147,7 @@ export function PremiumFeatures({ theme }: { theme: Theme }) {
           </IncludedRow>
           <IncludedRow icon="briefcase" title="My Terminal">
             Your Live Wall, market headlines and the economic calendar, your net
-            worth, your trading team, and your settings.
+            worth, your private group, and your settings.
           </IncludedRow>
           <IncludedRow icon="life-buoy" title="Site Help">
             How-to guides, announcements, patch notes, and the bug and suggestion

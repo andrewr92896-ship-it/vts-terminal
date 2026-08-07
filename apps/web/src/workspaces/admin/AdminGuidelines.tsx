@@ -47,7 +47,7 @@ export function AdminGuidelines({ theme }: { theme: Theme }) {
         </Rule>
         <Rule icon="message-circle" title="Keep it in the Administrator chat">
           Decisions about a user's account are discussed in the Administrator chat,
-          not in the team chat and not privately, so there is a record.
+          not in the group chat and not privately, so there is a record.
         </Rule>
       </Card>
 

@@ -78,7 +78,7 @@ export async function chatRoutes(app: FastifyInstance) {
   app.post('/api/chat/team', teamChat, async (request, reply) => {
     const u = request.currentUser!;
     const elig = await teamChatEligibility(u);
-    if (!elig.eligible) return reply.code(403).send({ error: 'You are not on a trading team yet' });
+    if (!elig.eligible) return reply.code(403).send({ error: 'You are not in a group yet' });
     const parsed = messageSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Type a message to send' });
     try {
@@ -91,7 +91,7 @@ export async function chatRoutes(app: FastifyInstance) {
   app.delete('/api/chat/team/:id', teamChat, async (request, reply) => {
     const u = request.currentUser!;
     const elig = await teamChatEligibility(u);
-    if (!elig.eligible) return reply.code(403).send({ error: 'You are not on a trading team yet' });
+    if (!elig.eligible) return reply.code(403).send({ error: 'You are not in a group yet' });
     const id = (request.params as { id: string }).id;
     try {
       const messages = await deleteTeamMessage(u.teamId, id, { id: u.id, isAdmin: isAdmin(parseRoles(u)) });
@@ -156,7 +156,7 @@ export async function chatRoutes(app: FastifyInstance) {
       const msgs = await listTeamMessages(u.teamId, u.id, 30);
       for (const m of msgs) {
         if (m.mine) continue;
-        items.push({ id: `chat:${m.id}`, kind: 'chat', title: 'Team chat', body: m.body, author: m.author, avatar: m.avatar, createdAt: m.createdAt });
+        items.push({ id: `chat:${m.id}`, kind: 'chat', title: 'Group chat', body: m.body, author: m.author, avatar: m.avatar, createdAt: m.createdAt });
       }
     }
 

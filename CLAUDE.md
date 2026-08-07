@@ -1152,7 +1152,7 @@ workspaces list** (see `theme/nav.ts` order).
   Finances workspace and Market News for the News workspace; both keys still
   resolve. It holds the **Live Wall** (`live`) — the terminal's one
   centralized board and what a sign-in opens on; see its own section below. (Its
-  nav row sits under Trading Team since the tier stacking flipped — the workspace
+  nav row sits under My Group since the tier stacking flipped — the workspace
   still *opens* on the wall, see Memberships ▸ the sidebar marking.) It also holds **Premium
   Features** (`my_access`) — memberships and the per-user opt-ins, see its own
   section below — plus one personal roll-up section:
@@ -1508,7 +1508,7 @@ cycle.
       account on the paid screen now sitting at the top would open the workspace on
       something it cannot use. Advanced Trading already opened on `tradedesk`, so
       there the two now agree by coincidence rather than by rule.
-    - Consequence in My Terminal: **Trading Team, Market Data and Market News sit
+    - Consequence in My Terminal: **My Group, Market Data and Market News sit
       above the Live Wall**, which
       still opens on sign-in (`DEFAULT_SCREEN.myportal` is `live`). The Live Wall
       is no longer the first *row* of the first workspace; it is still the first
@@ -1528,7 +1528,7 @@ cycle.
     | `suggestions`, `supportChat` | the intake choices in `SupportTab` |
     | `brokerConnections` | Trade History ▸ Live Brokers, **and** the Settings section |
     | `pushover` | its row in `DeviceSettings` |
-    | `premiumBadges` | the **Badge** button in My Terminal ▸ Trading Team |
+    | `premiumBadges` | the **Badge** button in My Terminal ▸ My Group |
     | `customBoards` | the Live Wall's "Build your own" button |
     | `studyCreation` | the Studies **Create** `ActionTile` |
     | `studyExplain` | the tutor's one-tap opener ("Break this down" / "More Details") |
@@ -1685,7 +1685,7 @@ account" rather than hiding them, so the screen reads as the whole picture.
 **The terminal's one board, and the screen a sign-in lands on** (owner decision,
 2026-08). Every part of the terminal can be put on it, which is why it is the
 landing screen; its nav row is no longer My Terminal's first, since the tier
-stacking puts the paid Trading Team row above it. There is no lite duplicate to
+stacking puts the paid My Group row above it. There is no lite duplicate to
 keep in sync — one screen serves a free account and a full desk alike.
 
 **`source` has THREE states, and the third one is the point** (`trading/types.ts`,
@@ -2164,7 +2164,7 @@ here:**
 - **`wip` — a dashed speech bubble, shown to EVERYONE.** "This part of the
   terminal is still being built ahead of launch." Today that is the group
   features (`teams`, `teamChat`), per the owner's instruction that anything to do
-  with the trading team says so until launch.
+  with private groups says so until launch.
 - **`risk` — an amber exclamation, FOUNDER-LEVEL ONLY, and that is not
   negotiable.** It is the owner's own note that a feature has compliance
   questions still awaiting attorney review, and it exists so those features can
@@ -2311,6 +2311,59 @@ required is what turns the next one into a compile error. Same for
 
 ## Teams (`teams/service.ts`) — hidden at launch, and no longer a trade boundary
 
+> ### It is called a PRIVATE GROUP everywhere a person reads it (2026-08)
+>
+> Compliance rename, driven by the owner opening a separate registered
+> investment advisory firm: "team" implies coordinated trading and members
+> advising each other, and VTS Terminal must not read as an advice business.
+> **Labels only. Never keys.** `trading_teams`, `user_teams`,
+> `user_team_members`, `user_team_invites`, `team_id`, `team-vitalis`, the
+> `teams` / `teamChat` feature keys, `TEAM_ONLY_SECTIONS`, `isDeskLead`, the
+> `my_team` / `ad_teams` screen keys and every route path and column are
+> **unchanged** — routing, in-app links and the `howto.<screen>` wording all
+> depend on them. Everything below this box still describes the real model; read
+> "team" in it as the internal name for a private group.
+>
+> | Where | Reads |
+> |---|---|
+> | The feature | Private Groups |
+> | One instance | your group |
+> | Sidebar row (`my_team`) | My Group |
+> | Admin section (`ad_teams`) | Groups |
+> | Chat tab / wall tile | Group chat / Group Chat |
+> | Shared boards | Shared with your group |
+> | Admin grant (Admin ▸ Users) | Private Groups |
+> | Seeded group (`team-vitalis`) | Vitalis Group |
+>
+> **Words to keep out of user-visible copy**: team, teammate, trading team,
+> shared desk, team book, "your desk" — and in this feature's copy specifically
+> also desk, book, network, community, club, collective, partners. Each carries a
+> meaning (a coordinated trading unit, a pooled position book, pooled capital, or
+> the legal category "investment club") that the rename exists to get away from.
+>
+> **Two collisions.** "Member" is already the baseline role *and* how the paid
+> tiers read, so write "someone in your group" or "group members", never a bare
+> "members". And **"the team" meaning VITALIS STAFF** — in the AI privacy copy,
+> the guardrail notice and the Privacy Policy — now says **"VTS staff"**: left as
+> "the team" it reads as the user's own group, i.e. that the people they trade
+> beside can read their AI conversations, which is false and alarming.
+>
+> **Two pieces of stored copy are repaired on boot**, not by migration, because
+> the code that knows the current wording is the only thing that should write it:
+> the seeded group's name (`SEEDED_GROUP_RENAMES` in `teams/service.ts`) and the
+> seeded chat/announcement bodies (`SEEDED_BODY_REWRITES` in
+> `chat/announcements.ts`). Both match on the **exact old string**, so anything
+> somebody has since renamed or edited is left alone. The built-in study games
+> mention it too, so `BAKED_IN_VERSION` was bumped to re-sync their content.
+>
+> **Historical patch notes are NOT rewritten** — they are a dated record, the
+> same precedent set when "portal" became "terminal". **`LEGAL_VERSION` was
+> deliberately NOT bumped** (owner decision): no obligation changed, only the
+> word for the feature, so nobody is re-prompted to accept. The substantive
+> correction still owed to those documents — they describe broker credentials as
+> read-only, which is false — is a separate job, and that is the one that should
+> move the effective date.
+
 A **trading team** is a group a user belongs to at most one of (`users.team_id`).
 Two owner decisions (2026-08) reshaped what a team *is*, and both matter more
 than anything else in this section:
@@ -2400,7 +2453,7 @@ of money or self-service switching obtains it.
   parse** in `features/service.ts`, not an `isFounder` import — `rbac.ts` already
   imports `DEFAULT_FEATURES` from there, so importing back would be a real cycle.
 - **Migration `0100` grandfathers everyone already on a team**, so the Vitalis
-  Trading Team and its members are unchanged on deploy.
+  Vitalis Group and its members are unchanged on deploy.
 - **The UI hides, it does not lock.** `TEAM_ONLY_SECTIONS` (`theme/nav.ts`) drops
   the row; `visibleTiles` (`tileCatalog.ts`) drops the Team Chat tile from the
   picker; the chat panel drops its Team tab on reason `unavailable`. This is the
@@ -2480,7 +2533,7 @@ act on the same team:
 
 - **Admin ▸ Teams** (`teams/service.ts`) — admins create teams, rename them, and
   assign/move members (`users.team_id`).
-- **My Terminal ▸ Trading Team** (`userTeams/service.ts`) — the self-service surface
+- **My Terminal ▸ My Group** (`userTeams/service.ts`) — the self-service surface
   over the **same** team the user is in. Membership is read straight from
   `users.team_id`; My-Terminal-only metadata is layered on top:
   - `user_teams` — one row per team naming its **leader** (`leaderId`).
@@ -2537,7 +2590,7 @@ trivially defeated by a space or a spelling and would give false assurance.
 
 A trader always removes their own. Beyond that it is a **team grant**: the
 **leader** holds it implicitly, and they can hand the **Delete trades**
-permission (`canDeleteTrades`, set from My Terminal ▸ Trading Team) to any member.
+permission (`canDeleteTrades`, set from My Terminal ▸ My Group) to any member.
 Admins keep their install-wide reach. `tradeDeleteScope(actor)` resolves this
 once per request into `{ any, ownerIds, others }`, which `removeTrade`,
 `removePosition` and `restoreDeleted` turn into the owner filter on their `WHERE`

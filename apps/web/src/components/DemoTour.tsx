@@ -28,13 +28,13 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'myportal',
     screen: 'live',
     title: 'Live Wall — your command center',
-    body: 'One drag-and-drop board that draws on the whole terminal: charts, watchlists, market news and the economic calendar, alongside your open and closed trades, net worth, portfolio, to-do list, study progress and your team’s messages. Three layouts come built in, or arrange and save your own. Flip to Positions and open trades stream in from any broker with an API (OANDA, Kraken, TradeStation, and more), every instrument normalized — forex, indices, crypto, futures, stocks — with live price, open P/L, and risk/reward to your stop and target.',
+    body: 'One drag-and-drop board that draws on the whole terminal: charts, watchlists, market news and the economic calendar, alongside your open and closed trades, net worth, portfolio, to-do list, study progress and your group’s messages. Three layouts come built in, or arrange and save your own. Flip to Positions and open trades stream in from any broker with an API (OANDA, Kraken, TradeStation, and more), every instrument normalized — forex, indices, crypto, futures, stocks — with live price, open P/L, and risk/reward to your stop and target.',
   },
   {
     workspace: 'trading',
     screen: 'tradedesk',
     title: 'Live Trades',
-    body: 'Where a trade gets placed. The ticket sends the order to your own connected broker account — size it from the risk you’re willing to take, see the stop and target priced in real money, and confirm on a review panel that states the trade in one sentence. Beside it sits your team’s open book, so you never size a position blind to what the desk already holds. The demo is read-only, so nothing here can be sent.',
+    body: 'Where a trade gets placed. The ticket sends the order to your own connected broker account — size it from the risk you’re willing to take, see the stop and target priced in real money, and confirm on a review panel that states the trade in one sentence. Beside it sits every position already open, so you never size a position blind to what is already hels. The demo is read-only, so nothing here can be sent.',
   },
   {
     workspace: 'trading',
@@ -58,13 +58,13 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'studies',
     screen: 'st_decks',
     title: 'Study Creation — build your own study content',
-    body: 'One place to make two things. Study games: turn any topic — or a file you upload — into a quiz VTS AI writes, then play it as a leveling game with a team leaderboard over in the Study Game section. Study guides: go back and forth with VTS AI to draft a slide deck, or upload a PowerPoint, then add your own screenshots.',
+    body: 'One place to make two things. Study games: turn any topic — or a file you upload — into a quiz VTS AI writes, then play it as a leveling game with a leaderboard over in the Study Game section. Study guides: go back and forth with VTS AI to draft a slide deck, or upload a PowerPoint, then add your own screenshots.',
   },
   {
     workspace: 'studies',
     screen: 'st_guides',
     title: 'Study Guides — present what you know',
-    body: 'Every study guide your team builds in Study Creation lands here, ready to present like a guided walkthrough — the same stepped, slide-by-slide format as this tour.',
+    body: 'Every study guide built in Study Creation lands here, ready to present like a guided walkthrough — the same stepped, slide-by-slide format as this tour.',
   },
   {
     workspace: 'myportal',
@@ -77,7 +77,7 @@ export const DEMO_STEPS: TourStep[] = [
     workspace: 'trading',
     screen: 'desk',
     title: 'Private by design',
-    body: 'Trade data is scoped to your team — you never see another team’s trades, positions, or capital. And “Hide $” or Privacy mode masks every dollar figure on screen instantly, so you can share your screen without sharing your book.',
+    body: 'Trade data is scoped to you — you never see anybody else’s trades, positions, or capital unless you are in a group that shares them. And “Hide $” or Privacy mode masks every dollar figure on screen instantly, so you can share your screen without sharing your book.',
   },
   {
     workspace: 'myportal',

@@ -690,7 +690,7 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
         {"Home-screen widget (iPhone)"}
       </div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
-        {"Put your team’s open positions on your iPhone Home Screen with the free Scriptable app. One widget per teammate — each shows one person’s positions."}
+        {"Put your group’s open positions on your iPhone Home Screen with the free Scriptable app. One widget per person — each shows that person’s positions."}
       </p>
 
       {!token ? (
@@ -739,12 +739,12 @@ function HomeScreenWidgetSection({ accent, accentText }: { accent: string; accen
           <li>{"In Scriptable, tap ＋, paste the script above, and name it “VTS Positions”."}</li>
           <li>{"Long-press your Home Screen → ＋ → Scriptable → pick a size (Large = full cards, Medium = compact list, Small = your top trade) → Add."}</li>
           <li>{"Long-press the new widget → Edit Widget → choose the “VTS Positions” script."}</li>
-          <li>{"Set its Parameter to a teammate’s handle (below). Repeat for one widget per person."}</li>
+          <li>{"Set its Parameter to a handle from the list below. Repeat for one widget per person."}</li>
         </ol>
       </div>
 
       <p style={{ ...hintStyle, marginTop: 12 }}>
-        {"The Parameter is the handle shown after “@” on the Live Wall. Leave it blank to show your whole team on one widget."}
+        {"The Parameter is the handle shown after “@” on the Live Wall. Leave it blank to show your whole group on one widget."}
       </p>
 
       {people.length > 0 && (

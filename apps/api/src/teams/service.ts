@@ -14,7 +14,7 @@ import { parseRoles, type RoleKey } from '../auth/rbac.js';
 // assigned to it so the leaderboards keep showing everyone until an admin splits
 // the roster into more teams.
 export const DEFAULT_TEAM_ID = 'team-vitalis';
-export const DEFAULT_TEAM_NAME = 'Vitalis Trading Team';
+export const DEFAULT_TEAM_NAME = 'Vitalis Group';
 
 export class TeamError extends Error {}
 
@@ -93,10 +93,10 @@ export async function listTeams(): Promise<TeamView[]> {
 
 export async function createTeam(name: string): Promise<TeamView> {
   const clean = name.trim();
-  if (!clean) throw new TeamError('A team name is required');
-  if (clean.length > 80) throw new TeamError('Team name is too long');
+  if (!clean) throw new TeamError('A group name is required');
+  if (clean.length > 80) throw new TeamError('That group name is too long');
   const dup = await teamByName(clean);
-  if (dup) throw new TeamError('A team with that name already exists');
+  if (dup) throw new TeamError('A group with that name already exists');
   const now = new Date();
   const row = { id: crypto.randomUUID(), name: clean, createdAt: now, updatedAt: now };
   await db.insert(tradingTeams).values(row);
@@ -105,12 +105,12 @@ export async function createTeam(name: string): Promise<TeamView> {
 
 export async function renameTeam(id: string, name: string): Promise<TeamView> {
   const clean = name.trim();
-  if (!clean) throw new TeamError('A team name is required');
-  if (clean.length > 80) throw new TeamError('Team name is too long');
+  if (!clean) throw new TeamError('A group name is required');
+  if (clean.length > 80) throw new TeamError('That group name is too long');
   const team = (await db.select().from(tradingTeams).where(eq(tradingTeams.id, id)).limit(1))[0];
-  if (!team) throw new TeamError('Team not found');
+  if (!team) throw new TeamError('Group not found');
   const dup = await teamByName(clean);
-  if (dup && dup.id !== id) throw new TeamError('A team with that name already exists');
+  if (dup && dup.id !== id) throw new TeamError('A group with that name already exists');
   await db.update(tradingTeams).set({ name: clean, updatedAt: new Date() }).where(eq(tradingTeams.id, id));
   const memberRows = await db.select({ teamId: users.teamId }).from(users).where(eq(users.teamId, id));
   return { id, name: clean, memberCount: memberRows.length, members: [], createdAt: team.createdAt.getTime() };
@@ -120,7 +120,7 @@ export async function renameTeam(id: string, name: string): Promise<TeamView> {
 // user is left pointing at a team that no longer exists.
 export async function deleteTeam(id: string): Promise<void> {
   const team = (await db.select().from(tradingTeams).where(eq(tradingTeams.id, id)).limit(1))[0];
-  if (!team) throw new TeamError('Team not found');
+  if (!team) throw new TeamError('Group not found');
   await db.transaction(async (tx) => {
     await tx.update(users).set({ teamId: null, updatedAt: new Date() }).where(eq(users.teamId, id));
     await tx.delete(tradingTeams).where(eq(tradingTeams.id, id));
@@ -167,9 +167,22 @@ async function teamByName(name: string): Promise<{ id: string } | null> {
 //
 // The default team row is still created (existing members keep it, and it is the
 // one real team today), and existing members are left exactly where they are.
+// The names the seeded group has been shipped under, so an install created
+// before a rename catches up on the next boot. Repaired here rather than in a
+// migration for the reason the connection labels are (see
+// `backfillConnectionLabels`): a rename is a fact about what the terminal calls
+// things, and the code that knows the current name is the only thing that should
+// write it. Guarded on the OLD name, so a group somebody deliberately renamed is
+// left exactly as they named it.
+const SEEDED_GROUP_RENAMES = ['Vitalis Trading Team'];
+
 export async function seedDefaultTeam(): Promise<void> {
   const existing = (
-    await db.select({ id: tradingTeams.id }).from(tradingTeams).where(eq(tradingTeams.id, DEFAULT_TEAM_ID)).limit(1)
+    await db
+      .select({ id: tradingTeams.id, name: tradingTeams.name })
+      .from(tradingTeams)
+      .where(eq(tradingTeams.id, DEFAULT_TEAM_ID))
+      .limit(1)
   )[0];
   const now = new Date();
   if (!existing) {
@@ -179,5 +192,12 @@ export async function seedDefaultTeam(): Promise<void> {
       createdAt: now,
       updatedAt: now,
     });
+    return;
+  }
+  if (SEEDED_GROUP_RENAMES.includes(existing.name)) {
+    await db
+      .update(tradingTeams)
+      .set({ name: DEFAULT_TEAM_NAME, updatedAt: now })
+      .where(eq(tradingTeams.id, DEFAULT_TEAM_ID));
   }
 }

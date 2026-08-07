@@ -25,10 +25,10 @@ import {
 // The leader-granted permissions, in display order.
 const PERMS: { key: keyof TeamMemberPermissions; label: string; help: string }[] = [
   { key: 'canCreateStudyGuides', label: 'Create study guides', help: 'Build study guides in the Studies workspace' },
-  { key: 'canInvite', label: 'Invite members', help: 'Send invitations (up to the team cap)' },
-  { key: 'canManageBadges', label: 'Manage badges', help: 'Assign cosmetic titles to teammates' },
-  { key: 'canRemoveMembers', label: 'Remove members', help: 'Remove teammates from the team' },
-  { key: 'canEditTeam', label: 'Edit team info', help: 'Rename the team' },
+  { key: 'canInvite', label: 'Invite people', help: 'Send invitations (up to the group cap)' },
+  { key: 'canManageBadges', label: 'Manage badges', help: 'Assign cosmetic titles to people in the group' },
+  { key: 'canRemoveMembers', label: 'Remove people', help: 'Remove somebody from the group' },
+  { key: 'canEditTeam', label: 'Edit group info', help: 'Rename the group' },
   // ("Delete trades" was here — a permission to remove and restore a teammate's
   // trades. It is gone because nobody can see a teammate's trades any more, so
   // the toggle granted a reach that resolved to nothing. A permission that
@@ -75,7 +75,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
         setMaxMembers(cfg.maxMembers);
         setPresets(cfg.badgePresets);
       })
-      .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Failed to load your team'))
+      .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Failed to load your group'))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
@@ -163,7 +163,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
   const full = useMemo(() => (team ? team.members.length >= maxMembers : false), [team, maxMembers]);
 
   if (loading) {
-    return <div style={{ padding: 24, color: '#8ea3cc', fontSize: 13 }}>Loading your team…</div>;
+    return <div style={{ padding: 24, color: '#8ea3cc', fontSize: 13 }}>Loading your group…</div>;
   }
 
   const wrap: React.CSSProperties = { maxWidth: 860, margin: '0 auto', padding: '20px 22px 60px' };
@@ -173,8 +173,8 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
     return (
       <div style={wrap}>
         <SectionHeader
-          title="Trading Team"
-          subtitle="Create your own trading team, invite up to five teammates, and lead it."
+          title="My Group"
+          subtitle="Create your own private group, invite a few people, and lead it."
         />
 
         {incoming.length > 0 && (
@@ -218,26 +218,26 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
 
         <div style={panel(theme)}>
           <div style={panelLabel}>
-            {"Create a team"}
+            {"Create a group"}
           </div>
           <label style={fieldLabel}>
-            {"Team name"}
+            {"Group name"}
           </label>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <input
               style={{ ...inputStyle, maxWidth: 340 }}
               value={teamName}
               onChange={(e) => setTeamName(e.target.value)}
-              placeholder="e.g. Alpha Desk"
+              placeholder="e.g. Alpha"
               maxLength={80}
               onKeyDown={(e) => e.key === 'Enter' && teamName.trim() && create()}
             />
             <button style={primaryBtn(theme, grad)} disabled={busy || !teamName.trim()} onClick={create}>
-              {"Create team"}
+              {"Create group"}
             </button>
           </div>
           <p style={{ margin: '10px 0 0', fontSize: 12, color: '#8ea3cc', lineHeight: 1.5 }}>
-            {"You become the team leader. You can invite up to four others, assign badges, and set each member’s permissions."}
+            {"You become the group leader. You can invite up to four others, assign badges, and set what each of them can do."}
           </p>
           {error && <div style={msgStyle(false)}>{error}</div>}
           {notice && <div style={msgStyle(true)}>{notice}</div>}
@@ -279,7 +279,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
               {team.name}
               {canEditTeam && (
                 <button
-                  title="Rename team"
+                  title="Rename group"
                   style={{ ...ghostBtn, minHeight: 0, padding: '4px 8px' }}
                   onClick={() => {
                     setRenameValue(team.name);
@@ -292,11 +292,11 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
             </h2>
           )}
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc' }}>
-            {team.members.length}/{maxMembers} members · {isLeader ? 'You lead this team' : 'You are a member'}
+            {team.members.length}/{maxMembers} people · {isLeader ? 'You lead this group' : 'You are in this group'}
           </p>
         </div>
         <button style={ghostDangerBtn} disabled={busy} onClick={() => setConfirmLeave(true)}>
-          {"Leave team"}
+          {"Leave group"}
         </button>
       </div>
 
@@ -304,11 +304,11 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
         <div style={{ ...panel(theme), marginBottom: 16, borderColor: 'rgba(239,84,104,.4)' }}>
           <p style={{ margin: '0 0 10px', fontSize: 13, color: '#ffd7d2' }}>
             {isLeader && team.members.length > 1 ? (
-              "You lead this team. Hand leadership to another member before you can leave."
+              "You lead this group. Hand leadership to somebody else before you can leave."
             ) : isLeader ? (
-              "You are the only member — leaving will disband the team."
+              "You are the only one here — leaving will disband the group."
             ) : (
-              "Leave this team? You can be re-invited later."
+              "Leave this group? You can be re-invited later."
             )}
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -361,11 +361,11 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
       {canInvite && (
         <div style={{ ...panel(theme), marginBottom: 16 }}>
           <div style={panelLabel}>
-            {"Invite a teammate"}
+            {"Invite someone"}
           </div>
           {full ? (
             <p style={{ margin: 0, fontSize: 12.5, color: '#8ea3cc' }}>
-              {"Your team is full. Remove a member to invite someone new."}
+              {"Your group is full. Remove somebody to invite a new person."}
             </p>
           ) : (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -486,13 +486,13 @@ function MemberRow({
           onClick={() => { onDraft(m.badge ?? ''); setEditingBadge((v) => !v); }}
         >
           <span>Badge</span>
-          {/* Assigning a teammate's badge is its own paid feature, so the
+          {/* Assigning somebody's badge is its own paid feature, so the
               control says what it costs — the same mark the sidebar draws. */}
           <TierMark tier={badgeTier} size={11} />
         </button>
       )}
       {showTransfer && (
-        <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onTransfer} title="Make this member the leader">
+        <button style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px' }} disabled={busy} onClick={onTransfer} title="Make this person the leader">
           Make leader
         </button>
       )}

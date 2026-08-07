@@ -83,7 +83,7 @@ export const TERMS: LegalDoc = {
           p:
             `${COMPANY.product} is a private, invite-only, read-only tracking and collaboration tool for a ` +
             'small group of individuals who already know and trust one another. It lets you and your ' +
-            'chosen teammates record, view, organize, and discuss your own trading activity, connect ' +
+            'chosen group record, view, organize, and discuss your own trading activity, connect ' +
             'read-only broker data, study together, and share notes. It is intended purely for ' +
             'informational, organizational, educational, and personal-reference purposes.',
         },
@@ -119,7 +119,7 @@ export const TERMS: LegalDoc = {
           p:
             'The Service is not a substitute for the advice of a licensed and qualified professional. We are ' +
             'not your broker, investment adviser, financial planner, fiduciary, or agent, and no such ' +
-            'relationship is created by your use of the Service, by your membership on a team, or by any ' +
+            'relationship is created by your use of the Service, by your membership of a private group, or by any ' +
             'communication, data, alert, market news item, AI output, session bias, coaching note, or other ' +
             'content made available through the Service.',
         },
@@ -174,8 +174,8 @@ export const TERMS: LegalDoc = {
         },
         {
           p:
-            'Some accounts have access to team features, which allow shared study material, group chat, ' +
-            'and published Live Wall layouts. Teams do not make trading information visible: a shared ' +
+            'Some accounts have access to private groups, which allow shared study material, group chat, ' +
+            'and published Live Wall layouts. A group does not make trading information visible: a shared ' +
             'layout carries the arrangement only, and every figure in it is loaded for whoever is looking ' +
             'at it. Anything you type into a shared chat or create as shared study material is, of course, ' +
             'visible to the people it is shared with.',
@@ -241,8 +241,8 @@ export const TERMS: LegalDoc = {
               'advertise to, or induce any person to copy your trades, follow your trades, or pay for access ' +
               'to your trades or "signals."',
             'Access, view, request, scrape, or attempt to obtain the trades, positions, results, capital, ' +
-              'metrics, chat, or other data of any person who is not on your team. Viewing data belonging to ' +
-              'people outside your own team is strictly prohibited.',
+              'metrics, chat, or other data of any person who is not in your group. Viewing data belonging to ' +
+              'people outside your own group is strictly prohibited.',
             'Provide, or hold yourself out as providing, personalized investment, financial, or trading ' +
               'advice through the Service, or otherwise act as an unregistered adviser, broker, or ' +
               'money-manager.',
@@ -254,7 +254,7 @@ export const TERMS: LegalDoc = {
               'anywhere else in the Service.',
             'Share, sell, or transfer your account, or use another person’s account; use the Service to ' +
               'infringe intellectual-property or privacy rights; or misuse, disclose, or re-share another ' +
-              'user’s information for any purpose other than the legitimate, mutual, team-based ' +
+              'user’s information for any purpose other than the legitimate, mutual, group-based ' +
               'collaboration the Service is intended for.',
             'Violate any law or regulation, or the terms, policies, or acceptable-use rules of any ' +
               'third-party service you connect or use with the Service, including any broker, exchange, or ' +
@@ -315,7 +315,7 @@ export const TERMS: LegalDoc = {
           p:
             'You grant us a limited, non-exclusive, worldwide, royalty-free license to host, store, process, ' +
             'display, and transmit your User Content solely to operate, secure, support, and improve the ' +
-            'Service and to make it available to you and, where you have chosen to share it, to your team. ' +
+            'Service and to make it available to you and, where you have chosen to share it, to your group. ' +
             'You represent and warrant that you have all rights necessary to submit your User Content and ' +
             'that it does not infringe any third party’s rights or violate any law or these Terms.',
         },
@@ -397,7 +397,7 @@ export const TERMS: LegalDoc = {
             'Our Privacy Policy explains what information we collect, how we use and share it, how it is ' +
             'protected, and your choices. By using the Service you also agree to the Privacy Policy. Please ' +
             'note in particular that AI and support conversations may be reviewed by administrators, that ' +
-            'team-scoped data is visible to your teammates, and that team chat is private among team members.',
+            'group-scoped data is visible to the others in your group, and that group chat is private among them.',
         },
       ],
     },
@@ -433,9 +433,9 @@ export const TERMS: LegalDoc = {
         },
         {
           p:
-            'This includes, without limitation, any losses arising from your or a teammate’s trading ' +
+            'This includes, without limitation, any losses arising from your trading, or that of anyone in your group; ' +
             'decisions; from reliance on any information, data, metric, result, news, or AI output; from ' +
-            'inaccurate, edited, or manipulated data; from the acts or omissions of teammates or third ' +
+            'from inaccurate, edited, or manipulated data; from the acts or omissions of anyone in your group or of third ' +
             'parties (including brokers and APIs); or from unauthorized access to your data.',
         },
         {
@@ -457,7 +457,7 @@ export const TERMS: LegalDoc = {
             'losses, and expenses (including reasonable attorneys’ fees) arising out of or related to ' +
             'your use of the Service, your User Content, your trading or financial decisions, your ' +
             'connections to third-party services, your violation of these Terms or any law, or your ' +
-            'violation of the rights of any person, including your teammates.',
+            'violation of the rights of any person, including anyone in your group.',
         },
       ],
     },
@@ -586,16 +586,16 @@ export const PRIVACY: LegalDoc = {
           ul: [
             'Account and profile information: your username, display name, email address (where provided), ' +
               'password (stored only as a secure cryptographic hash — we never store your plaintext ' +
-              'password), optional profile picture, assigned roles, team membership, and badges.',
+              'password), optional profile picture, assigned roles, group membership, and badges.',
             'Content you provide: trades, positions, results, notes and journals, strategy sessions, ' +
-              'study games, flashcards and study guides, to-do items, team chat messages, announcements, ' +
+              'study games, flashcards and study guides, to-do items, group chat messages, announcements, ' +
               'bug reports, suggestions, feedback, and any files or screenshots you upload.',
             'Broker and third-party connection data: information needed to connect read-only broker or ' +
               'exchange feeds (such as API keys or tokens and account identifiers) and the resulting ' +
               'read-only trading data (positions, balances/NAV, and closed trades). Broker credentials are ' +
               'stored encrypted (see Security).',
             'AI and support interactions: support and bug-intake conversations, which are stored so the ' +
-              'team can act on them. Ordinary conversations with the AI assistants are NOT stored — they ' +
+              'VTS staff can act on them. Ordinary conversations with the AI assistants are NOT stored — they ' +
               'are sent to our AI provider to produce a reply and are not retained by us. The exceptions ' +
               'are described in Section 5: we record that an AI request was made (for usage metering), and ' +
               'we store the conversation when a request trips our financial-advice limits.',
@@ -623,8 +623,8 @@ export const PRIVACY: LegalDoc = {
         {
           ul: [
             'Provide, operate, maintain, and secure the Service and its features;',
-            'Authenticate you, manage your account, teams, roles, and permissions;',
-            'Display your data to you and, where you have chosen to share it, to your teammates;',
+            'Authenticate you, manage your account, groups, roles, and permissions;',
+            'Display your data to you and, where you have chosen to share it, to the others in your group;',
             'Connect and refresh read-only broker data and deliver notifications you opt into;',
             'Provide AI-assisted features and support, and process and review those interactions for ' +
               'quality, safety, and rule enforcement;',
@@ -648,7 +648,7 @@ export const PRIVACY: LegalDoc = {
           note:
             'Your trading information is visible only to you. Positions, trade history, results, balances, ' +
             'and broker data are not shown to any other user of the Service — not to other members, not to ' +
-            'anyone on a team you belong to, and not to a team leader.',
+            'anyone in a group you belong to, and not to a group leader.',
         },
         { p: 'What other people can see is limited to:' },
         {
@@ -658,13 +658,13 @@ export const PRIVACY: LegalDoc = {
               'score appear on a leaderboard visible to all users. You can remove yourself from these at ' +
               'any time in My Terminal ▸ Preferences, and you will still see your own standing.',
             'Content you deliberately share: messages you post in a chat, study material you create within ' +
-              'a team, and a Live Wall layout you choose to publish (the arrangement only — never your ' +
+              'a group, and a Live Wall layout you choose to publish (the arrangement only — never your ' +
               'figures, which are always fetched as the person viewing it).',
           ],
         },
         {
           p:
-            'Your email address is never shown to other users. Team features, where enabled for an account, ' +
+            'Your email address is never shown to other users. Private groups, where enabled for an account, ' +
             'allow shared study material, chat, and layouts — they do not make trading information visible ' +
             'to anyone.',
         },
@@ -697,7 +697,7 @@ export const PRIVACY: LegalDoc = {
               'messages and the reply — so an administrator can review whether the Service acted ' +
               'correctly. You are told on screen when this happens, and you can tell us you believe it was ' +
               'a mistake. These records are deleted when your account is deleted.',
-            'Support and bug-report conversations are stored so the team can act on them.',
+            'Support and bug-report conversations are stored so VTS staff can act on them.',
           ],
         },
         {
@@ -722,8 +722,8 @@ export const PRIVACY: LegalDoc = {
         { p: 'We share information only as described here:' },
         {
           ul: [
-            'With your team: team-scoped content you create or choose to share is visible to your ' +
-              'teammates, as described in Section 4.',
+            'With your group: group-scoped content you create or choose to share is visible to the ' +
+              'others in it, as described in Section 4.',
             'With service providers: vendors that host and operate the Service and provide specific ' +
               'features on our behalf, such as our hosting/infrastructure provider, our AI provider ' +
               '(Anthropic, which processes AI prompts and content to generate responses), and ' +
@@ -909,7 +909,7 @@ export const RULES: RulesDoc = {
       heading: 'Privacy of your trading activity',
       items: [
         'Nobody else on the terminal can see your positions, your trade log, your history, or your ' +
-          'balances. Not other members, not a team you belong to, not a team leader.',
+          'balances. Not other users, not a group you belong to, not a group leader.',
         'Do not pay anyone to place or copy trades for you, and do not accept payment to trade for ' +
           'others. Paid copy-trading and signal services are not allowed.',
         'Do not use webhooks, bots, or automation to relay or copy anyone else’s trades. Any trade ' +
@@ -943,7 +943,7 @@ export const RULES: RulesDoc = {
           'button to tell us if you think the system got it wrong, and it does sometimes.',
         'Do not try to talk around those limits with hypotheticals, roleplay, or "not as advice" ' +
           'framing. Repeated attempts can lead to removal from the platform.',
-        'Conversations with VTS AI are not private — the team can review them, and a conversation ' +
+        'Conversations with VTS AI are not private — VTS staff can review them, and a conversation ' +
           'that trips the advice limits is recorded for review. Your trading data is separate: ' +
           'positions, results, balances, and broker keys are never read by administrators, and only ' +
           'a software developer can reach them, only to keep them secure.',

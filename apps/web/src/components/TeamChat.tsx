@@ -225,8 +225,8 @@ export function TeamChat({
       {/* Launcher — a chat bubble, not a circle. */}
       <button
         onClick={() => (open ? onClose() : openPanel())}
-        aria-label={hasUnread ? 'Team chat (new messages)' : 'Team chat'}
-        title="Team chat"
+        aria-label={hasUnread ? 'Group chat (new messages)' : 'Group chat'}
+        title="Group chat"
         style={{
           position: 'fixed',
           right: isPhone ? 14 : 22,
@@ -303,7 +303,7 @@ export function TeamChat({
           <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 59 }} />
           <div
             role="dialog"
-            aria-label="Team chat"
+            aria-label="Group chat"
             style={{
               position: 'fixed',
               right: isPhone ? 0 : 22,
@@ -331,13 +331,13 @@ export function TeamChat({
               />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#eef3ff' }}>
-                  {tab === 'team' ? 'Team chat' : tab === 'admin' ? 'Administrator chat' : 'Support'}
+                  {tab === 'team' ? 'Group chat' : tab === 'admin' ? 'Administrator chat' : 'Support'}
                 </div>
                 <div style={{ fontSize: 10.5, color: '#7e92c0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {tab === 'team'
                     ? eligible && teamName
                       ? teamName
-                      : 'Your trading team'
+                      : 'Your private group'
                     : tab === 'admin'
                       ? 'Founders, developers and admins'
                       : 'Report a bug, idea, or question'}
@@ -355,7 +355,7 @@ export function TeamChat({
                   mark is what says the feed costs something. Support carries
                   its own per-kind marks inside (a bug report is free). */}
               {teamChatAvailable && (
-                <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} tier={tierOfFeature('teamChat', user.access.membership)} review="teamChat" />
+                <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Group chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} tier={tierOfFeature('teamChat', user.access.membership)} review="teamChat" />
               )}
               <TabBtn active={tab === 'support'} onClick={() => setTab('support')} icon="life-buoy" label="Support" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
               {canModerate && (
@@ -393,7 +393,7 @@ export function TeamChat({
                 <div ref={scrollRef} style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {messages.length === 0 ? (
                     <div style={{ color: '#6f84b2', fontSize: 12, textAlign: 'center', marginTop: 16 }}>
-                      No messages yet. Say hello to your team.
+                      No messages yet. Say hello to your group.
                     </div>
                   ) : (
                     messages.map((m) => (
@@ -459,7 +459,7 @@ export function TeamChat({
                           void send();
                         }
                       }}
-                      placeholder="Message your team"
+                      placeholder="Message your group"
                       maxLength={1000}
                       style={inputStyle}
                     />
@@ -678,18 +678,18 @@ function NotOnTeam({ reason, accent }: { reason: TeamChatReason; accent: string 
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 8 }}>
           <Icon name="users" size={18} color={accent} />
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#eef3ff' }}>Team chat is a trading-team feature</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#eef3ff' }}>Group chat comes with a private group</div>
         </div>
         <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: '#aebcd8' }}>
-          Team chat is a private channel shared only with your trading team — a place to post your
-          session bias, share setups and levels, and ask each other questions in real time. Messages
-          stay within your team and never fan out to other desks.
+          Group chat is a private channel shared only with the people in your group — a place to
+          post your session bias, share setups and levels, and ask each other questions in real
+          time. Messages stay inside the group and reach nobody outside it.
         </p>
       </div>
       <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: '#8ea3cc' }}>
         {reason === 'no_trading'
-          ? 'Your account isn’t on the trading desk yet, so there’s no team to chat with. Ask an admin to add you to the Trading workspace and a trading team to unlock it.'
-          : 'You’re not assigned to a trading team yet. Ask an admin to add you to a team, and this channel will connect you with your teammates.'}
+          ? 'Advanced Trading is not turned on for your account yet, so there is no group to chat with. Ask an admin to turn it on and add you to a group.'
+          : 'You are not in a group yet. Ask an admin to add you to one, and this channel will connect you with the people in it.'}
       </p>
     </div>
   );

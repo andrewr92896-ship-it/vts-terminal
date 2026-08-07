@@ -21,11 +21,24 @@ import { seedDemoData, clearDemoData } from './demo/seedData.js';
 // stay isolated from the owner's team. Idempotent.
 async function ensureDemoTeam(): Promise<void> {
   const existing = (
-    await db.select({ id: tradingTeams.id }).from(tradingTeams).where(eq(tradingTeams.id, DEMO_TEAM_ID)).limit(1)
+    await db
+      .select({ id: tradingTeams.id, name: tradingTeams.name })
+      .from(tradingTeams)
+      .where(eq(tradingTeams.id, DEMO_TEAM_ID))
+      .limit(1)
   )[0];
+  const now = new Date();
   if (!existing) {
-    const now = new Date();
     await db.insert(tradingTeams).values({ id: DEMO_TEAM_ID, name: DEMO_TEAM_NAME, createdAt: now, updatedAt: now });
+    return;
+  }
+  // Names this row has shipped under, so an install created before the rename
+  // catches up. Same rule as `seedDefaultTeam`: matched on the OLD name, so
+  // nothing anyone chose deliberately is overwritten. The demo's group name is
+  // on screen during the tour, which is the one place a stale one would be read
+  // by somebody deciding whether to sign up.
+  if (existing.name === 'Demo Team') {
+    await db.update(tradingTeams).set({ name: DEMO_TEAM_NAME, updatedAt: now }).where(eq(tradingTeams.id, DEMO_TEAM_ID));
   }
 }
 

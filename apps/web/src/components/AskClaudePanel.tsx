@@ -237,13 +237,13 @@ export function AskClaudePanel({
                 ))}
               </div>
               {/* Stated up front, not only after somebody trips a limit. Two
-                  facts, and the second matters as much as the first: the team can
-                  read these conversations, and the team cannot read your trading
+                  facts, and the second matters as much as the first: VTS staff can
+                  read these conversations, and they cannot read your trading
                   data. Saying only the first would be a warning; saying both is
                   the actual arrangement. */}
               <p style={privacyLine}>
                 VTS AI explains things — it can’t give financial or investment advice.
-                These conversations aren’t private and can be reviewed by the team.
+                These conversations aren’t private and can be reviewed by VTS staff.
                 Your trading data is separate: positions, results, balances and broker
                 keys are never read by administrators, and only a software developer
                 can reach them, only to keep them secure.

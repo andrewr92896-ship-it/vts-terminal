@@ -114,26 +114,56 @@ async function seedTeamChat(
   }
 }
 
+const WELCOME_BODY =
+  'Thanks for joining VTS Terminal. Use the channels to stay in sync, and watch this announcements board for important updates.';
+const ANNOUNCEMENTS_BODY =
+  'Admins can post and remove announcements here. Everyone signed in can read them, so this is the right place for policy changes, schedules, and notices that reach everybody.';
+
+// Seeded wording that has already shipped, paired with what it says now. Matched
+// on the exact old string so a message somebody has edited is never overwritten.
+const SEEDED_BODY_REWRITES: [string, string][] = [
+  [
+    'Thanks for joining the team workspace. Use the channels to stay in sync, and watch this announcements board for important updates from the desk.',
+    WELCOME_BODY,
+  ],
+  [
+    'Admins can post and remove announcements here. Everyone on the team can read them, so this is the right place for policy changes, schedules, and desk-wide notices.',
+    ANNOUNCEMENTS_BODY,
+  ],
+  [
+    'Welcome to the team chat. This channel is just for you and your trading team — share setups, levels, and trade ideas here.',
+    'Welcome to the group chat. This channel is just for the people in your group — share setups, levels, and trade ideas here.',
+  ],
+];
+
 // Idempotent starter content. Only fills a channel/list that is empty, so it is
 // safe to run on every boot.
 export async function seedWelcome(): Promise<void> {
-  const owner = await resolveOwner();
-  if (!owner) return;
-
-  await seedTeamChat(DEFAULT_TEAM_ID, owner, [
-    'Welcome to the team chat. This channel is just for you and your trading team — share setups, levels, and trade ideas here.',
-    'A quick reminder to keep risk in check and trade your plan. Post your bias for the session here before the open.',
-    'Questions about the platform or a connection are welcome too — we are all here to help each other improve.',
-  ]);
-
-  // The welcome announcement was seeded under the product's old name on every
-  // install that already exists. It is only ever written here, so retitling it
-  // in place is safe — and it is the one piece of stored copy the rename cannot
-  // reach from code alone. Idempotent: nothing matches after the first pass.
+  // Rewriting seeded copy comes FIRST, and deliberately before the owner check.
+  // These updates only touch rows that already exist, so they need nobody to
+  // attribute them to — and `resolveOwner` below can legitimately answer null
+  // (it looks for the literal `admin` role, which a founder-only install does
+  // not hold). Behind that guard, the rename would silently never reach the
+  // stored copy on exactly the installs that need it. Each update matches on the
+  // EXACT old text, so anything an admin has since edited is left alone, and
+  // nothing matches after the first pass.
   await db
     .update(announcements)
     .set({ title: 'Welcome to the VTS Terminal' })
     .where(eq(announcements.title, 'Welcome to the VTS Portal'));
+  for (const [from, to] of SEEDED_BODY_REWRITES) {
+    await db.update(announcements).set({ body: to }).where(eq(announcements.body, from));
+    await db.update(chatMessages).set({ body: to }).where(eq(chatMessages.body, from));
+  }
+
+  const owner = await resolveOwner();
+  if (!owner) return;
+
+  await seedTeamChat(DEFAULT_TEAM_ID, owner, [
+    'Welcome to the group chat. This channel is just for the people in your group — share setups, levels, and trade ideas here.',
+    'A quick reminder to keep risk in check and trade your plan. Post your bias for the session here before the open.',
+    'Questions about the platform or a connection are welcome too — we are all here to help each other improve.',
+  ]);
 
   const existing = await db.select({ id: announcements.id }).from(announcements).limit(1);
   if (existing.length === 0) {
@@ -143,7 +173,7 @@ export async function seedWelcome(): Promise<void> {
       userId: owner.id,
       author: owner.displayName,
       title: 'Welcome to the VTS Terminal',
-      body: 'Thanks for joining the team workspace. Use the channels to stay in sync, and watch this announcements board for important updates from the desk.',
+      body: WELCOME_BODY,
       createdAt: new Date(base),
     });
     await db.insert(announcements).values({
@@ -151,7 +181,7 @@ export async function seedWelcome(): Promise<void> {
       userId: owner.id,
       author: owner.displayName,
       title: 'How announcements work',
-      body: 'Admins can post and remove announcements here. Everyone on the team can read them, so this is the right place for policy changes, schedules, and desk-wide notices.',
+      body: ANNOUNCEMENTS_BODY,
       createdAt: new Date(base + 60_000),
     });
   }

@@ -106,7 +106,7 @@ export function FundedChallengeScreen() {
           </div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
             {theirs.length > 0
-              ? `Your desk’s prop-firm accounts — ${mine.length} of yours and ${theirs.length} of your teammates’. You can watch theirs; only they can change them.`
+              ? `Prop-firm accounts — ${mine.length} of yours and ${theirs.length} belonging to others in your group. You can watch theirs; only they can change them.`
               : 'Your prop-firm accounts — equity against target, and how much drawdown is left on each.'}
           </div>
         </div>

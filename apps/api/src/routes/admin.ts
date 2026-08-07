@@ -122,7 +122,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.post('/api/admin/teams', guard, async (request, reply) => {
     const parsed = teamCreateSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'A team name is required' });
+    if (!parsed.success) return reply.code(400).send({ error: 'A group name is required' });
     try {
       const team = await createTeam(parsed.data.name);
       return { team, teams: await listTeams() };
@@ -134,7 +134,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.patch('/api/admin/teams/:id', guard, async (request, reply) => {
     const parsed = teamRenameSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'A team name is required' });
+    if (!parsed.success) return reply.code(400).send({ error: 'A group name is required' });
     const id = (request.params as { id: string }).id;
     try {
       const team = await renameTeam(id, parsed.data.name);

@@ -96,7 +96,7 @@ export async function postTeamMessage(
   user: { id: string; displayName: string; teamId: string | null },
   body: string,
 ): Promise<ChatMessageView[]> {
-  if (!user.teamId) throw new Error('You are not on a trading team yet');
+  if (!user.teamId) throw new Error('You are not in a group yet');
   const text = body.trim();
   if (!text) throw new Error('A message is required');
   await db.insert(chatMessages).values({
@@ -122,7 +122,7 @@ export async function deleteTeamMessage(
   id: string,
   user: { id: string; isAdmin: boolean },
 ): Promise<ChatMessageView[]> {
-  if (!teamId) throw new Error('You are not on a trading team yet');
+  if (!teamId) throw new Error('You are not in a group yet');
   const row = (
     await db
       .select()

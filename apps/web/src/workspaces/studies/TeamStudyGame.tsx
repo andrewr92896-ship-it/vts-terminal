@@ -377,7 +377,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       setFixNote(
         nowCorrect && !practiceAttempt
           ? `Correct answer set to ${newAnswer} — your answer now counts as correct.`
-          : `Correct answer set to ${newAnswer} — saved for your team.`,
+          : `Correct answer set to ${newAnswer} — saved for everyone who plays it.`,
       );
     } catch (e) {
       setFixError(fixErrorMessage(e));
@@ -850,7 +850,7 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
                       ) : (
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ fontSize: 12, color: '#ffb4ab' }}>
-                            {"Delete this question for the whole team?"}
+                            {"Delete this question for everyone who plays it?"}
                           </span>
                           <button
                             onClick={() => void deleteCurrentQuestion()}
