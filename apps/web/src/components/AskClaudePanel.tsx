@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { hasEntitlement, tierOfFeature } from '../auth/access';
 import { UpgradeNotice } from './UpgradeNotice';
 import { TierMark } from './TierMark';
+import { ReviewMark } from './ReviewMark';
 import { GuardrailNotice, GuardrailPaused } from './GuardrailNotice';
 
 interface AskClaudePanelProps {
@@ -185,6 +186,7 @@ export function AskClaudePanel({
                 feature can say what it costs. Drawn for a Max member too — the
                 mark states a price, it is not a lock. */}
             <TierMark tier={tierOfFeature('ai', user?.access.membership)} size={12} />
+            <ReviewMark id="ai" size={12} />
             {workspaceLabel && <span style={{ fontSize: 11, color: '#7e92c0' }}>· {workspaceLabel}</span>}
             <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>VTS AI</span>
             {remaining != null && (

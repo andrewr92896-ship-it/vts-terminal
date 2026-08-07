@@ -7,6 +7,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { Icon } from '../../components/Icon';
 import { TierMark } from '../../components/TierMark';
+import { ReviewMark } from '../../components/ReviewMark';
 import { tierOfFeature } from '../../auth/access';
 import {
   SectionHeader,
@@ -569,10 +570,14 @@ function MemberRow({
             {presets.map((p) => (
               <button
                 key={p}
-                style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px', borderColor: draft === p ? theme.accent : '#2a4170' }}
+                style={{ ...ghostBtn, minHeight: 0, padding: '5px 10px', borderColor: draft === p ? theme.accent : '#2a4170', display: 'inline-flex', alignItems: 'center', gap: 5 }}
                 onClick={() => onDraft(p)}
               >
-                {p}
+                <span>{p}</span>
+                {/* One of the two presets is flagged for review; the field is
+                    free text, so this marks the offered title rather than
+                    pretending to police what can be typed. */}
+                {p === 'Lead Trader' && <ReviewMark id="leadTraderBadge" size={11} />}
               </button>
             ))}
           </div>

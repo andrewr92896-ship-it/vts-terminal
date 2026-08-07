@@ -256,6 +256,10 @@ export const NAV: NavWorkspace[] = [
       // sidebar's order — workspaces and the sections within each — and the only
       // way to change it is to edit it here and deploy. Owner decision, 2026-08.)
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
+      // Everything the terminal carries a status mark on, in one list — the
+      // other half of marks that are otherwise scattered beside the features
+      // they describe. A read of auth/reviewMarks.ts; it stores nothing.
+      { key: 'ad_review', label: 'Under Review', icon: 'alert-triangle' },
       // (There is deliberately no "View as role" row. It lives in the account
       // menu instead — owner decision, 2026-08: previewing as Member hides this
       // very workspace, so a control for leaving the preview cannot live inside

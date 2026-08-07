@@ -7,6 +7,8 @@ import { UpgradeNotice } from './UpgradeNotice';
 import type { ChatMessage, MembershipTier, TeamChatReason, User } from '../api/types';
 import { Icon } from './Icon';
 import { TierMark } from './TierMark';
+import { ReviewMark } from './ReviewMark';
+import type { ReviewKey } from '../auth/reviewMarks';
 import { Avatar } from './Avatar';
 import { UserBadges } from './UserBadges';
 import { SupportTab } from './SupportTab';
@@ -353,7 +355,7 @@ export function TeamChat({
                   mark is what says the feed costs something. Support carries
                   its own per-kind marks inside (a bug report is free). */}
               {teamChatAvailable && (
-                <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} tier={tierOfFeature('teamChat', user.access.membership)} />
+                <TabBtn active={tab === 'team'} onClick={() => setTab('team')} icon="message-circle" label="Team chat" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} tier={tierOfFeature('teamChat', user.access.membership)} review="teamChat" />
               )}
               <TabBtn active={tab === 'support'} onClick={() => setTab('support')} icon="life-buoy" label="Support" accent={theme.accent} accentGrad={accentGrad} accentText={theme.accentText} />
               {canModerate && (
@@ -620,6 +622,7 @@ function TabBtn({
   accentGrad,
   accentText,
   tier,
+  review,
 }: {
   active: boolean;
   onClick: () => void;
@@ -630,6 +633,8 @@ function TabBtn({
   accentText: string;
   /** What this tab's feature costs, when it costs something. */
   tier?: MembershipTier | null;
+  /** Its status mark, when it carries one — see auth/reviewMarks.ts. */
+  review?: ReviewKey;
 }) {
   return (
     <button
@@ -654,6 +659,7 @@ function TabBtn({
       <Icon name={icon} size={14} />
       {label}
       {tier && <TierMark tier={tier} size={11} />}
+      {review && <ReviewMark id={review} size={11} />}
     </button>
   );
 }

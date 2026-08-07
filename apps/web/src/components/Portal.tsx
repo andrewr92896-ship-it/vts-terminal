@@ -48,6 +48,7 @@ import { AdminLog } from '../workspaces/admin/AdminLog';
 import { AdminGuidelines } from '../workspaces/admin/AdminGuidelines';
 import { AdminRuleBreaking } from '../workspaces/admin/AdminRuleBreaking';
 import { AdminWallTemplates } from '../workspaces/admin/AdminWallTemplates';
+import { AdminReviewList } from '../workspaces/admin/AdminReviewList';
 import { DevBlog } from '../workspaces/admin/DevBlog';
 import {
   HelpHowTo,
@@ -189,6 +190,8 @@ function renderScreen(
       return <AdminRuleBreaking theme={theme} />;
     case 'ad_walls':
       return <AdminWallTemplates theme={theme} />;
+    case 'ad_review':
+      return <AdminReviewList theme={theme} />;
     case 'ad_blog':
       return <DevBlog theme={theme} />;
     case 'ad_teams':

@@ -5,10 +5,17 @@ import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
-import { hasEntitlement, tierOfFeature } from '../../auth/access';
+import { hasEntitlement, isFounder, tierOfFeature } from '../../auth/access';
 import { Icon } from '../../components/Icon';
 import { TierMark } from '../../components/TierMark';
-import type { BoardTile, BoardTileKind, PremiumFeature, TradingBoard } from '../../api/types';
+import { ReviewMark } from '../../components/ReviewMark';
+import type {
+  BoardTile,
+  BoardTileKind,
+  PremiumFeature,
+  TemplateTile,
+  TradingBoard,
+} from '../../api/types';
 import { MobileScrollLockBar } from './scrollLock';
 import { useContentWidth } from '../../lib/measure';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -68,6 +75,90 @@ function wsRooms(tiles: BoardTile[], cols: number): { left: number; right: numbe
   const minX = tiles.reduce((m, t) => Math.min(m, t.x), Number.POSITIVE_INFINITY);
   const maxX = tiles.reduce((m, t) => Math.max(m, t.x + t.w), 0);
   return { left: Number.isFinite(minX) ? minX : 0, right: Math.max(0, cols - maxX) };
+}
+
+// ---- Keeping an arrangement that has not been saved -------------------------
+// An arrangement in progress survives leaving the screen: switching to another
+// sidebar section and back, a reload, a new session tomorrow. Before this the
+// board was rebuilt from the server on every mount, so unsaved work vanished the
+// moment the trader looked at anything else, with nothing said about it.
+//
+// Stored per BOARD — a saved preset, a built-in layout, a teammate's shared one,
+// a template being authored — under the reader's own id, and stamped with the
+// baseline it was edited FROM. If that baseline no longer matches (the board was
+// saved from another device, a built-in template was republished) the draft is
+// DROPPED rather than replayed: an arrangement only means anything against the
+// board it was made on, and laying old tile positions over different content is
+// how somebody loses the newer version without being asked.
+//
+// The stored copy is the unsaved state only. Saving clears it, so this can never
+// become a second, competing record of a board that IS saved.
+const DRAFT_PREFIX = 'vts:wallDraft';
+
+interface StoredDraft {
+  /** The saved board this was edited from — `layoutJson` of the baseline. */
+  base: string;
+  cols: number;
+  tiles: BoardTile[];
+}
+
+function draftKey(userId: string | undefined, boardKey: string | null): string | null {
+  return userId && boardKey ? `${DRAFT_PREFIX}:${userId}:${boardKey}` : null;
+}
+
+function readDraft(key: string | null, base: string): { cols: number; tiles: BoardTile[] } | null {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as StoredDraft;
+    if (!d || d.base !== base || !Array.isArray(d.tiles)) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return { cols: typeof d.cols === 'number' ? d.cols : COLS, tiles: d.tiles };
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(key: string | null, draft: StoredDraft): void {
+  if (!key) return;
+  try {
+    localStorage.setItem(key, JSON.stringify(draft));
+  } catch {
+    /* storage full or unavailable — the edit is still on screen */
+  }
+}
+
+function clearDraft(key: string | null): void {
+  if (!key) return;
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+// A template's tiles are geometry and kind only — no id, no per-tile settings —
+// so authoring one on the real grid means minting a tile around each entry on
+// the way in and throwing the extras away on the way out.
+function tilesFromTemplate(list: TemplateTile[]): BoardTile[] {
+  return list.map((t, i) => ({
+    ...newTile(t.kind, { x: t.x, y: t.y }),
+    x: t.x,
+    y: t.y,
+    w: t.w,
+    h: t.h,
+    // Deterministic, for the reason `buildPreset` spells out: a template that
+    // does not compare equal to itself between two visits discards the
+    // arrangement being worked on.
+    id: `tpl-${i}-${t.kind}`,
+  }));
+}
+
+function templateFromTiles(list: BoardTile[]): TemplateTile[] {
+  return list.map((t) => ({ kind: t.kind, x: t.x, y: t.y, w: t.w, h: t.h }));
 }
 
 // A positions tile set to grow to fit its trades (rather than scroll in a fixed
@@ -184,6 +275,10 @@ export function ChartBoard({
   // column (see `layout`), and a drag there would write that flattened order
   // back over the real arrangement — so editing is simply not offered.
   const canEdit = canCustomize && !isPhone;
+  // Founder-level, on the reader's REAL roles. It reveals authoring the built-in
+  // layouts every other account opens on — the server refuses those routes to
+  // anybody else, so this only decides whether the control is drawn.
+  const isDev = isFounder(user?.roles ?? []) && !isPhone;
 
   // Remember the last-opened preset per user (per device) so returning to the
   // board — after toggling to Positions, a reload, or a new session — lands on
@@ -218,30 +313,36 @@ export function ChartBoard({
   // builder edits. Falls back to the code presets until it answers (and if it
   // never does): a picker showing three finished layouts from memory is a much
   // better failure than an empty one.
+  // Loaded by `load()` rather than by an effect of its own, and that ordering is
+  // load-bearing: a built-in layout's SAVED state is the template's own tiles,
+  // which is both the dirty comparison and what a kept unsaved arrangement is
+  // matched against. Fetching separately meant the board applied the code
+  // fallback first and the server's version a moment later — two different
+  // baselines for one layout, so an arrangement kept from the last visit was
+  // discarded as belonging to a board that had changed.
   const [templates, setTemplates] = useState<PresetLayout[]>(PRESET_LAYOUTS);
-  useEffect(() => {
-    let alive = true;
-    api
-      .wallTemplates()
-      .then((r) => {
-        if (!alive || r.templates.length === 0) return;
-        setTemplates(
-          r.templates.map((t) => ({ key: t.key, label: t.label, blurb: t.blurb, tiles: t.tiles })),
-        );
-      })
-      .catch(() => {
-        /* keep the built-in fallback */
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   const [tiles, setTiles] = useState<BoardTile[]>([]);
   // The workspace width this board renders at — see workspaceCols above.
   const [cols, setCols] = useState<number>(COLS);
   const [savedTilesJson, setSavedTilesJson] = useState<string>(''); // '' → never saved
   const [editing, setEditing] = useState(false);
+  // Which board the unsaved-edit draft belongs to — see the draft helpers above.
+  // Held as a key rather than derived, because "the open board" is four
+  // different things (a saved preset, a built-in, a teammate's, a template) and
+  // a draft must never be restored onto a different one.
+  const [boardKey, setBoardKey] = useState<string | null>(null);
+  // The built-in layout being authored, when a developer is editing one. Null is
+  // the ordinary board; anything else means Save writes a TEMPLATE draft rather
+  // than one of the reader's own boards. Founder-level only — see `isDev`.
+  const [tplEdit, setTplEdit] = useState<{ id: string; key: string; label: string } | null>(null);
+  const [tplBusy, setTplBusy] = useState(false);
+  // Read by the Escape handler, which is registered once per edit session and so
+  // cannot see either value directly. Leaving template authoring is more than
+  // dropping out of edit mode — it has to put the published layout back.
+  const tplEditRef = useRef(tplEdit);
+  tplEditRef.current = tplEdit;
+  const exitTemplateEditRef = useRef<(() => void) | null>(null);
   // Whether the workspace frame itself may be resized. LOCKED even in edit
   // mode, deliberately: arranging tiles and sizing the canvas are different
   // acts, and a drag meant for a tile must never change the canvas under it.
@@ -276,6 +377,7 @@ export function ChartBoard({
       // Locking the workspace back up comes first, so Escape mid-sizing does
       // not also throw the reader out of edit mode.
       if (wsUnlocked) setWsUnlocked(false);
+      else if (tplEditRef.current) exitTemplateEditRef.current?.();
       else setEditing(false);
     };
     window.addEventListener('keydown', onKey);
@@ -343,16 +445,30 @@ export function ChartBoard({
   // floor only guards the unlocked state's subtraction.
   const gridW = wsUnlocked ? Math.max(320, boardW - wsGutter * 2) : boardW;
 
+  // Open a board and, if there is one, put the reader's unsaved arrangement of
+  // it back. `base` is what the board looks like SAVED, which is both the dirty
+  // comparison and the stamp the draft is matched against.
+  const applySaved = useCallback(
+    (key: string, base: { cols: number; tiles: BoardTile[] }) => {
+      const json = layoutJson(base.cols, base.tiles);
+      const draft = readDraft(draftKey(user?.id, key), json);
+      setBoardKey(key);
+      setSavedTilesJson(json);
+      setCols(draft?.cols ?? base.cols);
+      setTiles(draft?.tiles ?? base.tiles);
+      setWsUnlocked(false);
+      setNamePrompt(null);
+    },
+    [user?.id],
+  );
+
   const applyBoard = useCallback(
     (b: TradingBoard) => {
       setActiveId(b.id);
       setSharedId(null);
+      setTplEdit(null);
       setName(b.name);
-      setTiles(b.layout.tiles ?? []);
-      setCols(workspaceCols(b.layout));
-      setWsUnlocked(false);
-      setSavedTilesJson(layoutJson(workspaceCols(b.layout), b.layout.tiles ?? []));
-      setNamePrompt(null);
+      applySaved(`b:${b.id}`, { cols: workspaceCols(b.layout), tiles: b.layout.tiles ?? [] });
       if (lastKey) {
         try {
           localStorage.setItem(lastKey, b.id);
@@ -361,27 +477,29 @@ export function ChartBoard({
         }
       }
     },
-    [lastKey],
+    [lastKey, applySaved],
   );
 
   // Switch to a built-in layout. Rebuilt through `buildPreset` so it is filtered
   // to what this reader can actually reach before it ever renders.
-  const applyBuiltIn = useCallback(
-    (key: string) => {
+  const applyBuiltInFrom = useCallback(
+    (list: PresetLayout[], key: string) => {
       setBuiltIn(key);
       setActiveId(null);
       setSharedId(null);
-      const p = templates.find((t) => t.key === key) ?? templates[0] ?? presetLayout(key);
+      setTplEdit(null);
+      const p = list.find((t) => t.key === key) ?? list[0] ?? presetLayout(key);
       setName(p.label);
       const built = buildPreset(p, features, entitled);
-      setTiles(built);
-      // The built-in templates are authored on the default canvas.
-      setCols(COLS);
-      setWsUnlocked(false);
-      // Baseline the comparison against what was just applied, so an untouched
-      // built-in layout is not "modified". Without this every layout switch
-      // asked "discard unsaved changes?" about changes nobody had made.
-      setSavedTilesJson(layoutJson(COLS, built));
+      // Baselined against what was just applied, so an untouched built-in layout
+      // is not "modified". Without this every layout switch asked "discard
+      // unsaved changes?" about changes nobody had made. The built-in templates
+      // are authored on the default canvas, so 12 columns is the baseline width.
+      //
+      // Keyed on the layout actually SHOWN (`p.key`), not the one asked for — a
+      // key with no template falls back to the first, and a kept arrangement
+      // must belong to the board on screen.
+      applySaved(`t:${p.key}`, { cols: COLS, tiles: built });
       if (builtInKey) {
         try {
           localStorage.setItem(builtInKey, key);
@@ -390,15 +508,32 @@ export function ChartBoard({
         }
       }
     },
-    [builtInKey, features, entitled],
+    [builtInKey, features, entitled, applySaved],
+  );
+  const applyBuiltIn = useCallback(
+    (key: string) => applyBuiltInFrom(templates, key),
+    [applyBuiltInFrom, templates],
   );
 
   const load = useCallback(async () => {
+    // The published built-in layouts, before anything is applied. A failure
+    // keeps the code fallback — a picker showing three finished layouts from
+    // memory is a far better failure than an empty one.
+    let tpls = templates;
+    try {
+      const r = await api.wallTemplates();
+      if (r.templates.length > 0) {
+        tpls = r.templates.map((t) => ({ key: t.key, label: t.label, blurb: t.blurb, tiles: t.tiles }));
+        setTemplates(tpls);
+      }
+    } catch {
+      /* keep whatever the picker already had */
+    }
     try {
       // A reader without `customBoards` has nothing saved to load, and the read
       // would only ever come back empty — so go straight to the built-ins.
       if (!canCustomize) {
-        applyBuiltIn(builtIn);
+        applyBuiltInFrom(tpls, builtIn);
         setError(null);
         return;
       }
@@ -421,7 +556,7 @@ export function ChartBoard({
         } else {
           // Nothing saved yet: open on a built-in layout rather than an empty
           // grid, so a first visit shows a finished board.
-          applyBuiltIn(builtIn);
+          applyBuiltInFrom(tpls, builtIn);
         }
       }
       setError(null);
@@ -431,7 +566,7 @@ export function ChartBoard({
       firstLoad.current = false;
       setLoading(false);
     }
-  }, [applyBoard, applyBuiltIn, builtIn, canCustomize, lastKey]);
+  }, [applyBoard, applyBuiltInFrom, builtIn, canCustomize, lastKey, templates]);
 
   useEffect(() => {
     void load();
@@ -453,6 +588,39 @@ export function ChartBoard({
   // the two made every layout switch warn about discarding nothing.
   const dirty = boardJson !== savedTilesJson;
   const activeBoard = activeId ? (boards.find((b) => b.id === activeId) ?? null) : null;
+
+  // Keep the unsaved arrangement on the device, so leaving the screen does not
+  // throw it away (see the draft helpers at the top of this file). Debounced,
+  // because a single drag fires this on every frame of the gesture and a write
+  // per frame is a write per frame.
+  const pendingDraft = useRef<{ key: string; draft: StoredDraft } | null>(null);
+  useEffect(() => {
+    const key = draftKey(user?.id, boardKey);
+    if (!key) return;
+    if (!dirty) {
+      pendingDraft.current = null;
+      clearDraft(key);
+      return;
+    }
+    const draft: StoredDraft = { base: savedTilesJson, cols, tiles };
+    pendingDraft.current = { key, draft };
+    const id = window.setTimeout(() => {
+      writeDraft(key, draft);
+      pendingDraft.current = null;
+    }, 400);
+    return () => window.clearTimeout(id);
+  }, [user?.id, boardKey, dirty, savedTilesJson, cols, tiles]);
+  // Flush whatever the debounce is still holding when the board goes away.
+  // Leaving the screen is precisely the case this whole mechanism exists for, so
+  // a drag finished within the debounce window must not be the one edit it
+  // loses.
+  useEffect(
+    () => () => {
+      const p = pendingDraft.current;
+      if (p) writeDraft(p.key, p.draft);
+    },
+    [],
+  );
 
   // Which tiles this reader cannot reach, resolved once per render rather than
   // per tile per frame.
@@ -644,13 +812,22 @@ export function ChartBoard({
     setEditing(true);
   }, []);
 
-  const confirmSwitch = useCallback(
-    (fn: () => void) => {
-      if (dirty && !window.confirm('Discard unsaved changes to this board?')) return;
-      fn();
-    },
-    [dirty],
-  );
+  // Load layout — drop the unsaved arrangement and go back to the board as it is
+  // saved. The one control here that destroys work, so it is the one that asks.
+  const revert = useCallback(() => {
+    if (!dirty) return;
+    if (!window.confirm('Are you sure? Your current changes will be lost.')) return;
+    try {
+      const base = JSON.parse(savedTilesJson) as { cols?: number; tiles?: BoardTile[] };
+      setCols(typeof base.cols === 'number' ? base.cols : COLS);
+      setTiles(base.tiles ?? []);
+    } catch {
+      /* a baseline that will not parse means there is nothing to go back to */
+      return;
+    }
+    clearDraft(draftKey(user?.id, boardKey));
+    setWsUnlocked(false);
+  }, [dirty, savedTilesJson, user?.id, boardKey]);
 
   // "Save as new" — keep the current layout exactly as it is and save it under
   // a new name as a separate preset (the original board is left untouched). It
@@ -658,7 +835,106 @@ export function ChartBoard({
   // confirmName's 'create' branch persists the current tiles.
   const saveAsNew = () => setNamePrompt({ mode: 'create', value: isUnsaved ? name : `${name} copy` });
 
+  // ---- Authoring a built-in layout ------------------------------------------
+  // The three layouts every account without `customBoards` chooses between are
+  // rows in the database, and until now the only way to arrange one was typing
+  // x/y/w/h into a list in the Developer Terminal. This edits the same rows on
+  // the real grid — the board a member will actually open — and publishes from
+  // there. Founder-level only, and the SERVER is the enforcer: every route
+  // behind these calls is `requireFounder`.
+  //
+  // DRAFT THEN PUBLISH is preserved exactly. Saving writes the draft; only
+  // Publish reaches a member. Without that split, a half-moved tile is what
+  // every unpaid account opens on for as long as somebody is arranging it.
+  const refreshTemplates = useCallback(async () => {
+    try {
+      const r = await api.wallTemplates();
+      if (r.templates.length > 0) {
+        setTemplates(r.templates.map((t) => ({ key: t.key, label: t.label, blurb: t.blurb, tiles: t.tiles })));
+      }
+    } catch {
+      /* the picker keeps whatever it already had */
+    }
+  }, []);
+
+  const startTemplateEdit = async () => {
+    if (tplBusy) return;
+    setTplBusy(true);
+    try {
+      const { templates: rows } = await api.adminWallTemplates();
+      const row = rows.find((t) => t.key === builtIn);
+      if (!row) {
+        setError('That built-in layout is no longer in the templates list.');
+        return;
+      }
+      setActiveId(null);
+      setSharedId(null);
+      setName(row.label);
+      setTplEdit({ id: row.id, key: row.key, label: row.label });
+      // The DRAFT rather than the published tiles, so a layout half-arranged
+      // yesterday is picked up where it was left. Templates are authored on the
+      // default 12-column canvas — `parseTiles` clamps to it server-side.
+      applySaved(`tpl:${row.id}`, { cols: COLS, tiles: tilesFromTemplate(row.draft) });
+      setEditing(true);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not open that layout for editing');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+
+  const saveTemplateDraft = async () => {
+    if (!tplEdit || tplBusy) return;
+    setTplBusy(true);
+    try {
+      await api.saveWallTemplateDraft(tplEdit.id, { tiles: templateFromTiles(tiles) });
+      setSavedTilesJson(layoutJson(cols, tiles));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not save that layout');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+
+  const publishTemplate = async () => {
+    if (!tplEdit || tplBusy) return;
+    if (!window.confirm(`Publish "${tplEdit.label}" to everyone? This replaces the layout members open on.`)) return;
+    setTplBusy(true);
+    try {
+      // Save first, so Publish always sends what is on screen rather than
+      // whatever the draft happened to hold.
+      await api.saveWallTemplateDraft(tplEdit.id, { tiles: templateFromTiles(tiles) });
+      await api.publishWallTemplate(tplEdit.id);
+      setSavedTilesJson(layoutJson(cols, tiles));
+      await refreshTemplates();
+      setError(null);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Could not publish that layout');
+    } finally {
+      setTplBusy(false);
+    }
+  };
+
+  const exitTemplateEdit = () => {
+    setTplEdit(null);
+    setEditing(false);
+    // Back to the published layout as a member sees it. The unsaved arrangement
+    // stays on the device under its own key, so re-opening the editor resumes
+    // rather than restarts.
+    void (async () => {
+      await refreshTemplates();
+      applyBuiltIn(builtIn);
+    })();
+  };
+  exitTemplateEditRef.current = exitTemplateEdit;
+
   const save = async () => {
+    if (tplEdit) {
+      void saveTemplateDraft();
+      return;
+    }
     if (saving) return;
     if (isUnsaved) {
       // Naming it is the same step for everybody now: how many boards you may
@@ -673,6 +949,8 @@ export function ChartBoard({
       const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { layout: { tiles, cols } });
       setBoards(list);
       setTeamBoards(shared);
+      // The saved board IS the arrangement now, so the effect above drops the
+      // stored draft on the next pass — there is nothing unsaved left to keep.
       setSavedTilesJson(layoutJson(workspaceCols(board.layout), board.layout.tiles ?? []));
       setError(null);
     } catch (e) {
@@ -692,6 +970,11 @@ export function ChartBoard({
         const { board, boards: list, teamBoards: shared } = await api.createBoard({ name: nm, layout: { tiles, cols }, isDefault: boards.length === 0 });
         setBoards(list);
         setTeamBoards(shared);
+        // The arrangement is stored now — under a new name, but stored. So the
+        // board it was made on goes back to clean rather than keeping a copy of
+        // edits that have already been saved somewhere else, which would greet
+        // the trader with the same "unsaved changes" the next time they open it.
+        clearDraft(draftKey(user?.id, boardKey));
         applyBoard(board);
       } else {
         const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { name: nm });
@@ -713,21 +996,20 @@ export function ChartBoard({
   // Read-only by construction: `activeId` stays null, so there is nothing for
   // Save to write to. Nothing of theirs comes with it either — the tiles fetch
   // as the signed-in reader, so this shows THEIR arrangement of YOUR figures.
-  const applyShared = useCallback((b: TradingBoard) => {
-    setActiveId(null);
-    setSharedId(b.id);
-    setName(b.name);
-    setTiles(b.layout.tiles ?? []);
-    // A shared layout keeps the width its author arranged it on — the
-    // arrangement is the point, and the width is part of it.
-    setCols(workspaceCols(b.layout));
-    setWsUnlocked(false);
-    // Baselined for the same reason as a built-in: opening a teammate's layout
-    // is not an edit.
-    setSavedTilesJson(layoutJson(workspaceCols(b.layout), b.layout.tiles ?? []));
-    setNamePrompt(null);
-    setEditing(false);
-  }, []);
+  const applyShared = useCallback(
+    (b: TradingBoard) => {
+      setActiveId(null);
+      setSharedId(b.id);
+      setTplEdit(null);
+      setName(b.name);
+      // A shared layout keeps the width its author arranged it on — the
+      // arrangement is the point, and the width is part of it. Baselined for the
+      // same reason as a built-in: opening a teammate's layout is not an edit.
+      applySaved(`s:${b.id}`, { cols: workspaceCols(b.layout), tiles: b.layout.tiles ?? [] });
+      setEditing(false);
+    },
+    [applySaved],
+  );
 
   // Take a copy of the shared layout currently open, into the reader's own
   // boards, where they can rearrange it freely.
@@ -783,6 +1065,9 @@ export function ChartBoard({
       const { boards: list, teamBoards: shared } = await api.removeBoard(activeId!);
       setBoards(list);
       setTeamBoards(shared);
+      // A deleted board's kept-but-unsaved arrangement goes with it — there is
+      // no longer anything for it to be an arrangement OF.
+      clearDraft(draftKey(user?.id, `b:${activeId}`));
       if (list.length > 0) applyBoard(list.find((b) => b.isDefault) ?? list[0]);
       else applyBuiltIn(builtIn);
     } catch (e) {
@@ -812,9 +1097,9 @@ export function ChartBoard({
           isUnsaved={isUnsaved}
           sharedId={sharedId}
           templates={templates}
-          onPickBoard={(b) => confirmSwitch(() => applyBoard(b))}
-          onPickBuiltIn={(k) => confirmSwitch(() => applyBuiltIn(k))}
-          onPickShared={(b) => confirmSwitch(() => applyShared(b))}
+          onPickBoard={(b) => applyBoard(b)}
+          onPickBuiltIn={(k) => applyBuiltIn(k)}
+          onPickShared={(b) => applyShared(b)}
         />
 
         {/* A teammate's layout is not the reader's to save over, so the one
@@ -828,67 +1113,102 @@ export function ChartBoard({
 
         {canEdit && !sharedId ? (
           <>
-            <button onClick={() => setEditing((v) => !v)} style={editing ? goldBtn : ghostBtn}>
-              {editing ? '✓ Done editing' : '✎ Edit layout'}
+            <button
+              onClick={() => (tplEdit ? exitTemplateEdit() : setEditing((v) => !v))}
+              style={{
+                ...(editing ? goldBtn : ghostBtn),
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              {editing ? (
+                <Icon name="check" size={12} color={editing ? '#0c2768' : '#dfe7fa'} />
+              ) : (
+                // The Premium star rather than a pencil: arranging your own board
+                // is what the membership buys, so the control that opens it says
+                // so. Drawn for everyone who has it too — the mark states what a
+                // thing costs, it is not a lock.
+                <TierMark tier={customBoardsTier} size={12} />
+              )}
+              <span>{editing ? (tplEdit ? 'Done' : 'Done editing') : 'Edit layout'}</span>
             </button>
-            {editing && (
+
+            {/* Authoring the layouts every other account opens on. Founder-level
+                only, and shown only while a built-in layout is the one open —
+                that is what it edits. The crown is the Developer Terminal's own
+                mark, so a developer-only control carries it here too. */}
+            {isDev && !editing && isUnsaved && (
+              <button
+                onClick={() => void startTemplateEdit()}
+                disabled={tplBusy}
+                style={{ ...ghostBtn, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Icon name="crown" size={12} color={GOLD} />
+                <span>{tplBusy ? 'Opening…' : 'Edit default layout'}</span>
+              </button>
+            )}
+
+            {editing && !tplEdit && (
               <>
                 <TilePicker onAdd={addTile} onOpenMembership={onOpenMembership} />
-                {/* The board actions follow the membership, not the desk — see
-                    `save` above. They only need a board to act on. */}
-                {!isUnsaved && (
-                  <button onClick={() => setNamePrompt({ mode: 'rename', value: name })} style={ghostBtn}>
-                    {"Rename"}
-                  </button>
-                )}
-                {!isUnsaved && (
-                  <button onClick={setDefault} style={ghostBtn} title="Show this board by default">
-                    {"Set default"}
-                  </button>
-                )}
-                {!isUnsaved && (
-                  <button onClick={deleteBoard} style={{ ...ghostBtn, color: '#ffb4ab' }}>
-                    {"Delete"}
-                  </button>
-                )}
-                {/* Publishing sends the ARRANGEMENT to the team, never the
-                    figures — each teammate's tiles fetch as themselves. A notes
-                    tile's text is stripped server-side on the way out. */}
-                {!isUnsaved && onTeam && (
-                  <button
-                    onClick={() => void toggleShare()}
-                    disabled={saving}
-                    style={{
-                      ...ghostBtn,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      ...(activeBoard?.sharedTeamId
-                        ? { color: GREEN, borderColor: 'rgba(53,196,123,.5)' }
-                        : null),
-                    }}
-                    title={
-                      activeBoard?.sharedTeamId
-                        ? 'Your team can open this layout'
-                        : 'Let your team open this layout'
-                    }
-                  >
-                    <Icon name="users" size={12} color={activeBoard?.sharedTeamId ? GREEN : FAINT} />
-                    <span>{activeBoard?.sharedTeamId ? 'Shared with team' : 'Share with team'}</span>
-                  </button>
-                )}
-                <button onClick={saveAsNew} style={ghostBtn}>{"Save as new"}</button>
+                {/* Every action on the open preset, behind one control. They were
+                    six buttons in this row, which on a narrow board wrapped into
+                    a second and third line of controls above the board itself. */}
+                <PresetSettingsMenu
+                  isUnsaved={isUnsaved}
+                  dirty={dirty}
+                  saving={saving}
+                  onTeam={onTeam}
+                  shared={!!activeBoard?.sharedTeamId}
+                  onRename={() => setNamePrompt({ mode: 'rename', value: name })}
+                  onSetDefault={() => void setDefault()}
+                  onShare={() => void toggleShare()}
+                  onSaveAsNew={saveAsNew}
+                  onSave={() => void save()}
+                  onDelete={() => void deleteBoard()}
+                />
               </>
             )}
-            {editing && (
+
+            {/* Authoring a built-in layout has its own two actions, because the
+                thing being written is not one of the reader's own boards: Save
+                writes the DRAFT, and Publish is the separate, deliberate step
+                that puts it in front of members. */}
+            {editing && tplEdit && (
+              <>
+                <TilePicker onAdd={addTile} onOpenMembership={onOpenMembership} />
+                <span style={tplChip}>
+                  <Icon name="crown" size={11} color={GOLD} />
+                  <span>Default layout · {tplEdit.label}</span>
+                </span>
+                <button
+                  onClick={() => void publishTemplate()}
+                  disabled={tplBusy}
+                  style={{ ...ghostBtn, opacity: tplBusy ? 0.55 : 1 }}
+                >
+                  {"Publish to everyone"}
+                </button>
+              </>
+            )}
+
+            {/* The unsaved pair. Shown whenever there ARE unsaved changes, in
+                edit mode or out of it — the arrangement is kept when the trader
+                leaves the screen, so they come back to a board that is already
+                changed and need to be able to act on it without first finding
+                their way back into edit mode. */}
+            {dirty && (
               <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {dirty && <span style={{ fontSize: 11, color: FAINT }}>Unsaved changes</span>}
+                <span style={{ fontSize: 11, color: FAINT }}>Unsaved changes</span>
+                <button onClick={revert} style={ghostBtn}>
+                  {"Load layout"}
+                </button>
                 <button
                   onClick={save}
-                  disabled={saving || (!dirty && !isUnsaved)}
-                  style={{ ...goldBtn, opacity: saving || (!dirty && !isUnsaved) ? 0.55 : 1 }}
+                  disabled={saving || tplBusy}
+                  style={{ ...goldBtn, opacity: saving || tplBusy ? 0.55 : 1 }}
                 >
-                  {saving ? 'Saving…' : isUnsaved ? 'Save board' : 'Save'}
+                  {saving || tplBusy ? 'Saving…' : 'Save layout'}
                 </button>
               </div>
             )}
@@ -1081,7 +1401,11 @@ export function ChartBoard({
                 live in, drawn only while editing. It is LOCKED even then — the
                 pencil on its corner is the one way to size it, so a drag meant
                 for a tile can never change the canvas underneath it. */}
-            {editing && canEdit && (
+            {/* Not while authoring a built-in layout: those are stored on the
+                default 12-column canvas (the server clamps to it), so offering
+                a width control there would be offering a setting that cannot be
+                saved. */}
+            {editing && canEdit && !tplEdit && (
               <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 40 }}>
                 <div style={wsOutline(wsUnlocked)} />
                 <button
@@ -1229,6 +1553,187 @@ function MaximizedTile({
       </div>
     </>,
     document.body,
+  );
+}
+
+// Everything you can do to the preset that is open: rename it, make it the one
+// that opens by default, publish it to your team, save it, save it under a new
+// name, delete it.
+//
+// One control rather than six buttons in the toolbar. They were six, and on any
+// board narrower than a desktop they wrapped onto a second and third row of
+// controls stacked above the board — the arrangement being edited pushed further
+// down the screen the more ways there were to act on it.
+//
+// Body-portalled and drawn by the terminal for the same reasons the layout
+// picker is: a native <select> renders the OS wheel on iOS, and the grid's
+// stacking context would otherwise trap the menu behind the tiles.
+function PresetSettingsMenu({
+  isUnsaved,
+  dirty,
+  saving,
+  onTeam,
+  shared,
+  onRename,
+  onSetDefault,
+  onShare,
+  onSaveAsNew,
+  onSave,
+  onDelete,
+}: {
+  isUnsaved: boolean;
+  dirty: boolean;
+  saving: boolean;
+  /** Whether there is anybody to publish to — from the server. */
+  onTeam: boolean;
+  /** Whether this board is currently published. */
+  shared: boolean;
+  onRename: () => void;
+  onSetDefault: () => void;
+  onShare: () => void;
+  onSaveAsNew: () => void;
+  onSave: () => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // CAPTURE phase, and the propagation is stopped outright. Escape here
+      // means "close this menu" and nothing else — but the board's own Escape
+      // handler is registered first (it mounts first), so a bubble-phase
+      // listener runs too late: the board has already dropped out of edit mode
+      // by the time this one is reached, and one keypress undoes two things.
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setOpen(false);
+    };
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('keydown', onKey, true);
+    };
+  }, [open]);
+
+  function toggle() {
+    if (!open && btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen((v) => !v);
+  }
+
+  // A board that has never been saved has nothing to rename, make default,
+  // publish or delete — those act on a stored row. Saving it is what creates
+  // one, so that stays live.
+  const rows: Array<{
+    key: string;
+    label: string;
+    icon: string;
+    run: () => void;
+    disabled?: boolean;
+    danger?: boolean;
+    /** The status marks drawn at the right of the row. */
+    mark?: 'team';
+    hidden?: boolean;
+  }> = [
+    { key: 'rename', label: 'Rename', icon: 'pencil', run: onRename, disabled: isUnsaved },
+    { key: 'default', label: 'Set default', icon: 'check-check', run: onSetDefault, disabled: isUnsaved },
+    // Publishing sends the ARRANGEMENT, never the figures — each teammate's
+    // tiles fetch as themselves, and a notes tile's text is stripped
+    // server-side on the way out.
+    {
+      key: 'share',
+      label: shared ? 'Shared with team' : 'Share with team',
+      icon: 'users',
+      run: onShare,
+      disabled: isUnsaved || saving,
+      hidden: !onTeam,
+      mark: 'team',
+    },
+    { key: 'saveas', label: 'Save as new', icon: 'copy', run: onSaveAsNew },
+    {
+      key: 'save',
+      label: isUnsaved ? 'Save board' : 'Save',
+      icon: 'download',
+      run: onSave,
+      disabled: saving || (!dirty && !isUnsaved),
+    },
+    { key: 'delete', label: 'Delete', icon: 'trash-2', run: onDelete, disabled: isUnsaved, danger: true },
+  ];
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        onClick={toggle}
+        style={{ ...ghostBtn, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+      >
+        <Icon name="settings-2" size={12} color={FAINT} />
+        <span>Preset Settings</span>
+        <Icon name="chevron-down" size={12} color={FAINT} />
+      </button>
+      {open &&
+        rect &&
+        createPortal(
+          <>
+            <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 200 }} />
+            <div
+              style={{
+                position: 'fixed',
+                top: rect.bottom + 6,
+                left: Math.max(8, Math.min(rect.left, window.innerWidth - MENU_W - 8)),
+                width: Math.min(MENU_W, window.innerWidth - 16),
+                background: '#0C1C3C',
+                border: `1px solid ${BORDER2}`,
+                borderRadius: 10,
+                boxShadow: '0 16px 40px rgba(0,0,0,.5)',
+                padding: 6,
+                zIndex: 201,
+              }}
+            >
+              {rows
+                .filter((r) => !r.hidden)
+                .map((r) => (
+                  <button
+                    key={r.key}
+                    onClick={() => {
+                      if (r.disabled) return;
+                      setOpen(false);
+                      r.run();
+                    }}
+                    disabled={r.disabled}
+                    style={{
+                      ...menuRow(false),
+                      color: r.danger ? '#ffb4ab' : r.key === 'share' && shared ? GREEN : '#cfe0ff',
+                      opacity: r.disabled ? 0.4 : 1,
+                      cursor: r.disabled ? 'default' : 'pointer',
+                    }}
+                  >
+                    <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                      <Icon
+                        name={r.icon}
+                        size={13}
+                        color={r.danger ? '#ffb4ab' : r.key === 'share' && shared ? GREEN : FAINT}
+                      />
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>{r.label}</span>
+                    {/* Sharing a board is a group feature, and the group half of
+                        the terminal is still being built — so the row carries
+                        the same mark every other group surface does. */}
+                    {r.mark === 'team' && <ReviewMark id="teams" size={12} />}
+                  </button>
+                ))}
+            </div>
+          </>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -1389,7 +1894,10 @@ function LayoutPicker({
               )}
               {teamBoards.length > 0 && (
                 <>
-                  <div style={menuHeading}>Shared with your team</div>
+                  <div style={{ ...menuHeading, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span>Shared with your team</span>
+                    <ReviewMark id="teams" size={11} />
+                  </div>
                   {teamBoards.map((b) => {
                     const sel = b.id === sharedId;
                     return (
@@ -1634,6 +2142,20 @@ const maxWrap: CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   zIndex: 301,
+};
+// Says which built-in layout is being authored, so a developer arranging the
+// board members open on can never mistake it for one of their own.
+const tplChip: CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+  fontSize: 11,
+  fontWeight: 600,
+  color: '#EFDFAF',
+  background: 'rgba(235,203,116,.12)',
+  border: '1px solid rgba(235,203,116,.45)',
+  borderRadius: 7,
+  padding: '6px 10px',
 };
 const railLabel: CSSProperties = {
   fontSize: 9,

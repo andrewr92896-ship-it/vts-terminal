@@ -6,6 +6,7 @@ import { useNowTick } from '../../hooks/useNowTick';
 import { zoneAbbr } from '../../lib/timezone';
 import { Icon } from '../../components/Icon';
 import { TierMark } from '../../components/TierMark';
+import { ReviewMark } from '../../components/ReviewMark';
 import { UpgradeNotice } from '../../components/UpgradeNotice';
 import { C, tint } from '../../theme/tokens';
 import { ScreenTitle } from './ScreenTitle';
@@ -578,8 +579,12 @@ export function MarketNews({ onOpenMembership }: { onOpenMembership?: () => void
         </div>
 
         {/* ---- content footer (informational only) ---- */}
-        <div style={{ marginTop: 20, fontSize: 10.5, color: C.faint, letterSpacing: '0.3px' }}>
-          Headlines are reproduced from the desk's news feeds for information only — not investment advice.
+        <div style={{ marginTop: 20, fontSize: 10.5, color: C.faint, letterSpacing: '0.3px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>Headlines are reproduced from the desk's news feeds for information only — not investment advice.</span>
+          {/* The tape-read glyph is what is flagged here, not the headlines.
+              Marked once at the foot of the feed rather than on every row —
+              a glyph repeated beside a hundred headlines stops being a mark. */}
+          <ReviewMark id="newsBias" size={11} />
         </div>
       </div>
 

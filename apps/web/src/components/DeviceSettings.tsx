@@ -3,6 +3,7 @@ import { useAuth } from '../auth/AuthContext';
 import { api, ApiError, type NotifTarget, type NotifPrefFlags, type WidgetTokenStatus } from '../api/client';
 import { canAccessWorkspace, hasEntitlement, isWorkspaceReadOnly, tierOfFeature } from '../auth/access';
 import { TierMark } from './TierMark';
+import { ReviewMark } from './ReviewMark';
 import { UpgradeNotice } from './UpgradeNotice';
 import { BrokerConnectionsPanel } from '../workspaces/trading/BrokerConnectionsPanel';
 import { ownerHandle } from '../workspaces/trading/TradeCard';
@@ -75,6 +76,7 @@ export function NotificationsConnectionsPanel({ theme }: { theme: Theme }) {
             <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span>Broker connections</span>
               <TierMark tier={tierOfFeature('brokerConnections', user?.access.membership)} size={12} />
+              <ReviewMark id="brokerConnections" size={12} />
             </div>
             <BrokerConnectionsPanel />
           </section>

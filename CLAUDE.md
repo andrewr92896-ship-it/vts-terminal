@@ -2085,6 +2085,57 @@ unsaved and nonetheless untouched, so `applyBuiltIn` / `applyShared` baseline
 `savedTilesJson` against what they just applied. Conflating the two made every
 layout switch ask "discard unsaved changes?" about changes nobody had made.
 
+**An unsaved arrangement is KEPT, per board, on the device** (`vts:wallDraft:…`;
+owner request, 2026-08). The board used to be rebuilt from the server on every
+mount, so an arrangement in progress vanished the moment the trader opened
+another sidebar section — silently, which is the part that made it a fault
+rather than a limitation. Now leaving the screen, reloading, or coming back the
+next day all land on exactly what was left.
+
+- **A draft is stamped with the baseline it was edited FROM** and dropped if that
+  no longer matches — the board was saved elsewhere, a template was
+  republished. An arrangement only means anything against the board it was made
+  on, and replaying old tile positions over different content loses the newer
+  version without asking.
+- **So a built-in layout has to compare equal to ITSELF between two visits**, and
+  it did not: `buildPreset` minted tile ids from `newTile`'s monotonic counter,
+  so the same layout produced different ids every mount and the draft was
+  discarded every single time. Preset and template tiles now carry
+  **deterministic ids** (`<layoutKey>-<i>-<kind>`). It also stops React
+  remounting every tile on re-entry, which reloaded each TradingView embed.
+- **`load()` reads the templates BEFORE it applies one**, for the same reason:
+  fetching them in a separate effect meant the code fallback was applied first
+  and the server's version a moment later — two baselines for one layout.
+- **Switching layouts no longer asks.** Nothing is lost, so a "discard unsaved
+  changes?" prompt was warning about something untrue. **Load layout** is the
+  one control that destroys work and the one that asks.
+- The write is debounced (a drag fires it per frame) and **flushed on unmount**,
+  since leaving the screen is the exact case the whole mechanism exists for.
+
+**Everything you can do to the open preset is behind one "Preset Settings"
+menu** while editing (owner request, 2026-08): rename, set default, share with
+the team, save as new, save, delete. They were six buttons in the toolbar, which
+on anything narrower than a desktop wrapped into a second and third row of
+controls stacked above the board being edited. Its Escape handler is in the
+**capture** phase and stops propagation — the board's own Escape handler is
+registered first, so a bubble-phase listener let one keypress both close the menu
+and drop out of edit mode.
+
+**The toolbar marks who each control is for.** "Edit layout" carries the
+**Premium star** rather than a pencil, because arranging your own board is what
+`customBoards` buys. Beside it, **"Edit default layout" carries the crown** — the
+Developer Terminal's own mark — is drawn only for founder-level readers, and only
+while a built-in layout is open, since that is what it edits.
+
+**A built-in layout can be authored on the wall itself** (founder-level; the
+routes behind it are all `requireFounder`, which is the enforcer). It loads the
+template's **draft**, arranges it on the real grid, and publishes from there —
+the same `wall_templates` rows the Developer Terminal's list editor writes, so
+**draft-then-publish is unchanged** and a half-moved tile still never reaches a
+member. The workspace width control is hidden in this mode: templates are stored
+on the default 12-column canvas (`parseTiles` clamps to it), so offering a width
+there would offer a setting that cannot be saved.
+
 **Tiles fetch through `tiles/tileFeed.ts`, so two tiles reading one endpoint make
 one request.** The wall changed the economics of a poll: a realistic board has
 Trade History beside Closed Trades (both the closed-trade history), Net Worth
@@ -2097,6 +2148,59 @@ what lets a tile go on showing the previous reading. `useTileData`'s first
 argument is the key, and it must name everything that varies the request —
 `studies:leaderboard:<deckId>`, never `studies:leaderboard`, or every leaderboard
 tile shows the first deck's standings.
+
+## Review marks — status, not price (`auth/reviewMarks.ts`)
+
+A second, separate axis from the tier marks. A tier mark says what a feature
+**costs**; these say something about its **status**. They are **additional, never
+a replacement** — a row draws its star or gem and then one of these beside it, so
+it can state both that it is paid and that it is not finished. `REVIEW_MARKS` is
+one map, readable in one screen, and is the only place that decides what is
+marked. `components/ReviewMark.tsx` draws it.
+
+**Two kinds, with OPPOSITE audiences. Confusing them is the expensive mistake
+here:**
+
+- **`wip` — a dashed speech bubble, shown to EVERYONE.** "This part of the
+  terminal is still being built ahead of launch." Today that is the group
+  features (`teams`, `teamChat`), per the owner's instruction that anything to do
+  with the trading team says so until launch.
+- **`risk` — an amber exclamation, FOUNDER-LEVEL ONLY, and that is not
+  negotiable.** It is the owner's own note that a feature has compliance
+  questions still awaiting attorney review, and it exists so those features can
+  be found again. A product that publicly labels its own features as legally
+  risky is worse than one that marks nothing: it tells customers to worry, and it
+  writes a record pointing at itself. An ordinary user, a paying member and a
+  plain admin all see nothing. `ReviewMark` reads the signed-in user **itself**
+  rather than taking one as a prop, so the gate cannot be lost by a call site
+  forgetting to pass something.
+
+**Nothing is gated, hidden, disabled or degraded by a mark.** It marks; it does
+nothing else. Adding a key can never change what an account may do.
+
+**The flagged list is the owner's compliance judgment, not a guess to extend.**
+Do not add or remove a `risk` entry without being asked — say so in the report
+instead. The twelve entries and their notes came from the compliance handoff.
+
+- Colours: risk `#FF9F45` (amber), wip `#8FA0C9` (quiet slate). Deliberately none
+  of the three already carrying meaning — Premium gold `#EBCB74`, Max gem
+  `#B9F2FF`, market-watch blue `#5AC8FA`.
+- `SECTION_REVIEW` maps a nav row to a mark, the same shape as `SECTION_FEATURE`
+  and read in the same place in `Sidebar.tsx`; `TILE_REVIEW` does the same for a
+  Live Wall tile kind. Flagged features with no row of their own are marked at
+  their own control (the Ask VTS AI header, broker connections in Settings, the
+  Team chat tab, the news feed's footer, the funded AI read, the "Lead Trader"
+  badge preset, the Live Wall's share row).
+- **Developer Terminal ▸ Under Review** (`ad_review`, `AdminReviewList.tsx`)
+  lists every entry with its note and where it is marked. It is a **read of the
+  map and nothing else** — no state, no route, no stored copy — so it cannot fall
+  out of step with what the terminal actually draws.
+- **Gated on the reader's REAL roles**, like the "View as role" control. Previewing
+  as a member is for checking what a member reaches, not for hiding the owner's
+  own notes from the owner.
+- `legalCredentials` has no control anywhere: it records that Terms and Privacy
+  both describe broker credentials as read-only, which is false. It lives in the
+  map so the review list is complete.
 
 ## Identity — display names and email
 
