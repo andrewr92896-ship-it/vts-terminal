@@ -1152,7 +1152,7 @@ workspaces list** (see `theme/nav.ts` order).
   Finances workspace and Market News for the News workspace; both keys still
   resolve. It holds the **Live Wall** (`live`) — the terminal's one
   centralized board and what a sign-in opens on; see its own section below. (Its
-  nav row sits under Trading Team since the tier stacking flipped — the workspace
+  nav row sits under My Group since the tier stacking flipped — the workspace
   still *opens* on the wall, see Memberships ▸ the sidebar marking.) It also holds **Premium
   Features** (`my_access`) — memberships and the per-user opt-ins, see its own
   section below — plus one personal roll-up section:
@@ -1508,7 +1508,7 @@ cycle.
       account on the paid screen now sitting at the top would open the workspace on
       something it cannot use. Advanced Trading already opened on `tradedesk`, so
       there the two now agree by coincidence rather than by rule.
-    - Consequence in My Terminal: **Trading Team, Market Data and Market News sit
+    - Consequence in My Terminal: **My Group, Market Data and Market News sit
       above the Live Wall**, which
       still opens on sign-in (`DEFAULT_SCREEN.myportal` is `live`). The Live Wall
       is no longer the first *row* of the first workspace; it is still the first
@@ -1528,7 +1528,7 @@ cycle.
     | `suggestions`, `supportChat` | the intake choices in `SupportTab` |
     | `brokerConnections` | Trade History ▸ Live Brokers, **and** the Settings section |
     | `pushover` | its row in `DeviceSettings` |
-    | `premiumBadges` | the **Badge** button in My Terminal ▸ Trading Team |
+    | `premiumBadges` | the **Badge** button in My Terminal ▸ My Group |
     | `customBoards` | the Live Wall's "Build your own" button |
     | `studyCreation` | the Studies **Create** `ActionTile` |
     | `studyExplain` | the tutor's one-tap opener ("Break this down" / "More Details") |
@@ -1685,7 +1685,7 @@ account" rather than hiding them, so the screen reads as the whole picture.
 **The terminal's one board, and the screen a sign-in lands on** (owner decision,
 2026-08). Every part of the terminal can be put on it, which is why it is the
 landing screen; its nav row is no longer My Terminal's first, since the tier
-stacking puts the paid Trading Team row above it. There is no lite duplicate to
+stacking puts the paid My Group row above it. There is no lite duplicate to
 keep in sync — one screen serves a free account and a full desk alike.
 
 **`source` has THREE states, and the third one is the point** (`trading/types.ts`,
@@ -2085,6 +2085,57 @@ unsaved and nonetheless untouched, so `applyBuiltIn` / `applyShared` baseline
 `savedTilesJson` against what they just applied. Conflating the two made every
 layout switch ask "discard unsaved changes?" about changes nobody had made.
 
+**An unsaved arrangement is KEPT, per board, on the device** (`vts:wallDraft:…`;
+owner request, 2026-08). The board used to be rebuilt from the server on every
+mount, so an arrangement in progress vanished the moment the trader opened
+another sidebar section — silently, which is the part that made it a fault
+rather than a limitation. Now leaving the screen, reloading, or coming back the
+next day all land on exactly what was left.
+
+- **A draft is stamped with the baseline it was edited FROM** and dropped if that
+  no longer matches — the board was saved elsewhere, a template was
+  republished. An arrangement only means anything against the board it was made
+  on, and replaying old tile positions over different content loses the newer
+  version without asking.
+- **So a built-in layout has to compare equal to ITSELF between two visits**, and
+  it did not: `buildPreset` minted tile ids from `newTile`'s monotonic counter,
+  so the same layout produced different ids every mount and the draft was
+  discarded every single time. Preset and template tiles now carry
+  **deterministic ids** (`<layoutKey>-<i>-<kind>`). It also stops React
+  remounting every tile on re-entry, which reloaded each TradingView embed.
+- **`load()` reads the templates BEFORE it applies one**, for the same reason:
+  fetching them in a separate effect meant the code fallback was applied first
+  and the server's version a moment later — two baselines for one layout.
+- **Switching layouts no longer asks.** Nothing is lost, so a "discard unsaved
+  changes?" prompt was warning about something untrue. **Load layout** is the
+  one control that destroys work and the one that asks.
+- The write is debounced (a drag fires it per frame) and **flushed on unmount**,
+  since leaving the screen is the exact case the whole mechanism exists for.
+
+**Everything you can do to the open preset is behind one "Preset Settings"
+menu** while editing (owner request, 2026-08): rename, set default, share with
+the team, save as new, save, delete. They were six buttons in the toolbar, which
+on anything narrower than a desktop wrapped into a second and third row of
+controls stacked above the board being edited. Its Escape handler is in the
+**capture** phase and stops propagation — the board's own Escape handler is
+registered first, so a bubble-phase listener let one keypress both close the menu
+and drop out of edit mode.
+
+**The toolbar marks who each control is for.** "Edit layout" carries the
+**Premium star** rather than a pencil, because arranging your own board is what
+`customBoards` buys. Beside it, **"Edit default layout" carries the crown** — the
+Developer Terminal's own mark — is drawn only for founder-level readers, and only
+while a built-in layout is open, since that is what it edits.
+
+**A built-in layout can be authored on the wall itself** (founder-level; the
+routes behind it are all `requireFounder`, which is the enforcer). It loads the
+template's **draft**, arranges it on the real grid, and publishes from there —
+the same `wall_templates` rows the Developer Terminal's list editor writes, so
+**draft-then-publish is unchanged** and a half-moved tile still never reaches a
+member. The workspace width control is hidden in this mode: templates are stored
+on the default 12-column canvas (`parseTiles` clamps to it), so offering a width
+there would offer a setting that cannot be saved.
+
 **Tiles fetch through `tiles/tileFeed.ts`, so two tiles reading one endpoint make
 one request.** The wall changed the economics of a poll: a realistic board has
 Trade History beside Closed Trades (both the closed-trade history), Net Worth
@@ -2097,6 +2148,59 @@ what lets a tile go on showing the previous reading. `useTileData`'s first
 argument is the key, and it must name everything that varies the request —
 `studies:leaderboard:<deckId>`, never `studies:leaderboard`, or every leaderboard
 tile shows the first deck's standings.
+
+## Review marks — status, not price (`auth/reviewMarks.ts`)
+
+A second, separate axis from the tier marks. A tier mark says what a feature
+**costs**; these say something about its **status**. They are **additional, never
+a replacement** — a row draws its star or gem and then one of these beside it, so
+it can state both that it is paid and that it is not finished. `REVIEW_MARKS` is
+one map, readable in one screen, and is the only place that decides what is
+marked. `components/ReviewMark.tsx` draws it.
+
+**Two kinds, with OPPOSITE audiences. Confusing them is the expensive mistake
+here:**
+
+- **`wip` — a dashed speech bubble, shown to EVERYONE.** "This part of the
+  terminal is still being built ahead of launch." Today that is the group
+  features (`teams`, `teamChat`), per the owner's instruction that anything to do
+  with private groups says so until launch.
+- **`risk` — an amber exclamation, FOUNDER-LEVEL ONLY, and that is not
+  negotiable.** It is the owner's own note that a feature has compliance
+  questions still awaiting attorney review, and it exists so those features can
+  be found again. A product that publicly labels its own features as legally
+  risky is worse than one that marks nothing: it tells customers to worry, and it
+  writes a record pointing at itself. An ordinary user, a paying member and a
+  plain admin all see nothing. `ReviewMark` reads the signed-in user **itself**
+  rather than taking one as a prop, so the gate cannot be lost by a call site
+  forgetting to pass something.
+
+**Nothing is gated, hidden, disabled or degraded by a mark.** It marks; it does
+nothing else. Adding a key can never change what an account may do.
+
+**The flagged list is the owner's compliance judgment, not a guess to extend.**
+Do not add or remove a `risk` entry without being asked — say so in the report
+instead. The twelve entries and their notes came from the compliance handoff.
+
+- Colours: risk `#FF9F45` (amber), wip `#8FA0C9` (quiet slate). Deliberately none
+  of the three already carrying meaning — Premium gold `#EBCB74`, Max gem
+  `#B9F2FF`, market-watch blue `#5AC8FA`.
+- `SECTION_REVIEW` maps a nav row to a mark, the same shape as `SECTION_FEATURE`
+  and read in the same place in `Sidebar.tsx`; `TILE_REVIEW` does the same for a
+  Live Wall tile kind. Flagged features with no row of their own are marked at
+  their own control (the Ask VTS AI header, broker connections in Settings, the
+  Team chat tab, the news feed's footer, the funded AI read, the "Lead Trader"
+  badge preset, the Live Wall's share row).
+- **Developer Terminal ▸ Under Review** (`ad_review`, `AdminReviewList.tsx`)
+  lists every entry with its note and where it is marked. It is a **read of the
+  map and nothing else** — no state, no route, no stored copy — so it cannot fall
+  out of step with what the terminal actually draws.
+- **Gated on the reader's REAL roles**, like the "View as role" control. Previewing
+  as a member is for checking what a member reaches, not for hiding the owner's
+  own notes from the owner.
+- `legalCredentials` has no control anywhere: it records that Terms and Privacy
+  both describe broker credentials as read-only, which is false. It lives in the
+  map so the review list is complete.
 
 ## Identity — display names and email
 
@@ -2207,6 +2311,59 @@ required is what turns the next one into a compile error. Same for
 
 ## Teams (`teams/service.ts`) — hidden at launch, and no longer a trade boundary
 
+> ### It is called a PRIVATE GROUP everywhere a person reads it (2026-08)
+>
+> Compliance rename, driven by the owner opening a separate registered
+> investment advisory firm: "team" implies coordinated trading and members
+> advising each other, and VTS Terminal must not read as an advice business.
+> **Labels only. Never keys.** `trading_teams`, `user_teams`,
+> `user_team_members`, `user_team_invites`, `team_id`, `team-vitalis`, the
+> `teams` / `teamChat` feature keys, `TEAM_ONLY_SECTIONS`, `isDeskLead`, the
+> `my_team` / `ad_teams` screen keys and every route path and column are
+> **unchanged** — routing, in-app links and the `howto.<screen>` wording all
+> depend on them. Everything below this box still describes the real model; read
+> "team" in it as the internal name for a private group.
+>
+> | Where | Reads |
+> |---|---|
+> | The feature | Private Groups |
+> | One instance | your group |
+> | Sidebar row (`my_team`) | My Group |
+> | Admin section (`ad_teams`) | Groups |
+> | Chat tab / wall tile | Group chat / Group Chat |
+> | Shared boards | Shared with your group |
+> | Admin grant (Admin ▸ Users) | Private Groups |
+> | Seeded group (`team-vitalis`) | Vitalis Group |
+>
+> **Words to keep out of user-visible copy**: team, teammate, trading team,
+> shared desk, team book, "your desk" — and in this feature's copy specifically
+> also desk, book, network, community, club, collective, partners. Each carries a
+> meaning (a coordinated trading unit, a pooled position book, pooled capital, or
+> the legal category "investment club") that the rename exists to get away from.
+>
+> **Two collisions.** "Member" is already the baseline role *and* how the paid
+> tiers read, so write "someone in your group" or "group members", never a bare
+> "members". And **"the team" meaning VITALIS STAFF** — in the AI privacy copy,
+> the guardrail notice and the Privacy Policy — now says **"VTS staff"**: left as
+> "the team" it reads as the user's own group, i.e. that the people they trade
+> beside can read their AI conversations, which is false and alarming.
+>
+> **Two pieces of stored copy are repaired on boot**, not by migration, because
+> the code that knows the current wording is the only thing that should write it:
+> the seeded group's name (`SEEDED_GROUP_RENAMES` in `teams/service.ts`) and the
+> seeded chat/announcement bodies (`SEEDED_BODY_REWRITES` in
+> `chat/announcements.ts`). Both match on the **exact old string**, so anything
+> somebody has since renamed or edited is left alone. The built-in study games
+> mention it too, so `BAKED_IN_VERSION` was bumped to re-sync their content.
+>
+> **Historical patch notes are NOT rewritten** — they are a dated record, the
+> same precedent set when "portal" became "terminal". **`LEGAL_VERSION` was
+> deliberately NOT bumped** (owner decision): no obligation changed, only the
+> word for the feature, so nobody is re-prompted to accept. The substantive
+> correction still owed to those documents — they describe broker credentials as
+> read-only, which is false — is a separate job, and that is the one that should
+> move the effective date.
+
 A **trading team** is a group a user belongs to at most one of (`users.team_id`).
 Two owner decisions (2026-08) reshaped what a team *is*, and both matter more
 than anything else in this section:
@@ -2296,7 +2453,7 @@ of money or self-service switching obtains it.
   parse** in `features/service.ts`, not an `isFounder` import — `rbac.ts` already
   imports `DEFAULT_FEATURES` from there, so importing back would be a real cycle.
 - **Migration `0100` grandfathers everyone already on a team**, so the Vitalis
-  Trading Team and its members are unchanged on deploy.
+  Vitalis Group and its members are unchanged on deploy.
 - **The UI hides, it does not lock.** `TEAM_ONLY_SECTIONS` (`theme/nav.ts`) drops
   the row; `visibleTiles` (`tileCatalog.ts`) drops the Team Chat tile from the
   picker; the chat panel drops its Team tab on reason `unavailable`. This is the
@@ -2376,7 +2533,7 @@ act on the same team:
 
 - **Admin ▸ Teams** (`teams/service.ts`) — admins create teams, rename them, and
   assign/move members (`users.team_id`).
-- **My Terminal ▸ Trading Team** (`userTeams/service.ts`) — the self-service surface
+- **My Terminal ▸ My Group** (`userTeams/service.ts`) — the self-service surface
   over the **same** team the user is in. Membership is read straight from
   `users.team_id`; My-Terminal-only metadata is layered on top:
   - `user_teams` — one row per team naming its **leader** (`leaderId`).
@@ -2433,7 +2590,7 @@ trivially defeated by a space or a spelling and would give false assurance.
 
 A trader always removes their own. Beyond that it is a **team grant**: the
 **leader** holds it implicitly, and they can hand the **Delete trades**
-permission (`canDeleteTrades`, set from My Terminal ▸ Trading Team) to any member.
+permission (`canDeleteTrades`, set from My Terminal ▸ My Group) to any member.
 Admins keep their install-wide reach. `tradeDeleteScope(actor)` resolves this
 once per request into `{ any, ownerIds, others }`, which `removeTrade`,
 `removePosition` and `restoreDeleted` turn into the owner filter on their `WHERE`

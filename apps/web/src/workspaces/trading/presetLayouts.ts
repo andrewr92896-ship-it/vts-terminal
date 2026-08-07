@@ -114,12 +114,26 @@ export function buildPreset(
     yFor.set(band, cursor);
     cursor += Math.max(...kept.filter((t) => t.y === band).map((t) => t.h));
   }
-  return kept.map((t) => ({
+  return kept.map((t, i) => ({
     ...newTile(t.kind, { x: t.x, y: yFor.get(t.y) ?? t.y }),
     x: t.x,
     y: yFor.get(t.y) ?? t.y,
     w: t.w,
     h: t.h,
     ...(t.patch ?? {}),
+    // A DETERMINISTIC id, replacing the minted one. `newTile` numbers ids from a
+    // counter that keeps climbing for the life of the page, so applying the same
+    // built-in layout twice produced two sets of tiles that differed only in
+    // their ids. Two things break on that:
+    //
+    //  - an unsaved arrangement is kept per board and matched against the board
+    //    it was made on, so a layout that never compares equal to itself threw
+    //    the trader's edits away every time they left the screen; and
+    //  - React reconciles the grid by these ids, so a fresh set remounts every
+    //    tile — which reloads a TradingView chart on each visit.
+    //
+    // Index plus kind is enough: it is stable for a given reader, and it SHOULD
+    // change when the filtered set does, since that is a different board.
+    id: `${layout.key}-${i}-${t.kind}`,
   }));
 }

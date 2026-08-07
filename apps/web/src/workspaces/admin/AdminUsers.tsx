@@ -285,7 +285,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
         </div>
 
         <div style={{ marginTop: 14, maxWidth: isPhone ? '100%' : 320 }}>
-          <label style={fieldLabel}>{"Trading team"}</label>
+          <label style={fieldLabel}>{"Group"}</label>
           <TeamSelect value={teamId} onChange={setTeamId} teams={teams} />
         </div>
 
@@ -508,7 +508,7 @@ export function AdminUsers({ theme }: { theme: Theme }) {
 
               {/* Trading team assignment */}
               <div style={{ marginTop: 12, maxWidth: isPhone ? '100%' : 320 }}>
-                <div style={{ ...fieldLabel, marginBottom: 8 }}>Trading team</div>
+                <div style={{ ...fieldLabel, marginBottom: 8 }}>Group</div>
                 <TeamSelect
                   value={u.teamId ?? ''}
                   onChange={(v) => patch(u.id, { teamId: v || null })}
@@ -639,7 +639,7 @@ function TradingTeamsGrant({
       const r = await api.setTradingTeamsGrant(user.id, !user.tradingTeams);
       onChanged(r.users);
     } catch (e) {
-      onError(e instanceof ApiError ? e.message : 'Could not change Trading Teams access');
+      onError(e instanceof ApiError ? e.message : 'Could not change Private Groups access');
     } finally {
       setBusy(false);
     }
@@ -647,7 +647,7 @@ function TradingTeamsGrant({
 
   return (
     <div style={{ marginTop: 12 }}>
-      <div style={{ ...fieldLabel, marginBottom: 8 }}>Trading Teams</div>
+      <div style={{ ...fieldLabel, marginBottom: 8 }}>Private Groups</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: user.tradingTeams ? '#8fe3c0' : '#7e92c0' }}>
           {byRole
@@ -899,7 +899,7 @@ function TeamSelect({
   };
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled} style={selectStyle}>
-      <option value="">No team</option>
+      <option value="">No group</option>
       {teams.map((t) => (
         <option key={t.id} value={t.id}>
           {t.name}

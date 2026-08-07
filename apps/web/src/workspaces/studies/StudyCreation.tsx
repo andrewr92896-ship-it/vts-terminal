@@ -50,7 +50,7 @@ export function StudyCreation({
           {"Study Creation"}
         </h2>
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc' }}>
-          {"Build your team’s own study content."}
+          {"Build your own study content."}
         </p>
       </div>
 

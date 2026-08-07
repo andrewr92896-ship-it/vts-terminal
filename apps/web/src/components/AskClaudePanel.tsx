@@ -7,6 +7,7 @@ import { useAuth } from '../auth/AuthContext';
 import { hasEntitlement, tierOfFeature } from '../auth/access';
 import { UpgradeNotice } from './UpgradeNotice';
 import { TierMark } from './TierMark';
+import { ReviewMark } from './ReviewMark';
 import { GuardrailNotice, GuardrailPaused } from './GuardrailNotice';
 
 interface AskClaudePanelProps {
@@ -185,6 +186,7 @@ export function AskClaudePanel({
                 feature can say what it costs. Drawn for a Max member too — the
                 mark states a price, it is not a lock. */}
             <TierMark tier={tierOfFeature('ai', user?.access.membership)} size={12} />
+            <ReviewMark id="ai" size={12} />
             {workspaceLabel && <span style={{ fontSize: 11, color: '#7e92c0' }}>· {workspaceLabel}</span>}
             <span style={{ fontSize: 9.5, color: '#6f84b0', border: '1px solid #234584', borderRadius: 4, padding: '1px 6px', fontFamily: "'IBM Plex Mono', monospace" }}>VTS AI</span>
             {remaining != null && (
@@ -235,13 +237,13 @@ export function AskClaudePanel({
                 ))}
               </div>
               {/* Stated up front, not only after somebody trips a limit. Two
-                  facts, and the second matters as much as the first: the team can
-                  read these conversations, and the team cannot read your trading
+                  facts, and the second matters as much as the first: VTS staff can
+                  read these conversations, and they cannot read your trading
                   data. Saying only the first would be a warning; saying both is
                   the actual arrangement. */}
               <p style={privacyLine}>
                 VTS AI explains things — it can’t give financial or investment advice.
-                These conversations aren’t private and can be reviewed by the team.
+                These conversations aren’t private and can be reviewed by VTS staff.
                 Your trading data is separate: positions, results, balances and broker
                 keys are never read by administrators, and only a software developer
                 can reach them, only to keep them secure.

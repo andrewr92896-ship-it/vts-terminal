@@ -302,7 +302,7 @@ export function TeamChatTile({ tile, editing, onRemove }: TileProps) {
 
   return (
     <TileFrame
-      title={tile.title || 'Team Chat'}
+      title={tile.title || 'Group Chat'}
       icon="message-square"
       editing={editing}
       onRemove={onRemove}
@@ -310,7 +310,7 @@ export function TeamChatTile({ tile, editing, onRemove }: TileProps) {
     >
       {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
       {error && !data && <TileMessage tone="error">{error}</TileMessage>}
-      {data && !data.eligible && <TileMessage>{"Team chat is not available for this account."}</TileMessage>}
+      {data && !data.eligible && <TileMessage>{"Group chat is not available for this account."}</TileMessage>}
       {data && data.eligible && messages.length === 0 && <TileMessage>{"No messages yet."}</TileMessage>}
       {messages.map((m) => (
         <div key={m.id} style={msgRow}>

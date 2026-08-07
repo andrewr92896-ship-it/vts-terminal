@@ -91,7 +91,7 @@ export function TeamPositions({ trades, myUserId, currency, hideMoney, readOnly,
 
       {theirs.length > 0 && (
         <>
-          <GroupLabel>{sample ? 'Sample positions' : 'Your team'}</GroupLabel>
+          <GroupLabel>{sample ? 'Sample positions' : 'Your group'}</GroupLabel>
           {theirs.map((t) => (
             <PositionRow
               key={t.id}

@@ -79,10 +79,10 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-            {"Team Flashcards"}
+            {"Flashcard Sets"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            Build and edit your team’s own flashcard sets here — study them from the <strong>Flashcards</strong> section.
+            Build and edit your own flashcard sets here — study them from the <strong>Flashcards</strong> section.
           </p>
         </div>
         {!readOnly && sets.length > 0 && (
@@ -106,11 +106,11 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          {"Loading your team’s flashcard sets…"}
+          {"Loading your flashcard sets…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          {"Couldn’t load your team’s flashcard sets. Try again in a moment."}
+          {"Couldn’t load your flashcard sets. Try again in a moment."}
         </div>
       ) : sets.length === 0 ? (
         <div style={{ ...card(theme), textAlign: 'center' }}>
@@ -120,7 +120,7 @@ export function TeamFlashcards({ theme }: { theme: Theme }) {
           </div>
           <div style={{ fontSize: 12.5, color: muted, maxWidth: 440, margin: '0 auto', lineHeight: 1.55 }}>
             {readOnly
-              ? "A team builds its own flashcard sets here — typed in, AI-generated from a topic, or from an uploaded file."
+              ? "Flashcard sets are built here — typed in, AI-generated from a topic, or from an uploaded file."
               : "Build your first one: type the cards in, have AI generate them from a topic, or upload a text file of terms."}
           </div>
           {!readOnly && (

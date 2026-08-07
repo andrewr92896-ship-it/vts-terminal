@@ -253,7 +253,7 @@ export async function shareBoard(
     await db.update(tradingBoards).set({ sharedTeamId: null }).where(eq(tradingBoards.id, id));
     return;
   }
-  if (!teamId) throw new Error('You are not on a team yet');
+  if (!teamId) throw new Error('You are not in a group yet');
   // Strip the author's notes before it becomes visible to anyone else.
   await db
     .update(tradingBoards)
@@ -275,14 +275,14 @@ export async function copyTeamBoard(
   teamId: string | null,
   sourceId: string,
 ): Promise<TradingBoard> {
-  if (!teamId) throw new Error('You are not on a team yet');
+  if (!teamId) throw new Error('You are not in a group yet');
   const [row] = await db
     .select()
     .from(tradingBoards)
     .where(and(eq(tradingBoards.id, sourceId), eq(tradingBoards.sharedTeamId, teamId)));
   // Scoped on the team, so a board id from another desk cannot be copied by
   // guessing it — the row simply does not match.
-  if (!row) throw new Error('That layout is not shared with your team');
+  if (!row) throw new Error('That layout is not shared with your group');
   return createBoard(userId, {
     name: row.name.slice(0, 70),
     layout: shareableLayout(parseLayout(row.layout)),

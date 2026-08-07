@@ -14,7 +14,7 @@ export const DEMO_SEED_VERSION = 7;
 // activity) stays isolated from the real owner's team — otherwise the default
 // team-seeding would adopt the team-less demo into the owner's Vitalis team.
 export const DEMO_TEAM_ID = 'team-demo';
-export const DEMO_TEAM_NAME = 'Demo Team';
+export const DEMO_TEAM_NAME = 'Demo Group';
 
 // The roles the demo account holds: a plain member, so a reviewer sees every
 // standard workspace (Trading, Studies, My Terminal, Site Help) but never the

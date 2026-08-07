@@ -108,21 +108,21 @@ export function StudyGuidesLibrary({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-            {"Team Study Presentations"}
+            {"Study Presentations"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
-            {"Present your team’s slide-by-slide study presentations."}
+            {"Present your slide-by-slide study presentations."}
           </p>
         </div>
       </div>
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          {"Loading your team’s study guides…"}
+          {"Loading your study guides…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          {"Couldn’t load your team’s study guides. Try again in a moment."}
+          {"Couldn’t load your study guides. Try again in a moment."}
         </div>
       ) : (
         // The build tile closes the list, so an empty library still offers the
@@ -222,7 +222,7 @@ export function StudyGuideCreator({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: '#fff' }}>
-            {"Team Study Presentations"}
+            {"Study Presentations"}
           </h2>
           <p style={{ margin: '5px 0 0', fontSize: 12.5, color: muted }}>
             {"Build a slide-by-slide study presentation with VTS AI, or upload a presentation — then present it from Study Presentations."}
@@ -273,7 +273,7 @@ export function StudyGuideCreator({
         </div>
         <div style={{ fontSize: 12.5, color: muted, maxWidth: 460, margin: '0 auto', lineHeight: 1.55 }}>
           {readOnly
-            ? "A team builds study guides here by chatting with VTS AI to draft the slides, or by uploading a PowerPoint. They add screenshots, then present it from Study Guides."
+            ? "Study guides are built here by chatting with VTS AI to draft the slides, or by uploading a PowerPoint. Add screenshots, then present it from Study Guides."
             : "Describe what you want to teach and go back and forth with VTS AI to shape the slides — or upload a PowerPoint (export Google Slides as .pptx). Refine, drop in screenshots, then present it from Study Guides."}
         </div>
         {!readOnly && (

@@ -84,7 +84,7 @@ export function FundedManager({ showMoney, readOnly }: { showMoney: boolean; rea
           <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: MUTED }}>{"Accounts"}</div>
           <div style={{ fontSize: 11.5, color: FAINT, marginTop: 4 }}>
             {"Kept by hand — set the balance and place trades by typing them in or pasting a trade-history photo. “Track live trade” posts an open position to the Live Wall with OANDA-priced P/L (kept off the Trade Log and Live Brokers). Duplicates are skipped by time + profit."}
-            {data.accounts.some((a) => !a.isMine) && " Your teammates’ accounts are shown too; only they can change them."}
+            {data.accounts.some((a) => !a.isMine) && " Accounts belonging to others in your group are shown too; only they can change them."}
           </div>
         </div>
         {!readOnly && (

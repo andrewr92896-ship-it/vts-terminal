@@ -89,9 +89,9 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // while actually sending an order is the top tier. It also puts the
   // highest-liability surface in the terminal behind the highest tier.
   tradeDesk: 'max',
-  // Sharing a desk with other people, and the chat that goes with it. These two
-  // move together on purpose — a tier that let you build a team but not message
-  // it would be a feature that half-works.
+  // A private group with other people, and the chat that goes with it. These
+  // two move together on purpose — a tier that let you build a group but not
+  // message it would be a feature that half-works.
   teams: 'max',
   teamChat: 'max',
   // Adding your own YouTube channel to the Market News wall.
@@ -156,8 +156,8 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   ai: 'VTS AI',
   studyAsk: 'Study tutor chat',
   tradeDesk: 'Live Trades',
-  teams: 'Trading teams',
-  teamChat: 'Team chat',
+  teams: 'Private groups',
+  teamChat: 'Group chat',
   customStreams: 'Your own live streams',
   brokerConnections: 'Broker connections',
   pushover: 'Pushover notifications',
@@ -179,8 +179,8 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   ai: 'Ask VTS AI anywhere in the terminal.',
   studyAsk: 'Ask the study tutor your own questions about a question or term, and keep going.',
   tradeDesk: 'Place, close and amend real orders through your own broker.',
-  teams: 'Share a desk: one book, one leaderboard, one set of study content.',
-  teamChat: 'The private conversation with your desk.',
+  teams: 'A private group of a few people, with shared study content and chat.',
+  teamChat: 'The private conversation with your group.',
   customStreams: 'Add any YouTube channel to the live-stream wall.',
   brokerConnections: 'Connect OANDA and Kraken to stream your positions and balances.',
   pushover: 'Trade and alert notifications through Pushover, with your own sound.',

@@ -4,6 +4,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { usePrivacy } from '../../privacy/privacy';
 import { useAiBrief, BriefButton, BriefCard, BriefError } from '../../components/AiBrief';
+import { ReviewMark } from '../../components/ReviewMark';
 import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
 import { FundedLiveTrades } from './FundedLiveTrades';
 import { FundedPastTrades } from './FundedPastTrades';
@@ -105,12 +106,15 @@ export function FundedChallengeScreen() {
           </div>
           <div style={{ fontSize: 12, color: MUTED, marginTop: 6 }}>
             {theirs.length > 0
-              ? `Your desk’s prop-firm accounts — ${mine.length} of yours and ${theirs.length} of your teammates’. You can watch theirs; only they can change them.`
+              ? `Prop-firm accounts — ${mine.length} of yours and ${theirs.length} belonging to others in your group. You can watch theirs; only they can change them.`
               : 'Your prop-firm accounts — equity against target, and how much drawdown is left on each.'}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BriefButton onClick={ai.run} busy={ai.busy} accent={GOLD} accentText="#0c2768" />
+          {/* The AI read of a challenge is coaching on trading performance —
+              flagged for review, and visible only to founder level. */}
+          <ReviewMark id="metricsCoach" size={12} />
           <button onClick={() => setHideMoney((v) => !v)} style={ghostBtn}>{hideMoney ? 'Show $' : 'Hide $'}</button>
           {!readOnly && (
             <button onClick={() => void runList(api.addChallenge())} disabled={busy} style={{ ...goldBtn, opacity: busy ? 0.6 : 1 }}>

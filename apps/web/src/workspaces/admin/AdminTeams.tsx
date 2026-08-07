@@ -47,7 +47,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
     api
       .adminListTeams()
       .then((r) => alive && setTeams(r.teams))
-      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load teams'))
+      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load groups'))
       .finally(() => alive && setLoading(false));
     return () => {
       alive = false;
@@ -79,7 +79,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
       setTeams(r.teams);
       setNewName('');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not create the team.');
+      setError(e instanceof ApiError ? e.message : 'Could not create the group.');
     } finally {
       setBusy(false);
     }
@@ -96,7 +96,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
       setRenamingId(null);
       setRenameVal('');
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not rename the team.');
+      setError(e instanceof ApiError ? e.message : 'Could not rename the group.');
     } finally {
       setBusy(false);
     }
@@ -110,26 +110,26 @@ export function AdminTeams({ theme }: { theme: Theme }) {
       setTeams(r.teams);
       setConfirmDeleteId(null);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not delete the team.');
+      setError(e instanceof ApiError ? e.message : 'Could not delete the group.');
     } finally {
       setBusy(false);
     }
   }
 
-  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>{"Loading teams..."}</div>;
+  if (loading) return <div style={{ color: '#8ea3cc', padding: 20, fontSize: 13 }}>{"Loading groups..."}</div>;
   if (loadError) return <div style={{ color: '#ef5468', padding: 20, fontSize: 13 }}>{loadError}</div>;
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', color: '#dfe7fa' }}>
       <SectionHeader
-        title="Teams"
-        subtitle="Teams group traders into their own desk. The Studies leaderboard ranks a learner only against their team; the Trading workspace stays shared across every team. Expand a team to see its members and move anyone between teams."
+        title="Groups"
+        subtitle="A private group is a handful of people who share study content, chat and published Live Wall layouts. Expand one to see who is in it, and move anyone between groups."
       />
 
       <div style={panel(theme)}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {teams.length === 0 && (
-            <div style={{ fontSize: 12.5, color: '#8ea3cc' }}>{"No teams yet — add one below."}</div>
+            <div style={{ fontSize: 12.5, color: '#8ea3cc' }}>{"No groups yet — add one below."}</div>
           )}
           {teams.map((t) => {
             const expanded = expandedId === t.id;
@@ -196,7 +196,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
                           onClick={() => setConfirmDeleteId(t.id)}
                           disabled={busy}
                           style={ghostDangerBtn}
-                          title="Delete this team; its members become unassigned"
+                          title="Delete this group; everyone in it becomes unassigned"
                         >
                           Delete
                         </button>
@@ -208,7 +208,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
                 {expanded && (
                   <div style={{ borderTop: `1px solid ${theme.navBorder}`, padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {t.members.length === 0 ? (
-                      <div style={{ fontSize: 12, color: '#8ea3cc', padding: '4px 2px' }}>No members on this team yet.</div>
+                      <div style={{ fontSize: 12, color: '#8ea3cc', padding: '4px 2px' }}>Nobody in this group yet.</div>
                     ) : (
                       t.members.map((m) => (
                         <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '5px 4px' }}>
@@ -228,7 +228,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
                             {teams.map((opt) => (
                               <option key={opt.id} value={opt.id}>{opt.name}</option>
                             ))}
-                            <option value="">— No team —</option>
+                            <option value="">— No group —</option>
                           </select>
                         </div>
                       ))
@@ -242,7 +242,7 @@ export function AdminTeams({ theme }: { theme: Theme }) {
 
         {confirmDeleteId && (
           <div style={{ ...msgStyle(false), marginTop: 10 }}>
-            {"Deleting a team unassigns everyone on it (their data is untouched). This can't be undone."}
+            {"Deleting a group unassigns everyone in it (their data is untouched). This can't be undone."}
           </div>
         )}
 
@@ -257,11 +257,11 @@ export function AdminTeams({ theme }: { theme: Theme }) {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && add()}
-            placeholder="New team name"
+            placeholder="New group name"
             style={{ ...inputStyle, flex: '1 1 200px' }}
           />
           <button onClick={add} disabled={busy || !newName.trim()} style={primaryBtn(theme, accentGrad)}>
-            {"Add team"}
+            {"Add group"}
           </button>
         </div>
       </div>

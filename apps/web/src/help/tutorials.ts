@@ -52,7 +52,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Add a tile',
-        body: 'With a Premium membership, turn on Edit layout and use "Add a tile". Tiles are grouped by where their data comes from — Markets, Advanced Trading, My Terminal, Studies, Team. Every tile is listed, including ones your membership does not reach; those carry a star (Premium) or diamond (Max) so you can see what upgrading would add.',
+        body: 'With a Premium membership, turn on Edit layout and use "Add a tile". Tiles are grouped by where their data comes from — Markets, Advanced Trading, My Terminal, Studies, Group. Every tile is listed, including ones your membership does not reach; those carry a star (Premium) or diamond (Max) so you can see what upgrading would add.',
       },
       {
         title: 'Arrange and save',
@@ -194,7 +194,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
 
   tradedesk: {
     title: 'Live Trades',
-    intro: 'Where you place a trade. The ticket on the left sends the order to your own connected broker account; the panel beside it shows every position your team currently has open, so you size a trade knowing what the desk already holds.',
+    intro: 'Where you place a trade. The ticket on the left sends the order to your own connected broker account; the panel beside it shows every position your group currently has open, so you size a trade knowing what the desk already holds.',
     steps: [
       {
         title: 'Connect your account',
@@ -214,7 +214,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'The desk’s open book',
-        body: 'Every position on your team, yours and your teammates’, with entry, current price and open P/L. Click any instrument to load it into the ticket. Your own positions carry Close and Stop/Target controls; teammates’ are watch-only — the desk never trades someone else’s account.',
+        body: 'Every position across your group, yours and everyone else’s, with entry, current price and open P/L. Click any instrument to load it into the ticket. Your own positions carry Close and Stop/Target controls; everyone else’s are watch-only — the desk never trades someone else’s account.',
       },
       {
         title: 'Working orders and the journal',
@@ -275,15 +275,15 @@ export const TUTORIALS: Record<string, Tutorial> = {
 
   td_trading: {
     title: 'Trading To-Do',
-    intro: 'Your trading tasks and reminders, shared with your team.',
+    intro: 'Your trading tasks and reminders, shared with your group.',
     steps: [
       {
         title: 'Add a trading task',
         body: 'Type a task in the box and click Add. It is filed under Vitalis Trading.',
       },
       {
-        title: 'Shared with your team',
-        body: 'These tasks are the shared Vitalis Trading list, so anything you add here is visible to your team.',
+        title: 'Shared with your group',
+        body: 'These tasks are the shared Vitalis Trading list, so anything you add here is visible to your group.',
       },
       {
         title: 'Check things off',
@@ -295,11 +295,11 @@ export const TUTORIALS: Record<string, Tutorial> = {
   // ---- Studies ----
   st_game: {
     title: 'Study Game',
-    intro: 'Pick one of your team’s study games to play — answer questions, level up as you go, and climb your team’s leaderboard.',
+    intro: 'Pick one of your study games to play — answer questions, level up as you go, and climb the leaderboard.',
     steps: [
       {
         title: 'Pick a game to play',
-        body: 'The Study Game section lists your team’s study games (built in Study Creation). Tap Play on one to start; use “‹ All study games” to come back and switch games.',
+        body: 'The Study Game section lists your study games (built in Study Creation). Tap Play on one to start; use “‹ All study games” to come back and switch games.',
       },
       {
         title: 'Answer the question',
@@ -315,13 +315,13 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Leaderboard & reset',
-        body: 'Flip to the Leaderboard tab to see how your team stacks up. “Reset” banks your current run to the leaderboard as a past run, then clears your level and score to start fresh — your best level ever reached is kept.',
+        body: 'Flip to the Leaderboard tab to see how you stack up. “Reset” banks your current run to the leaderboard as a past run, then clears your level and score to start fresh — your best level ever reached is kept.',
       },
     ],
   },
   st_test: {
     title: 'Practice Tests',
-    intro: 'Sit a graded practice test drawn from one of your team’s study games.',
+    intro: 'Sit a graded practice test drawn from one of your study games.',
     steps: [
       {
         title: 'Pick a game and set it up',
@@ -335,7 +335,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
   st_progress: {
     title: 'Progress',
-    intro: 'A snapshot of how you are doing on any of your team’s study games.',
+    intro: 'A snapshot of how you are doing on any of your study games.',
     steps: [
       {
         title: 'Pick a game',
@@ -363,7 +363,7 @@ export const TUTORIALS: Record<string, Tutorial> = {
       },
       {
         title: 'Choose the right role',
-        body: 'Every signed-in user is a Member with full access to Trading, Studies, My Terminal, and Site Help. Add Admin for user and team management, and Funded to reveal the private prop-challenge section in Trading. Founder / Software Developer (Developer Terminal) are granted only by the owner.',
+        body: 'Every signed-in user is a Member with full access to Trading, Studies, My Terminal, and Site Help. Add Admin for user and group management, and Funded to reveal the private prop-challenge section in Trading. Founder / Software Developer (Developer Terminal) are granted only by the owner.',
       },
       {
         title: 'Manage existing users',

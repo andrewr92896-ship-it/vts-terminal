@@ -56,7 +56,7 @@ async function studiesDeleteMode(me: { id: string; roles: string | null }): Prom
   if (ctx) return ctx.isLeader ? 'any' : 'none';
   return 'own';
 }
-const NOT_LEADER_MSG = 'Only your Trading Team leader can delete team study content.';
+const NOT_LEADER_MSG = 'Only your group leader can delete shared study content.';
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });

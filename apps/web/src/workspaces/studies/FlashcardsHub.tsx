@@ -61,17 +61,17 @@ export function FlashcardsHub({ theme, onNavigate }: { theme: Theme; onNavigate:
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', margin: '0 0 10px' }}>
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#fff' }}>
-          {"Your team’s flashcard sets"}
+          {"Your flashcard sets"}
         </h3>
       </div>
 
       {loading ? (
         <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
-          {"Loading your team’s flashcard sets…"}
+          {"Loading your flashcard sets…"}
         </div>
       ) : loadError ? (
         <div style={{ ...card(theme), color: '#ffb4ab', fontSize: 13 }}>
-          {"Couldn’t load your team’s flashcard sets. Try again in a moment."}
+          {"Couldn’t load your flashcard sets. Try again in a moment."}
         </div>
       ) : (
         // The create tile closes the grid, so an empty launcher still offers the

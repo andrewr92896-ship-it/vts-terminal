@@ -45,7 +45,7 @@ export const NAV: NavWorkspace[] = [
       // working — the same reason `desk` stayed `desk`.
       { key: 'live', label: 'Live Wall', icon: 'zap' },
       // Max.
-      { key: 'my_team', label: 'Trading Team', icon: 'users' },
+      { key: 'my_team', label: 'My Group', icon: 'users' },
       // Premium — the series board. The economic calendar and the FOMC
       // countdown on that same screen stay free. Market News left for the News
       // workspace; Market Data stayed, because it is a board of rates and prices
@@ -224,7 +224,7 @@ export const NAV: NavWorkspace[] = [
       // Sits beside the log and the guidelines because it is the same job:
       // what has happened, and what is waiting on somebody.
       { key: 'ad_rules', label: 'Rule Breaking', icon: 'shield' },
-      { key: 'ad_teams', label: 'Teams', icon: 'building-2' },
+      { key: 'ad_teams', label: 'Groups', icon: 'building-2' },
       { key: 'ad_badges', label: 'Badges', icon: 'star' },
       { key: 'ad_templates', label: 'Message Templates', icon: 'message-square' },
       { key: 'ad_notes', label: 'Patch Notes', icon: 'file-text' },
@@ -256,6 +256,10 @@ export const NAV: NavWorkspace[] = [
       // sidebar's order — workspaces and the sections within each — and the only
       // way to change it is to edit it here and deploy. Owner decision, 2026-08.)
       { key: 'ad_suggestions', label: 'Suggestions', icon: 'lightbulb' },
+      // Everything the terminal carries a status mark on, in one list — the
+      // other half of marks that are otherwise scattered beside the features
+      // they describe. A read of auth/reviewMarks.ts; it stores nothing.
+      { key: 'ad_review', label: 'Under Review', icon: 'alert-triangle' },
       // (There is deliberately no "View as role" row. It lives in the account
       // menu instead — owner decision, 2026-08: previewing as Member hides this
       // very workspace, so a control for leaving the preview cannot live inside

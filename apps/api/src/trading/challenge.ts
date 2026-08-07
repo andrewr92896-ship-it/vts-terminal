@@ -38,7 +38,7 @@ export interface ChallengeMetrics {
 export interface ChallengeData {
   id: string;
   ownerId: string;
-  owner: string; // the owning trader's display name, shown on a teammate's card
+  owner: string; // the owning trader's display name, shown on somebody else's card
   isMine: boolean; // the viewer owns it, so may edit it
   label: string;
   trailing: boolean;

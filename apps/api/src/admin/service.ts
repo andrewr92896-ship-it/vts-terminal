@@ -208,7 +208,7 @@ async function cleanBadges(badges: string[]): Promise<string[]> {
 // id must reference an existing team. Returns the normalized value to store.
 async function resolveTeamId(teamId: string | null): Promise<string | null> {
   if (teamId == null) return null;
-  if (!(await teamExists(teamId))) throw new AdminError('That team no longer exists');
+  if (!(await teamExists(teamId))) throw new AdminError('That group no longer exists');
   return teamId;
 }
 

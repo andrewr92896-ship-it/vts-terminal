@@ -72,7 +72,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
 
   app.post('/api/my-portal/team', team, async (request, reply) => {
     const parsed = nameSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'A team name is required' });
+    if (!parsed.success) return reply.code(400).send({ error: 'A group name is required' });
     try {
       const team = await createTeam(request.currentUser!.id, parsed.data.name);
       return { team };
@@ -83,7 +83,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
 
   app.post('/api/my-portal/team/rename', team, async (request, reply) => {
     const parsed = nameSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'A team name is required' });
+    if (!parsed.success) return reply.code(400).send({ error: 'A group name is required' });
     try {
       const team = await renameTeam(request.currentUser!.id, parsed.data.name);
       return { team };
@@ -96,7 +96,7 @@ export async function userTeamRoutes(app: FastifyInstance) {
     const parsed = inviteSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Enter a username to invite' });
     const ctx = await getUserTeamContext(request.currentUser!.id);
-    if (!ctx) return reply.code(400).send({ error: 'Create a Trading Team first' });
+    if (!ctx) return reply.code(400).send({ error: 'Create a group first' });
     try {
       const team = await inviteByUsername(request.currentUser!.id, ctx.teamId, parsed.data.username);
       return { team };

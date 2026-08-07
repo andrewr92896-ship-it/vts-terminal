@@ -28,7 +28,7 @@ export const BAKED_IN_SOURCE = 'baked_in';
 // Bump whenever the CONTENT of a baked-in game below changes, so the next deploy
 // re-syncs every team's copy to match. Creating a fresh copy for a team that
 // lacks one does not need a bump.
-export const BAKED_IN_VERSION = 3;
+export const BAKED_IN_VERSION = 4;
 
 // Where the last-applied content version is remembered (app_settings key).
 const VERSION_KEY = 'seed.bakedInGames.version';
@@ -427,37 +427,37 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
       topic: 'Playing',
       stem: 'What is a Study Game on this terminal?',
       options: [
-        { label: 'A', text: 'A quiz your team builds and plays together' },
+        { label: 'A', text: 'A quiz you build and play' },
         { label: 'B', text: 'A single-player arcade game' },
         { label: 'C', text: 'A live trading simulator' },
         { label: 'D', text: 'A pre-recorded video course' },
       ],
       answer: 'A',
-      explanation: 'Every study game is a quiz your team creates — there’s no hardcoded subject.',
+      explanation: 'Every study game is a quiz somebody here creates — there’s no hardcoded subject.',
     },
     {
       topic: 'Playing',
       stem: 'Where do a Study Game’s questions come from?',
       options: [
-        { label: 'A', text: 'Your team makes them — typed in, AI-generated, or uploaded' },
+        { label: 'A', text: 'You make them — typed in, AI-generated, or uploaded' },
         { label: 'B', text: 'They are built into the app' },
         { label: 'C', text: 'They come from the market news feed' },
         { label: 'D', text: 'Random internet trivia' },
       ],
       answer: 'A',
-      explanation: 'All study content is team-built. (This built-in example is the one exception, to show you how it works.)',
+      explanation: 'All study content is built by the people who use it. (This built-in example is the one exception, to show you how it works.)',
     },
     {
       topic: 'Playing',
-      stem: 'Who can see and play your team’s Study Games?',
+      stem: 'Who can see and play the Study Games you build?',
       options: [
-        { label: 'A', text: 'Your team — study content is scoped to your team' },
+        { label: 'A', text: 'You, and your private group if you are in one' },
         { label: 'B', text: 'Everyone on the whole platform' },
         { label: 'C', text: 'Only admins' },
         { label: 'D', text: 'The general public' },
       ],
       answer: 'A',
-      explanation: 'A team only ever sees its own games, flashcards, and guides.',
+      explanation: 'Study content stays with whoever it belongs to — you, or your group.',
     },
     {
       topic: 'Playing',
@@ -465,7 +465,7 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
       options: [
         { label: 'A', text: 'As a graded Test Mode and as a Progress summary' },
         { label: 'B', text: 'As a live-trading mode' },
-        { label: 'C', text: 'As a team chat room' },
+        { label: 'C', text: 'As a group chat room' },
         { label: 'D', text: 'As a broker connection' },
       ],
       answer: 'A',
@@ -551,7 +551,7 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
       options: [
         { label: 'A', text: 'Recolors live to match your current level' },
         { label: 'B', text: 'Locks you out until tomorrow' },
-        { label: 'C', text: 'Resets your team' },
+        { label: 'C', text: 'Resets your group' },
         { label: 'D', text: 'Turns the sound off' },
       ],
       answer: 'A',
@@ -566,7 +566,7 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
         { label: 'A', text: 'A run of consecutive correct answers' },
         { label: 'B', text: 'How many days in a row you log in' },
         { label: 'C', text: 'Your total number of questions' },
-        { label: 'D', text: 'Your rank on the team' },
+        { label: 'D', text: 'Your rank on the leaderboard' },
       ],
       answer: 'A',
       explanation: 'A streak counts how many correct answers you’ve gotten in a row.',
@@ -601,7 +601,7 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
       options: [
         { label: 'A', text: 'Makes each correct answer count for more toward your level' },
         { label: 'B', text: 'Pays out real money' },
-        { label: 'C', text: 'Unlocks other teams’ games' },
+        { label: 'C', text: 'Unlocks other people’s games' },
         { label: 'D', text: 'Changes the questions' },
       ],
       answer: 'A',
@@ -611,13 +611,13 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
       topic: 'Streaks & Scoring',
       stem: 'On a Study Game leaderboard, who are you ranked against?',
       options: [
-        { label: 'A', text: 'Your own team' },
+        { label: 'A', text: 'Everyone playing the same built-in game' },
         { label: 'B', text: 'The entire platform' },
         { label: 'C', text: 'Random strangers' },
         { label: 'D', text: 'Only yourself' },
       ],
       answer: 'A',
-      explanation: 'Leaderboards are scoped to your team.',
+      explanation: 'The built-in games have one public leaderboard across the whole platform. Games you build have none.',
     },
 
     // ---- Building & Studying ----
@@ -651,7 +651,7 @@ const HOW_STUDY_GAMES_WORK: BakedGame = {
       options: [
         { label: 'A', text: 'Studying term/definition cards with an auto-rotating player' },
         { label: 'B', text: 'Placing trades' },
-        { label: 'C', text: 'Sending team chat messages' },
+        { label: 'C', text: 'Sending group chat messages' },
         { label: 'D', text: 'Scheduling trading sessions' },
       ],
       answer: 'A',
@@ -753,7 +753,7 @@ const VTS_PORTAL_101: BakedGame = {
         { label: 'D', text: 'Strategy Sessions' },
       ],
       answer: 'A',
-      explanation: 'The Live Wall streams your team’s open positions.',
+      explanation: 'The Live Wall streams your open positions.',
     },
     {
       topic: 'Trading Workspace',
@@ -773,7 +773,7 @@ const VTS_PORTAL_101: BakedGame = {
       options: [
         { label: 'A', text: 'Named trading windows with a bias and a weekly schedule' },
         { label: 'B', text: 'Study quizzes' },
-        { label: 'C', text: 'Team chat rooms' },
+        { label: 'C', text: 'Group chat rooms' },
         { label: 'D', text: 'Broker fee tiers' },
       ],
       answer: 'A',
@@ -809,13 +809,13 @@ const VTS_PORTAL_101: BakedGame = {
       topic: 'Studies Workspace',
       stem: 'What lives in the Studies workspace?',
       options: [
-        { label: 'A', text: 'Team-built study games, flashcards, practice tests, and guides' },
+        { label: 'A', text: 'Study games, flashcards, practice tests, and guides you build' },
         { label: 'B', text: 'Live trades and broker keys' },
         { label: 'C', text: 'User management tools' },
         { label: 'D', text: 'The economic calendar' },
       ],
       answer: 'A',
-      explanation: 'Studies holds your team’s games, flashcard sets, practice tests, and study presentations.',
+      explanation: 'Studies holds your games, flashcard sets, practice tests, and study presentations.',
     },
     {
       topic: 'Studies Workspace',
@@ -833,9 +833,9 @@ const VTS_PORTAL_101: BakedGame = {
       topic: 'Studies Workspace',
       stem: 'What does the “Practice Tests” section do?',
       options: [
-        { label: 'A', text: 'Lets you take a graded test drawn from your team’s study games' },
+        { label: 'A', text: 'Lets you take a graded test drawn from your study games' },
         { label: 'B', text: 'Places practice trades' },
-        { label: 'C', text: 'Opens a team chat' },
+        { label: 'C', text: 'Opens a group chat' },
         { label: 'D', text: 'Plays training videos' },
       ],
       answer: 'A',
@@ -889,19 +889,19 @@ const VTS_PORTAL_101: BakedGame = {
         { label: 'D', text: 'Market News' },
       ],
       answer: 'A',
-      explanation: 'My Terminal holds your Trading Team, Preferences, and Settings.',
+      explanation: 'My Terminal holds My Group, Preferences, and Settings.',
     },
     {
       topic: 'Help & Account',
-      stem: 'What is a “Trading Team”?',
+      stem: 'What is a “private group”?',
       options: [
-        { label: 'A', text: 'A group you belong to that scopes your trades, chat, and study leaderboards' },
+        { label: 'A', text: 'A few people who share study content, chat, and published Live Wall layouts' },
         { label: 'B', text: 'A paid subscription tier' },
         { label: 'C', text: 'A type of trade order' },
         { label: 'D', text: 'A news source' },
       ],
       answer: 'A',
-      explanation: 'Teams scope trade data, team chat, and Studies leaderboards to your teammates.',
+      explanation: 'A private group is a handful of people sharing study content, group chat and published Live Wall layouts.',
     },
     {
       topic: 'Help & Account',

@@ -98,7 +98,7 @@ export function GuardrailNotice({
       {error && <div style={{ fontSize: 11.5, color: '#ffb4ab', marginTop: 8 }}>{error}</div>}
 
       <p style={fine}>
-        Conversations with VTS AI aren’t private — the team can review them. Your
+        Conversations with VTS AI aren’t private — VTS staff can review them. Your
         trading data is separate: positions, results, balances and broker keys are
         never read by administrators, and only a software developer can reach them,
         only to keep them secure.

@@ -4,6 +4,8 @@ import type { MembershipTier } from '../api/types';
 import { NAV, navFor, FUNDED_ONLY_SECTIONS, TEAM_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
 import { SECTION_FEATURE, WORKSPACE_FEATURE, tierForKey } from '../auth/access';
+import { SECTION_REVIEW, type ReviewKey } from '../auth/reviewMarks';
+import { ReviewMark } from './ReviewMark';
 import { useAuth } from '../auth/AuthContext';
 import { APP_VERSION } from '../meta/version';
 import { Icon } from './Icon';
@@ -194,6 +196,9 @@ export function Sidebar(props: SidebarProps) {
               // so the nav says what each part costs rather than looking
               // identical to a free account's.
               tier={tierForKey(s.key, SECTION_FEATURE, membership)}
+              // Beside the tier mark, never instead of it: a row can both cost
+              // something and be unfinished, and each is worth saying.
+              review={SECTION_REVIEW[s.key]}
               dot={sectionDots?.has(s.key)}
               onClick={() => onSelectScreen(s.key)}
             />
@@ -322,6 +327,7 @@ function NavRow({
   count,
   accent,
   tier,
+  review,
   collapsed,
   dot,
   locked,
@@ -338,6 +344,9 @@ function NavRow({
   // row WITHOUT recolouring it — the workspace accent still signals where you
   // are, which is what the accent is for.
   tier?: MembershipTier | null;
+  // The status mark this row carries, if any — see auth/reviewMarks.ts. Drawn
+  // NEXT TO the tier mark rather than in place of it.
+  review?: ReviewKey;
   collapsed: boolean;
   dot?: boolean;
   // A workspace the user hasn't opted into: dimmed, with a padlock in place of
@@ -416,6 +425,7 @@ function NavRow({
           member still wants to see which parts of the terminal are paid. Shared
           with the Market News rail so a star means one thing terminal-wide. */}
       {!collapsed && <TierMark tier={tier} dim={locked} />}
+      {!collapsed && review && <ReviewMark id={review} size={12} />}
       {!collapsed && locked && <Icon name="lock" size={12} color={C.faint} />}
       {!collapsed && dot && <BlinkDot />}
       {!collapsed && count != null && (

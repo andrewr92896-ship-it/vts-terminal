@@ -4,6 +4,8 @@ import { useAuth } from '../../../auth/AuthContext';
 import { hasEntitlement, tierOfFeature } from '../../../auth/access';
 import { Icon } from '../../../components/Icon';
 import { TierMark } from '../../../components/TierMark';
+import { ReviewMark } from '../../../components/ReviewMark';
+import { TILE_REVIEW } from '../../../auth/reviewMarks';
 import type { BoardTileKind } from '../../../api/types';
 import { TILE_GROUPS, tileLock, visibleTiles, type TileDef, type TileGroup } from '../tileCatalog';
 import { BORDER2, FAINT, GOLD, MUTED, TEXT } from '../tvChart';
@@ -205,6 +207,7 @@ function TileRow({
           ) : lockKind === 'optIn' ? (
             <Icon name="lock" size={10} color={FAINT} />
           ) : null}
+          {TILE_REVIEW[def.kind] && <ReviewMark id={TILE_REVIEW[def.kind]!} size={11} />}
         </span>
         <span style={{ display: 'block', fontSize: 10.5, color: FAINT, lineHeight: 1.45, marginTop: 2 }}>
           {def.blurb}

@@ -62,7 +62,7 @@ const GUARDRAIL_DEF = [
 // Everything a user reads about what is and is not private, in one place so the
 // disclaimers on the panel, the warning card and the rules page cannot drift.
 export const AI_PRIVACY_NOTICE =
-  'Conversations with VTS AI are not private — they can be reviewed by the team, and a conversation that trips the financial-advice limits is recorded for review. Your trading data is a separate matter: your positions, results, balances and broker keys are never read by administrators, and only a software developer can reach them, only to keep them secure.';
+  'Conversations with VTS AI are not private — they can be reviewed by VTS staff, and a conversation that trips the financial-advice limits is recorded for review. Your trading data is a separate matter: your positions, results, balances and broker keys are never read by administrators, and only a software developer can reach them, only to keep them secure.';
 
 /**
  * Compose the guardrails and the terminal-wide response style onto one feature's

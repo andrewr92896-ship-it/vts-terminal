@@ -18,7 +18,7 @@ export const TILE_GROUPS: { key: TileGroup; label: string }[] = [
   { key: 'desk', label: 'Advanced Trading' },
   { key: 'personal', label: 'My Terminal' },
   { key: 'studies', label: 'Studies' },
-  { key: 'team', label: 'Team' },
+  { key: 'team', label: 'Group' },
 ];
 
 export interface TileDef {
@@ -366,7 +366,7 @@ export const TILE_CATALOG: TileDef[] = [
     label: 'Study Leaderboard',
     group: 'studies',
     icon: 'trophy',
-    blurb: 'Where your team stands on a study game.',
+    blurb: 'Where your group stands on a study game.',
     feature: null,
     w: 4,
     h: 10,
@@ -376,10 +376,10 @@ export const TILE_CATALOG: TileDef[] = [
   // ---- Team ----
   {
     kind: 'teamchat',
-    label: 'Team Chat',
+    label: 'Group Chat',
     group: 'team',
     icon: 'message-square',
-    blurb: 'The latest messages from your desk.',
+    blurb: 'The latest messages from your group.',
     feature: 'teamChat',
     w: 4,
     h: 12,

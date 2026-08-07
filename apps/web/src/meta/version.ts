@@ -11,9 +11,27 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.84';
+export const APP_VERSION = 'Beta V 6.86';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.86',
+    date: 'August 7, 2026',
+    notes: [
+      'Trading teams are now called private groups, everywhere they appear. The sidebar row is My Group, team chat is group chat, and a shared layout reads “Shared with your group”. Nothing about how they work has changed — the same people, the same access, the same private conversation.',
+      'The Terms of Service and Privacy Policy use the new wording too. No obligation changed, so there is nothing to re-accept.',
+    ],
+  },
+  {
+    version: 'Beta V 6.85',
+    date: 'August 7, 2026',
+    notes: [
+      'An unfinished Live Wall arrangement is now kept. Move some tiles, go and look at something else, come back tomorrow — the board is exactly as you left it, marked “Unsaved changes”, with Load layout to go back to the saved version and Save layout to keep it.',
+      'Everything you can do to the open preset — rename, set default, share, save, save as new, delete — now sits behind one Preset Settings menu while editing, instead of a row of buttons above the board.',
+      'The default layouts every account starts on can be arranged on the wall itself and published from there, rather than typed in as numbers.',
+      'Parts of the terminal that are still being built before launch now carry a small marker beside their name.',
+    ],
+  },
   {
     version: 'Beta V 6.84',
     date: 'August 6, 2026',
