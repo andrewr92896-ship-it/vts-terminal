@@ -1266,6 +1266,50 @@ workspaces list** (see `theme/nav.ts` order).
     - The Live Wall's leaderboard tile lists **only built-in games** in its
       picker, for the same reason the tab hides — every other option would sit in
       front of an endpoint that 404s.
+  - **A game's categories can carry WEIGHTS — the exam blueprint**
+    (`studyDecks.category_weights`, migration `0111`; math in
+    `workspaces/studies/examWeights.ts`). A category list said which topics a
+    game covered and never that the exam behind it gives them **different shares
+    of the paper** — the Series 65 devotes a set percentage to each area — so a
+    raw "18 of 20" on a sample that drew eight questions from one easy area was
+    not the score that exam would give. Set from the game editor's Categories
+    card ("Weight categories for scoring"); **null means unweighted**, which is
+    every game that predates this and is deliberately *not* the same as every
+    weight being zero.
+    - **The weights do TWO separate things, and merging them is the mistake.**
+      They compose the **draw** (a 20-question sitting on a 15% category takes
+      about three from it — `allocateDraw`, highest-averages so a category that
+      cannot supply its share hands the rest to whoever is next most
+      under-served, capped by what the deck actually holds, always summing to
+      the test length), and they compute the **score** (each category's accuracy
+      times its share). The score does **not** depend on how many questions were
+      drawn — four of five right in a 15% area is worth 15% × 80% whether the
+      draw took five questions or fifty. The draw only decides how *precise*
+      each estimate is.
+    - **An uncovered category is rescaled OUT, never scored zero**, and named on
+      the result. Scoring a category the learner was never asked about as zero
+      marks them down for questions that were not on their paper — on a short
+      sitting that is most of the exam, and the number would read as a real
+      result while being nothing of the kind. Same family of rule as Market
+      Data's `sample: true` and the Live Wall's `unavailable`: **a figure that
+      could not be measured must never be reported as a measured one.**
+    - **Weights are stored RAW and normalized on read.** Nothing forces them to
+      total 100 — a total half-typed must not block a save — so a list totalling
+      95 still scores correctly, and a category renamed or removed cannot leave
+      a weight behind that still counts toward the denominator (`resolveWeights`
+      re-filters against the category list on **every** category change, not
+      only when weights are the thing being patched).
+    - **The choice is per sitting**: the Practice Test intro offers weighted or
+      plain scoring, and only when the game carries usable weights. Both scores
+      are shown at the end whichever was chosen — the gap between them says the
+      sample was kinder or harsher than the exam's own mix, which is the one
+      thing a plain percentage cannot tell you. A **merged** game is deliberately
+      unweighted however its sources were: two blueprints do not add up to a
+      third.
+    - The Study Game player, Progress and the leaderboards are **untouched** and
+      stay on raw accuracy. The public board spans every copy of a built-in game
+      (`leaderboardDeckIds`), and those copies could carry different weights, so
+      a weighted board would rank people against different papers.
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.

@@ -1309,13 +1309,15 @@ export const api = {
   studyDeck(id: string): Promise<{ deck: TeamDeckDetail }> {
     return request(`/api/studies/decks/${encodeURIComponent(id)}`);
   },
-  // Edit a study game: rename, replace its questions, and/or set its categories.
+  // Edit a study game: rename, replace its questions, and/or set its categories
+  // and their scoring weights (null turns weighting off; omitting leaves it).
   updateStudyDeck(
     id: string,
     patch: {
       name?: string;
       description?: string | null;
       categories?: string[];
+      categoryWeights?: Record<string, number> | null;
       questions?: {
         topic: string;
         stem: string;

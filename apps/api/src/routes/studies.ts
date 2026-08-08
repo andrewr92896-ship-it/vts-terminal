@@ -160,9 +160,23 @@ const deckUpdateSchema = z
     name: z.string().trim().min(1).max(120).optional(),
     description: z.string().trim().max(500).nullable().optional(),
     categories: z.array(z.string().trim().min(1).max(60)).max(60).optional(),
+    // What each category is worth when the practice test is scored the way the
+    // real exam is. `null` turns weighting off; omitting it leaves it as it is.
+    // Weights are stored as typed and normalized on read, so they need no
+    // "must total 100" rule here — a total the author has not finished typing
+    // must not be a 400.
+    categoryWeights: z.record(z.string().trim().min(1).max(60), z.number().min(0).max(100)).nullable().optional(),
     questions: z.array(deckEditQuestionSchema).max(1000).optional(),
   })
-  .refine((v) => v.name !== undefined || v.description !== undefined || v.categories !== undefined || v.questions !== undefined, 'Nothing to update');
+  .refine(
+    (v) =>
+      v.name !== undefined ||
+      v.description !== undefined ||
+      v.categories !== undefined ||
+      v.categoryWeights !== undefined ||
+      v.questions !== undefined,
+    'Nothing to update',
+  );
 // Combining games: a new game with every question from the chosen games.
 const deckMergeSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -468,6 +482,7 @@ export async function studiesRoutes(app: FastifyInstance) {
       name: parsed.data.name,
       description: parsed.data.description,
       categories: parsed.data.categories,
+      categoryWeights: parsed.data.categoryWeights,
       questions: parsed.data.questions?.map((q) => ({
         topic: q.topic,
         stem: q.stem,
