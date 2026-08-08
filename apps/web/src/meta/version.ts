@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.87';
+export const APP_VERSION = 'Beta V 6.88';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.88',
+    date: 'August 8, 2026',
+    notes: [
+      'The Progress screen now shows a weighted score for any study game that has category weights, beside your lifetime accuracy — the same answers scored against the exam’s own mix, so practice that has been heavy on one area no longer reads as mastery of the whole paper.',
+      'Its category breakdown shows what each area is worth and what it has contributed, and a “Where the marks are going” list ranks the areas costing you the most. An area you have not practised at all is named and left out of the score rather than counted as zero.',
+    ],
+  },
   {
     version: 'Beta V 6.87',
     date: 'August 8, 2026',

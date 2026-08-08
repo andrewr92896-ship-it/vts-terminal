@@ -1306,8 +1306,23 @@ workspaces list** (see `theme/nav.ts` order).
       thing a plain percentage cannot tell you. A **merged** game is deliberately
       unweighted however its sources were: two blueprints do not add up to a
       third.
-    - The Study Game player, Progress and the leaderboards are **untouched** and
-      stay on raw accuracy. The public board spans every copy of a built-in game
+    - **Progress shows the weighted score too**, beside the lifetime accuracy,
+      for any weighted game. Playing does not draw to the blueprint the way a
+      test does, so this is the figure that says what the exam would give for
+      the understanding shown so far however lopsided the practice was — on a
+      book of practice heavy in one easy area it reads far below the plain
+      accuracy, which is the whole point of it being there.
+      - It is **lifetime**, from `cats[c].correct/answered`, because it sits
+        beside the Lifetime accuracy card and must be measured over the same
+        answers. So the weighted breakdown **restates each category on that same
+        lifetime basis** rather than the 100-answer window the plain bars use —
+        a breakdown that cannot reconcile with the headline above it is worse
+        than no breakdown. An **unweighted** game's bars are untouched.
+      - `sum(pointsEarned) === score` and the covered categories'
+        `sum(pointsAvailable) === 100` are the invariants that make it
+        reconcile; they hold by construction in `weightedResult`.
+    - The Study Game **player** and the **leaderboards** stay on raw accuracy.
+      The public board spans every copy of a built-in game
       (`leaderboardDeckIds`), and those copies could carry different weights, so
       a weighted board would rank people against different papers.
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
