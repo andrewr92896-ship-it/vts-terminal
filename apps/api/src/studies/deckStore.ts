@@ -35,6 +35,10 @@ export interface DeckSummary {
   source: string; // 'ai_topic' | 'upload' | 'sample'
   isSample: boolean;
   categories: string[];
+  // What each category is worth when a practice test is scored the way the real
+  // exam is. Null = the author never set weights, so the game scores plainly —
+  // deliberately not the same as every weight being zero.
+  categoryWeights: Record<string, number> | null;
   questionCount: number;
   createdBy: string | null;
   createdByName: string | null;
@@ -52,6 +56,43 @@ function parseCategories(raw: string): string[] {
   } catch {
     return [];
   }
+}
+
+// Stored weights, keyed by category name. Anything unusable — a non-object, a
+// negative, a NaN — is dropped rather than defaulted, since a weight nobody can
+// account for silently changes what a score means.
+function parseWeights(raw: string | null): Record<string, number> | null {
+  if (!raw) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+    const n = Number(v);
+    if (Number.isFinite(n) && n >= 0) out[k] = n;
+  }
+  return out;
+}
+
+// The weights to store: only those naming a category the deck actually has, so
+// a category the author removed can never leave a weight behind that still
+// counts toward the total a score is measured against. Returns null when
+// weighting is off (the patch's own null) — null and "all zeroes" mean
+// different things and must not collapse into each other.
+function resolveWeights(categories: string[], weights: Record<string, number> | null | undefined): string | null {
+  if (weights == null) return null;
+  const byLower = new Map(categories.map((c) => [c.toLowerCase(), c]));
+  const out: Record<string, number> = {};
+  for (const [k, v] of Object.entries(weights)) {
+    const name = byLower.get(k.trim().toLowerCase());
+    const n = Number(v);
+    if (name && Number.isFinite(n) && n >= 0) out[name] = n;
+  }
+  return JSON.stringify(out);
 }
 
 function parseOptions(raw: string): { label: Letter; text: string }[] {
@@ -76,6 +117,7 @@ export async function listDecks(teamId: string): Promise<DeckSummary[]> {
       source: studyDecks.source,
       isSample: studyDecks.isSample,
       categories: studyDecks.categories,
+      categoryWeights: studyDecks.categoryWeights,
       createdBy: studyDecks.createdBy,
       createdByName: users.displayName,
       createdAt: studyDecks.createdAt,
@@ -106,6 +148,7 @@ export async function listDecks(teamId: string): Promise<DeckSummary[]> {
       source: r.source,
       isSample: r.isSample,
       categories: parseCategories(r.categories),
+      categoryWeights: parseWeights(r.categoryWeights),
       questionCount: counts.get(r.id) ?? 0,
       createdBy: r.createdBy,
       createdByName: r.createdByName,
@@ -163,6 +206,7 @@ export async function createDeck(input: {
   source: string;
   isSample?: boolean;
   categories?: string[];
+  categoryWeights?: Record<string, number> | null;
   questions: DeckQuestionInput[];
 }): Promise<DeckDetail> {
   const now = new Date();
@@ -179,6 +223,7 @@ export async function createDeck(input: {
       source: input.source,
       isSample: input.isSample ?? false,
       categories: JSON.stringify(categories),
+      categoryWeights: resolveWeights(categories, input.categoryWeights),
       createdAt: now,
       updatedAt: now,
     });
@@ -203,7 +248,14 @@ export async function updateDeck(
   teamId: string,
   userId: string,
   isAdmin: boolean,
-  patch: { name?: string; description?: string | null; categories?: string[]; questions?: DeckQuestionInput[] },
+  patch: {
+    name?: string;
+    description?: string | null;
+    categories?: string[];
+    // undefined = leave weighting as it is; null = turn it off; an object = set it.
+    categoryWeights?: Record<string, number> | null;
+    questions?: DeckQuestionInput[];
+  },
 ): Promise<DeckDetail | null> {
   const existing = await getDeck(deckId, teamId);
   if (!existing) return null;
@@ -227,8 +279,16 @@ export async function updateDeck(
     const set: Record<string, unknown> = { updatedAt: now };
     if (patch.name !== undefined) set.name = patch.name.trim().slice(0, 120);
     if (patch.description !== undefined) set.description = patch.description?.trim().slice(0, 500) || null;
-    if (patch.questions !== undefined || patch.categories !== undefined) {
-      set.categories = JSON.stringify(resolveCategories(effectiveQuestions, patch.categories));
+    // The category list and the weights are resolved together whenever either
+    // moves. Re-filtering the weights against the list on every category change
+    // — not only when weights are the thing being patched — is what stops a
+    // renamed or removed category leaving a stored weight behind that no longer
+    // names anything but still counts toward the total.
+    if (patch.questions !== undefined || patch.categories !== undefined || patch.categoryWeights !== undefined) {
+      const nextCategories = resolveCategories(effectiveQuestions, patch.categories);
+      set.categories = JSON.stringify(nextCategories);
+      const nextWeights = patch.categoryWeights !== undefined ? patch.categoryWeights : existing.categoryWeights;
+      set.categoryWeights = resolveWeights(nextCategories, nextWeights);
     }
     await tx.update(studyDecks).set(set).where(and(eq(studyDecks.id, deckId), eq(studyDecks.teamId, teamId)));
     if (patch.questions !== undefined) {
@@ -246,6 +306,11 @@ export async function updateDeck(
 // questions. When `tagSource` is set, each question remembers the name of the
 // game it came from (for the optional "guess the source" play mode). Skips any
 // deck id that isn't this team's. Returns the new deck.
+//
+// The combined game is deliberately UNWEIGHTED however its sources were
+// weighted: two games' weights are two different exams' blueprints, and there
+// is no arithmetic that merges them into a third that means anything. The
+// author sets the combined game's weights themselves.
 export async function mergeDecks(input: {
   teamId: string;
   name: string;
@@ -289,6 +354,7 @@ export async function getDeck(deckId: string, teamId: string): Promise<DeckDetai
         source: studyDecks.source,
         isSample: studyDecks.isSample,
         categories: studyDecks.categories,
+        categoryWeights: studyDecks.categoryWeights,
         createdBy: studyDecks.createdBy,
         createdByName: users.displayName,
         createdAt: studyDecks.createdAt,
@@ -332,6 +398,7 @@ export async function getDeck(deckId: string, teamId: string): Promise<DeckDetai
     source: deckRow.source,
     isSample: deckRow.isSample,
     categories: parseCategories(deckRow.categories),
+    categoryWeights: parseWeights(deckRow.categoryWeights),
     questionCount: questions.length,
     createdBy: deckRow.createdBy,
     createdByName: deckRow.createdByName,

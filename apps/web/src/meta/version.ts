@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.86';
+export const APP_VERSION = 'Beta V 6.87';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.87',
+    date: 'August 8, 2026',
+    notes: [
+      'A study game’s categories can now carry a weight — the share of the exam each one is worth. Tick “Weight categories for scoring” in the game editor and give each category a percentage.',
+      'A practice test on a weighted game then draws its questions in those proportions and scores each category against its share, so the result reflects the real paper rather than whichever questions came up. You pick weighted or plain scoring before each sitting, and both scores are shown at the end.',
+      'The result breaks down what each category was worth, what it earned, and which areas cost you the most marks. A category the game does not hold enough questions for is named rather than quietly counted.',
+    ],
+  },
   {
     version: 'Beta V 6.86',
     date: 'August 7, 2026',

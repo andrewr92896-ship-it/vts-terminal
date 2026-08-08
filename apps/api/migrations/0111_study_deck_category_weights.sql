@@ -1,0 +1,22 @@
+-- What each of a study game's categories is worth, so a practice test can be
+-- scored the way the real exam is scored.
+--
+-- A game already carries its own categories, and every question carries one.
+-- What it could not say is that the exam it is preparing somebody for gives
+-- those categories DIFFERENT SHARES of the paper — the Series 65 devotes a set
+-- percentage of its questions to each topic area, so a raw "18 of 20 correct"
+-- on a sample that happened to draw eight easy questions from one area is not
+-- the score that exam would give.
+--
+-- JSON object of {categoryName: weight}, weights being percentages the author
+-- typed. NULL is the whole point of the column being nullable: null means the
+-- author never set weights, which is every game that exists today, and those
+-- games score exactly as they always have. It is NOT the same as every weight
+-- being zero, which is a game whose author excluded every category.
+--
+-- Weights are stored RAW, as typed, and normalized wherever they are read. A
+-- category removed or renamed afterwards would otherwise leave a stored total
+-- that no longer reaches 100 and a score quietly measured against the wrong
+-- denominator; normalizing on read means the arithmetic is always over the
+-- categories that actually exist.
+ALTER TABLE `study_decks` ADD `category_weights` text;

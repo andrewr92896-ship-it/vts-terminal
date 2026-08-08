@@ -396,6 +396,11 @@ export interface TeamDeck {
   source: string; // 'ai_topic' | 'upload' | 'sample'
   isSample: boolean;
   categories: string[];
+  // What each category is worth when a practice test is scored the way the real
+  // exam is — {categoryName: weight}, as the author typed them. Null = the
+  // author never set weights, so the game scores plainly. Deliberately NOT the
+  // same as every weight being zero, which is a game with nothing on the paper.
+  categoryWeights: Record<string, number> | null;
   questionCount: number;
   createdBy: string | null;
   createdByName: string | null;

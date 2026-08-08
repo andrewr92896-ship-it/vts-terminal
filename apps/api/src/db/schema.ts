@@ -1513,6 +1513,11 @@ export const studyDecks = sqliteTable('study_decks', {
   source: text('source').notNull(), // 'ai_topic' | 'upload' | 'sample'
   isSample: integer('is_sample', { mode: 'boolean' }).notNull().default(false),
   categories: text('categories').notNull(), // JSON string[] of this deck's category names
+  // What each category is worth when a practice test is scored the way the real
+  // exam is: JSON {categoryName: weight}, weights as typed by the author and
+  // normalized on read. NULL = no weights set (every game before this existed),
+  // which is deliberately different from every weight being zero.
+  categoryWeights: text('category_weights'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

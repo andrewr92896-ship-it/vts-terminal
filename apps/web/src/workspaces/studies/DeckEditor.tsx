@@ -3,12 +3,18 @@ import { api, ApiError } from '../../api/client';
 import type { TeamDeck } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
+import { weightTotal } from './examWeights';
 
-// The study-game editor: rename the game, manage its categories, and edit every
-// question (stem, the four options, the correct answer, the explanation, and the
-// category). Questions can be sorted by category, and VTS AI can auto-categorize
-// them (optionally with a custom prompt). Saving replaces the game's questions
-// and category list in one call.
+// The study-game editor: rename the game, manage its categories and what each
+// one is worth, and edit every question (stem, the four options, the correct
+// answer, the explanation, and the category). Questions can be sorted by
+// category, and VTS AI can auto-categorize them (optionally with a custom
+// prompt). Saving replaces the game's questions, category list and weights in
+// one call.
+//
+// Category weights are the exam blueprint — see examWeights.ts. They are typed
+// as percentages and stored raw; nothing here forces them to total 100, because
+// a total the author is halfway through typing must not block a save.
 
 const muted = '#a99ff0';
 const GREEN = '#35c47b';
@@ -60,6 +66,9 @@ export function DeckEditor({
   const [loadError, setLoadError] = useState(false);
   const [name, setName] = useState('');
   const [categories, setCategories] = useState<string[]>([]);
+  // Null = this game is not weighted, which is different from every weight being
+  // zero. Kept as the author typed it and normalized wherever it is read.
+  const [weights, setWeights] = useState<Record<string, number> | null>(null);
   const [questions, setQuestions] = useState<EditQ[]>([]);
   const [sortByCat, setSortByCat] = useState(false);
   const [newCat, setNewCat] = useState('');
@@ -88,6 +97,7 @@ export function DeckEditor({
         const d = r.deck;
         setName(d.name);
         setCategories(d.categories.length ? d.categories : []);
+        setWeights(d.categoryWeights);
         setQuestions(
           d.questions.map((q) => ({
             uid: _uid++,
@@ -135,7 +145,16 @@ export function DeckEditor({
   function renameCategory(oldName: string, next: string) {
     const nm = next.trim();
     setCategories((prev) => prev.map((c) => (c === oldName ? (nm || c) : c)));
-    if (nm) setQuestions((prev) => prev.map((q) => (q.topic === oldName ? { ...q, topic: nm } : q)));
+    if (nm) {
+      setQuestions((prev) => prev.map((q) => (q.topic === oldName ? { ...q, topic: nm } : q)));
+      // The weight belongs to the category, not to the spelling of its name — a
+      // rename that dropped it would silently take that share off the paper.
+      setWeights((prev) => {
+        if (!prev || !(oldName in prev)) return prev;
+        const { [oldName]: moved, ...rest } = prev;
+        return { ...rest, [nm]: moved };
+      });
+    }
   }
   function removeCategory(name: string) {
     const remaining = categories.filter((c) => c !== name);
@@ -143,6 +162,33 @@ export function DeckEditor({
     setCategories(remaining.length ? remaining : []);
     // Reassign any question in the removed category to a remaining one.
     setQuestions((prev) => prev.map((q) => (q.topic === name ? { ...q, topic: fallback } : q)));
+    setWeights((prev) => {
+      if (!prev || !(name in prev)) return prev;
+      const { [name]: _drop, ...rest } = prev;
+      return rest;
+    });
+  }
+
+  // Turning weighting on seeds an even split that totals 100, so the author
+  // starts from a valid blueprint and edits it rather than facing a row of
+  // zeroes that would score every category out of the paper.
+  function toggleWeighting(on: boolean) {
+    if (!on) {
+      setWeights(null);
+      return;
+    }
+    const names = allCategories;
+    if (names.length === 0) {
+      setWeights({});
+      return;
+    }
+    const each = Math.floor(100 / names.length);
+    const seeded: Record<string, number> = {};
+    names.forEach((c, i) => (seeded[c] = each + (i < 100 - each * names.length ? 1 : 0)));
+    setWeights(seeded);
+  }
+  function setWeight(name: string, value: number) {
+    setWeights((prev) => ({ ...(prev ?? {}), [name]: Math.max(0, Math.min(100, value)) }));
   }
 
   function addQuestion(topic?: string) {
@@ -247,6 +293,9 @@ export function DeckEditor({
       const { decks } = await api.updateStudyDeck(deckId, {
         name: name.trim(),
         categories,
+        // Only the categories in play — a weight for a category that no longer
+        // exists would still count toward the total a score is measured against.
+        categoryWeights: weights ? Object.fromEntries(allCategories.map((c) => [c, weights[c] ?? 0])) : null,
         questions: questions.map((q) => ({
           topic: q.topic.trim(),
           stem: q.stem.trim(),
@@ -278,6 +327,10 @@ export function DeckEditor({
   }, [questions, sortByCat, allCategories]);
 
   const issueCount = Object.keys(auditIssues).length;
+  const weighted = weights !== null;
+  const total = weighted ? weightTotal(allCategories, weights) : 0;
+  const totalIs100 = Math.abs(total - 100) < 0.05;
+  const zeroWeighted = weighted ? allCategories.filter((c) => (weights?.[c] ?? 0) <= 0) : [];
 
   if (loading) {
     return (
@@ -351,10 +404,29 @@ export function DeckEditor({
           </div>
         )}
 
+        {/* Weighting: what each category is worth when a practice test is scored
+            the way the real exam is. Off by default — a game with no weights
+            scores plainly, exactly as it always has. */}
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#e7e0ff', cursor: 'pointer', marginBottom: weighted ? 8 : 12 }}>
+          <input
+            type="checkbox"
+            checked={weighted}
+            onChange={(e) => toggleWeighting(e.target.checked)}
+            style={{ width: 15, height: 15, accentColor: theme.accent }}
+          />
+          {"Weight categories for scoring"}
+        </label>
+        {weighted && (
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: muted, lineHeight: 1.5 }}>
+            {"Give each category the share of the exam it carries. A practice test then draws its questions in those proportions and scores each category against its share, so the result reflects the real paper rather than whichever questions happened to come up."}
+          </p>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {allCategories.length === 0 && <span style={{ fontSize: 12, color: muted }}>{"No categories yet — add one below or auto-categorize."}</span>}
           {allCategories.map((c) => {
             const count = questions.filter((q) => q.topic.trim().toLowerCase() === c.toLowerCase()).length;
+            const w = weights?.[c] ?? 0;
             return (
               <div key={c} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <input
@@ -362,12 +434,67 @@ export function DeckEditor({
                   onBlur={(e) => e.target.value.trim() !== c && renameCategory(c, e.target.value)}
                   style={{ ...field(theme), flex: 1, padding: '7px 10px' }}
                 />
+                {weighted && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={w}
+                      onChange={(e) => setWeight(c, Number(e.target.value) || 0)}
+                      title={w === 0 ? 'Weight 0% — this category is left off a weighted test' : undefined}
+                      style={{
+                        ...field(theme),
+                        width: 62,
+                        padding: '7px 8px',
+                        textAlign: 'right',
+                        borderColor: w === 0 ? '#e0a23a' : theme.navBorder,
+                      }}
+                    />
+                    <span style={{ fontSize: 11.5, color: muted }}>%</span>
+                  </span>
+                )}
                 <span style={{ fontSize: 11, color: muted, minWidth: 58, textAlign: 'right' }}>{count} q{count === 1 ? '' : 's'}</span>
                 <button onClick={() => removeCategory(c)} title="Remove category" style={{ ...ghostBtn(theme), minHeight: 34, padding: '6px 10px', color: '#ff9a9a' }}>✕</button>
               </div>
             );
           })}
         </div>
+
+        {/* The running total. Not enforced — a total mid-edit must not block a
+            save — but a total that is not 100 is rescaled, which is worth
+            saying outright rather than letting a 95 quietly score as a 100. */}
+        {weighted && allCategories.length > 0 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              flexWrap: 'wrap',
+              marginTop: 10,
+              paddingTop: 10,
+              borderTop: `1px solid ${theme.navBorder}`,
+              fontSize: 12,
+            }}
+          >
+            <span style={{ color: totalIs100 ? GREEN : '#e0a23a', fontWeight: 700 }}>
+              {"Total "}{Math.round(total * 10) / 10}%
+            </span>
+            {!totalIs100 && (
+              <span style={{ color: muted }}>
+                {total <= 0
+                  ? "Every category is at 0% — a weighted test would have nothing to draw from."
+                  : "Scored in these proportions, scaled to 100%."}
+              </span>
+            )}
+            {zeroWeighted.length > 0 && total > 0 && (
+              <span style={{ color: muted }}>
+                {"Left off a weighted test: "}{zeroWeighted.join(', ')}
+              </span>
+            )}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           <input
             value={newCat}
