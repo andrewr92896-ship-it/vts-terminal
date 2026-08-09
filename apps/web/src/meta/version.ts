@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.88';
+export const APP_VERSION = 'Beta V 6.89';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.89',
+    date: 'August 9, 2026',
+    notes: [
+      'Fixed the category weight boxes in the study game editor: clearing one put a 0 straight back in, so typing a new number landed after it and 30 came out as 030. A cleared box now stays empty until you type. The number of questions and pass line boxes on a practice test behaved the same way and are fixed too.',
+    ],
+  },
   {
     version: 'Beta V 6.88',
     date: 'August 8, 2026',

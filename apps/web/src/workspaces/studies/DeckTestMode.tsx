@@ -12,6 +12,7 @@ import {
   type DrawAllocation,
   type WeightedResult,
 } from './examWeights';
+import { NumberField } from './NumberField';
 
 // A configurable, graded test over a team-built study game's questions. This is
 // the generic mock test over any study game: pick how many questions and the
@@ -270,26 +271,12 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <label style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13, color: '#e7e0ff' }}>
                 <span style={{ minWidth: 130 }}>{"Number of questions"}</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={maxSize}
-                  value={size}
-                  onChange={(e) => setSize(Math.max(1, Math.min(maxSize, Number(e.target.value) || 1)))}
-                  style={{ ...field(theme), width: 90 }}
-                />
+                <NumberField value={size} onChange={setSize} min={1} max={maxSize} emptyValue={1} style={{ ...field(theme), width: 90 }} />
                 <span style={{ fontSize: 11.5, color: muted }}>up to {maxSize}</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 13, color: '#e7e0ff' }}>
                 <span style={{ minWidth: 130 }}>{"Pass line"}</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={passLine}
-                  onChange={(e) => setPassLine(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
-                  style={{ ...field(theme), width: 90 }}
-                />
+                <NumberField value={passLine} onChange={setPassLine} min={1} max={100} emptyValue={1} style={{ ...field(theme), width: 90 }} />
                 <span style={{ fontSize: 11.5, color: muted }}>{"% correct to pass"}</span>
               </label>
               <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#e7e0ff', cursor: 'pointer' }}>

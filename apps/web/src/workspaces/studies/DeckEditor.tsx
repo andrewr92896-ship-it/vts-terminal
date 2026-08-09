@@ -4,6 +4,7 @@ import type { TeamDeck } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { weightTotal } from './examWeights';
+import { NumberField } from './NumberField';
 
 // The study-game editor: rename the game, manage its categories and what each
 // one is worth, and edit every question (stem, the four options, the correct
@@ -436,12 +437,12 @@ export function DeckEditor({
                 />
                 {weighted && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <input
-                      type="number"
+                    <NumberField
+                      value={w}
+                      onChange={(n) => setWeight(c, n)}
                       min={0}
                       max={100}
-                      value={w}
-                      onChange={(e) => setWeight(c, Number(e.target.value) || 0)}
+                      emptyValue={0}
                       title={w === 0 ? 'Weight 0% — this category is left off a weighted test' : undefined}
                       style={{
                         ...field(theme),
