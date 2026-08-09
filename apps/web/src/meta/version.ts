@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.88';
+export const APP_VERSION = 'Beta V 6.89';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.89',
+    date: 'August 9, 2026',
+    notes: [
+      'The Live Wall’s Desk Metrics tile now carries the full figure set from Closed Trades & Metrics: gross profit and gross loss, average slippage, break-even trades in the win-rate line, pip figures under each money card, and your deposited, withdrawn and total capital.',
+      'The capital figures are always your own and do not follow the tile’s trader picker. They are read-only on the wall — set or sync them from Closed Trades & Metrics.',
+    ],
+  },
   {
     version: 'Beta V 6.88',
     date: 'August 8, 2026',

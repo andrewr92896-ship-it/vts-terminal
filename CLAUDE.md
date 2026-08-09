@@ -456,6 +456,11 @@ workspaces list** (see `theme/nav.ts` order).
       trader filter. The return on the Deposited card is likewise measured over
       the viewer's **own** closed rows within the current filters (`t.isMine`):
       dividing the desk's P/L by one person's deposit is a return nobody earned.
+      The Live Wall's **Desk Metrics** tile restates all three, and takes both
+      rules with it — the figures do not follow that tile's trader picker, and
+      the return is over the viewer's own rows. They are **read-only** there:
+      the Trade Log is the one screen that writes them, so a board tile cannot
+      become a second writer of a number two surfaces already have to agree on.
     - **Deposited and Withdrawn are each TYPED or SYNCED, chosen per figure**
       (`deposited_sync` / `withdrawn_sync`). Synced reads the connected OANDA
       account's funding history — `fetchOandaFunding` in `brokers/oanda.ts`
