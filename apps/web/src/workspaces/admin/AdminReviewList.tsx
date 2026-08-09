@@ -39,11 +39,14 @@ const LABELS: Record<ReviewKey, string> = {
   funded: 'Funded Trades tracking',
   leadTraderBadge: 'The "Lead Trader" badge title',
   legalCredentials: 'Terms + Privacy — "read-only credentials"',
+  finances: 'Finances — the whole workspace',
+  investments: 'Investments — the whole workspace',
+  generalNews: 'News ▸ World and Politics',
 };
 
 // Where each one is marked in the terminal, so a flagged item can be found.
 const WHERE: Record<ReviewKey, string> = {
-  tradeDesk: 'Advanced Trading ▸ Live Trades, in the sidebar',
+  tradeDesk: 'Advanced Trading ▸ Live Trades in the sidebar, and the Order Ticket wall tile',
   brokerConnections: 'My Terminal ▸ Settings ▸ Broker connections',
   teams: 'My Terminal ▸ My Group, and the Live Wall’s Preset Settings',
   teamChat: 'The chat bubble’s Group chat tab, and the Group Chat wall tile',
@@ -55,6 +58,9 @@ const WHERE: Record<ReviewKey, string> = {
   funded: 'Advanced Trading ▸ Funded Trades, in the sidebar',
   leadTraderBadge: 'My Terminal ▸ My Group ▸ Badge',
   legalCredentials: 'Nowhere — it is a claim in the documents, not a control',
+  finances: 'The Finances workspace row, and every section inside it',
+  investments: 'The Investments workspace row, and every section inside it',
+  generalNews: 'News ▸ World and News ▸ Politics, in the sidebar',
 };
 
 export function AdminReviewList({ theme }: { theme: Theme }) {

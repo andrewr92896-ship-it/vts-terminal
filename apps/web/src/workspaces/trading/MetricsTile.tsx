@@ -38,17 +38,28 @@ function fmtPrice(n: number | null): string {
 export function MetricsTile({
   tile,
   editing,
+  onChange,
   onRemove,
 }: {
   tile: BoardTile;
   editing: boolean;
+  onChange: (patch: Partial<BoardTile>) => void;
   onRemove: () => void;
 }) {
   const { privacy } = usePrivacy();
   const [data, setData] = useState<TradeLogData | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // '' = the whole desk; otherwise one trader's ownerId.
-  const [trader, setTrader] = useState('');
+  // WHOSE figures this tile reports — '' = the whole desk, otherwise one
+  // trader's ownerId.
+  //
+  // It lives ON THE TILE rather than in local state, so a board can carry
+  // several Desk Metrics tiles each pinned to a different trader and each one
+  // stays where it was left. Changed from the header, which is usable while
+  // reading as well as while editing, so a change here marks the board dirty
+  // the way any other tile setting does — the arrangement is kept per board on
+  // the device either way, and Save is what makes it permanent.
+  const trader = tile.trader ?? '';
+  const setTrader = useCallback((v: string) => onChange({ trader: v || undefined }), [onChange]);
   const firstLoad = useRef(true);
   const alive = useRef(true);
 
@@ -84,8 +95,13 @@ export function MetricsTile({
         .map(([id, name]) => ({ id, name }))
         .sort((a, b) => a.name.localeCompare(b.name))
     : [];
-  const shownTrades = data ? (trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades) : [];
-  const s = data && config ? (trader ? summarizeTrades(shownTrades, config) : data.summary) : undefined;
+  // A pinned trader who is no longer on the desk falls back to the whole desk
+  // rather than filtering to nothing: the picker would still read "Whole desk"
+  // (its label falls back too) above a tile of zeros, which is a figure nobody
+  // could tell from a flat month.
+  const activeTrader = trader && traders.some((t) => t.id === trader) ? trader : '';
+  const shownTrades = data ? (activeTrader ? data.trades.filter((t) => t.ownerId === activeTrader) : data.trades) : [];
+  const s = data && config ? (activeTrader ? summarizeTrades(shownTrades, config) : data.summary) : undefined;
   // Read the permission off the SERVER's whole-desk summary, never the
   // recomputed one: `summarizeTrades` always returns a number, so asking the
   // per-trader summary whether balances are visible always answers yes.
@@ -115,7 +131,7 @@ export function MetricsTile({
         <div className="no-drag" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <ScrollLockButton />
           {traders.length > 1 && (
-            <TraderPicker value={trader} options={traders} onChange={setTrader} />
+            <TraderPicker value={activeTrader} options={traders} onChange={setTrader} />
           )}
           {editing && <button onClick={onRemove} style={iconBtn} title="Remove tile">✕</button>}
         </div>

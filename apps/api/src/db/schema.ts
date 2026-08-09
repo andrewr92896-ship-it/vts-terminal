@@ -572,6 +572,12 @@ export const tradingBoards = sqliteTable('trading_boards', {
   // JSON: { tiles: BoardTile[] }. Opaque to the DB; validated in the route.
   layout: text('layout').notNull().default('{"tiles":[]}'),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+  // The board a PHONE opens on (migration 0112). Separate from `is_default`
+  // because a board is arranged against a screen — a dense desktop wall is
+  // unreadable flattened into one phone column, and a phone glance board wastes
+  // a desk. Unset falls back to `is_default`, so a desk that never picks one
+  // behaves exactly as it did before the column existed.
+  isDefaultPhone: integer('is_default_phone', { mode: 'boolean' }).notNull().default(false),
   // Null = private (the default). A team id publishes this layout to that team,
   // who can open it from their own picker. Only the ARRANGEMENT travels — every
   // tile fetches as the signed-in reader, so a teammate sees their own figures

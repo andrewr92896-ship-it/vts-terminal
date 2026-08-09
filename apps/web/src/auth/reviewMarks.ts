@@ -48,7 +48,10 @@ export type ReviewKey =
   | 'metricsCoach'
   | 'funded'
   | 'leadTraderBadge'
-  | 'legalCredentials';
+  | 'legalCredentials'
+  | 'finances'
+  | 'investments'
+  | 'generalNews';
 
 // Everything the terminal marks, in one screen.
 export const REVIEW_MARKS: Record<ReviewKey, ReviewMark> = {
@@ -94,6 +97,14 @@ export const REVIEW_MARKS: Record<ReviewKey, ReviewMark> = {
   legalCredentials: {
     risk: 'Terms and Privacy both describe broker credentials as read-only. That is false: the keys can trade.',
   },
+
+  // ---- Still being built ahead of launch ----
+  // `wip` only. Nothing here is a compliance question — these are whole
+  // workspaces the owner is still filling in, and a customer meeting a thin
+  // screen is better off knowing it is unfinished than concluding it is broken.
+  finances: { wip: 'Finances is still being built ahead of launch.' },
+  investments: { wip: 'Investments is still being built ahead of launch.' },
+  generalNews: { wip: 'World and Politics news is still being built ahead of launch.' },
 };
 
 // Which sidebar SECTION carries a mark, by screen key. The same shape as
@@ -109,6 +120,39 @@ export const SECTION_REVIEW: Record<string, ReviewKey> = {
   my_team: 'teams',
   sessions: 'strategySessions',
   prop: 'funded',
+
+  // Finances and Investments are marked on the WORKSPACE row and on every
+  // section inside them (owner instruction, 2026-08). Marking only the
+  // workspace would leave a reader who is already inside it with nothing to
+  // say the screen in front of them is unfinished — and the workspace row is
+  // out of sight the moment its sections are on screen.
+  fin_networth: 'finances',
+  fin_budget: 'finances',
+  inv_overview: 'investments',
+  inv_accounts: 'investments',
+  inv_holdings: 'investments',
+  inv_allocation: 'investments',
+  inv_performance: 'investments',
+  inv_dividends: 'investments',
+  inv_contributions: 'investments',
+  inv_projections: 'investments',
+
+  // News is NOT marked as a workspace — Market News is finished and sits in
+  // it. Only the two general-news sections carry the bubble.
+  news_world: 'generalNews',
+  news_politics: 'generalNews',
+};
+
+// The same, for a WORKSPACE row. Separate from `SECTION_REVIEW` because the two
+// are different rows in different lists, and a workspace being unfinished is a
+// statement about everything inside it rather than about one screen.
+//
+// The tier equivalent (`WORKSPACE_FEATURE`) is deliberately empty — no workspace
+// is entirely paid — but a workspace genuinely can be entirely unfinished, which
+// is why this one has entries.
+export const WORKSPACE_REVIEW: Record<string, ReviewKey> = {
+  finances: 'finances',
+  investments: 'investments',
 };
 
 // The same, for a Live Wall tile kind. The Trading Alerts SCREEN was removed,
@@ -117,6 +161,10 @@ export const SECTION_REVIEW: Record<string, ReviewKey> = {
 export const TILE_REVIEW: Partial<Record<string, ReviewKey>> = {
   teamchat: 'teamChat',
   alerts: 'tradingAlerts',
+  // The order ticket on the wall is the same order path as the Live Trades
+  // screen, so it carries the same flag. A surface that can place a real trade
+  // must not be reachable without the note that says so.
+  ticket: 'tradeDesk',
 };
 
 // Amber. Deliberately none of the three colours already carrying meaning in the

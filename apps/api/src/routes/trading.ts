@@ -1690,6 +1690,15 @@ const boardTileSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
   todoSectionId: z.string().trim().max(64).optional(),
   range: z.enum(['7d', '30d', '90d', 'all']).optional(),
+  // Order ticket tiles — which instrument the ticket is set to, in display
+  // form. Never trusted: the desk validates the instrument against the
+  // account's own tradeable list on every order.
+  instrument: z.string().trim().max(40).optional(),
+  // Desk Metrics — whose figures the tile reports (a trader's ownerId, or
+  // absent for the whole desk). Never trusted as a permission: the tile filters
+  // rows the desk already returned, so an id the reader cannot see simply
+  // matches nothing.
+  trader: z.string().trim().max(64).optional(),
   // How large the tile's contents are drawn. Bounded rather than free so a
   // hand-rolled board cannot save a tile at 40x and paint over the screen.
   zoom: z.number().min(0.5).max(2).optional(),
@@ -1738,6 +1747,9 @@ const editBoardSchema = z
     name: z.string().trim().min(1).max(80).optional(),
     layout: boardLayoutSchema.optional(),
     isDefault: z.boolean().optional(),
+    // The board a phone opens on. Its own flag rather than a widened
+    // `isDefault`, so setting one never disturbs the other.
+    isDefaultPhone: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 

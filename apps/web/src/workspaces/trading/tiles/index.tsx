@@ -32,6 +32,7 @@ import {
   TradeLogTile,
 } from './DeskTiles';
 import { ClockTile, MarketDataTile, StreamTile } from './MarketTiles';
+import { TicketTile } from './TicketTile';
 import { FlashcardsTile, LeaderboardTile, StudyStatsTile, TeamChatTile } from './StudyTeamTiles';
 
 // One tile, resolved from its kind.
@@ -89,8 +90,10 @@ export function BoardTileView({
       return (
         <PositionsTile tile={tile} editing={editing} onChange={onChange} onRemove={onRemove} onMeasure={onMeasure ?? (() => {})} />
       );
+    case 'ticket':
+      return <TicketTile tile={tile} editing={editing} onChange={onChange} onRemove={onRemove} />;
     case 'metrics':
-      return <MetricsTile tile={tile} editing={editing} onRemove={onRemove} />;
+      return <MetricsTile tile={tile} editing={editing} onChange={onChange} onRemove={onRemove} />;
     case 'alerts':
       return <AlertsTile tile={tile} editing={editing} onChange={onChange} onRemove={onRemove} />;
     case 'tradelog':

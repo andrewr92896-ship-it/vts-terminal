@@ -33,17 +33,13 @@ export const NAV: NavWorkspace[] = [
     accent: '#34D399',
     group: 'My Terminal',
     sections: [
-      // THE LIVE WALL IS PINNED TO THE TOP, above the paid rows (owner
-      // instruction, 2026-08). It is the single exception to the Max → Premium →
-      // free stacking every other workspace follows, and it is deliberate: this
-      // is the terminal's biggest feature and what a sign-in opens on, so
-      // burying it beneath rows a free account cannot use read as though the
-      // product led with its paywall. `zap` rather than `layout-dashboard` so
-      // the row carries some weight against the paid marks beside it.
-      //
-      // The key stays `live`, so the howto wording and every in-app link keep
-      // working — the same reason `desk` stayed `desk`.
-      { key: 'live', label: 'Live Wall', icon: 'zap' },
+      // (The Live Wall moved to the TOP of Advanced Trading — owner
+      // instruction, 2026-08. Its key is still `live`, so `howto.live` and
+      // every in-app link keep working; what changed is the workspace around
+      // it. Consequence worth knowing: Advanced Trading is an OPT-IN, so the
+      // wall is now behind that switch — an account that has not turned the
+      // desk on cannot reach it, where before it was the screen every sign-in
+      // opened on.)
       // Max.
       { key: 'my_team', label: 'My Group', icon: 'users' },
       // Premium — the series board. The economic calendar and the FOMC
@@ -91,6 +87,16 @@ export const NAV: NavWorkspace[] = [
     accent: C.gold,
     group: 'Advanced Trading',
     sections: [
+      // THE LIVE WALL LEADS THIS WORKSPACE (owner instruction, 2026-08 — it was
+      // the top of My Terminal until then). It is the terminal's one
+      // centralized board, and every desk-reading tile on it belongs to this
+      // workspace, so it sits above the screens it summarises: the board first,
+      // then the trade's own life beneath it.
+      //
+      // `layout-dashboard` rather than `zap` — Live Trades below it already
+      // carries the bolt, and two identical glyphs at the top of one list is
+      // the fastest way to click the wrong row.
+      { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       // Placing an order and watching what is open. Renamed from "Trade Desk"
       // (owner, 2026-08); the key stays `tradedesk`, as `desk` below stayed
       // `desk` through its own two renames — rename a label, never a key.

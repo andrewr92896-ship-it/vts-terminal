@@ -1141,6 +1141,7 @@ export type BoardTileKind =
   | 'streams'
   | 'clock'
   // The desk — behind the Advanced Trading opt-in.
+  | 'ticket'
   | 'positions'
   | 'metrics'
   | 'alerts'
@@ -1222,6 +1223,16 @@ export interface BoardTile {
   todoSectionId?: string;
   // Trade History / closed-trade tiles — the window they score.
   range?: '7d' | '30d' | '90d' | 'all';
+  // Order ticket tiles — the instrument the ticket is set to, in display form
+  // ("EUR/USD"). Per tile, so a board can carry a forex ticket beside a crypto
+  // one. Deliberately not `symbol`, which is a TradingView symbol elsewhere.
+  instrument?: string;
+  // Desk Metrics — whose figures this tile reports. A trader's ownerId, or
+  // absent/'' for the whole desk. Stored on the tile so a board can carry
+  // several of them, each pinned to a different trader, and each stays where it
+  // was left. Emptied when a board is shared: a teammate's id means nothing on
+  // somebody else's screen.
+  trader?: string;
   // How large this tile's contents are drawn, 0.5–2 (absent = 1). Below 1 the
   // tile lays out in a bigger box and is painted down to fit, so it carries
   // more; above 1 it carries less, larger.
@@ -1243,6 +1254,11 @@ export interface TradingBoard {
   name: string;
   layout: BoardLayout;
   isDefault: boolean;
+  // The board a PHONE opens on, kept separately from the desktop default: a
+  // board is arranged against a screen, and a dense desktop wall flattened into
+  // one phone column is not the board anybody wants in their hand. No board
+  // carrying it falls back to `isDefault`.
+  isDefaultPhone: boolean;
   updatedAt: number;
   /** Published to this team, or null when private. */
   sharedTeamId: string | null;
@@ -1264,6 +1280,7 @@ export interface BoardInput {
   name?: string;
   layout?: BoardLayout;
   isDefault?: boolean;
+  isDefaultPhone?: boolean;
 }
 
 // ---- Trading — Market News (mirror of apps/api/src/trading/news.ts) ----

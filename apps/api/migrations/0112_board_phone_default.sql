@@ -1,0 +1,17 @@
+-- Which board opens on a PHONE, kept separately from which board opens on a
+-- desktop (owner instruction, 2026-08).
+--
+-- A board is arranged against a screen. Twelve columns of tiles read well on a
+-- desktop and flatten to one full-width column on a phone, so the board somebody
+-- wants in their hand is usually not the board they want in front of them at a
+-- desk — a dense television wall is unreadable stacked, and a three-tile glance
+-- board wastes a desk.
+--
+-- `is_default` keeps its meaning exactly: the account's default, and what a
+-- desktop opens on. This is the phone's, and it is a SEPARATE column rather than
+-- a widened one so every existing row is unchanged and a desk that never sets a
+-- phone board simply falls back to `is_default` — the behaviour it has today.
+--
+-- Enforced in the service, not the schema: at most one board per user may carry
+-- each flag, the same way `is_default` has always been kept unique.
+ALTER TABLE `trading_boards` ADD `is_default_phone` integer DEFAULT 0 NOT NULL;

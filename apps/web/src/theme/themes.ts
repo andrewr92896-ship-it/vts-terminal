@@ -147,14 +147,19 @@ export function accentGradient(t: Theme): string {
 }
 
 export const DEFAULT_SCREEN: Record<WorkspaceKey, string> = {
-  trading: 'tradedesk',
+  // The Live Wall moved here from My Terminal (owner instruction, 2026-08) and
+  // leads the workspace, so it is what the workspace opens on. This is one of
+  // the two places where the first row and the opening screen agree — the rule
+  // is still that they are separate settings.
+  trading: 'live',
   investments: 'inv_overview',
   finances: 'fin_networth',
   news: 'news',
   studies: 'st_game',
-  // The Live Wall is the terminal's centralized board and the first thing in
-  // My Terminal, so it is what this workspace opens on.
-  myportal: 'live',
+  // My Terminal opens on Premium Features now the wall has left it: it is the
+  // one row here that states what the account holds and what it can switch on,
+  // which includes the Advanced Trading opt-in the wall now sits behind.
+  myportal: 'my_access',
   admin: 'ad_users',
   founder: 'ad_ai',
   help: 'hp_howto',

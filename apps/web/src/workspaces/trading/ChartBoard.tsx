@@ -281,11 +281,19 @@ export function ChartBoard({
   // anybody else, so this only decides whether the control is drawn.
   const isDev = isFounder(user?.roles ?? []) && !isPhone;
 
-  // Remember the last-opened preset per user (per device) so returning to the
-  // board — after toggling to Positions, a reload, or a new session — lands on
-  // the same preset instead of resetting to the default.
-  const lastKey = user?.id ? `vts:lastBoard:${user.id}` : null;
-  const builtInKey = user?.id ? `vts:wallLayout:${user.id}` : null;
+  // Remember the last-opened preset per user so returning to the board — after
+  // toggling to Positions, a reload, or a new session — lands on the same preset
+  // instead of resetting to the default.
+  //
+  // Scoped by DEVICE CLASS as well as by user (owner instruction, 2026-08). A
+  // board is arranged against a screen: twelve columns of tiles read well at a
+  // desk and flatten to one full-width column in the hand, so the board somebody
+  // wants on a phone is usually not the one they want on a desktop. Separate
+  // browsers already had separate storage; this also keeps one browser from
+  // carrying a phone-shaped choice back to the desk when a window is narrowed.
+  const deviceClass = isPhone ? 'phone' : 'desktop';
+  const lastKey = user?.id ? `vts:lastBoard:${user.id}:${deviceClass}` : null;
+  const builtInKey = user?.id ? `vts:wallLayout:${user.id}:${deviceClass}` : null;
   const [boards, setBoards] = useState<TradingBoard[]>([]);
   // What this reader's teammates have published. Read for everyone — a free
   // account cannot build a layout but can open the one their desk uses.
@@ -555,7 +563,14 @@ export function ChartBoard({
               /* ignore */
             }
           }
-          applyBoard(list.find((b) => b.id === savedId) ?? list.find((b) => b.isDefault) ?? list[0]);
+          // This device's own default before the account's, so a phone opens
+          // the board that was arranged for a phone. Nothing set for a phone
+          // falls back to the account default, which is the behaviour every
+          // board had before the two were split.
+          const deviceDefault = isPhone
+            ? (list.find((b) => b.isDefaultPhone) ?? list.find((b) => b.isDefault))
+            : list.find((b) => b.isDefault);
+          applyBoard(list.find((b) => b.id === savedId) ?? deviceDefault ?? list[0]);
         } else {
           // Nothing saved yet: open on a built-in layout rather than an empty
           // grid, so a first visit shows a finished board.
@@ -569,7 +584,7 @@ export function ChartBoard({
       firstLoad.current = false;
       setLoading(false);
     }
-  }, [applyBoard, applyBuiltInFrom, builtIn, canCustomize, lastKey, templates]);
+  }, [applyBoard, applyBuiltInFrom, builtIn, canCustomize, isPhone, lastKey, templates]);
 
   useEffect(() => {
     void load();
@@ -1064,10 +1079,18 @@ export function ChartBoard({
     }
   };
 
-  const setDefault = async () => {
+  // Which board this device class opens on. Two flags rather than one, set from
+  // the same menu: a desktop is where boards are arranged, so both are chosen
+  // from here — a phone cannot reach this menu at all (`canEdit` is false
+  // there), which is exactly why the phone's default has to be settable from
+  // somewhere else.
+  const setDefault = async (which: 'desktop' | 'phone') => {
     if (isUnsaved) return;
     try {
-      const { boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { isDefault: true });
+      const { boards: list, teamBoards: shared } = await api.updateBoard(
+        activeId!,
+        which === 'phone' ? { isDefaultPhone: true } : { isDefault: true },
+      );
       setBoards(list);
       setTeamBoards(shared);
     } catch (e) {
@@ -1190,7 +1213,9 @@ export function ChartBoard({
                   onTeam={onTeam}
                   shared={!!activeBoard?.sharedTeamId}
                   onRename={() => setNamePrompt({ mode: 'rename', value: name })}
-                  onSetDefault={() => void setDefault()}
+                  isDesktopDefault={!!activeBoard?.isDefault}
+                  isPhoneDefault={!!activeBoard?.isDefaultPhone}
+                  onSetDefault={(which) => void setDefault(which)}
                   onShare={() => void toggleShare()}
                   onSaveAsNew={saveAsNew}
                   onSave={() => void save()}
@@ -1610,6 +1635,8 @@ function PresetSettingsMenu({
   onTeam,
   shared,
   onRename,
+  isDesktopDefault,
+  isPhoneDefault,
   onSetDefault,
   onShare,
   onSaveAsNew,
@@ -1624,7 +1651,10 @@ function PresetSettingsMenu({
   /** Whether this board is currently published. */
   shared: boolean;
   onRename: () => void;
-  onSetDefault: () => void;
+  /** Whether this board is already the default for each device class. */
+  isDesktopDefault: boolean;
+  isPhoneDefault: boolean;
+  onSetDefault: (which: 'desktop' | 'phone') => void;
   onShare: () => void;
   onSaveAsNew: () => void;
   onSave: () => void;
@@ -1678,7 +1708,23 @@ function PresetSettingsMenu({
     hidden?: boolean;
   }> = [
     { key: 'rename', label: 'Rename', icon: 'pencil', run: onRename, disabled: isUnsaved },
-    { key: 'default', label: 'Set default', icon: 'check-check', run: onSetDefault, disabled: isUnsaved },
+    // TWO defaults, both set from here. A phone never reaches this menu, so a
+    // single "Set default" could only ever name the screen you were standing
+    // at — which is the desk, every time.
+    {
+      key: 'default',
+      label: isDesktopDefault ? 'Desktop default' : 'Set as desktop default',
+      icon: 'monitor',
+      run: () => onSetDefault('desktop'),
+      disabled: isUnsaved || isDesktopDefault,
+    },
+    {
+      key: 'default-phone',
+      label: isPhoneDefault ? 'Phone default' : 'Set as phone default',
+      icon: 'smartphone',
+      run: () => onSetDefault('phone'),
+      disabled: isUnsaved || isPhoneDefault,
+    },
     // Publishing sends the ARRANGEMENT, never the figures — each teammate's
     // tiles fetch as themselves, and a notes tile's text is stripped
     // server-side on the way out.
@@ -1927,7 +1973,11 @@ function LayoutPicker({
                         {/* A published board says so in the reader's own list,
                             so they always know what their team can see. */}
                         {b.sharedTeamId && <Icon name="users" size={12} color={GREEN} />}
-                        {b.isDefault && <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>default</span>}
+                        {/* Which device each board opens on. Two glyphs rather
+                            than the word "default", because there are two of
+                            them now and a board can hold both. */}
+                        {b.isDefault && <Icon name="monitor" size={12} color={FAINT} />}
+                        {b.isDefaultPhone && <Icon name="smartphone" size={12} color={FAINT} />}
                       </button>
                     );
                   })}
