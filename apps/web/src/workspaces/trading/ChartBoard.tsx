@@ -12,6 +12,7 @@ import { ReviewMark } from '../../components/ReviewMark';
 import type {
   BoardTile,
   BoardTileKind,
+  MembershipTier,
   PremiumFeature,
   TemplateTile,
   TradingBoard,
@@ -386,7 +387,9 @@ export function ChartBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [namePrompt, setNamePrompt] = useState<{ mode: 'create' | 'rename'; value: string } | null>(null);
+  // 'create' stores the arrangement on screen under a new name; 'blank' stores a
+  // brand-new empty board; 'rename' retitles the open one.
+  const [namePrompt, setNamePrompt] = useState<{ mode: 'create' | 'blank' | 'rename'; value: string } | null>(null);
   // Content-driven grid-row counts for positions tiles in an "expand" view, keyed
   // by tile id. These override the tile's stored h so the cell grows to fit every
   // trade; they are transient (never saved, never marked dirty).
@@ -966,16 +969,30 @@ export function ChartBoard({
     if (!nm) return;
     setSaving(true);
     try {
-      if (namePrompt.mode === 'create') {
-        const { board, boards: list, teamBoards: shared } = await api.createBoard({ name: nm, layout: { tiles, cols }, isDefault: boards.length === 0 });
+      if (namePrompt.mode === 'create' || namePrompt.mode === 'blank') {
+        const blank = namePrompt.mode === 'blank';
+        const { board, boards: list, teamBoards: shared } = await api.createBoard({
+          name: nm,
+          // A blank board is empty at the default width — deliberately NOT the
+          // tiles on screen, which belong to the board being left behind.
+          layout: blank ? { tiles: [], cols: COLS } : { tiles, cols },
+          isDefault: boards.length === 0,
+        });
         setBoards(list);
         setTeamBoards(shared);
         // The arrangement is stored now — under a new name, but stored. So the
         // board it was made on goes back to clean rather than keeping a copy of
         // edits that have already been saved somewhere else, which would greet
         // the trader with the same "unsaved changes" the next time they open it.
-        clearDraft(draftKey(user?.id, boardKey));
+        //
+        // A blank board stored nothing of that arrangement, so its draft is left
+        // exactly where it is: creating a new layout must never be what discards
+        // the unsaved work on the board you were looking at.
+        if (!blank) clearDraft(draftKey(user?.id, boardKey));
         applyBoard(board);
+        // Straight into edit mode: an empty board has nothing to read, and
+        // adding the first tile is the only thing to do with it.
+        if (blank) setEditing(true);
       } else {
         const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { name: nm });
         setBoards(list);
@@ -1100,6 +1117,17 @@ export function ChartBoard({
           onPickBoard={(b) => applyBoard(b)}
           onPickBuiltIn={(k) => applyBuiltIn(k)}
           onPickShared={(b) => applyShared(b)}
+          // "Create New Layout" — a blank board, from the same menu the existing
+          // ones are chosen in.
+          //
+          // Marked rather than hidden for a free account, which is the rule the
+          // sidebar rows and the tile picker follow: somebody has to be able to
+          // see what a membership would let them do. A member on a PHONE is the
+          // one case the row is dropped — they cannot arrange a grid here at all
+          // (see `canEdit`), and a blank board they have no way to fill is worse
+          // than no row.
+          createTier={canCustomize ? null : customBoardsTier}
+          onCreateNew={canEdit ? () => setNamePrompt({ mode: 'blank', value: '' }) : canCustomize ? null : (onOpenMembership ?? null)}
         />
 
         {/* A teammate's layout is not the reader's to save over, so the one
@@ -1231,7 +1259,12 @@ export function ChartBoard({
 
       {namePrompt && (
         <div style={namePromptRow}>
-          <span style={{ fontSize: 11.5, color: MUTED }}>{namePrompt.mode === 'create' ? 'Name this board' : 'Rename board'}</span>
+          {/* The blank case names a board that does not exist yet, while the
+              board on screen is still the previous one — "Name this board"
+              would read as retitling what is in front of them. */}
+          <span style={{ fontSize: 11.5, color: MUTED }}>
+            {namePrompt.mode === 'rename' ? 'Rename board' : namePrompt.mode === 'blank' ? 'Name your new board' : 'Name this board'}
+          </span>
           <input
             autoFocus
             value={namePrompt.value}
@@ -1244,7 +1277,7 @@ export function ChartBoard({
             style={{ ...input, minWidth: 200 }}
           />
           <button onClick={() => void confirmName()} disabled={saving} style={goldBtn}>
-            {namePrompt.mode === 'create' ? 'Save' : 'Rename'}
+            {namePrompt.mode === 'rename' ? 'Rename' : namePrompt.mode === 'blank' ? 'Create' : 'Save'}
           </button>
           <button onClick={() => setNamePrompt(null)} style={ghostBtn}>
             {"Cancel"}
@@ -1264,9 +1297,11 @@ export function ChartBoard({
       <div ref={boardRef}>
         {tiles.length === 0 ? (
           <div style={emptyState}>
-            {canEdit
-              ? 'This board is empty. Turn on Edit layout and add a tile.'
-              : 'This layout has nothing you can see yet.'}
+            {!canEdit
+              ? 'This layout has nothing you can see yet.'
+              : editing
+                ? 'This board is empty. Add a tile.'
+                : 'This board is empty. Turn on Edit layout and add a tile.'}
           </div>
         ) : (
           <>
@@ -1757,6 +1792,8 @@ function LayoutPicker({
   onPickBoard,
   onPickBuiltIn,
   onPickShared,
+  createTier,
+  onCreateNew,
 }: {
   boards: TradingBoard[];
   teamBoards: TradingBoard[];
@@ -1771,6 +1808,10 @@ function LayoutPicker({
   onPickBoard: (b: TradingBoard) => void;
   onPickBuiltIn: (key: string) => void;
   onPickShared: (b: TradingBoard) => void;
+  /** The tier "Create New Layout" costs, or null when the reader holds it. */
+  createTier: MembershipTier | null;
+  /** Start a blank board, or open the membership screen. Null hides the row. */
+  onCreateNew: (() => void) | null;
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -1925,6 +1966,35 @@ function LayoutPicker({
                       </button>
                     );
                   })}
+                </>
+              )}
+              {/* Last, and separated: everything above is a layout to open,
+                  this is the one row that makes one. Same placement rule the
+                  Studies launchers follow — the grid of things you have, then
+                  the tile that adds another. */}
+              {onCreateNew && (
+                <>
+                  <div style={{ borderTop: `1px solid ${BORDER}`, margin: '6px 2px 4px' }} />
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      onCreateNew();
+                    }}
+                    style={menuRow(false)}
+                  >
+                    <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                      <Icon name="plus" size={13} color={GOLD} />
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                      <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {"Create New Layout"}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 10, color: FAINT, marginTop: 1 }}>
+                        {"Start from an empty board"}
+                      </span>
+                    </span>
+                    <TierMark tier={createTier} size={11} dim />
+                  </button>
                 </>
               )}
             </div>

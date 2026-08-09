@@ -2144,6 +2144,28 @@ the author.
   it sits on the paid guard. A copy rather than a reference, so the author
   editing theirs later never reaches into somebody else's board.
 
+**"Create New Layout" is the LAST row of the layout picker** (owner request,
+2026-08) — everything above it is a layout to open, and this is the one row that
+makes one, so it sits under a divider the way the Studies launchers end with
+their Create tile.
+
+- **It is CREATED ON THE SERVER, named up front, rather than left as an unsaved
+  blank.** The board has an id from the moment it exists, so it appears in Your
+  boards, the device remembers it as the last one opened, and the draft
+  mechanism keeps whatever is arranged on it. An unnamed blank board would have
+  none of those: leaving the screen before the first save would land the trader
+  back on their previous board with nothing to return to. It opens straight
+  into edit mode, since an empty board has nothing to read.
+- **It must never clear the outgoing board's draft.** `confirmName`'s `create`
+  branch does clear it — that mode stores the arrangement on screen under a new
+  name, so the board it came from is genuinely clean afterwards. The `blank`
+  branch stored none of it, so creating a new layout must not be what discards
+  the unsaved work on the board you were looking at.
+- **Marked, not hidden, for a free account** (it lands on the membership screen)
+  — the rule the sidebar rows and the tile picker follow. The one case the row
+  is dropped is a **member on a phone**: `canEdit` is false there, so a blank
+  board would be one they have no way to fill.
+
 **`dirty` means MODIFIED, not merely unsaved.** A built-in layout is permanently
 unsaved and nonetheless untouched, so `applyBuiltIn` / `applyShared` baseline
 `savedTilesJson` against what they just applied. Conflating the two made every

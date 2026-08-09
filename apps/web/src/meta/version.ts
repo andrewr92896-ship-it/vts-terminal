@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.89';
+export const APP_VERSION = 'Beta V 6.90';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.90',
+    date: 'August 9, 2026',
+    notes: [
+      'The Live Wall’s layout dropdown ends with “Create New Layout” — name it and you get an empty board, already in edit mode, ready for the first tile.',
+      'It is saved from the moment you name it, so it appears in your boards straight away and nothing you had unsaved on the layout you were looking at is touched.',
+    ],
+  },
   {
     version: 'Beta V 6.89',
     date: 'August 9, 2026',
