@@ -3,21 +3,38 @@ import { createPortal } from 'react-dom';
 import { api, ApiError } from '../../api/client';
 import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, TradeLogData } from '../../api/types';
-import { configFrom } from './outcome';
+import { configActive, configFrom } from './outcome';
+import { fmtPips, hasAnyPips, netPips } from './pips';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
+import { useTileData } from './tiles/TileFrame';
 import { BORDER, BORDER2, FAINT, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
 import { Icon } from '../../components/Icon';
 
 const REFRESH_MS = 20_000;
+const CAPITAL_MS = 60_000;
+const GOLD = '#EBCB74';
+const AMBER = '#e0a23a';
 
 const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
 const signedUsd = (n: number) => `${n > 0 ? '+' : ''}${usd(n)}`;
 
-// A compact desk-metrics tile for the Live Wall — the Trade Log's headline
-// numbers (realized + open P/L, net, win rate, profit factor, trades) in one
-// board cell. Team-scoped like the Trade Log. Polls on its own interval and
-// keeps the last snapshot on a failed refresh.
+// Slippage is a price, not money — same formatting rule the Trade Log uses.
+function fmtPrice(n: number | null): string {
+  if (n == null) return '—';
+  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return String(Number(n.toFixed(5)));
+}
+
+// A compact desk-metrics tile for the Live Wall — the SAME KPI row the Trade Log
+// carries, in one board cell: trades, win rate, realized / unrealized / net P/L,
+// gross profit and loss, profit factor and projected PF, average slippage, and
+// the trader's own capital. Every figure is computed by the shared functions the
+// Trade Log calls, so the two screens can never disagree about a number.
+//
+// Team-scoped like the Trade Log for the trade figures; the capital cards are
+// always the VIEWER'S own (see below). Polls on its own interval and keeps the
+// last snapshot on a failed refresh.
 export function MetricsTile({
   tile,
   editing,
@@ -69,7 +86,10 @@ export function MetricsTile({
     : [];
   const shownTrades = data ? (trader ? data.trades.filter((t) => t.ownerId === trader) : data.trades) : [];
   const s = data && config ? (trader ? summarizeTrades(shownTrades, config) : data.summary) : undefined;
-  const canSeeBalances = (s?.totalRealizedPl ?? null) !== null;
+  // Read the permission off the SERVER's whole-desk summary, never the
+  // recomputed one: `summarizeTrades` always returns a number, so asking the
+  // per-trader summary whether balances are visible always answers yes.
+  const canSeeBalances = data ? data.summary.totalRealizedPl !== null : false;
   const showMoney = canSeeBalances && !privacy;
   const pf = config ? profitFactorStats(shownTrades, config) : null;
   // Projected PF: realized closed trades + each open position at its current mark.
@@ -77,6 +97,10 @@ export function MetricsTile({
   const realized = s?.totalRealizedPl ?? 0;
   const unreal = s?.totalUnrealizedPl ?? 0;
   const net = realized + unreal;
+  // Pips sit under every money figure, but only on a desk that trades forex —
+  // there is no pip to show otherwise.
+  const showPips = hasAnyPips(shownTrades);
+  const beActive = config ? configActive(config) : false;
 
   const money = (n: number) => (!showMoney ? '•••' : signedUsd(n));
   const plColor = (n: number) => (n > 0 ? GREEN : n < 0 ? RED : MUTED);
@@ -101,13 +125,55 @@ export function MetricsTile({
         {error && !data && <div style={{ ...hint, color: '#ffb4ab' }}>{error}</div>}
         {data && s && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(112px,1fr))', gap: 1, background: BORDER }}>
-            <Stat label="Realized P/L" value={s.totalRealizedPl == null ? 'hidden' : money(realized)} color={plColor(realized)} sub="closed" />
-            <Stat label="Unrealized P/L" value={!canSeeBalances ? 'hidden' : money(unreal)} color={plColor(unreal)} sub={`${s.open} open`} />
+            {/* Same figures, same order, same wording as the Trade Log's KPI
+                row — a board tile that reorders or renames them reads as a
+                different set of numbers than the screen it summarises. */}
+            <Stat label="Trades" value={String(s.total)} sub={`${s.open} open · ${s.closed} closed`} />
+            <Stat
+              label="Win Rate"
+              value={s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—'}
+              sub={`${s.wins}W · ${s.losses}L${beActive || s.breakeven > 0 ? ` · ${s.breakeven}BE` : ''}`}
+            />
+            <Stat
+              label="Realized P/L"
+              value={!canSeeBalances ? 'hidden' : money(realized)}
+              color={plColor(realized)}
+              pips={showPips ? `(${fmtPips(netPips(shownTrades), true)})` : undefined}
+              sub="closed trades"
+            />
+            <Stat
+              label="Unrealized P/L"
+              value={!canSeeBalances ? 'hidden' : money(unreal)}
+              color={plColor(unreal)}
+              sub={`${s.open} open`}
+            />
             <Stat label="Net P/L" value={!canSeeBalances ? 'hidden' : money(net)} color={plColor(net)} sub="realized + open" />
-            <Stat label="Win Rate" value={s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—'} sub={`${s.wins}W · ${s.losses}L`} />
-            <Stat label="Profit Factor" value={pf ? profitFactorText(pf) : '—'} sub={pf ? `scaled ${scaledProfitFactorText(pf)}` : undefined} />
-            <Stat label="Projected PF" value={ppf ? profitFactorText(ppf) : '—'} sub={ppf ? `scaled ${scaledProfitFactorText(ppf)}` : undefined} />
-            <Stat label="Trades" value={String(s.total)} sub={`${s.open} open · ${s.closed} closed`} wide />
+            <Stat
+              label="Gross Profit"
+              value={!canSeeBalances ? 'hidden' : showMoney ? usd(pf?.grossProfit ?? 0) : '•••'}
+              pips={showPips && pf ? `(${fmtPips(pf.grossProfitPips)})` : undefined}
+              sub="winning trades"
+            />
+            <Stat
+              label="Gross Loss"
+              value={!canSeeBalances ? 'hidden' : showMoney ? usd(-(pf?.grossLoss ?? 0)) : '•••'}
+              pips={showPips && pf ? `(${fmtPips(-pf.grossLossPips)})` : undefined}
+              sub="losing trades"
+            />
+            <Stat
+              label="Profit Factor"
+              value={pf ? profitFactorText(pf) : '—'}
+              pips={pf ? `scaled ${scaledProfitFactorText(pf)}` : undefined}
+              sub="gross profit ÷ loss"
+            />
+            <Stat
+              label="Projected PF"
+              value={ppf ? profitFactorText(ppf) : '—'}
+              pips={ppf ? `scaled ${scaledProfitFactorText(ppf)}` : undefined}
+              sub="if closed now"
+            />
+            <Stat label="Avg Slippage" value={s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage)} sub="entry vs. plan" />
+            <CapitalStats trades={data.trades} showMoney={showMoney} />
           </div>
         )}
       </div>
@@ -115,12 +181,98 @@ export function MetricsTile({
   );
 }
 
-function Stat({ label, value, sub, color, wide }: { label: string; value: string; sub?: string; color?: string; wide?: boolean }) {
+// The trader's own money — Deposited, Withdrawn and Total Capital — as three
+// more cells on the same grid.
+//
+// ALWAYS THE VIEWER'S OWN, and deliberately unaffected by the tile's trader
+// picker: a teammate's deposits are their business, and the payload behind this
+// takes no "whose" parameter. The return on the Deposited card is likewise
+// measured over the viewer's OWN closed rows (`t.isMine`) — dividing the desk's
+// P/L by one person's deposit is a return nobody earned.
+//
+// Read-only here. The figures are typed or synced from Closed Trades & Metrics,
+// which is the one screen that owns them; a board tile states what they are.
+function CapitalStats({ trades, showMoney }: { trades: TradeLogData['trades']; showMoney: boolean }) {
+  const { data: cap, error } = useTileData('trading:trader-capital', () => api.traderCapital(), CAPITAL_MS);
+
+  const myClosedPl = trades
+    .filter((t) => t.isMine && t.status === 'closed' && t.realizedPl != null)
+    .reduce((sum, t) => sum + (t.realizedPl as number), 0);
+  const pct = cap?.deposited.value != null && cap.deposited.value > 0 ? (myClosedPl / cap.deposited.value) * 100 : null;
+
+  // These three share one payload, so a load failure is reported once rather
+  // than three times over.
+  if (error && !cap) return <Stat label="Deposited Capital" value="—" sub="could not read" />;
+
+  const flow = (value: number | null | undefined) =>
+    cap == null ? '…' : value == null ? '—' : showMoney ? usd(value) : '•••';
+
+  return (
+    <>
+      <Stat
+        label="Deposited Capital"
+        value={flow(cap?.deposited.value)}
+        pips={pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% return` : undefined}
+        pipsColor={pct != null && pct < 0 ? RED : GREEN}
+        sub={cap == null ? 'reading' : cap.deposited.value == null ? 'not set' : 'your own closed trades'}
+      />
+      <Stat
+        label="Withdrawn Capital"
+        value={flow(cap?.withdrawn.value)}
+        sub={cap == null ? 'reading' : cap.withdrawn.value == null ? 'not set' : 'taken out of the account'}
+      />
+      <Stat
+        label="Total Capital"
+        value={flow(cap?.total)}
+        sub={
+          cap == null
+            ? 'reading your accounts'
+            : cap.total == null
+              ? cap.accounts > 1
+                ? 'accounts use different currencies'
+                : cap.unreadable > 0
+                  ? 'your broker did not answer'
+                  : 'no broker account connected'
+              : `held now · ${cap.accounts} account${cap.accounts === 1 ? '' : 's'}`
+        }
+        // An account left out makes the total an understatement — say so rather
+        // than letting it read as complete.
+        note={
+          cap != null && cap.total != null && cap.unreadable > 0
+            ? `${cap.unreadable} account${cap.unreadable === 1 ? '' : 's'} could not be read`
+            : undefined
+        }
+      />
+    </>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  sub,
+  color,
+  pips,
+  pipsColor,
+  note,
+  wide,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  color?: string;
+  pips?: string;
+  pipsColor?: string;
+  note?: string;
+  wide?: boolean;
+}) {
   return (
     <div style={{ background: 'rgba(9,20,46,1)', padding: '10px 12px', ...(wide ? { gridColumn: '1 / -1' } : null) }}>
       <div style={{ fontSize: 9, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</div>
       <div style={{ fontFamily: MONO, fontSize: 17, fontWeight: 700, color: color ?? '#fff', marginTop: 4 }}>{value}</div>
+      {pips && <div style={{ fontFamily: MONO, fontSize: 10, fontWeight: 600, color: pipsColor ?? GOLD, marginTop: 2 }}>{pips}</div>}
       {sub && <div style={{ fontSize: 9.5, color: FAINT, marginTop: 2 }}>{sub}</div>}
+      {note && <div style={{ fontSize: 9, color: AMBER, marginTop: 2 }}>{note}</div>}
     </div>
   );
 }

@@ -182,11 +182,11 @@ export const TILE_CATALOG: TileDef[] = [
     label: 'Desk Metrics',
     group: 'desk',
     icon: 'gauge',
-    blurb: "A trader's live performance figures.",
+    blurb: 'The full Closed Trades & Metrics KPI row, including your capital.',
     feature: null,
     desk: true,
     w: 6,
-    h: 8,
+    h: 10,
     minH: 4,
   },
   {
