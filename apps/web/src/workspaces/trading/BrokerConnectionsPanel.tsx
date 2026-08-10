@@ -525,7 +525,8 @@ function TeamConnections({ onChanged }: { onChanged?: () => void }) {
       </div>
       <div style={{ fontSize: 11.5, color: FAINT, marginBottom: 10, lineHeight: 1.5 }}>
         Every trader's connections across the desk. Rename them so the Live Wall reads cleanly (e.g. “Dale's Trades”).
-        You can rename and pause, but never see or change a teammate's keys.
+        You can rename, pause and remove, but never see or change a teammate's keys. Removing a paused connection
+        leaves that trader's closed trades on the desk.
       </div>
 
       {err && <div style={banner}>{err}</div>}
@@ -578,6 +579,26 @@ function TeamConnections({ onChanged }: { onChanged?: () => void }) {
                     <button onClick={() => !busy && apply(api.adminUpdateConnection(c.id, { active: !c.active }))} style={ghostBtn}>
                       {c.active ? 'Pause' : 'Resume'}
                     </button>
+                    {/* Offered only on a paused connection, matching what the
+                        server will accept — a Remove that always refuses on an
+                        active row reads as broken rather than as a safeguard. */}
+                    {!c.active && (
+                      <button
+                        onClick={() => {
+                          if (busy) return;
+                          if (
+                            !window.confirm(
+                              `Remove “${c.label}” from @${c.owner}'s connections? Their closed trades stay on the desk. This can't be undone.`,
+                            )
+                          )
+                            return;
+                          apply(api.adminRemoveConnection(c.id));
+                        }}
+                        style={ghostBtn}
+                      >
+                        Remove
+                      </button>
+                    )}
                   </span>
                 </>
               )}

@@ -867,6 +867,11 @@ export const api = {
   adminUpdateConnection(id: string, patch: { label?: string; active?: boolean; historyStartAt?: number | null }): Promise<{ connections: OwnedBrokerConnection[] }> {
     return request(`/api/trading/connections/${id}/admin`, { method: 'PATCH', body: JSON.stringify(patch) });
   },
+  // Removes the connection only — closed trades survive it. The server refuses
+  // an active connection and a hand-kept book that still holds positions.
+  adminRemoveConnection(id: string): Promise<{ connections: OwnedBrokerConnection[] }> {
+    return request(`/api/trading/connections/${id}/admin`, { method: 'DELETE' });
+  },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });
   },

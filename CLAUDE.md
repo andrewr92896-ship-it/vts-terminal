@@ -1350,7 +1350,8 @@ workspaces list** (see `theme/nav.ts` order).
     since the only question the screen exists to answer at a glance is "is anything
     waiting on me".
     - **Two storage models, deliberately.** Administrative **actions** (a manual
-      membership grant and its stated reason) are **stored** in `admin_log` — they
+      membership grant and its stated reason; a broker connection removed on
+      somebody else's behalf) are **stored** in `admin_log` — they
       have no other home and the point is that they cannot be un-recorded.
       **Tickets are projected, not copied**: bug reports, support requests and
       early-access leads are read from their own tables at request time. Closing a
@@ -3019,6 +3020,30 @@ control — the server is still the enforcer.
   - The Trade Desk's account cards print the venue outright ("KRAKEN · CRYPTO
     SPOT") from the connection's `broker`, so even a drifting label can never
     leave the desk ambiguous about which venue an order would go to.
+- **An admin can REMOVE a teammate's connection, not just rename and pause it**
+  (`adminRemoveConnection`, `DELETE /api/trading/connections/:id/admin`). A
+  connection stranded by somebody else — a dead account replaced after the
+  credential reset — otherwise had exactly one person who could tidy it, which
+  is no use when that person is not the one looking at it.
+  - **The desk's trade history is untouched by it.**
+    `trading_positions.connection_id` carries no foreign key, so closed trades
+    outlive the connection they arrived through: an orphaned row still shows on
+    the Trade Log, and still dedupes the backfill (an account it cannot
+    attribute is unknown, and unknown dedupes). This is tidying the list, not
+    deleting anybody's trades — and it is why the removal is safe at all.
+  - **Two refusals, each covering a loss the admin cannot see coming.** An
+    **active** connection is refused — removing one stops that trader's Live
+    Wall with nothing on screen to say why, and the credential is gone, so pause
+    (reversible, already there) is the stop and this is the cleanup afterwards.
+    A **manual** connection still holding positions is refused, because
+    `manual_positions` cascades on that row: deleting it destroys hand-typed
+    trades that exist nowhere else and no broker can re-import. The owner can
+    still delete their own book — they can see what is in it.
+  - The button is drawn only on a paused row, matching what the server accepts;
+    a control that always refuses reads as broken rather than as a safeguard.
+  - Recorded in the **Administrator Log** (`connection.removed`) — an admin
+    acting on somebody else's account, irreversibly, which is what that log is
+    for. `removeConnection` (the trader's own) is unchanged and unlogged.
 - **TradingView webhooks — TWO endpoints, easy to misconfigure:**
   - `POST /api/webhooks/tradingview` — secret `TRADINGVIEW_WEBHOOK_SECRET` (in
     body or query). Writes `trading_alerts`; **this is the one wired to the
