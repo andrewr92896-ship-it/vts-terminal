@@ -22,6 +22,7 @@ import {
 } from '../db/schema.js';
 import { commitPackage } from './packageImport.js';
 import {
+  canEditPackage,
   canReadPackage,
   packageAudience,
   packageRights,
@@ -344,6 +345,29 @@ async function main() {
   ok('but can still manage it', rights.manage);
   const bobRights = await packageRights(bob, pkg.id);
   ok('a reader cannot edit it', bobRights.read && !bobRights.edit);
+
+  section('an approved package cannot be quietly changed afterwards');
+  // The frozen-content rule has an obvious way round it if nobody checks:
+  // archive the published package (which clears `locked`), edit it, unarchive.
+  // Archiving is on the EDIT right, which a published package does not grant, so
+  // the first step already refuses and the route is closed. This asserts that
+  // rather than trusting it — the whole point of admin review is that what
+  // people study is what was read.
+  const pubRights = await packageRights(alice, pkg.id);
+  ok('a published package is locked', pubRights.locked && !pubRights.edit);
+  ok('so the owner cannot archive it either', !(await canEditPackage(alice, pkg.id)));
+  ok('and it is still in the library', (await listPublished(carol.id)).some((e) => e.packageId === pkg.id));
+
+  section('leaderboard opt-out reaches the package board too');
+  // hide_from_leaderboards predates package boards. It has to keep working on
+  // them, and it does because both boards share one ranking body.
+  await db.update(users).set({ hideFromLeaderboards: true }).where(eq(users.id, bob.id));
+  let hidden = await getPackageLeaderboard(deckId, alice.id, await packageAudience(pkg.id));
+  ok('an opted-out player is off somebody else’s board', !hidden.some((e) => e.userId === bob.id));
+  hidden = await getPackageLeaderboard(deckId, bob.id, await packageAudience(pkg.id));
+  ok('but still sees their own row', hidden.some((e) => e.userId === bob.id && e.isMe));
+  await db.update(users).set({ hideFromLeaderboards: false }).where(eq(users.id, bob.id));
+  ok('and comes back when the preference is off', (await getPackageLeaderboard(deckId, alice.id, await packageAudience(pkg.id))).some((e) => e.userId === bob.id));
 
   section('reading the library is not joining it');
   ok('it is not yet in Carol’s own list', !(await readablePackageIds(carol)).includes(pkg.id));
