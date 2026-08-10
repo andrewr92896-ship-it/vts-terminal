@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.97';
+export const APP_VERSION = 'Beta V 6.98';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.98',
+    date: 'August 10, 2026',
+    notes: [
+      'The study package wizard now finishes the job. At the end you get a handoff to copy into your own ChatGPT or Claude — it tells them to ask you one question at a time, and exactly what to build, down to how many questions each category gets. Bring back the file it makes, or paste it, and the terminal checks it.',
+      'Checking is thorough and tells you what is actually wrong — "Question 47 is missing option D", "Expected 15 questions in Regulations; found 14" — with a set of repair instructions you can hand straight back to your AI. You see everything, including the questions themselves, before anything is created. If your AI runs out of room, ask it for one part at a time and add the parts as they come.',
+      'Choosing to type the questions in yourself now builds a proper study package too, rather than a loose game off to one side. Either way, nothing is saved until you say so.',
+    ],
+  },
   {
     version: 'Beta V 6.97',
     date: 'August 10, 2026',

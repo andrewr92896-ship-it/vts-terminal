@@ -7,7 +7,10 @@ import { ActionTile } from './ActionTile';
 import { useResponsive } from '../../hooks/useMediaQuery';
 import { useAuth } from '../../auth/AuthContext';
 import { PackageWizard, type WizardResult } from './wizard/PackageWizard';
-import { HandoffPending } from './wizard/HandoffPending';
+import { PackageHandoff } from './wizard/PackageHandoff';
+import { ManualEntry } from './wizard/ManualEntry';
+import { PackageDone } from './wizard/PackageDone';
+import { clearDraft } from './wizard/draft';
 
 // The "Study Creation" section — the one place a team builds its own study
 // content. Three makers: study games (quizzes), flashcard sets (term/definition
@@ -39,21 +42,34 @@ export function StudyCreation({
   const readOnly = !!user?.isDemo;
   const [maker, setMaker] = useState<Maker | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [handoff, setHandoff] = useState<WizardResult | null>(null);
+  const [pending, setPending] = useState<WizardResult | null>(null);
+  const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
 
+  // The blueprint is finished. Which ending it lands on is the route the wizard
+  // resolved: the AI handoff, or typing the questions in. Neither has written
+  // anything yet — both create the package only on their own final action.
   const onWizardDone = (result: WizardResult) => {
     setWizardOpen(false);
-    if (result.route === 'manual') {
-      // Manual-only: straight into the study game maker, which is where the
-      // questions get typed in or imported from a file.
-      setMaker('games');
-      return;
-    }
-    setHandoff(result);
+    setPending(result);
   };
 
-  if (handoff) {
-    return <HandoffPending theme={theme} result={handoff} onBack={() => setHandoff(null)} />;
+  // The package exists now, so the draft that described it has done its job.
+  const onCreated = (pkg: { id: string; name: string }) => {
+    clearDraft(user?.id ?? 'anon');
+    setPending(null);
+    setCreated(pkg);
+  };
+
+  if (created) {
+    return <PackageDone theme={theme} pkg={created} onNavigate={onNavigate} onBack={() => setCreated(null)} />;
+  }
+
+  if (pending) {
+    return pending.route === 'manual' ? (
+      <ManualEntry theme={theme} result={pending} onBack={() => setPending(null)} onCreated={onCreated} />
+    ) : (
+      <PackageHandoff theme={theme} result={pending} onBack={() => setPending(null)} onImported={onCreated} />
+    );
   }
 
   if (maker) {

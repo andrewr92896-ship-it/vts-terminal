@@ -1475,6 +1475,62 @@ workspaces list** (see `theme/nav.ts` order).
         device state too, deliberately not package content. The walkthrough is
         an explicit exception to the no-how-to-copy rule (owner instruction),
         and stays reachable afterwards from the handoff step.
+    - **THE CONTENT COMES FROM THE CREATOR'S OWN AI, AND VTS VALIDATES IT.**
+      That is the economics of the whole workflow: the terminal defines the
+      structure and checks the answer, and somebody else's model does the
+      writing. **Zero VTS AI calls** in the questionnaire, the handoff, the
+      parsing, the validation or the repair instructions.
+      - **`wizard/handoffPrompt.ts` composes the handoff locally** from fixed
+        sections plus blueprint values, and the behavioral contract is identical
+        for every provider — only a heading and a line of onboarding differ,
+        because a package written against ChatGPT has to import exactly like one
+        written against Claude. It also builds the **repair prompt** the same
+        way when validation fails: the failures and the affected import ids, and
+        deliberately not the creator's whole package.
+      - **Exact per-category question targets are computed, not described.**
+        `questionTargets` reuses `examWeights.allocateDraw` — the same
+        highest-averages allocator a weighted practice test already draws with —
+        so the handoff asks for a split the terminal itself would produce, and
+        the importer checks the counts against those same numbers. One
+        allocation used twice; a second implementation is how the prompt and the
+        validator come to disagree.
+      - **The transport format is versioned JSON** (`studies/packageFormat.ts`,
+        `format: "vts-study-package"`, `schemaVersion`), because one package
+        carries metadata, categories, weights, questions, flashcards, slides and
+        lessons at once and a flat table cannot say that. **CSV is untouched**
+        and stays the advanced/round-trip route for questions and cards.
+      - **Validation is deterministic and lives in `studies/packageValidate.ts`.**
+        It reports what PASSED as well as what failed, and every failure names
+        the thing — "Question 47 is missing option D", "Expected 15 questions in
+        Regulations; found 14". "Invalid JSON" tells a creator nothing they can
+        act on. The paste path strips **one** surrounding code fence and nothing
+        else: no brace hunting, no quote repair, no fuzzy fixing.
+      - **A package too large for one reply arrives as PARTS**
+        (`vts-study-package-part`, a `manifest` part plus component parts).
+        Every part must carry the same `blueprintId`; a set mixing two is
+        **refused rather than combined**, and a set missing one says how many
+        are still needed instead of importing what it has.
+      - **Nothing is created by validating.** Validate reads and reports;
+        confirm writes. That is what lets a creator paste, read the errors, have
+        their AI fix them and paste again with nothing left behind.
+      - **`studies/packageImport.ts` commits the whole package in ONE
+        transaction** — package, categories, deck and questions, flashcard set
+        and cards, presentation, lessons. The inserts are written out there
+        rather than delegating to `createDeck`/`createFlashcardSet`/`createGuide`
+        because each of those opens its own transaction and they cannot compose;
+        the mirroring is deliberate. A failure part-way leaves **nothing**
+        (verified, not assumed). **Ids and sequence numbers are assigned by the
+        server** — the ids in the file are import identity only and are never
+        stored.
+      - **The MANUAL ending creates a package too.** It edits a pending draft in
+        client state and commits through that same transactional creator, so the
+        deck carries `package_id` by construction rather than by a second code
+        path remembering to set it. It deliberately does **not** route into the
+        standalone maker. The standalone makers stay reachable on their own for
+        building one piece outside the wizard.
+      - `npm run verify:study-packages` checks the contract offline against
+        hand-built fixtures — valid packages, every validation failure, and
+        multipart assembly. Run it after touching the format or the validator.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.

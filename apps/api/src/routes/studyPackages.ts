@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { requireWorkspace, requirePremium } from '../auth/middleware.js';
-import { PACKAGE_DEPTHS } from '../db/schema.js';
+import { CATEGORY_WEIGHT_MODES, EXPLANATION_MODES, PACKAGE_DEPTHS } from '../db/schema.js';
+import { validateDocuments, parseForCommit } from '../studies/packageValidate.js';
+import { commitPackage } from '../studies/packageImport.js';
 import {
   canEditPackage,
   canReadPackage,
@@ -92,6 +94,100 @@ const lessonsSchema = z.object({
 });
 
 const NOT_FOUND = { error: 'Study package not found' };
+
+// ---- Import ----
+//
+// The plan the package is checked against. It comes from the caller's own
+// wizard draft, which is client state — there is nothing to protect here, since
+// a creator validating their own package against their own plan can only fool
+// themselves. What the server does own is the writing: every stored id and
+// sequence number is assigned in commitPackage, never taken from the file.
+const importBlueprintSchema = z.object({
+  blueprintId: z.string().trim().min(1).max(80),
+  categoriesLocked: z.boolean(),
+  categories: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(80),
+        name: z.string().trim().min(1).max(60),
+        weight: z.number().min(0).max(100).nullable(),
+      }),
+    )
+    .max(60),
+  questionTargets: z.record(z.string().trim().min(1).max(80), z.number().int().min(0).max(1000)).nullable(),
+  totalQuestions: z.number().int().min(1).max(1000).nullable(),
+  explanationsRequired: z.boolean(),
+  wantQuestions: z.boolean(),
+  wantFlashcards: z.boolean(),
+  wantPresentation: z.boolean(),
+  wantLessons: z.boolean(),
+  // Carried through to the created package. Not used by validation.
+  name: z.string().trim().min(1).max(120),
+  subject: z.string().trim().max(120).optional(),
+  audience: z.string().trim().max(120).nullable().optional(),
+  depth: z.enum(PACKAGE_DEPTHS).nullable().optional(),
+  categoryWeightMode: z.enum(CATEGORY_WEIGHT_MODES).nullable().optional(),
+  explanationMode: z.enum(EXPLANATION_MODES).nullable().optional(),
+});
+
+// The manual ending: the plan, plus the questions the creator typed in. The
+// questions are fully re-validated here because they come from the client, the
+// same rule the deck import/confirm route already follows.
+const letterSchema = z.enum(['A', 'B', 'C', 'D']);
+const manualQuestionSchema = z.object({
+  categoryId: z.string().trim().min(1).max(80).nullable().optional(),
+  stem: z.string().trim().min(1).max(600),
+  options: z
+    .array(z.object({ label: letterSchema, text: z.string().trim().min(1).max(400) }))
+    .length(4)
+    .refine(
+      (opts) => ['A', 'B', 'C', 'D'].every((l) => opts.some((o) => o.label === l)),
+      'Each question needs exactly one option labelled A, B, C, and D',
+    ),
+  answer: letterSchema,
+  explanation: z.string().trim().max(400).nullable().optional(),
+});
+
+// The documents are generous in size: a 1000-question package is a large file,
+// and refusing it at the body limit after the AI produced it would be the worst
+// possible place to fail.
+const importSchema = z.object({
+  documents: z.array(z.string().min(1).max(4_000_000)).min(1).max(20),
+  blueprint: importBlueprintSchema,
+  // The one hybrid the wizard allows: the AI wrote the flashcards or the
+  // slides, and the creator is typing the questions. They ride along so both
+  // halves are created in the SAME transaction — a package with the AI's
+  // flashcards and no questions is exactly the half-created state to avoid.
+  manualQuestions: z.array(manualQuestionSchema).max(1000).optional(),
+});
+
+const manualSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  subject: z.string().trim().max(120).optional(),
+  depth: z.enum(PACKAGE_DEPTHS).nullable().optional(),
+  categoryWeightMode: z.enum(CATEGORY_WEIGHT_MODES).nullable().optional(),
+  explanationMode: z.enum(EXPLANATION_MODES).nullable().optional(),
+  categories: z
+    .array(
+      z.object({
+        id: z.string().trim().min(1).max(80),
+        name: z.string().trim().min(1).max(60),
+        weight: z.number().min(0).max(100).nullable(),
+      }),
+    )
+    .max(60),
+  questions: z.array(manualQuestionSchema).min(1).max(1000),
+  presentation: z
+    .object({
+      title: z.string().trim().max(120),
+      slides: z
+        .array(z.object({ title: z.string().trim().max(200), body: z.string().trim().max(4000) }))
+        .min(1)
+        .max(40),
+    })
+    .nullable()
+    .optional(),
+});
 
 export async function studyPackageRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
@@ -219,6 +315,134 @@ export async function studyPackageRoutes(app: FastifyInstance) {
         })),
       );
       return { lessons };
+    } catch (err) {
+      if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  // ---- Import ----
+  //
+  // Two steps, and the split is the whole safety property: VALIDATE reads and
+  // reports, CONFIRM writes. Nothing is created by parsing or checking a
+  // package, so a creator can paste, read the errors, fix them with their AI and
+  // paste again without leaving anything behind.
+  //
+  // Neither step calls VTS AI. Validation is deterministic from end to end.
+  app.post('/api/studies/packages/import/validate', { ...create, bodyLimit: 32 * 1024 * 1024 }, async (request, reply) => {
+    const parsed = importSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A package and its plan are required' });
+    return { result: validateDocuments(parsed.data.documents, parsed.data.blueprint) };
+  });
+
+  // Create the package and everything in it, in one transaction. Re-validates
+  // first: the client already did, but the check that matters is the one taken
+  // immediately before the write.
+  app.post('/api/studies/packages/import/commit', { ...create, bodyLimit: 32 * 1024 * 1024 }, async (request, reply) => {
+    const me = request.currentUser!;
+    const parsed = importSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A package and its plan are required' });
+    const { documents, blueprint } = parsed.data;
+
+    const result = validateDocuments(documents, blueprint);
+    if (!result.ok) return reply.code(422).send({ error: 'That package did not pass validation', result });
+
+    const pkg = parseForCommit(documents, blueprint);
+    if (!pkg) return reply.code(422).send({ error: 'That package could not be read' });
+
+    // Slide ids are import identity; the stored lesson mapping is positions in
+    // the slide list. Resolved here, where both halves are still in hand.
+    const slidePos = new Map<string, number>();
+    (pkg.presentation?.slides ?? []).forEach((s, i) => slidePos.set(s.id, i));
+
+    try {
+      const created = await commitPackage({
+        ownerUserId: me.id,
+        createdBy: me.id,
+        name: pkg.name,
+        subject: pkg.subject || blueprint.subject || null,
+        description: pkg.description,
+        audience: blueprint.audience ?? pkg.audience,
+        depth: blueprint.depth ?? null,
+        explanationMode: blueprint.explanationMode ?? null,
+        categoryWeightMode: blueprint.categoryWeightMode ?? null,
+        categories: pkg.categories.map((c) => ({ importId: c.id, name: c.name, weight: c.weight })),
+        questions: blueprint.wantQuestions
+          ? pkg.questions.map((q) => ({
+              categoryImportId: q.categoryId,
+              stem: q.stem,
+              options: q.options,
+              answer: q.answer,
+              explanation: q.explanation,
+            }))
+          : (parsed.data.manualQuestions ?? []).map((q) => ({
+              categoryImportId: q.categoryId ?? null,
+              stem: q.stem,
+              options: q.options,
+              answer: q.answer,
+              explanation: q.explanation ?? null,
+            })),
+        // A component the plan did not ask for is left out rather than created —
+        // the validator already warned that it would be.
+        flashcards: blueprint.wantFlashcards
+          ? pkg.flashcards.map((f) => ({ categoryImportId: f.categoryId, term: f.term, definition: f.definition }))
+          : [],
+        presentation:
+          blueprint.wantPresentation && pkg.presentation
+            ? { title: pkg.presentation.title, slides: pkg.presentation.slides.map((s) => ({ title: s.title, body: s.body })) }
+            : null,
+        lessons: blueprint.wantLessons
+          ? pkg.lessons.map((l) => ({
+              title: l.title,
+              objective: l.objective,
+              body: l.body,
+              slideIndexes: l.slideIds.map((id) => slidePos.get(id)).filter((n): n is number => n != null),
+            }))
+          : [],
+        source: 'package_import',
+      });
+      return { package: created };
+    } catch (err) {
+      if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  // The manual ending of the wizard. The questions were typed in, not imported,
+  // but everything after that is identical — one transaction, package-backed by
+  // construction, nothing written before this call.
+  app.post('/api/studies/packages/manual', { ...create, bodyLimit: 32 * 1024 * 1024 }, async (request, reply) => {
+    const me = request.currentUser!;
+    const parsed = manualSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A package plan and at least one question are required' });
+    const d = parsed.data;
+    try {
+      const created = await commitPackage({
+        ownerUserId: me.id,
+        createdBy: me.id,
+        name: d.name,
+        subject: d.subject ?? null,
+        description: null,
+        audience: null,
+        depth: d.depth ?? null,
+        explanationMode: d.explanationMode ?? null,
+        categoryWeightMode: d.categoryWeightMode ?? null,
+        categories: d.categories.map((c) => ({ importId: c.id, name: c.name, weight: c.weight })),
+        questions: d.questions.map((q) => ({
+          categoryImportId: q.categoryId ?? null,
+          stem: q.stem,
+          options: q.options,
+          answer: q.answer,
+          explanation: q.explanation ?? null,
+        })),
+        flashcards: [],
+        presentation: d.presentation
+          ? { title: d.presentation.title, slides: d.presentation.slides }
+          : null,
+        lessons: [],
+        source: 'package_manual',
+      });
+      return { package: created };
     } catch (err) {
       if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
       throw err;

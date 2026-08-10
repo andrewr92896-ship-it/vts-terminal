@@ -1,4 +1,7 @@
 import type {
+  ImportBlueprintPayload,
+  ManualPackagePayload,
+  PackageValidation,
   BudgetMonth,
   PublishedWallTemplate,
   TemplateTile,
@@ -1662,5 +1665,36 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(item),
     });
+  },
+
+  // ---- Study Packages ----
+  // Validate reads and reports; commit writes. Nothing is created by validating,
+  // so a creator can paste, read the errors, fix them with their AI and paste
+  // again without leaving anything behind. Neither call touches VTS AI.
+  validateStudyPackage(
+    documents: string[],
+    blueprint: ImportBlueprintPayload,
+  ): Promise<{ result: PackageValidation }> {
+    return request('/api/studies/packages/import/validate', {
+      method: 'POST',
+      body: JSON.stringify({ documents, blueprint }),
+    });
+  },
+  commitStudyPackage(
+    documents: string[],
+    blueprint: ImportBlueprintPayload,
+    // Only for the hybrid where the AI wrote the extras and the creator typed
+    // the questions. They are created in the same transaction as the import.
+    manualQuestions?: ManualPackagePayload['questions'],
+  ): Promise<{ package: { id: string; name: string } }> {
+    return request('/api/studies/packages/import/commit', {
+      method: 'POST',
+      body: JSON.stringify({ documents, blueprint, manualQuestions }),
+    });
+  },
+  // The wizard's manual ending: the same transactional creator, given questions
+  // that were typed in rather than imported.
+  createManualStudyPackage(payload: ManualPackagePayload): Promise<{ package: { id: string; name: string } }> {
+    return request('/api/studies/packages/manual', { method: 'POST', body: JSON.stringify(payload) });
   },
 };

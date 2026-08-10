@@ -2524,3 +2524,88 @@ export interface WallTemplate {
   sortOrder: number;
   updatedAt: number;
 }
+
+// ---- Study Packages: import ----
+// Mirrors apps/api/src/studies/packageFormat.ts. The server is the authority —
+// it re-validates before it writes, and assigns every stored id and sequence.
+
+export interface PackageIssue {
+  code: string;
+  message: string;
+  ids?: string[];
+}
+
+export interface PackagePreview {
+  name: string;
+  subject: string;
+  questionCount: number;
+  categories: { id: string; name: string; weight: number | null; target: number | null; found: number }[];
+  categoryWeightMode: string | null;
+  explanationMode: string | null;
+  flashcardCount: number;
+  slideCount: number;
+  lessonCount: number;
+}
+
+export interface ImportedQuestionView {
+  id: string;
+  categoryId: string | null;
+  stem: string;
+  options: { label: string; text: string }[];
+  answer: string;
+  explanation: string | null;
+}
+
+export interface PackageValidation {
+  ok: boolean;
+  /** Named checks that came back clean, for the "what passed" half of the report. */
+  passed: string[];
+  errors: PackageIssue[];
+  warnings: PackageIssue[];
+  preview: PackagePreview | null;
+  questions: ImportedQuestionView[];
+}
+
+/** The plan a package is checked against — the wizard's blueprint, flattened. */
+export interface ImportBlueprintPayload {
+  blueprintId: string;
+  categoriesLocked: boolean;
+  categories: { id: string; name: string; weight: number | null }[];
+  questionTargets: Record<string, number> | null;
+  totalQuestions: number | null;
+  explanationsRequired: boolean;
+  wantQuestions: boolean;
+  wantFlashcards: boolean;
+  wantPresentation: boolean;
+  wantLessons: boolean;
+  name: string;
+  subject?: string;
+  audience?: string | null;
+  depth?: string | null;
+  categoryWeightMode?: string | null;
+  explanationMode?: string | null;
+}
+
+export interface ManualPackagePayload {
+  name: string;
+  subject?: string;
+  depth?: string | null;
+  categoryWeightMode?: string | null;
+  explanationMode?: string | null;
+  categories: { id: string; name: string; weight: number | null }[];
+  questions: {
+    categoryId?: string | null;
+    stem: string;
+    options: { label: string; text: string }[];
+    answer: string;
+    explanation?: string | null;
+  }[];
+  presentation?: { title: string; slides: { title: string; body: string }[] } | null;
+}
+
+export interface StudyPackageSummary {
+  id: string;
+  name: string;
+  subject: string | null;
+  questionCount?: number;
+}

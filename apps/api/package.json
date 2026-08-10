@@ -17,6 +17,7 @@
     "verify:investments": "tsx src/investments/verifyInvestments.ts",
     "verify:migrations": "tsx src/db/verifyMigrations.ts",
     "verify:secretbox": "tsx src/security/verifySecretbox.ts",
+    "verify:study-packages": "tsx src/studies/verifyStudyPackages.ts",
     "setup": "npm run db:migrate && npm run db:seed"
   },
   "dependencies": {

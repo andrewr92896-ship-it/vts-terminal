@@ -1700,6 +1700,11 @@ export type PackageDepth = (typeof PACKAGE_DEPTHS)[number];
 export const PACKAGE_VISIBILITIES = ['private', 'shared', 'submitted', 'public'] as const;
 export type PackageVisibility = (typeof PACKAGE_VISIBILITIES)[number];
 
+// What the player does with explanations. Null = not stated, which is how every
+// package created before the setting existed reads.
+export const EXPLANATION_MODES = ['always', 'on_incorrect', 'none'] as const;
+export type ExplanationMode = (typeof EXPLANATION_MODES)[number];
+
 export const studyPackages = sqliteTable('study_packages', {
   id: text('id').primaryKey(),
   // Who the package belongs to. Distinct from `createdBy`: this is the account
@@ -1716,6 +1721,10 @@ export const studyPackages = sqliteTable('study_packages', {
   // handoff adds — an uploaded package states which shape it was written to.
   formatVersion: integer('format_version').notNull().default(1),
   visibility: text('visibility', { enum: PACKAGE_VISIBILITIES }).notNull().default('private'),
+  // What the player does with explanations: show one after every question, only
+  // after a wrong answer, or never. A package setting rather than a property of
+  // any one question — the questions either carry an explanation or they do not.
+  explanationMode: text('explanation_mode', { enum: EXPLANATION_MODES }),
   // The member who built it; null if that account is later deleted.
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
   // When the owner archived it; null = active. Archiving is the ORDINARY way a
@@ -1768,6 +1777,9 @@ export const studyPackageLessons = sqliteTable('study_package_lessons', {
   title: text('title').notNull(),
   objective: text('objective'),
   body: text('body'),
+  // JSON int[] of positions in the presentation's slide list. See migration
+  // 0116 for why positions rather than the transported slide ids.
+  slideIndexes: text('slide_indexes'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
