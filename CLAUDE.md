@@ -1406,16 +1406,40 @@ workspaces list** (see `theme/nav.ts` order).
       row against it. The headline state fields (`totalAttempted`,
       `totalCorrect`, `levelCorrect`, `bestStep`, `recent`) mean what they always
       did — changing them is a separate scoring project.
-    - **Deleting a package DETACHES its content rather than destroying it.** The
-      game, set and presentation survive with `package_id` cleared, and every
-      learner's progress with them; only the package's own rows go. Destroying a
-      study game and everybody's history on it in one irreversible step is the
-      wrong direction to fail.
+    - **REMOVING a package is ARCHIVING it, and archiving changes ONE COLUMN**
+      (`archived_at`, migration `0115`). The package, its components, every
+      learner's progress, the stable category ids and every future sharing
+      relationship are left exactly as they are, so unarchiving is instant and
+      lossless. What the flag governs is **listing**: `readablePackages`
+      excludes archived ones by default, and since that same set of ids is what
+      widens the content lists, an archived package's game, set and presentation
+      drop out of the ordinary Study Library and creation views with it. Reading
+      one **by id still works**, so a direct link and a restore both do.
+      - **Do NOT go back to detaching the content** (`package_id → null`), which
+        is what the first cut did. It turns package-owned content into unrelated
+        standalone content — severing the stable category links, stranding the
+        lessons, breaking what sharing and versioning need — and nothing records
+        what the package held, so it cannot be undone. It is destructive in a way
+        that does not look destructive.
+      - **`purgePackage` is the separate, genuinely destructive path**: it
+        deletes the package's content too (the game with its questions, state
+        and banked runs; the set with its cards; the presentation), so nothing is
+        left carrying a package id that resolves to nothing. **There is no route
+        to it and no user-facing workflow** — its one caller is account deletion,
+        where a personal package goes with the person like their Investments and
+        Net Worth rows do.
+    - **The two ownership models are DISJOINT in the list queries**, and the
+      `package_id IS NULL` half of each `WHERE` is what makes them so. A
+      package-backed row is stored under its owner's personal scope key, which
+      for an owner on no team is the *same string* `contentScopeId` gives them —
+      so without it the scope test matches package content too and the package
+      stops being what decides. Archiving is exactly when that shows: the ids
+      drop out and the row would go on being listed by scope alone.
     - **Foreign keys never fire on this database** (`PRAGMA foreign_keys` is
       never turned on — see `db/index.ts`), so a declared `ON DELETE` action is
-      documentation, not behavior. Every cleanup is explicit: in
-      `deletePackage`, and in the per-user delete list in `admin/service.ts`,
-      which owns the package rows an account holds.
+      documentation, not behavior. Every cleanup is explicit: in `purgePackage`,
+      and in the per-user delete list in `admin/service.ts`, which owns the
+      package rows an account holds.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.

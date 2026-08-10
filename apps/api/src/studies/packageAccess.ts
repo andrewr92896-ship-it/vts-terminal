@@ -1,4 +1,4 @@
-import { eq, or } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyDecks, studyFlashcardSets, studyGuides, studyPackages, type StudyPackageRow } from '../db/schema.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
@@ -111,21 +111,34 @@ export async function canEditPackage(viewer: PackageViewer, packageId: string): 
  * package-backed game appears beside the legacy ones rather than being reachable
  * only if you already know its id.
  */
-export async function readablePackages(viewer: PackageViewer): Promise<StudyPackageRow[]> {
+export async function readablePackages(
+  viewer: PackageViewer,
+  opts: { archived?: boolean } = {},
+): Promise<StudyPackageRow[]> {
   // Filtered in SQL rather than read whole and sifted in memory: this runs on
   // every study game, flashcard and presentation list, so it must not grow with
   // the number of packages on the install.
   //
   // An administrator can reach any package, but the whole install is not a
   // useful list — it would bury their own — so management access stays by id.
+  //
+  // ARCHIVED packages are excluded by default, which is the whole point of the
+  // flag: hiding one hides its game, set and presentation from the ordinary
+  // Study Library and creation views, because those lists are widened by
+  // exactly this set of ids. `archived: true` asks for them instead, so an
+  // owner can find and restore one.
+  const reachable = or(eq(studyPackages.ownerUserId, viewer.id), eq(studyPackages.visibility, 'public'));
   const rows = await db
     .select()
     .from(studyPackages)
-    .where(or(eq(studyPackages.ownerUserId, viewer.id), eq(studyPackages.visibility, 'public')));
+    .where(and(reachable, opts.archived ? isNotNull(studyPackages.archivedAt) : isNull(studyPackages.archivedAt)));
   return rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 }
 
-/** Just the ids, for widening a content list query. */
+/**
+ * Just the ids of the ACTIVE ones, for widening a content list query. Archived
+ * packages are left out, so their content drops out of the ordinary lists.
+ */
 export async function readablePackageIds(viewer: PackageViewer): Promise<string[]> {
   return (await readablePackages(viewer)).map((p) => p.id);
 }

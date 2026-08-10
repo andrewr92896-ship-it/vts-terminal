@@ -2,8 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
+  studyDeckGame,
   studyDeckQuestions,
+  studyDeckRuns,
   studyDecks,
+  studyFlashcardCards,
   studyFlashcardSets,
   studyGuides,
   studyPackageCategories,
@@ -57,6 +60,10 @@ export interface PackageSummary {
   depth: PackageDepth | null;
   formatVersion: number;
   visibility: PackageVisibility;
+  // Archived packages keep everything and are simply hidden from the ordinary
+  // Study Library and creation views.
+  archived: boolean;
+  archivedAt: number | null;
   ownerUserId: string;
   ownerName: string | null;
   createdBy: string | null;
@@ -88,6 +95,8 @@ function toSummaryBase(row: StudyPackageRow, ownerName: string | null) {
     depth: row.depth,
     formatVersion: row.formatVersion,
     visibility: row.visibility,
+    archived: row.archivedAt != null,
+    archivedAt: row.archivedAt?.getTime() ?? null,
     ownerUserId: row.ownerUserId,
     ownerName,
     createdBy: row.createdBy,
@@ -252,43 +261,82 @@ export async function updatePackage(
 }
 
 /**
- * Delete a package.
+ * ARCHIVE a package — the ordinary way a creator removes one.
  *
- * Its own rows go — the categories and the lesson plans are meaningless without
- * it. Its CONTENT does not: the game, set and presentation are detached
- * (`package_id → null`) and carry on as legacy scope-based content, keeping
- * every learner's progress, which is keyed on the deck id and never on the
- * package.
+ * Changes one column and nothing else. The components, every learner's
+ * progress, the stable category ids and every future sharing relationship stay
+ * exactly as they are, so unarchiving is instant and lossless. What the flag
+ * governs is LISTING: an archived package and its content drop out of the
+ * ordinary Study Library and creation views.
  *
- * That is the safe direction. Deleting the container would otherwise destroy a
- * study game and everybody's history on it in one irreversible step, and this
- * repo's standing preference is against that whenever the content cannot be
- * re-imported. Questions keep their `topic` text as their category link is
- * cleared, so a detached deck degrades exactly to a legacy name-keyed one.
- *
- * Every child write is explicit because this database never turns the foreign
- * key pragma on (see db/index.ts) — a declared ON DELETE action does not fire.
+ * Deliberately NOT a detach. Clearing `package_id` would turn package-owned
+ * content into unrelated standalone content — severing the stable category
+ * links, stranding the lessons, and breaking the relationships sharing and
+ * versioning need — irreversibly, since nothing would record what the package
+ * had held. That is destructive in a way that does not look destructive.
  */
-export async function deletePackage(packageId: string): Promise<void> {
+export async function archivePackage(packageId: string): Promise<PackageDetail | null> {
+  const now = new Date();
+  await db
+    .update(studyPackages)
+    .set({ archivedAt: now, updatedAt: now })
+    .where(eq(studyPackages.id, packageId));
+  return getPackage(packageId);
+}
+
+/** Restore an archived package. Nothing was changed, so nothing is rebuilt. */
+export async function unarchivePackage(packageId: string): Promise<PackageDetail | null> {
+  await db
+    .update(studyPackages)
+    .set({ archivedAt: null, updatedAt: new Date() })
+    .where(eq(studyPackages.id, packageId));
+  return getPackage(packageId);
+}
+
+/**
+ * PERMANENTLY DELETE a package and everything it owns. Destructive, and
+ * deliberately kept separate from archiving above.
+ *
+ * There is no route to this and no user-facing workflow — archiving is what a
+ * creator does. Its one caller is account deletion, where a personal package
+ * has to go with the person the way their Investments and Net Worth rows do.
+ *
+ * It deletes the package's CONTENT rather than detaching it, because the
+ * alternative leaves games and sets that belonged to a package sitting in a
+ * scope keyed to a user who no longer exists — content nobody can reach,
+ * carrying a package id that resolves to nothing. Cleaning up coherently means
+ * the package's records leave together.
+ *
+ * Every child write is explicit: this database never turns the foreign key
+ * pragma on (see db/index.ts), so a declared ON DELETE action does not fire and
+ * anything not named here is what gets left behind.
+ */
+export async function purgePackage(packageId: string): Promise<void> {
   await db.transaction(async (tx) => {
-    const catIds = (
+    const deckIds = (
+      await tx.select({ id: studyDecks.id }).from(studyDecks).where(eq(studyDecks.packageId, packageId))
+    ).map((d) => d.id);
+    const setIds = (
       await tx
-        .select({ id: studyPackageCategories.id })
-        .from(studyPackageCategories)
-        .where(eq(studyPackageCategories.packageId, packageId))
-    ).map((c) => c.id);
-    if (catIds.length) {
-      await tx
-        .update(studyDeckQuestions)
-        .set({ categoryId: null })
-        .where(inArray(studyDeckQuestions.categoryId, catIds));
+        .select({ id: studyFlashcardSets.id })
+        .from(studyFlashcardSets)
+        .where(eq(studyFlashcardSets.packageId, packageId))
+    ).map((s) => s.id);
+
+    if (deckIds.length) {
+      // The game, its questions, and every learner's state and banked runs on
+      // it. Progress is keyed by (userId, deckId), so it is reachable only
+      // through these ids and would otherwise outlive the game itself.
+      await tx.delete(studyDeckQuestions).where(inArray(studyDeckQuestions.deckId, deckIds));
+      await tx.delete(studyDeckGame).where(inArray(studyDeckGame.deckId, deckIds));
+      await tx.delete(studyDeckRuns).where(inArray(studyDeckRuns.deckId, deckIds));
+      await tx.delete(studyDecks).where(inArray(studyDecks.id, deckIds));
     }
-    await tx.update(studyDecks).set({ packageId: null }).where(eq(studyDecks.packageId, packageId));
-    await tx
-      .update(studyFlashcardSets)
-      .set({ packageId: null })
-      .where(eq(studyFlashcardSets.packageId, packageId));
-    await tx.update(studyGuides).set({ packageId: null }).where(eq(studyGuides.packageId, packageId));
+    if (setIds.length) {
+      await tx.delete(studyFlashcardCards).where(inArray(studyFlashcardCards.setId, setIds));
+      await tx.delete(studyFlashcardSets).where(inArray(studyFlashcardSets.id, setIds));
+    }
+    await tx.delete(studyGuides).where(eq(studyGuides.packageId, packageId));
     await tx.delete(studyPackageCategories).where(eq(studyPackageCategories.packageId, packageId));
     await tx.delete(studyPackageLessons).where(eq(studyPackageLessons.packageId, packageId));
     await tx.delete(studyPackages).where(eq(studyPackages.id, packageId));

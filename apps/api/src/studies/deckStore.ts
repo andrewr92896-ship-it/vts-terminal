@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyDecks, studyDeckQuestions, users } from '../db/schema.js';
 
@@ -132,9 +132,17 @@ export async function listDecks(teamId: string, packageIds: string[] = []): Prom
     .from(studyDecks)
     .leftJoin(users, eq(users.id, studyDecks.createdBy))
     .where(
-      packageIds.length
-        ? or(eq(studyDecks.teamId, teamId), inArray(studyDecks.packageId, packageIds))
-        : eq(studyDecks.teamId, teamId),
+      // The two ownership models are DISJOINT here, and the `IS NULL` half is
+      // what makes them so. A package-backed row is stored under its owner's
+      // personal scope key, which for an owner who is on no team is the very
+      // same string `contentScopeId` gives them — so without it the scope test
+      // would match package content too, and the package would no longer be
+      // what decides. Archiving one is exactly when that shows: its ids drop out
+      // of `packageIds`, and the row would go on being listed by scope alone.
+      or(
+        and(eq(studyDecks.teamId, teamId), isNull(studyDecks.packageId)),
+        packageIds.length ? inArray(studyDecks.packageId, packageIds) : undefined,
+      ),
     );
 
   const counts = new Map<string, number>();

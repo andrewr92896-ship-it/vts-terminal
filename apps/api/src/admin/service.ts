@@ -69,6 +69,7 @@ import {
   studyTestProgress,
   studyDecks,
   studyDeckQuestions,
+  studyFlashcardCards,
   studyFlashcardSets,
   studyGuides,
   studyPackages,
@@ -589,38 +590,47 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(studyDeckRuns).where(eq(studyDeckRuns.userId, targetId));
     await tx.delete(studyTests).where(eq(studyTests.userId, targetId));
     await tx.delete(studyTestProgress).where(eq(studyTestProgress.userId, targetId));
-    // Study Packages this account OWNS. Unlike the team-shared content below, a
-    // package belongs to one person, so it goes with them.
+    // Study Packages this account OWNS, and everything inside them.
+    //
+    // Unlike the team-shared content below, a package belongs to one person, so
+    // it goes with them the way their Investments and Net Worth rows do. It is
+    // deleted WHOLE — the game, its questions, everybody's state and banked runs
+    // on it, the flashcard set and its cards, the presentation, the categories
+    // and the lessons.
+    //
+    // Detaching the content instead was the first cut and is worse: it would
+    // leave games and sets in a scope keyed to a user who no longer exists —
+    // unreachable content carrying a package id that resolves to nothing. The
+    // ordinary way a creator removes a package is to ARCHIVE it, which destroys
+    // nothing; this path only runs when the account itself is being erased.
     //
     // Every child write is spelled out because this database never turns the
-    // foreign key pragma on, so a declared ON DELETE action does not fire. The
-    // package's CONTENT is detached rather than destroyed — the same rule
-    // deletePackage follows, and for the same reason: a game and everybody's
-    // progress on it must not disappear as a side effect of one account being
-    // removed. Questions keep their `topic` text as their category link is
-    // cleared, so a detached game degrades exactly to a legacy one.
+    // foreign key pragma on, so a declared ON DELETE action does not fire and
+    // anything unnamed here is what gets left behind.
     const ownedPackageIds = (
       await tx.select({ id: studyPackages.id }).from(studyPackages).where(eq(studyPackages.ownerUserId, targetId))
     ).map((p) => p.id);
     if (ownedPackageIds.length) {
-      const ownedCategoryIds = (
+      const packageDeckIds = (
+        await tx.select({ id: studyDecks.id }).from(studyDecks).where(inArray(studyDecks.packageId, ownedPackageIds))
+      ).map((d) => d.id);
+      const packageSetIds = (
         await tx
-          .select({ id: studyPackageCategories.id })
-          .from(studyPackageCategories)
-          .where(inArray(studyPackageCategories.packageId, ownedPackageIds))
-      ).map((c) => c.id);
-      if (ownedCategoryIds.length) {
-        await tx
-          .update(studyDeckQuestions)
-          .set({ categoryId: null })
-          .where(inArray(studyDeckQuestions.categoryId, ownedCategoryIds));
+          .select({ id: studyFlashcardSets.id })
+          .from(studyFlashcardSets)
+          .where(inArray(studyFlashcardSets.packageId, ownedPackageIds))
+      ).map((s) => s.id);
+      if (packageDeckIds.length) {
+        await tx.delete(studyDeckQuestions).where(inArray(studyDeckQuestions.deckId, packageDeckIds));
+        await tx.delete(studyDeckGame).where(inArray(studyDeckGame.deckId, packageDeckIds));
+        await tx.delete(studyDeckRuns).where(inArray(studyDeckRuns.deckId, packageDeckIds));
+        await tx.delete(studyDecks).where(inArray(studyDecks.id, packageDeckIds));
       }
-      await tx.update(studyDecks).set({ packageId: null }).where(inArray(studyDecks.packageId, ownedPackageIds));
-      await tx
-        .update(studyFlashcardSets)
-        .set({ packageId: null })
-        .where(inArray(studyFlashcardSets.packageId, ownedPackageIds));
-      await tx.update(studyGuides).set({ packageId: null }).where(inArray(studyGuides.packageId, ownedPackageIds));
+      if (packageSetIds.length) {
+        await tx.delete(studyFlashcardCards).where(inArray(studyFlashcardCards.setId, packageSetIds));
+        await tx.delete(studyFlashcardSets).where(inArray(studyFlashcardSets.id, packageSetIds));
+      }
+      await tx.delete(studyGuides).where(inArray(studyGuides.packageId, ownedPackageIds));
       await tx
         .delete(studyPackageCategories)
         .where(inArray(studyPackageCategories.packageId, ownedPackageIds));

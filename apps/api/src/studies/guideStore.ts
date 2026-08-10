@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyGuides, users } from '../db/schema.js';
 
@@ -86,9 +86,11 @@ export async function listGuides(teamId: string, packageIds: string[] = []): Pro
     .from(studyGuides)
     .leftJoin(users, eq(users.id, studyGuides.createdBy))
     .where(
-      packageIds.length
-        ? or(eq(studyGuides.teamId, teamId), inArray(studyGuides.packageId, packageIds))
-        : eq(studyGuides.teamId, teamId),
+      // Disjoint by construction — see the note on deckStore.listDecks.
+      or(
+        and(eq(studyGuides.teamId, teamId), isNull(studyGuides.packageId)),
+        packageIds.length ? inArray(studyGuides.packageId, packageIds) : undefined,
+      ),
     );
 
   return rows

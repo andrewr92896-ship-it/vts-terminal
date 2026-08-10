@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray, or } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyFlashcardSets, studyFlashcardCards, users } from '../db/schema.js';
 
@@ -64,9 +64,11 @@ export async function listFlashcardSets(teamId: string, packageIds: string[] = [
     .from(studyFlashcardSets)
     .leftJoin(users, eq(users.id, studyFlashcardSets.createdBy))
     .where(
-      packageIds.length
-        ? or(eq(studyFlashcardSets.teamId, teamId), inArray(studyFlashcardSets.packageId, packageIds))
-        : eq(studyFlashcardSets.teamId, teamId),
+      // Disjoint by construction — see the note on deckStore.listDecks.
+      or(
+        and(eq(studyFlashcardSets.teamId, teamId), isNull(studyFlashcardSets.packageId)),
+        packageIds.length ? inArray(studyFlashcardSets.packageId, packageIds) : undefined,
+      ),
     );
 
   const counts = new Map<string, number>();

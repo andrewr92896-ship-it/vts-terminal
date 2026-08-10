@@ -1718,6 +1718,13 @@ export const studyPackages = sqliteTable('study_packages', {
   visibility: text('visibility', { enum: PACKAGE_VISIBILITIES }).notNull().default('private'),
   // The member who built it; null if that account is later deleted.
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  // When the owner archived it; null = active. Archiving is the ORDINARY way a
+  // package is removed, and it changes nothing but this column — the content,
+  // the learners' progress, the stable category ids and every future sharing
+  // relationship stay exactly as they are, so unarchiving is lossless. What it
+  // governs is listing: an archived package and its content drop out of the
+  // ordinary Study Library and creation views.
+  archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

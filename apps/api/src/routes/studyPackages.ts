@@ -13,13 +13,14 @@ import {
   MAX_CATEGORIES,
   MAX_LESSONS,
   PackageError,
+  archivePackage,
   componentIds,
   createPackage,
-  deletePackage,
   getPackage,
   setCategories,
   setLessons,
   summarize,
+  unarchivePackage,
   updatePackage,
 } from '../studies/packageStore.js';
 import { getDeck } from '../studies/deckStore.js';
@@ -100,10 +101,13 @@ export async function studyPackageRoutes(app: FastifyInstance) {
 
   const viewerOf = (u: PackageViewer): PackageViewer => ({ id: u.id, teamId: u.teamId, roles: u.roles });
 
-  // Every package this account can reach.
+  // Every package this account can reach. Archived ones are left out — pass
+  // `?archived=true` to list those instead, which is how an owner finds one to
+  // restore.
   app.get('/api/studies/packages', guard, async (request) => {
     const me = viewerOf(request.currentUser!);
-    return { packages: await summarize(await readablePackages(me)) };
+    const archived = (request.query as { archived?: string }).archived === 'true';
+    return { packages: await summarize(await readablePackages(me, { archived })), archived };
   });
 
   // Create the shell. Components and the category blueprint are added after.
@@ -150,14 +154,30 @@ export async function studyPackageRoutes(app: FastifyInstance) {
     return { package: pkg };
   });
 
-  // Delete the container. Its game, set and presentation are DETACHED rather
-  // than destroyed, keeping every learner's progress — see deletePackage.
-  app.delete('/api/studies/packages/:id', create, async (request, reply) => {
+  // ARCHIVE — the only removal a creator gets, and deliberately not a delete.
+  //
+  // Nothing is destroyed, detached or rewritten: the package, its components,
+  // every learner's progress and the stable category ids are all left as they
+  // are, and the package simply stops appearing in the ordinary lists. There is
+  // NO permanent-delete route here on purpose; purgePackage exists for account
+  // deletion and has no user-facing workflow.
+  app.post('/api/studies/packages/:id/archive', create, async (request, reply) => {
     const me = viewerOf(request.currentUser!);
     const id = (request.params as { id: string }).id;
     if (!(await canEditPackage(me, id))) return reply.code(404).send(NOT_FOUND);
-    await deletePackage(id);
-    return { packages: await summarize(await readablePackages(me)) };
+    const pkg = await archivePackage(id);
+    if (!pkg) return reply.code(404).send(NOT_FOUND);
+    return { package: pkg, packages: await summarize(await readablePackages(me)) };
+  });
+
+  // Restore one. Nothing was changed by archiving, so nothing is rebuilt.
+  app.post('/api/studies/packages/:id/unarchive', create, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const id = (request.params as { id: string }).id;
+    if (!(await canEditPackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    const pkg = await unarchivePackage(id);
+    if (!pkg) return reply.code(404).send(NOT_FOUND);
+    return { package: pkg, packages: await summarize(await readablePackages(me)) };
   });
 
   // The category blueprint. Sent whole; an entry with an `id` keeps that
