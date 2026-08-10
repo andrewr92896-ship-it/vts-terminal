@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.96';
+export const APP_VERSION = 'Beta V 6.97';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.97',
+    date: 'August 10, 2026',
+    notes: [
+      'Studies ▸ Study Creation now opens with “Create a study package” — a short set of questions, one at a time, about what you need: how many questions, whether to track categories, whether to include flashcards or a presentation. It only asks what follows from your answers, so a simple package is a handful of taps.',
+      'It writes nothing itself. At the end you either take a handoff to your own ChatGPT or Claude, which does the writing, or go straight to typing the questions in. Your answers are kept if you leave the screen or reload, and the three existing makers are still there underneath for building one piece at a time.',
+    ],
+  },
   {
     version: 'Beta V 6.96',
     date: 'August 10, 2026',

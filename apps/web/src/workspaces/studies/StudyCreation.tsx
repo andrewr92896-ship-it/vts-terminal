@@ -5,6 +5,9 @@ import { TeamFlashcards } from './TeamFlashcards';
 import { StudyGuideCreator } from './StudyGuides';
 import { ActionTile } from './ActionTile';
 import { useResponsive } from '../../hooks/useMediaQuery';
+import { useAuth } from '../../auth/AuthContext';
+import { PackageWizard, type WizardResult } from './wizard/PackageWizard';
+import { HandoffPending } from './wizard/HandoffPending';
 
 // The "Study Creation" section — the one place a team builds its own study
 // content. Three makers: study games (quizzes), flashcard sets (term/definition
@@ -16,6 +19,12 @@ import { useResponsive } from '../../hooks/useMediaQuery';
 // 2026-08): stacked, every maker's full list and form loaded at once, so the
 // screen opened three feet long and the thing you came to build was somewhere in
 // the middle of it. Picking a tile opens one maker with a way back.
+//
+// The DEFAULT way to build a study game is now the package wizard: a short,
+// branching set of questions that produces a blueprint and then hands it either
+// to the creator's own AI or to the manual entry path. The three makers below it
+// are the alternate route — they are what the wizard's manual path lands in, and
+// they stay directly reachable for anyone who would rather skip the questions.
 type Maker = 'games' | 'flashcards' | 'guides';
 
 export function StudyCreation({
@@ -26,7 +35,26 @@ export function StudyCreation({
   onNavigate?: (screen: string) => void;
 }) {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
+  const readOnly = !!user?.isDemo;
   const [maker, setMaker] = useState<Maker | null>(null);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [handoff, setHandoff] = useState<WizardResult | null>(null);
+
+  const onWizardDone = (result: WizardResult) => {
+    setWizardOpen(false);
+    if (result.route === 'manual') {
+      // Manual-only: straight into the study game maker, which is where the
+      // questions get typed in or imported from a file.
+      setMaker('games');
+      return;
+    }
+    setHandoff(result);
+  };
+
+  if (handoff) {
+    return <HandoffPending theme={theme} result={handoff} onBack={() => setHandoff(null)} />;
+  }
 
   if (maker) {
     return (
@@ -52,6 +80,22 @@ export function StudyCreation({
         <p style={{ margin: '5px 0 0', fontSize: 12.5, color: '#8ea3cc' }}>
           {"Build your own study content."}
         </p>
+      </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <ActionTile
+          theme={theme}
+          icon="layers"
+          title="Create a study package"
+          subtitle="A few questions about what you need, then your own AI writes it — or you type it in yourself."
+          feature="studyCreation"
+          onClick={() => setWizardOpen(true)}
+          onLockedClick={() => onNavigate?.('my_access')}
+        />
+      </div>
+
+      <div style={{ margin: '0 0 10px', fontSize: 11.5, fontWeight: 600, letterSpacing: '.4px', color: '#6f84b0' }}>
+        {"ONE PIECE AT A TIME"}
       </div>
 
       <div
@@ -89,6 +133,15 @@ export function StudyCreation({
           onLockedClick={() => onNavigate?.('my_access')}
         />
       </div>
+
+      {wizardOpen && (
+        <PackageWizard
+          theme={theme}
+          readOnly={readOnly}
+          onClose={() => setWizardOpen(false)}
+          onComplete={onWizardDone}
+        />
+      )}
     </div>
   );
 }

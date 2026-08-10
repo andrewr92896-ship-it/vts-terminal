@@ -1440,6 +1440,41 @@ workspaces list** (see `theme/nav.ts` order).
       documentation, not behavior. Every cleanup is explicit: in `purgePackage`,
       and in the per-user delete list in `admin/service.ts`, which owns the
       package rows an account holds.
+    - **THE CREATION WIZARD is the default way to build a study game**
+      (`workspaces/studies/wizard/`, opened from the "Create a study package"
+      tile on Study Creation). One structural question per card, branching on
+      the answers, ending at a review screen. The three existing makers stay
+      exactly as they were, directly reachable underneath — they are also where
+      the wizard's manual path lands.
+      - **It calls no VTS AI endpoint, and that is the point of the workflow**
+        (owner decision): the content comes from the creator's OWN third-party
+        AI, or from their keyboard. The wizard produces a blueprint describing
+        the SHAPE of a package — how many questions, which categories, whether
+        there are flashcards — and never a word of the content.
+      - **It writes nothing.** No route is called at any point, so nothing
+        exists in the database because somebody opened the wizard or reached the
+        last card. Creation happens in what comes after: the AI handoff/import,
+        or the manual maker.
+      - **`blueprint.ts` is the whole model** — the type, `stepsFor` (the path,
+        recomputed from the answers, which is what makes the branching work),
+        `stepError` (plain-language, local to a card) and `nextStep`. **Add a
+        question by adding a `StepId` and a case, never by threading a
+        conditional through the shell.** `nextStep` sweeps for anything still
+        unanswered before it will open Review, so a step that becomes relevant
+        after the user has walked past its place in the path cannot be missed.
+      - **The draft is per user, on the device** (`vts_study_package_draft_<id>`,
+        debounced, flushed on unmount, restored on open). Navigation here is
+        state-based, so leaving the section used to lose everything silently. A
+        draft carries its schema version and is DISCARDED rather than repaired
+        when that version moves — replaying half-understood answers into a
+        changed set of questions produces a package nobody described.
+      - **A category gets its stable id the moment it is added**, so renaming it
+        in the editor is a rename. Same rule as the stored package categories,
+        for the same reason.
+      - The provider preference and the one-time AI walkthrough are per-user
+        device state too, deliberately not package content. The walkthrough is
+        an explicit exception to the no-how-to-copy rule (owner instruction),
+        and stays reachable afterwards from the handoff step.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.
