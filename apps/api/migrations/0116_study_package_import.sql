@@ -1,0 +1,26 @@
+-- Two fields the imported package format carries that had nowhere to land.
+--
+-- `explanation_mode` is a package SETTING, not a property of any one question:
+-- it says whether the player shows an explanation after every question, only
+-- after a wrong answer, or not at all. The questions themselves either carry an
+-- explanation or they do not; this is what the player does with them. It sits on
+-- the package because that is where the creation wizard asks for it and where
+-- the transport format puts it (`package.settings.explanationMode`).
+--
+-- NULL means the package predates the setting, and the player keeps behaving
+-- exactly as it does today.
+ALTER TABLE `study_packages` ADD `explanation_mode` text;
+--> statement-breakpoint
+-- Which slides a lesson covers, as a JSON array of INDEXES into the
+-- presentation's slide list.
+--
+-- Indexes rather than the ids the importing AI used: those ids exist only in the
+-- transported file, and a guide stores its slides as one JSON blob with no ids
+-- of their own, so an imported id would resolve to nothing the moment the file
+-- was gone. The validator has already checked that every referenced slide is in
+-- the same package, so the indexes are meaningful at the point they are written.
+--
+-- Consequence worth knowing: reordering a presentation's slides afterwards does
+-- not move the lesson mapping with them. There is no lesson UI yet, so nothing
+-- reads this today; it is here so the mapping the AI produced is not discarded.
+ALTER TABLE `study_package_lessons` ADD `slide_indexes` text;

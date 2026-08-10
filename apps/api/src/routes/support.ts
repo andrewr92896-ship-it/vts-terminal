@@ -8,6 +8,7 @@ import {
   TIER_LABELS,
   type PremiumFeature,
 } from '../memberships/tiers.js';
+import { studyContextSchema } from '../support/studyContext.js';
 import {
   supportTurn,
   listSupportRequests,
@@ -18,6 +19,14 @@ import {
 
 const turnSchema = z.object({
   kind: z.enum(SUPPORT_KINDS),
+  /**
+   * Machine context collected by the surface the user reported from — today the
+   * Studies wizard and importer. Optional, whitelisted by `studyContextSchema`,
+   * and only honoured on a BUG: a suggestion or a support question has nothing
+   * to diagnose, so attaching diagnostics to one would be collecting for the
+   * sake of it.
+   */
+  context: studyContextSchema.optional(),
   messages: z
     .array(
       z.object({
@@ -56,7 +65,9 @@ export async function supportRoutes(app: FastifyInstance) {
       });
     }
     try {
-      const result = await supportTurn(u, parsed.data.kind, parsed.data.messages);
+      const result = await supportTurn(u, parsed.data.kind, parsed.data.messages, {
+        context: parsed.data.kind === 'bug' ? parsed.data.context : undefined,
+      });
       return result;
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not send message' });

@@ -202,6 +202,10 @@ export const NAV: NavWorkspace[] = [
       // which is why the rest of this list is not marked.
       { key: 'st_decks', label: 'Study Creation', icon: 'library' },
       // Free.
+      // Study Packages: what this account owns, what has been shared with it by
+      // username, and the published VTS Study Library. Free throughout —
+      // browsing and studying have never been paid, and only the making is.
+      { key: 'st_packages', label: 'Study Packages', icon: 'package' },
       { key: 'st_game', label: 'Study Game', icon: 'gamepad-2' },
       { key: 'st_cards', label: 'Flashcards', icon: 'copy' },
       { key: 'st_test', label: 'Practice Tests', icon: 'file-check-2' },
@@ -230,6 +234,9 @@ export const NAV: NavWorkspace[] = [
       // Sits beside the log and the guidelines because it is the same job:
       // what has happened, and what is waiting on somebody.
       { key: 'ad_rules', label: 'Rule Breaking', icon: 'shield' },
+      // The moderation queue for the public Study Library. Same job again:
+      // something a creator has asked for that is waiting on an administrator.
+      { key: 'ad_studies', label: 'Study Library', icon: 'package-check' },
       { key: 'ad_teams', label: 'Groups', icon: 'building-2' },
       { key: 'ad_badges', label: 'Badges', icon: 'star' },
       { key: 'ad_templates', label: 'Message Templates', icon: 'message-square' },

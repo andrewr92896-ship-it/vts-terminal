@@ -28,6 +28,14 @@ import {
   parseFlashcardsFromText,
 } from '../ai/claude.js';
 import { contentScopeId } from '../teams/contentScope.js';
+import {
+  isPackageBacked,
+  packageAudience,
+  packageIdOf,
+  readablePackageIds,
+  resolveContentScope,
+  type ContentKind,
+} from '../studies/packageAccess.js';
 import { AiLimitError, enforceAiLimit } from '../ai/usage.js';
 import { styleGuide } from '../ai/prompts.js';
 import { getTeamName } from '../teams/service.js';
@@ -40,7 +48,13 @@ import {
   listFlashcardSets,
   updateFlashcardSet,
 } from '../studies/flashcardStore.js';
-import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
+import {
+  archiveDeckRun,
+  getDeckGame,
+  getDeckLeaderboard,
+  getPackageLeaderboard,
+  saveDeckGame,
+} from '../studies/deckGame.js';
 import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { getUserTeamContext } from '../userTeams/service.js';
@@ -57,6 +71,26 @@ async function studiesDeleteMode(me: { id: string; roles: string | null }): Prom
   return 'own';
 }
 const NOT_LEADER_MSG = 'Only your group leader can delete shared study content.';
+
+// Who may delete one particular piece of content.
+//
+// Two ownership models, two answers. GROUP-scoped content follows the group
+// rule above — the leader, or an admin. PACKAGE-BACKED content is user-owned, so
+// its owner deletes their own: the group leader has no standing over somebody's
+// personal study package, and applying the group rule here would leave an owner
+// who happens to be on a team unable to delete a game they built themselves.
+//
+// PRECONDITION: only called once `resolveContentScope(..., 'edit')` has already
+// granted the caller edit access. This picks the ownership question; it is not
+// itself the access check.
+async function deleteModeFor(
+  me: { id: string; roles: string | null },
+  kind: ContentKind,
+  contentId: string,
+): Promise<StudiesDeleteMode> {
+  if (await isPackageBacked(kind, contentId)) return 'any';
+  return studiesDeleteMode(me);
+}
 
 const termSchema = z.object({ term: z.string().trim().min(1).max(200) });
 const gameSchema = z.object({ state: z.string() });
@@ -259,6 +293,11 @@ const guideChatSchema = z.object({
 // One presentation slide the author is saving: title, body, and an optional
 // screenshot as a base64 data URL. The store re-sanitizes and caps these.
 const guideSlideSchema = z.object({
+  // The slide's stored identity, sent back by the editor. It MUST be accepted
+  // here: zod strips what it does not declare, so leaving it out would silently
+  // drop every id on save and the store would mint new ones — which is exactly
+  // how a lesson ends up describing slides that no longer exist.
+  id: z.string().trim().min(1).max(80).nullable().optional(),
   title: z.string().max(400).optional(),
   body: z.string().max(6000).optional(),
   image: z.string().max(4_000_000).nullable().optional(),
@@ -289,7 +328,9 @@ export async function studiesRoutes(app: FastifyInstance) {
   // creates it (AI-generated or from an uploaded file) and the whole team plays
   // it with the level-up mechanics.
 
-  // The list of the caller's team decks.
+  // The list of the caller's team decks, plus any package-backed game they can
+  // reach. Package content is stored under its owner's personal scope key, so
+  // without the second argument it would be reachable only by knowing its id.
   app.get('/api/studies/decks', guard, async (request, reply) => {
     const teamId = contentScopeId(request.currentUser!);
     // Make sure this team has the built-in example game(s) — covers teams created
@@ -299,7 +340,7 @@ export async function studiesRoutes(app: FastifyInstance) {
     } catch {
       /* ignore — the built-in game will fill in on a later fetch or the next boot */
     }
-    return { decks: await listDecks(teamId) };
+    return { decks: await listDecks(teamId, await readablePackageIds(request.currentUser!)) };
   });
 
   // Create a deck by generating questions from a topic with Claude.
@@ -326,7 +367,7 @@ export async function studiesRoutes(app: FastifyInstance) {
         source: 'ai_topic',
         questions,
       });
-      return { deck, decks: await listDecks(teamId) };
+      return { deck, decks: await listDecks(teamId, await readablePackageIds(request.currentUser!)) };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the study game' });
@@ -379,31 +420,38 @@ export async function studiesRoutes(app: FastifyInstance) {
           explanation: q.explanation ?? null,
         })),
       });
-      return { deck, decks: await listDecks(teamId) };
+      return { deck, decks: await listDecks(teamId, await readablePackageIds(request.currentUser!)) };
     } catch (err) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the study game' });
     }
   });
 
-  // Combine several of the team's games into one new game with all their
+  // Combine several of the caller's games into one new game with all their
   // questions. Registered before the ":id" routes so the literal path wins.
+  //
+  // Each chosen game is resolved to the scope it is actually stored under, so a
+  // package-backed one joins the combination instead of being silently dropped;
+  // a game the caller cannot read resolves to nothing and is left out.
   app.post('/api/studies/decks/merge', create, async (request, reply) => {
     const me = request.currentUser!;
     const parsed = deckMergeSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A name and at least one game are required' });
     try {
+      const resolved = await Promise.all(
+        parsed.data.deckIds.map(async (id) => ({ id, scope: await resolveContentScope(me, 'deck', id, 'read') })),
+      );
       const deck = await mergeDecks({
         teamId: contentScopeId(me),
         name: parsed.data.name,
         createdBy: me.id,
-        deckIds: parsed.data.deckIds,
+        sources: resolved.filter((s): s is { id: string; scope: string } => s.scope !== null),
         tagSource: parsed.data.tagSource ?? false,
       });
       if (deck.questionCount === 0) {
         await deleteDeck(deck.id, contentScopeId(me), me.id, true);
         return reply.code(422).send({ error: 'None of the chosen games had questions to combine.' });
       }
-      return { deck, decks: await listDecks(contentScopeId(me)) };
+      return { deck, decks: await listDecks(contentScopeId(me), await readablePackageIds(me)) };
     } catch (err) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not combine the study games' });
     }
@@ -457,11 +505,14 @@ export async function studiesRoutes(app: FastifyInstance) {
     }
   });
 
-  // One deck with its questions (team-scoped).
+  // One deck with its questions. The scope comes from packageAccess: the
+  // caller's own content scope for legacy games, the package's decision for
+  // package-backed ones.
   app.get('/api/studies/decks/:id', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
+    const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    const deck = await getDeck(id, teamId);
+    const scope = await resolveContentScope(me, 'deck', id, 'read');
+    const deck = scope ? await getDeck(id, scope) : null;
     if (!deck) return reply.code(404).send({ error: 'Study game not found' });
     return { deck };
   });
@@ -473,12 +524,14 @@ export async function studiesRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     const parsed = deckUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
+    const scope = await resolveContentScope(me, 'deck', id, 'edit');
+    if (!scope) return reply.code(403).send({ error: 'You can only edit study games you created.' });
     // Built-in example games are code-owned and locked — nobody edits them here.
-    const target = await getDeck(id, contentScopeId(me));
+    const target = await getDeck(id, scope);
     if (target && isBakedInSource(target.source)) {
       return reply.code(403).send({ error: 'This is a built-in example game and can’t be edited.' });
     }
-    const deck = await updateDeck(id, contentScopeId(me), me.id, isAdmin(parseRoles(me)), {
+    const deck = await updateDeck(id, scope, me.id, isAdmin(parseRoles(me)), {
       name: parsed.data.name,
       description: parsed.data.description,
       categories: parsed.data.categories,
@@ -493,7 +546,7 @@ export async function studiesRoutes(app: FastifyInstance) {
       })),
     });
     if (!deck) return reply.code(403).send({ error: 'You can only edit study games you created.' });
-    return { deck, decks: await listDecks(contentScopeId(me)) };
+    return { deck, decks: await listDecks(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   // Delete a deck. Only the Trading Team leader (or an admin/founder) may delete
@@ -501,30 +554,39 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.delete('/api/studies/decks/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
+    const scope = await resolveContentScope(me, 'deck', id, 'edit');
+    if (!scope) return reply.code(403).send({ error: 'You can only delete study games you created.' });
     // Built-in example games are permanent — they can't be removed by anyone.
-    const target = await getDeck(id, contentScopeId(me));
+    const target = await getDeck(id, scope);
     if (target && isBakedInSource(target.source)) {
       return reply.code(403).send({ error: 'This is a built-in example game and can’t be removed.' });
     }
-    const mode = await studiesDeleteMode(me);
+    const mode = await deleteModeFor(me, 'deck', id);
     if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
-    const ok = await deleteDeck(id, contentScopeId(me), me.id, mode === 'any');
+    const ok = await deleteDeck(id, scope, me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete study games you created.' });
-    return { decks: await listDecks(contentScopeId(me)) };
+    return { decks: await listDecks(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   // Per-user, per-deck game state.
+  //
+  // Progress stays keyed by (userId, deckId) exactly as it always was, which is
+  // what makes a shared package work: everybody plays the SAME deck id and each
+  // keeps their own row against it. Reaching the deck is a read — the state
+  // being written belongs to the learner, not to the game.
   app.get('/api/studies/decks/:id/game', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
+    const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
-    return { state: await getDeckGame(request.currentUser!.id, id) };
+    const scope = await resolveContentScope(me, 'deck', id, 'read');
+    if (!scope || !(await getDeck(id, scope))) return reply.code(404).send({ error: 'Not found' });
+    return { state: await getDeckGame(me.id, id) };
   });
 
   app.put('/api/studies/decks/:id/game', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
+    const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    const scope = await resolveContentScope(me, 'deck', id, 'read');
+    if (!scope || !(await getDeck(id, scope))) return reply.code(404).send({ error: 'Not found' });
     const parsed = gameSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
     const state = normalizeState(parsed.data.state);
@@ -534,9 +596,10 @@ export async function studiesRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/studies/decks/:id/game/archive', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
+    const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    if (!(await getDeck(id, teamId))) return reply.code(404).send({ error: 'Not found' });
+    const scope = await resolveContentScope(me, 'deck', id, 'read');
+    if (!scope || !(await getDeck(id, scope))) return reply.code(404).send({ error: 'Not found' });
     const parsed = gameSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A state string is required' });
     const state = normalizeState(parsed.data.state);
@@ -545,22 +608,33 @@ export async function studiesRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // The leaderboard for a BUILT-IN study game — public, spanning every account
-  // on the install (owner decision, 2026-08).
+  // Two kinds of study game have a board, and they are ranked the same way:
   //
-  // User-made games have no leaderboard: 404, not an empty list, so the client
-  // can hide the tab entirely rather than showing an empty board that looks
-  // broken. The caller must still own a copy of the deck to ask, which is what
-  // stops this being a way to probe deck ids.
+  //   • A BUILT-IN game — public, spanning every copy of itself on the install
+  //     (owner decision, 2026-08).
+  //   • A PACKAGE-BACKED game — ranked among the package's own audience: the
+  //     owner, whoever accepted a share, and whoever added it from the public
+  //     library. Participation follows Study Package access and never
+  //     trading/private-group membership (Handoff 4).
+  //
+  // A legacy user-made game still has none: 404, not an empty list, so the
+  // client hides the tab entirely rather than showing an empty board that looks
+  // broken. The caller must be able to read the deck to ask either way, which is
+  // what stops this being a way to probe deck ids.
   app.get('/api/studies/decks/:id/leaderboard', guard, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    const deck = await getDeck(id, contentScopeId(me));
+    const scope = await resolveContentScope(me, 'deck', id, 'read');
+    const deck = scope ? await getDeck(id, scope) : null;
     if (!deck) return reply.code(404).send({ error: 'Not found' });
-    if (!isBakedInSource(deck.source)) {
+    if (isBakedInSource(deck.source)) {
+      return { entries: await getDeckLeaderboard(id, me.id) };
+    }
+    const packageId = await packageIdOf('deck', id);
+    if (!packageId) {
       return reply.code(404).send({ error: 'This study game has no leaderboard' });
     }
-    return { entries: await getDeckLeaderboard(id, me.id) };
+    return { entries: await getPackageLeaderboard(id, me.id, await packageAudience(packageId)) };
   });
 
   // ---- Team flashcard sets ----
@@ -569,10 +643,11 @@ export async function studiesRoutes(app: FastifyInstance) {
   // from an uploaded file) and the whole team studies it with the auto-rotate
   // flashcard experience.
 
-  // The list of the caller's team flashcard sets.
+  // The list of the caller's team flashcard sets, plus any package-backed set
+  // they can reach.
   app.get('/api/studies/flashcards', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
-    return { sets: await listFlashcardSets(teamId) };
+    const me = request.currentUser!;
+    return { sets: await listFlashcardSets(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   // Create a set from cards the client supplies: typed in by hand, or the
@@ -591,7 +666,7 @@ export async function studiesRoutes(app: FastifyInstance) {
         source: parsed.data.source ?? 'manual',
         cards: parsed.data.cards.map((c) => ({ term: c.term, def: c.def, topic: c.topic ?? null })),
       });
-      return { set, sets: await listFlashcardSets(teamId) };
+      return { set, sets: await listFlashcardSets(teamId, await readablePackageIds(request.currentUser!)) };
     } catch (err) {
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the flashcard set' });
     }
@@ -621,7 +696,7 @@ export async function studiesRoutes(app: FastifyInstance) {
         source: 'ai_topic',
         cards,
       });
-      return { set, sets: await listFlashcardSets(teamId) };
+      return { set, sets: await listFlashcardSets(teamId, await readablePackageIds(request.currentUser!)) };
     } catch (err) {
       if (err instanceof AiLimitError) return reply.code(429).send({ error: err.message });
       return reply.code(502).send({ error: err instanceof Error ? err.message : 'Could not build the flashcard set' });
@@ -660,7 +735,8 @@ export async function studiesRoutes(app: FastifyInstance) {
     const parsed = flashcardFromDeckSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'A study game is required' });
     if (!aiConfigured()) return reply.code(503).send({ error: 'AI is not configured (no API key set)' });
-    const deck = await getDeck(parsed.data.deckId, teamId);
+    const deckScope = await resolveContentScope(request.currentUser!, 'deck', parsed.data.deckId, 'read');
+    const deck = deckScope ? await getDeck(parsed.data.deckId, deckScope) : null;
     if (!deck) return reply.code(404).send({ error: 'Study game not found' });
     // Compose source material from the game: each question's stem, its correct
     // answer, and any explanation — the concepts to pull vocabulary from.
@@ -687,11 +763,12 @@ export async function studiesRoutes(app: FastifyInstance) {
     }
   });
 
-  // One set with its cards (team-scoped).
+  // One set with its cards.
   app.get('/api/studies/flashcards/:id', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
+    const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    const set = await getFlashcardSet(id, teamId);
+    const scope = await resolveContentScope(me, 'flashcards', id, 'read');
+    const set = scope ? await getFlashcardSet(id, scope) : null;
     if (!set) return reply.code(404).send({ error: 'Flashcard set not found' });
     return { set };
   });
@@ -702,13 +779,16 @@ export async function studiesRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     const parsed = flashcardUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
-    const set = await updateFlashcardSet(id, contentScopeId(me), me.id, isAdmin(parseRoles(me)), {
-      name: parsed.data.name,
-      description: parsed.data.description,
-      cards: parsed.data.cards?.map((c) => ({ term: c.term, def: c.def, topic: c.topic ?? null })),
-    });
+    const scope = await resolveContentScope(me, 'flashcards', id, 'edit');
+    const set = scope
+      ? await updateFlashcardSet(id, scope, me.id, isAdmin(parseRoles(me)), {
+          name: parsed.data.name,
+          description: parsed.data.description,
+          cards: parsed.data.cards?.map((c) => ({ term: c.term, def: c.def, topic: c.topic ?? null })),
+        })
+      : null;
     if (!set) return reply.code(403).send({ error: 'You can only edit flashcard sets you created.' });
-    return { set, sets: await listFlashcardSets(contentScopeId(me)) };
+    return { set, sets: await listFlashcardSets(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   // Delete a set. Only the Trading Team leader (or an admin/founder) may delete
@@ -716,21 +796,24 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.delete('/api/studies/flashcards/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    const mode = await studiesDeleteMode(me);
+    const scope = await resolveContentScope(me, 'flashcards', id, 'edit');
+    if (!scope) return reply.code(403).send({ error: 'You can only delete flashcard sets you created.' });
+    const mode = await deleteModeFor(me, 'flashcards', id);
     if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
-    const ok = await deleteFlashcardSet(id, contentScopeId(me), me.id, mode === 'any');
+    const ok = await deleteFlashcardSet(id, scope, me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete flashcard sets you created.' });
-    return { sets: await listFlashcardSets(contentScopeId(me)) };
+    return { sets: await listFlashcardSets(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   // ---- Team study guides (slide presentations) ----
   // A team builds a study guide by conversing with Claude (which drafts the slide
   // text) and attaching its own screenshots, then presents it like a slideshow.
 
-  // The list of the caller's team guides (metadata only — no slide blob).
+  // The list of the caller's team guides (metadata only — no slide blob), plus
+  // any package-backed presentation they can reach.
   app.get('/api/studies/guides', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
-    return { guides: await listGuides(teamId) };
+    const me = request.currentUser!;
+    return { guides: await listGuides(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   // One turn of the guide-builder conversation. Returns the assistant's reply
@@ -762,21 +845,27 @@ export async function studiesRoutes(app: FastifyInstance) {
       name: parsed.data.name,
       description: parsed.data.description,
       createdBy: request.currentUser!.id,
-      slides: parsed.data.slides.map((s) => ({ title: s.title ?? '', body: s.body ?? '', image: s.image ?? null })),
+      slides: parsed.data.slides.map((s) => ({
+        id: s.id ?? null,
+        title: s.title ?? '',
+        body: s.body ?? '',
+        image: s.image ?? null,
+      })),
     });
     if (guide.slideCount === 0) {
       // Every slide was empty (no text, no image); nothing worth keeping.
       await deleteGuide(guide.id, teamId, request.currentUser!.id, true);
       return reply.code(422).send({ error: 'A study guide needs at least one slide with text or a screenshot.' });
     }
-    return { guide, guides: await listGuides(teamId) };
+    return { guide, guides: await listGuides(teamId, await readablePackageIds(request.currentUser!)) };
   });
 
-  // One guide with its slides (team-scoped).
+  // One guide with its slides.
   app.get('/api/studies/guides/:id', guard, async (request, reply) => {
-    const teamId = contentScopeId(request.currentUser!);
+    const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    const guide = await getGuide(id, teamId);
+    const scope = await resolveContentScope(me, 'guide', id, 'read');
+    const guide = scope ? await getGuide(id, scope) : null;
     if (!guide) return reply.code(404).send({ error: 'Study guide not found' });
     return { guide };
   });
@@ -787,13 +876,21 @@ export async function studiesRoutes(app: FastifyInstance) {
     const id = (request.params as { id: string }).id;
     const parsed = guideUpdateSchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Nothing valid to update' });
-    const guide = await updateGuide(id, contentScopeId(me), me.id, isAdmin(parseRoles(me)), {
-      name: parsed.data.name,
-      description: parsed.data.description,
-      slides: parsed.data.slides?.map((s) => ({ title: s.title ?? '', body: s.body ?? '', image: s.image ?? null })),
-    });
+    const scope = await resolveContentScope(me, 'guide', id, 'edit');
+    const guide = scope
+      ? await updateGuide(id, scope, me.id, isAdmin(parseRoles(me)), {
+          name: parsed.data.name,
+          description: parsed.data.description,
+          slides: parsed.data.slides?.map((s) => ({
+            id: s.id ?? null,
+            title: s.title ?? '',
+            body: s.body ?? '',
+            image: s.image ?? null,
+          })),
+        })
+      : null;
     if (!guide) return reply.code(403).send({ error: 'You can only edit study guides you created.' });
-    return { guide, guides: await listGuides(contentScopeId(me)) };
+    return { guide, guides: await listGuides(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   // Delete a guide. Only the Trading Team leader (or an admin/founder) may delete
@@ -801,11 +898,13 @@ export async function studiesRoutes(app: FastifyInstance) {
   app.delete('/api/studies/guides/:id', create, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    const mode = await studiesDeleteMode(me);
+    const scope = await resolveContentScope(me, 'guide', id, 'edit');
+    if (!scope) return reply.code(403).send({ error: 'You can only delete study guides you created.' });
+    const mode = await deleteModeFor(me, 'guide', id);
     if (mode === 'none') return reply.code(403).send({ error: NOT_LEADER_MSG });
-    const ok = await deleteGuide(id, contentScopeId(me), me.id, mode === 'any');
+    const ok = await deleteGuide(id, scope, me.id, mode === 'any');
     if (!ok) return reply.code(403).send({ error: 'You can only delete study guides you created.' });
-    return { guides: await listGuides(contentScopeId(me)) };
+    return { guides: await listGuides(contentScopeId(me), await readablePackageIds(me)) };
   });
 
   app.get('/api/studies/learned', guard, async (request) => {

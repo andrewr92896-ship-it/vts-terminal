@@ -11,6 +11,7 @@ import { aiConfigured, chatClaude, extractJson } from '../ai/claude.js';
 import { getPrompt } from '../ai/prompts.js';
 import { withGuardrails } from '../ai/guardrails.js';
 import { addSuggestion, fileBugReportFromConversation } from '../feedback/service.js';
+import { formatStudyContext, type StudyBugContext } from './studyContext.js';
 
 // The chat-bubble Support tab. A user picks a category — bug, suggestion, or a
 // general question — and an AI intake collects the details it needs. The intake
@@ -160,6 +161,7 @@ export async function supportTurn(
   user: { id: string; displayName: string; teamId: string | null },
   kind: SupportKind,
   conversation: SupportMessage[],
+  opts: { context?: StudyBugContext } = {},
 ): Promise<SupportTurnResult> {
   const trimmed = conversation
     .filter((m) => typeof m.body === 'string' && m.body.trim())
@@ -173,9 +175,17 @@ export async function supportTurn(
   if (needMore) return { needMore: true, reply, submitted: false };
 
   // Complete — file it, closing reply included, to the matching admin section.
+  //
+  // The machine context is appended as its own message rather than folded into
+  // the reporter's words, so the admin reads what the person said and what the
+  // terminal knew as two separate things. It is deliberately NOT sent to the AI
+  // triage above: the intake's job is to get a usable description out of a
+  // human, and a wall of version numbers in the conversation would only give it
+  // something else to talk about.
   const full: SupportMessage[] = [...trimmed, { role: 'ai', body: reply }];
   if (kind === 'bug') {
-    await fileBugReportFromConversation(user, full);
+    const details = opts.context ? formatStudyContext(opts.context) : '';
+    await fileBugReportFromConversation(user, details ? [...full, { role: 'user', body: details }] : full);
   } else if (kind === 'suggestion') {
     await addSuggestion(user, suggestionBody(trimmed));
   } else {

@@ -12,6 +12,7 @@ import type { ReviewKey } from '../auth/reviewMarks';
 import { Avatar } from './Avatar';
 import { UserBadges } from './UserBadges';
 import { SupportTab } from './SupportTab';
+import { onProblemReport } from '../lib/reportProblem';
 
 // The lower-right corner widget: the Team Chat, and only the team chat. The
 // how-to guides, announcements, and patch notes now live in the Site Help
@@ -72,8 +73,35 @@ export function TeamChat({
   // developers and admins — Administrator chat. The panel opens on Team chat
   // when there is one, and on Support otherwise.
   const [tab, setTab] = useState<'team' | 'support' | 'admin'>('team');
+  // "Report a problem", pressed somewhere else in the terminal. This opens the
+  // bubble on the Support tab; the counter tells SupportTab to pick up what came
+  // with it. One channel rather than a prop threaded through every screen that
+  // might fail — see lib/reportProblem.
+  const [reportNonce, setReportNonce] = useState(0);
+  // Set when the bubble is being opened BY a report, and consumed by the
+  // open-effect below. Without it the two fight: the report asks for Support,
+  // then opening the bubble resets the tab to Group chat and the report lands on
+  // a screen that knows nothing about it.
+  const openingForReport = useRef(false);
+  useEffect(
+    () =>
+      onProblemReport(() => {
+        openingForReport.current = true;
+        setTab('support');
+        setReportNonce((n) => n + 1);
+        onOpen();
+      }),
+    [onOpen],
+  );
   useEffect(() => {
-    if (open) setTab(teamChatAvailable ? 'team' : 'support');
+    if (!open) return;
+    if (openingForReport.current) {
+      // Already on Support, deliberately. Reopening normally goes back to the
+      // default, so this is a one-shot rather than a mode.
+      openingForReport.current = false;
+      return;
+    }
+    setTab(teamChatAvailable ? 'team' : 'support');
   }, [open, teamChatAvailable]);
   // A grant revoked mid-session leaves the panel parked on a tab that is gone.
   useEffect(() => {
@@ -365,7 +393,7 @@ export function TeamChat({
 
             {/* Body */}
             {tab === 'support' ? (
-              <SupportTab theme={theme} isDemo={!!user.isDemo} userId={user.id} />
+              <SupportTab theme={theme} isDemo={!!user.isDemo} userId={user.id} reportNonce={reportNonce} />
             ) : tab === 'admin' ? (
               <ChatFeed
                 theme={theme}

@@ -115,6 +115,18 @@ export interface User {
   // renders. Never true for the read-only demo.
   mustAcceptTerms: boolean;
   isDemo: boolean; // the public, read-only demo account
+  // The developer preview this SESSION is in ('free' | 'premium' | 'max' |
+  // 'public'), or null. Set server-side, so everything above already reports the
+  // previewed account: the roles, the workspaces and the membership are all what
+  // that tier really gets, which is what makes a preview the production
+  // experience rather than a costume.
+  //
+  // Its presence is the authority to change or leave one, because previewing as
+  // the public narrows `roles` to a plain member and a role check would take the
+  // way out with it.
+  preview: PreviewMode | null;
+  /** Whether this account may enter a preview — decided from its REAL roles. */
+  canPreview: boolean;
   access: {
     label: string;
     workspaces: WorkspaceKey[];
@@ -402,6 +414,11 @@ export interface TeamDeck {
   // same as every weight being zero, which is a game with nothing on the paper.
   categoryWeights: Record<string, number> | null;
   questionCount: number;
+  // Whether this game has a leaderboard at all: built-in games (ranked across
+  // every copy on the install) and package-backed ones (ranked among the
+  // package's own audience) do; a legacy user-made game does not, and its
+  // endpoint answers 404 so the tab can be hidden rather than opened empty.
+  hasLeaderboard: boolean;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: number;
@@ -451,6 +468,11 @@ export interface FlashcardInput {
 // a body, and an optional screenshot. Built through a back-and-forth chat with
 // VTS AI (which drafts the slide text) plus screenshots the author attaches.
 export interface GuideSlide {
+  // The slide's stable stored identity, assigned by the server. Round-trip it
+  // on save: a lesson refers to slides by this, so dropping it would leave the
+  // lesson describing slides that no longer exist. Absent on legacy slides
+  // written before ids existed, and on a slide just added in the editor.
+  id?: string | null;
   title: string;
   body: string;
   // A base64 data URL of a screenshot the author attached, or null/absent.
@@ -2523,4 +2545,255 @@ export interface WallTemplate {
   hidden: boolean;
   sortOrder: number;
   updatedAt: number;
+}
+
+// ---- Study Packages: import ----
+// Mirrors apps/api/src/studies/packageFormat.ts. The server is the authority —
+// it re-validates before it writes, and assigns every stored id and sequence.
+
+export interface PackageIssue {
+  code: string;
+  message: string;
+  ids?: string[];
+}
+
+export interface PackagePreview {
+  name: string;
+  subject: string;
+  questionCount: number;
+  categories: { id: string; name: string; weight: number | null; target: number | null; found: number }[];
+  categoryWeightMode: string | null;
+  explanationMode: string | null;
+  flashcardCount: number;
+  slideCount: number;
+  lessonCount: number;
+}
+
+export interface ImportedQuestionView {
+  id: string;
+  categoryId: string | null;
+  stem: string;
+  options: { label: string; text: string }[];
+  answer: string;
+  explanation: string | null;
+}
+
+export interface PackageValidation {
+  ok: boolean;
+  /** Named checks that came back clean, for the "what passed" half of the report. */
+  passed: string[];
+  errors: PackageIssue[];
+  warnings: PackageIssue[];
+  preview: PackagePreview | null;
+  questions: ImportedQuestionView[];
+  /**
+   * What the validator SAW, as opposed to what it decided — versions, ids,
+   * counts and part indices, and no package content at all.
+   *
+   * Two uses, both of which need it present on every run including a failed
+   * one: the founder-only diagnostics panel, and the machine context a bug
+   * report carries so the reporter does not have to find any of this by hand.
+   */
+  diagnostics: PackageDiagnostics;
+}
+
+export interface PackageDiagnostics {
+  documents: { index: number; format: string | null; schemaVersion: number | null; blueprintId: string | null; bytes: number }[];
+  multipart: { parts: number; expected: number | null; received: number[]; missing: number[] } | null;
+  expectedBlueprintId: string;
+  expectedSchemaVersion: number;
+  categoryTargets: { id: string; name: string; target: number | null; found: number }[];
+}
+
+/** The plan a package is checked against — the wizard's blueprint, flattened. */
+export interface ImportBlueprintPayload {
+  blueprintId: string;
+  categoriesLocked: boolean;
+  categories: { id: string; name: string; weight: number | null }[];
+  questionTargets: Record<string, number> | null;
+  totalQuestions: number | null;
+  explanationsRequired: boolean;
+  wantQuestions: boolean;
+  wantFlashcards: boolean;
+  wantPresentation: boolean;
+  wantLessons: boolean;
+  name: string;
+  subject?: string;
+  audience?: string | null;
+  depth?: string | null;
+  categoryWeightMode?: string | null;
+  explanationMode?: string | null;
+}
+
+export interface ManualPackagePayload {
+  name: string;
+  subject?: string;
+  depth?: string | null;
+  categoryWeightMode?: string | null;
+  explanationMode?: string | null;
+  categories: { id: string; name: string; weight: number | null }[];
+  questions: {
+    categoryId?: string | null;
+    stem: string;
+    options: { label: string; text: string }[];
+    answer: string;
+    explanation?: string | null;
+  }[];
+  presentation?: { title: string; slides: { title: string; body: string }[] } | null;
+}
+
+/**
+ * Machine context attached to a bug report from Studies.
+ *
+ * Mirrors the server's whitelist (api/support/studyContext.ts), which is the
+ * enforcer: anything not on this list is stripped there. Ids, versions, counts
+ * and codes only — never study content. `sample` is the one exception and is
+ * filled solely by an explicit press of "include a small sample".
+ */
+export interface StudyBugContext {
+  screen?: string;
+  step?: string;
+  component?: string;
+  blueprintVersion?: number;
+  formatVersion?: number;
+  draftId?: string;
+  packageId?: string;
+  source?: 'upload' | 'paste' | 'fixture';
+  parts?: number;
+  expectedParts?: number;
+  missingParts?: number[];
+  errorCodes?: string[];
+  errorMessages?: string[];
+  errorId?: string;
+  apiStatus?: number;
+  appVersion?: string;
+  tier?: string;
+  isDemo?: boolean;
+  previewAs?: string;
+  flags?: string[];
+  sample?: string;
+  sampleLabel?: string;
+}
+
+/** What a founder-level account can ask to be treated as, for testing. */
+export type PreviewMode = 'free' | 'premium' | 'max' | 'public';
+
+export const PREVIEW_LABELS: Record<PreviewMode, string> = {
+  free: 'Free account',
+  premium: 'Premium member',
+  max: 'Max member',
+  public: 'Member of the public',
+};
+
+/** A package's sharing and publication state, for developer diagnostics. */
+export interface StudyPackageState {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  visibility: string;
+  archivedAt: number | null;
+  formatVersion: number;
+  shares: { id: string; recipientUserId: string; status: string; createdAt: number }[];
+  submissions: {
+    id: string;
+    status: string;
+    submittedAt: number;
+    reviewedAt: number | null;
+    attestationVersion: string;
+  }[];
+  libraryAdds: string[];
+  /** Who the package leaderboard ranks — the answer package access actually gives. */
+  leaderboardAudience: string[];
+}
+
+export interface StudyPackageSummary {
+  id: string;
+  name: string;
+  subject: string | null;
+  questionCount?: number;
+}
+
+// ---- Study Packages: the owner's library, sharing, and the VTS Study Library ----
+
+/** private → shared → submitted → public. Four distinct states, never merged. */
+export type StudyPackageVisibility = 'private' | 'shared' | 'submitted' | 'public';
+
+export interface StudyPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  subject: string | null;
+  audience: string | null;
+  depth: string | null;
+  formatVersion: number;
+  visibility: StudyPackageVisibility;
+  archived: boolean;
+  archivedAt: number | null;
+  ownerUserId: string;
+  ownerName: string | null;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+  hasDeck: boolean;
+  hasFlashcards: boolean;
+  hasGuide: boolean;
+  lessonCount: number;
+  /** Whether the viewer owns it — only an owner can share, submit or archive. */
+  mine: boolean;
+  sharedWith: number;
+}
+
+export interface StudyPackageDetail extends StudyPackage {
+  categories: { id: string; seq: number; name: string; weight: number | null }[];
+  lessons: { id: string; seq: number; title: string; objective: string | null; body: string | null }[];
+  deckId: string | null;
+  flashcardSetId: string | null;
+  guideId: string | null;
+}
+
+export type StudyShareStatus = 'pending' | 'accepted' | 'declined';
+
+export interface StudyShare {
+  id: string;
+  packageId: string;
+  packageName: string;
+  packageSubject: string | null;
+  status: StudyShareStatus;
+  /** Who it is with, or who it came from, depending on which list this is. */
+  personName: string;
+  personUsername: string;
+  createdAt: number;
+  respondedAt: number | null;
+}
+
+export type StudySubmissionStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'withdrawn';
+
+export interface StudySubmission {
+  id: string;
+  packageId: string;
+  packageName: string;
+  packageSubject: string | null;
+  status: StudySubmissionStatus;
+  submittedAt: number;
+  reviewedAt: number | null;
+  adminNote: string | null;
+  attestationVersion: string;
+  submitterName: string | null;
+  /** When this publication ended, if it has. `status` stays 'approved'. */
+  withdrawnAt: number | null;
+  withdrawnByName: string | null;
+  /** Whether the creator withdrew it, rather than an administrator. */
+  withdrawnByOwner: boolean;
+}
+
+export interface StudyLibraryEntry {
+  packageId: string;
+  name: string;
+  subject: string | null;
+  description: string | null;
+  depth: string | null;
+  ownerName: string | null;
+  questionCount: number;
+  added: boolean;
+  publishedAt: number;
 }

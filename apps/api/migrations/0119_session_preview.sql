@@ -1,0 +1,11 @@
+-- Developer preview: what a founder-level account has asked to be treated AS.
+--
+-- On the SESSION rather than on the user, deliberately and in two senses. It is
+-- a property of this browsing session — signing out ends it, and a second
+-- browser is unaffected — and it must never look like a change to the account.
+-- A preview is a lens, not a grant: nothing about the real membership, roles or
+-- entitlements is touched, so there is no state to restore and nothing that can
+-- be left behind if the container dies mid-preview.
+--
+-- Null is the normal case: no preview, act as yourself.
+ALTER TABLE `sessions` ADD `preview_as` text;

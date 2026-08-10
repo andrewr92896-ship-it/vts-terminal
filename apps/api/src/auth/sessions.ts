@@ -1,10 +1,16 @@
 import crypto from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { sessions, users, type UserRow } from '../db/schema.js';
+import { sessions, users } from '../db/schema.js';
 import { config } from '../config.js';
+import { applyPreview, type PreviewedUser } from '../dev/preview.js';
 
 export const SESSION_COOKIE = 'vts_session';
+
+/** The session id a request is authenticated by — what a preview is stored on. */
+export function sessionIdForToken(token: string): string {
+  return hashToken(token);
+}
 const TTL_MS = config.SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
 
 function hashToken(token: string): string {
@@ -46,7 +52,7 @@ export async function createSession(
 // are deleted lazily on lookup.
 export async function getUserForToken(
   token: string | undefined,
-): Promise<UserRow | null> {
+): Promise<PreviewedUser | null> {
   if (!token) return null;
   const id = hashToken(token);
   const rows = await db.select().from(sessions).where(eq(sessions.id, id)).limit(1);
@@ -72,7 +78,11 @@ export async function getUserForToken(
     .set({ lastSeenAt: new Date() })
     .where(eq(sessions.id, id));
 
-  return user;
+  // A developer preview is applied HERE, at the one place a request's user is
+  // resolved, so every guard and every payload downstream is answered for the
+  // previewed account without knowing a preview exists. `applyPreview` refuses
+  // anything that would be a privilege change rather than a preview.
+  return applyPreview(user, session.previewAs);
 }
 
 export async function destroySession(token: string | undefined): Promise<void> {

@@ -11,9 +11,60 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.95';
+export const APP_VERSION = 'Beta V 7.01';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.01',
+    date: 'August 10, 2026',
+    notes: [
+      'You can now take your own study package back out of the VTS Study Library yourself, without waiting on an administrator. It leaves the library straight away. Nothing is deleted — your content, everyone’s progress and anyone you shared it with by username all stay exactly as they are, and people who had already added it keep it. Putting it back in the library goes through review again.',
+    ],
+  },
+  {
+    version: 'Beta V 7.00',
+    date: 'August 10, 2026',
+    notes: [
+      'The handoff you give your own AI now spells out the rules it has to work to: write original questions, do not copy a question bank or a book, only use material you have the right to use, and keep finance content educational rather than telling anyone what to buy. A short line about rights sits beside the copy button, and the leaderboard says plainly that a study score is not a measure of investment skill.',
+      'When the wizard or the import checker refuses something, there is now a Report a problem button beside the error. It opens the usual bug chat with the technical details already attached — the step you were on, the versions, the exact checks that failed — so you do not have to describe any of it. Your questions, uploads, slides and lesson text are never sent; if a sample would help, you are asked first and shown exactly what would go.',
+      'You can now look at the terminal as a free, Premium, Max or ordinary public account from the account menu, without a second login. It is the real thing rather than a mock-up: the locks you meet are the locks that exist. A bar across the top says you are previewing and gets you back out in one press, and your own account is untouched throughout.',
+    ],
+  },
+  {
+    version: 'Beta V 6.99',
+    date: 'August 10, 2026',
+    notes: [
+      'Studies ▸ Study Packages is new. It holds the packages you have made, the ones people have shared with you, and the VTS Study Library.',
+      'You can now share a study package with someone by their username. They get an invitation, and once they accept it the game, cards and slides appear in their own Studies — the same package, not a copy, so you both keep your own progress. You can take the access back whenever you like; their progress is theirs and is never touched.',
+      'You can also ask VTS to publish a package to the Study Library. Submitting is a request, not a publication — an administrator reads it and either publishes it, asks for changes, or declines, and you get the reply. Anything published is browsable by everyone, and adding it puts it in your own Studies.',
+      'Study games inside a package now have a leaderboard, between the people who actually have the package.',
+    ],
+  },
+  {
+    version: 'Beta V 6.98',
+    date: 'August 10, 2026',
+    notes: [
+      'The study package wizard now finishes the job. At the end you get a handoff to copy into your own ChatGPT or Claude — it tells them to ask you one question at a time, and exactly what to build, down to how many questions each category gets. Bring back the file it makes, or paste it, and the terminal checks it.',
+      'Checking is thorough and tells you what is actually wrong — "Question 47 is missing option D", "Expected 15 questions in Regulations; found 14" — with a set of repair instructions you can hand straight back to your AI. You see everything, including the questions themselves, before anything is created. If your AI runs out of room, ask it for one part at a time and add the parts as they come.',
+      'Choosing to type the questions in yourself now builds a proper study package too, rather than a loose game off to one side. Either way, nothing is saved until you say so.',
+    ],
+  },
+  {
+    version: 'Beta V 6.97',
+    date: 'August 10, 2026',
+    notes: [
+      'Studies ▸ Study Creation now opens with “Create a study package” — a short set of questions, one at a time, about what you need: how many questions, whether to track categories, whether to include flashcards or a presentation. It only asks what follows from your answers, so a simple package is a handful of taps.',
+      'It writes nothing itself. At the end you either take a handoff to your own ChatGPT or Claude, which does the writing, or go straight to typing the questions in. Your answers are kept if you leave the screen or reload, and the three existing makers are still there underneath for building one piece at a time.',
+    ],
+  },
+  {
+    version: 'Beta V 6.96',
+    date: 'August 10, 2026',
+    notes: [
+      'Groundwork for the new way of building study content. Nothing looks different yet — study games, flashcard sets and presentations all work exactly as before.',
+      'What changed underneath: study content can now belong to a person rather than to a group, which is what lets it be shared with someone who is not in your group. Categories also gained a permanent identity, so renaming one no longer resets what it had recorded about how you were doing in it.',
+    ],
+  },
   {
     version: 'Beta V 6.95',
     date: 'August 10, 2026',

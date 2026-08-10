@@ -1359,6 +1359,380 @@ workspaces list** (see `theme/nav.ts` order).
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.
+  - **STUDY PACKAGES — study content can belong to a PERSON, not a group**
+    (`study_packages`, migration `0114`; `studies/packageStore.ts` over
+    `studies/packageAccess.ts`, routes `/api/studies/packages/*`). A package is
+    a container for one study game, one flashcard set, one presentation, its
+    lesson plans and its category blueprint. **Foundation only so far** — the
+    creation wizard, the external-AI handoff, the import parser, direct sharing
+    and the public library are later stages, and none of them exists yet.
+    - **Two ownership models run side by side, and `packageAccess.ts` is the ONE
+      place that picks between them.** Legacy content (`package_id = null` —
+      everything that exists today) is scoped by `contentScopeId(viewer)` and is
+      completely untouched. Package-backed content is reached by owning it, by
+      being shared with it, or by it being published, and **never** by being in
+      the owner's private group. That is what makes Study sharing work for a
+      public signup, who is in no group and cannot be put in one.
+      - `resolveContentScope(viewer, kind, id, right)` is the seam that let every
+        existing store stay exactly as it was: they all take a scope key, so a
+        route passes whatever this returns instead of `contentScopeId(me)`.
+        Legacy content resolves to that same value byte for byte; package-backed
+        content is decided here and resolves to the row's own stored scope. **Do
+        not add `if (packageId)` exceptions to route handlers** — a guard
+        exception copied into eleven places will be wrong in one of them.
+      - **Package-backed rows are stored under the OWNER'S PERSONAL scope key**
+        (`packageScopeKey`), never `contentScopeId(owner)`. Using the latter
+        would look natural and would hand every teammate access through the
+        legacy path, quietly making a user-owned package group-owned.
+    - **Categories have STABLE IDS, and that is the correction the layer exists
+      to make.** Legacy categories are identified by NAME everywhere — on the
+      deck, on each question's `topic`, in the weights map, and in each learner's
+      own per-category statistics — so renaming one silently resets everybody's
+      history for it. Here the row id is the identity and the name is what it is
+      currently called.
+      - The old name-keyed fields are **kept and kept in step** (`topic`,
+        `study_decks.categories`, `category_weights`), which is why no player,
+        editor or test code had to change. `syncPackageCategories` is the one
+        writer of that projection; run it after any category change.
+      - A category removed, or a package deleted, **clears the link and leaves
+        the `topic` text**, so the content degrades exactly to a legacy
+        name-keyed game rather than losing its categories.
+    - **`category_weight_mode` states what weights are FOR** (`tracking_only` /
+      `draw_only` / `score_only` / `draw_and_score`). Null keeps the legacy
+      reading — no weights means unweighted, any weights mean both — so nothing
+      already stored changes meaning.
+    - **Progress is untouched**: still keyed `(userId, deckId)`, and a shared
+      package is the SAME deck id for everybody, so each person keeps their own
+      row against it. The headline state fields (`totalAttempted`,
+      `totalCorrect`, `levelCorrect`, `bestStep`, `recent`) mean what they always
+      did — changing them is a separate scoring project.
+    - **REMOVING a package is ARCHIVING it, and archiving changes ONE COLUMN**
+      (`archived_at`, migration `0115`). The package, its components, every
+      learner's progress, the stable category ids and every future sharing
+      relationship are left exactly as they are, so unarchiving is instant and
+      lossless. What the flag governs is **listing**: `readablePackages`
+      excludes archived ones by default, and since that same set of ids is what
+      widens the content lists, an archived package's game, set and presentation
+      drop out of the ordinary Study Library and creation views with it. Reading
+      one **by id still works**, so a direct link and a restore both do.
+      - **Do NOT go back to detaching the content** (`package_id → null`), which
+        is what the first cut did. It turns package-owned content into unrelated
+        standalone content — severing the stable category links, stranding the
+        lessons, breaking what sharing and versioning need — and nothing records
+        what the package held, so it cannot be undone. It is destructive in a way
+        that does not look destructive.
+      - **`purgePackage` is the separate, genuinely destructive path**: it
+        deletes the package's content too (the game with its questions, state
+        and banked runs; the set with its cards; the presentation), so nothing is
+        left carrying a package id that resolves to nothing. **There is no route
+        to it and no user-facing workflow** — its one caller is account deletion,
+        where a personal package goes with the person like their Investments and
+        Net Worth rows do.
+    - **The two ownership models are DISJOINT in the list queries**, and the
+      `package_id IS NULL` half of each `WHERE` is what makes them so. A
+      package-backed row is stored under its owner's personal scope key, which
+      for an owner on no team is the *same string* `contentScopeId` gives them —
+      so without it the scope test matches package content too and the package
+      stops being what decides. Archiving is exactly when that shows: the ids
+      drop out and the row would go on being listed by scope alone.
+    - **Foreign keys never fire on this database** (`PRAGMA foreign_keys` is
+      never turned on — see `db/index.ts`), so a declared `ON DELETE` action is
+      documentation, not behavior. Every cleanup is explicit: in `purgePackage`,
+      and in the per-user delete list in `admin/service.ts`, which owns the
+      package rows an account holds.
+    - **THE CREATION WIZARD is the default way to build a study game**
+      (`workspaces/studies/wizard/`, opened from the "Create a study package"
+      tile on Study Creation). One structural question per card, branching on
+      the answers, ending at a review screen. The three existing makers stay
+      exactly as they were, directly reachable underneath — they are also where
+      the wizard's manual path lands.
+      - **It calls no VTS AI endpoint, and that is the point of the workflow**
+        (owner decision): the content comes from the creator's OWN third-party
+        AI, or from their keyboard. The wizard produces a blueprint describing
+        the SHAPE of a package — how many questions, which categories, whether
+        there are flashcards — and never a word of the content.
+      - **It writes nothing.** No route is called at any point, so nothing
+        exists in the database because somebody opened the wizard or reached the
+        last card. Creation happens in what comes after: the AI handoff/import,
+        or the manual maker.
+      - **`blueprint.ts` is the whole model** — the type, `stepsFor` (the path,
+        recomputed from the answers, which is what makes the branching work),
+        `stepError` (plain-language, local to a card) and `nextStep`. **Add a
+        question by adding a `StepId` and a case, never by threading a
+        conditional through the shell.** `nextStep` sweeps for anything still
+        unanswered before it will open Review, so a step that becomes relevant
+        after the user has walked past its place in the path cannot be missed.
+      - **The draft is per user, on the device** (`vts_study_package_draft_<id>`,
+        debounced, flushed on unmount, restored on open). Navigation here is
+        state-based, so leaving the section used to lose everything silently. A
+        draft carries its schema version and is DISCARDED rather than repaired
+        when that version moves — replaying half-understood answers into a
+        changed set of questions produces a package nobody described.
+      - **A category gets its stable id the moment it is added**, so renaming it
+        in the editor is a rename. Same rule as the stored package categories,
+        for the same reason.
+      - The provider preference and the one-time AI walkthrough are per-user
+        device state too, deliberately not package content. The walkthrough is
+        an explicit exception to the no-how-to-copy rule (owner instruction),
+        and stays reachable afterwards from the handoff step.
+    - **THE CONTENT COMES FROM THE CREATOR'S OWN AI, AND VTS VALIDATES IT.**
+      That is the economics of the whole workflow: the terminal defines the
+      structure and checks the answer, and somebody else's model does the
+      writing. **Zero VTS AI calls** in the questionnaire, the handoff, the
+      parsing, the validation or the repair instructions.
+      - **`wizard/handoffPrompt.ts` composes the handoff locally** from fixed
+        sections plus blueprint values, and the behavioral contract is identical
+        for every provider — only a heading and a line of onboarding differ,
+        because a package written against ChatGPT has to import exactly like one
+        written against Claude. It also builds the **repair prompt** the same
+        way when validation fails: the failures and the affected import ids, and
+        deliberately not the creator's whole package.
+      - **Exact per-category question targets are computed, not described.**
+        `questionTargets` reuses `examWeights.allocateDraw` — the same
+        highest-averages allocator a weighted practice test already draws with —
+        so the handoff asks for a split the terminal itself would produce, and
+        the importer checks the counts against those same numbers. One
+        allocation used twice; a second implementation is how the prompt and the
+        validator come to disagree.
+      - **The transport format is versioned JSON** (`studies/packageFormat.ts`,
+        `format: "vts-study-package"`, `schemaVersion`), because one package
+        carries metadata, categories, weights, questions, flashcards, slides and
+        lessons at once and a flat table cannot say that. **CSV is untouched**
+        and stays the advanced/round-trip route for questions and cards.
+      - **Validation is deterministic and lives in `studies/packageValidate.ts`.**
+        It reports what PASSED as well as what failed, and every failure names
+        the thing — "Question 47 is missing option D", "Expected 15 questions in
+        Regulations; found 14". "Invalid JSON" tells a creator nothing they can
+        act on. The paste path strips **one** surrounding code fence and nothing
+        else: no brace hunting, no quote repair, no fuzzy fixing.
+      - **A package too large for one reply arrives as PARTS**
+        (`vts-study-package-part`, a `manifest` part plus component parts).
+        Every part must carry the same `blueprintId`; a set mixing two is
+        **refused rather than combined**, and a set missing one says how many
+        are still needed instead of importing what it has.
+      - **Nothing is created by validating.** Validate reads and reports;
+        confirm writes. That is what lets a creator paste, read the errors, have
+        their AI fix them and paste again with nothing left behind.
+      - **`studies/packageImport.ts` commits the whole package in ONE
+        transaction** — package, categories, deck and questions, flashcard set
+        and cards, presentation, lessons. The inserts are written out there
+        rather than delegating to `createDeck`/`createFlashcardSet`/`createGuide`
+        because each of those opens its own transaction and they cannot compose;
+        the mirroring is deliberate. A failure part-way leaves **nothing**
+        (verified, not assumed). **Ids and sequence numbers are assigned by the
+        server** — the ids in the file are import identity only and are never
+        stored.
+      - **The MANUAL ending creates a package too.** It edits a pending draft in
+        client state and commits through that same transactional creator, so the
+        deck carries `package_id` by construction rather than by a second code
+        path remembering to set it. It deliberately does **not** route into the
+        standalone maker. The standalone makers stay reachable on their own for
+        building one piece outside the wizard.
+      - **A SLIDE HAS ITS OWN IDENTITY, and a lesson points at that** — never at
+        a position (`studies/slideIdentity.ts`, migration `0117`). A guide keeps
+        its slides as one JSON blob, which is a fine way to hold a presentation
+        together and a hopeless way to identify a slide: the editor can move one
+        up the deck, and every lesson mapped by position would silently start
+        describing different slides. So each slide carries an `id` inside the
+        blob, minted by the server the first time it is written, and
+        `study_package_lessons.slide_ids` holds those ids.
+        - **`keepSlideId` never mints and `withSlideIds` only mints for a slide
+          that has none.** The split matters because sanitizing runs on READ too,
+          and a read that invented identity would hand out a different id every
+          time.
+        - **The id has to round-trip through the editor**, or every save looks
+          like a deck of brand new slides. That means `getGuide` returns it, the
+          route's Zod schema accepts it (zod strips what it does not declare —
+          this is the easiest place to break the whole mechanism), and
+          `GuideEditor` carries it in its state and sends it back.
+        - **Legacy presentations are not migrated.** Their slides simply have no
+          id, read and edit exactly as before, and gain ids the next time they
+          are saved. A presentation with no lessons is unaffected either way.
+        - The blob stays one guide deliberately: a slides table would also give
+          identity, and would be a rewrite of a storage model that works.
+      - `npm run verify:study-packages` checks the contract offline against
+        hand-built fixtures — valid packages, every validation failure,
+        multipart assembly, and the slide-identity rules. Run it after touching
+        the format, the validator or slide identity.
+    - **SHARING IS BY USERNAME, AND IT JOINS NOBODY TO ANYTHING**
+      (`studies/packageSharing.ts`, `study_package_shares`, migration `0118`;
+      the **Study Packages** section, `st_packages`). One person names another
+      and hands over a package. There is no chat attached, no feed, no follow,
+      and above all **no group** — which is the whole reason the package layer
+      exists, because a public signup is in no trading/private group and none
+      can be invented for them.
+      - **The recipient is resolved server-side** against the real user table,
+        by username or display name (both unique). A typo finds nobody and says
+        so rather than reaching whoever was closest. The lookup answers with the
+        display name and username and **nothing else** — no email, no roles — so
+        a share form cannot become a way to read the user table.
+      - **The unique index `(package_id, recipient_user_id)` is what makes a
+        repeat share idempotent.** Sharing twice re-offers the same one and the
+        client says so; re-sharing to somebody who DECLINED puts it back to
+        pending, because an owner asking again is a real thing to want.
+      - **Only an ACCEPTED share is access.** A pending one is an offer nobody
+        answered, and treating it as access would hand out content on the
+        strength of a click that never happened. `respondToShare` matches on the
+        recipient as well as the id, so a guessed share id cannot be answered on
+        another person's behalf.
+      - **REVOKING NEVER TOUCHES PROGRESS.** The share row goes; the recipient's
+        `(user, deck)` rows are their own record of work they actually did.
+        Deleting somebody's history to enforce a permission that is already
+        enforced would be destroying data for nothing.
+      - **An archived package grants nothing through a share**, and does not
+        appear in anybody's Shared-with-me list. The share row survives, so
+        restoring brings it all back exactly as it was.
+      - `visibility` is kept honest by `refreshShareVisibility`, which moves a
+        package between `private` and `shared` on its own as recipients come and
+        go. It deliberately **never** touches `submitted` or `public`: those are
+        set by the review workflow, and a share arriving on a published package
+        must not quietly unpublish it.
+    - **THE VTS STUDY LIBRARY — SUBMITTING IS NOT PUBLISHING**
+      (`studies/packageLibrary.ts`, `study_package_submissions`,
+      `study_package_adds`; **Admin ▸ Study Library**, `ad_studies`). A creator
+      asks; an administrator reads it and decides. Nothing becomes public on a
+      timer, and nothing becomes public because it was shared privately with
+      somebody.
+      - **Three outcomes, and two of them are the same act with different
+        words.** Approve publishes it. Reject and "ask for changes" both hand it
+        straight back with the package untouched — kept apart because the
+        creator reads them completely differently, and a note saying "fix the
+        third category" filed as a rejection reads as a refusal.
+      - **The attestation is recorded as a VERSION, not a boolean**
+        (`ATTESTATION_VERSION`, stored per submission). The wording will change,
+        and "they ticked the box" would not say which wording was actually put
+        in front of them.
+      - **A published package's content is FROZEN** (`locked` in
+        `packageAccess.ts`): the owner keeps `manage` but loses `edit`. It is
+        public on the strength of what a reviewer read, so letting it be edited
+        in place would let what people study drift away from what was approved
+        with nobody seeing it happen. Withdrawing or unpublishing is how it
+        unlocks.
+      - **Reading the library is not joining it.** Anyone signed in may read a
+        published package; `study_package_adds` records somebody actually taking
+        one up, which is what puts it in their own list and puts them on its
+        leaderboard. **No copy is made** — they study the same deck everybody
+        else does, and their progress is their own because progress has always
+        been keyed by `(user, deck)`.
+      - `readablePackages` is therefore **owned + accepted shares + added
+        published ones**, deliberately *not* every public package. Dropping the
+        whole library into everyone's study game list is not a library; it is
+        noise that grows without limit.
+      - **An add row is a right of its own, not merely a listing.** `rightsFor`
+        grants `read` to anybody holding one, so somebody who took a package up
+        keeps it after it stops being public. Without that branch the two halves
+        disagreed — the package stayed in their list and then refused to open.
+      - **A CREATOR CAN WITHDRAW THEIR OWN PUBLICATION**
+        (`withdrawFromLibrary`, `POST /api/studies/packages/:id/withdraw-from-library`;
+        `withdrawn_at` / `withdrawn_by_user_id`, migration `0120`). Stopping the
+        distribution of your own work must not depend on an administrator being
+        available. It is on `guard` and `manage` rather than `create` and
+        `edit`, deliberately: a published package is locked against edits and
+        withdrawing must not require breaking that lock — or paying, on a
+        membership that has since lapsed.
+        - **It is its own publication-state transition and NOT an archive or a
+          delete.** Nothing is removed: not the package, its game, cards,
+          presentation or lessons; not anybody's progress; not the explicit
+          username shares, which keep working until separately revoked; not the
+          package, category, deck or slide ids. `refreshShareVisibility` then
+          settles it at `private` or `shared` depending on what shares it still
+          has, so a withdrawal never silently converts it back to legacy
+          content.
+        - **It stops PUBLIC distribution only.** It leaves library browsing and
+          `addToLibrary` immediately, and anyone who had already taken it up
+          keeps it — which is the whole point of the add-row branch above.
+        - **The record is preserved, and the withdrawal is stamped ONTO the
+          approval that ended** — the newest approved submission still carrying
+          no `withdrawn_at`. The `status` stays `approved`, because that is what
+          was decided; what is added is when the publication ended and who
+          ended it. So a package published, withdrawn and published again has
+          two independent records rather than one overwritten one, and the
+          moderation queue reads both.
+        - **`unpublishPackage` (the admin action) DELEGATES to it**, so there is
+          one transition with one record whoever performs it. An admin acting on
+          somebody else's package additionally writes an Administrator Log
+          entry; the owner withdrawing their own does not, since it is not an
+          administrative act.
+        - **A withdrawn package does not go back on its own.** The content
+          unlocks so the creator can work on it, and returning to the library
+          takes a fresh submission and a fresh approval — a new attestation
+          included. Refused with **409** if it is not currently public, so
+          withdrawing twice cannot overwrite the first publication's record.
+    - **LEADERBOARD MEMBERSHIP FOLLOWS PACKAGE ACCESS** (`packageAudience`,
+      `getPackageLeaderboard`). Two kinds of game have a board and they are
+      ranked by the **same code** (`rankDecks` in `deckGame.ts`, which
+      `getDeckLeaderboard` also calls, so a percentage means one thing):
+      - a **built-in** game, spanning every copy of itself on the install;
+      - a **package-backed** game, among the package's own audience — the owner,
+        whoever accepted a share, and whoever added it from the library. Never
+        trading/private-group membership.
+      A legacy user-made game still has none. **Scoring is untouched** — level,
+      streak, weighted scoring and every progress calculation are exactly as
+      they were; only who appears changed. `DeckSummary.hasLeaderboard` states
+      the rule once so the game screen's tab and the Live Wall's leaderboard
+      tile cannot offer a game whose endpoint would 404.
+    - `npm run db:check-sharing` exercises all of the above through the real
+      services against a scratch database. It WRITES (four accounts and a
+      package), so it refuses to run against any database that already holds a
+      user. **Do not weaken that guard.**
+    - **COMPLIANCE COPY IS CENTRALIZED, AND THERE ARE FOUR SENTENCES OF IT**
+      (`workspaces/studies/compliance.ts`). The rule is not "say more", it is
+      "say it once, where it matters": a wall of disclaimers is worse than a
+      short notice at the point of risk, because people stop reading it and it
+      makes an educational product look like a legal one.
+      - `EDUCATIONAL_NOTICE` + `AFFILIATION_NOTICE` — the standing position,
+        drawn by `StudyDisclaimer` at the foot of the study surfaces.
+      - `RIGHTS_NOTICE` — `RightsNote`, at the handoff step and nowhere else.
+        That is the one point in the wizard where "am I allowed to use this?"
+        arises, because it is where a creator hands a brief and possibly their
+        own material to somebody else's model.
+      - `SCORE_NOTICE` — `ScoreNote`, on the leaderboard and nowhere else. A
+        ranked list of people is the one place a study percentage could be read
+        as a claim about investment ability, so the correction belongs there.
+      The **attestation** is deliberately NOT in that file: it lives server-side
+      in `packageLibrary.ts`, versioned, because it is *recorded* against a
+      submission rather than merely displayed, and what somebody agreed to has
+      to survive the wording changing.
+    - **The external-AI handoff carries a standing rights block**
+      (`RIGHTS_BLOCK` in `wizard/handoffPrompt.ts`), on the first handoff and on
+      the repair instructions alike. Original questions; no copyrighted question
+      banks, books or courses; supplied material only where the creator may use
+      it; finance content educational; no personalized recommendations; no
+      individualized buy/sell/hold; follow the format exactly. Composed locally
+      like everything else in that file — **zero VTS AI calls**.
+    - **STUDY BUG REPORTS CARRY MACHINE CONTEXT, NEVER STUDY CONTENT**
+      (`support/studyContext.ts`, `lib/reportProblem.ts`). "Report a problem" in
+      the wizard's validation error and in the import failure opens the
+      terminal's EXISTING bug flow — the chat bubble's Support tab, the AI
+      intake, `bug_reports`, Admin ▸ Bug Reports — with the diagnosis attached.
+      There is deliberately no second, Study-only ticketing system.
+      - The point is that the reporter does not have to explain any of it: they
+        know the screen said no, not the wizard step id, the schema version, the
+        validation codes, or whether they pasted or uploaded.
+      - **The schema is a closed list of short scalars** and there is no field a
+        package could arrive in. Anything else the client sends is stripped
+        server-side, which is the enforcer — the client's list is a mirror.
+      - **`sample` is the one exception**, filled only by an explicit press of
+        "include a small sample" and capped at `MAX_SAMPLE` (2000). Over-length
+        is DROPPED rather than truncated: the client only ever offers 400
+        characters, so more could only come from a hand-rolled request, and a
+        bug report is never worth refusing over its diagnostics.
+      - The context is appended as its own message rather than folded into the
+        reporter's words, and is deliberately **not** shown to the AI triage —
+        the intake's job is to get a usable description out of a human, and a
+        wall of version numbers would give it something else to talk about.
+      - It is honoured on a **bug** only. A suggestion or a support question has
+        nothing to diagnose.
+    - **Developer diagnostics are in the REAL screens, founder-level only.**
+      `ValidationDiagnostics` rides on every validation result (versions, ids,
+      counts, part indices — no content, on a pass or a failure), and the import
+      panel draws it for a founder while an ordinary user gets the
+      plain-language errors. `dev/fixtures.ts` builds known-good and known-bad
+      packages **against the open blueprint** — generated rather than checked in,
+      because a fixture written against last month's plan fails for the wrong
+      reason — and each bad one breaks exactly ONE thing. A fixture returns TEXT
+      and goes through the ordinary validate-then-confirm path, so a fixture
+      behaving differently from a real package is a finding rather than a quirk.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.
@@ -1367,9 +1741,12 @@ workspaces list** (see `theme/nav.ts` order).
     `RULES` object in `legal/content.ts`. Deliberately not a copy: two rules
     pages disagree within a month, and the one people read is always the wrong
     one. Edit `RULES` and both follow.
-- **Admin** (rose): Users, **Administrator Log**, **Admin Guidelines**, Teams,
-  Badges, Message Templates, Patch Notes, Early Access, Bug Reports, Support.
-  **Admins only.**
+- **Admin** (rose): Users, **Administrator Log**, **Admin Guidelines**, Rule
+  Breaking, **Study Library**, Teams, Badges, Message Templates, Patch Notes,
+  Early Access, Bug Reports, Support. **Admins only.**
+  - **Study Library** (`ad_studies`, `AdminStudyLibrary.tsx`) is the moderation
+    queue for the public Study Library — the screen that makes "submitting is
+    not publishing" true. See Studies ▸ Study Packages for the whole workflow.
   - **Administrator Log** (`ad_log`, `AdminLog.tsx` over `admin/adminLog.ts`) —
     what administrators have done, and what is waiting on one. **Red = open**
     (still needs somebody), **green = resolved**, **gray = a record that asks
@@ -1427,6 +1804,49 @@ workspaces list** (see `theme/nav.ts` order).
       when the current one goes out of reach, so the screen never blanks.
     - The section key `ad_viewas` and `AdminViewAs.tsx` are **deleted**, not
       aliased: nothing in the terminal linked to that screen.
+  - **PREVIEW AS — a second axis beside "View as role", and SERVER-SIDE**
+    (`dev/preview.ts`, `routes/dev.ts`, `sessions.preview_as`, migration `0119`;
+    `PreviewAsTier` in the account menu, `PreviewBanner` in `Portal.tsx`).
+    A role says what you are trusted with; this says what you have paid for. Four
+    modes: `free`, `premium`, `max`, and `public` (free **plus** the elevated
+    roles stripped, which is the only way to see what an ordinary signup meets).
+    - **It is authoritative, and that is the whole point.** A client-side flag
+      would be a costume: the screen would draw a padlock and the API would go on
+      serving the paid answer behind it, so the one thing being tested — does the
+      boundary hold — is the one thing it could not show. A preview lives on the
+      SESSION, so every request in it is answered for the previewed account:
+      guards refuse, payloads narrow, 402s fire.
+    - **It never writes to the account.** Temporarily downgrading a real
+      membership would be visible to anything else reading that account, and a
+      browser closed mid-preview would leave the owner locked out of their own
+      terminal with no obvious cause. Signing out ends a preview; a second
+      browser is unaffected.
+    - **It only ever REDUCES.** Every mode resolves to a tier at or below what
+      the account already had. That is what makes it a testing tool rather than
+      the generic "turn the safeguards off" switch — there is nothing to turn
+      off, only privilege to give up. **Do not add a mode that grants anything.**
+    - **One guard reads the REAL roles** — `requireRealFounder`, used by the
+      preview and diagnostics routes and nowhere else. Everything else reads the
+      effective roles deliberately, because while previewing as the public the
+      terminal must refuse exactly as it refuses a member. **Leaving a preview is
+      on `requireAuth`**, not the founder guard: previewing as the public makes
+      the caller a member, and a guard there would be a one-way door.
+    - **The client draws the banner and the controls on `user.preview` /
+      `user.canPreview`, never on a role check.** The server computes
+      `canPreview` from the real roles, so its presence is itself the authority —
+      a role check would take away the way out at exactly the moment it matters.
+    - `applyPreview` is applied in `getUserForToken`, the one place a request's
+      user is resolved, so nothing downstream knows a preview exists. Rows loaded
+      from the database elsewhere carry no `preview` field, which is what keeps a
+      preview strictly the previewer's own view of their own account.
+    - The demo can never preview, and neither can anybody who is not
+      founder-level — checked on every request, so a revoked role drops the
+      preview with it.
+    - **Developer capabilities live in the real screens**, gated on the
+      *effective* roles so a preview hides them: the wizard's `WizardDevPanel`
+      (step id, jump, blueprint JSON, clear draft), the importer's fixtures and
+      `Diagnostics`, and `PackageStatePanel` on a package. There is deliberately
+      no second, developer-flavoured copy of Studies.
   - **Developer Blog** (`ad_blog`, `workspaces/admin/DevBlog.tsx` over
     `devBlog/service.ts`, routes `/api/dev-blog/*`) — the idea board. Posts with
     replies, founder-level throughout including reads. Tables `dev_blog_posts` /
@@ -3933,6 +4353,18 @@ metrics by eye. Defaults to the current
 **ET** month; narrow it with `-- --from=2026-07-01 --to=2026-08-01` (`to` is
 exclusive). Exits non-zero when it finds a structural problem. Run it against
 prod after any change to the reconcile/backfill writers.
+
+**Study sharing:** `npm run db:check-sharing` walks the whole Study Package
+sharing, library and leaderboard contract through the real services. Unlike
+every other check here it **writes** — four accounts and a package — so it
+refuses to run against any database that already holds a user, which makes an
+empty scratch file the only thing it can be pointed at:
+
+    DATABASE_URL="file:/tmp/x.db" npm run db:migrate
+    DATABASE_URL="file:/tmp/x.db" npm run db:check-sharing
+
+Run it after touching `packageAccess.ts`, `packageSharing.ts`,
+`packageLibrary.ts` or the leaderboard.
 
 ## Deployment workflow (owner preference)
 

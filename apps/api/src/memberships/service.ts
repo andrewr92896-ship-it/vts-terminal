@@ -30,6 +30,20 @@ import {
 
 export * from './tiers.js';
 
+/**
+ * Who a membership is being resolved FOR.
+ *
+ * A plain user row, plus the optional developer preview the signed-in request's
+ * own user object may carry. Declared structurally rather than importing
+ * `PreviewState`, so this module stays free of the dev layer and a row loaded
+ * from the database — which has no `preview` field at all — is still a valid
+ * subject. That is what keeps a preview strictly the previewer's own view:
+ * nothing that reads somebody else's membership can accidentally be in one.
+ */
+export type MembershipSubject = Pick<UserRow, 'id' | 'username' | 'roles'> & {
+  preview?: { tier: MembershipTier } | null;
+};
+
 // Whether a stored grant is still in force. A lapsed row is left in place rather
 // than deleted — it is the record of what was granted and by whom — so every
 // read checks the date rather than trusting that the row exists.
@@ -49,8 +63,19 @@ function tierOf(raw: string): MembershipTier {
 // demoting them falls back to whatever they were actually granted, rather than
 // to nothing.
 export async function getMembership(
-  user: Pick<UserRow, 'id' | 'username' | 'roles'>,
+  user: MembershipSubject,
 ): Promise<Membership> {
+  // A DEVELOPER PREVIEW wins over everything, including the role resolution
+  // below — which it has to, or previewing Free as a founder would go on
+  // returning Max and the preview would show nothing. It is set server-side on
+  // the session and can only ever name a tier at or below what the account
+  // already had, so this cannot grant anything (see dev/preview.ts). Only the
+  // signed-in request's own user object ever carries one: rows loaded from the
+  // database elsewhere have no `preview` field, so nothing about anybody else's
+  // membership is affected.
+  const preview = user.preview;
+  if (preview) return { ...FREE_MEMBERSHIP, tier: preview.tier, source: 'preview' };
+
   const roles = parseRoles(user);
   if (isAdmin(roles)) return { ...FREE_MEMBERSHIP, tier: 'max', source: 'role' };
   // The public demo is a showcase: it sees everything so the tour is complete,
@@ -83,7 +108,7 @@ export async function getMembership(
 }
 
 export async function hasEntitlement(
-  user: Pick<UserRow, 'id' | 'username' | 'roles'>,
+  user: MembershipSubject,
   feature: PremiumFeature,
 ): Promise<boolean> {
   const { tier } = await getMembership(user);
@@ -94,7 +119,7 @@ export async function hasEntitlement(
 // UI can draw locks without a round trip per feature — the server is still the
 // enforcer on every endpoint.
 export async function getMembershipView(
-  user: Pick<UserRow, 'id' | 'username' | 'roles'>,
+  user: MembershipSubject,
 ): Promise<MembershipView> {
   return viewOf(await getMembership(user));
 }

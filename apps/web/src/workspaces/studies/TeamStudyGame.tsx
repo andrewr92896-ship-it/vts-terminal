@@ -17,7 +17,7 @@ import {
   type DeckGameState,
 } from './studyEngine';
 import { StudyProgressBars } from './StudyProgress';
-import { StudyDisclaimer } from './StudyDisclaimer';
+import { ScoreNote, StudyDisclaimer } from './StudyDisclaimer';
 import { loadStudyPrefs, saveStudyPrefs, type StudyPrefs } from './studyPrefs';
 import { loadDeckSession, saveDeckSession } from './studySession';
 import { TutorChat } from './TutorChat';
@@ -67,10 +67,11 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   const [deck, setDeck] = useState<TeamDeckDetail | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [view, setView] = useState<'quiz' | 'leaderboard'>('quiz');
-  // Only the terminal's built-in games carry a leaderboard, and it is public
-  // across every account. `isSample` is what marks a built-in copy; the server
-  // is the enforcer and 404s the endpoint for anything else.
-  const hasLeaderboard = !!deck?.isSample;
+  // Two kinds of game carry a board: a built-in one, ranked publicly across
+  // every copy on the install, and a package-backed one, ranked among the
+  // package's own audience. A legacy user-made game has none. The server states
+  // which this is and is the enforcer — it 404s the endpoint for anything else.
+  const hasLeaderboard = !!deck?.hasLeaderboard;
 
   useEffect(() => {
     if (!hasLeaderboard && view === 'leaderboard') setView('quiz');
@@ -471,10 +472,10 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
           {deck.questionCount} questions · level up as you answer correctly · {STREAK_STEP} in a row for a multiplier
         </p>
       </div>
-      {/* Only the terminal's built-in games have a leaderboard, and theirs is
-          public across every account (owner decision, 2026-08). A game somebody
-          made has none, so the tab is hidden rather than opening on an empty
-          board that reads as broken. */}
+      {/* Two kinds of game have a board — a built-in one, public across every
+          account, and a package-backed one, among the package's own audience.
+          A legacy user-made game has none, so the tab is hidden rather than
+          opening on an empty board that reads as broken. */}
       <div
         style={{
           display: hasLeaderboard ? 'inline-flex' : 'none',
@@ -509,6 +510,10 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
       <div style={{ maxWidth: 900, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
         <DeckLeaderboard theme={theme} deckId={deckId} />
+        {/* The one place a study percentage could be read as a claim about
+            investment ability, so the correction is drawn here and nowhere
+            else. */}
+        <ScoreNote theme={theme} />
       </div>
     );
   }
