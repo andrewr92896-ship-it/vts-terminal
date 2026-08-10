@@ -643,6 +643,20 @@ export async function connectionCutoffs(): Promise<Map<string, number>> {
   return out;
 }
 
+// The cutoff that excludes this position, or null when nothing does. Returning
+// the cutoff rather than a boolean is what lets a caller both drop the trade and
+// say WHICH date dropped it — counting exclusions off a second, parallel test is
+// how a count and a filter come to disagree about the same trade.
+export function cutoffFor(
+  cutoffs: Map<string, number>,
+  connectionId: string | null,
+  openedAtMs: number,
+): number | null {
+  if (!connectionId) return null;
+  const cutoff = cutoffs.get(connectionId);
+  return cutoff != null && openedAtMs < cutoff ? cutoff : null;
+}
+
 // Whether a broker position falls before its connection's cutoff (and so should
 // be hidden from the desk stats). A position with no connection, or whose
 // connection has no cutoff, is always kept.
@@ -651,9 +665,7 @@ export function beforeCutoff(
   connectionId: string | null,
   openedAtMs: number,
 ): boolean {
-  if (!connectionId) return false;
-  const cutoff = cutoffs.get(connectionId);
-  return cutoff != null && openedAtMs < cutoff;
+  return cutoffFor(cutoffs, connectionId, openedAtMs) != null;
 }
 
 // Has this user set up any connection at all?

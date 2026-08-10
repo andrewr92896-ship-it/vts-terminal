@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.94';
+export const APP_VERSION = 'Beta V 6.95';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.95',
+    date: 'August 10, 2026',
+    notes: [
+      'Your metrics now say what they are leaving out. Two settings quietly narrow them — a broker connection’s “count trades since” date, and the test-trade floor — and neither said so, which meant an export covering June could list no June trades and read as though there had been none.',
+      'The Trade Log, the CSV export and the Live Wall’s Trade History tile all now name how many trades were left out and from what date. Nothing appears when nothing was excluded.',
+    ],
+  },
   {
     version: 'Beta V 6.94',
     date: 'August 10, 2026',
