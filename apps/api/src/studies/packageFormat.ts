@@ -152,6 +152,31 @@ export interface PackagePreview {
   lessonCount: number;
 }
 
+/**
+ * What the validator SAW, as opposed to what it decided.
+ *
+ * Deterministic, computed on every run, and carrying no package content at all —
+ * versions, counts, ids and part indices only. The client shows it to
+ * founder-level readers and nobody else, not because it is sensitive but
+ * because it is diagnostic noise to anybody who cannot act on it; an ordinary
+ * user gets the plain-language errors, which is the whole point of those.
+ *
+ * It exists because "this package will not import" and "this package declared
+ * schema version 2 in part 3 of 4" are different questions, and only the second
+ * one is answerable when somebody reports a fault.
+ */
+export interface ValidationDiagnostics {
+  /** How many documents were handed in, and what each declared. */
+  documents: { index: number; format: string | null; schemaVersion: number | null; blueprintId: string | null; bytes: number }[];
+  /** Multipart assembly: what was expected, what arrived, what is missing. */
+  multipart: { parts: number; expected: number | null; received: number[]; missing: number[] } | null;
+  /** The blueprint the import was checked against. */
+  expectedBlueprintId: string;
+  expectedSchemaVersion: number;
+  /** Per-category expected vs actual, even when the run failed. */
+  categoryTargets: { id: string; name: string; target: number | null; found: number }[];
+}
+
 export interface ValidationResult {
   ok: boolean;
   /** Named checks that came back clean — the "what passed" half of the report. */
@@ -161,6 +186,8 @@ export interface ValidationResult {
   preview: PackagePreview | null;
   /** The questions, for the reviewer to read before committing. */
   questions: ImportedQuestion[];
+  /** See ValidationDiagnostics — always present, shown only to developers. */
+  diagnostics: ValidationDiagnostics;
 }
 
 // ---- Small helpers ----

@@ -1635,6 +1635,64 @@ workspaces list** (see `theme/nav.ts` order).
       services against a scratch database. It WRITES (four accounts and a
       package), so it refuses to run against any database that already holds a
       user. **Do not weaken that guard.**
+    - **COMPLIANCE COPY IS CENTRALIZED, AND THERE ARE FOUR SENTENCES OF IT**
+      (`workspaces/studies/compliance.ts`). The rule is not "say more", it is
+      "say it once, where it matters": a wall of disclaimers is worse than a
+      short notice at the point of risk, because people stop reading it and it
+      makes an educational product look like a legal one.
+      - `EDUCATIONAL_NOTICE` + `AFFILIATION_NOTICE` — the standing position,
+        drawn by `StudyDisclaimer` at the foot of the study surfaces.
+      - `RIGHTS_NOTICE` — `RightsNote`, at the handoff step and nowhere else.
+        That is the one point in the wizard where "am I allowed to use this?"
+        arises, because it is where a creator hands a brief and possibly their
+        own material to somebody else's model.
+      - `SCORE_NOTICE` — `ScoreNote`, on the leaderboard and nowhere else. A
+        ranked list of people is the one place a study percentage could be read
+        as a claim about investment ability, so the correction belongs there.
+      The **attestation** is deliberately NOT in that file: it lives server-side
+      in `packageLibrary.ts`, versioned, because it is *recorded* against a
+      submission rather than merely displayed, and what somebody agreed to has
+      to survive the wording changing.
+    - **The external-AI handoff carries a standing rights block**
+      (`RIGHTS_BLOCK` in `wizard/handoffPrompt.ts`), on the first handoff and on
+      the repair instructions alike. Original questions; no copyrighted question
+      banks, books or courses; supplied material only where the creator may use
+      it; finance content educational; no personalized recommendations; no
+      individualized buy/sell/hold; follow the format exactly. Composed locally
+      like everything else in that file — **zero VTS AI calls**.
+    - **STUDY BUG REPORTS CARRY MACHINE CONTEXT, NEVER STUDY CONTENT**
+      (`support/studyContext.ts`, `lib/reportProblem.ts`). "Report a problem" in
+      the wizard's validation error and in the import failure opens the
+      terminal's EXISTING bug flow — the chat bubble's Support tab, the AI
+      intake, `bug_reports`, Admin ▸ Bug Reports — with the diagnosis attached.
+      There is deliberately no second, Study-only ticketing system.
+      - The point is that the reporter does not have to explain any of it: they
+        know the screen said no, not the wizard step id, the schema version, the
+        validation codes, or whether they pasted or uploaded.
+      - **The schema is a closed list of short scalars** and there is no field a
+        package could arrive in. Anything else the client sends is stripped
+        server-side, which is the enforcer — the client's list is a mirror.
+      - **`sample` is the one exception**, filled only by an explicit press of
+        "include a small sample" and capped at `MAX_SAMPLE` (2000). Over-length
+        is DROPPED rather than truncated: the client only ever offers 400
+        characters, so more could only come from a hand-rolled request, and a
+        bug report is never worth refusing over its diagnostics.
+      - The context is appended as its own message rather than folded into the
+        reporter's words, and is deliberately **not** shown to the AI triage —
+        the intake's job is to get a usable description out of a human, and a
+        wall of version numbers would give it something else to talk about.
+      - It is honoured on a **bug** only. A suggestion or a support question has
+        nothing to diagnose.
+    - **Developer diagnostics are in the REAL screens, founder-level only.**
+      `ValidationDiagnostics` rides on every validation result (versions, ids,
+      counts, part indices — no content, on a pass or a failure), and the import
+      panel draws it for a founder while an ordinary user gets the
+      plain-language errors. `dev/fixtures.ts` builds known-good and known-bad
+      packages **against the open blueprint** — generated rather than checked in,
+      because a fixture written against last month's plan fails for the wrong
+      reason — and each bad one breaks exactly ONE thing. A fixture returns TEXT
+      and goes through the ordinary validate-then-confirm path, so a fixture
+      behaving differently from a real package is a finding rather than a quirk.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.
@@ -1706,6 +1764,49 @@ workspaces list** (see `theme/nav.ts` order).
       when the current one goes out of reach, so the screen never blanks.
     - The section key `ad_viewas` and `AdminViewAs.tsx` are **deleted**, not
       aliased: nothing in the terminal linked to that screen.
+  - **PREVIEW AS — a second axis beside "View as role", and SERVER-SIDE**
+    (`dev/preview.ts`, `routes/dev.ts`, `sessions.preview_as`, migration `0119`;
+    `PreviewAsTier` in the account menu, `PreviewBanner` in `Portal.tsx`).
+    A role says what you are trusted with; this says what you have paid for. Four
+    modes: `free`, `premium`, `max`, and `public` (free **plus** the elevated
+    roles stripped, which is the only way to see what an ordinary signup meets).
+    - **It is authoritative, and that is the whole point.** A client-side flag
+      would be a costume: the screen would draw a padlock and the API would go on
+      serving the paid answer behind it, so the one thing being tested — does the
+      boundary hold — is the one thing it could not show. A preview lives on the
+      SESSION, so every request in it is answered for the previewed account:
+      guards refuse, payloads narrow, 402s fire.
+    - **It never writes to the account.** Temporarily downgrading a real
+      membership would be visible to anything else reading that account, and a
+      browser closed mid-preview would leave the owner locked out of their own
+      terminal with no obvious cause. Signing out ends a preview; a second
+      browser is unaffected.
+    - **It only ever REDUCES.** Every mode resolves to a tier at or below what
+      the account already had. That is what makes it a testing tool rather than
+      the generic "turn the safeguards off" switch — there is nothing to turn
+      off, only privilege to give up. **Do not add a mode that grants anything.**
+    - **One guard reads the REAL roles** — `requireRealFounder`, used by the
+      preview and diagnostics routes and nowhere else. Everything else reads the
+      effective roles deliberately, because while previewing as the public the
+      terminal must refuse exactly as it refuses a member. **Leaving a preview is
+      on `requireAuth`**, not the founder guard: previewing as the public makes
+      the caller a member, and a guard there would be a one-way door.
+    - **The client draws the banner and the controls on `user.preview` /
+      `user.canPreview`, never on a role check.** The server computes
+      `canPreview` from the real roles, so its presence is itself the authority —
+      a role check would take away the way out at exactly the moment it matters.
+    - `applyPreview` is applied in `getUserForToken`, the one place a request's
+      user is resolved, so nothing downstream knows a preview exists. Rows loaded
+      from the database elsewhere carry no `preview` field, which is what keeps a
+      preview strictly the previewer's own view of their own account.
+    - The demo can never preview, and neither can anybody who is not
+      founder-level — checked on every request, so a revoked role drops the
+      preview with it.
+    - **Developer capabilities live in the real screens**, gated on the
+      *effective* roles so a preview hides them: the wizard's `WizardDevPanel`
+      (step id, jump, blueprint JSON, clear draft), the importer's fixtures and
+      `Diagnostics`, and `PackageStatePanel` on a package. There is deliberately
+      no second, developer-flavoured copy of Studies.
   - **Developer Blog** (`ad_blog`, `workspaces/admin/DevBlog.tsx` over
     `devBlog/service.ts`, routes `/api/dev-blog/*`) — the idea board. Posts with
     replies, founder-level throughout including reads. Tables `dev_blog_posts` /

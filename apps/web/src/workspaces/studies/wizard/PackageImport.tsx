@@ -1,6 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api, ApiError } from '../../../api/client';
-import type { PackageValidation } from '../../../api/types';
+import type { PackageDiagnostics, PackageValidation, StudyBugContext } from '../../../api/types';
+import { APP_VERSION } from '../../../meta/version';
+import { useAuth } from '../../../auth/AuthContext';
+import { isFounder } from '../../../auth/access';
+import { reportProblem } from '../../../lib/reportProblem';
 import { Icon } from '../../../components/Icon';
 import type { Theme } from '../../../theme/themes';
 import type { StudyPackageBlueprint } from './blueprint';
@@ -41,6 +45,15 @@ export function PackageImport({
   const [copied, setCopied] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
   const [manual, setManual] = useState<ManualQuestion[]>([]);
+  // How the most recent document arrived, for the bug report. Upload and paste
+  // fail differently — a paste can be truncated by the chat window it came from
+  // — so which one it was is the first thing worth knowing.
+  const [lastSource, setLastSource] = useState<'upload' | 'paste' | 'fixture' | undefined>(undefined);
+  const { user } = useAuth();
+  // Developer capabilities inside the REAL importer, never a second one. Gated
+  // on the effective roles, so previewing as the public hides them — which is
+  // the point of previewing.
+  const canDebug = !!user && isFounder(user.roles);
 
   const payload = toImportBlueprint(blueprint, draftId);
   const owesQuestions = needsManualQuestions(blueprint);
@@ -60,6 +73,7 @@ export function PackageImport({
 
   const onFiles = async (files: FileList | null) => {
     if (!files) return;
+    setLastSource('upload');
     for (const f of Array.from(files)) addDoc(f.name, await f.text());
   };
 
@@ -112,6 +126,51 @@ export function PackageImport({
     }
   };
 
+  /**
+   * Hand the failure to the bug report flow, with the diagnosis attached.
+   *
+   * The context is ids, versions and validation CODES — never the package. The
+   * smallest useful fragment of it is offered separately, as a switch the
+   * reporter has to turn on: the first 400 characters of the first document is
+   * usually enough to see whether the envelope is malformed, and it is study
+   * content, so it is theirs to send or withhold.
+   */
+  function reportImportProblem() {
+    const d = result?.diagnostics;
+    reportProblem({
+      intro: result?.errors.length
+        ? `A study package would not import. The checker said: ${result.errors[0].message}`
+        : 'Something went wrong importing a study package.',
+      context: {
+        ...baseContext(),
+        component: 'import',
+        source: lastSource,
+        parts: d?.multipart?.parts ?? docs.length,
+        expectedParts: d?.multipart?.expected ?? undefined,
+        missingParts: d?.multipart?.missing?.length ? d.multipart.missing : undefined,
+        errorCodes: result?.errors.map((e) => e.code),
+        errorMessages: result?.errors.slice(0, 5).map((e) => e.message),
+        formatVersion: d?.expectedSchemaVersion,
+      },
+      offer: docs[0]
+        ? { label: 'the first 400 characters of what you added', text: docs[0].text.slice(0, 400) }
+        : null,
+    });
+  }
+
+  // The parts of the context that do not depend on where in the panel we are.
+  function baseContext(): StudyBugContext {
+    return {
+      screen: 'st_decks',
+      step: 'import',
+      draftId,
+      appVersion: APP_VERSION,
+      tier: user?.access.membership.tier,
+      isDemo: user?.isDemo || undefined,
+      previewAs: user?.preview ?? undefined,
+    };
+  }
+
   const canConfirm = !!result?.ok && !busy && manualErrors.length === 0;
 
   return (
@@ -153,6 +212,7 @@ export function PackageImport({
           <button
             type="button"
             onClick={() => {
+              setLastSource('paste');
               addDoc(docs.length ? `Pasted part ${docs.length + 1}` : 'Pasted package', paste);
               setPaste('');
             }}
@@ -208,6 +268,25 @@ export function PackageImport({
         </div>
       )}
 
+      {/* Fixtures, in the REAL importer. They produce the same text a creator
+          would paste and then go through validate-then-confirm unchanged, so a
+          fixture that behaves differently from a real package is a finding
+          rather than a quirk of a test harness. */}
+      {canDebug && (
+        <FixtureLoader
+          theme={theme}
+          onLoad={(label, documents) => {
+            setLastSource('fixture');
+            setResult(null);
+            setError(null);
+            for (const [i, text] of documents.entries()) {
+              addDoc(documents.length === 1 ? label : `${label} — part ${i + 1}`, text);
+            }
+          }}
+          build={(kind) => api.buildStudyFixture(kind, payload.name, payload.subject ?? '', payload)}
+        />
+      )}
+
       {error && <Note tone="bad">{error}</Note>}
 
       {/* ---- What passed and what failed ---- */}
@@ -255,6 +334,13 @@ export function PackageImport({
                 <button type="button" onClick={() => void copyRepair()} style={secondaryBtn(theme)}>
                   {copied ? 'Copied' : 'Copy repair instructions'}
                 </button>
+                {/* Most failures here are the AI's, and the repair prompt fixes
+                    those. This is for the other kind — a package that looks
+                    right and is refused anyway — and it carries the versions and
+                    validation codes so the reporter does not have to find them. */}
+                <button type="button" onClick={() => reportImportProblem()} style={secondaryBtn(theme)}>
+                  Report a problem
+                </button>
                 <span style={{ fontSize: 11.5, color: FAINT }}>
                   Lists the problems and the affected ids — not your questions.
                 </span>
@@ -272,6 +358,12 @@ export function PackageImport({
               ))}
             </div>
           )}
+
+          {/* Deterministic diagnostics, founder-level only. An ordinary user
+              gets the plain-language errors above, which is what they can act
+              on; this is the version-and-code detail that answers "why did it
+              decide that". */}
+          {canDebug && <Diagnostics theme={theme} d={result.diagnostics} />}
 
           {/* ---- Preview ---- */}
           {result.ok && result.preview && (
@@ -427,6 +519,177 @@ function Note({ children, tone }: { children: React.ReactNode; tone: 'bad' }) {
     >
       <Icon name="alert-triangle" size={13} color="#ffb4a8" />
       {children}
+    </div>
+  );
+}
+
+// ---- Developer capabilities, inside the real importer ----
+//
+// Both of these are drawn only for a founder-level reader and both are
+// read-only or reversible. There is no path here that commits a package the
+// validator refused, and no switch that relaxes a check — a fixture is text, and
+// diagnostics are a report.
+
+const DEV_BORDER = 'rgba(255,159,69,.35)';
+const DEV_TINT = 'rgba(255,159,69,.06)';
+const DEV_INK = '#FF9F45';
+
+/**
+ * Known-good and known-bad packages, built by the server against THIS blueprint.
+ *
+ * Generated rather than checked in, because a fixture written against an older
+ * plan fails for the wrong reason and teaches nothing. Each bad one breaks
+ * exactly one thing, so what the validator says is attributable.
+ */
+function FixtureLoader({
+  theme,
+  onLoad,
+  build,
+}: {
+  theme: Theme;
+  onLoad: (label: string, documents: string[]) => void;
+  build: (kind: string) => Promise<{ kind: string; label: string; documents: string[] }>;
+}) {
+  const [kinds, setKinds] = useState<{ kind: string; label: string }[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!open || kinds) return;
+    let alive = true;
+    api
+      .studyFixtures()
+      .then((r) => {
+        if (alive) setKinds(r.fixtures);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, kinds]);
+
+  return (
+    <div style={{ border: `1px solid ${DEV_BORDER}`, background: DEV_TINT, borderRadius: 10, padding: 11 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          width: '100%',
+          background: 'none',
+          border: 'none',
+          color: DEV_INK,
+          fontSize: 12.5,
+          fontWeight: 700,
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} color={DEV_INK} />
+        {'Test packages'}
+        <span style={{ fontWeight: 500, color: FAINT, fontSize: 11.5 }}>{'developer'}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {failed && <span style={{ fontSize: 12, color: '#ffb4a8' }}>{'Could not load the fixtures.'}</span>}
+          {!kinds && !failed && <span style={{ fontSize: 12, color: MUTED }}>{'Loading…'}</span>}
+          {kinds?.map((f) => (
+            <button
+              key={f.kind}
+              type="button"
+              disabled={busy === f.kind}
+              onClick={async () => {
+                setBusy(f.kind);
+                try {
+                  const r = await build(f.kind);
+                  onLoad(r.label, r.documents);
+                } catch {
+                  setFailed(true);
+                }
+                setBusy(null);
+              }}
+              style={{ ...secondaryBtn(theme), fontSize: 11.5, padding: '6px 10px', minHeight: 0 }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** What the validator saw. Never package content — see ValidationDiagnostics. */
+function Diagnostics({ theme, d }: { theme: Theme; d: PackageDiagnostics }) {
+  const [open, setOpen] = useState(false);
+  const mono: React.CSSProperties = { fontFamily: 'ui-monospace, monospace', fontSize: 11.5, color: MUTED };
+  return (
+    <div style={{ border: `1px solid ${DEV_BORDER}`, background: DEV_TINT, borderRadius: 10, padding: 11 }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          width: '100%',
+          background: 'none',
+          border: 'none',
+          color: DEV_INK,
+          fontSize: 12.5,
+          fontWeight: 700,
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} color={DEV_INK} />
+        {'Diagnostics'}
+        <span style={{ fontWeight: 500, color: FAINT, fontSize: 11.5 }}>{'developer'}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10, display: 'grid', gap: 8 }}>
+          <div style={mono}>
+            {`expects blueprint ${d.expectedBlueprintId} · schema v${d.expectedSchemaVersion}`}
+          </div>
+          {d.documents.map((doc) => (
+            <div key={doc.index} style={mono}>
+              {`doc ${doc.index + 1}: format=${doc.format ?? '—'} v=${doc.schemaVersion ?? '—'} blueprint=${doc.blueprintId ?? '—'} ${doc.bytes}B`}
+            </div>
+          ))}
+          {d.multipart && (
+            <div style={mono}>
+              {`multipart: ${d.multipart.parts} added, expects ${d.multipart.expected ?? '—'}, received [${d.multipart.received.join(', ')}]${
+                d.multipart.missing.length ? `, missing [${d.multipart.missing.join(', ')}]` : ''
+              }`}
+            </div>
+          )}
+          {d.categoryTargets.length > 0 && (
+            <div style={{ display: 'grid', gap: 3 }}>
+              {d.categoryTargets.map((c) => (
+                <div
+                  key={c.id}
+                  style={{
+                    ...mono,
+                    color: c.target != null && c.found !== c.target ? '#ffb4a8' : MUTED,
+                  }}
+                >
+                  {`${c.name} (${c.id}): ${c.found}${c.target != null ? ` of ${c.target}` : ''}`}
+                </div>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 11, color: FAINT, borderTop: `1px solid ${theme.navBorder}`, paddingTop: 7 }}>
+            {'Versions, ids and counts only — no package content.'}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

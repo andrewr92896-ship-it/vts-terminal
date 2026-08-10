@@ -27,6 +27,35 @@ export const PACKAGE_FILE_NAME = 'vts-study-package.json';
 export const SCHEMA_VERSION = 1;
 
 /**
+ * The standing rights-and-educational-use block, carried by EVERY handoff this
+ * module generates — the first one and the repair instructions alike.
+ *
+ * It is here as a constant rather than inline in the prompt for the reason the
+ * whole compliance surface is centralized: it is the terminal's position on what
+ * it is asking somebody else's model to do, and a position stated in two places
+ * is a position that will differ in one of them. If it changes, it changes once.
+ *
+ * The two halves do different work. **Rights** keeps the terminal from being a
+ * convenient way to launder a copyrighted question bank into a shareable
+ * package — the answer to which is to ask for original questions, every time,
+ * and to say plainly that supplied material has to be material the user may
+ * actually use. **Advice** keeps finance content educational: this product
+ * teaches the exam, it does not tell anybody what to buy, and an external model
+ * asked for "questions about options strategies" will drift into
+ * recommendations unless told not to.
+ *
+ * Generated locally, like everything else in this file. It costs no VTS AI call.
+ */
+export const RIGHTS_BLOCK = `RIGHTS AND EDUCATIONAL USE
+- Create original educational questions, explanations and study material.
+- Do not reproduce proprietary or copyrighted question banks, books, courses, or long protected passages.
+- Use material I supply only where I have the right to use it, and turn it into original content rather than copying it out.
+- Keep finance-related content educational and informational.
+- Do not give personalized investment recommendations.
+- Do not give individualized buy, sell or hold instructions.
+- Follow the VTS package format exactly as specified below.`;
+
+/**
  * The exact number of questions each category should get.
  *
  * Computed with the same highest-averages allocator a weighted practice test
@@ -261,12 +290,7 @@ CONTENT RULES
 - Keep presentation slide text short enough to read as a slide.
 - Make lesson sequencing coherent with the presentation when lessons are requested.
 
-RIGHTS AND EDUCATIONAL USE
-- Create original educational questions and explanations.
-- Do not reproduce proprietary or copyrighted question banks, books, courses, or long protected passages unless I have the right to use and reproduce that material.
-- If I provide source material, transform it into original educational content rather than copying long passages unnecessarily.
-- Finance-related content must remain educational and informational.
-- Do not provide personalized investment recommendations or individualized buy/sell/hold instructions.
+${RIGHTS_BLOCK}
 
 FINAL OUTPUT
 When all necessary questions have been answered:
@@ -320,5 +344,7 @@ WHAT TO DO
 - Keep the same Blueprint ID.
 - Return the corrected package as valid JSON only, with no commentary outside it.
 - If you produced the package in numbered parts, return only the corrected parts, each with its original partIndex and partCount.
+
+${RIGHTS_BLOCK}
 `;
 }

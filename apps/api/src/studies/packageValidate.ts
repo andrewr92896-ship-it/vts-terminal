@@ -21,6 +21,7 @@ import {
   type ImportedSlide,
   type Letter,
   type PartType,
+  type ValidationDiagnostics,
   type ValidationIssue,
   type ValidationResult,
 } from './packageFormat.js';
@@ -38,7 +39,16 @@ interface Ctx {
   errors: ValidationIssue[];
   warnings: ValidationIssue[];
   passed: string[];
+  diagnostics: ValidationDiagnostics;
 }
+
+const NO_DIAGNOSTICS: ValidationDiagnostics = {
+  documents: [],
+  multipart: null,
+  expectedBlueprintId: '',
+  expectedSchemaVersion: PACKAGE_SCHEMA_VERSION,
+  categoryTargets: [],
+};
 
 function err(ctx: Ctx, code: string, message: string, ids?: string[]) {
   ctx.errors.push({ code, message, ...(ids && ids.length ? { ids } : null) });
@@ -48,7 +58,72 @@ function warn(ctx: Ctx, code: string, message: string, ids?: string[]) {
 }
 
 function fail(ctx: Ctx): ValidationResult {
-  return { ok: false, passed: ctx.passed, errors: ctx.errors, warnings: ctx.warnings, preview: null, questions: [] };
+  return {
+    ok: false,
+    passed: ctx.passed,
+    errors: ctx.errors,
+    warnings: ctx.warnings,
+    preview: null,
+    questions: [],
+    diagnostics: ctx.diagnostics,
+  };
+}
+
+/**
+ * Read what each document DECLARES about itself, before deciding anything.
+ *
+ * Runs first and unconditionally, so the diagnostics say something useful even
+ * when the run fails at the first hurdle — a package that will not parse is
+ * exactly the case where "what did it actually say" is the question. Carries no
+ * content: versions, ids, part indices and a byte count.
+ */
+function readDiagnostics(
+  documents: string[],
+  parsed: unknown[],
+  blueprint: ImportBlueprint,
+): ValidationDiagnostics {
+  const docs = documents.map((raw, index) => {
+    const d = obj(parsed[index]);
+    return {
+      index,
+      format: d ? str(d.format) : null,
+      schemaVersion: d ? num(d.schemaVersion) : null,
+      blueprintId: d ? trimmed(d.blueprintId) : null,
+      bytes: raw.length,
+    };
+  });
+
+  // Multipart state, from what the parts themselves claim. `expected` is the
+  // partCount they agree on; `missing` is what a complete set would still need,
+  // which is the one thing a creator adding parts one at a time wants to know.
+  const parts = parsed
+    .map((d) => obj(d))
+    .filter((d): d is Record<string, unknown> => !!d && str(d.format) === PACKAGE_PART_FORMAT);
+  let multipart: ValidationDiagnostics['multipart'] = null;
+  if (parts.length) {
+    const counts = [...new Set(parts.map((p) => num(p.partCount)).filter((n): n is number => n != null))];
+    const expected = counts.length === 1 ? counts[0] : null;
+    const received = [...new Set(parts.map((p) => num(p.partIndex)).filter((n): n is number => n != null))].sort(
+      (a, b) => a - b,
+    );
+    const missing = expected
+      ? Array.from({ length: expected }, (_, i) => i + 1).filter((n) => !received.includes(n))
+      : [];
+    multipart = { parts: parts.length, expected, received, missing };
+  }
+
+  return {
+    documents: docs,
+    multipart,
+    expectedBlueprintId: blueprint.blueprintId,
+    expectedSchemaVersion: PACKAGE_SCHEMA_VERSION,
+    categoryTargets: blueprint.categories.map((c) => ({
+      id: c.id,
+      name: c.name,
+      target: blueprint.questionTargets?.[c.id] ?? null,
+      found: 0,
+    })),
+  };
 }
 
 /**
@@ -61,9 +136,10 @@ function fail(ctx: Ctx): ValidationResult {
  * designed.
  */
 export function validateDocuments(documents: string[], blueprint: ImportBlueprint): ValidationResult {
-  const ctx: Ctx = { errors: [], warnings: [], passed: [] };
+  const ctx: Ctx = { errors: [], warnings: [], passed: [], diagnostics: NO_DIAGNOSTICS };
 
   if (!documents.length) {
+    ctx.diagnostics = readDiagnostics([], [], blueprint);
     err(ctx, 'empty', 'Add the package your AI produced — upload the file or paste the JSON.');
     return fail(ctx);
   }
@@ -73,8 +149,14 @@ export function validateDocuments(documents: string[], blueprint: ImportBlueprin
   for (const [i, raw] of documents.entries()) {
     const label = documents.length === 1 ? 'That' : `Part ${i + 1}`;
     const text = stripFence(raw);
+    // A document that cannot be read still takes its slot. Skipping it would
+    // shift every later document down one, so the diagnostics would report
+    // part 3's version against part 2 — a diagnostic that lies is worse than no
+    // diagnostic. Nothing downstream sees the nulls: a parse failure is always
+    // an error, and the error check below returns before `assemble` runs.
     if (!text) {
       err(ctx, 'empty_document', `${label} is empty.`);
+      parsed.push(null);
       continue;
     }
     try {
@@ -85,8 +167,12 @@ export function validateDocuments(documents: string[], blueprint: ImportBlueprin
         'not_json',
         `${label} is not valid JSON. Copy the whole block your AI produced, from the first { to the last }.`,
       );
+      parsed.push(null);
     }
   }
+  // Built here, from whatever DID parse, so a run that fails at the first hurdle
+  // still reports what each document declared about itself.
+  ctx.diagnostics = readDiagnostics(documents, parsed, blueprint);
   if (ctx.errors.length) return fail(ctx);
   ctx.passed.push(documents.length === 1 ? 'Readable JSON' : `Readable JSON in all ${documents.length} parts`);
 
@@ -105,6 +191,15 @@ export function validateDocuments(documents: string[], blueprint: ImportBlueprin
   const slideIds = validatePresentation(pkg, blueprint, ctx);
   validateLessons(pkg, slideIds, blueprint, ctx);
 
+  // The per-category found counts are only knowable once the package has been
+  // read, so they are filled in rather than guessed at the top.
+  const found = new Map<string, number>();
+  for (const q of pkg.questions) if (q.categoryId) found.set(q.categoryId, (found.get(q.categoryId) ?? 0) + 1);
+  ctx.diagnostics = {
+    ...ctx.diagnostics,
+    categoryTargets: ctx.diagnostics.categoryTargets.map((c) => ({ ...c, found: found.get(c.id) ?? 0 })),
+  };
+
   const ok = ctx.errors.length === 0;
   return {
     ok,
@@ -113,6 +208,7 @@ export function validateDocuments(documents: string[], blueprint: ImportBlueprin
     warnings: ctx.warnings,
     preview: ok ? preview(pkg, blueprint) : null,
     questions: ok ? pkg.questions : [],
+    diagnostics: ctx.diagnostics,
   };
 }
 
@@ -676,7 +772,7 @@ function preview(pkg: ImportedPackage, blueprint: ImportBlueprint): import('./pa
 
 /** The validated package, for the caller that is about to commit it. */
 export function parseForCommit(documents: string[], blueprint: ImportBlueprint): ImportedPackage | null {
-  const ctx: Ctx = { errors: [], warnings: [], passed: [] };
+  const ctx: Ctx = { errors: [], warnings: [], passed: [], diagnostics: NO_DIAGNOSTICS };
   const parsed: unknown[] = [];
   for (const raw of documents) {
     try {

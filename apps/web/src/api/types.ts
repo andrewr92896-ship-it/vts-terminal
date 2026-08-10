@@ -115,6 +115,18 @@ export interface User {
   // renders. Never true for the read-only demo.
   mustAcceptTerms: boolean;
   isDemo: boolean; // the public, read-only demo account
+  // The developer preview this SESSION is in ('free' | 'premium' | 'max' |
+  // 'public'), or null. Set server-side, so everything above already reports the
+  // previewed account: the roles, the workspaces and the membership are all what
+  // that tier really gets, which is what makes a preview the production
+  // experience rather than a costume.
+  //
+  // Its presence is the authority to change or leave one, because previewing as
+  // the public narrows `roles` to a plain member and a role check would take the
+  // way out with it.
+  preview: PreviewMode | null;
+  /** Whether this account may enter a preview — decided from its REAL roles. */
+  canPreview: boolean;
   access: {
     label: string;
     workspaces: WorkspaceKey[];
@@ -2574,6 +2586,23 @@ export interface PackageValidation {
   warnings: PackageIssue[];
   preview: PackagePreview | null;
   questions: ImportedQuestionView[];
+  /**
+   * What the validator SAW, as opposed to what it decided — versions, ids,
+   * counts and part indices, and no package content at all.
+   *
+   * Two uses, both of which need it present on every run including a failed
+   * one: the founder-only diagnostics panel, and the machine context a bug
+   * report carries so the reporter does not have to find any of this by hand.
+   */
+  diagnostics: PackageDiagnostics;
+}
+
+export interface PackageDiagnostics {
+  documents: { index: number; format: string | null; schemaVersion: number | null; blueprintId: string | null; bytes: number }[];
+  multipart: { parts: number; expected: number | null; received: number[]; missing: number[] } | null;
+  expectedBlueprintId: string;
+  expectedSchemaVersion: number;
+  categoryTargets: { id: string; name: string; target: number | null; found: number }[];
 }
 
 /** The plan a package is checked against — the wizard's blueprint, flattened. */
@@ -2611,6 +2640,70 @@ export interface ManualPackagePayload {
     explanation?: string | null;
   }[];
   presentation?: { title: string; slides: { title: string; body: string }[] } | null;
+}
+
+/**
+ * Machine context attached to a bug report from Studies.
+ *
+ * Mirrors the server's whitelist (api/support/studyContext.ts), which is the
+ * enforcer: anything not on this list is stripped there. Ids, versions, counts
+ * and codes only — never study content. `sample` is the one exception and is
+ * filled solely by an explicit press of "include a small sample".
+ */
+export interface StudyBugContext {
+  screen?: string;
+  step?: string;
+  component?: string;
+  blueprintVersion?: number;
+  formatVersion?: number;
+  draftId?: string;
+  packageId?: string;
+  source?: 'upload' | 'paste' | 'fixture';
+  parts?: number;
+  expectedParts?: number;
+  missingParts?: number[];
+  errorCodes?: string[];
+  errorMessages?: string[];
+  errorId?: string;
+  apiStatus?: number;
+  appVersion?: string;
+  tier?: string;
+  isDemo?: boolean;
+  previewAs?: string;
+  flags?: string[];
+  sample?: string;
+  sampleLabel?: string;
+}
+
+/** What a founder-level account can ask to be treated as, for testing. */
+export type PreviewMode = 'free' | 'premium' | 'max' | 'public';
+
+export const PREVIEW_LABELS: Record<PreviewMode, string> = {
+  free: 'Free account',
+  premium: 'Premium member',
+  max: 'Max member',
+  public: 'Member of the public',
+};
+
+/** A package's sharing and publication state, for developer diagnostics. */
+export interface StudyPackageState {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  visibility: string;
+  archivedAt: number | null;
+  formatVersion: number;
+  shares: { id: string; recipientUserId: string; status: string; createdAt: number }[];
+  submissions: {
+    id: string;
+    status: string;
+    submittedAt: number;
+    reviewedAt: number | null;
+    attestationVersion: string;
+  }[];
+  libraryAdds: string[];
+  /** Who the package leaderboard ranks — the answer package access actually gives. */
+  leaderboardAudience: string[];
 }
 
 export interface StudyPackageSummary {

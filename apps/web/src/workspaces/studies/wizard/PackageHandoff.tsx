@@ -6,6 +6,7 @@ import { PACKAGE_FILE_NAME, buildHandoff } from './handoffPrompt';
 import type { WizardResult } from './PackageWizard';
 import { PackageImport } from './PackageImport';
 import { AiOnboarding } from './steps';
+import { RightsNote } from '../StudyDisclaimer';
 import { BORDER, FAINT, MUTED, TEXT, primaryBtn, secondaryBtn } from './wizardUi';
 
 // The AI ending of the wizard: take this to your own AI, bring back what it
@@ -69,9 +70,15 @@ export function PackageHandoff({
           <Icon name="layers" size={17} color={theme.accent} />
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#fff' }}>{bp.packageName || 'Study package'}</h2>
         </div>
-        <p style={{ margin: '0 0 16px', fontSize: 12.5, color: MUTED, lineHeight: 1.6 }}>
+        <p style={{ margin: '0 0 12px', fontSize: 12.5, color: MUTED, lineHeight: 1.6 }}>
           {`Copy this into ${provider}. It will ask you a few questions, then produce a file called ${PACKAGE_FILE_NAME} — bring that back below.`}
         </p>
+
+        {/* Rights, at the one point in the wizard where it arises: the creator
+            is about to put a brief — and possibly their own material — into
+            somebody else's model. The handoff itself carries the full rules for
+            the AI; this is the line for the person. */}
+        <RightsNote theme={theme} style={{ marginTop: 0, marginBottom: 16 }} />
 
         <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap', alignItems: 'center' }}>
           <button type="button" onClick={() => void copy()} style={primaryBtn(theme)}>

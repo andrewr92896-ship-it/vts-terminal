@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
-import type { RoleKey } from '../api/types';
+import type { PreviewMode, RoleKey } from '../api/types';
+import { PREVIEW_LABELS } from '../api/types';
 import {
   THEMES,
   DEFAULT_SCREEN,
@@ -265,7 +266,7 @@ function sectionLabelFor(workspace: WorkspaceKey, screen: string): string {
 }
 
 export function Portal() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { isPhone } = useResponsive();
 
   // Admin-only "view as role" preview: emulate someone who holds only the one
@@ -525,6 +526,29 @@ export function Portal() {
     }
   }
 
+  /**
+   * Enter, change or leave the developer tier preview.
+   *
+   * The preview itself is SERVER-SIDE — this call only asks — so the answer
+   * comes back through `refreshUser()`, which re-reads the whole user payload:
+   * the roles, the workspaces and the membership all arrive already narrowed to
+   * the previewed account, and the sidebar, the locks and the routing follow
+   * from that with no separate client state to keep in step.
+   */
+  async function changePreview(mode: PreviewMode | null) {
+    try {
+      if (mode) await api.setPreview(mode);
+      else await api.exitPreview();
+    } catch {
+      // A failed preview change leaves the session exactly as it was; the
+      // refresh below re-reads the truth either way.
+    }
+    // A preview narrows the roles, so the acting-role preview on top of it would
+    // be a preview of a preview. Cleared, so what is on screen has one cause.
+    setActingRole(null);
+    await refreshUser();
+  }
+
   // The nested Funded Account opt-in. Never revealed to the demo.
   const canFunded = !user!.isDemo && canAccessFunded(features);
   // The Trading Teams grant. Not a role, not an opt-in, not a membership — a
@@ -642,6 +666,7 @@ export function Portal() {
       effectiveRoles={effectiveRoles}
       actingRole={actingRole}
       onSetActingRole={changeActingRole}
+      onSetPreview={changePreview}
       workspaceLabel={WORKSPACE_LABELS[workspace]}
       sectionLabel={sectionLabelFor(workspace, screen)}
       accent={accent}
@@ -664,6 +689,10 @@ export function Portal() {
   const main = (
     <div key="app-main" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: 'var(--app-h)' }}>
       {isDemo && <DemoBanner accent={accent} onTour={() => setTourOpen(true)} onExit={logout} />}
+      {/* Above everything, and drawn on `user.preview` alone — never on a role
+          check, because previewing as the public is exactly when every role
+          check says member and the way out must still be on screen. */}
+      {user!.preview && <PreviewBanner mode={user!.preview} onExit={() => void changePreview(null)} />}
       {topBar}
       <PrivacyBanner />
       <InstallPrompt theme={theme} />
@@ -830,6 +859,57 @@ function PrivacyBanner() {
     >
       <Icon name="eye-off" size={14} />
       Privacy mode on — names and dollar amounts are hidden.
+    </div>
+  );
+}
+
+/**
+ * "You are previewing" — and, more importantly, the way out.
+ *
+ * Amber rather than the workspace accent, because this is a state the terminal
+ * is in rather than a feature of it, and it must not be mistaken for part of
+ * whatever screen is underneath. It sits above the top bar so it is present on
+ * every screen including the ones a previewed account can still reach when the
+ * account menu is not open.
+ */
+function PreviewBanner({ mode, onExit }: { mode: PreviewMode; onExit: () => void }) {
+  return (
+    <div
+      style={{
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+        gap: 12,
+        padding: '8px 16px',
+        background: 'rgba(255,159,69,.10)',
+        borderBottom: '1px solid rgba(255,159,69,.35)',
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: C.text, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <Icon name="eye" size={14} color="#FF9F45" />
+        <span>
+          <strong style={{ color: '#FF9F45' }}>Previewing as {PREVIEW_LABELS[mode].toLowerCase()}</strong>
+          <span style={{ color: C.muted }}> · this is the real experience for that account. Your own is unchanged.</span>
+        </span>
+      </span>
+      <button
+        onClick={onExit}
+        style={{
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: '#1b1206',
+          background: '#FF9F45',
+          border: 'none',
+          padding: '6px 12px',
+          borderRadius: 6,
+          cursor: 'pointer',
+        }}
+      >
+        Stop previewing
+      </button>
     </div>
   );
 }

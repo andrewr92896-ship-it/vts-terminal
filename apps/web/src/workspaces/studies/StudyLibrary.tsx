@@ -3,12 +3,14 @@ import { api, ApiError } from '../../api/client';
 import type {
   StudyLibraryEntry,
   StudyPackage,
+  StudyPackageState,
   StudyShare,
   StudySubmission,
 } from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useAuth } from '../../auth/AuthContext';
+import { isFounder } from '../../auth/access';
 import { Icon } from '../../components/Icon';
 
 // Study Packages: what a person owns, what has been handed to them, and what
@@ -395,6 +397,10 @@ function PackageDetail({
   onClose: () => void;
 }) {
   const grad = accentGradient(theme);
+  const { user } = useAuth();
+  // Founder-level only, and on the EFFECTIVE roles — so previewing as another
+  // account hides it, which is what makes the preview worth having.
+  const canDebug = !!user && isFounder(user.roles);
   const [pkg, setPkg] = useState<Awaited<ReturnType<typeof api.getStudyPackage>>['package'] | null>(null);
   const [shares, setShares] = useState<StudyShare[]>([]);
   const [submissions, setSubmissions] = useState<StudySubmission[]>([]);
@@ -509,6 +515,12 @@ function PackageDetail({
             .join(' · ') || 'No content yet'}
         </div>
       </div>
+
+      {/* Developer diagnostics on the real screen, founder-level only: what the
+          access rules are actually deciding from. Read-only — an admin could
+          already reach this package through the ordinary routes; this puts its
+          sharing and publication state on one screen. */}
+      {canDebug && <PackageStatePanel theme={theme} packageId={packageId} />}
 
       {pkg.mine && !readOnly && (
         <>
@@ -894,4 +906,100 @@ function inputStyle(theme: Theme): CSSProperties {
     padding: '11px 12px',
     minHeight: 44,
   };
+}
+
+/**
+ * What the sharing and publication rules are deciding from, for a developer.
+ *
+ * Read-only. It reports recipient ids rather than names on purpose: this is a
+ * diagnostic about relationships, not a directory of who holds what.
+ */
+function PackageStatePanel({ theme, packageId }: { theme: Theme; packageId: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, setState] = useState<StudyPackageState | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    if (!open || state) return;
+    let alive = true;
+    api
+      .studyPackageState(packageId)
+      .then((r) => {
+        if (alive) setState(r.state);
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, state, packageId]);
+
+  const mono: CSSProperties = { fontFamily: 'ui-monospace, monospace', fontSize: 11.5, color: MUTED };
+
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        border: '1px solid rgba(255,159,69,.35)',
+        background: 'rgba(255,159,69,.06)',
+        borderRadius: 12,
+        padding: 12,
+      }}
+    >
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          width: '100%',
+          background: 'none',
+          border: 'none',
+          color: '#FF9F45',
+          fontSize: 12.5,
+          fontWeight: 700,
+          cursor: 'pointer',
+          textAlign: 'left',
+          fontFamily: 'inherit',
+        }}
+      >
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} color="#FF9F45" />
+        <span style={{ flex: 1 }}>{'Package state'}</span>
+        <span style={{ fontWeight: 500, color: FAINT, fontSize: 11.5 }}>{'developer'}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 10, display: 'grid', gap: 6 }}>
+          {failed && <div style={{ fontSize: 12, color: '#ffb4ab' }}>{'Could not read it.'}</div>}
+          {!state && !failed && <div style={{ fontSize: 12, color: MUTED }}>{'Loading…'}</div>}
+          {state && (
+            <>
+              <div style={mono}>{`id ${state.id} · owner ${state.ownerUserId}`}</div>
+              <div style={mono}>
+                {`visibility ${state.visibility} · format v${state.formatVersion}${state.archivedAt ? ' · archived' : ''}`}
+              </div>
+              <div style={mono}>
+                {state.shares.length
+                  ? state.shares.map((s) => `${s.recipientUserId}=${s.status}`).join('  ')
+                  : 'no shares'}
+              </div>
+              <div style={mono}>
+                {state.submissions.length
+                  ? state.submissions.map((s) => `${s.status}@${s.attestationVersion}`).join('  ')
+                  : 'no submissions'}
+              </div>
+              <div style={mono}>{`library adds: ${state.libraryAdds.length}`}</div>
+              <div style={{ ...mono, color: '#7de2b8' }}>
+                {`leaderboard audience: ${state.leaderboardAudience.length}`}
+              </div>
+              <div style={{ fontSize: 11, color: FAINT, borderTop: `1px solid ${theme.navBorder}`, paddingTop: 7 }}>
+                {'Ids and states only — no study content.'}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }

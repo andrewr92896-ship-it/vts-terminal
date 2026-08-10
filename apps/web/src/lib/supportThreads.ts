@@ -1,4 +1,4 @@
-import type { SupportKind } from '../api/types';
+import type { StudyBugContext, SupportKind } from '../api/types';
 
 // Local persistence for the corner-bubble Support tab.
 //
@@ -27,6 +27,21 @@ export interface SupportThread {
   draft: string;
   /** True once the intake was filed to the admins. */
   submitted: boolean;
+  /**
+   * Machine context collected where the problem happened, sent with the report.
+   *
+   * Ids, versions and validation codes — never study content. It rides on the
+   * thread rather than being rebuilt at send time because the state that
+   * produced it (the failed import, the wizard step) is usually gone by the time
+   * the reporter finishes typing.
+   */
+  context?: StudyBugContext;
+  /**
+   * A fragment the reporter was OFFERED and has not necessarily accepted.
+   * Attaching study content is an explicit choice; `sampleOn` records it.
+   */
+  offer?: { label: string; text: string } | null;
+  sampleOn?: boolean;
   createdAt: number;
   updatedAt: number;
 }

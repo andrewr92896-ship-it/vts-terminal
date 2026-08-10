@@ -14,6 +14,7 @@ import {
   type WorkspaceKey,
 } from './rbac.js';
 import { isDemoUser } from '../demo/identity.js';
+import { canPreview } from '../dev/preview.js';
 import { featuresForUser } from '../features/service.js';
 import { hasEntitlement } from '../memberships/service.js';
 import { FEATURE_LABELS, FEATURE_TIER, TIER_LABELS, type PremiumFeature } from '../memberships/tiers.js';
@@ -68,6 +69,33 @@ export const requireFounder: preHandlerHookHandler = async (
     return reply.code(401).send({ error: 'Not authenticated' });
   }
   if (!isFounder(parseRoles(user))) {
+    return reply.code(403).send({ error: 'Forbidden' });
+  }
+};
+
+/**
+ * Founder-level, asked of the account's REAL roles rather than the ones a
+ * developer preview has narrowed.
+ *
+ * The one guard that must ignore a preview, and only two things use it: setting
+ * or changing the preview, and the diagnostics that go with it. Reading the
+ * effective roles here would build the trap the account-menu preview control
+ * exists to avoid — previewing as the public would take away the ability to
+ * stop previewing.
+ *
+ * Everything else in the terminal deliberately uses `requireFounder`, which
+ * reads the effective roles, because that is the whole point: while previewing
+ * as the public the terminal must refuse exactly as it refuses a member.
+ */
+export const requireRealFounder: preHandlerHookHandler = async (
+  request: FastifyRequest,
+  reply: FastifyReply,
+) => {
+  const user = request.currentUser;
+  if (!user) {
+    return reply.code(401).send({ error: 'Not authenticated' });
+  }
+  if (!canPreview(user)) {
     return reply.code(403).send({ error: 'Forbidden' });
   }
 };

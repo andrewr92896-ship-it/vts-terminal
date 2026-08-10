@@ -3,7 +3,11 @@ import { Icon } from '../../../components/Icon';
 import { useAuth } from '../../../auth/AuthContext';
 import { useResponsive } from '../../../hooks/useMediaQuery';
 import type { Theme } from '../../../theme/themes';
+import { APP_VERSION } from '../../../meta/version';
+import { isFounder } from '../../../auth/access';
+import { reportProblem } from '../../../lib/reportProblem';
 import {
+  DRAFT_VERSION,
   PROVIDER_LABELS,
   emptyBlueprint,
   needsExternalAi,
@@ -24,6 +28,7 @@ import {
   saveProvider,
 } from './draft';
 import { StepCard } from './steps';
+import { WizardDevPanel } from './WizardDevPanel';
 import { BORDER, MUTED, PAGE, Progress, TEXT, ErrorLine, primaryBtn, secondaryBtn } from './wizardUi';
 
 // The Study Package creation wizard.
@@ -67,6 +72,10 @@ export function PackageWizard({
   const [stepId, setStepId] = useState<StepId>('subject');
   const [showError, setShowError] = useState(false);
   const [restored, setRestored] = useState(false);
+  // Developer capabilities inside the real wizard. Founder-level only, and on
+  // the EFFECTIVE roles — so a founder previewing as the public loses them,
+  // which is what makes the preview a real preview.
+  const canDebug = !!user && isFounder(user.roles);
 
   // Restore whatever was left unfinished. Runs once: the wizard is mounted fresh
   // each time it opens, and re-reading later would fight the debounced save.
@@ -299,7 +308,64 @@ export function PackageWizard({
             }}
             onAdvance={goNext}
           />
-          {showError && error && <ErrorLine>{error}</ErrorLine>}
+          {showError && error && (
+            <>
+              <ErrorLine>{error}</ErrorLine>
+              {/* A validation message the creator cannot act on is a bug in the
+                  wizard, not in their answer. This carries the step id and the
+                  blueprint version so they do not have to describe either. */}
+              <button
+                type="button"
+                onClick={() =>
+                  reportProblem({
+                    intro: `The study package wizard would not let me continue. It said: ${error}`,
+                    context: {
+                      screen: 'st_decks',
+                      step: safeStep,
+                      component: 'wizard',
+                      draftId,
+                      blueprintVersion: DRAFT_VERSION,
+                      appVersion: APP_VERSION,
+                      errorMessages: [error],
+                      tier: user?.access.membership.tier,
+                      isDemo: user?.isDemo || undefined,
+                      previewAs: user?.preview ?? undefined,
+                    },
+                  })
+                }
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: MUTED,
+                  fontSize: 12,
+                  fontFamily: 'inherit',
+                  textDecoration: 'underline',
+                  cursor: 'pointer',
+                  padding: '6px 0 0',
+                }}
+              >
+                Report a problem
+              </button>
+            </>
+          )}
+
+          {/* Developer capabilities, in the REAL wizard rather than a second
+              one. Founder-level only, and hidden while previewing as anybody
+              else — seeing the product without them is the point. */}
+          {canDebug && (
+            <WizardDevPanel
+              theme={theme}
+              stepId={safeStep}
+              steps={steps}
+              blueprint={bp}
+              draftId={draftId}
+              onJump={(s) => {
+                setShowError(false);
+                setStepId(s);
+              }}
+              onClearDraft={startOver}
+            />
+          )}
         </div>
 
         <div

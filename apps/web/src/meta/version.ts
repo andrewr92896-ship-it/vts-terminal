@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.99';
+export const APP_VERSION = 'Beta V 7.00';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.00',
+    date: 'August 10, 2026',
+    notes: [
+      'The handoff you give your own AI now spells out the rules it has to work to: write original questions, do not copy a question bank or a book, only use material you have the right to use, and keep finance content educational rather than telling anyone what to buy. A short line about rights sits beside the copy button, and the leaderboard says plainly that a study score is not a measure of investment skill.',
+      'When the wizard or the import checker refuses something, there is now a Report a problem button beside the error. It opens the usual bug chat with the technical details already attached — the step you were on, the versions, the exact checks that failed — so you do not have to describe any of it. Your questions, uploads, slides and lesson text are never sent; if a sample would help, you are asked first and shown exactly what would go.',
+      'You can now look at the terminal as a free, Premium, Max or ordinary public account from the account menu, without a second login. It is the real thing rather than a mock-up: the locks you meet are the locks that exist. A bar across the top says you are previewing and gets you back out in one press, and your own account is untouched throughout.',
+    ],
+  },
   {
     version: 'Beta V 6.99',
     date: 'August 10, 2026',

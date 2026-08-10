@@ -202,9 +202,11 @@ export interface Membership {
   expiresAt: number | null;
   /**
    * Why this account holds the tier. 'role' means it comes from being an admin
-   * or a developer, with no stored grant involved at all.
+   * or a developer, with no stored grant involved at all; 'preview' means a
+   * founder-level account is deliberately looking at the product as this tier
+   * and their real membership is untouched (see dev/preview.ts).
    */
-  source: 'role' | 'demo' | 'manual' | 'grandfather' | 'billing' | 'none';
+  source: 'role' | 'demo' | 'preview' | 'manual' | 'grandfather' | 'billing' | 'none';
   note: string | null;
   grantedByName: string | null;
   grantedAt: number | null;

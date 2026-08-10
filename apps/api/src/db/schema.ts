@@ -94,6 +94,12 @@ export const sessions = sqliteTable('sessions', {
   expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
   userAgent: text('user_agent'),
+  // Developer preview (migration 0119). What a founder-level account has asked
+  // to be treated AS for this session — see dev/preview.ts. Null is the normal
+  // case. On the session because a preview is a lens rather than a grant: it
+  // ends with the sign-in, leaves the account untouched, and cannot be left
+  // behind.
+  previewAs: text('preview_as'),
 });
 
 export type UserRow = typeof users.$inferSelect;

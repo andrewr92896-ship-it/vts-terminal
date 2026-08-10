@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import type { Theme } from '../../theme/themes';
 import { Icon } from '../../components/Icon';
+import { AFFILIATION_NOTICE, EDUCATIONAL_NOTICE, RIGHTS_NOTICE, SCORE_NOTICE } from './compliance';
 
 // A small, reusable disclaimer strip shown across the study-game surfaces (the
 // game launcher, the player, graded tests, and progress).
@@ -12,21 +13,65 @@ import { Icon } from '../../components/Icon';
 // educational, is not affiliated with or endorsed by anyone it references, and
 // is not financial/investment/legal/tax advice.
 //
-// It's ONE shared component with fixed, shared <EditableText> ids, so the wording
-// is written — and admin-editable/hideable from the site-wording editor — in a
-// single place. Editing (or hiding) it updates every study-game surface at once.
+// The WORDING lives in `compliance.ts`, not here, and so does every other
+// compliance sentence in Studies. One file holds the terminal's whole position
+// so a review can read it in one screen and an edit is one edit.
 //
 // Reuse it by rendering <StudyDisclaimer theme={theme} /> at the foot of a study
 // screen; pass `style` to tweak spacing where a screen needs it.
 
 export function StudyDisclaimer({ theme, style }: { theme: Theme; style?: CSSProperties }) {
   return (
+    <ComplianceNote theme={theme} style={style} icon="scale">
+      {`${EDUCATIONAL_NOTICE} ${AFFILIATION_NOTICE}`}
+    </ComplianceNote>
+  );
+}
+
+/**
+ * What a score is not — drawn on the leaderboard and deliberately nowhere else.
+ * A ranked list of people is the one place a study percentage could be read as a
+ * claim about investment ability.
+ */
+export function ScoreNote({ theme, style }: { theme: Theme; style?: CSSProperties }) {
+  return (
+    <ComplianceNote theme={theme} style={style} icon="scale">
+      {SCORE_NOTICE}
+    </ComplianceNote>
+  );
+}
+
+/**
+ * Rights — shown where a creator is about to hand material to their own AI, or
+ * bring material of their own back in. Those are the two points where "am I
+ * allowed to use this?" actually arises, so it appears at those two and not on
+ * every wizard card.
+ */
+export function RightsNote({ theme, style }: { theme: Theme; style?: CSSProperties }) {
+  return (
+    <ComplianceNote theme={theme} style={style} icon="scale">
+      {RIGHTS_NOTICE}
+    </ComplianceNote>
+  );
+}
+
+// The one strip every compliance notice is drawn in, so they read as the same
+// kind of thing wherever they appear.
+function ComplianceNote({
+  theme,
+  style,
+  icon,
+  children,
+}: {
+  theme: Theme;
+  style?: CSSProperties;
+  icon: string;
+  children: string;
+}) {
+  return (
     <div style={{ ...wrap(theme), ...style }}>
-      <Icon name="scale" size={15} color={theme.accent} style={{ flex: 'none', marginTop: 1, opacity: 0.85 }} />
-      <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: DIM }}>
-        {"Educational content only — informational, not financial, investment, legal, or tax advice."}{' '}
-        {"Study games may name third-party methods, brands, or people to teach about them, and are not affiliated with or endorsed by anyone they reference."}
-      </p>
+      <Icon name={icon} size={15} color={theme.accent} style={{ flex: 'none', marginTop: 1, opacity: 0.85 }} />
+      <p style={{ margin: 0, fontSize: 11.5, lineHeight: 1.5, color: DIM }}>{children}</p>
     </div>
   );
 }

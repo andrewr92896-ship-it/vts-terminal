@@ -2,9 +2,12 @@ import type {
   ImportBlueprintPayload,
   ManualPackagePayload,
   PackageValidation,
+  PreviewMode,
   StudyLibraryEntry,
   StudyPackage,
   StudyPackageDetail,
+  StudyPackageState,
+  StudyBugContext,
   StudyShare,
   StudySubmission,
   StudySubmissionStatus,
@@ -1190,8 +1193,14 @@ export const api = {
   supportMessage(
     kind: SupportKind,
     messages: { role: 'user' | 'ai'; body: string }[],
+    // Machine context, on a BUG only. The server whitelists it and ignores it
+    // on any other kind — see api/support/studyContext.
+    context?: StudyBugContext,
   ): Promise<{ needMore: boolean; reply: string; submitted: boolean }> {
-    return request('/api/support/message', { method: 'POST', body: JSON.stringify({ kind, messages }) });
+    return request('/api/support/message', {
+      method: 'POST',
+      body: JSON.stringify({ kind, messages, context }),
+    });
   },
   adminSupportRequests(): Promise<{ requests: SupportRequest[] }> {
     return request('/api/admin/support');
@@ -1801,5 +1810,36 @@ export const api = {
   },
   unpublishStudyPackage(id: string): Promise<{ ok: true }> {
     return request(`/api/studies/admin/packages/${encodeURIComponent(id)}/unpublish`, { method: 'POST' });
+  },
+
+  // ---- Developer capabilities ----
+  // The same production terminal, seen as somebody else. The preview is stored
+  // on the SESSION server-side, so the API answers as that account too — the
+  // guards refuse, the payloads narrow, the 402s fire. Nothing about the real
+  // account is written, and leaving is one call.
+  setPreview(mode: PreviewMode): Promise<{ preview: PreviewMode }> {
+    return request('/api/dev/preview', { method: 'POST', body: JSON.stringify({ mode }) });
+  },
+  exitPreview(): Promise<{ preview: null }> {
+    return request('/api/dev/preview', { method: 'DELETE' });
+  },
+  studyFixtures(): Promise<{ schemaVersion: number; fixtures: { kind: string; label: string }[] }> {
+    return request('/api/dev/study/fixtures');
+  },
+  // Returns the documents a creator would have pasted — the fixture then goes
+  // through the ordinary validate-then-confirm path with no shortcut around it.
+  buildStudyFixture(
+    kind: string,
+    name: string,
+    subject: string,
+    blueprint: ImportBlueprintPayload,
+  ): Promise<{ kind: string; label: string; documents: string[] }> {
+    return request('/api/dev/study/fixtures', {
+      method: 'POST',
+      body: JSON.stringify({ kind, name, subject, blueprint }),
+    });
+  },
+  studyPackageState(id: string): Promise<{ state: StudyPackageState }> {
+    return request(`/api/dev/study/packages/${encodeURIComponent(id)}/state`);
   },
 };

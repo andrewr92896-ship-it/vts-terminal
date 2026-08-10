@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { accentGradient, type Theme } from '../theme/themes';
 import { api, ApiError } from '../api/client';
-import type { PremiumFeature, SupportKind } from '../api/types';
+import type { PremiumFeature, StudyBugContext, SupportKind } from '../api/types';
 import {
   loadThreads,
   saveThreads,
@@ -14,6 +14,7 @@ import {
 import { Icon } from './Icon';
 import { useAuth } from '../auth/AuthContext';
 import { TIER_COLORS, TIER_GLYPHS, TIER_LABELS, tierOfFeature } from '../auth/access';
+import { takeProblemReport, type ProblemReport } from '../lib/reportProblem';
 
 // The Support tab inside the corner chat bubble. The user picks a category — a
 // bug, a suggestion, or a general question — and an AI assistant collects the
@@ -72,7 +73,23 @@ function whenLabel(ms: number): string {
     : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: boolean; userId: string }) {
+export function SupportTab({
+  theme,
+  isDemo,
+  userId,
+  reportNonce = 0,
+}: {
+  theme: Theme;
+  isDemo: boolean;
+  userId: string;
+  /**
+   * Bumped by TeamChat each time a "Report a problem" arrives, so this component
+   * knows to pick the pending report up. A counter rather than the report itself
+   * because the report is consumed once and must not be re-applied on a
+   * re-render.
+   */
+  reportNonce?: number;
+}) {
   const accentGrad = accentGradient(theme);
   const { user } = useAuth();
   const membership = user?.access.membership;
@@ -112,22 +129,37 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
     );
   }
 
-  function startThread(kind: SupportKind) {
+  function startThread(kind: SupportKind, from?: ProblemReport) {
     const c = categoryFor(kind);
     const now = Date.now();
     const thread: SupportThread = {
       id: newThreadId(),
       kind,
       messages: [{ role: 'ai', body: c.greeting }],
-      draft: '',
+      // A report opened from a failure arrives with the failure already
+      // described, so the reporter can send it as-is or add to it. They do not
+      // have to re-explain what the screen already knows.
+      draft: from?.intro ?? '',
       submitted: false,
       createdAt: now,
       updatedAt: now,
+      context: from?.context,
+      offer: from?.offer ?? null,
+      sampleOn: false,
     };
     setThreads((prev) => [thread, ...prev]);
     setActiveId(thread.id);
     setError(null);
   }
+
+  // "Report a problem", pressed somewhere in Studies. The bubble is already
+  // opening (TeamChat handles that); this picks up what came with it.
+  useEffect(() => {
+    if (isDemo || !reportNonce) return;
+    const r = takeProblemReport();
+    if (r) startThread('bug', r);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reportNonce]);
 
   function openThread(id: string) {
     setActiveId(id);
@@ -155,7 +187,16 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
     setBusy(true);
     setError(null);
     try {
-      const r = await api.supportMessage(active.kind, next);
+      // The context rides with every turn of this thread, but the SAMPLE only
+      // goes if the reporter switched it on. Assembled at send time rather than
+      // stored merged, so turning the switch off really does withhold it.
+      const context =
+        active.kind === 'bug' && active.context
+          ? active.sampleOn && active.offer
+            ? { ...active.context, sample: active.offer.text, sampleLabel: active.offer.label }
+            : active.context
+          : undefined;
+      const r = await api.supportMessage(active.kind, next, context);
       patchThread(id, {
         messages: [...next, { role: 'ai', body: r.reply }],
         submitted: active.submitted || r.submitted,
@@ -422,6 +463,20 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
         )}
       </div>
 
+      {/* What the terminal is sending on the reporter's behalf, and the one
+          thing it is NOT sending unless they say so. Shown rather than merely
+          done: attaching diagnostics quietly would be the sort of thing a person
+          should be able to find out about by looking at the screen. */}
+      {active.kind === 'bug' && active.context && (
+        <ContextPanel
+          theme={theme}
+          context={active.context}
+          offer={active.offer ?? null}
+          sampleOn={!!active.sampleOn}
+          onToggleSample={() => patchThread(active.id, { sampleOn: !active.sampleOn }, false)}
+        />
+      )}
+
       {error && (
         <div style={{ margin: '0 10px', fontSize: 12, color: '#ffb4ab', background: 'rgba(239,84,104,.1)', border: '1px solid rgba(239,84,104,.4)', borderRadius: 8, padding: '8px 11px' }}>
           {error}
@@ -473,6 +528,122 @@ export function SupportTab({ theme, isDemo, userId }: { theme: Theme; isDemo: bo
       )}
     </>
   );
+}
+
+/**
+ * The technical details riding along with a bug report, and the sample that is
+ * not.
+ *
+ * Two separate statements, and keeping them apart is the whole design. The first
+ * is a list of ids and versions the terminal collected so the reporter does not
+ * have to; it is dull, it is safe, and it goes automatically. The second is
+ * study CONTENT — the thing that would actually be private — and it goes only
+ * when the switch is on. Collapsed by default because the details are for the
+ * administrator, not for the person reporting; expandable because "what are you
+ * sending about me" deserves an answer on the screen rather than in a policy.
+ */
+function ContextPanel({
+  theme,
+  context,
+  offer,
+  sampleOn,
+  onToggleSample,
+}: {
+  theme: Theme;
+  context: StudyBugContext;
+  offer: { label: string; text: string } | null;
+  sampleOn: boolean;
+  onToggleSample: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rows = describeContext(context);
+
+  return (
+    <div style={{ margin: '0 10px 8px', border: '1px solid #1d3560', borderRadius: 8, background: 'rgba(255,255,255,.03)' }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 7,
+          width: '100%',
+          background: 'none',
+          border: 'none',
+          color: '#aebcd8',
+          fontSize: 11.5,
+          padding: '8px 10px',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} size={13} color="#7e92c0" />
+        <span style={{ flex: 1 }}>
+          {`Sending ${rows.length} technical detail${rows.length === 1 ? '' : 's'} with this report`}
+        </span>
+      </button>
+
+      {open && (
+        <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {rows.map((r) => (
+            <div key={r} style={{ fontSize: 11, color: '#8ea3cc', fontFamily: 'ui-monospace, monospace' }}>
+              {r}
+            </div>
+          ))}
+          <div style={{ fontSize: 11, color: '#6f84b2', marginTop: 4, lineHeight: 1.5 }}>
+            {'Your questions, uploads, slides and lesson text are not included.'}
+          </div>
+        </div>
+      )}
+
+      {offer && (
+        <label
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'flex-start',
+            padding: '8px 10px',
+            borderTop: '1px solid #16294f',
+            fontSize: 11.5,
+            color: '#dfe7fa',
+            cursor: 'pointer',
+          }}
+        >
+          <input type="checkbox" checked={sampleOn} onChange={onToggleSample} style={{ marginTop: 2, accentColor: theme.accent }} />
+          <span>
+            {`Also include a small sample (${offer.label}) to help diagnose it`}
+          </span>
+        </label>
+      )}
+    </div>
+  );
+}
+
+// The context as short readable lines. Mirrors what the server writes into the
+// report, so what the reporter is shown is what the administrator receives.
+function describeContext(c: StudyBugContext): string[] {
+  const out: string[] = [];
+  const add = (label: string, v: unknown) => {
+    if (v === undefined || v === null || v === '' || (Array.isArray(v) && !v.length)) return;
+    out.push(`${label}: ${Array.isArray(v) ? v.join(', ') : String(v)}`);
+  };
+  add('screen', c.screen);
+  add('step', c.step);
+  add('component', c.component);
+  add('input', c.source);
+  add('parts', c.parts);
+  add('missing parts', c.missingParts);
+  add('validation', c.errorCodes);
+  add('error id', c.errorId);
+  add('api status', c.apiStatus);
+  add('draft', c.draftId);
+  add('package', c.packageId);
+  add('blueprint version', c.blueprintVersion);
+  add('format version', c.formatVersion);
+  add('app version', c.appVersion);
+  add('membership', c.tier);
+  add('previewing as', c.previewAs);
+  add('flags', c.flags);
+  return out;
 }
 
 const inputStyle: CSSProperties = {
