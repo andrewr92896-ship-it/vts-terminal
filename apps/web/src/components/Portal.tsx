@@ -235,9 +235,16 @@ const RULES_DOT_SECTION = 'ad_rules';
 // board that draws on every workspace, so it is the most useful thing to open on
 // whatever the account has turned on. Every account reaches My Terminal, so the
 // fallback below is a safety net rather than a real path.
+// Where a sign-in lands.
+//
+// Advanced Trading FIRST, because the Live Wall lives there now (owner
+// instruction, 2026-08) and the wall is what a sign-in has always opened on.
+// Preferring My Terminal here would land a trader on Premium Features instead
+// of their board. An account without the desk opt-in has no `trading` in its
+// allowed list, so it falls through to My Terminal exactly as before.
 function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
-  if (allowed.includes('myportal')) return 'myportal';
   if (allowed.includes('trading')) return 'trading';
+  if (allowed.includes('myportal')) return 'myportal';
   return allowed[0] ?? 'studies';
 }
 
@@ -443,12 +450,23 @@ export function Portal() {
 
   const selectScreen = useCallback(
     (scr: string) => {
+      // Resolve the workspace the key belongs to as well as the screen.
+      //
+      // Setting the screen alone is not enough for a key from another
+      // workspace: the effect that keeps the two consistent bounces it straight
+      // back to the current workspace's default. That is not hypothetical — the
+      // Live Wall's upgrade links point at My Terminal ▸ Premium Features, and
+      // the wall now lives in Advanced Trading, so without this they land
+      // nowhere. From the sidebar, where the key always belongs to the
+      // workspace already open, this is a no-op.
+      const owner = NAV.find((w) => w.sections.some((sec) => sec.key === scr));
+      if (owner && owner.key !== workspace) setWorkspace(owner.key);
       setScreen(scr);
       setNavOpen(false);
       if (scr in SECTION_ACTIVITY) markAdminSectionSeen(scr);
       resetScroll();
     },
-    [resetScroll, markAdminSectionSeen],
+    [workspace, resetScroll, markAdminSectionSeen],
   );
 
   // Demo mode: a one-click, read-only showcase with a guided tour.

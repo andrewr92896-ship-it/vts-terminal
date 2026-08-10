@@ -12,6 +12,7 @@ import { ReviewMark } from '../../components/ReviewMark';
 import type {
   BoardTile,
   BoardTileKind,
+  MembershipTier,
   PremiumFeature,
   TemplateTile,
   TradingBoard,
@@ -280,11 +281,19 @@ export function ChartBoard({
   // anybody else, so this only decides whether the control is drawn.
   const isDev = isFounder(user?.roles ?? []) && !isPhone;
 
-  // Remember the last-opened preset per user (per device) so returning to the
-  // board — after toggling to Positions, a reload, or a new session — lands on
-  // the same preset instead of resetting to the default.
-  const lastKey = user?.id ? `vts:lastBoard:${user.id}` : null;
-  const builtInKey = user?.id ? `vts:wallLayout:${user.id}` : null;
+  // Remember the last-opened preset per user so returning to the board — after
+  // toggling to Positions, a reload, or a new session — lands on the same preset
+  // instead of resetting to the default.
+  //
+  // Scoped by DEVICE CLASS as well as by user (owner instruction, 2026-08). A
+  // board is arranged against a screen: twelve columns of tiles read well at a
+  // desk and flatten to one full-width column in the hand, so the board somebody
+  // wants on a phone is usually not the one they want on a desktop. Separate
+  // browsers already had separate storage; this also keeps one browser from
+  // carrying a phone-shaped choice back to the desk when a window is narrowed.
+  const deviceClass = isPhone ? 'phone' : 'desktop';
+  const lastKey = user?.id ? `vts:lastBoard:${user.id}:${deviceClass}` : null;
+  const builtInKey = user?.id ? `vts:wallLayout:${user.id}:${deviceClass}` : null;
   const [boards, setBoards] = useState<TradingBoard[]>([]);
   // What this reader's teammates have published. Read for everyone — a free
   // account cannot build a layout but can open the one their desk uses.
@@ -386,7 +395,9 @@ export function ChartBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [namePrompt, setNamePrompt] = useState<{ mode: 'create' | 'rename'; value: string } | null>(null);
+  // 'create' stores the arrangement on screen under a new name; 'blank' stores a
+  // brand-new empty board; 'rename' retitles the open one.
+  const [namePrompt, setNamePrompt] = useState<{ mode: 'create' | 'blank' | 'rename'; value: string } | null>(null);
   // Content-driven grid-row counts for positions tiles in an "expand" view, keyed
   // by tile id. These override the tile's stored h so the cell grows to fit every
   // trade; they are transient (never saved, never marked dirty).
@@ -552,7 +563,14 @@ export function ChartBoard({
               /* ignore */
             }
           }
-          applyBoard(list.find((b) => b.id === savedId) ?? list.find((b) => b.isDefault) ?? list[0]);
+          // This device's own default before the account's, so a phone opens
+          // the board that was arranged for a phone. Nothing set for a phone
+          // falls back to the account default, which is the behaviour every
+          // board had before the two were split.
+          const deviceDefault = isPhone
+            ? (list.find((b) => b.isDefaultPhone) ?? list.find((b) => b.isDefault))
+            : list.find((b) => b.isDefault);
+          applyBoard(list.find((b) => b.id === savedId) ?? deviceDefault ?? list[0]);
         } else {
           // Nothing saved yet: open on a built-in layout rather than an empty
           // grid, so a first visit shows a finished board.
@@ -566,7 +584,7 @@ export function ChartBoard({
       firstLoad.current = false;
       setLoading(false);
     }
-  }, [applyBoard, applyBuiltInFrom, builtIn, canCustomize, lastKey, templates]);
+  }, [applyBoard, applyBuiltInFrom, builtIn, canCustomize, isPhone, lastKey, templates]);
 
   useEffect(() => {
     void load();
@@ -966,16 +984,30 @@ export function ChartBoard({
     if (!nm) return;
     setSaving(true);
     try {
-      if (namePrompt.mode === 'create') {
-        const { board, boards: list, teamBoards: shared } = await api.createBoard({ name: nm, layout: { tiles, cols }, isDefault: boards.length === 0 });
+      if (namePrompt.mode === 'create' || namePrompt.mode === 'blank') {
+        const blank = namePrompt.mode === 'blank';
+        const { board, boards: list, teamBoards: shared } = await api.createBoard({
+          name: nm,
+          // A blank board is empty at the default width — deliberately NOT the
+          // tiles on screen, which belong to the board being left behind.
+          layout: blank ? { tiles: [], cols: COLS } : { tiles, cols },
+          isDefault: boards.length === 0,
+        });
         setBoards(list);
         setTeamBoards(shared);
         // The arrangement is stored now — under a new name, but stored. So the
         // board it was made on goes back to clean rather than keeping a copy of
         // edits that have already been saved somewhere else, which would greet
         // the trader with the same "unsaved changes" the next time they open it.
-        clearDraft(draftKey(user?.id, boardKey));
+        //
+        // A blank board stored nothing of that arrangement, so its draft is left
+        // exactly where it is: creating a new layout must never be what discards
+        // the unsaved work on the board you were looking at.
+        if (!blank) clearDraft(draftKey(user?.id, boardKey));
         applyBoard(board);
+        // Straight into edit mode: an empty board has nothing to read, and
+        // adding the first tile is the only thing to do with it.
+        if (blank) setEditing(true);
       } else {
         const { board, boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { name: nm });
         setBoards(list);
@@ -1047,10 +1079,18 @@ export function ChartBoard({
     }
   };
 
-  const setDefault = async () => {
+  // Which board this device class opens on. Two flags rather than one, set from
+  // the same menu: a desktop is where boards are arranged, so both are chosen
+  // from here — a phone cannot reach this menu at all (`canEdit` is false
+  // there), which is exactly why the phone's default has to be settable from
+  // somewhere else.
+  const setDefault = async (which: 'desktop' | 'phone') => {
     if (isUnsaved) return;
     try {
-      const { boards: list, teamBoards: shared } = await api.updateBoard(activeId!, { isDefault: true });
+      const { boards: list, teamBoards: shared } = await api.updateBoard(
+        activeId!,
+        which === 'phone' ? { isDefaultPhone: true } : { isDefault: true },
+      );
       setBoards(list);
       setTeamBoards(shared);
     } catch (e) {
@@ -1100,6 +1140,17 @@ export function ChartBoard({
           onPickBoard={(b) => applyBoard(b)}
           onPickBuiltIn={(k) => applyBuiltIn(k)}
           onPickShared={(b) => applyShared(b)}
+          // "Create New Layout" — a blank board, from the same menu the existing
+          // ones are chosen in.
+          //
+          // Marked rather than hidden for a free account, which is the rule the
+          // sidebar rows and the tile picker follow: somebody has to be able to
+          // see what a membership would let them do. A member on a PHONE is the
+          // one case the row is dropped — they cannot arrange a grid here at all
+          // (see `canEdit`), and a blank board they have no way to fill is worse
+          // than no row.
+          createTier={canCustomize ? null : customBoardsTier}
+          onCreateNew={canEdit ? () => setNamePrompt({ mode: 'blank', value: '' }) : canCustomize ? null : (onOpenMembership ?? null)}
         />
 
         {/* A teammate's layout is not the reader's to save over, so the one
@@ -1162,7 +1213,9 @@ export function ChartBoard({
                   onTeam={onTeam}
                   shared={!!activeBoard?.sharedTeamId}
                   onRename={() => setNamePrompt({ mode: 'rename', value: name })}
-                  onSetDefault={() => void setDefault()}
+                  isDesktopDefault={!!activeBoard?.isDefault}
+                  isPhoneDefault={!!activeBoard?.isDefaultPhone}
+                  onSetDefault={(which) => void setDefault(which)}
                   onShare={() => void toggleShare()}
                   onSaveAsNew={saveAsNew}
                   onSave={() => void save()}
@@ -1231,7 +1284,12 @@ export function ChartBoard({
 
       {namePrompt && (
         <div style={namePromptRow}>
-          <span style={{ fontSize: 11.5, color: MUTED }}>{namePrompt.mode === 'create' ? 'Name this board' : 'Rename board'}</span>
+          {/* The blank case names a board that does not exist yet, while the
+              board on screen is still the previous one — "Name this board"
+              would read as retitling what is in front of them. */}
+          <span style={{ fontSize: 11.5, color: MUTED }}>
+            {namePrompt.mode === 'rename' ? 'Rename board' : namePrompt.mode === 'blank' ? 'Name your new board' : 'Name this board'}
+          </span>
           <input
             autoFocus
             value={namePrompt.value}
@@ -1244,7 +1302,7 @@ export function ChartBoard({
             style={{ ...input, minWidth: 200 }}
           />
           <button onClick={() => void confirmName()} disabled={saving} style={goldBtn}>
-            {namePrompt.mode === 'create' ? 'Save' : 'Rename'}
+            {namePrompt.mode === 'rename' ? 'Rename' : namePrompt.mode === 'blank' ? 'Create' : 'Save'}
           </button>
           <button onClick={() => setNamePrompt(null)} style={ghostBtn}>
             {"Cancel"}
@@ -1264,9 +1322,11 @@ export function ChartBoard({
       <div ref={boardRef}>
         {tiles.length === 0 ? (
           <div style={emptyState}>
-            {canEdit
-              ? 'This board is empty. Turn on Edit layout and add a tile.'
-              : 'This layout has nothing you can see yet.'}
+            {!canEdit
+              ? 'This layout has nothing you can see yet.'
+              : editing
+                ? 'This board is empty. Add a tile.'
+                : 'This board is empty. Turn on Edit layout and add a tile.'}
           </div>
         ) : (
           <>
@@ -1575,6 +1635,8 @@ function PresetSettingsMenu({
   onTeam,
   shared,
   onRename,
+  isDesktopDefault,
+  isPhoneDefault,
   onSetDefault,
   onShare,
   onSaveAsNew,
@@ -1589,7 +1651,10 @@ function PresetSettingsMenu({
   /** Whether this board is currently published. */
   shared: boolean;
   onRename: () => void;
-  onSetDefault: () => void;
+  /** Whether this board is already the default for each device class. */
+  isDesktopDefault: boolean;
+  isPhoneDefault: boolean;
+  onSetDefault: (which: 'desktop' | 'phone') => void;
   onShare: () => void;
   onSaveAsNew: () => void;
   onSave: () => void;
@@ -1643,7 +1708,23 @@ function PresetSettingsMenu({
     hidden?: boolean;
   }> = [
     { key: 'rename', label: 'Rename', icon: 'pencil', run: onRename, disabled: isUnsaved },
-    { key: 'default', label: 'Set default', icon: 'check-check', run: onSetDefault, disabled: isUnsaved },
+    // TWO defaults, both set from here. A phone never reaches this menu, so a
+    // single "Set default" could only ever name the screen you were standing
+    // at — which is the desk, every time.
+    {
+      key: 'default',
+      label: isDesktopDefault ? 'Desktop default' : 'Set as desktop default',
+      icon: 'monitor',
+      run: () => onSetDefault('desktop'),
+      disabled: isUnsaved || isDesktopDefault,
+    },
+    {
+      key: 'default-phone',
+      label: isPhoneDefault ? 'Phone default' : 'Set as phone default',
+      icon: 'smartphone',
+      run: () => onSetDefault('phone'),
+      disabled: isUnsaved || isPhoneDefault,
+    },
     // Publishing sends the ARRANGEMENT, never the figures — each teammate's
     // tiles fetch as themselves, and a notes tile's text is stripped
     // server-side on the way out.
@@ -1757,6 +1838,8 @@ function LayoutPicker({
   onPickBoard,
   onPickBuiltIn,
   onPickShared,
+  createTier,
+  onCreateNew,
 }: {
   boards: TradingBoard[];
   teamBoards: TradingBoard[];
@@ -1771,6 +1854,10 @@ function LayoutPicker({
   onPickBoard: (b: TradingBoard) => void;
   onPickBuiltIn: (key: string) => void;
   onPickShared: (b: TradingBoard) => void;
+  /** The tier "Create New Layout" costs, or null when the reader holds it. */
+  createTier: MembershipTier | null;
+  /** Start a blank board, or open the membership screen. Null hides the row. */
+  onCreateNew: (() => void) | null;
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -1886,7 +1973,11 @@ function LayoutPicker({
                         {/* A published board says so in the reader's own list,
                             so they always know what their team can see. */}
                         {b.sharedTeamId && <Icon name="users" size={12} color={GREEN} />}
-                        {b.isDefault && <span style={{ fontSize: 10, fontWeight: 600, color: FAINT }}>default</span>}
+                        {/* Which device each board opens on. Two glyphs rather
+                            than the word "default", because there are two of
+                            them now and a board can hold both. */}
+                        {b.isDefault && <Icon name="monitor" size={12} color={FAINT} />}
+                        {b.isDefaultPhone && <Icon name="smartphone" size={12} color={FAINT} />}
                       </button>
                     );
                   })}
@@ -1925,6 +2016,35 @@ function LayoutPicker({
                       </button>
                     );
                   })}
+                </>
+              )}
+              {/* Last, and separated: everything above is a layout to open,
+                  this is the one row that makes one. Same placement rule the
+                  Studies launchers follow — the grid of things you have, then
+                  the tile that adds another. */}
+              {onCreateNew && (
+                <>
+                  <div style={{ borderTop: `1px solid ${BORDER}`, margin: '6px 2px 4px' }} />
+                  <button
+                    onClick={() => {
+                      setOpen(false);
+                      onCreateNew();
+                    }}
+                    style={menuRow(false)}
+                  >
+                    <span style={{ flex: '0 0 16px', display: 'inline-flex' }}>
+                      <Icon name="plus" size={13} color={GOLD} />
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                      <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {"Create New Layout"}
+                      </span>
+                      <span style={{ display: 'block', fontSize: 10, color: FAINT, marginTop: 1 }}>
+                        {"Start from an empty board"}
+                      </span>
+                    </span>
+                    <TierMark tier={createTier} size={11} dim />
+                  </button>
                 </>
               )}
             </div>

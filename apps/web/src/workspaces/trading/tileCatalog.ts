@@ -142,6 +142,28 @@ export const TILE_CATALOG: TileDef[] = [
 
   // ---- The desk: behind the Advanced Trading opt-in ----
   {
+    // The Live Trades ticket, on the board. Deliberately the SAME component the
+    // Live Trades screen renders (OrderTicket) rather than a wall-sized
+    // imitation of it: this is the one tile that can move money, and two
+    // tickets that could disagree about a size, a stop or a confirmation step
+    // is not a risk worth taking for a narrower layout.
+    //
+    // It starts tall because the ticket IS tall — instrument, quote, order
+    // type, size, protection and the review button, in that order — and a tile
+    // that hides the Review button behind an inner scroll reads as broken.
+    kind: 'ticket',
+    label: 'Order Ticket',
+    group: 'desk',
+    icon: 'send',
+    blurb: 'Place a trade on your own broker account, without leaving the wall.',
+    feature: 'tradeDesk',
+    desk: true,
+    w: 4,
+    h: 26,
+    minH: 10,
+    minW: 3,
+  },
+  {
     kind: 'positions',
     label: 'Open Trades',
     group: 'desk',

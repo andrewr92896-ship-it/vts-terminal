@@ -26,6 +26,7 @@ export const BOARD_TILE_KINDS = [
   'streams',
   'clock',
   // The desk
+  'ticket',
   'positions',
   'metrics',
   'alerts',
@@ -70,6 +71,14 @@ export const TILE_GATES: Partial<Record<BoardTileKind, TileGate>> = {
   // is entitled to.
 
   // The desk
+  //
+  // The order ticket — the one tile on the wall that can MOVE MONEY. Gated on
+  // the desk opt-in and on `tradeDesk` like the screen it comes from, but the
+  // gate here is belt and braces: every write it makes goes through
+  // /api/trading/desk/*, which is behind `requireWorkspaceWrite` and
+  // `requirePremium('tradeDesk')` and refuses the demo twice over. A tile that
+  // slipped past this map would render a ticket whose every button 402s.
+  ticket: { desk: true, feature: 'tradeDesk' },
   positions: { desk: true },
   metrics: { desk: true },
   alerts: { desk: true },

@@ -17,15 +17,16 @@ export interface TourStep {
 // The script. Keys match the workspace/screen identifiers the Portal renders.
 export const DEMO_STEPS: TourStep[] = [
   {
-    // The Live Wall lives in My Terminal now; the tour drives the real screens,
-    // so its workspace key has to follow or the sidebar lands somewhere else.
-    workspace: 'myportal',
+    // The Live Wall leads Advanced Trading now; the tour drives the real
+    // screens, so its workspace key has to follow or the sidebar lands
+    // somewhere else.
+    workspace: 'trading',
     screen: 'live',
     title: 'Welcome to VTS Terminal',
     body: 'A private trading and operations hub: live trading across any broker with an API, a hand-kept trade book, a build-your-own study game, a shared to-do list, and a built-in VTS AI assistant. This is a read-only demo with simulated data — click around freely.',
   },
   {
-    workspace: 'myportal',
+    workspace: 'trading',
     screen: 'live',
     title: 'Live Wall — your command center',
     body: 'One drag-and-drop board that draws on the whole terminal: charts, watchlists, market news and the economic calendar, alongside your open and closed trades, net worth, portfolio, to-do list, study progress and your group’s messages. Three layouts come built in, or arrange and save your own. Flip to Positions and open trades stream in from any broker with an API (OANDA, Kraken, TradeStation, and more), every instrument normalized — forex, indices, crypto, futures, stocks — with live price, open P/L, and risk/reward to your stop and target.',
@@ -67,7 +68,7 @@ export const DEMO_STEPS: TourStep[] = [
     body: 'Every study guide built in Study Creation lands here, ready to present like a guided walkthrough — the same stepped, slide-by-slide format as this tour.',
   },
   {
-    workspace: 'myportal',
+    workspace: 'trading',
     screen: 'live',
     openClaude: true,
     title: 'VTS AI, on every screen',
@@ -80,7 +81,7 @@ export const DEMO_STEPS: TourStep[] = [
     body: 'Trade data is scoped to you — you never see anybody else’s trades, positions, or capital unless you are in a group that shares them. And “Hide $” or Privacy mode masks every dollar figure on screen instantly, so you can share your screen without sharing your book.',
   },
   {
-    workspace: 'myportal',
+    workspace: 'trading',
     screen: 'live',
     title: 'That’s the tour',
     body: 'Everything here is simulated and read-only, so explore freely. The real, live terminal — built end to end with VTS AI — is available on request. Thanks for looking.',

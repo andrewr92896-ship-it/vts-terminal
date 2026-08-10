@@ -231,6 +231,9 @@ workspaces list** (see `theme/nav.ts` order).
     stored against.
 - **Advanced Trading** (gold, internal key `trading`) — **opt-in** (and several of
   its parts are **paid** — see Memberships):
+  **Live Wall** (`live` — the terminal's one board, moved here from My Terminal
+  by owner instruction, 2026-08 and leading this workspace; see its own section
+  below),
   **Live Trades** (`tradedesk` — placing real orders, see below),
   **Closed Trades & Metrics**
   (`desk` — **ONE page**, the trade log with Live Brokers below it; legacy keys
@@ -274,8 +277,10 @@ workspaces list** (see `theme/nav.ts` order).
   Labelled "Funded Account" until 2026-08; the key, the opt-in and the paid
   feature are all still `funded`/`prop`).
   **The sidebar order here follows the TRADE'S LIFE, not the tier stacking**
-  (owner instruction, 2026-08): Live Trades → Closed Trades & Metrics → Funded
-  Trades → Manual Trades → Deleted Trades → Strategy Sessions. It is the one
+  (owner instruction, 2026-08): Live Wall → Live Trades → Closed Trades &
+  Metrics → Funded Trades → Manual Trades → Deleted Trades → Strategy Sessions.
+  The wall leads because it is the board the rest of the workspace is summarised
+  onto; the rows after it are the trade's own sequence. It is the one
   workspace that does not stack Max → Premium → free, because a trader reads
   these rows as a sequence rather than as a price list; Strategy Sessions comes
   last as the only row that is not a record of trades.
@@ -1147,20 +1152,14 @@ workspaces list** (see `theme/nav.ts` order).
   - `npm run verify:investments` checks the portfolio math offline against
     hand-computed fixtures (same spirit as `verify:market-macro`). Run it after
     touching `math.ts` or `limits.ts`.
-- **My Terminal** (emerald) — **the Live Wall is PINNED TO THE TOP of its
-  section list** (owner instruction, 2026-08), above the paid rows. It is the
-  single exception to the Max → Premium → free stacking every other workspace
-  follows: this is the terminal's biggest feature and what a sign-in opens on, so
-  burying it under rows a free account cannot use read as though the product led
-  with its paywall. Its icon is `zap` rather than `layout-dashboard` so the row
-  carries some weight against the paid marks beside it. Net Worth left for the
-  Finances workspace and Market News for the News workspace; both keys still
-  resolve. It holds the **Live Wall** (`live`) — the terminal's one
-  centralized board and what a sign-in opens on; see its own section below. (Its
-  nav row sits under My Group since the tier stacking flipped — the workspace
-  still *opens* on the wall, see Memberships ▸ the sidebar marking.) It also holds **Premium
-  Features** (`my_access`) — memberships and the per-user opt-ins, see its own
-  section below — plus one personal roll-up section:
+- **My Terminal** (emerald) — **the Live Wall LEFT for Advanced Trading** (owner
+  instruction, 2026-08), where it now leads that workspace; Net Worth left for
+  Finances and Market News for News. Every one of those keys still resolves, so
+  in-app links and the `howto` wording are unaffected. What is left stacks
+  Max → Premium → free like every other workspace, and `DEFAULT_SCREEN.myportal`
+  is now **Premium Features** (`my_access`) — memberships and the per-user
+  opt-ins, including the Advanced Trading switch the wall now sits behind — plus
+  one personal roll-up section:
   - **Removed: Investment Holdings** (`my_holdings`). Owner decision, 2026-08 —
     the Investments workspace already tracks the portfolio, so a second screen
     saying the same thing was duplication rather than a roll-up. The screen, its
@@ -1748,9 +1747,46 @@ account" rather than hiding them, so the screen reads as the whole picture.
 
 **The terminal's one board, and the screen a sign-in lands on** (owner decision,
 2026-08). Every part of the terminal can be put on it, which is why it is the
-landing screen; its nav row is no longer My Terminal's first, since the tier
-stacking puts the paid My Group row above it. There is no lite duplicate to
-keep in sync — one screen serves a free account and a full desk alike.
+landing screen. There is no lite duplicate to keep in sync — one screen serves a
+free account and a full desk alike.
+
+**It LEADS the Advanced Trading workspace** (owner instruction, 2026-08 — it was
+the top of My Terminal until then). The key is still `live`, so `howto.live` and
+every in-app link resolve unchanged; what moved is the workspace around it.
+`DEFAULT_SCREEN.trading` is `live` and `pickInitialWorkspace` prefers `trading`,
+so a sign-in still opens on the board. **Consequence to keep in mind rather than
+rediscover:** Advanced Trading is an **opt-in**, so the wall now sits behind that
+switch — an account that has not turned the desk on cannot reach it, and lands on
+My Terminal ▸ Premium Features instead (which is the screen that turns the desk
+on). Before the move the wall was reachable by everyone.
+
+> ### CHANGE A SECTION, CHANGE ITS TILE (owner instruction, 2026-08)
+>
+> Almost every screen in the terminal has a Live Wall tile that restates it —
+> Closed Trades & Metrics has Desk Metrics, Live Trades has the Order Ticket,
+> Net Worth, Portfolio, Market Data, Market News, To Do, the study launchers and
+> the group chat all do too. **The wall is not a separate feature; it is the
+> same features in a smaller box.**
+>
+> So whenever you change what a section shows, computes or is called, **check its
+> tile in the same change and bring it with you.** A figure added to a screen and
+> not to its tile means two surfaces answering one question differently, which is
+> the failure this repo has paid for more than once. The rules that make a
+> figure right — what may be summed, whose data it is, what "not measured" looks
+> like — travel with it.
+>
+> Concretely, before you finish: find the tile in
+> `workspaces/trading/tileCatalog.ts` (the tile kinds and what each is called),
+> render it from `workspaces/trading/tiles/`, and ask whether the change you just
+> made is visible there. If the section has no tile, that is fine — say so and
+> move on. If it has one and the change does not apply to it, say why. What is
+> not acceptable is not looking.
+>
+> **Reuse the component rather than re-implementing it** wherever the screen's
+> own component can take the tile's inputs — the Order Ticket tile renders the
+> Live Trades `OrderTicket` itself, and Desk Metrics computes through the same
+> `tradeStats.ts` functions the Trade Log calls. A tile that shares the code
+> cannot disagree with the screen.
 
 **`source` has THREE states, and the third one is the point** (`trading/types.ts`,
 mirrored in the web `api/types.ts` and on the widget payload):
@@ -1965,6 +2001,57 @@ draws the workspace around the grid.
   templates stay at 12 — `wall_templates` and the template editor are
   untouched, and `buildPreset` is width-agnostic.
 
+**The ORDER TICKET is on the wall** (`ticket`, `tiles/TicketTile.tsx`; owner
+request, 2026-08). It renders the **same `OrderTicket` component the Live Trades
+screen renders**, given the same inputs, rather than a board-sized imitation —
+this is the one tile that can move money, so every rule about sizing, protective
+levels, venue precision, the double-click guard and the review-then-confirm step
+has to be one set of rules. A second ticket is a second place for those to
+drift, and the failure mode is a real order at a size or a stop nobody meant.
+- What the tile adds is **which account and which instrument, both stored on the
+  tile** (`accountId` / `instrument`), so a board can carry a forex ticket on one
+  account beside a crypto ticket on another, each opening where it was left. A
+  stored account id that is no longer connected falls back (practice first,
+  matching the screen); an instrument the chosen account cannot trade re-resolves
+  rather than sitting on a symbol that would only ever be refused.
+- Gated `desk: true` + `tradeDesk` and carrying the `tradeDesk` **review mark**,
+  like the screen. The gate is belt and braces — every write goes to
+  `/api/trading/desk/*`, which is behind `requireWorkspaceWrite`,
+  `requirePremium('tradeDesk')` and refuses the demo twice.
+- A fill **invalidates the shared feeds** (`invalidateFeed`), so the rest of the
+  board is not still reporting the pre-trade state until each tile's own poll.
+
+**A Desk Metrics tile remembers WHOSE figures it shows** (`BoardTile.trader`;
+owner request, 2026-08) — a board can carry several, one per trader plus the
+whole desk, and each stays where it was left. It is **emptied when a board is
+shared**, for a different reason than the notes tile: not privacy (only an id
+travels) but meaning — the tile narrows rows the READER'S own desk returned, so
+a teammate opening it would get a tile of zeros. A pinned trader who is no
+longer on the desk falls back to the whole desk rather than filtering to
+nothing, since the picker's label falls back too and "Whole desk" above a tile
+of zeros is indistinguishable from a flat month.
+
+**Which board opens is per DEVICE CLASS** (owner instruction, 2026-08). A board
+is arranged against a screen: twelve columns read well at a desk and flatten to
+one full-width column in the hand, so the board somebody wants on a phone is
+usually not the one they want on a desktop.
+- **`trading_boards.is_default_phone`** (migration `0112`) sits beside
+  `is_default`, which keeps its meaning exactly — the account default, and what a
+  desktop opens on. The two are cleared **independently** (`clearOtherDefaults`
+  takes which), so setting one never disturbs the other and one board may hold
+  both. No phone default set anywhere falls back to `is_default`, which is the
+  behaviour every board had before the column existed.
+- **Both are set from the desktop**, as two rows in Preset Settings. That is not
+  a shortcut: `canEdit` is false on a phone, so a phone never reaches that menu
+  at all — a single "Set default" could only ever name the screen you were
+  standing at, which is the desk every time.
+- The remembered last-opened board (`vts:lastBoard:<user>:<phone|desktop>`) and
+  the built-in choice are **device-scoped keys** for the same reason. Separate
+  browsers already had separate storage; this also stops one browser carrying a
+  phone-shaped choice back to the desk when a window is narrowed. Resolution
+  order is unchanged otherwise: last opened on this device → this device's
+  default → the account default → the first board.
+
 **Four files carry the design, and adding a tile kind touches all of them:**
 
 - **`workspaces/trading/tileCatalog.ts`** — the single source of truth for what a
@@ -2144,6 +2231,28 @@ the author.
   it sits on the paid guard. A copy rather than a reference, so the author
   editing theirs later never reaches into somebody else's board.
 
+**"Create New Layout" is the LAST row of the layout picker** (owner request,
+2026-08) — everything above it is a layout to open, and this is the one row that
+makes one, so it sits under a divider the way the Studies launchers end with
+their Create tile.
+
+- **It is CREATED ON THE SERVER, named up front, rather than left as an unsaved
+  blank.** The board has an id from the moment it exists, so it appears in Your
+  boards, the device remembers it as the last one opened, and the draft
+  mechanism keeps whatever is arranged on it. An unnamed blank board would have
+  none of those: leaving the screen before the first save would land the trader
+  back on their previous board with nothing to return to. It opens straight
+  into edit mode, since an empty board has nothing to read.
+- **It must never clear the outgoing board's draft.** `confirmName`'s `create`
+  branch does clear it — that mode stores the arrangement on screen under a new
+  name, so the board it came from is genuinely clean afterwards. The `blank`
+  branch stored none of it, so creating a new layout must not be what discards
+  the unsaved work on the board you were looking at.
+- **Marked, not hidden, for a free account** (it lands on the membership screen)
+  — the rule the sidebar rows and the tile picker follow. The one case the row
+  is dropped is a **member on a phone**: `canEdit` is false there, so a blank
+  board would be one they have no way to fill.
+
 **`dirty` means MODIFIED, not merely unsaved.** A built-in layout is permanently
 unsaved and nonetheless untouched, so `applyBuiltIn` / `applyShared` baseline
 `savedTilesJson` against what they just applied. Conflating the two made every
@@ -2228,7 +2337,13 @@ here:**
 - **`wip` — a dashed speech bubble, shown to EVERYONE.** "This part of the
   terminal is still being built ahead of launch." Today that is the group
   features (`teams`, `teamChat`), per the owner's instruction that anything to do
-  with private groups says so until launch.
+  with private groups says so until launch, plus three whole areas the owner is
+  still filling in (owner instruction, 2026-08): **Finances** and
+  **Investments** — each marked on the workspace row *and* on every section
+  inside it — and **News ▸ World / Politics**. Marking only the workspace would
+  leave a reader who is already inside it with nothing on screen to say so,
+  since the workspace row is out of sight the moment its sections are showing.
+  News itself is **not** marked: Market News is finished and lives there.
 - **`risk` — an amber exclamation, FOUNDER-LEVEL ONLY, and that is not
   negotiable.** It is the owner's own note that a feature has compliance
   questions still awaiting attorney review, and it exists so those features can
@@ -2250,8 +2365,11 @@ instead. The twelve entries and their notes came from the compliance handoff.
   of the three already carrying meaning — Premium gold `#EBCB74`, Max gem
   `#B9F2FF`, market-watch blue `#5AC8FA`.
 - `SECTION_REVIEW` maps a nav row to a mark, the same shape as `SECTION_FEATURE`
-  and read in the same place in `Sidebar.tsx`; `TILE_REVIEW` does the same for a
-  Live Wall tile kind. Flagged features with no row of their own are marked at
+  and read in the same place in `Sidebar.tsx`; **`WORKSPACE_REVIEW`** does the
+  same for a workspace row. That one has entries where the tier equivalent
+  (`WORKSPACE_FEATURE`) is deliberately empty — no workspace is entirely paid,
+  but a workspace genuinely can be entirely unfinished. `TILE_REVIEW` does the
+  same for a Live Wall tile kind. Flagged features with no row of their own are marked at
   their own control (the Ask VTS AI header, broker connections in Settings, the
   Team chat tab, the news feed's footer, the funded AI read, the "Lead Trader"
   badge preset, the Live Wall's share row).
