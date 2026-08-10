@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.95';
+export const APP_VERSION = 'Beta V 6.96';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.96',
+    date: 'August 10, 2026',
+    notes: [
+      'Groundwork for the new way of building study content. Nothing looks different yet — study games, flashcard sets and presentations all work exactly as before.',
+      'What changed underneath: study content can now belong to a person rather than to a group, which is what lets it be shared with someone who is not in your group. Categories also gained a permanent identity, so renaming one no longer resets what it had recorded about how you were doing in it.',
+    ],
+  },
   {
     version: 'Beta V 6.95',
     date: 'August 10, 2026',

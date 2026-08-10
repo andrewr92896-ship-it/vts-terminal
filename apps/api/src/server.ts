@@ -21,6 +21,7 @@ import { chatRoutes } from './routes/chat.js';
 import { feedbackRoutes } from './routes/feedback.js';
 import { supportRoutes } from './routes/support.js';
 import { studiesRoutes } from './routes/studies.js';
+import { studyPackageRoutes } from './routes/studyPackages.js';
 import { pushRoutes } from './routes/push.js';
 import { pushoverRoutes } from './routes/pushover.js';
 import { devBlogRoutes } from './routes/devBlog.js';
@@ -115,6 +116,7 @@ export async function buildServer() {
   await app.register(feedbackRoutes);
   await app.register(supportRoutes);
   await app.register(studiesRoutes);
+  await app.register(studyPackageRoutes);
   await app.register(pushRoutes);
   await app.register(pushoverRoutes);
   await app.register(notificationPrefsRoutes);

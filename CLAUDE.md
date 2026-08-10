@@ -1359,6 +1359,63 @@ workspaces list** (see `theme/nav.ts` order).
   The shared level ladder / streak / scoring math lives in `gameEngine.ts` (used
   by `studyEngine.ts` for per-deck state and mirrored server-side in
   `gameStats.ts`). Studies is lazy-loaded.
+  - **STUDY PACKAGES — study content can belong to a PERSON, not a group**
+    (`study_packages`, migration `0114`; `studies/packageStore.ts` over
+    `studies/packageAccess.ts`, routes `/api/studies/packages/*`). A package is
+    a container for one study game, one flashcard set, one presentation, its
+    lesson plans and its category blueprint. **Foundation only so far** — the
+    creation wizard, the external-AI handoff, the import parser, direct sharing
+    and the public library are later stages, and none of them exists yet.
+    - **Two ownership models run side by side, and `packageAccess.ts` is the ONE
+      place that picks between them.** Legacy content (`package_id = null` —
+      everything that exists today) is scoped by `contentScopeId(viewer)` and is
+      completely untouched. Package-backed content is reached by owning it, by
+      being shared with it, or by it being published, and **never** by being in
+      the owner's private group. That is what makes Study sharing work for a
+      public signup, who is in no group and cannot be put in one.
+      - `resolveContentScope(viewer, kind, id, right)` is the seam that let every
+        existing store stay exactly as it was: they all take a scope key, so a
+        route passes whatever this returns instead of `contentScopeId(me)`.
+        Legacy content resolves to that same value byte for byte; package-backed
+        content is decided here and resolves to the row's own stored scope. **Do
+        not add `if (packageId)` exceptions to route handlers** — a guard
+        exception copied into eleven places will be wrong in one of them.
+      - **Package-backed rows are stored under the OWNER'S PERSONAL scope key**
+        (`packageScopeKey`), never `contentScopeId(owner)`. Using the latter
+        would look natural and would hand every teammate access through the
+        legacy path, quietly making a user-owned package group-owned.
+    - **Categories have STABLE IDS, and that is the correction the layer exists
+      to make.** Legacy categories are identified by NAME everywhere — on the
+      deck, on each question's `topic`, in the weights map, and in each learner's
+      own per-category statistics — so renaming one silently resets everybody's
+      history for it. Here the row id is the identity and the name is what it is
+      currently called.
+      - The old name-keyed fields are **kept and kept in step** (`topic`,
+        `study_decks.categories`, `category_weights`), which is why no player,
+        editor or test code had to change. `syncPackageCategories` is the one
+        writer of that projection; run it after any category change.
+      - A category removed, or a package deleted, **clears the link and leaves
+        the `topic` text**, so the content degrades exactly to a legacy
+        name-keyed game rather than losing its categories.
+    - **`category_weight_mode` states what weights are FOR** (`tracking_only` /
+      `draw_only` / `score_only` / `draw_and_score`). Null keeps the legacy
+      reading — no weights means unweighted, any weights mean both — so nothing
+      already stored changes meaning.
+    - **Progress is untouched**: still keyed `(userId, deckId)`, and a shared
+      package is the SAME deck id for everybody, so each person keeps their own
+      row against it. The headline state fields (`totalAttempted`,
+      `totalCorrect`, `levelCorrect`, `bestStep`, `recent`) mean what they always
+      did — changing them is a separate scoring project.
+    - **Deleting a package DETACHES its content rather than destroying it.** The
+      game, set and presentation survive with `package_id` cleared, and every
+      learner's progress with them; only the package's own rows go. Destroying a
+      study game and everybody's history on it in one irreversible step is the
+      wrong direction to fail.
+    - **Foreign keys never fire on this database** (`PRAGMA foreign_keys` is
+      never turned on — see `db/index.ts`), so a declared `ON DELETE` action is
+      documentation, not behavior. Every cleanup is explicit: in
+      `deletePackage`, and in the per-user delete list in `admin/service.ts`,
+      which owns the package rows an account holds.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.

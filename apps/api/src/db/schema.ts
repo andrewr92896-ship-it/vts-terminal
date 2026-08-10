@@ -1503,6 +1503,17 @@ export const studyGameRuns = sqliteTable('study_game_runs', {
 });
 export type StudyGameRunRow = typeof studyGameRuns.$inferSelect;
 
+// What a package-backed game's category weights govern. See
+// `study_decks.category_weight_mode`, which is where this is stored and where
+// the null (legacy) reading is explained.
+//
+//   tracking_only  — report per-category accuracy; weight neither draw nor score
+//   draw_only      — compose the sitting to the blueprint, score plainly
+//   score_only     — draw however the deck falls, score to the blueprint
+//   draw_and_score — both (what any weighted legacy game already does)
+export const CATEGORY_WEIGHT_MODES = ['tracking_only', 'draw_only', 'score_only', 'draw_and_score'] as const;
+export type CategoryWeightMode = (typeof CATEGORY_WEIGHT_MODES)[number];
+
 // ---- Team-authored study games (decks) ----
 // Any team can
 // build its own study game: questions AI-generated from a topic, or parsed by
@@ -1524,6 +1535,18 @@ export const studyDecks = sqliteTable('study_decks', {
   // normalized on read. NULL = no weights set (every game before this existed),
   // which is deliberately different from every weight being zero.
   categoryWeights: text('category_weights'),
+  // The Study Package this game belongs to, or null for legacy content. Null is
+  // the case that decides which access model applies — see studyPackages.
+  packageId: text('package_id').references(() => studyPackages.id, { onDelete: 'set null' }),
+  // What the category weights are FOR, stated rather than inferred.
+  //
+  // The legacy rule reads the weights themselves as the setting: null weights
+  // means unweighted, and any weights at all means weight both the draw and the
+  // score. That conflates two independent choices, and an author who wants
+  // per-category tracking without the draw changing has no way to say so. Null
+  // here keeps the legacy reading exactly (every game that exists today), so
+  // nothing already stored changes meaning.
+  categoryWeightMode: text('category_weight_mode', { enum: CATEGORY_WEIGHT_MODES }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -1537,6 +1560,13 @@ export const studyDeckQuestions = sqliteTable('study_deck_questions', {
   teamId: text('team_id').notNull(), // denormalized for team-scoped guards
   seq: integer('seq').notNull(), // stable question number within the deck
   topic: text('topic').notNull(), // one of the deck's categories
+  // The stable category this question belongs to, for a package-backed deck.
+  //
+  // `topic` above is kept in step with this row's current name and stays the
+  // compatibility field every existing player, editor and test path reads, so
+  // none of them had to change. Where both are present THIS is the identity:
+  // renaming a category rewrites the topic strings and leaves the id alone.
+  categoryId: text('category_id').references(() => studyPackageCategories.id, { onDelete: 'set null' }),
   stem: text('stem').notNull(),
   options: text('options').notNull(), // JSON [{label,text} x4]
   answer: text('answer').notNull(), // 'A' | 'B' | 'C' | 'D'
@@ -1597,6 +1627,8 @@ export const studyFlashcardSets = sqliteTable('study_flashcard_sets', {
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
   source: text('source').notNull(), // 'manual' | 'ai_topic' | 'upload' | 'sample'
   topics: text('topics').notNull(), // JSON string[] of this set's topic names
+  // The Study Package this set belongs to, or null for legacy content.
+  packageId: text('package_id').references(() => studyPackages.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -1632,10 +1664,107 @@ export const studyGuides = sqliteTable('study_guides', {
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
   slides: text('slides').notNull(), // JSON [{ title, body, image? } ...]
   slideCount: integer('slide_count').notNull().default(0),
+  // The Study Package this presentation belongs to, or null for legacy content.
+  packageId: text('package_id').references(() => studyPackages.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type StudyGuideRow = typeof studyGuides.$inferSelect;
+
+// ---- Study Packages ----
+// The owner-facing unit for newly created Study content: a container that may
+// hold a study game, a flashcard set, a presentation, lesson plans, and the
+// category blueprint they are all scored against.
+//
+// A package is USER-OWNED, and that is the whole point of the layer. Everything
+// above this line is scoped by `team_id` through `contentScopeId(viewer)` — the
+// shared-library model, where content belongs to a group and is reached by
+// being in that group. A package belongs to a person, and is reached by being
+// its owner, by having been shared with it, or (later) by it being public. That
+// makes Study sharing independent of trading/private groups, which is what the
+// public product needs: a stranger who signs up has no group to be in.
+//
+// Both models run side by side. Content with `package_id = null` is legacy and
+// keeps the scope rules exactly as they were; package-backed content resolves
+// through `studies/packageAccess.ts` instead. Do not scatter that choice across
+// route handlers — that module is the one place it is made.
+export const PACKAGE_DEPTHS = ['quick_review', 'standard', 'comprehensive', 'exam_prep'] as const;
+export type PackageDepth = (typeof PACKAGE_DEPTHS)[number];
+
+// Only `private` is reachable in this stage — `createPackage` refuses the rest
+// and there is no route that sets them. The other three are named here so the
+// sharing and publication handoffs add behavior without a schema change:
+// drizzle's `enum` is a TypeScript type, not a DB constraint (the same reason
+// `trading_news.category` needed no migration to widen), so listing them now
+// costs nothing at the database.
+export const PACKAGE_VISIBILITIES = ['private', 'shared', 'submitted', 'public'] as const;
+export type PackageVisibility = (typeof PACKAGE_VISIBILITIES)[number];
+
+export const studyPackages = sqliteTable('study_packages', {
+  id: text('id').primaryKey(),
+  // Who the package belongs to. Distinct from `createdBy`: this is the account
+  // whose access decides everybody else's, and it survives an author leaving.
+  ownerUserId: text('owner_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  subject: text('subject'),
+  audience: text('audience'),
+  depth: text('depth', { enum: PACKAGE_DEPTHS }),
+  // The structure version of the package itself, for the import parser a later
+  // handoff adds — an uploaded package states which shape it was written to.
+  formatVersion: integer('format_version').notNull().default(1),
+  visibility: text('visibility', { enum: PACKAGE_VISIBILITIES }).notNull().default('private'),
+  // The member who built it; null if that account is later deleted.
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyPackageRow = typeof studyPackages.$inferSelect;
+
+// A package's category blueprint, with STABLE IDs.
+//
+// This is the architectural correction the package layer exists to make. Every
+// category in the legacy model is identified by its NAME — on the deck, on each
+// question's `topic`, in the stored weights map, and in each learner's own
+// per-category statistics. So renaming a category silently resets everybody's
+// history for it: the new name matches nothing, and the old name's record is
+// stranded under a label that no longer exists. Here the row id is the
+// identity, and the name is just what it is currently called.
+export const studyPackageCategories = sqliteTable('study_package_categories', {
+  id: text('id').primaryKey(),
+  packageId: text('package_id')
+    .notNull()
+    .references(() => studyPackages.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  name: text('name').notNull(),
+  // This category's share of the paper when weighting is on. Null = this
+  // category carries no stated weight, which is not the same as a weight of
+  // zero (a category the author deliberately excluded).
+  weight: real('weight'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyPackageCategoryRow = typeof studyPackageCategories.$inferSelect;
+
+// Lesson plans belonging to a package: structured teaching content, ordered.
+// Deliberately its own table rather than another blob inside the deck's state —
+// a lesson is content, and the game state is one learner's progress. A lesson
+// has no scoring engine of its own in V1.
+export const studyPackageLessons = sqliteTable('study_package_lessons', {
+  id: text('id').primaryKey(),
+  packageId: text('package_id')
+    .notNull()
+    .references(() => studyPackages.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  title: text('title').notNull(),
+  objective: text('objective'),
+  body: text('body'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyPackageLessonRow = typeof studyPackageLessons.$inferSelect;
 
 // ---- Studies: completed mock tests (per user) ----
 // One row per finished mock test (a graded exam drawn to

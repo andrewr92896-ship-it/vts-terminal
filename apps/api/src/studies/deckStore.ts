@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyDecks, studyDeckQuestions, users } from '../db/schema.js';
 
@@ -108,7 +108,14 @@ function parseOptions(raw: string): { label: Letter; text: string }[] {
 }
 
 // Every deck a team owns, newest first, with its question count and creator name.
-export async function listDecks(teamId: string): Promise<DeckSummary[]> {
+//
+// `packageIds` widens the list with package-backed games the viewer can reach
+// (resolved by studies/packageAccess.ts, which is the only thing that decides
+// what belongs in it). Package-backed content is stored under the OWNER'S
+// personal scope key rather than a team's, so without this a game somebody was
+// shared would be reachable only by already knowing its id. Omitting the
+// argument leaves the query exactly as it was.
+export async function listDecks(teamId: string, packageIds: string[] = []): Promise<DeckSummary[]> {
   const rows = await db
     .select({
       id: studyDecks.id,
@@ -124,7 +131,11 @@ export async function listDecks(teamId: string): Promise<DeckSummary[]> {
     })
     .from(studyDecks)
     .leftJoin(users, eq(users.id, studyDecks.createdBy))
-    .where(eq(studyDecks.teamId, teamId));
+    .where(
+      packageIds.length
+        ? or(eq(studyDecks.teamId, teamId), inArray(studyDecks.packageId, packageIds))
+        : eq(studyDecks.teamId, teamId),
+    );
 
   const counts = new Map<string, number>();
   if (rows.length) {
@@ -207,6 +218,9 @@ export async function createDeck(input: {
   isSample?: boolean;
   categories?: string[];
   categoryWeights?: Record<string, number> | null;
+  // The Study Package this game belongs to, when it is being created into one.
+  // Omitted (or null) for every legacy path, which is all of them today.
+  packageId?: string | null;
   questions: DeckQuestionInput[];
 }): Promise<DeckDetail> {
   const now = new Date();
@@ -224,6 +238,7 @@ export async function createDeck(input: {
       isSample: input.isSample ?? false,
       categories: JSON.stringify(categories),
       categoryWeights: resolveWeights(categories, input.categoryWeights),
+      packageId: input.packageId ?? null,
       createdAt: now,
       updatedAt: now,
     });
@@ -311,16 +326,23 @@ export async function updateDeck(
 // weighted: two games' weights are two different exams' blueprints, and there
 // is no arithmetic that merges them into a third that means anything. The
 // author sets the combined game's weights themselves.
+// Each source names the scope it is read under, rather than all being assumed
+// to sit in the caller's own: a package-backed game is stored under its owner's
+// personal key, so a single teamId could not reach one and it would be dropped
+// from the combination without a word. The caller resolves those scopes through
+// packageAccess, so a game reaches this list only if the caller may read it.
+// The combined game itself is created in the caller's own scope as ordinary
+// content — combining is authoring something new, not extending a package.
 export async function mergeDecks(input: {
   teamId: string;
   name: string;
   createdBy: string | null;
-  deckIds: string[];
+  sources: { id: string; scope: string }[];
   tagSource: boolean;
 }): Promise<DeckDetail> {
   const questions: DeckQuestionInput[] = [];
-  for (const id of input.deckIds) {
-    const d = await getDeck(id, input.teamId);
+  for (const source of input.sources) {
+    const d = await getDeck(source.id, source.scope);
     if (!d) continue;
     for (const q of d.questions) {
       questions.push({
@@ -336,7 +358,7 @@ export async function mergeDecks(input: {
   return createDeck({
     teamId: input.teamId,
     name: input.name,
-    description: `Combined from ${input.deckIds.length} game${input.deckIds.length === 1 ? '' : 's'}`,
+    description: `Combined from ${input.sources.length} game${input.sources.length === 1 ? '' : 's'}`,
     createdBy: input.createdBy,
     source: 'merged',
     questions,

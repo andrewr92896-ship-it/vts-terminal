@@ -68,8 +68,12 @@ import {
   studyTests,
   studyTestProgress,
   studyDecks,
+  studyDeckQuestions,
   studyFlashcardSets,
   studyGuides,
+  studyPackages,
+  studyPackageCategories,
+  studyPackageLessons,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -585,6 +589,47 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(studyDeckRuns).where(eq(studyDeckRuns.userId, targetId));
     await tx.delete(studyTests).where(eq(studyTests.userId, targetId));
     await tx.delete(studyTestProgress).where(eq(studyTestProgress.userId, targetId));
+    // Study Packages this account OWNS. Unlike the team-shared content below, a
+    // package belongs to one person, so it goes with them.
+    //
+    // Every child write is spelled out because this database never turns the
+    // foreign key pragma on, so a declared ON DELETE action does not fire. The
+    // package's CONTENT is detached rather than destroyed — the same rule
+    // deletePackage follows, and for the same reason: a game and everybody's
+    // progress on it must not disappear as a side effect of one account being
+    // removed. Questions keep their `topic` text as their category link is
+    // cleared, so a detached game degrades exactly to a legacy one.
+    const ownedPackageIds = (
+      await tx.select({ id: studyPackages.id }).from(studyPackages).where(eq(studyPackages.ownerUserId, targetId))
+    ).map((p) => p.id);
+    if (ownedPackageIds.length) {
+      const ownedCategoryIds = (
+        await tx
+          .select({ id: studyPackageCategories.id })
+          .from(studyPackageCategories)
+          .where(inArray(studyPackageCategories.packageId, ownedPackageIds))
+      ).map((c) => c.id);
+      if (ownedCategoryIds.length) {
+        await tx
+          .update(studyDeckQuestions)
+          .set({ categoryId: null })
+          .where(inArray(studyDeckQuestions.categoryId, ownedCategoryIds));
+      }
+      await tx.update(studyDecks).set({ packageId: null }).where(inArray(studyDecks.packageId, ownedPackageIds));
+      await tx
+        .update(studyFlashcardSets)
+        .set({ packageId: null })
+        .where(inArray(studyFlashcardSets.packageId, ownedPackageIds));
+      await tx.update(studyGuides).set({ packageId: null }).where(inArray(studyGuides.packageId, ownedPackageIds));
+      await tx
+        .delete(studyPackageCategories)
+        .where(inArray(studyPackageCategories.packageId, ownedPackageIds));
+      await tx.delete(studyPackageLessons).where(inArray(studyPackageLessons.packageId, ownedPackageIds));
+      await tx.delete(studyPackages).where(inArray(studyPackages.id, ownedPackageIds));
+    }
+    // A package somebody else owns that this account merely authored keeps its
+    // authorship link dropped, like the team content below.
+    await tx.update(studyPackages).set({ createdBy: null }).where(eq(studyPackages.createdBy, targetId));
     // Team-SHARED study content (decks, flashcard sets, guides) survives the
     // author — just drop the authorship link, mirroring the news feed above.
     await tx.update(studyDecks).set({ createdBy: null }).where(eq(studyDecks.createdBy, targetId));

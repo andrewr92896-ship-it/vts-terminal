@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyFlashcardSets, studyFlashcardCards, users } from '../db/schema.js';
 
@@ -47,7 +47,9 @@ function parseTopics(raw: string): string[] {
 }
 
 // Every set a team owns, newest first, with its card count and creator name.
-export async function listFlashcardSets(teamId: string): Promise<FlashcardSetSummary[]> {
+// `packageIds` widens the list with package-backed sets the viewer can reach —
+// see the note on deckStore.listDecks. Omitting it leaves the query unchanged.
+export async function listFlashcardSets(teamId: string, packageIds: string[] = []): Promise<FlashcardSetSummary[]> {
   const rows = await db
     .select({
       id: studyFlashcardSets.id,
@@ -61,7 +63,11 @@ export async function listFlashcardSets(teamId: string): Promise<FlashcardSetSum
     })
     .from(studyFlashcardSets)
     .leftJoin(users, eq(users.id, studyFlashcardSets.createdBy))
-    .where(eq(studyFlashcardSets.teamId, teamId));
+    .where(
+      packageIds.length
+        ? or(eq(studyFlashcardSets.teamId, teamId), inArray(studyFlashcardSets.packageId, packageIds))
+        : eq(studyFlashcardSets.teamId, teamId),
+    );
 
   const counts = new Map<string, number>();
   if (rows.length) {
@@ -119,6 +125,8 @@ export async function createFlashcardSet(input: {
   description?: string | null;
   createdBy: string | null;
   source: string;
+  // The Study Package this set belongs to, when it is created into one.
+  packageId?: string | null;
   cards: FlashcardInput[];
 }): Promise<FlashcardSetDetail> {
   const now = new Date();
@@ -133,6 +141,7 @@ export async function createFlashcardSet(input: {
       createdBy: input.createdBy,
       source: input.source,
       topics: JSON.stringify(computeTopics(input.cards)),
+      packageId: input.packageId ?? null,
       createdAt: now,
       updatedAt: now,
     });

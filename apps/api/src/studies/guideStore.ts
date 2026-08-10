@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyGuides, users } from '../db/schema.js';
 
@@ -69,7 +69,9 @@ function parseSlides(raw: string): GuideSlide[] {
 
 // Every guide a team owns, newest first, WITHOUT the slide blob (so the list
 // never pulls the embedded screenshots).
-export async function listGuides(teamId: string): Promise<GuideSummary[]> {
+// `packageIds` widens the list with package-backed presentations the viewer can
+// reach — see the note on deckStore.listDecks. Omitting it changes nothing.
+export async function listGuides(teamId: string, packageIds: string[] = []): Promise<GuideSummary[]> {
   const rows = await db
     .select({
       id: studyGuides.id,
@@ -83,7 +85,11 @@ export async function listGuides(teamId: string): Promise<GuideSummary[]> {
     })
     .from(studyGuides)
     .leftJoin(users, eq(users.id, studyGuides.createdBy))
-    .where(eq(studyGuides.teamId, teamId));
+    .where(
+      packageIds.length
+        ? or(eq(studyGuides.teamId, teamId), inArray(studyGuides.packageId, packageIds))
+        : eq(studyGuides.teamId, teamId),
+    );
 
   return rows
     .map((r) => ({
@@ -139,6 +145,8 @@ export async function createGuide(input: {
   name: string;
   description?: string | null;
   createdBy: string | null;
+  // The Study Package this presentation belongs to, when it is created into one.
+  packageId?: string | null;
   slides: GuideSlide[];
 }): Promise<GuideDetail> {
   const now = new Date();
@@ -152,6 +160,7 @@ export async function createGuide(input: {
     createdBy: input.createdBy,
     slides: JSON.stringify(slides),
     slideCount: slides.length,
+    packageId: input.packageId ?? null,
     createdAt: now,
     updatedAt: now,
   });
