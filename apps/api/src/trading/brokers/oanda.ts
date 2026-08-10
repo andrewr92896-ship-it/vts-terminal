@@ -447,6 +447,22 @@ export async function fetchOandaTrades(cfg: OandaConfig): Promise<LiveTrade[]> {
     throw new Error(`OANDA responded ${res.status}`);
   }
   const json = (await res.json()) as OandaOpenTradesResponse;
+  // "No open trades" and "we could not read the open trades" are DIFFERENT
+  // answers and must not collapse into one. OANDA always sends the array, empty
+  // when the account is flat — so a body without it is a response we do not
+  // understand, whatever its status code.
+  //
+  // Reading it as an empty book is not a harmless default: the reconciler closes
+  // a position when its connection ANSWERED and the position is no longer in the
+  // feed, so one unexpected 200 marks every open position on that account closed
+  // at the last mark that was polled — a bid/ask midpoint that never filled —
+  // and fires a "trade closed" push for each. The broker has no such close on
+  // record, and nothing self-heals it: the closed-trade backfill only corrects
+  // rows the broker also considers closed. Throwing instead reports the
+  // connection as unhealthy, which closes nothing and says so on the wall.
+  if (!Array.isArray(json?.trades)) {
+    throw new Error('OANDA returned no open-trades list');
+  }
   const trades = mapOandaTrades(json);
   if (trades.length === 0) return trades;
 

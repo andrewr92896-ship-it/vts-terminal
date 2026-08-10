@@ -3038,6 +3038,27 @@ control — the server is still the enforcer.
 - **Desk watch** (`trading/service.ts`, prod-only, every **10 s**,
   `DESK_WATCH_SECONDS`): reconciles broker positions so trade open/close/TP-SL
   notifications fire even with no client open. **Only runs if push is configured.**
+  - **"Nothing open" and "could not read" are different answers, and a broker
+    connector must never collapse them.** Reconcile closes a position when its
+    connection **answered** and the position is no longer in the feed, so an
+    empty feed is an instruction to close the whole book — at the last mark
+    polled, which is a bid/ask midpoint that never filled, with a "trade closed"
+    push per position. `fetchOandaTrades` therefore **throws when the response
+    carries no `trades` array**: OANDA always sends it, empty when the account is
+    flat, so a body without it is a response we do not understand whatever its
+    status code. Nothing self-heals a bad close — the closed-trade backfill only
+    corrects rows the broker also considers closed — which is why the guard sits
+    at the read rather than downstream.
+  - **A position wrongly closed is REOPENED, never stored a second time.**
+    Reconcile looks a live trade up among **open** rows, so a wrongly-closed one
+    is invisible there and used to be inserted alongside: the phantom kept its
+    estimated exit and P/L, the new row closed properly later, and both counted
+    toward the trade count, win rate and P/L. A broker trade id is never reused,
+    so the key **is** the trade — if it is back in the feed it was not really
+    closed. `closedByKey` in `history.ts` is that lookup. Soft-deleted rows are
+    deliberately excluded: a trade the trader removed by hand must not be
+    resurrected by the broker still carrying it, the same rule the backfill
+    follows.
 - **Closed-trade backfill** (`trading/backfill.ts`, throttled per connection to
   `BACKFILL_INTERVAL_SECONDS`, default 300): pulls OANDA's closed-trade page into
   `trading_positions` so trades that opened and closed between polls still land

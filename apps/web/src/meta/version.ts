@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.92';
+export const APP_VERSION = 'Beta V 6.93';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.93',
+    date: 'August 10, 2026',
+    notes: [
+      'A broker account that answers but sends back something the terminal cannot read no longer looks like an account with nothing open. It used to mark every open position closed at the last price seen, and buzz a “trade closed” for each — the connection now reports as unhealthy instead, which closes nothing.',
+      'A position wrongly marked closed is put back the way the broker has it when it reappears, instead of being stored a second time alongside the bad copy.',
+    ],
+  },
   {
     version: 'Beta V 6.92',
     date: 'August 10, 2026',

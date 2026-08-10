@@ -62,6 +62,42 @@ export async function reconcile(
   const byKey = new Map(openRows.map((r) => [r.key, r]));
   const currentKeys = new Set(liveTrades.map((t) => t.id));
 
+  // Positions we already recorded as CLOSED that the broker is showing as open
+  // again. A broker trade id is never reused, so the key is the trade: if it is
+  // back in the feed it was not really closed, and the row we have is a bad
+  // close — the reconciler's estimate written when the position went missing
+  // from a connection that had answered (an unexpected 200, an account that
+  // briefly reported nothing).
+  //
+  // These have to be REOPENED rather than inserted alongside, or the same trade
+  // ends up stored twice under one key: the phantom-closed row keeps its
+  // estimated exit and its P/L, the new row closes properly later, and both then
+  // count toward the trade count, win rate and P/L. The insert path below cannot
+  // see the problem on its own — it looks the trade up among OPEN rows, where a
+  // wrongly-closed one is not.
+  //
+  // Soft-deleted rows are deliberately excluded: a trade the trader removed by
+  // hand must not be resurrected by the broker still carrying it, which is the
+  // same rule the closed-trade backfill follows.
+  const reopenable =
+    liveTrades.length > 0
+      ? await db
+          .select()
+          .from(tradingPositions)
+          .where(
+            and(
+              eq(tradingPositions.userId, userId),
+              inArray(
+                tradingPositions.key,
+                liveTrades.map((t) => t.id),
+              ),
+              eq(tradingPositions.status, 'closed'),
+              isNull(tradingPositions.deletedAt),
+            ),
+          )
+      : [];
+  const closedByKey = new Map(reopenable.map((r) => [r.key, r]));
+
   // Trade events to notify on after the DB work: genuinely fresh fills and
   // positions that just closed (TP/SL/manual exit). Collected here, pushed once.
   const opened: LiveTrade[] = [];
@@ -101,6 +137,29 @@ export async function reconcile(
           lastSeenAt: now,
         })
         .where(eq(tradingPositions.id, existing.id));
+    } else if (closedByKey.has(t.id)) {
+      // Put the trade back the way the broker has it. The exit and realized P/L
+      // are cleared because they were never real — they were the last mark and
+      // last open P/L polled before the position went missing. No push fires: it
+      // never opened, it only stopped being visible, and a "trade opened" buzz
+      // for a position the trader has held for days is noise.
+      const stale = closedByKey.get(t.id)!;
+      await db
+        .update(tradingPositions)
+        .set({
+          status: 'open',
+          closedAt: null,
+          exitPrice: null,
+          realizedPl: null,
+          currentPrice: t.currentPrice,
+          unrealizedPl: t.unrealizedPl,
+          takeProfit: t.takeProfit,
+          stopLoss: t.stopLoss,
+          trailingStopLoss: t.trailingStopLoss,
+          units: t.units,
+          lastSeenAt: now,
+        })
+        .where(eq(tradingPositions.id, stale.id));
     } else {
       await db.insert(tradingPositions).values({
         id: crypto.randomUUID(),
