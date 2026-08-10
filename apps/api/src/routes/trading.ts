@@ -97,11 +97,13 @@ import { NEWS_IMPACTS, NEWS_BIASES, NEWS_CATEGORIES } from '../db/schema.js';
 import {
   addConnection,
   adminUpdateConnection,
+  adminRemoveConnection,
   listAllConnections,
   listConnections,
   removeConnection,
   updateConnection,
 } from '../trading/connections.js';
+import { recordAdminAction } from '../admin/adminLog.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
@@ -1051,6 +1053,35 @@ export async function tradingRoutes(app: FastifyInstance) {
       await adminUpdateConnection(id, parsed.data);
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not update connection' });
+    }
+    return { connections: await listAllConnections() };
+  });
+
+  // Admin-only: remove any connection regardless of owner — a stranded one, a
+  // dead account replaced after a credential reset. The service refuses an
+  // active connection and a hand-kept book that still holds positions; see
+  // `adminRemoveConnection` for why each would be a loss the admin cannot see.
+  //
+  // Recorded in the Administrator Log: this is an admin acting on somebody
+  // else's account and it cannot be undone, which is exactly what that log is
+  // for. Best-effort by design, so logging can never be why the removal fails.
+  app.delete('/api/trading/connections/:id/admin', write, async (request, reply) => {
+    if (!isAdmin(parseRoles(request.currentUser!))) {
+      return reply.code(403).send({ error: 'Admins only' });
+    }
+    const id = (request.params as { id: string }).id;
+    try {
+      const removed = await adminRemoveConnection(id);
+      await recordAdminAction({
+        kind: 'connection.removed',
+        state: 'info',
+        title: 'Removed a broker connection',
+        detail: `${removed.label} · ${removed.broker}${removed.summary ? ` · ${removed.summary}` : ''}`,
+        actor: { id: request.currentUser!.id, name: request.currentUser!.username },
+        target: { id: removed.ownerId, name: removed.owner },
+      });
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not remove connection' });
     }
     return { connections: await listAllConnections() };
   });

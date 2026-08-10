@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.93';
+export const APP_VERSION = 'Beta V 6.94';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.94',
+    date: 'August 10, 2026',
+    notes: [
+      'Admins can now remove a trader’s broker connection from Trade History ▸ Live Brokers, not just rename or pause it — so a dead account somebody left behind can be tidied up by whoever is looking at it. The trader’s closed trades stay on the desk.',
+      'It only offers to remove a paused connection, and refuses a hand-kept book that still holds positions, since those trades exist nowhere else. Removals are recorded in the Administrator Log.',
+    ],
+  },
   {
     version: 'Beta V 6.93',
     date: 'August 10, 2026',

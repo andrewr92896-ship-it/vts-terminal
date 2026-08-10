@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   brokerConnections,
+  manualPositions,
   users,
   BROKER_CONNECTION_KINDS,
   type BrokerConnectionKind,
@@ -560,6 +561,60 @@ export async function removeConnection(userId: string, id: string): Promise<void
   await db
     .delete(brokerConnections)
     .where(and(eq(brokerConnections.id, id), eq(brokerConnections.userId, userId)));
+}
+
+// Admin-only: remove any connection regardless of owner, so a stranded one — a
+// dead account replaced after a credential reset, say — can be tidied up by
+// somebody other than the person who left it there. Returns the row it removed
+// so the caller can record who did what to whom.
+//
+// **The desk's trade history is NOT affected.** `trading_positions.connection_id`
+// carries no foreign key, deliberately, so closed trades outlive the connection
+// they arrived through: an orphaned row still shows on the Trade Log, and still
+// dedupes the closed-trade backfill (an account it cannot attribute is unknown,
+// and unknown dedupes). Removing a connection is tidying the list, not deleting
+// anybody's trades.
+//
+// Two refusals, each covering a loss the admin cannot see coming:
+//
+//   • **An ACTIVE connection.** Removing one stops that trader's Live Wall with
+//     nothing on screen to say why, and the credential is gone, so putting it
+//     back means asking them for a key they may no longer have. Pause is the
+//     reversible stop and already exists; this is the cleanup afterwards. Two
+//     deliberate steps is the point, not an obstacle.
+//   • **A MANUAL connection still holding positions.** `manual_positions`
+//     cascades on this row, so deleting it destroys hand-typed trades that exist
+//     nowhere else and cannot be re-imported from any broker. The owner can
+//     still delete their own book — they can see what is in it.
+export async function adminRemoveConnection(id: string): Promise<OwnedBrokerConnection> {
+  const row = (
+    await db
+      .select({ conn: brokerConnections, username: users.username })
+      .from(brokerConnections)
+      .innerJoin(users, eq(users.id, brokerConnections.userId))
+      .where(eq(brokerConnections.id, id))
+      .limit(1)
+  )[0];
+  if (!row) throw new Error('Connection not found');
+
+  if (row.conn.active) {
+    throw new Error('Pause this connection first, then remove it.');
+  }
+
+  if (row.conn.broker === 'manual') {
+    const held = await db
+      .select({ id: manualPositions.id })
+      .from(manualPositions)
+      .where(eq(manualPositions.connectionId, id));
+    if (held.length > 0) {
+      throw new Error(
+        `This hand-kept book still holds ${held.length} position${held.length === 1 ? '' : 's'}, which would be deleted with it. Only ${row.username} can remove it.`,
+      );
+    }
+  }
+
+  await db.delete(brokerConnections).where(eq(brokerConnections.id, id));
+  return { ...toPublic(row.conn), ownerId: row.conn.userId, owner: row.username };
 }
 
 // Record the outcome of a live fetch against a connection (drives the UI dots).
