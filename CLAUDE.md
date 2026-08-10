@@ -503,6 +503,33 @@ workspaces list** (see `theme/nav.ts` order).
     - The funding read is audited as its own `credential_audit` purpose
       (`funding`, individual rows — a person asked for it); the NAV read rides
       the existing hourly-aggregated `capital` purpose.
+  - **A narrowed figure SAYS it is narrowed** (`ExcludedTrades` on the
+    `/trades` and `/history` payloads; `workspaces/trading/excludedNote.ts` is
+    the one place it is phrased). Two settings quietly shrink what the desk
+    scores — a connection's "count trades since" cutoff and the "ignore test
+    trades" floor — and both used to do it in silence. A CSV export headed
+    `Date range,2026-06-01 to 2026-08-09` listed no June trades at all while
+    **nine real ones** sat behind a July cutoff, which reads as "there were no
+    June trades" rather than "June is not being counted". On a number somebody
+    may present as a track record that is the difference between a narrowed
+    figure and a wrong one — the excluded trades were the losing months, so
+    hiding them raised the win rate from 40% to 50% and the profit factor from
+    2.40 to 3.52.
+    - **Counted as the rows are filtered, never recomputed after.** `cutoffFor`
+      (`connections.ts`) returns the cutoff that excluded a trade rather than a
+      boolean, so the same call both drops the row and says which date dropped
+      it; `beforeCutoff` is now defined in terms of it. Tallying against a
+      second, parallel test is how a count and a filter come to disagree about
+      the same trade.
+    - **`cutoffFrom` is null when connections cut off on different dates.**
+      Naming one of them would be false for the trades the others excluded, so
+      the copy falls back to "before your connection cutoffs".
+    - Drawn on the Trade Log (replacing a line that said the floor was on
+      without saying whether it had caught anything), written into the CSV
+      **directly under the date range** — the line it qualifies — and carried on
+      the Live Wall's Desk Metrics tile, which is read on its own with no screen
+      around it to qualify the number. Nothing is drawn when nothing was
+      excluded, so the absence of the note means everything is counted.
   - **Trade History settings are per trader** (`trading/settings.ts`,
     `getDeskSettings(userId)` / `updateDeskSettings(userId, patch)`): the
     break-even buffer, per-instrument buffers (`trading_be_overrides`, keyed

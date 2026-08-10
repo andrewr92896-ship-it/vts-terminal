@@ -1551,6 +1551,22 @@ export interface TradeSummary {
   avgSlippage: number | null;
 }
 
+// What a trade view LEFT OUT, and why. Mirrors the server's ExcludedTrades.
+//
+// The Trade Log and its metrics are a narrowed view of the desk's real trades: a
+// connection's "count trades since" cutoff hides an earlier phase, and the
+// "ignore test trades" floor hides connection-test fills. Both are deliberate,
+// and both were silent — an export headed "2026-06-01 to 2026-08-09" listed no
+// June trades while nine real ones sat behind a July cutoff, which reads as
+// "there were no June trades" rather than "June is not being counted".
+export interface ExcludedTrades {
+  beforeCutoff: number; // opened before their connection's "count trades since"
+  belowFloor: number; // under the desk's "test trade" floor
+  // The cutoff instant when every exclusion shares one, so a screen can name a
+  // date. Null when several connections cut off on different dates.
+  cutoffFrom: number | null;
+}
+
 export interface TradeLogData {
   trades: TradeRecord[];
   summary: TradeSummary;
@@ -1559,6 +1575,7 @@ export interface TradeLogData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  excluded: ExcludedTrades; // what this view left out, and why
   // The viewer may remove a teammate's trade, not just their own (team leader,
   // a member granted "Delete trades", or an admin).
   canDeleteAny: boolean;
@@ -1914,6 +1931,7 @@ export interface HistoryData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  excluded: ExcludedTrades; // what this view left out, and why
   // The viewer may remove a teammate's closed trade, not just their own.
   canDeleteAny: boolean;
 }

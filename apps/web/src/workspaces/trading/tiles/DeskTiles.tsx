@@ -4,6 +4,7 @@ import { usePrivacy } from '../../../privacy/privacy';
 import type { BoardTile, HistoryRecord, SessionBias, SessionStatus } from '../../../api/types';
 import { FAINT, GOLD, GREEN, MONO, MUTED, RED, TEXT } from '../tvChart';
 import { TradeTimesCell } from '../tradeTime';
+import { excludedNote, excludedShort } from '../excludedNote';
 import {
   HIDDEN,
   TileFrame,
@@ -54,7 +55,21 @@ export function TradeLogTile({ tile, editing, onChange, onRemove }: TileProps) {
           width={100}
         />
       }
-      status={<span style={stamp}>{RANGE_OPTIONS.find((r) => r.value === range)?.label}</span>}
+      status={
+        <span style={stamp}>
+          {RANGE_OPTIONS.find((r) => r.value === range)?.label}
+          {/* The same disclosure the Trade Log carries, in the space a tile has:
+              these figures are narrowed by a connection cutoff and the
+              test-trade floor, and a board tile is read on its own with no
+              screen around it to qualify the number. The full sentence is in
+              the hover, from the one module that phrases it. */}
+          {excludedShort(data?.excluded) && (
+            <span title={excludedNote(data?.excluded) ?? undefined} style={{ color: GOLD, marginLeft: 6 }}>
+              {`· ${excludedShort(data?.excluded)}`}
+            </span>
+          )}
+        </span>
+      }
     >
       {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
       {error && !data && <TileMessage tone="error">{error}</TileMessage>}
