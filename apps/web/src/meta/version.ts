@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.00';
+export const APP_VERSION = 'Beta V 7.01';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.01',
+    date: 'August 10, 2026',
+    notes: [
+      'You can now take your own study package back out of the VTS Study Library yourself, without waiting on an administrator. It leaves the library straight away. Nothing is deleted — your content, everyone’s progress and anyone you shared it with by username all stay exactly as they are, and people who had already added it keep it. Putting it back in the library goes through review again.',
+    ],
+  },
   {
     version: 'Beta V 7.00',
     date: 'August 10, 2026',

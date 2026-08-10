@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
@@ -36,6 +37,10 @@ export const ATTESTATIONS = [
   'Any finance material in it is educational, and is not personal investment advice.',
 ] as const;
 
+// The submitter and the person who withdrew it are two different people on two
+// different rows of `users`, so the second needs its own alias.
+const withdrawer = alias(users, 'withdrawer');
+
 export interface SubmissionView {
   id: string;
   packageId: string;
@@ -48,6 +53,15 @@ export interface SubmissionView {
   attestationVersion: string;
   /** Who made it — shown to reviewers, not to other learners. */
   submitterName: string | null;
+  /**
+   * When this publication ENDED, if it has. `status` stays 'approved': the
+   * decision and the attestation behind it are the record, and rewriting them
+   * would destroy what an audit is for.
+   */
+  withdrawnAt: number | null;
+  withdrawnByName: string | null;
+  /** Whether the creator withdrew it, as opposed to an administrator. */
+  withdrawnByOwner: boolean;
 }
 
 export interface LibraryEntry {
@@ -132,10 +146,16 @@ async function pendingFor(packageId: string) {
 export async function getSubmission(id: string): Promise<SubmissionView | null> {
   const row = (
     await db
-      .select({ s: studyPackageSubmissions, pkg: studyPackages, name: users.displayName })
+      .select({
+        s: studyPackageSubmissions,
+        pkg: studyPackages,
+        name: users.displayName,
+        withdrawnByName: withdrawer.displayName,
+      })
       .from(studyPackageSubmissions)
       .innerJoin(studyPackages, eq(studyPackages.id, studyPackageSubmissions.packageId))
       .leftJoin(users, eq(users.id, studyPackageSubmissions.submittedByUserId))
+      .leftJoin(withdrawer, eq(withdrawer.id, studyPackageSubmissions.withdrawnByUserId))
       .where(eq(studyPackageSubmissions.id, id))
       .limit(1)
   )[0];
@@ -146,6 +166,7 @@ function toView(row: {
   s: typeof studyPackageSubmissions.$inferSelect;
   pkg: typeof studyPackages.$inferSelect;
   name: string | null;
+  withdrawnByName?: string | null;
 }): SubmissionView {
   return {
     id: row.s.id,
@@ -158,16 +179,25 @@ function toView(row: {
     adminNote: row.s.adminNote,
     attestationVersion: row.s.attestationVersion,
     submitterName: row.name,
+    withdrawnAt: row.s.withdrawnAt?.getTime() ?? null,
+    withdrawnByName: row.withdrawnByName ?? null,
+    withdrawnByOwner: row.s.withdrawnByUserId != null && row.s.withdrawnByUserId === row.pkg.ownerUserId,
   };
 }
 
 /** This package's submission history, newest first — for its owner. */
 export async function submissionsForPackage(packageId: string): Promise<SubmissionView[]> {
   const rows = await db
-    .select({ s: studyPackageSubmissions, pkg: studyPackages, name: users.displayName })
+    .select({
+      s: studyPackageSubmissions,
+      pkg: studyPackages,
+      name: users.displayName,
+      withdrawnByName: withdrawer.displayName,
+    })
     .from(studyPackageSubmissions)
     .innerJoin(studyPackages, eq(studyPackages.id, studyPackageSubmissions.packageId))
     .leftJoin(users, eq(users.id, studyPackageSubmissions.submittedByUserId))
+    .leftJoin(withdrawer, eq(withdrawer.id, studyPackageSubmissions.withdrawnByUserId))
     .where(eq(studyPackageSubmissions.packageId, packageId))
     .orderBy(desc(studyPackageSubmissions.submittedAt));
   return rows.map(toView);
@@ -178,10 +208,16 @@ export async function submissionsForPackage(packageId: string): Promise<Submissi
 /** The moderation queue. Pending first, because that is what needs somebody. */
 export async function listSubmissions(status?: SubmissionStatus): Promise<SubmissionView[]> {
   const rows = await db
-    .select({ s: studyPackageSubmissions, pkg: studyPackages, name: users.displayName })
+    .select({
+      s: studyPackageSubmissions,
+      pkg: studyPackages,
+      name: users.displayName,
+      withdrawnByName: withdrawer.displayName,
+    })
     .from(studyPackageSubmissions)
     .innerJoin(studyPackages, eq(studyPackages.id, studyPackageSubmissions.packageId))
     .leftJoin(users, eq(users.id, studyPackageSubmissions.submittedByUserId))
+    .leftJoin(withdrawer, eq(withdrawer.id, studyPackageSubmissions.withdrawnByUserId))
     .where(status ? eq(studyPackageSubmissions.status, status) : undefined)
     .orderBy(desc(studyPackageSubmissions.submittedAt));
   const views = rows.map(toView);
@@ -232,18 +268,89 @@ export async function reviewSubmission(input: {
 }
 
 /**
- * Take a package back out of the library.
+ * WITHDRAW A PACKAGE FROM THE PUBLIC LIBRARY.
  *
- * Admins only. The package itself is untouched — this is the opposite of
- * publishing, not a delete — and it is also what unlocks the content so the
- * creator can work on it again.
+ * One transition, available to the package's owner and to an administrator, and
+ * it is deliberately its OWN thing rather than a side effect of archiving or
+ * deleting. A creator has to be able to stop distributing their own work
+ * immediately — the day they find they lack the rights to something in it, or
+ * simply change their mind — without that meaning they destroy it.
+ *
+ * WHAT IT DOES: stops public distribution. The package leaves the library
+ * listing, and nobody new can take it up.
+ *
+ * WHAT IT DOES NOT DO, and each of these is the point:
+ *   • It deletes NOTHING — not the package, its game, its cards, its slides or
+ *     its lessons, and not one learner's progress.
+ *   • It does not touch EXPLICIT SHARES. Somebody the creator handed the package
+ *     to by username still has it; withdrawal is about the public, and taking a
+ *     named person's access back is the separate, deliberate act of revoking.
+ *   • It does not touch anybody who had already TAKEN THE PACKAGE UP. Their add
+ *     row is the record that they acquired it, and it goes on granting them
+ *     access (see packageAccess.ts). Withdrawal stops distribution; it does not
+ *     reach back and take away what people already have.
+ *   • It changes no identity — the package, its categories, its deck and its
+ *     slides keep their ids, so progress, lessons and shares all still resolve.
+ *   • It does not convert package-backed content back into legacy content.
+ *
+ * WHAT IT RECORDS: the approved submission is stamped with when the publication
+ * ended and who ended it. `status` stays 'approved' because it WAS approved, and
+ * the attestation the creator agreed to stays with it — a withdrawal is the end
+ * of that publication, not a retraction of the history of it.
+ *
+ * AFTERWARDS the content unlocks, because there is no longer an approved public
+ * version for it to drift away from. Getting back into the library therefore
+ * needs a NEW submission and a NEW review: `submitPackage` writes a fresh row
+ * and only `reviewSubmission` can make anything public. There is no path from
+ * withdrawn to public that does not pass through an administrator.
  */
-export async function unpublishPackage(packageId: string): Promise<boolean> {
-  const pkg = (await db.select().from(studyPackages).where(eq(studyPackages.id, packageId)).limit(1))[0];
+export async function withdrawFromLibrary(input: {
+  packageId: string;
+  /** Who is doing it. Recorded, and used to tell a creator from an admin. */
+  actorId: string;
+}): Promise<boolean> {
+  const pkg = (await db.select().from(studyPackages).where(eq(studyPackages.id, input.packageId)).limit(1))[0];
   if (!pkg || pkg.visibility !== 'public') return false;
-  await db.update(studyPackages).set({ visibility: 'private' }).where(eq(studyPackages.id, packageId));
-  await refreshShareVisibility(packageId);
+
+  const now = new Date();
+  await db.update(studyPackages).set({ visibility: 'private' }).where(eq(studyPackages.id, input.packageId));
+  // Back to `shared` if people hold it privately — the shares are untouched, so
+  // the state has to say so.
+  await refreshShareVisibility(input.packageId);
+
+  // Stamp the publication that just ended. The newest approved submission is the
+  // one that put it in the library; an already-stamped row is left alone so a
+  // second withdrawal cannot overwrite the first one's record.
+  const approved = (
+    await db
+      .select()
+      .from(studyPackageSubmissions)
+      .where(
+        and(
+          eq(studyPackageSubmissions.packageId, input.packageId),
+          eq(studyPackageSubmissions.status, 'approved'),
+          isNull(studyPackageSubmissions.withdrawnAt),
+        ),
+      )
+      .orderBy(desc(studyPackageSubmissions.reviewedAt))
+      .limit(1)
+  )[0];
+  if (approved) {
+    await db
+      .update(studyPackageSubmissions)
+      .set({ withdrawnAt: now, withdrawnByUserId: input.actorId })
+      .where(eq(studyPackageSubmissions.id, approved.id));
+  }
   return true;
+}
+
+/**
+ * The administrator's name for the same transition, kept so the existing route
+ * and its callers read the way they always did. One implementation, so a
+ * creator withdrawing and an admin removing leave the same auditable record.
+ */
+export async function unpublishPackage(packageId: string, actorId: string): Promise<boolean> {
+  return withdrawFromLibrary({ packageId, actorId });
 }
 
 // ---- Browsing and taking up ----

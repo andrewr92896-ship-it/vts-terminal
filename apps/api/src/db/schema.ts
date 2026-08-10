@@ -1849,6 +1849,13 @@ export const studyPackageSubmissions = sqliteTable('study_package_submissions', 
   // not survive the wording changing: this records what was actually shown.
   attestationVersion: text('attestation_version').notNull(),
   attestedAt: integer('attested_at', { mode: 'timestamp_ms' }).notNull(),
+  // When this publication ENDED, and who ended it (migration 0120). Null while
+  // it is still published, and null forever on a submission that was never
+  // approved. `status` stays 'approved' — the decision and the attestation it
+  // was made against are the record, and rewriting them to say "withdrawn"
+  // would destroy exactly what an audit needs.
+  withdrawnAt: integer('withdrawn_at', { mode: 'timestamp_ms' }),
+  withdrawnByUserId: text('withdrawn_by_user_id').references(() => users.id, { onDelete: 'set null' }),
 });
 export type StudyPackageSubmissionRow = typeof studyPackageSubmissions.$inferSelect;
 

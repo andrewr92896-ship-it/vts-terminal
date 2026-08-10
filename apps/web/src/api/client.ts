@@ -1780,6 +1780,14 @@ export const api = {
   withdrawStudyPackage(id: string): Promise<{ package: StudyPackageDetail; submissions: StudySubmission[] }> {
     return request(`/api/studies/packages/${encodeURIComponent(id)}/withdraw`, { method: 'POST' });
   },
+  // Stop distributing your own published package. Deliberately distinct from
+  // `withdrawStudyPackage`, which takes back a request nobody has reviewed yet:
+  // this one is about something already in the library.
+  withdrawStudyPackageFromLibrary(
+    id: string,
+  ): Promise<{ package: StudyPackageDetail; submissions: StudySubmission[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/withdraw-from-library`, { method: 'POST' });
+  },
   studyPackageSubmissions(id: string): Promise<{ submissions: StudySubmission[] }> {
     return request(`/api/studies/packages/${encodeURIComponent(id)}/submissions`);
   },

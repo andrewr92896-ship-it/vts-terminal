@@ -96,6 +96,27 @@ async function sharedWithViewer(viewer: PackageViewer, pkg: StudyPackageRow): Pr
   return !!row;
 }
 
+/**
+ * Whether this viewer has TAKEN THE PACKAGE UP from the public library.
+ *
+ * The add row is a record of acquisition, and it outlives the publication: a
+ * creator withdrawing their package stops new people getting it, and does not
+ * take it off the shelf of somebody who already has it. An ARCHIVED package
+ * still grants nothing, the same rule shares follow — archiving is the owner
+ * putting the whole thing away.
+ */
+async function addedByViewer(viewer: PackageViewer, pkg: StudyPackageRow): Promise<boolean> {
+  if (pkg.archivedAt) return false;
+  const row = (
+    await db
+      .select({ userId: studyPackageAdds.userId })
+      .from(studyPackageAdds)
+      .where(and(eq(studyPackageAdds.packageId, pkg.id), eq(studyPackageAdds.userId, viewer.id)))
+      .limit(1)
+  )[0];
+  return !!row;
+}
+
 /** Whether this package is published in the VTS Study Library. */
 function isPublished(pkg: StudyPackageRow): boolean {
   return pkg.visibility === 'public' && !pkg.archivedAt;
@@ -133,6 +154,14 @@ export async function rightsFor(viewer: PackageViewer, pkg: StudyPackageRow): Pr
   // and it is how the library is browsable. `submitted` is NOT public — it is
   // the owner asking, not having been granted.
   if (isPublished(pkg)) return { read: true, edit: false, manage: false, locked };
+
+  // ALREADY TAKEN UP. Somebody who added the package from the library keeps it
+  // when the creator withdraws it: their add row is the record that they
+  // acquired it, and withdrawal stops PUBLIC DISTRIBUTION rather than reaching
+  // back and taking away what people already hold. Without this an add row would
+  // go on widening their game list (readablePackages) while every read of the
+  // content refused — the deck listed and unopenable, which is the worst of both.
+  if (await addedByViewer(viewer, pkg)) return { read: true, edit: false, manage: false, locked };
 
   // Otherwise it comes down to a direct share, which is read-only in V1.
   return { read: await sharedWithViewer(viewer, pkg), edit: false, manage: false, locked };

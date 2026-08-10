@@ -482,6 +482,9 @@ function PackageDetail({
 
   const open = submissions.find((s) => s.status === 'pending');
   const lastDecision = submissions.find((s) => s.status === 'rejected' || s.status === 'changes_requested');
+  // The most recent publication that has ended — what the creator sees instead
+  // of an unexplained "not published any more".
+  const lastWithdrawn = submissions.find((s) => s.withdrawnAt != null);
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
@@ -592,9 +595,36 @@ function PackageDetail({
               {'The VTS Study Library'}
             </h4>
             {pkg.visibility === 'public' ? (
-              <p style={{ margin: 0, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
-                {'Published. Its content is locked while it is in the library — ask an administrator to take it back out to work on it again.'}
-              </p>
+              <>
+                <p style={{ margin: 0, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
+                  {'Published. Its content is locked while it is in the library, so what people study stays what was reviewed.'}
+                </p>
+                {/* The creator's own way out. Stopping distribution of your own
+                    work must not depend on an administrator being available, and
+                    it is deliberately not the same act as editing it. */}
+                <p style={{ margin: '10px 0 0', fontSize: 12.5, color: FAINT, lineHeight: 1.5 }}>
+                  {'Withdrawing takes it out of the library straight away. Nothing is deleted — your content, everyone’s progress and any packages you shared by username all stay exactly as they are. People who already added it keep it. To put it back in the library it goes through review again.'}
+                </p>
+                <button
+                  style={{ ...ghostBtn(theme), marginTop: 10 }}
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    try {
+                      const r = await api.withdrawStudyPackageFromLibrary(packageId);
+                      setPkg(r.package);
+                      setSubmissions(r.submissions);
+                    } catch (err) {
+                      setError(err instanceof ApiError ? err.message : 'Couldn’t withdraw that.');
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {'Withdraw from VTS Study Library'}
+                </button>
+              </>
             ) : open ? (
               <>
                 <p style={{ margin: 0, fontSize: 12.5, color: MUTED, lineHeight: 1.5 }}>
@@ -617,6 +647,24 @@ function PackageDetail({
               </>
             ) : (
               <>
+                {lastWithdrawn && (
+                  <div
+                    style={{
+                      fontSize: 12.5,
+                      color: MUTED,
+                      background: 'rgba(255,255,255,.04)',
+                      border: `1px solid ${theme.navBorder}`,
+                      borderRadius: 8,
+                      padding: '10px 12px',
+                      marginBottom: 10,
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {`Withdrawn from the library on ${new Date(lastWithdrawn.withdrawnAt!).toLocaleDateString()}${
+                      lastWithdrawn.withdrawnByOwner ? ' by you' : lastWithdrawn.withdrawnByName ? ` by ${lastWithdrawn.withdrawnByName}` : ''
+                    }. Submitting again starts a new review.`}
+                  </div>
+                )}
                 {lastDecision && (
                   <div
                     style={{

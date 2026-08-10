@@ -2779,6 +2779,11 @@ export interface StudySubmission {
   adminNote: string | null;
   attestationVersion: string;
   submitterName: string | null;
+  /** When this publication ended, if it has. `status` stays 'approved'. */
+  withdrawnAt: number | null;
+  withdrawnByName: string | null;
+  /** Whether the creator withdrew it, rather than an administrator. */
+  withdrawnByOwner: boolean;
 }
 
 export interface StudyLibraryEntry {

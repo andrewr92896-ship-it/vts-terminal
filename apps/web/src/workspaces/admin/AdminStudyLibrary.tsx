@@ -100,11 +100,25 @@ export function AdminStudyLibrary({ theme }: { theme: Theme }) {
                       .join(' · ')}
                   </div>
                 </div>
-                <StatusBadge status={s.status} />
+                <StatusBadge status={s.status} withdrawn={s.withdrawnAt != null} />
               </div>
 
               {s.adminNote && (
                 <div style={{ ...panelLabel, marginTop: 10, color: FAINT }}>{`Note: ${s.adminNote}`}</div>
+              )}
+              {/* A publication that has ended. The approval is still the record —
+                  the status stays 'approved' — so this says what happened to it
+                  rather than pretending the decision was something else. */}
+              {s.withdrawnAt && (
+                <div style={{ ...panelLabel, marginTop: 8, color: '#EBCB74' }}>
+                  {`Withdrawn from the library ${new Date(s.withdrawnAt).toLocaleDateString()}${
+                    s.withdrawnByOwner
+                      ? ' by the creator'
+                      : s.withdrawnByName
+                        ? ` by ${s.withdrawnByName}`
+                        : ''
+                  }`}
+                </div>
               )}
               <div style={{ ...panelLabel, marginTop: 8, color: FAINT }}>
                 {`Attested against ${s.attestationVersion}`}
@@ -117,7 +131,7 @@ export function AdminStudyLibrary({ theme }: { theme: Theme }) {
                 {s.status === 'pending' && (
                   <ReviewControls theme={theme} grad={grad} submissionId={s.id} onDone={(list) => setSubmissions(list)} />
                 )}
-                {s.status === 'approved' && (
+                {s.status === 'approved' && !s.withdrawnAt && (
                   <button
                     style={ghostBtn}
                     onClick={async () => {
@@ -252,7 +266,14 @@ function PackagePreview({ theme, packageId }: { theme: Theme; packageId: string 
   );
 }
 
-function StatusBadge({ status }: { status: StudySubmission['status'] }) {
+// The badge says where the package STANDS; the line beneath says what was
+// decided and when. A publication that has since ended is still an approval on
+// the record — the status column is untouched — but reading "Published" beside
+// "Withdrawn from the library" makes the reviewer work out which is current, so
+// the badge reports the end of the publication and the decision stays in the
+// row below it.
+function StatusBadge({ status, withdrawn }: { status: StudySubmission['status']; withdrawn?: boolean }) {
+  if (withdrawn) return <Badge color={FAINT}>{'Withdrawn'}</Badge>;
   const color =
     status === 'approved'
       ? '#7de2b8'

@@ -36,6 +36,7 @@ import {
   submissionsForPackage,
   submitPackage,
   unpublishPackage,
+  withdrawFromLibrary,
   withdrawSubmission,
 } from '../studies/packageLibrary.js';
 import {
@@ -52,6 +53,7 @@ import {
   unarchivePackage,
   updatePackage,
 } from '../studies/packageStore.js';
+import { recordAdminAction } from '../admin/adminLog.js';
 import { getDeck } from '../studies/deckStore.js';
 import { getFlashcardSet } from '../studies/flashcardStore.js';
 import { getGuide } from '../studies/guideStore.js';
@@ -670,14 +672,55 @@ export async function studyPackageRoutes(app: FastifyInstance) {
     }
   });
 
-  // Taking something back out of the library. The package is untouched — this is
-  // the opposite of publishing, not a delete — and it unlocks the content so the
-  // creator can work on it again.
+  // Taking something back out of the library, as an administrator. The package
+  // is untouched — this is the opposite of publishing, not a delete — and it
+  // unlocks the content so the creator can work on it again.
+  //
+  // It is the SAME transition the creator's own withdrawal runs, so both leave
+  // the same auditable record; an admin acting on somebody else's content also
+  // reaches the Administrator Log, which is what that log is for.
   app.post('/api/studies/admin/packages/:id/unpublish', adminGuard, async (request, reply) => {
+    const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
-    const ok = await unpublishPackage(id);
+    const pkg = await getPackage(id);
+    const ok = await unpublishPackage(id, me.id);
     if (!ok) return reply.code(409).send({ error: 'That package is not published' });
+    if (pkg && pkg.ownerUserId !== me.id) {
+      await recordAdminAction({
+        kind: 'study.unpublished',
+        title: `Removed “${pkg.name}” from the VTS Study Library`,
+        detail: 'The package, its content and everyone’s progress are untouched. It needs a new review to go back in.',
+        actor: { id: me.id, name: me.displayName },
+        target: pkg.ownerUserId ? { id: pkg.ownerUserId, name: pkg.ownerName ?? 'the creator' } : null,
+      });
+    }
     return { ok: true };
+  });
+
+  /**
+   * WITHDRAW MY OWN PACKAGE FROM THE PUBLIC LIBRARY.
+   *
+   * The creator-facing half of the same transition, and a deliberately separate
+   * route from `/withdraw` above — that one takes back a request nobody has read
+   * yet, this one stops distribution of something already published. Two very
+   * different acts that would be dangerous to confuse.
+   *
+   * On `manage`, not `edit`: a published package is locked against edits, which
+   * is the whole point of review, and a creator must not have to break that lock
+   * to stop distributing their own work. It is also why this is NOT built on
+   * archiving — withdrawal is its own publication-state change, not a side
+   * effect of putting the package away.
+   *
+   * Ungated by membership for the same reason revoking a share is: taking your
+   * own content out of circulation must never depend on still paying.
+   */
+  app.post('/api/studies/packages/:id/withdraw-from-library', guard, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const id = (request.params as { id: string }).id;
+    if (!(await canManagePackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    const ok = await withdrawFromLibrary({ packageId: id, actorId: me.id });
+    if (!ok) return reply.code(409).send({ error: 'This package is not in the VTS Study Library' });
+    return { package: await getPackage(id, me.id), submissions: await submissionsForPackage(id) };
   });
 
   // What the package holds, summarized. The components themselves are read and

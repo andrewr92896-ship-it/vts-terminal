@@ -1618,6 +1618,46 @@ workspaces list** (see `theme/nav.ts` order).
         published ones**, deliberately *not* every public package. Dropping the
         whole library into everyone's study game list is not a library; it is
         noise that grows without limit.
+      - **An add row is a right of its own, not merely a listing.** `rightsFor`
+        grants `read` to anybody holding one, so somebody who took a package up
+        keeps it after it stops being public. Without that branch the two halves
+        disagreed — the package stayed in their list and then refused to open.
+      - **A CREATOR CAN WITHDRAW THEIR OWN PUBLICATION**
+        (`withdrawFromLibrary`, `POST /api/studies/packages/:id/withdraw-from-library`;
+        `withdrawn_at` / `withdrawn_by_user_id`, migration `0120`). Stopping the
+        distribution of your own work must not depend on an administrator being
+        available. It is on `guard` and `manage` rather than `create` and
+        `edit`, deliberately: a published package is locked against edits and
+        withdrawing must not require breaking that lock — or paying, on a
+        membership that has since lapsed.
+        - **It is its own publication-state transition and NOT an archive or a
+          delete.** Nothing is removed: not the package, its game, cards,
+          presentation or lessons; not anybody's progress; not the explicit
+          username shares, which keep working until separately revoked; not the
+          package, category, deck or slide ids. `refreshShareVisibility` then
+          settles it at `private` or `shared` depending on what shares it still
+          has, so a withdrawal never silently converts it back to legacy
+          content.
+        - **It stops PUBLIC distribution only.** It leaves library browsing and
+          `addToLibrary` immediately, and anyone who had already taken it up
+          keeps it — which is the whole point of the add-row branch above.
+        - **The record is preserved, and the withdrawal is stamped ONTO the
+          approval that ended** — the newest approved submission still carrying
+          no `withdrawn_at`. The `status` stays `approved`, because that is what
+          was decided; what is added is when the publication ended and who
+          ended it. So a package published, withdrawn and published again has
+          two independent records rather than one overwritten one, and the
+          moderation queue reads both.
+        - **`unpublishPackage` (the admin action) DELEGATES to it**, so there is
+          one transition with one record whoever performs it. An admin acting on
+          somebody else's package additionally writes an Administrator Log
+          entry; the owner withdrawing their own does not, since it is not an
+          administrative act.
+        - **A withdrawn package does not go back on its own.** The content
+          unlocks so the creator can work on it, and returning to the library
+          takes a fresh submission and a fresh approval — a new attestation
+          included. Refused with **409** if it is not currently public, so
+          withdrawing twice cannot overwrite the first publication's record.
     - **LEADERBOARD MEMBERSHIP FOLLOWS PACKAGE ACCESS** (`packageAudience`,
       `getPackageLeaderboard`). Two kinds of game have a board and they are
       ranked by the **same code** (`rankDecks` in `deckGame.ts`, which

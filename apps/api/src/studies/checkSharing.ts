@@ -23,6 +23,7 @@ import {
 import { commitPackage } from './packageImport.js';
 import {
   canEditPackage,
+  canManagePackage,
   canReadPackage,
   packageAudience,
   packageRights,
@@ -42,10 +43,12 @@ import {
   listPublished,
   listSubmissions,
   reviewSubmission,
+  submissionsForPackage,
   submitPackage,
   unpublishPackage,
+  withdrawFromLibrary,
 } from './packageLibrary.js';
-import { archivePackage, createPackage, unarchivePackage } from './packageStore.js';
+import { archivePackage, createPackage, getPackage, unarchivePackage, updatePackage } from './packageStore.js';
 import { listDecks } from './deckStore.js';
 import { getPackageLeaderboard } from './deckGame.js';
 import { contentScopeId } from '../teams/contentScope.js';
@@ -387,13 +390,87 @@ async function main() {
   ok('the library marks it as added', (await listPublished(carol.id))[0]?.added === true);
 
   section('unpublishing');
-  ok('an admin can take it back out', await unpublishPackage(pkg.id));
+  ok('an admin can take it back out', await unpublishPackage(pkg.id, admin.id));
   ok('it leaves the library', (await listPublished(carol.id)).length === 0);
   ok('the package is intact', (await pkgRow(pkg.id)).name === 'Series 65 Prep');
   ok('and the content is unlocked again', (await packageRights(alice, pkg.id)).edit);
   // Carol keeps the package she took up: her add row is her own relationship to
   // it, and the owner can still take it away by leaving it unpublished.
   ok('somebody who had added it keeps their add row', (await readablePackageIds(carol)).includes(pkg.id));
+
+  section('THE CREATOR CAN WITHDRAW THEIR OWN PUBLISHED PACKAGE');
+  // Put it back in the library first, and let Carol take it up, so the checks
+  // below are about a package somebody really holds.
+  const rePub = await submitPackage({ packageId: pkg.id, userId: alice.id, attested: true });
+  await reviewSubmission({ submissionId: rePub.id, reviewerId: admin.id, decision: 'approved' });
+  await addToLibrary(carol.id, pkg.id);
+  const beforeProgress = (await progressRows(deckId)).length;
+  ok('it is published and Carol has taken it up', (await pkgRow(pkg.id)).visibility === 'public');
+  ok('and she can read it', await canReadPackage(carol, pkg.id));
+
+  // 7. A non-owner ordinary user cannot withdraw it.
+  ok('a stranger cannot manage it', !(await canManagePackage(carol, pkg.id)));
+  ok('and neither can the recipient of a share', !(await canManagePackage(bob, pkg.id)));
+  ok('an admin can, alongside the owner', await canManagePackage(admin, pkg.id));
+
+  // 1. The creator withdraws their own.
+  ok('the creator withdraws it', await withdrawFromLibrary({ packageId: pkg.id, actorId: alice.id }));
+  ok('it is no longer public', (await pkgRow(pkg.id)).visibility !== 'public');
+
+  // 2. A stranger can no longer discover or add it.
+  ok('it is gone from library browsing', !(await listPublished(carol.id)).some((e) => e.packageId === pkg.id));
+  ok('and cannot be added by anybody new', !(await addToLibrary(bob.id, pkg.id)));
+
+  // 3. Existing learner progress survives, and 11: so does prior acquisition.
+  ok('every progress row survives', (await progressRows(deckId)).length === beforeProgress);
+  ok('somebody who had already taken it up KEEPS it', await canReadPackage(carol, pkg.id));
+  ok('and it is still in their library', (await readablePackageIds(carol)).includes(pkg.id));
+  ok(
+    'so its study game still opens for them',
+    (await listDecks(contentScopeId(carol), await readablePackageIds(carol))).some((d) => d.id === deckId),
+  );
+
+  // 4. Explicit private shares continue.
+  ok('an explicit share is untouched', await canReadPackage(bob, pkg.id));
+  ok('and still listed as shared with them', (await listSharedWithMe(bob.id)).accepted.some((v) => v.packageId === pkg.id));
+
+  // 5. Identity and content relationships survive.
+  const afterPkg = await getPackage(pkg.id);
+  ok('the package keeps its id', afterPkg?.id === pkg.id);
+  ok('its deck keeps its id', afterPkg?.deckId === deckId);
+  ok('its categories keep theirs', (afterPkg?.categories ?? []).every((c) => !!c.id));
+  ok('and nothing was deleted', (await db.select().from(studyDecks).where(eq(studyDecks.id, deckId))).length === 1);
+  ok('it is NOT archived — withdrawal is its own transition', afterPkg?.archived === false);
+  ok('and it is still package-backed rather than legacy', afterPkg?.ownerUserId === alice.id);
+
+  // 8. The moderation history and the attestation are preserved.
+  const history = await submissionsForPackage(pkg.id);
+  const ended = history.find((h) => h.id === rePub.id);
+  ok('the approval is still on the record', ended?.status === 'approved');
+  ok('with the attestation it was made against', !!ended?.attestationVersion);
+  ok('and it records WHEN the publication ended', ended?.withdrawnAt != null);
+  ok('and WHO ended it', ended?.withdrawnByOwner === true);
+  ok('an admin still sees the whole history', (await listSubmissions()).some((h) => h.id === rePub.id));
+
+  // 6 + 9. Editing after withdrawal cannot put it back without a new review.
+  ok('the content unlocks so the creator can work on it', (await packageRights(alice, pkg.id)).edit);
+  await updatePackage(pkg.id, { name: 'Series 65 Prep (revised)' });
+  ok('the edit lands', (await pkgRow(pkg.id)).name === 'Series 65 Prep (revised)');
+  ok('but it is STILL not public', (await listPublished(carol.id)).length === 0);
+  const resubmit = await submitPackage({ packageId: pkg.id, userId: alice.id, attested: true });
+  ok('submitting again only asks', resubmit.status === 'pending');
+  ok('and it is still not public while it waits', (await listPublished(carol.id)).length === 0);
+  ok('it takes a fresh submission row', resubmit.id !== rePub.id);
+  await reviewSubmission({ submissionId: resubmit.id, reviewerId: admin.id, decision: 'approved' });
+  ok('only an administrator approving puts it back', (await listPublished(carol.id)).some((e) => e.packageId === pkg.id));
+
+  section('a withdrawal cannot overwrite an earlier one');
+  ok('an admin withdraws this publication', await unpublishPackage(pkg.id, admin.id));
+  const both = await submissionsForPackage(pkg.id);
+  ok('the first publication keeps its own record', both.find((h) => h.id === rePub.id)?.withdrawnByOwner === true);
+  ok('and the second has its own', both.find((h) => h.id === resubmit.id)?.withdrawnAt != null);
+  ok('recorded against the admin, not the owner', both.find((h) => h.id === resubmit.id)?.withdrawnByOwner === false);
+  ok('withdrawing something already withdrawn is refused', !(await withdrawFromLibrary({ packageId: pkg.id, actorId: alice.id })));
 
   section('legacy content is unaffected throughout');
   const aliceDecks = await listDecks(contentScopeId(alice), await readablePackageIds(alice));
