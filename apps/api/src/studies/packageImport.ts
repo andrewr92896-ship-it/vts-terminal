@@ -60,8 +60,13 @@ export interface CommitLesson {
   title: string;
   objective: string | null;
   body: string | null;
-  /** Positions in the slide list below. Already resolved and checked. */
-  slideIndexes: number[];
+  /**
+   * The slides this lesson covers, named by their IMPORT ids — the ones from
+   * the transported file. They are translated to the stored slide ids minted
+   * below, here rather than in the caller, because this is the only place that
+   * knows what those stored ids are.
+   */
+  slideImportIds: string[];
 }
 
 export interface PackageCommitInput {
@@ -77,7 +82,11 @@ export interface PackageCommitInput {
   categories: CommitCategory[];
   questions: CommitQuestion[];
   flashcards: CommitFlashcard[];
-  presentation: { title: string; slides: { title: string; body: string }[] } | null;
+  presentation: {
+    title: string;
+    /** `importId` is the file's own id for the slide. Never stored as-is. */
+    slides: { importId?: string | null; title: string; body: string }[];
+  } | null;
   lessons: CommitLesson[];
   /** How the content got here, for the deck's `source` column. */
   source: 'package_import' | 'package_manual';
@@ -102,6 +111,9 @@ export async function commitPackage(input: PackageCommitInput): Promise<PackageD
   // question can be linked to a stable category as it is inserted.
   const categoryIdByImportId = new Map<string, string>();
   const categoryNameByImportId = new Map<string, string>();
+  // The file's slide id → the stored slide id minted for it. Filled while the
+  // presentation is written, read when the lessons are.
+  const storedSlideIdByImportId = new Map<string, string>();
   for (const c of input.categories) {
     categoryIdByImportId.set(c.importId, randomUUID());
     categoryNameByImportId.set(c.importId, c.name.trim().slice(0, 60));
@@ -232,12 +244,21 @@ export async function commitPackage(input: PackageCommitInput): Promise<PackageD
     }
 
     // ---- Presentation ----
+    //
+    // Every slide gets a stored id of its own, minted here. The file's ids are
+    // untrusted external identity and are only used to work out which stored
+    // slide each lesson meant.
     if (input.presentation && input.presentation.slides.length) {
-      const slides = input.presentation.slides.map((s) => ({
-        title: s.title.trim().slice(0, 200),
-        body: s.body.trim().slice(0, 4000),
-        image: null as string | null,
-      }));
+      const slides = input.presentation.slides.map((s) => {
+        const id = randomUUID();
+        if (s.importId) storedSlideIdByImportId.set(s.importId, id);
+        return {
+          id,
+          title: s.title.trim().slice(0, 200),
+          body: s.body.trim().slice(0, 4000),
+          image: null as string | null,
+        };
+      });
       await tx.insert(studyGuides).values({
         id: randomUUID(),
         teamId: scope,
@@ -262,7 +283,16 @@ export async function commitPackage(input: PackageCommitInput): Promise<PackageD
           title: l.title.trim().slice(0, 200),
           objective: l.objective?.trim().slice(0, 1000) || null,
           body: l.body?.trim().slice(0, 20_000) || null,
-          slideIndexes: l.slideIndexes.length ? JSON.stringify(l.slideIndexes) : null,
+          // Stored ids, resolved from the file's ids. A reference that did not
+          // resolve is dropped rather than guessed at — the validator has
+          // already refused any package where one pointed at a slide that is
+          // not in the presentation.
+          slideIds: (() => {
+            const ids = l.slideImportIds
+              .map((importId) => storedSlideIdByImportId.get(importId))
+              .filter((id): id is string => !!id);
+            return ids.length ? JSON.stringify(ids) : null;
+          })(),
           createdAt: now,
           updatedAt: now,
         })),

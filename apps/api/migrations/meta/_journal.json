@@ -813,6 +813,13 @@
       "when": 1782344736908,
       "tag": "0116_study_package_import",
       "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "6",
+      "when": 1782344836908,
+      "tag": "0117_lesson_slide_ids",
+      "breakpoints": true
     }
   ]
 }

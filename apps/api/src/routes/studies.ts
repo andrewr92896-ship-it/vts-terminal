@@ -285,6 +285,11 @@ const guideChatSchema = z.object({
 // One presentation slide the author is saving: title, body, and an optional
 // screenshot as a base64 data URL. The store re-sanitizes and caps these.
 const guideSlideSchema = z.object({
+  // The slide's stored identity, sent back by the editor. It MUST be accepted
+  // here: zod strips what it does not declare, so leaving it out would silently
+  // drop every id on save and the store would mint new ones — which is exactly
+  // how a lesson ends up describing slides that no longer exist.
+  id: z.string().trim().min(1).max(80).nullable().optional(),
   title: z.string().max(400).optional(),
   body: z.string().max(6000).optional(),
   image: z.string().max(4_000_000).nullable().optional(),
@@ -822,7 +827,12 @@ export async function studiesRoutes(app: FastifyInstance) {
       name: parsed.data.name,
       description: parsed.data.description,
       createdBy: request.currentUser!.id,
-      slides: parsed.data.slides.map((s) => ({ title: s.title ?? '', body: s.body ?? '', image: s.image ?? null })),
+      slides: parsed.data.slides.map((s) => ({
+        id: s.id ?? null,
+        title: s.title ?? '',
+        body: s.body ?? '',
+        image: s.image ?? null,
+      })),
     });
     if (guide.slideCount === 0) {
       // Every slide was empty (no text, no image); nothing worth keeping.
@@ -854,6 +864,7 @@ export async function studiesRoutes(app: FastifyInstance) {
           name: parsed.data.name,
           description: parsed.data.description,
           slides: parsed.data.slides?.map((s) => ({
+            id: s.id ?? null,
             title: s.title ?? '',
             body: s.body ?? '',
             image: s.image ?? null,

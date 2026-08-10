@@ -1777,9 +1777,11 @@ export const studyPackageLessons = sqliteTable('study_package_lessons', {
   title: text('title').notNull(),
   objective: text('objective'),
   body: text('body'),
-  // JSON int[] of positions in the presentation's slide list. See migration
-  // 0116 for why positions rather than the transported slide ids.
-  slideIndexes: text('slide_indexes'),
+  // JSON string[] of the STORED slide ids this lesson covers. Each slide in a
+  // guide carries its own server-assigned id inside the slides blob, so a
+  // lesson keeps pointing at the same slides when the presentation is reordered
+  // or a slide's text is edited. Never positions — see migration 0117.
+  slideIds: text('slide_ids'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

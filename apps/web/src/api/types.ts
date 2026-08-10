@@ -451,6 +451,11 @@ export interface FlashcardInput {
 // a body, and an optional screenshot. Built through a back-and-forth chat with
 // VTS AI (which drafts the slide text) plus screenshots the author attaches.
 export interface GuideSlide {
+  // The slide's stable stored identity, assigned by the server. Round-trip it
+  // on save: a lesson refers to slides by this, so dropping it would leave the
+  // lesson describing slides that no longer exist. Absent on legacy slides
+  // written before ids existed, and on a slide just added in the editor.
+  id?: string | null;
   title: string;
   body: string;
   // A base64 data URL of a screenshot the author attached, or null/absent.

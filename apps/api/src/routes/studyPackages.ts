@@ -350,11 +350,6 @@ export async function studyPackageRoutes(app: FastifyInstance) {
     const pkg = parseForCommit(documents, blueprint);
     if (!pkg) return reply.code(422).send({ error: 'That package could not be read' });
 
-    // Slide ids are import identity; the stored lesson mapping is positions in
-    // the slide list. Resolved here, where both halves are still in hand.
-    const slidePos = new Map<string, number>();
-    (pkg.presentation?.slides ?? []).forEach((s, i) => slidePos.set(s.id, i));
-
     try {
       const created = await commitPackage({
         ownerUserId: me.id,
@@ -387,16 +382,22 @@ export async function studyPackageRoutes(app: FastifyInstance) {
         flashcards: blueprint.wantFlashcards
           ? pkg.flashcards.map((f) => ({ categoryImportId: f.categoryId, term: f.term, definition: f.definition }))
           : [],
+        // The file's slide ids travel through as import identity. commitPackage
+        // mints a stored id per slide and resolves the lessons onto those, so a
+        // lesson never depends on where a slide currently sits.
         presentation:
           blueprint.wantPresentation && pkg.presentation
-            ? { title: pkg.presentation.title, slides: pkg.presentation.slides.map((s) => ({ title: s.title, body: s.body })) }
+            ? {
+                title: pkg.presentation.title,
+                slides: pkg.presentation.slides.map((s) => ({ importId: s.id, title: s.title, body: s.body })),
+              }
             : null,
         lessons: blueprint.wantLessons
           ? pkg.lessons.map((l) => ({
               title: l.title,
               objective: l.objective,
               body: l.body,
-              slideIndexes: l.slideIds.map((id) => slidePos.get(id)).filter((n): n is number => n != null),
+              slideImportIds: l.slideIds,
             }))
           : [],
         source: 'package_import',
@@ -436,9 +437,9 @@ export async function studyPackageRoutes(app: FastifyInstance) {
           explanation: q.explanation ?? null,
         })),
         flashcards: [],
-        presentation: d.presentation
-          ? { title: d.presentation.title, slides: d.presentation.slides }
-          : null,
+        // A hand-uploaded PowerPoint carries no ids of its own; commitPackage
+        // mints one per slide as it writes them.
+        presentation: d.presentation ? { title: d.presentation.title, slides: d.presentation.slides } : null,
         lessons: [],
         source: 'package_manual',
       });

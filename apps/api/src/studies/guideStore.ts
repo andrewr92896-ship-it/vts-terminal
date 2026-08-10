@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, isNull, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { studyGuides, users } from '../db/schema.js';
+import { keepSlideId, withSlideIds } from './slideIdentity.js';
 
 // Team-authored study guides: a presentation of titled slides, each with a body
 // and an optional screenshot. Built through a back-and-forth chat with Claude
@@ -11,7 +12,18 @@ import { studyGuides, users } from '../db/schema.js';
 
 // A single presentation slide. `image` is an optional base64 data URL of a
 // screenshot the author attached; it is stored verbatim inside the slides blob.
+//
+// `id` is the slide's own stable identity, assigned by the server the first time
+// the slide is written and carried unchanged through every edit and reorder
+// afterwards. A lesson refers to slides by these ids, which is what stops
+// dragging a slide up the deck silently changing which slides a lesson covers.
+//
+// It is OPTIONAL because legacy presentations were written before it existed and
+// are not rewritten to add one. Those keep working exactly as they did; a slide
+// gains an id the next time its guide is saved, and nothing depends on one until
+// a lesson does.
 export interface GuideSlide {
+  id?: string | null;
   title: string;
   body: string;
   image?: string | null;
@@ -53,11 +65,15 @@ export function sanitizeSlides(raw: unknown): GuideSlide[] {
       image = o.image;
     }
     if (!title && !body && !image) continue;
-    out.push({ title, body, image });
+    // An id already on the slide is PRESERVED and never regenerated — see
+    // slideIdentity.ts, which is where that rule and its reasoning live.
+    out.push({ id: keepSlideId(o), title, body, image });
     if (out.length >= MAX_SLIDES) break;
   }
   return out;
 }
+
+
 
 function parseSlides(raw: string): GuideSlide[] {
   try {
@@ -153,7 +169,7 @@ export async function createGuide(input: {
 }): Promise<GuideDetail> {
   const now = new Date();
   const id = randomUUID();
-  const slides = sanitizeSlides(input.slides);
+  const slides = withSlideIds(sanitizeSlides(input.slides));
   await db.insert(studyGuides).values({
     id,
     teamId: input.teamId,
@@ -193,7 +209,10 @@ export async function updateGuide(
   if (typeof patch.name === 'string' && patch.name.trim()) set.name = patch.name.trim().slice(0, 120);
   if (patch.description !== undefined) set.description = patch.description?.trim().slice(0, 500) || null;
   if (patch.slides) {
-    const slides = sanitizeSlides(patch.slides);
+    // Ids the editor sent back are kept; only genuinely new slides get one. A
+    // reorder therefore changes the ORDER of the ids and nothing else, so every
+    // lesson still covers the slides it always did.
+    const slides = withSlideIds(sanitizeSlides(patch.slides));
     set.slides = JSON.stringify(slides);
     set.slideCount = slides.length;
   }

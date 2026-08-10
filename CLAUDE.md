@@ -1528,9 +1528,32 @@ workspaces list** (see `theme/nav.ts` order).
         path remembering to set it. It deliberately does **not** route into the
         standalone maker. The standalone makers stay reachable on their own for
         building one piece outside the wizard.
+      - **A SLIDE HAS ITS OWN IDENTITY, and a lesson points at that** — never at
+        a position (`studies/slideIdentity.ts`, migration `0117`). A guide keeps
+        its slides as one JSON blob, which is a fine way to hold a presentation
+        together and a hopeless way to identify a slide: the editor can move one
+        up the deck, and every lesson mapped by position would silently start
+        describing different slides. So each slide carries an `id` inside the
+        blob, minted by the server the first time it is written, and
+        `study_package_lessons.slide_ids` holds those ids.
+        - **`keepSlideId` never mints and `withSlideIds` only mints for a slide
+          that has none.** The split matters because sanitizing runs on READ too,
+          and a read that invented identity would hand out a different id every
+          time.
+        - **The id has to round-trip through the editor**, or every save looks
+          like a deck of brand new slides. That means `getGuide` returns it, the
+          route's Zod schema accepts it (zod strips what it does not declare —
+          this is the easiest place to break the whole mechanism), and
+          `GuideEditor` carries it in its state and sends it back.
+        - **Legacy presentations are not migrated.** Their slides simply have no
+          id, read and edit exactly as before, and gain ids the next time they
+          are saved. A presentation with no lessons is unaffected either way.
+        - The blob stays one guide deliberately: a slides table would also give
+          identity, and would be a rewrite of a storage model that works.
       - `npm run verify:study-packages` checks the contract offline against
-        hand-built fixtures — valid packages, every validation failure, and
-        multipart assembly. Run it after touching the format or the validator.
+        hand-built fixtures — valid packages, every validation failure,
+        multipart assembly, and the slide-identity rules. Run it after touching
+        the format, the validator or slide identity.
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.

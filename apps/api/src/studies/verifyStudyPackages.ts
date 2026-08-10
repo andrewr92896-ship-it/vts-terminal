@@ -1,4 +1,5 @@
 import { validateDocuments } from './packageValidate.js';
+import { keepSlideId, withSlideIds } from './slideIdentity.js';
 import { PACKAGE_FORMAT, PACKAGE_PART_FORMAT, PACKAGE_SCHEMA_VERSION, type ImportBlueprint } from './packageFormat.js';
 
 // Offline check of the Study Package import contract.
@@ -323,6 +324,48 @@ function part(partType: string, partIndex: number, partCount: number, payload: u
   const p2 = part('questions', 2, 2, [q(2, null)]);
   const r = validateDocuments([p1, p2], blueprint({ categoriesLocked: false, categories: [] }));
   check('parts with no manifest are refused', !r.ok && codes(r).includes('no_manifest'));
+}
+
+console.log('\n[slide identity]');
+{
+  const a = { id: 'slide-a', title: 'One', body: 'Body one' };
+  const b = { id: 'slide-b', title: 'Two', body: 'Body two' };
+
+  // Preserved, never regenerated — including on read, which is why keepSlideId
+  // exists separately from the minting.
+  check('an existing id is kept', keepSlideId(a) === 'slide-a');
+  check('a slide with no id reads as having none', keepSlideId({ title: 'x', body: 'y' }) === null);
+  check('a blank id is treated as none', keepSlideId({ id: '   ', title: 'x', body: 'y' }) === null);
+
+  const written = withSlideIds([a, b]);
+  check('writing keeps ids that are already there', written[0].id === 'slide-a' && written[1].id === 'slide-b');
+
+  // REORDER: the array order changes, the ids do not.
+  const reordered = withSlideIds([b, a]);
+  check('reordering does not change any id', reordered[0].id === 'slide-b' && reordered[1].id === 'slide-a');
+  check(
+    'so the same two slides are still identifiable after a reorder',
+    reordered.map((s) => s.id).sort().join() === written.map((s) => s.id).sort().join(),
+  );
+  check('and the slide that moved is the same slide', reordered.find((s) => s.id === 'slide-a')?.title === 'One');
+
+  // EDIT: title and body change, identity does not.
+  const edited = withSlideIds([{ ...a, title: 'Rewritten', body: 'New body' }, b]);
+  check('editing a slide keeps its id', edited[0].id === 'slide-a');
+  check('and the edit landed', edited[0].title === 'Rewritten');
+
+  // NEW slides get one; existing ones are untouched by their arrival.
+  const added = withSlideIds([{ title: 'Brand new', body: 'Added' }, a, b]);
+  check('a new slide is given an id', !!added[0].id && added[0].id !== 'slide-a' && added[0].id !== 'slide-b');
+  check('the older slides keep theirs', added[1].id === 'slide-a' && added[2].id === 'slide-b');
+  check('two new slides get different ids', withSlideIds([{ title: 'x', body: '' }, { title: 'y', body: '' }])[0].id !== withSlideIds([{ title: 'x', body: '' }, { title: 'y', body: '' }])[1].id);
+
+  // LEGACY: a presentation written before ids existed.
+  const legacy = [{ title: 'Old one', body: 'No id' }, { title: 'Old two', body: 'Nor here' }];
+  check('legacy slides read with no id and no error', legacy.every((s) => keepSlideId(s) === null));
+  const legacyWritten = withSlideIds(legacy);
+  check('and are given ids the next time they are saved', legacyWritten.every((s) => !!s.id));
+  check('which are distinct', legacyWritten[0].id !== legacyWritten[1].id);
 }
 
 console.log('\n[nothing is written]');

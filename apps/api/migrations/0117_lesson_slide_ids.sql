@@ -1,0 +1,29 @@
+-- Lessons point at SLIDES, not at positions.
+--
+-- Migration 0116 stored a lesson's slides as positions in the presentation's
+-- slide list, on the reasoning that the ids in a transported file mean nothing
+-- once the file is gone. That reasoning was right about the imported ids and
+-- wrong about the conclusion: the answer is to give a stored slide an identity
+-- of its own, not to fall back on where it happens to sit.
+--
+-- Positions are not identity. The presentation editor can move a slide up or
+-- down, and the moment it does, every lesson mapped by position is describing
+-- different slides than it did a second earlier — silently, with nothing on
+-- screen to say so. That is not a defensible foundation for sharing, the public
+-- library or versioning, all of which will copy and re-copy these packages.
+--
+-- So each slide now carries its own `id` inside the guide's slides blob,
+-- assigned by the server when the slide is first written and preserved through
+-- every edit and reorder. `slide_ids` holds those ids as a JSON string array.
+--
+-- The blob stays one guide, deliberately. A slides table would give identity
+-- too, and would also be a rewrite of a storage model that works; the identity
+-- problem does not require it.
+ALTER TABLE `study_package_lessons` ADD `slide_ids` text;
+--> statement-breakpoint
+-- `slide_indexes` is dropped rather than left as a decoy. Nothing reads it, and
+-- a column holding stale positions beside the column holding real ids is
+-- exactly the kind of second source somebody trusts by mistake later. It never
+-- reached a deployed database — the only rows written under 0116 were in
+-- scratch databases used while building this.
+ALTER TABLE `study_package_lessons` DROP COLUMN `slide_indexes`;
