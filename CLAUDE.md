@@ -3051,6 +3051,34 @@ control — the server is still the enforcer.
   every live-captured trade got a second, phantom row (migration `0077` cleaned
   those up). There is no unique constraint on `(user_id, key)` to catch it, so
   check with `db:verify-positions` below.
+  - **The dedupe boundary is the OANDA ACCOUNT, never the connection row**
+    (`differentAccount` in `backfill.ts`). Trade ids are numbered per account,
+    and one account can sit behind more than one connection row — so scoping the
+    "what do we already hold" index to the connection says *every connection is
+    its own account*, which is false. That is the second route to the same
+    duplicate the key drift produced, and it is the one that actually shipped: a
+    connection deactivated by migration `0094`'s credential reset was replaced by
+    a **new** connection rather than re-keyed, the backfill saw an account it had
+    no history for, and re-imported all 500 of its closed trades. Every trade the
+    live poll had already captured was then held twice — once with the stop, once
+    without — and both legs counted toward the trade count, win rate and P/L.
+    Migration `0113` merged and removed them.
+  - **An account we cannot attribute is UNKNOWN, and unknown dedupes.** Only a
+    connection whose credentials this pass already decrypted can be resolved (so
+    identity costs no extra decryption and no extra audit row); inactive, deleted
+    and out-of-scope connections resolve to nothing. Erring this way costs a
+    backfilled row only when one owner runs two accounts whose trade ids collide
+    *and* one of those connections is unreadable — a missing row, which the
+    trader can see, rather than a phantom one, which scores. Same family of rule
+    as the Live Wall's `source` union: **never let a fabricated figure stand in
+    for one that could not be established.**
+  - **A second connection to an account already connected is refused**
+    (`assertAccountNotAlreadyConnected` in `connections.ts`, on both add and
+    credential edit), which stops the pair being created at all — and with it the
+    live poll reporting one open position twice, which no backfill rule can fix.
+    Identity is compared on the plaintext `summary`, so nothing is decrypted to
+    run the check. `manual` is exempt: it holds no credential and a trader
+    legitimately keeps several hand-kept books.
 - **Session watch** (`trading/sessionWatch.ts`, prod-only, every **30 s**,
   `SESSION_WATCH_SECONDS`): fires a trader's OWN Strategy Session notifications —
   a pre-open heads-up, an open buzz, and a close buzz — on each session's per-day
@@ -3820,9 +3848,15 @@ Run `npm install` first in a fresh container.
 
 **Desk data health:** `npm run db:verify-positions` (root or `@vts/api`) is a
 read-only check over `trading_positions` — it flags rows still on the legacy
-un-namespaced key, any broker trade stored more than once on a connection, and
-closed rows with no exit price, then prints per-trader closed-trade counts and
-realized P/L to diff against the broker's own export. Defaults to the current
+un-namespaced key, any broker trade stored more than once, any OANDA account
+connected more than once, and closed rows with no exit price, then prints
+per-trader closed-trade counts and realized P/L to diff against the broker's own
+export. **A duplicate is grouped on the TRADE's identity** — owner, trade id,
+instrument, side, entry price, open time — **not on the connection it arrived
+through**: keyed on the connection, this check could not see a trade duplicated
+across two connections to one account, which is exactly the fault it exists to
+catch, so the doubled July trades read as clean until somebody noticed the
+metrics by eye. Defaults to the current
 **ET** month; narrow it with `-- --from=2026-07-01 --to=2026-08-01` (`to` is
 exclusive). Exits non-zero when it finds a structural problem. Run it against
 prod after any change to the reconcile/backfill writers.

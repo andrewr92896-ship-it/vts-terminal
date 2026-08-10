@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.91';
+export const APP_VERSION = 'Beta V 6.92';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.92',
+    date: 'August 10, 2026',
+    notes: [
+      'Fixed closed trades being counted twice. Reconnecting a broker account as a new connection made the desk re-import that account’s whole closed-trade history, so trades captured before the reconnect were held twice and both copies counted toward the trade count, win rate and P/L. The duplicates are removed and the surviving copy now carries the broker’s own fill.',
+      'A trade left showing as open because its connection went dark mid-trade is now closed off the broker’s record.',
+      'An account that is already connected can no longer be added a second time — update the key on the connection you have instead.',
+    ],
+  },
   {
     version: 'Beta V 6.91',
     date: 'August 9, 2026',

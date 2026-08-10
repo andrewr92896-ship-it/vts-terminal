@@ -161,6 +161,53 @@ function summaryOf(broker: BrokerConnectionKind, creds: BrokerCreds): string {
   return `Key ••${c.apiKey.slice(-4)}`;
 }
 
+// Refuse a second connection to an account this owner already has connected.
+//
+// Two rows naming one OANDA account are two views of ONE book: the same trades
+// arrive under both, numbered with the same broker trade ids. That is how the
+// desk's July trades came to be counted twice — a connection deactivated by the
+// 2026-08-02 credential reset was replaced by a NEW connection rather than
+// re-keyed, so the closed-trade backfill saw an account it had no history for
+// and re-imported all of it. The backfill dedupes on the account now rather than
+// the connection row, so it can no longer double-import; this stops the pair
+// being created at all, which also keeps the live poll from reporting one open
+// position twice.
+//
+// Compared on `summary` because it is derived from the credentials by
+// `summaryOf` and stored in plaintext — so this establishes identity without
+// decrypting anything, and without an audit row for a credential nobody used.
+// For OANDA that string IS the account (environment + account id); for Kraken it
+// is the last four of the API key, which catches the same key added twice but
+// not two different keys cut against one Kraken account. `manual` is exempt: it
+// carries no credential and a trader legitimately keeps several hand-kept books.
+async function assertAccountNotAlreadyConnected(
+  userId: string,
+  broker: BrokerConnectionKind,
+  summary: string,
+  exceptId?: string,
+): Promise<void> {
+  if (broker === 'manual') return;
+  const clash = (
+    await db
+      .select({ id: brokerConnections.id, label: brokerConnections.label })
+      .from(brokerConnections)
+      .where(
+        and(
+          eq(brokerConnections.userId, userId),
+          eq(brokerConnections.broker, broker),
+          eq(brokerConnections.summary, summary),
+        ),
+      )
+  ).find((r) => r.id !== exceptId);
+  if (!clash) return;
+  // Name the row they already have, because the fix is almost always to re-enter
+  // the key on it — a connection that stopped reading is the reason somebody
+  // reaches for a second one.
+  throw new Error(
+    `That account is already connected as "${clash.label}". Update the key on that connection instead of adding a second one.`,
+  );
+}
+
 function toPublic(row: BrokerConnectionRow): BrokerConnection {
   return {
     id: row.id,
@@ -442,6 +489,8 @@ export async function addConnection(
   // calling this directly — comes out naming its venue.
   const label = venueLabel(str(input.label) || defaultConnectionLabel('', input.broker), input.broker);
   const creds = normalizeCreds(input.broker, input.creds);
+  const summary = summaryOf(input.broker, creds);
+  await assertAccountNotAlreadyConnected(userId, input.broker, summary);
   const now = new Date();
   // The id is minted before the secret is sealed, because the ciphertext is
   // bound to the row it belongs to (id + owner) as authenticated data — a blob
@@ -453,7 +502,7 @@ export async function addConnection(
     broker: input.broker,
     label: label.slice(0, 80),
     secretEnc: encryptSecret(JSON.stringify(creds), { userId, connectionId: id }),
-    summary: summaryOf(input.broker, creds),
+    summary,
     active: true,
     lastStatus: 'unknown',
     lastError: null,
@@ -491,8 +540,12 @@ export async function updateConnection(
   }
   if (input.creds !== undefined) {
     const creds = normalizeCreds(row.broker, input.creds);
+    const summary = summaryOf(row.broker, creds);
+    // Re-pointing an existing connection at an account already connected here
+    // makes the same pair as adding one, so it is refused on the same terms.
+    await assertAccountNotAlreadyConnected(userId, row.broker, summary, id);
     patch.secretEnc = encryptSecret(JSON.stringify(creds), { userId, connectionId: id });
-    patch.summary = summaryOf(row.broker, creds);
+    patch.summary = summary;
     // New credentials → reset health until the next refresh proves them.
     patch.lastStatus = 'unknown';
     patch.lastError = null;
