@@ -99,7 +99,40 @@ export async function getDeckLeaderboard(
 ): Promise<LeaderboardEntry[]> {
   const deckIds = await leaderboardDeckIds(deckId);
   if (deckIds.length === 0) return [];
+  return rankDecks(deckIds, currentUserId, null);
+}
 
+/**
+ * The board for a PACKAGE-BACKED study game.
+ *
+ * A package deck is ONE row that everybody with access studies, so unlike a
+ * built-in game there are no copies to span — the deck id is the board. What
+ * differs is WHO is on it: the owner, whoever accepted a share, and whoever
+ * added the package from the public library. That is the whole change Handoff 4
+ * makes to leaderboards — participation follows package access, never
+ * trading/private-group membership.
+ *
+ * Scoring is untouched. It runs through the same `rankDecks` body the built-in
+ * board uses, so a percentage means exactly what it always meant and there is
+ * one implementation rather than two that can disagree.
+ */
+export async function getPackageLeaderboard(
+  deckId: string,
+  currentUserId: string,
+  population: string[],
+): Promise<LeaderboardEntry[]> {
+  if (population.length === 0) return [];
+  return rankDecks([deckId], currentUserId, new Set(population));
+}
+
+// The shared ranking body. `population` null means "everybody who has played" —
+// the public board's rule. A set restricts the board to those user ids, which is
+// what makes a package board follow package access.
+async function rankDecks(
+  deckIds: string[],
+  currentUserId: string,
+  population: Set<string> | null,
+): Promise<LeaderboardEntry[]> {
   const [liveRows, runRows] = await Promise.all([
     db
       .select({
@@ -130,6 +163,7 @@ export async function getDeckLeaderboard(
   const entries: LeaderboardEntry[] = [];
 
   for (const row of liveRows) {
+    if (population && !population.has(row.userId)) continue;
     if (row.hidden && row.userId !== currentUserId) continue;
     const stats = statsFromState(row.state);
     if (!stats) continue;
@@ -154,6 +188,7 @@ export async function getDeckLeaderboard(
     // A banked run is somebody's past attempt; `isMe` is always false on these,
     // so an opted-out player's history goes even for themselves. Their live row
     // above is the one that carries their standing.
+    if (population && !population.has(row.userId)) continue;
     if (row.hidden) continue;
     if (row.attempted <= 0) continue;
     entries.push({

@@ -1787,6 +1787,86 @@ export const studyPackageLessons = sqliteTable('study_package_lessons', {
 });
 export type StudyPackageLessonRow = typeof studyPackageLessons.$inferSelect;
 
+// ---- Study sharing, and the public library ----
+//
+// Study sharing is INDEPENDENT of trading/private groups, which is the whole
+// point of the package layer: one person hands a package to another person by
+// username, and neither of them joins anything. There is no chat, no feed, no
+// follow — a share is permission to study somebody's content, and nothing else.
+
+export const SHARE_STATUSES = ['pending', 'accepted', 'declined'] as const;
+export type ShareStatus = (typeof SHARE_STATUSES)[number];
+
+export const studyPackageShares = sqliteTable(
+  'study_package_shares',
+  {
+    id: text('id').primaryKey(),
+    packageId: text('package_id')
+      .notNull()
+      .references(() => studyPackages.id, { onDelete: 'cascade' }),
+    recipientUserId: text('recipient_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Who offered it. Null if that account is later deleted — the share itself
+    // belongs to the package and the recipient, not to whoever pressed the
+    // button.
+    sharedByUserId: text('shared_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    status: text('status', { enum: SHARE_STATUSES }).notNull().default('pending'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    respondedAt: integer('responded_at', { mode: 'timestamp_ms' }),
+  },
+  // One share relationship per person per package. Offering the same package to
+  // the same person twice is the same offer, not a second one.
+  (t) => ({ oneEach: unique().on(t.packageId, t.recipientUserId) }),
+);
+export type StudyPackageShareRow = typeof studyPackageShares.$inferSelect;
+
+export const SUBMISSION_STATUSES = ['pending', 'approved', 'rejected', 'changes_requested', 'withdrawn'] as const;
+export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
+
+// A creator asking VTS to publish their package. Submitting is NOT publishing:
+// an administrator reads it and decides, and only an approval makes it public.
+export const studyPackageSubmissions = sqliteTable('study_package_submissions', {
+  id: text('id').primaryKey(),
+  packageId: text('package_id')
+    .notNull()
+    .references(() => studyPackages.id, { onDelete: 'cascade' }),
+  submittedByUserId: text('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  status: text('status', { enum: SUBMISSION_STATUSES }).notNull().default('pending'),
+  submittedAt: integer('submitted_at', { mode: 'timestamp_ms' }).notNull(),
+  reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+  reviewedByUserId: text('reviewed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  // The reviewer's note back to the creator — why it was rejected, or what to
+  // change. Shown to the submitter, so it is not an internal-only field.
+  adminNote: text('admin_note'),
+  // WHICH wording the submitter agreed to, and when. A blanket boolean would
+  // not survive the wording changing: this records what was actually shown.
+  attestationVersion: text('attestation_version').notNull(),
+  attestedAt: integer('attested_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyPackageSubmissionRow = typeof studyPackageSubmissions.$inferSelect;
+
+// A learner adding a published package to their own library.
+//
+// Deliberately not a share row: a share is something offered TO somebody, and
+// this is somebody helping themselves to public content. It is also what makes
+// them a participant on that package's leaderboard — reading a public package is
+// open to anyone, but appearing on its board means having chosen to study it.
+export const studyPackageAdds = sqliteTable(
+  'study_package_adds',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    packageId: text('package_id')
+      .notNull()
+      .references(() => studyPackages.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.packageId] }) }),
+);
+export type StudyPackageAddRow = typeof studyPackageAdds.$inferSelect;
+
 // ---- Studies: completed mock tests (per user) ----
 // One row per finished mock test (a graded exam drawn to
 // the real exam blueprint: 25 Investments, 30 Client Management, 30 Regulations

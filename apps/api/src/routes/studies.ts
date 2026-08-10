@@ -30,6 +30,8 @@ import {
 import { contentScopeId } from '../teams/contentScope.js';
 import {
   isPackageBacked,
+  packageAudience,
+  packageIdOf,
   readablePackageIds,
   resolveContentScope,
   type ContentKind,
@@ -46,7 +48,13 @@ import {
   listFlashcardSets,
   updateFlashcardSet,
 } from '../studies/flashcardStore.js';
-import { archiveDeckRun, getDeckGame, getDeckLeaderboard, saveDeckGame } from '../studies/deckGame.js';
+import {
+  archiveDeckRun,
+  getDeckGame,
+  getDeckLeaderboard,
+  getPackageLeaderboard,
+  saveDeckGame,
+} from '../studies/deckGame.js';
 import { createGuide, deleteGuide, getGuide, listGuides, updateGuide } from '../studies/guideStore.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { getUserTeamContext } from '../userTeams/service.js';
@@ -600,23 +608,33 @@ export async function studiesRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
-  // The leaderboard for a BUILT-IN study game — public, spanning every account
-  // on the install (owner decision, 2026-08).
+  // Two kinds of study game have a board, and they are ranked the same way:
   //
-  // User-made games have no leaderboard: 404, not an empty list, so the client
-  // can hide the tab entirely rather than showing an empty board that looks
-  // broken. The caller must still own a copy of the deck to ask, which is what
-  // stops this being a way to probe deck ids.
+  //   • A BUILT-IN game — public, spanning every copy of itself on the install
+  //     (owner decision, 2026-08).
+  //   • A PACKAGE-BACKED game — ranked among the package's own audience: the
+  //     owner, whoever accepted a share, and whoever added it from the public
+  //     library. Participation follows Study Package access and never
+  //     trading/private-group membership (Handoff 4).
+  //
+  // A legacy user-made game still has none: 404, not an empty list, so the
+  // client hides the tab entirely rather than showing an empty board that looks
+  // broken. The caller must be able to read the deck to ask either way, which is
+  // what stops this being a way to probe deck ids.
   app.get('/api/studies/decks/:id/leaderboard', guard, async (request, reply) => {
     const me = request.currentUser!;
     const id = (request.params as { id: string }).id;
     const scope = await resolveContentScope(me, 'deck', id, 'read');
     const deck = scope ? await getDeck(id, scope) : null;
     if (!deck) return reply.code(404).send({ error: 'Not found' });
-    if (!isBakedInSource(deck.source)) {
+    if (isBakedInSource(deck.source)) {
+      return { entries: await getDeckLeaderboard(id, me.id) };
+    }
+    const packageId = await packageIdOf('deck', id);
+    if (!packageId) {
       return reply.code(404).send({ error: 'This study game has no leaderboard' });
     }
-    return { entries: await getDeckLeaderboard(id, me.id) };
+    return { entries: await getPackageLeaderboard(id, me.id, await packageAudience(packageId)) };
   });
 
   // ---- Team flashcard sets ----

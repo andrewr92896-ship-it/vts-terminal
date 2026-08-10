@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.98';
+export const APP_VERSION = 'Beta V 6.99';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 6.99',
+    date: 'August 10, 2026',
+    notes: [
+      'Studies ▸ Study Packages is new. It holds the packages you have made, the ones people have shared with you, and the VTS Study Library.',
+      'You can now share a study package with someone by their username. They get an invitation, and once they accept it the game, cards and slides appear in their own Studies — the same package, not a copy, so you both keep your own progress. You can take the access back whenever you like; their progress is theirs and is never touched.',
+      'You can also ask VTS to publish a package to the Study Library. Submitting is a request, not a publication — an administrator reads it and either publishes it, asks for changes, or declines, and you get the reply. Anything published is browsable by everyone, and adding it puts it in your own Studies.',
+      'Study games inside a package now have a leaderboard, between the people who actually have the package.',
+    ],
+  },
   {
     version: 'Beta V 6.98',
     date: 'August 10, 2026',

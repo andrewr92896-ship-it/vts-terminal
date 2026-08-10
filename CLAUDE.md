@@ -1554,6 +1554,87 @@ workspaces list** (see `theme/nav.ts` order).
         hand-built fixtures — valid packages, every validation failure,
         multipart assembly, and the slide-identity rules. Run it after touching
         the format, the validator or slide identity.
+    - **SHARING IS BY USERNAME, AND IT JOINS NOBODY TO ANYTHING**
+      (`studies/packageSharing.ts`, `study_package_shares`, migration `0118`;
+      the **Study Packages** section, `st_packages`). One person names another
+      and hands over a package. There is no chat attached, no feed, no follow,
+      and above all **no group** — which is the whole reason the package layer
+      exists, because a public signup is in no trading/private group and none
+      can be invented for them.
+      - **The recipient is resolved server-side** against the real user table,
+        by username or display name (both unique). A typo finds nobody and says
+        so rather than reaching whoever was closest. The lookup answers with the
+        display name and username and **nothing else** — no email, no roles — so
+        a share form cannot become a way to read the user table.
+      - **The unique index `(package_id, recipient_user_id)` is what makes a
+        repeat share idempotent.** Sharing twice re-offers the same one and the
+        client says so; re-sharing to somebody who DECLINED puts it back to
+        pending, because an owner asking again is a real thing to want.
+      - **Only an ACCEPTED share is access.** A pending one is an offer nobody
+        answered, and treating it as access would hand out content on the
+        strength of a click that never happened. `respondToShare` matches on the
+        recipient as well as the id, so a guessed share id cannot be answered on
+        another person's behalf.
+      - **REVOKING NEVER TOUCHES PROGRESS.** The share row goes; the recipient's
+        `(user, deck)` rows are their own record of work they actually did.
+        Deleting somebody's history to enforce a permission that is already
+        enforced would be destroying data for nothing.
+      - **An archived package grants nothing through a share**, and does not
+        appear in anybody's Shared-with-me list. The share row survives, so
+        restoring brings it all back exactly as it was.
+      - `visibility` is kept honest by `refreshShareVisibility`, which moves a
+        package between `private` and `shared` on its own as recipients come and
+        go. It deliberately **never** touches `submitted` or `public`: those are
+        set by the review workflow, and a share arriving on a published package
+        must not quietly unpublish it.
+    - **THE VTS STUDY LIBRARY — SUBMITTING IS NOT PUBLISHING**
+      (`studies/packageLibrary.ts`, `study_package_submissions`,
+      `study_package_adds`; **Admin ▸ Study Library**, `ad_studies`). A creator
+      asks; an administrator reads it and decides. Nothing becomes public on a
+      timer, and nothing becomes public because it was shared privately with
+      somebody.
+      - **Three outcomes, and two of them are the same act with different
+        words.** Approve publishes it. Reject and "ask for changes" both hand it
+        straight back with the package untouched — kept apart because the
+        creator reads them completely differently, and a note saying "fix the
+        third category" filed as a rejection reads as a refusal.
+      - **The attestation is recorded as a VERSION, not a boolean**
+        (`ATTESTATION_VERSION`, stored per submission). The wording will change,
+        and "they ticked the box" would not say which wording was actually put
+        in front of them.
+      - **A published package's content is FROZEN** (`locked` in
+        `packageAccess.ts`): the owner keeps `manage` but loses `edit`. It is
+        public on the strength of what a reviewer read, so letting it be edited
+        in place would let what people study drift away from what was approved
+        with nobody seeing it happen. Withdrawing or unpublishing is how it
+        unlocks.
+      - **Reading the library is not joining it.** Anyone signed in may read a
+        published package; `study_package_adds` records somebody actually taking
+        one up, which is what puts it in their own list and puts them on its
+        leaderboard. **No copy is made** — they study the same deck everybody
+        else does, and their progress is their own because progress has always
+        been keyed by `(user, deck)`.
+      - `readablePackages` is therefore **owned + accepted shares + added
+        published ones**, deliberately *not* every public package. Dropping the
+        whole library into everyone's study game list is not a library; it is
+        noise that grows without limit.
+    - **LEADERBOARD MEMBERSHIP FOLLOWS PACKAGE ACCESS** (`packageAudience`,
+      `getPackageLeaderboard`). Two kinds of game have a board and they are
+      ranked by the **same code** (`rankDecks` in `deckGame.ts`, which
+      `getDeckLeaderboard` also calls, so a percentage means one thing):
+      - a **built-in** game, spanning every copy of itself on the install;
+      - a **package-backed** game, among the package's own audience — the owner,
+        whoever accepted a share, and whoever added it from the library. Never
+        trading/private-group membership.
+      A legacy user-made game still has none. **Scoring is untouched** — level,
+      streak, weighted scoring and every progress calculation are exactly as
+      they were; only who appears changed. `DeckSummary.hasLeaderboard` states
+      the rule once so the game screen's tab and the Live Wall's leaderboard
+      tile cannot offer a game whose endpoint would 404.
+    - `npm run db:check-sharing` exercises all of the above through the real
+      services against a scratch database. It WRITES (four accounts and a
+      package), so it refuses to run against any database that already holds a
+      user. **Do not weaken that guard.**
 - **Site Help** (blue): How to, Announcements, Patch notes, Report a bug,
   Suggestion, Rules & Conduct, Terms, Privacy. Available to **every** signed-in
   user.
@@ -1562,9 +1643,12 @@ workspaces list** (see `theme/nav.ts` order).
     `RULES` object in `legal/content.ts`. Deliberately not a copy: two rules
     pages disagree within a month, and the one people read is always the wrong
     one. Edit `RULES` and both follow.
-- **Admin** (rose): Users, **Administrator Log**, **Admin Guidelines**, Teams,
-  Badges, Message Templates, Patch Notes, Early Access, Bug Reports, Support.
-  **Admins only.**
+- **Admin** (rose): Users, **Administrator Log**, **Admin Guidelines**, Rule
+  Breaking, **Study Library**, Teams, Badges, Message Templates, Patch Notes,
+  Early Access, Bug Reports, Support. **Admins only.**
+  - **Study Library** (`ad_studies`, `AdminStudyLibrary.tsx`) is the moderation
+    queue for the public Study Library — the screen that makes "submitting is
+    not publishing" true. See Studies ▸ Study Packages for the whole workflow.
   - **Administrator Log** (`ad_log`, `AdminLog.tsx` over `admin/adminLog.ts`) —
     what administrators have done, and what is waiting on one. **Red = open**
     (still needs somebody), **green = resolved**, **gray = a record that asks
@@ -4128,6 +4212,18 @@ metrics by eye. Defaults to the current
 **ET** month; narrow it with `-- --from=2026-07-01 --to=2026-08-01` (`to` is
 exclusive). Exits non-zero when it finds a structural problem. Run it against
 prod after any change to the reconcile/backfill writers.
+
+**Study sharing:** `npm run db:check-sharing` walks the whole Study Package
+sharing, library and leaderboard contract through the real services. Unlike
+every other check here it **writes** — four accounts and a package — so it
+refuses to run against any database that already holds a user, which makes an
+empty scratch file the only thing it can be pointed at:
+
+    DATABASE_URL="file:/tmp/x.db" npm run db:migrate
+    DATABASE_URL="file:/tmp/x.db" npm run db:check-sharing
+
+Run it after touching `packageAccess.ts`, `packageSharing.ts`,
+`packageLibrary.ts` or the leaderboard.
 
 ## Deployment workflow (owner preference)
 

@@ -11,6 +11,9 @@ import {
   studyGuides,
   studyPackageCategories,
   studyPackageLessons,
+  studyPackageAdds,
+  studyPackageShares,
+  studyPackageSubmissions,
   studyPackages,
   users,
   type CategoryWeightMode,
@@ -74,6 +77,17 @@ export interface PackageSummary {
   hasFlashcards: boolean;
   hasGuide: boolean;
   lessonCount: number;
+  /**
+   * Whether the person asking owns it.
+   *
+   * A library holds a person's own packages beside ones handed to them and ones
+   * taken from the VTS Study Library, and they behave differently — only the
+   * owner can share, submit or archive. The screen needs to tell them apart
+   * without comparing user ids client-side.
+   */
+  mine: boolean;
+  /** How many people currently hold it or have been offered it. Owner's view. */
+  sharedWith: number;
 }
 
 export interface PackageDetail extends PackageSummary {
@@ -131,7 +145,7 @@ export async function componentIds(packageId: string): Promise<{
 
 // ---- Read ----
 
-export async function getPackage(packageId: string): Promise<PackageDetail | null> {
+export async function getPackage(packageId: string, viewerId?: string): Promise<PackageDetail | null> {
   const row = (
     await db
       .select({ pkg: studyPackages, ownerName: users.displayName })
@@ -142,10 +156,14 @@ export async function getPackage(packageId: string): Promise<PackageDetail | nul
   )[0];
   if (!row) return null;
 
-  const [categories, lessons, ids] = await Promise.all([
+  const [categories, lessons, ids, shares] = await Promise.all([
     listCategories(packageId),
     listLessons(packageId),
     componentIds(packageId),
+    db
+      .select({ status: studyPackageShares.status })
+      .from(studyPackageShares)
+      .where(eq(studyPackageShares.packageId, packageId)),
   ]);
 
   return {
@@ -154,6 +172,8 @@ export async function getPackage(packageId: string): Promise<PackageDetail | nul
     hasFlashcards: ids.flashcardSetId != null,
     hasGuide: ids.guideId != null,
     lessonCount: lessons.length,
+    mine: viewerId ? row.pkg.ownerUserId === viewerId : true,
+    sharedWith: shares.filter((s) => s.status !== 'declined').length,
     categories,
     lessons,
     ...ids,
@@ -161,10 +181,10 @@ export async function getPackage(packageId: string): Promise<PackageDetail | nul
 }
 
 /** Summaries for a set of packages already resolved as readable. */
-export async function summarize(rows: StudyPackageRow[]): Promise<PackageSummary[]> {
+export async function summarize(rows: StudyPackageRow[], viewerId?: string): Promise<PackageSummary[]> {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
-  const [owners, decks, sets, guides, lessons] = await Promise.all([
+  const [owners, decks, sets, guides, lessons, shares] = await Promise.all([
     db
       .select({ id: users.id, displayName: users.displayName })
       .from(users)
@@ -179,6 +199,12 @@ export async function summarize(rows: StudyPackageRow[]): Promise<PackageSummary
       .select({ packageId: studyPackageLessons.packageId })
       .from(studyPackageLessons)
       .where(inArray(studyPackageLessons.packageId, ids)),
+    // Read straight off the table rather than through packageSharing, which
+    // imports PackageError from here — the cycle is not worth one count.
+    db
+      .select({ packageId: studyPackageShares.packageId, status: studyPackageShares.status })
+      .from(studyPackageShares)
+      .where(inArray(studyPackageShares.packageId, ids)),
   ]);
   const nameById = new Map(owners.map((o) => [o.id, o.displayName]));
   const has = (list: { packageId: string | null }[]) => new Set(list.map((r) => r.packageId));
@@ -189,6 +215,12 @@ export async function summarize(rows: StudyPackageRow[]): Promise<PackageSummary
   for (const l of lessons) {
     if (l.packageId) lessonCounts.set(l.packageId, (lessonCounts.get(l.packageId) ?? 0) + 1);
   }
+  const shareCounts = new Map<string, number>();
+  for (const s of shares) {
+    // A declined offer is not somebody holding it.
+    if (s.status === 'declined') continue;
+    shareCounts.set(s.packageId, (shareCounts.get(s.packageId) ?? 0) + 1);
+  }
 
   return rows.map((r) => ({
     ...toSummaryBase(r, nameById.get(r.ownerUserId) ?? null),
@@ -196,6 +228,8 @@ export async function summarize(rows: StudyPackageRow[]): Promise<PackageSummary
     hasFlashcards: cardSet.has(r.id),
     hasGuide: guideSet.has(r.id),
     lessonCount: lessonCounts.get(r.id) ?? 0,
+    mine: viewerId ? r.ownerUserId === viewerId : true,
+    sharedWith: shareCounts.get(r.id) ?? 0,
   }));
 }
 
@@ -339,6 +373,13 @@ export async function purgePackage(packageId: string): Promise<void> {
     await tx.delete(studyGuides).where(eq(studyGuides.packageId, packageId));
     await tx.delete(studyPackageCategories).where(eq(studyPackageCategories.packageId, packageId));
     await tx.delete(studyPackageLessons).where(eq(studyPackageLessons.packageId, packageId));
+    // Everyone's relationship to it goes too — the shares handed out, the
+    // library submissions, and the rows recording who had taken it up. The
+    // foreign key pragma is never on, so an unnamed child table is one left
+    // pointing at a package id that no longer resolves.
+    await tx.delete(studyPackageShares).where(eq(studyPackageShares.packageId, packageId));
+    await tx.delete(studyPackageSubmissions).where(eq(studyPackageSubmissions.packageId, packageId));
+    await tx.delete(studyPackageAdds).where(eq(studyPackageAdds.packageId, packageId));
     await tx.delete(studyPackages).where(eq(studyPackages.id, packageId));
   });
 }

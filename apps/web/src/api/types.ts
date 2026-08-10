@@ -402,6 +402,11 @@ export interface TeamDeck {
   // same as every weight being zero, which is a game with nothing on the paper.
   categoryWeights: Record<string, number> | null;
   questionCount: number;
+  // Whether this game has a leaderboard at all: built-in games (ranked across
+  // every copy on the install) and package-backed ones (ranked among the
+  // package's own audience) do; a legacy user-made game does not, and its
+  // endpoint answers 404 so the tab can be hidden rather than opened empty.
+  hasLeaderboard: boolean;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: number;
@@ -2613,4 +2618,84 @@ export interface StudyPackageSummary {
   name: string;
   subject: string | null;
   questionCount?: number;
+}
+
+// ---- Study Packages: the owner's library, sharing, and the VTS Study Library ----
+
+/** private → shared → submitted → public. Four distinct states, never merged. */
+export type StudyPackageVisibility = 'private' | 'shared' | 'submitted' | 'public';
+
+export interface StudyPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  subject: string | null;
+  audience: string | null;
+  depth: string | null;
+  formatVersion: number;
+  visibility: StudyPackageVisibility;
+  archived: boolean;
+  archivedAt: number | null;
+  ownerUserId: string;
+  ownerName: string | null;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+  hasDeck: boolean;
+  hasFlashcards: boolean;
+  hasGuide: boolean;
+  lessonCount: number;
+  /** Whether the viewer owns it — only an owner can share, submit or archive. */
+  mine: boolean;
+  sharedWith: number;
+}
+
+export interface StudyPackageDetail extends StudyPackage {
+  categories: { id: string; seq: number; name: string; weight: number | null }[];
+  lessons: { id: string; seq: number; title: string; objective: string | null; body: string | null }[];
+  deckId: string | null;
+  flashcardSetId: string | null;
+  guideId: string | null;
+}
+
+export type StudyShareStatus = 'pending' | 'accepted' | 'declined';
+
+export interface StudyShare {
+  id: string;
+  packageId: string;
+  packageName: string;
+  packageSubject: string | null;
+  status: StudyShareStatus;
+  /** Who it is with, or who it came from, depending on which list this is. */
+  personName: string;
+  personUsername: string;
+  createdAt: number;
+  respondedAt: number | null;
+}
+
+export type StudySubmissionStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'withdrawn';
+
+export interface StudySubmission {
+  id: string;
+  packageId: string;
+  packageName: string;
+  packageSubject: string | null;
+  status: StudySubmissionStatus;
+  submittedAt: number;
+  reviewedAt: number | null;
+  adminNote: string | null;
+  attestationVersion: string;
+  submitterName: string | null;
+}
+
+export interface StudyLibraryEntry {
+  packageId: string;
+  name: string;
+  subject: string | null;
+  description: string | null;
+  depth: string | null;
+  ownerName: string | null;
+  questionCount: number;
+  added: boolean;
+  publishedAt: number;
 }

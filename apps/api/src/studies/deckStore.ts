@@ -43,6 +43,19 @@ export interface DeckSummary {
   createdBy: string | null;
   createdByName: string | null;
   createdAt: number;
+  /**
+   * Whether this game has a leaderboard at all.
+   *
+   * Two kinds do: a BUILT-IN game, ranked across every copy of itself on the
+   * install, and a PACKAGE-BACKED game, ranked among the package's own audience.
+   * A legacy user-made game has none, and its endpoint answers 404 so the client
+   * can hide the tab rather than open an empty board that reads as broken.
+   *
+   * Stated here so the rule is computed once. The Live Wall's leaderboard tile
+   * lists games by this flag, which is what stops the picker offering a game
+   * whose board could only ever 404.
+   */
+  hasLeaderboard: boolean;
 }
 
 export interface DeckDetail extends DeckSummary {
@@ -123,6 +136,7 @@ export async function listDecks(teamId: string, packageIds: string[] = []): Prom
       description: studyDecks.description,
       source: studyDecks.source,
       isSample: studyDecks.isSample,
+      packageId: studyDecks.packageId,
       categories: studyDecks.categories,
       categoryWeights: studyDecks.categoryWeights,
       createdBy: studyDecks.createdBy,
@@ -172,6 +186,9 @@ export async function listDecks(teamId: string, packageIds: string[] = []): Prom
       createdBy: r.createdBy,
       createdByName: r.createdByName,
       createdAt: r.createdAt.getTime(),
+      // Built-in and package-backed games have a board; a legacy user-made one
+      // does not. Same rule the leaderboard route applies, stated once.
+      hasLeaderboard: r.isSample || r.packageId != null,
     }))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
@@ -383,6 +400,7 @@ export async function getDeck(deckId: string, teamId: string): Promise<DeckDetai
         description: studyDecks.description,
         source: studyDecks.source,
         isSample: studyDecks.isSample,
+        packageId: studyDecks.packageId,
         categories: studyDecks.categories,
         categoryWeights: studyDecks.categoryWeights,
         createdBy: studyDecks.createdBy,
@@ -433,6 +451,7 @@ export async function getDeck(deckId: string, teamId: string): Promise<DeckDetai
     createdBy: deckRow.createdBy,
     createdByName: deckRow.createdByName,
     createdAt: deckRow.createdAt.getTime(),
+    hasLeaderboard: deckRow.isSample || deckRow.packageId != null,
     questions,
   };
 }

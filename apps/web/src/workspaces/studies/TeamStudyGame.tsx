@@ -67,10 +67,11 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
   const [deck, setDeck] = useState<TeamDeckDetail | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [view, setView] = useState<'quiz' | 'leaderboard'>('quiz');
-  // Only the terminal's built-in games carry a leaderboard, and it is public
-  // across every account. `isSample` is what marks a built-in copy; the server
-  // is the enforcer and 404s the endpoint for anything else.
-  const hasLeaderboard = !!deck?.isSample;
+  // Two kinds of game carry a board: a built-in one, ranked publicly across
+  // every copy on the install, and a package-backed one, ranked among the
+  // package's own audience. A legacy user-made game has none. The server states
+  // which this is and is the enforcer — it 404s the endpoint for anything else.
+  const hasLeaderboard = !!deck?.hasLeaderboard;
 
   useEffect(() => {
     if (!hasLeaderboard && view === 'leaderboard') setView('quiz');

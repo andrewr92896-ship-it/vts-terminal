@@ -2,6 +2,12 @@ import type {
   ImportBlueprintPayload,
   ManualPackagePayload,
   PackageValidation,
+  StudyLibraryEntry,
+  StudyPackage,
+  StudyPackageDetail,
+  StudyShare,
+  StudySubmission,
+  StudySubmissionStatus,
   BudgetMonth,
   PublishedWallTemplate,
   TemplateTile,
@@ -1696,5 +1702,104 @@ export const api = {
   // that were typed in rather than imported.
   createManualStudyPackage(payload: ManualPackagePayload): Promise<{ package: { id: string; name: string } }> {
     return request('/api/studies/packages/manual', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  // The library: a person's own packages, the ones handed to them, and the ones
+  // they took from the VTS Study Library. Archived ones are asked for
+  // separately, which is how an owner finds one to restore.
+  listStudyPackages(archived = false): Promise<{ packages: StudyPackage[]; archived: boolean }> {
+    return request(`/api/studies/packages${archived ? '?archived=true' : ''}`);
+  },
+  getStudyPackage(id: string): Promise<{ package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}`);
+  },
+  archiveStudyPackage(id: string): Promise<{ package: StudyPackageDetail; packages: StudyPackage[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/archive`, { method: 'POST' });
+  },
+  unarchiveStudyPackage(id: string): Promise<{ package: StudyPackageDetail; packages: StudyPackage[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/unarchive`, { method: 'POST' });
+  },
+
+  // ---- Sharing ----
+  // By username. The server resolves it against the real user table, so a typo
+  // finds nobody and says so rather than handing the package to somebody else.
+  shareStudyPackage(
+    id: string,
+    handle: string,
+  ): Promise<{ share: StudyShare; alreadyShared: boolean; shares: StudyShare[]; package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ handle }),
+    });
+  },
+  listStudyPackageShares(id: string): Promise<{ shares: StudyShare[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/shares`);
+  },
+  // Taking access back. The recipient's progress is deliberately untouched.
+  revokeStudyPackageShare(
+    id: string,
+    shareId: string,
+  ): Promise<{ shares: StudyShare[]; package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}`, {
+      method: 'DELETE',
+    });
+  },
+  sharedStudyPackages(): Promise<{ pending: StudyShare[]; accepted: StudyShare[] }> {
+    return request('/api/studies/shared-with-me');
+  },
+  respondToStudyShare(
+    shareId: string,
+    accept: boolean,
+  ): Promise<{ pending: StudyShare[]; accepted: StudyShare[]; packages: StudyPackage[] }> {
+    return request(`/api/studies/shares/${encodeURIComponent(shareId)}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ accept }),
+    });
+  },
+
+  // ---- The VTS Study Library ----
+  // Submitting is not publishing: an administrator reads it and decides.
+  studyLibraryAttestations(): Promise<{ version: string; statements: string[] }> {
+    return request('/api/studies/library/attestations');
+  },
+  submitStudyPackage(id: string): Promise<{ submission: StudySubmission; package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ attested: true }),
+    });
+  },
+  withdrawStudyPackage(id: string): Promise<{ package: StudyPackageDetail; submissions: StudySubmission[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/withdraw`, { method: 'POST' });
+  },
+  studyPackageSubmissions(id: string): Promise<{ submissions: StudySubmission[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/submissions`);
+  },
+  browseStudyLibrary(): Promise<{ entries: StudyLibraryEntry[] }> {
+    return request('/api/studies/library');
+  },
+  // No copy is made — the learner studies the same package everybody else does.
+  addStudyLibraryPackage(id: string): Promise<{ entries: StudyLibraryEntry[]; packages: StudyPackage[] }> {
+    return request(`/api/studies/library/${encodeURIComponent(id)}/add`, { method: 'POST' });
+  },
+  removeStudyLibraryPackage(id: string): Promise<{ entries: StudyLibraryEntry[]; packages: StudyPackage[] }> {
+    return request(`/api/studies/library/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
+  // ---- Moderation (admins) ----
+  adminStudySubmissions(status?: StudySubmissionStatus): Promise<{ submissions: StudySubmission[] }> {
+    return request(`/api/studies/admin/submissions${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+  },
+  reviewStudySubmission(
+    id: string,
+    decision: 'approved' | 'rejected' | 'changes_requested',
+    note?: string | null,
+  ): Promise<{ submission: StudySubmission; submissions: StudySubmission[] }> {
+    return request(`/api/studies/admin/submissions/${encodeURIComponent(id)}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, note: note ?? null }),
+    });
+  },
+  unpublishStudyPackage(id: string): Promise<{ ok: true }> {
+    return request(`/api/studies/admin/packages/${encodeURIComponent(id)}/unpublish`, { method: 'POST' });
   },
 };

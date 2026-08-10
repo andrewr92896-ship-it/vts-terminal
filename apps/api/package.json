@@ -13,6 +13,7 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "db:verify-positions": "tsx src/trading/verifyPositions.ts",
+    "db:check-sharing": "tsx src/studies/checkSharing.ts",
     "verify:market-macro": "tsx src/trading/verifyMarketMacro.ts",
     "verify:investments": "tsx src/investments/verifyInvestments.ts",
     "verify:migrations": "tsx src/db/verifyMigrations.ts",

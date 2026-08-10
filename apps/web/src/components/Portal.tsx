@@ -49,6 +49,7 @@ import { AdminGuidelines } from '../workspaces/admin/AdminGuidelines';
 import { AdminRuleBreaking } from '../workspaces/admin/AdminRuleBreaking';
 import { AdminWallTemplates } from '../workspaces/admin/AdminWallTemplates';
 import { AdminReviewList } from '../workspaces/admin/AdminReviewList';
+import { AdminStudyLibrary } from '../workspaces/admin/AdminStudyLibrary';
 import { DevBlog } from '../workspaces/admin/DevBlog';
 import {
   HelpHowTo,
@@ -85,6 +86,9 @@ const StudyCreation = lazy(() =>
 );
 const StudyGuidesLibrary = lazy(() =>
   import('../workspaces/studies/StudyGuides').then((m) => ({ default: m.StudyGuidesLibrary })),
+);
+const StudyLibrary = lazy(() =>
+  import('../workspaces/studies/StudyLibrary').then((m) => ({ default: m.StudyLibrary })),
 );
 const TradingTeam = lazy(() =>
   import('../workspaces/myportal/TradingTeam').then((m) => ({ default: m.TradingTeam })),
@@ -178,6 +182,8 @@ function renderScreen(
       return <StudyCreation theme={theme} onNavigate={onNavigate} />;
     case 'st_guides':
       return <StudyGuidesLibrary theme={theme} onNavigate={onNavigate} />;
+    case 'st_packages':
+      return <StudyLibrary theme={theme} onNavigate={onNavigate} />;
     // Admin workspace sections. Access is gated by the sidebar/workspace filter
     // (admins only) and enforced server-side on every admin endpoint.
     case 'ad_users':
@@ -188,6 +194,8 @@ function renderScreen(
       return <AdminGuidelines theme={theme} />;
     case 'ad_rules':
       return <AdminRuleBreaking theme={theme} />;
+    case 'ad_studies':
+      return <AdminStudyLibrary theme={theme} />;
     case 'ad_walls':
       return <AdminWallTemplates theme={theme} />;
     case 'ad_review':

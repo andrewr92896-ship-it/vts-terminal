@@ -1,16 +1,43 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireWorkspace, requirePremium } from '../auth/middleware.js';
-import { CATEGORY_WEIGHT_MODES, EXPLANATION_MODES, PACKAGE_DEPTHS } from '../db/schema.js';
+import { requireAdmin, requireWorkspace, requirePremium } from '../auth/middleware.js';
+import {
+  CATEGORY_WEIGHT_MODES,
+  EXPLANATION_MODES,
+  PACKAGE_DEPTHS,
+  SUBMISSION_STATUSES,
+  type SubmissionStatus,
+} from '../db/schema.js';
 import { validateDocuments, parseForCommit } from '../studies/packageValidate.js';
 import { commitPackage } from '../studies/packageImport.js';
 import {
   canEditPackage,
+  canManagePackage,
   canReadPackage,
   readablePackages,
   scopeOf,
   type PackageViewer,
 } from '../studies/packageAccess.js';
+import {
+  listSharedWithMe,
+  listSharesFor,
+  respondToShare,
+  revokeShare,
+  sharePackage,
+} from '../studies/packageSharing.js';
+import {
+  ATTESTATIONS,
+  ATTESTATION_VERSION,
+  addToLibrary,
+  listPublished,
+  listSubmissions,
+  removeFromLibrary,
+  reviewSubmission,
+  submissionsForPackage,
+  submitPackage,
+  unpublishPackage,
+  withdrawSubmission,
+} from '../studies/packageLibrary.js';
 import {
   MAX_CATEGORIES,
   MAX_LESSONS,
@@ -189,11 +216,28 @@ const manualSchema = z.object({
     .optional(),
 });
 
+// Sharing takes a username (or the display name, which is unique too). It is
+// resolved server-side against the real user table: a typo finds nobody and says
+// so, rather than a package going to whoever happened to be closest.
+const shareSchema = z.object({ handle: z.string().trim().min(1).max(80) });
+const respondSchema = z.object({ accept: z.boolean() });
+// Submitting requires the attestation. A boolean is all that crosses the wire —
+// WHICH wording was agreed to is recorded server-side from ATTESTATION_VERSION,
+// so the client cannot claim to have agreed to a version it never showed.
+const submitSchema = z.object({ attested: z.literal(true) });
+const reviewSchema = z.object({
+  decision: z.enum(['approved', 'rejected', 'changes_requested']),
+  note: z.string().trim().max(2000).nullable().optional(),
+});
+
 export async function studyPackageRoutes(app: FastifyInstance) {
   const guard = { preHandler: requireWorkspace('studies') };
   // Making study content is paid; playing it is not. A package is authoring, so
   // it sits behind the same entitlement the deck/set/guide builders do.
   const create = { preHandler: [requireWorkspace('studies'), requirePremium('studyCreation')] };
+  // Moderation is an administrator's job and has nothing to do with the Studies
+  // opt-in or a membership, so it carries the admin guard alone.
+  const adminGuard = { preHandler: requireAdmin };
 
   const viewerOf = (u: PackageViewer): PackageViewer => ({ id: u.id, teamId: u.teamId, roles: u.roles });
 
@@ -203,7 +247,7 @@ export async function studyPackageRoutes(app: FastifyInstance) {
   app.get('/api/studies/packages', guard, async (request) => {
     const me = viewerOf(request.currentUser!);
     const archived = (request.query as { archived?: string }).archived === 'true';
-    return { packages: await summarize(await readablePackages(me, { archived })), archived };
+    return { packages: await summarize(await readablePackages(me, { archived }), me.id), archived };
   });
 
   // Create the shell. Components and the category blueprint are added after.
@@ -234,7 +278,7 @@ export async function studyPackageRoutes(app: FastifyInstance) {
     const me = viewerOf(request.currentUser!);
     const id = (request.params as { id: string }).id;
     if (!(await canReadPackage(me, id))) return reply.code(404).send(NOT_FOUND);
-    const pkg = await getPackage(id);
+    const pkg = await getPackage(id, me.id);
     if (!pkg) return reply.code(404).send(NOT_FOUND);
     return { package: pkg };
   });
@@ -263,7 +307,7 @@ export async function studyPackageRoutes(app: FastifyInstance) {
     if (!(await canEditPackage(me, id))) return reply.code(404).send(NOT_FOUND);
     const pkg = await archivePackage(id);
     if (!pkg) return reply.code(404).send(NOT_FOUND);
-    return { package: pkg, packages: await summarize(await readablePackages(me)) };
+    return { package: pkg, packages: await summarize(await readablePackages(me), me.id) };
   });
 
   // Restore one. Nothing was changed by archiving, so nothing is rebuilt.
@@ -273,7 +317,7 @@ export async function studyPackageRoutes(app: FastifyInstance) {
     if (!(await canEditPackage(me, id))) return reply.code(404).send(NOT_FOUND);
     const pkg = await unarchivePackage(id);
     if (!pkg) return reply.code(404).send(NOT_FOUND);
-    return { package: pkg, packages: await summarize(await readablePackages(me)) };
+    return { package: pkg, packages: await summarize(await readablePackages(me), me.id) };
   });
 
   // The category blueprint. Sent whole; an entry with an `id` keeps that
@@ -448,6 +492,192 @@ export async function studyPackageRoutes(app: FastifyInstance) {
       if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
       throw err;
     }
+  });
+
+  // ---- Sharing ----
+  //
+  // One person hands a package to another BY USERNAME, and neither of them joins
+  // anything. There is no group, no chat, no follow — a share is permission to
+  // study somebody's content and nothing else, which is what makes it work for a
+  // public signup who is in no trading/private group and never will be.
+  //
+  // Which guard each route carries is deliberate. OFFERING a share is authoring
+  // and sits behind `studyCreation`; ACCEPTING one, and an owner TAKING ACCESS
+  // BACK, are both free. The second of those follows the rule the broker
+  // credentials already set: disconnecting is never gated, because gating it
+  // would strand a lapsed member's content in somebody else's library with no
+  // way to withdraw it.
+  app.post('/api/studies/packages/:id/share', create, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const id = (request.params as { id: string }).id;
+    const parsed = shareSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A username is required' });
+    if (!(await canManagePackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    try {
+      const { share, alreadyShared } = await sharePackage({
+        packageId: id,
+        ownerUserId: me.id,
+        handle: parsed.data.handle,
+      });
+      // Idempotent: sharing the same package with the same person twice is the
+      // same offer, and the client says so rather than implying a second one.
+      //
+      // The refreshed package rides along because sharing CHANGES it — the first
+      // share moves it from private to shared — and a screen that updated only
+      // the recipient list would go on calling a shared package private.
+      return { share, alreadyShared, shares: await listSharesFor(id), package: await getPackage(id, me.id) };
+    } catch (err) {
+      if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.get('/api/studies/packages/:id/shares', guard, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const id = (request.params as { id: string }).id;
+    if (!(await canManagePackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    return { shares: await listSharesFor(id) };
+  });
+
+  // Taking access back. The share row goes; the recipient's PROGRESS does not —
+  // it is their own record of work they actually did, and deleting it would be
+  // destroying data to enforce a permission that is already enforced.
+  app.delete('/api/studies/packages/:id/shares/:shareId', guard, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const { id, shareId } = request.params as { id: string; shareId: string };
+    if (!(await canManagePackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    const ok = await revokeShare(shareId, id);
+    if (!ok) return reply.code(404).send({ error: 'That share no longer exists' });
+    // Same reason as sharing: revoking the last one puts it back to private.
+    return { shares: await listSharesFor(id), package: await getPackage(id, me.id) };
+  });
+
+  // What somebody has been handed. Free — accepting shared content is playing.
+  app.get('/api/studies/shared-with-me', guard, async (request) => {
+    return listSharedWithMe(request.currentUser!.id);
+  });
+
+  app.post('/api/studies/shares/:id/respond', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    const parsed = respondSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'An answer is required' });
+    const ok = await respondToShare(id, me.id, parsed.data.accept);
+    if (!ok) return reply.code(404).send({ error: 'That invitation no longer exists' });
+    return { ...(await listSharedWithMe(me.id)), packages: await summarize(await readablePackages(viewerOf(me)), me.id) };
+  });
+
+  // ---- The VTS Study Library ----
+  //
+  // SUBMITTING IS NOT PUBLISHING. A creator asks; an administrator reads it and
+  // decides; only an approval makes it public. Nothing becomes public because it
+  // was shared privately with somebody, and nothing becomes public on a timer.
+  app.get('/api/studies/library/attestations', guard, async () => {
+    return { version: ATTESTATION_VERSION, statements: ATTESTATIONS };
+  });
+
+  app.post('/api/studies/packages/:id/submit', create, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const id = (request.params as { id: string }).id;
+    const parsed = submitSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Confirm the statements before submitting' });
+    if (!(await canManagePackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    try {
+      const submission = await submitPackage({ packageId: id, userId: me.id, attested: parsed.data.attested });
+      return { submission, package: await getPackage(id, me.id) };
+    } catch (err) {
+      if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  // Taking the request back before anybody has read it. Ungated for the same
+  // reason revoking a share is.
+  app.post('/api/studies/packages/:id/withdraw', guard, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const id = (request.params as { id: string }).id;
+    if (!(await canManagePackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    const ok = await withdrawSubmission(id);
+    if (!ok) return reply.code(409).send({ error: 'This package is not waiting to be reviewed' });
+    return { package: await getPackage(id, me.id), submissions: await submissionsForPackage(id) };
+  });
+
+  // The creator's own record of what they asked for and what came back.
+  app.get('/api/studies/packages/:id/submissions', guard, async (request, reply) => {
+    const me = viewerOf(request.currentUser!);
+    const id = (request.params as { id: string }).id;
+    if (!(await canManagePackage(me, id))) return reply.code(404).send(NOT_FOUND);
+    return { submissions: await submissionsForPackage(id) };
+  });
+
+  // Browsing is free, and so is taking a package up: playing has never been
+  // paid, and a library nobody without a membership can read is not a library.
+  app.get('/api/studies/library', guard, async (request) => {
+    return { entries: await listPublished(request.currentUser!.id) };
+  });
+
+  // No copy is made. The learner studies the same package-backed content
+  // everybody else does, and their progress is their own because progress has
+  // always been keyed by (user, deck).
+  app.post('/api/studies/library/:id/add', guard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    const ok = await addToLibrary(me.id, id);
+    if (!ok) return reply.code(404).send({ error: 'That package is not in the VTS Study Library' });
+    return {
+      entries: await listPublished(me.id),
+      packages: await summarize(await readablePackages(viewerOf(me)), me.id),
+    };
+  });
+
+  app.delete('/api/studies/library/:id', guard, async (request) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    await removeFromLibrary(me.id, id);
+    return {
+      entries: await listPublished(me.id),
+      packages: await summarize(await readablePackages(viewerOf(me)), me.id),
+    };
+  });
+
+  // ---- Moderation ----
+  //
+  // The queue an administrator works. Approving is the only thing on the whole
+  // surface that makes a package public.
+  app.get('/api/studies/admin/submissions', adminGuard, async (request) => {
+    const status = (request.query as { status?: string }).status;
+    const filter = SUBMISSION_STATUSES.includes(status as SubmissionStatus) ? (status as SubmissionStatus) : undefined;
+    return { submissions: await listSubmissions(filter) };
+  });
+
+  app.post('/api/studies/admin/submissions/:id/review', adminGuard, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    const parsed = reviewSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A decision is required' });
+    try {
+      const submission = await reviewSubmission({
+        submissionId: id,
+        reviewerId: me.id,
+        decision: parsed.data.decision,
+        note: parsed.data.note ?? null,
+      });
+      if (!submission) return reply.code(404).send({ error: 'That submission no longer exists' });
+      return { submission, submissions: await listSubmissions('pending') };
+    } catch (err) {
+      if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  // Taking something back out of the library. The package is untouched — this is
+  // the opposite of publishing, not a delete — and it unlocks the content so the
+  // creator can work on it again.
+  app.post('/api/studies/admin/packages/:id/unpublish', adminGuard, async (request, reply) => {
+    const id = (request.params as { id: string }).id;
+    const ok = await unpublishPackage(id);
+    if (!ok) return reply.code(409).send({ error: 'That package is not published' });
+    return { ok: true };
   });
 
   // What the package holds, summarized. The components themselves are read and

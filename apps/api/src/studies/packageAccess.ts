@@ -1,6 +1,14 @@
-import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { studyDecks, studyFlashcardSets, studyGuides, studyPackages, type StudyPackageRow } from '../db/schema.js';
+import {
+  studyDecks,
+  studyFlashcardSets,
+  studyGuides,
+  studyPackageAdds,
+  studyPackageShares,
+  studyPackages,
+  type StudyPackageRow,
+} from '../db/schema.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { contentScopeId } from '../teams/contentScope.js';
 
@@ -25,7 +33,13 @@ import { contentScopeId } from '../teams/contentScope.js';
 // shape they already dealt with. That is deliberate: a guard exception copied
 // into eleven handlers is a guard exception that will be wrong in one of them.
 
-export type PackageRight = 'read' | 'edit';
+// Three rights, and keeping them apart is what makes the public library safe.
+//
+//   read   — study it: play the game, take tests, read the slides.
+//   edit   — change its content. LOCKED on a published package (see below).
+//   manage — the owner's own controls: share, revoke, submit, archive. Not
+//            locked by publication, because withdrawing is how you get out of it.
+export type PackageRight = 'read' | 'edit' | 'manage';
 
 /** The three content types a package can hold. */
 export type ContentKind = 'deck' | 'flashcards' | 'guide';
@@ -55,43 +69,85 @@ export function packageScopeKey(ownerUserId: string): string {
 /**
  * Whether a direct share grants this viewer access.
  *
- * Direct user-to-user sharing is a later handoff: it needs its own table and an
- * accept step, and neither exists yet, so there is nothing to consult and the
- * answer is no for everyone. It is a named function rather than an inline
- * `false` so that handoff has exactly one place to fill in — and so nothing in
- * this module reads as though sharing already works.
+ * Only an ACCEPTED share does. A pending one is an offer the recipient has not
+ * answered, and a declined one is an offer they refused — neither is access, and
+ * treating a pending share as access would mean an offer nobody accepted quietly
+ * handed out somebody's content.
+ *
+ * An ARCHIVED package grants nothing through a share either. Archiving is how an
+ * owner puts a package away, and content that has been put away must not go on
+ * appearing in other people's libraries as though it were live.
  */
-async function sharedWithViewer(_viewer: PackageViewer, _pkg: StudyPackageRow): Promise<boolean> {
-  return false;
+async function sharedWithViewer(viewer: PackageViewer, pkg: StudyPackageRow): Promise<boolean> {
+  if (pkg.archivedAt) return false;
+  const row = (
+    await db
+      .select({ id: studyPackageShares.id })
+      .from(studyPackageShares)
+      .where(
+        and(
+          eq(studyPackageShares.packageId, pkg.id),
+          eq(studyPackageShares.recipientUserId, viewer.id),
+          eq(studyPackageShares.status, 'accepted'),
+        ),
+      )
+      .limit(1)
+  )[0];
+  return !!row;
+}
+
+/** Whether this package is published in the VTS Study Library. */
+function isPublished(pkg: StudyPackageRow): boolean {
+  return pkg.visibility === 'public' && !pkg.archivedAt;
 }
 
 /**
  * What this viewer may do with one package — the single authority, so nothing
  * can answer "may they read it" while missing a way in.
  */
-export async function rightsFor(
-  viewer: PackageViewer,
-  pkg: StudyPackageRow,
-): Promise<{ read: boolean; edit: boolean }> {
-  // The owner, and administrators for support. Editing stops here: a share
-  // recipient is read-only in V1, so there is deliberately no third writer.
-  if (pkg.ownerUserId === viewer.id) return { read: true, edit: true };
-  if (isAdmin(parseRoles(viewer))) return { read: true, edit: true };
-  // A published package is readable by any signed-in account. `submitted` is
-  // NOT — it means awaiting admin review, which is the owner asking for
-  // publication rather than having been granted it.
-  if (pkg.visibility === 'public') return { read: true, edit: false };
-  return { read: await sharedWithViewer(viewer, pkg), edit: false };
+export interface PackageRights {
+  read: boolean;
+  edit: boolean;
+  manage: boolean;
+  /** Published, so its content is frozen against in-place edits. */
+  locked: boolean;
+}
+
+export async function rightsFor(viewer: PackageViewer, pkg: StudyPackageRow): Promise<PackageRights> {
+  // PUBLISHED CONTENT IS FROZEN. An approved package is public on the strength
+  // of what a reviewer read; letting the owner keep editing it in place would
+  // make the review meaningless, because what people study could drift away from
+  // what was approved without anybody seeing it happen. To change it, the owner
+  // withdraws or an admin unpublishes, and the new version goes back for review.
+  const locked = isPublished(pkg);
+  const admin = isAdmin(parseRoles(viewer));
+
+  if (pkg.ownerUserId === viewer.id) {
+    // The owner keeps MANAGE while published — withdrawing is how they get out
+    // of the lock, so taking that away would trap them in it.
+    return { read: true, edit: !locked, manage: true, locked };
+  }
+  if (admin) return { read: true, edit: true, manage: true, locked };
+
+  // Anyone signed in may read a published package: that is what published means,
+  // and it is how the library is browsable. `submitted` is NOT public — it is
+  // the owner asking, not having been granted.
+  if (isPublished(pkg)) return { read: true, edit: false, manage: false, locked };
+
+  // Otherwise it comes down to a direct share, which is read-only in V1.
+  return { read: await sharedWithViewer(viewer, pkg), edit: false, manage: false, locked };
 }
 
 /** The same decision from an id. */
-export async function packageRights(
-  viewer: PackageViewer,
-  packageId: string,
-): Promise<{ read: boolean; edit: boolean }> {
+export async function packageRights(viewer: PackageViewer, packageId: string): Promise<PackageRights> {
   const pkg = (await db.select().from(studyPackages).where(eq(studyPackages.id, packageId)).limit(1))[0];
-  if (!pkg) return { read: false, edit: false };
+  if (!pkg) return { read: false, edit: false, manage: false, locked: false };
   return rightsFor(viewer, pkg);
+}
+
+/** Whether this viewer may share, revoke, submit or archive this package. */
+export async function canManagePackage(viewer: PackageViewer, packageId: string): Promise<boolean> {
+  return (await packageRights(viewer, packageId)).manage;
 }
 
 /** Whether this viewer may read (and play) a package's content. */
@@ -127,7 +183,24 @@ export async function readablePackages(
   // Study Library and creation views, because those lists are widened by
   // exactly this set of ids. `archived: true` asks for them instead, so an
   // owner can find and restore one.
-  const reachable = or(eq(studyPackages.ownerUserId, viewer.id), eq(studyPackages.visibility, 'public'));
+  // What belongs in somebody's LIBRARY: their own packages, the ones accepted
+  // from another person, and the published ones they chose to add.
+  //
+  // Deliberately NOT every published package. Reading one is open to anybody, but
+  // the whole public library dropped into everyone's study game list is not a
+  // library — it is noise, and it would grow without limit. Browsing the library
+  // is its own list (`listPublished`); this is what a person has taken up.
+  const [shared, added] = await Promise.all([
+    db
+      .select({ packageId: studyPackageShares.packageId })
+      .from(studyPackageShares)
+      .where(and(eq(studyPackageShares.recipientUserId, viewer.id), eq(studyPackageShares.status, 'accepted'))),
+    db.select({ packageId: studyPackageAdds.packageId }).from(studyPackageAdds).where(eq(studyPackageAdds.userId, viewer.id)),
+  ]);
+  const mine = [...new Set([...shared, ...added].map((r) => r.packageId))];
+  const reachable = mine.length
+    ? or(eq(studyPackages.ownerUserId, viewer.id), inArray(studyPackages.id, mine))
+    : eq(studyPackages.ownerUserId, viewer.id);
   const rows = await db
     .select()
     .from(studyPackages)
@@ -141,6 +214,41 @@ export async function readablePackages(
  */
 export async function readablePackageIds(viewer: PackageViewer): Promise<string[]> {
   return (await readablePackages(viewer)).map((p) => p.id);
+}
+
+/**
+ * Everybody who studies this package — the owner, whoever accepted a share, and
+ * whoever added it from the public library.
+ *
+ * THIS IS WHAT A PACKAGE LEADERBOARD RANKS. Participation follows package
+ * access and nothing else: no trading team, no private group, no follow. It is
+ * deliberately narrower than "may read it" — a published package is readable by
+ * anyone signed in, but appearing on its board means having chosen to take it
+ * up, which is what `study_package_adds` records.
+ *
+ * Admins are not added. Their reach is for support, and quietly enrolling every
+ * administrator on every board would be a strange thing for a leaderboard to do.
+ */
+export async function packageAudience(packageId: string): Promise<string[]> {
+  const pkg = (
+    await db.select({ ownerUserId: studyPackages.ownerUserId }).from(studyPackages).where(eq(studyPackages.id, packageId)).limit(1)
+  )[0];
+  if (!pkg) return [];
+  const [shared, added] = await Promise.all([
+    db
+      .select({ userId: studyPackageShares.recipientUserId })
+      .from(studyPackageShares)
+      .where(and(eq(studyPackageShares.packageId, packageId), eq(studyPackageShares.status, 'accepted'))),
+    db.select({ userId: studyPackageAdds.userId }).from(studyPackageAdds).where(eq(studyPackageAdds.packageId, packageId)),
+  ]);
+  return [...new Set([pkg.ownerUserId, ...shared.map((r) => r.userId), ...added.map((r) => r.userId)])];
+}
+
+/** The package a piece of content belongs to, or null if it is legacy content. */
+export async function packageIdOf(kind: ContentKind, contentId: string): Promise<string | null> {
+  const t = CONTENT_TABLES[kind];
+  const row = (await db.select({ packageId: t.packageId }).from(t.table).where(eq(t.id, contentId)).limit(1))[0];
+  return row?.packageId ?? null;
 }
 
 const CONTENT_TABLES = {

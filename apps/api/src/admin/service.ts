@@ -73,8 +73,11 @@ import {
   studyFlashcardSets,
   studyGuides,
   studyPackages,
+  studyPackageAdds,
   studyPackageCategories,
   studyPackageLessons,
+  studyPackageShares,
+  studyPackageSubmissions,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -635,11 +638,37 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
         .delete(studyPackageCategories)
         .where(inArray(studyPackageCategories.packageId, ownedPackageIds));
       await tx.delete(studyPackageLessons).where(inArray(studyPackageLessons.packageId, ownedPackageIds));
+      // Everything hanging off the package this account owned goes with it: the
+      // shares it handed out, its library submissions, and the rows recording
+      // that other people had taken it up. Leaving any of them would leave a row
+      // pointing at a package id that resolves to nothing, since the foreign key
+      // pragma is never on.
+      await tx.delete(studyPackageShares).where(inArray(studyPackageShares.packageId, ownedPackageIds));
+      await tx.delete(studyPackageSubmissions).where(inArray(studyPackageSubmissions.packageId, ownedPackageIds));
+      await tx.delete(studyPackageAdds).where(inArray(studyPackageAdds.packageId, ownedPackageIds));
       await tx.delete(studyPackages).where(inArray(studyPackages.id, ownedPackageIds));
     }
     // A package somebody else owns that this account merely authored keeps its
     // authorship link dropped, like the team content below.
     await tx.update(studyPackages).set({ createdBy: null }).where(eq(studyPackages.createdBy, targetId));
+    // This account's own side of OTHER people's packages: shares they were given
+    // or handed out, submissions they made or reviewed, and library adds. The
+    // package itself belongs to somebody else and is untouched — only this
+    // person's relationship to it goes.
+    await tx.delete(studyPackageShares).where(eq(studyPackageShares.recipientUserId, targetId));
+    await tx
+      .update(studyPackageShares)
+      .set({ sharedByUserId: null })
+      .where(eq(studyPackageShares.sharedByUserId, targetId));
+    await tx.delete(studyPackageAdds).where(eq(studyPackageAdds.userId, targetId));
+    await tx
+      .update(studyPackageSubmissions)
+      .set({ submittedByUserId: null })
+      .where(eq(studyPackageSubmissions.submittedByUserId, targetId));
+    await tx
+      .update(studyPackageSubmissions)
+      .set({ reviewedByUserId: null })
+      .where(eq(studyPackageSubmissions.reviewedByUserId, targetId));
     // Team-SHARED study content (decks, flashcard sets, guides) survives the
     // author — just drop the authorship link, mirroring the news feed above.
     await tx.update(studyDecks).set({ createdBy: null }).where(eq(studyDecks.createdBy, targetId));
