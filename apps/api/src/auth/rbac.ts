@@ -205,6 +205,13 @@ export interface PublicUser {
   // Eastern default, so the client has one value to format with and no
   // "unset" state to reason about.
   displayTimezone: string;
+  // The screen the terminal opens on, as raw workspace/section keys, or null
+  // when the user has never chosen. Null is not a gap to fill in here: what an
+  // account can actually reach depends on roles, opt-ins and membership, all of
+  // which move after this is stored, so the CLIENT resolves it on every launch
+  // and falls back when the stored screen is out of reach.
+  homeWorkspace: string | null;
+  homeScreen: string | null;
   // Off the public study leaderboards. The board still shows them their own
   // row — opting out hides you from other people, not from yourself.
   hideFromLeaderboards: boolean;
@@ -301,6 +308,8 @@ export function toPublicUser(
     // come off the same payload.
     badges: withMembershipBadge(parseBadges(u), membership.tier),
     displayTimezone: u.displayTimezone ?? DEFAULT_DISPLAY_TIMEZONE,
+    homeWorkspace: u.homeWorkspace ?? null,
+    homeScreen: u.homeScreen ?? null,
     hideFromLeaderboards: u.hideFromLeaderboards,
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,

@@ -164,7 +164,36 @@ export interface NotifPrefFlags {
 }
 
 // How a Pushover test is sent. Mirrors the server's PushoverTestKind.
-export type PushoverTestKind = 'standard' | 'emergency';
+export type PushoverTestKind = 'standard' | 'repeating';
+
+// How loud one trade event is. Mirrors the server's NotifLevel, and the order
+// here is the order the picker draws — quietest first.
+export const NOTIF_LEVELS = ['silent', 'normal', 'alert', 'repeating'] as const;
+export type NotifLevel = (typeof NOTIF_LEVELS)[number];
+export type NotifPrefLevels = Record<keyof NotifPrefFlags, NotifLevel>;
+
+// A repeating alert still sounding on this user's phone.
+export interface LiveAlert {
+  id: string;
+  title: string;
+  body: string;
+  kind: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface AlertRepeatPrefs {
+  repeatEverySeconds: number;
+  repeatForSeconds: number;
+  // The master switch for this ACCOUNT (phone alerts are per device), and
+  // whether somebody else in your private group may buzz your phone.
+  accountAlerts: boolean;
+  groupAlerts: boolean;
+}
+
+// How loud a group nudge is sent. No message ever travels — the notification
+// says who sent it and nothing more.
+export type GroupAlertKind = 'standard' | 'repeating';
 
 
 // Status of the caller's home-screen widget token (never the token itself,
@@ -290,6 +319,10 @@ export const api = {
     avatar?: string;
     // 'auto', or an IANA zone name. The server refuses a name it cannot format.
     displayTimezone?: string;
+    // The screen the terminal opens on. Nullable together — clearing the home
+    // page means going back to the default, which is both set to null.
+    homeWorkspace?: string | null;
+    homeScreen?: string | null;
     hideFromLeaderboards?: boolean;
   }): Promise<{ user: User }> {
     return request('/api/auth/profile', {
@@ -1625,13 +1658,50 @@ export const api = {
     return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({ kind }) });
   },
   // ---- Per-user notification preferences ----
-  notificationPrefs(): Promise<{ targets: NotifTarget[]; prefs: Record<string, NotifPrefFlags> }> {
+  notificationPrefs(): Promise<{
+    targets: NotifTarget[];
+    prefs: Record<string, NotifPrefFlags>;
+    levels: Record<string, NotifPrefLevels>;
+  }> {
     return request('/api/notification-prefs');
   },
-  setNotificationPref(targetUserId: string, flags: NotifPrefFlags): Promise<{ ok: true }> {
+  // Flags and levels are saved together — the panel holds both, and sending only
+  // half would leave the server guessing at the other.
+  setNotificationPref(
+    targetUserId: string,
+    flags: NotifPrefFlags,
+    levels: NotifPrefLevels,
+  ): Promise<{ ok: true }> {
     return request(`/api/notification-prefs/${targetUserId}`, {
       method: 'PUT',
-      body: JSON.stringify(flags),
+      body: JSON.stringify({ flags, levels }),
+    });
+  },
+  // ---- Repeating alerts ----
+  alertRepeatPrefs(): Promise<{ prefs: AlertRepeatPrefs }> {
+    return request('/api/pushover/repeat-prefs');
+  },
+  saveAlertRepeatPrefs(prefs: Partial<AlertRepeatPrefs>): Promise<{ prefs: AlertRepeatPrefs }> {
+    return request('/api/pushover/repeat-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
+  },
+  // Nudge everybody else in your private group. Answers with how many people it
+  // actually reached, so the sender is told the truth rather than a cheerful
+  // "sent" when everyone has group alerts switched off.
+  sendGroupAlert(kind: GroupAlertKind): Promise<{ recipients: number }> {
+    return request('/api/notifications/group-alert', {
+      method: 'POST',
+      body: JSON.stringify({ kind }),
+    });
+  },
+  liveAlerts(): Promise<{ alerts: LiveAlert[] }> {
+    return request('/api/pushover/live-alerts');
+  },
+  // No id clears everything still repeating — what "I have opened the terminal"
+  // means.
+  acknowledgeAlerts(id?: string): Promise<{ cleared: number }> {
+    return request('/api/pushover/acknowledge', {
+      method: 'POST',
+      body: JSON.stringify(id ? { id } : {}),
     });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {

@@ -80,6 +80,13 @@ const profileSchema = z
       .max(64)
       .refine(isUsableTimezone, { message: 'Unknown time zone' })
       .optional(),
+    // The screen the terminal opens on. Raw workspace/section keys, kept as
+    // opaque strings on purpose: the server has no business knowing the client's
+    // nav shape, and what a given account can reach is resolved at launch
+    // anyway. Both nullable together — clearing the home page means going back
+    // to the default, which is two nulls.
+    homeWorkspace: z.string().trim().max(40).nullable().optional(),
+    homeScreen: z.string().trim().max(40).nullable().optional(),
   })
   .refine(
     (v) =>
@@ -88,6 +95,8 @@ const profileSchema = z
       v.email != null ||
       v.avatar !== undefined ||
       v.displayTimezone != null ||
+      v.homeWorkspace !== undefined ||
+      v.homeScreen !== undefined ||
       v.hideFromLeaderboards != null,
     { message: 'Nothing to update' },
   );
@@ -223,6 +232,8 @@ export async function authRoutes(app: FastifyInstance) {
       email?: string;
       avatar?: string | null;
       displayTimezone?: string;
+      homeWorkspace?: string | null;
+      homeScreen?: string | null;
       hideFromLeaderboards?: boolean;
       updatedAt: Date;
     } = {
@@ -236,6 +247,16 @@ export async function authRoutes(app: FastifyInstance) {
 
     if (parsed.data.displayTimezone != null) {
       patch.displayTimezone = parsed.data.displayTimezone;
+    }
+
+    // The pair moves together: a section key means nothing without the workspace
+    // it belongs to, so a half-set home page would be a setting that cannot be
+    // resolved. An empty string clears, matching how `avatar` above works.
+    if (parsed.data.homeWorkspace !== undefined) {
+      patch.homeWorkspace = parsed.data.homeWorkspace || null;
+    }
+    if (parsed.data.homeScreen !== undefined) {
+      patch.homeScreen = parsed.data.homeScreen || null;
     }
 
     if (parsed.data.username != null) {

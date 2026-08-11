@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireMarkets, requirePremium } from '../auth/middleware.js';
+import { requireMarkets, requirePremium, requireTradingTeams } from '../auth/middleware.js';
 import {
+  acknowledgeLiveAlerts,
   getPushoverKey,
   isLikelyUserKey,
   pushoverConfigured,
@@ -10,6 +11,10 @@ import {
   sendPushoverTest,
   type PushoverTestKind,
 } from '../notifications/pushover.js';
+import { getAlertPrefs, setAlertPrefs } from '../notifications/alertPrefs.js';
+import { GroupAlertError, sendGroupAlert } from '../notifications/groupAlerts.js';
+import { isDemoUser } from '../demo/identity.js';
+import { liveAlerts, resolveByCallbackToken } from '../notifications/pushoverReceipts.js';
 
 // Pushover connection management. Each user pastes their own Pushover "user
 // key"; the application token lives in server config.
@@ -69,12 +74,106 @@ export async function pushoverRoutes(app: FastifyInstance) {
   // never an unexpected repeating one.
   app.post('/api/pushover/test', paid, async (request, reply) => {
     if (!pushoverConfigured()) return reply.code(503).send({ error: 'Pushover is not configured on the server' });
+    // 'emergency' is the old name for 'repeating' and is still accepted: the web
+    // app is a service-worker-cached PWA, so a browser on yesterday's bundle can
+    // still be posting it.
     const parsed = z
-      .object({ kind: z.enum(['standard', 'emergency']).optional() })
+      .object({ kind: z.enum(['standard', 'repeating', 'emergency']).optional() })
       .safeParse(request.body ?? {});
-    const kind: PushoverTestKind = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
+    const raw = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
+    const kind: PushoverTestKind = raw === 'standard' ? 'standard' : 'repeating';
     const ok = await sendPushoverTest(request.currentUser!.id, kind);
     if (!ok) return reply.code(400).send({ error: 'Connect your Pushover user key first, or check that it’s valid.' });
+    return { ok: true };
+  });
+
+  // ---- Repeating alerts: timing, and acknowledging from the terminal ----
+
+  // How often a repeating alert repeats and for how long. On `signedIn` rather
+  // than `paid` deliberately: reading and changing your own alert timing is not
+  // a use of the Pushover credential, and a lapsed member must not be stuck with
+  // a repeat setting they can no longer edit.
+  // Carries the two account switches as well as the repeat timing — one row,
+  // one read, one save. Kept on the `/pushover` path it shipped on so a browser
+  // running a cached bundle keeps working.
+  app.get('/api/pushover/repeat-prefs', signedIn, async (request) => {
+    return { prefs: await getAlertPrefs(request.currentUser!.id) };
+  });
+
+  app.put('/api/pushover/repeat-prefs', signedIn, async (request, reply) => {
+    const parsed = z
+      .object({
+        repeatEverySeconds: z.number().int().optional(),
+        repeatForSeconds: z.number().int().optional(),
+        accountAlerts: z.boolean().optional(),
+        groupAlerts: z.boolean().optional(),
+      })
+      .safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid alert settings' });
+    // Every field is optional and an absent one is left alone, so a client that
+    // only knows about repeat timing cannot switch somebody's alerts off by
+    // omission. Out-of-range numbers are clamped rather than refused — see
+    // alertPrefs.ts.
+    return { prefs: await setAlertPrefs(request.currentUser!.id, parsed.data) };
+  });
+
+  // Nudge everybody else in your private group. No message — the notification
+  // says who sent it and nothing more.
+  //
+  // Three guards, and each answers a different question: the grant says private
+  // groups are available to this account at all, the tier says group alerts are
+  // paid, and the demo is refused because it writes to other people's phones.
+  app.post(
+    '/api/notifications/group-alert',
+    { preHandler: [requireMarkets, requireTradingTeams, requirePremium('teams')] },
+    async (request, reply) => {
+      const me = request.currentUser!;
+      if (isDemoUser(me)) return reply.code(403).send({ error: 'The demo cannot send notifications.' });
+      const parsed = z
+        .object({ kind: z.enum(['standard', 'repeating']).optional() })
+        .safeParse(request.body ?? {});
+      const kind = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
+      try {
+        return await sendGroupAlert(
+          { id: me.id, teamId: me.teamId ?? null, displayName: me.displayName, username: me.username },
+          kind,
+        );
+      } catch (err) {
+        if (err instanceof GroupAlertError) return reply.code(400).send({ error: err.message });
+        throw err;
+      }
+    },
+  );
+
+  // What is still sounding on this user's phone. Polled by the terminal so the
+  // banner appears without a reload, and read on arrival so opening the app can
+  // silence anything repeating.
+  app.get('/api/pushover/live-alerts', signedIn, async (request) => {
+    return { alerts: await liveAlerts(request.currentUser!.id) };
+  });
+
+  // Acknowledge — the terminal-side equivalent of pressing the button in the
+  // Pushover app. With no id, everything still repeating is cleared, which is
+  // what "silence it because I have opened the terminal" needs.
+  app.post('/api/pushover/acknowledge', signedIn, async (request) => {
+    const parsed = z.object({ id: z.string().optional() }).safeParse(request.body ?? {});
+    const only = parsed.success ? parsed.data.id : undefined;
+    const cleared = await acknowledgeLiveAlerts(request.currentUser!.id, only);
+    return { cleared };
+  });
+
+  // Pushover POSTs here when the user acknowledges on their PHONE, so the
+  // terminal's banner clears too and the two never disagree about what is still
+  // sounding.
+  //
+  // Deliberately unauthenticated — Pushover carries no session — which is
+  // exactly why the token in the path is unguessable and is the only thing
+  // matched on. It answers 200 whatever happens: Pushover retries a callback it
+  // considers failed, and there is nothing useful to retry here. Nothing about
+  // the account is disclosed either way.
+  app.post('/api/pushover/callback/:token', async (request) => {
+    const token = (request.params as { token: string }).token;
+    if (token) await resolveByCallbackToken(token).catch(() => false);
     return { ok: true };
   });
 }

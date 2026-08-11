@@ -104,6 +104,13 @@ export interface User {
   // IANA zone name. Stored on the account, so it follows them between devices.
   // Never null: an account that has never chosen gets the Eastern default.
   displayTimezone: string;
+  // The screen the terminal opens on (My Terminal ▸ Settings), as raw
+  // workspace/section keys. Null = never chosen, which keeps the original
+  // behaviour. Resolved at launch rather than trusted: what this account can
+  // reach depends on roles, opt-ins and membership, all of which can move after
+  // the choice was stored, so an unreachable home falls back.
+  homeWorkspace: string | null;
+  homeScreen: string | null;
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards to teammates; the Trading workspace itself stays shared.
   teamId: string | null;

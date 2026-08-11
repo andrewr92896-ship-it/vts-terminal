@@ -41,6 +41,7 @@ export type ReviewKey =
   | 'brokerConnections'
   | 'teams'
   | 'teamChat'
+  | 'groupAlerts'
   | 'tradingAlerts'
   | 'strategySessions'
   | 'newsBias'
@@ -73,6 +74,15 @@ export const REVIEW_MARKS: Record<ReviewKey, ReviewMark> = {
   teamChat: {
     wip: 'Private groups are still being built ahead of launch.',
     risk: 'User-generated content about trades — where advice between users would actually occur.',
+  },
+  // Owner instruction, 2026-08. One member's button making another member's
+  // phone sound through silent mode is a real-time prompt to act, sent between
+  // users, on a trading desk. It carries NO message deliberately — the sender's
+  // name is the whole payload — which is what keeps it a nudge rather than a
+  // signal, and that distinction is exactly what wants reviewing.
+  groupAlerts: {
+    wip: 'Private groups are still being built ahead of launch.',
+    risk: 'One user can make another user’s phone sound. Needs compliance review before public launch.',
   },
 
   // ---- Advice-flavoured surfaces ----

@@ -31,6 +31,7 @@ const LABELS: Record<ReviewKey, string> = {
   brokerConnections: 'Broker connections',
   teams: 'Private groups — shared position visibility',
   teamChat: 'Group chat',
+  groupAlerts: 'Group notifications — one member buzzing another',
   tradingAlerts: 'Trading alerts (TradingView webhooks)',
   strategySessions: 'Strategy Sessions — the Bull / Bear / Two-way bias',
   newsBias: 'Market News — the tape-read glyph',
@@ -50,6 +51,8 @@ const WHERE: Record<ReviewKey, string> = {
   brokerConnections: 'My Terminal ▸ Settings ▸ Broker connections',
   teams: 'My Terminal ▸ My Group, and the Live Wall’s Preset Settings',
   teamChat: 'The chat bubble’s Group chat tab, and the Group Chat wall tile',
+  groupAlerts:
+    'Advanced Trading ▸ Alert Settings (the Group notifications switch and Notify your group), and My Terminal ▸ My Group',
   tradingAlerts: 'The Alerts tile in the Live Wall’s tile picker',
   strategySessions: 'Advanced Trading ▸ Strategy Sessions, in the sidebar',
   newsBias: 'News ▸ Market News, at the foot of the feed',

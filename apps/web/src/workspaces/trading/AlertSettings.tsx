@@ -3,9 +3,11 @@ import { useAuth } from '../../auth/AuthContext';
 import { canAccessWorkspace, hasEntitlement } from '../../auth/access';
 import { UpgradeNotice } from '../../components/UpgradeNotice';
 import {
+  GroupAlertSender,
   PerUserNotificationsSection,
   PhoneNotificationsSection,
   PushoverSection,
+  RepeatTimingSection,
   SendTestSection,
   sectionLabel,
   hintStyle,
@@ -86,6 +88,18 @@ export function AlertSettings() {
         {/* ---- Included with every account ---- */}
         {!isDemo && <PhoneNotificationsSection accent={accent} accentText={accentText} push={push} />}
 
+        {/* Directly under phone notifications (owner instruction, 2026-08) —
+            it is the counterpart of the Group notifications switch that panel
+            ends with: that one says whether your group may buzz you, this is
+            how you buzz them. The same component renders on My Group, so the
+            two places cannot drift apart. */}
+        {!isDemo && (
+          <>
+            <Divider />
+            <GroupAlertSender accent={accent} accentText={accentText} />
+          </>
+        )}
+
         {!isDemo && (
           <>
             <Divider />
@@ -117,6 +131,11 @@ export function AlertSettings() {
           <>
             <Divider />
             <PerUserNotificationsSection accent={accent} accentText={accentText} />
+            <Divider />
+            {/* Directly under the per-event levels, because it is the setting
+                the Repeating rung above depends on — reading them apart would
+                leave "Repeating" meaning nothing in particular. */}
+            <RepeatTimingSection />
           </>
         )}
 

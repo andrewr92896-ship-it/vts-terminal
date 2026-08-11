@@ -9,6 +9,7 @@ import { Icon } from '../../components/Icon';
 import { TierMark } from '../../components/TierMark';
 import { ReviewMark } from '../../components/ReviewMark';
 import { tierOfFeature } from '../../auth/access';
+import { GroupAlertSender } from '../../components/NotificationSettings';
 import {
   SectionHeader,
   dangerSolidBtn,
@@ -323,6 +324,14 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
           </div>
         </div>
       )}
+
+      {/* Nudge the group. The same component Alert Settings renders, so the two
+          places can never offer different things — and it is here as well as
+          there because this is the screen you are on when you are thinking
+          about the people in your group. */}
+      <div style={{ ...panel(theme), marginBottom: 16 }}>
+        <GroupAlertSender accent={grad} accentText={theme.accentText} />
+      </div>
 
       {/* Roster */}
       <div style={{ ...panel(theme), marginBottom: 16 }}>

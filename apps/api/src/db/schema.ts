@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, unique, index } from 'drizzle-orm/sqlite-core';
 
 // The four roles match the prototype's access matrix exactly.
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
@@ -63,6 +63,15 @@ export const users = sqliteTable('users', {
   // Null = never chosen, which resolves to Eastern — the clock every stamp was
   // on before the setting existed. See DEFAULT_DISPLAY_TIMEZONE in auth/rbac.ts.
   displayTimezone: text('display_timezone'),
+  // The screen the terminal opens on (My Terminal ▸ Settings). Raw workspace and
+  // section KEYS — which is why every rename in this codebase changes a label
+  // and never a key. Both null = no choice made, which falls through to the
+  // existing behaviour (pickInitialWorkspace, then that workspace's
+  // DEFAULT_SCREEN). Deliberately not validated in the database: what an account
+  // can reach depends on roles, opt-ins and membership, all of which move after
+  // this is written, so the check happens on every read (migration 0122).
+  homeWorkspace: text('home_workspace'),
+  homeScreen: text('home_screen'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
   viewBrokerage: integer('view_brokerage', { mode: 'boolean' })
@@ -979,12 +988,90 @@ export const notificationPrefs = sqliteTable(
     notifyMoveSl: integer('notify_move_sl', { mode: 'boolean' }).notNull().default(true),
     notifyPlaceTp: integer('notify_place_tp', { mode: 'boolean' }).notNull().default(true),
     notifyMoveTp: integer('notify_move_tp', { mode: 'boolean' }).notNull().default(true),
+    // How loud each event is — 'silent' | 'normal' | 'alert' | 'repeating',
+    // mapping to Pushover priorities -1 / 0 / 1 / 2. The booleans above still
+    // decide WHETHER you hear about the event; these decide what the phone does
+    // when you do. Default 'alert' is exactly what every notification sent
+    // before this existed, so nothing stored changed meaning (migration 0121).
+    levelOpen: text('level_open').notNull().default('alert'),
+    levelClose: text('level_close').notNull().default('alert'),
+    levelPlaceSl: text('level_place_sl').notNull().default('alert'),
+    levelMoveSl: text('level_move_sl').notNull().default('alert'),
+    levelPlaceTp: text('level_place_tp').notNull().default('alert'),
+    levelMoveTp: text('level_move_tp').notNull().default('alert'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => ({ userTarget: unique().on(t.userId, t.targetUserId) }),
 );
 export type NotificationPrefRow = typeof notificationPrefs.$inferSelect;
+
+// ---- Repeating-alert timing (one row per user) ----
+// How often a 'repeating' notification repeats, and for how long, before
+// Pushover gives up. One row per user rather than per watched trader: anything
+// worth waking somebody for wants the same urgency, and six copies of two
+// numbers is six things to keep in step. Bounds are Pushover's own — retry at
+// least 30s, expire at most 10800s — and are enforced in the service.
+export const alertPrefs = sqliteTable('alert_prefs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  repeatEverySeconds: integer('repeat_every_seconds').notNull().default(30),
+  repeatForSeconds: integer('repeat_for_seconds').notNull().default(300),
+  // The MASTER switch for this account (migration 0123). Phone notifications are
+  // per device; this is per account, so off silences every channel on every
+  // device. It gates the existing notification paths too — a master switch that
+  // only governed new features would be a lie.
+  accountAlerts: integer('account_alerts', { mode: 'boolean' }).notNull().default(true),
+  // Whether somebody else in this user's private group may buzz their phone.
+  // A different question from the master switch: one is "do I want to be
+  // notified", the other is "may other people do it".
+  groupAlerts: integer('group_alerts', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type AlertPrefRow = typeof alertPrefs.$inferSelect;
+
+// ---- Live repeating alerts ----
+// Pushover returns a receipt id for every priority-2 message, and that receipt
+// is the ONLY way to stop the repeats from this side — so it is stored, or the
+// terminal would be drawing an Acknowledge button it could not honour.
+//
+// `callbackToken` is what makes the public callback route safe. Pushover signs
+// nothing, so the callback URL carries this unguessable value and the route
+// matches on it; without it, anybody who could guess a receipt could mark
+// somebody else's alert answered.
+//
+// Rows are KEPT after resolution rather than deleted — they are the record that
+// an alert fired and that somebody answered it, which is what "did I sleep
+// through one?" needs. A null `resolvedAt` is what makes an alert live.
+export const pushoverReceipts = sqliteTable(
+  'pushover_receipts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    receipt: text('receipt').notNull(),
+    callbackToken: text('callback_token').notNull().unique(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    // What produced it: a trade event key ('open', 'moveSl', …) or 'test'.
+    kind: text('kind').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    // When Pushover stops retrying on its own, so a row that nobody answered
+    // can stop being reported as live without a second call to Pushover.
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+    // 'terminal' (acknowledged here), 'pushover' (acknowledged on the phone,
+    // via the callback), or 'expired'.
+    resolvedBy: text('resolved_by'),
+  },
+  (t) => ({ live: index('pushover_receipts_live_idx').on(t.userId, t.resolvedAt) }),
+);
+export type PushoverReceiptRow = typeof pushoverReceipts.$inferSelect;
 
 // One row per user holding their Strategy Session notification preferences: buzz
 // me when one of my sessions opens, when it closes, and/or a configurable number

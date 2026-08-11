@@ -11,6 +11,7 @@ import {
   type Theme,
 } from '../theme/themes';
 import { NAV, navFor, accentFor, OPT_IN_WORKSPACES, TEAM_ONLY_SECTIONS } from '../theme/nav';
+import { homeOptions, pickInitialWorkspace, resolveHome } from '../theme/homeScreen';
 import { C } from '../theme/tokens';
 import {
   canAccessEmployeePortal,
@@ -20,6 +21,7 @@ import {
 } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
+import { LiveAlertBanner } from './LiveAlertBanner';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
 import { DemoTour } from './DemoTour';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -254,12 +256,6 @@ const RULES_DOT_SECTION = 'ad_rules';
 // Preferring My Terminal here would land a trader on Premium Features instead
 // of their board. An account without the desk opt-in has no `trading` in its
 // allowed list, so it falls through to My Terminal exactly as before.
-function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
-  if (allowed.includes('trading')) return 'trading';
-  if (allowed.includes('myportal')) return 'myportal';
-  return allowed[0] ?? 'studies';
-}
-
 // The breadcrumb label for the current section (uses the nav config).
 function sectionLabelFor(workspace: WorkspaceKey, screen: string): string {
   const nav = navFor(workspace);
@@ -296,10 +292,23 @@ export function Portal() {
     [allowed],
   );
 
-  const [workspace, setWorkspace] = useState<WorkspaceKey>(() =>
-    pickInitialWorkspace(workspacesForRoles(user!.roles, user!.access.features)),
-  );
-  const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
+  // Where this launch lands: the home page the user chose in My Terminal ▸
+  // Settings, or — with no choice, or one that is now out of reach — exactly
+  // where the terminal opened before the setting existed. Computed once, in a
+  // lazy initializer, so it is a starting point rather than something that
+  // yanks the screen back whenever the user record refreshes.
+  const initialHome = useMemo(() => {
+    const ws = workspacesForRoles(user!.roles, user!.access.features);
+    const options = homeOptions(ws, {
+      canFunded: !user!.isDemo && canAccessFunded(user!.access.features),
+      canTeams: !!user!.access.features.tradingTeams,
+    });
+    return resolveHome(user!, options, pickInitialWorkspace(ws));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [workspace, setWorkspace] = useState<WorkspaceKey>(initialHome.workspace);
+  const [screen, setScreen] = useState<string>(initialHome.screen);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -710,6 +719,13 @@ export function Portal() {
           transition: 'background 0.5s ease',
         }}
       >
+        {/* Sits above whatever screen is open, and outside the ErrorBoundary
+            and Suspense on purpose: a repeating alert that has already been
+            silenced still needs to SAY so, even if the screen underneath is
+            still loading or has thrown. */}
+        <div style={{ padding: isPhone ? '12px 14px 0' : '16px 32px 0' }}>
+          <LiveAlertBanner />
+        </div>
         <ErrorBoundary resetKey={screen}>
           <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
             {renderExtra(screen) ?? renderScreen(screen, theme, selectScreen, canFunded) ?? <Screen screen={screen} theme={theme} />}
