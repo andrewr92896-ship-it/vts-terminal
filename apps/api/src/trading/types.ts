@@ -41,6 +41,13 @@ export interface LiveTrade {
   // Forex pip math (pips of open P/L, money per pip, risk/reward), present only
   // for genuine currency pairs. Money fields are gated like unrealizedPl.
   forex?: import('./forex.js').ForexMetrics | null;
+  // The colour this tile is washed in — whose position it is, or that it is a
+  // funded / manual one. Stamped at the boundary by trading/tileColors.ts rather
+  // than at any of the eight places a position is built, because it is a fact
+  // about the group looking at the tile, not about the trade. Optional for that
+  // reason: absent means nobody has chosen, which every screen renders as the
+  // appearance it had before this existed.
+  tileColor?: string | null;
 }
 
 // Per-broker outcome of a Live Wall refresh: was it configured, did the fetch

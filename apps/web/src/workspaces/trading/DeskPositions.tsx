@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
-import { fmtMoney, fmtPrice, fmtUnits } from './TradeCard';
+import { OFF_BOOK_GRAY, fmtMoney, fmtPrice, fmtUnits, tileTint } from './TradeCard';
 import { fmtPerStep, fmtPips, fmtSteps, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
 import { TradeTimesCell, etSince } from './tradeTime';
 import type { DeskHolding, DeskOrderRecord, DeskWorkingOrder, LiveTrade } from '../../api/types';
@@ -220,8 +220,23 @@ function PositionRow({
     }
   };
 
+  // Whose position this is, in the group's colour. This row's left border is
+  // already spoken for by the side (green long / red short), so the colour is
+  // carried by the background wash alone rather than fighting it — the LONG /
+  // SHORT pill beside the instrument says the side in words either way, but
+  // moving that border would be a change to a different thing than was asked
+  // for. The wash is a little stronger than the card's for the same reason the
+  // compact list's is: less area to read it off.
+  const accent = trade.tileColor ?? (trade.broker === 'ftp' ? OFF_BOOK_GRAY : null);
+
   return (
-    <div style={{ ...row, borderLeft: `2px solid ${long ? GREEN : RED}` }}>
+    <div
+      style={{
+        ...row,
+        borderLeft: `2px solid ${long ? GREEN : RED}`,
+        ...(accent ? { background: tileTint(accent, 'transparent', 18) } : {}),
+      }}
+    >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
         <button onClick={() => onPick(trade.instrument)} style={instrumentBtn} title="Load into the ticket">
           {trade.instrument}

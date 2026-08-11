@@ -3353,10 +3353,11 @@ act on the same team:
   over the **same** team the user is in. Membership is read straight from
   `users.team_id`; My-Terminal-only metadata is layered on top:
   - `user_teams` — one row per team naming its **leader** (`leaderId`).
-  - `user_team_members` — optional per-user **badge** + **permission flags**
+  - `user_team_members` — optional per-user **badge**, **trade tile colour** (see
+    below) + **permission flags**
     (`canCreateStudyGuides / canInvite / canManageBadges / canRemoveMembers /
     canEditTeam / canDeleteTrades`); a missing row = defaults (no badge, no
-    perms). Leader = all.
+    colour, no perms). Leader = all.
   - `user_team_invites` — pending invites; **accepting sets the invitee's
     `team_id`** (moves them onto the team's desk). Leaving / removal clears
     `team_id` (→ solo). Renaming updates the shared `trading_teams` name.
@@ -3366,6 +3367,68 @@ act on the same team:
   Because membership is `team_id`, the My Terminal team **is** the trade-scoping
   team — the two are one. (Consequence: the Studies delete gate, keyed on team
   leadership, is now live — non-leader members can't delete team study content.)
+
+### Trade tile colours — whose position it is (`trading/tileColors.ts`)
+
+A group that shares its book draws every member's open position in the same navy
+card, so telling one trader's trades from another's meant reading the `@handle`
+on each one. The group **leader** assigns a colour per person from **My Terminal
+▸ My Group**, plus two more for the positions that belong to nobody in
+particular. Migration `0124` adds `user_team_members.tile_color` and
+`user_teams.funded_tile_color` / `manual_tile_color`.
+
+- **`trading/tileColors.ts` IS THE ONLY PLACE THE HEXES EXIST.** The palette goes
+  to the web on `/api/my-portal/config` and the resolved hex is stamped onto each
+  position, so no screen ever maps a person to a colour. There is deliberately
+  **no web mirror of the palette** to drift — unlike `FEATURE_TIER`, nothing on
+  the client needs to know what a key means.
+- **A colour is stored as a palette KEY and a raw hex is refused**
+  (`normalizeTileColor`). That is the guard, not tidiness: **green, red, gold and
+  amber are absent from the palette and nothing warm may be added**, because on a
+  trade tile those already mean winning, losing, break-even and a trailing stop.
+  A losing position washed green is the one mistake this feature could make that
+  costs money to misread. Nine cool/neutral choices for a group capped at five
+  people is enough.
+- **`slate` is the exact gray funded positions have always carried, and it is the
+  funded default.** So a group that never touches this sees the wall it saw
+  yesterday: every column is null on deploy, null means "as it was", and only
+  funded resolves to a colour without anybody choosing.
+- **THE BROKER KIND WINS OVER THE PERSON.** A funded position takes the funded
+  colour and a manual one the manual colour, whoever owns it — the owner asked
+  for those two to be coloured separately from anybody. A trader's own colour
+  therefore marks the accounts they actually trade, and their funded book stays
+  visibly off-book, which is the distinction the wall already sorts on.
+- **LEADER ONLY, and deliberately not folded into `canManageBadges`** (owner
+  instruction). A badge is a title on one person's row; a colour is how the whole
+  group reads the board, so two people handing colours out is how two members end
+  up sharing one. There is no permission flag for it for the same reason — a flag
+  would be a second way in. The leader can colour their own tiles: their
+  positions sit on the same wall as everybody else's.
+- **The colour is resolved SERVER-SIDE and stamped per position**
+  (`LiveTrade.tileColor`), so every surface reads one field and no two can
+  disagree about whose trade is whose. `getLiveWall` **wraps** the build
+  (`buildLiveWall`) rather than painting inside it — that function returns from
+  four places (sample, unavailable, empty desk, live), and a colour applied at
+  three of them is a wall that loses its colours whenever a broker goes quiet.
+- **Call sites** (change a position surface, bring the colour with it): the full
+  card (`TradeCard`, left border + wash), the Open Positions tile's compact list
+  (`PositionsTile`), the Trade Desk book (`DeskPositions` — wash only, its left
+  border is already spoken for by the side), the funded table
+  (`FundedLiveTrades`, off `FundedData.fundedTileColor` since every row there is
+  funded), and the **Scriptable iOS widget** in `DeviceSettings.tsx`, which
+  blends the hex itself (`mixHex` — Scriptable has no `color-mix`, and a
+  translucent background would drop the card colour rather than blend with it).
+  `tileTint` is exported from `TradeCard` so one blend rule serves all of them.
+- **A row that can be coloured reserves the bar whether or not it has one**
+  (`borderLeft: 3px solid transparent` on the base row style, header included).
+  Without it a list mixing coloured and plain positions steps 3px in and out and
+  the columns stop lining up with their headings.
+- Everyone in the group sees the same board — colours belong to the group, not to
+  the viewer. Somebody on no group resolves to the defaults, which is the
+  appearance every tile had before this existed.
+- No new paid feature key: this is part of Private Groups, so the routes sit on
+  the existing `requirePremium('teams')` guard and the sidebar's `teams` diamond
+  already marks it.
 
 ### Position designations — REMOVED, do not rebuild
 

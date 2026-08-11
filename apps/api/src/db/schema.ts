@@ -2078,6 +2078,12 @@ export const userTeams = sqliteTable('user_teams', {
   leaderId: text('leader_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // Trade tile colours for the two kinds of position that belong to nobody in
+  // particular: funded (prop-firm) and hand-kept manual. Palette keys, never
+  // hexes — see trading/tileColors.ts. Null = the default appearance, which for
+  // funded is the neutral gray those tiles have always carried.
+  fundedTileColor: text('funded_tile_color'),
+  manualTileColor: text('manual_tile_color'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -2098,6 +2104,10 @@ export const userTeamMembers = sqliteTable('user_team_members', {
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
   badge: text('badge'), // cosmetic title, e.g. "Lead Trader"; null for none
+  // The colour this person's open positions are washed in on every trade tile,
+  // set by the group leader. A palette key, never a hex — see
+  // trading/tileColors.ts. Null = no wash, exactly as before this existed.
+  tileColor: text('tile_color'),
   canCreateStudyGuides: integer('can_create_study_guides', { mode: 'boolean' }).notNull().default(false),
   canInvite: integer('can_invite', { mode: 'boolean' }).notNull().default(false),
   canManageBadges: integer('can_manage_badges', { mode: 'boolean' }).notNull().default(false),

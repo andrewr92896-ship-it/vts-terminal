@@ -3,6 +3,7 @@ import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { type LiveMark, type LivePrices } from './useLivePrices';
 import { etStamp, etStampFull, etSince } from './tradeTime';
+import { tileTint } from './TradeCard';
 import type { FundedAccount, FundedData, FundedTrade } from '../../api/types';
 
 // Live funded trades, embedded on the private Funded (prop-challenge) page.
@@ -133,6 +134,11 @@ export function FundedLiveTrades({
               // must not offer either.
               readOnly={readOnly || !account.isMine}
               liveMark={live.priceFor(trade.instrument)}
+              // The group's funded tile colour, so these positions read the same
+              // here as they do on the Live Wall. Every row on this table is
+              // funded, so it is one colour for the table rather than one per
+              // row — the colour says what kind of position this is, not whose.
+              tileColor={data?.fundedTileColor ?? null}
               onData={onData}
               onError={setError}
             />
@@ -149,6 +155,7 @@ function LiveTradeRow({
   showMoney,
   readOnly,
   liveMark,
+  tileColor,
   onData,
   onError,
 }: {
@@ -157,6 +164,7 @@ function LiveTradeRow({
   showMoney: boolean;
   readOnly: boolean;
   liveMark: LiveMark | null;
+  tileColor: string | null;
   onData: (d: FundedData) => void;
   onError: (e: string | null) => void;
 }) {
@@ -238,7 +246,14 @@ function LiveTradeRow({
     <>
       {/* Either panel below carries the divider itself, so the row drops its own
           rather than drawing a line between a row and its own open editor. */}
-      <div style={{ ...row, borderBottom: closing || editing ? 'none' : `1px solid ${BORDER}`, flexWrap: 'wrap' }}>
+      <div
+        style={{
+          ...row,
+          borderBottom: closing || editing ? 'none' : `1px solid ${BORDER}`,
+          flexWrap: 'wrap',
+          ...(tileColor ? { borderLeft: `3px solid ${tileColor}`, background: tileTint(tileColor, 'transparent', 18) } : {}),
+        }}
+      >
         <span style={{ flex: '1 1 120px', fontWeight: 600, color: TEXT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           {trade.instrument}
           <span style={openPill} title="Open position — marked live against the desk price">OPEN</span>
@@ -464,7 +479,18 @@ const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '8px 14px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const closeTradeBtn: CSSProperties = { fontSize: 10.5, fontWeight: 700, color: '#bff0d4', background: 'rgba(53,196,123,.1)', border: '1px solid rgba(53,196,123,.5)', padding: '4px 9px', borderRadius: 6, cursor: 'pointer', whiteSpace: 'nowrap' };
-const row: CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', fontSize: 11.5, fontFamily: MONO };
+// The transparent left border is reserved by every row, including the header, so
+// the funded tile colour can be drawn on a data row without shifting its columns
+// 3px out of line with the headings above them.
+const row: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '9px 12px',
+  fontSize: 11.5,
+  fontFamily: MONO,
+  borderLeft: '3px solid transparent',
+};
 const col: CSSProperties = { flex: '0 0 60px' };
 // Holds the two row controls side by side; wraps rather than truncating either.
 const actionCol: CSSProperties = { flex: '0 0 172px' };

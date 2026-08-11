@@ -187,6 +187,12 @@ export interface UserTeamMember {
   avatarUrl: string | null;
   isLeader: boolean;
   badge: string | null;
+  // The colour this person's open positions are washed in on every trade tile.
+  // The key says which swatch is selected; the hex is what the tiles are drawn
+  // in. Both come from the server — the palette lives there and nowhere else, so
+  // a swatch can never be a colour the wall does not paint.
+  tileColor: string | null;
+  tileColorHex: string | null;
   permissions: TeamMemberPermissions;
   joinedAt: number;
 }
@@ -206,7 +212,20 @@ export interface MyTeam {
   myPermissions: TeamMemberPermissions;
   members: UserTeamMember[];
   invites: UserTeamInvite[];
+  // Tile colours for the positions that belong to nobody in particular. Funded
+  // always resolves to a hex (the gray those tiles have always carried); manual
+  // is null until somebody chooses one.
+  fundedTileColor: string | null;
+  fundedTileColorHex: string;
+  manualTileColor: string | null;
+  manualTileColorHex: string | null;
   createdAt: number;
+}
+// One choice in the trade tile palette, exactly as the server sends it.
+export interface TileColorOption {
+  key: string;
+  label: string;
+  hex: string;
 }
 export interface IncomingInvite {
   id: string;
@@ -576,6 +595,12 @@ export interface LiveTrade {
   timeframe: string | null;
   openedAt: number | null;
   forex?: ForexMetrics | null; // present only for genuine currency pairs
+  // The colour this tile is washed in — whose position it is, or that it is a
+  // funded / manual one. Resolved server-side from the group's palette, so no
+  // screen maps a person to a colour and two surfaces cannot disagree about
+  // whose trade is whose. Absent/null = no wash, the appearance every tile had
+  // before the group set any colours.
+  tileColor?: string | null;
 }
 
 export interface BrokerLiveResult {
@@ -1043,6 +1068,10 @@ export interface FundedAccount {
 }
 export interface FundedData {
   accounts: FundedAccount[];
+  // The colour funded tiles carry, so the live positions on this screen read the
+  // same as the ones on the Live Wall. Every position here is funded, so it is
+  // one colour for the screen rather than one per row.
+  fundedTileColor: string | null;
 }
 export interface FundedAccountInput {
   platform?: string;

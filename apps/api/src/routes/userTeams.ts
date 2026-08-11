@@ -16,14 +16,28 @@ import {
   respondToInvite,
   setMemberBadge,
   setMemberPermissions,
+  setMemberTileColor,
+  setTeamTileColors,
   transferLeadership,
 } from '../userTeams/service.js';
+import { TILE_COLOR_OPTIONS } from '../trading/tileColors.js';
 
 const nameSchema = z.object({ name: z.string().trim().min(1).max(80) });
 const inviteSchema = z.object({ username: z.string().trim().min(1).max(64) });
 const respondSchema = z.object({ accept: z.boolean() });
 const transferSchema = z.object({ userId: z.string().min(1).max(64) });
 const badgeSchema = z.object({ badge: z.string().trim().max(40).nullable() });
+// A tile colour is a palette key or null (no colour). The service is the
+// enforcer — it refuses any key the palette does not carry — so this only has to
+// keep an unbounded string out of the handler.
+const tileColorSchema = z.object({ color: z.string().trim().max(32).nullable() });
+const teamTileColorsSchema = z
+  .object({
+    funded: z.string().trim().max(32).nullable().optional(),
+    manual: z.string().trim().max(32).nullable().optional(),
+  })
+  // An empty patch would be a save that silently does nothing.
+  .refine((v) => v.funded !== undefined || v.manual !== undefined, 'Pick a colour to change');
 const permsSchema = z.object({
   canCreateStudyGuides: z.boolean().optional(),
   canInvite: z.boolean().optional(),
@@ -61,9 +75,12 @@ export async function userTeamRoutes(app: FastifyInstance) {
     throw err;
   };
 
-  // Static config the UI needs: badge presets + the member cap.
+  // Static config the UI needs: badge presets, the member cap, and the trade
+  // tile palette. The palette is sent rather than mirrored in the web bundle so
+  // the swatches a leader picks from are the exact colours the wall paints —
+  // there is no second copy of the hexes anywhere.
   app.get('/api/my-portal/config', guard, async () => {
-    return { badgePresets: BADGE_PRESETS, maxMembers: MAX_TEAM_MEMBERS };
+    return { badgePresets: BADGE_PRESETS, maxMembers: MAX_TEAM_MEMBERS, tileColors: TILE_COLOR_OPTIONS };
   });
 
   app.get('/api/my-portal/team', guard, async (request) => {
@@ -164,6 +181,35 @@ export async function userTeamRoutes(app: FastifyInstance) {
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid badge' });
     try {
       const team = await setMemberBadge(request.currentUser!.id, memberUserId, parsed.data.badge);
+      return { team };
+    } catch (err) {
+      return fail(reply, err);
+    }
+  });
+
+  // Trade tile colours. On `team` (the paid group guard) rather than `badges`:
+  // this is not a badge, and the service additionally requires the caller to be
+  // the group leader — the owner's instruction that the colour choices are the
+  // leader's, so the board reads one way for everybody in the group.
+  app.post('/api/my-portal/team/members/:userId/tile-color', team, async (request, reply) => {
+    const memberUserId = (request.params as { userId: string }).userId;
+    const parsed = tileColorSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid tile colour' });
+    try {
+      const team = await setMemberTileColor(request.currentUser!.id, memberUserId, parsed.data.color);
+      return { team };
+    } catch (err) {
+      return fail(reply, err);
+    }
+  });
+
+  // The funded and manual tile colours — group-wide, and deliberately not tied
+  // to any one person.
+  app.post('/api/my-portal/team/tile-colors', team, async (request, reply) => {
+    const parsed = teamTileColorsSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid tile colours' });
+    try {
+      const team = await setTeamTileColors(request.currentUser!.id, parsed.data);
       return { team };
     } catch (err) {
       return fail(reply, err);

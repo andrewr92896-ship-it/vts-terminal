@@ -86,6 +86,17 @@ const C = {
   muted: new Color("#9fb0d6"), faint: new Color("#6f84b0"),
   green: new Color("#35c47b"), red: new Color("#ef5468"), gold: new Color("#ebcb74"),
 };
+// The group's trade tile colour, blended into the card background the same way
+// the terminal blends it — whose position this is, readable without reading the
+// handle. Scriptable has no color-mix, and a translucent background would drop
+// the card colour underneath rather than blending with it, so the mix is done on
+// the channels. Returns the plain card colour when the position has no colour.
+function mixHex(a, b, t){
+  const p = (h,i) => parseInt(h.slice(1+i*2, 3+i*2), 16);
+  const c = (i) => Math.round(p(a,i)*t + p(b,i)*(1-t)).toString(16).padStart(2,"0");
+  return "#" + c(0) + c(1) + c(2);
+}
+function cardColor(p){ return p.tileColor ? new Color(mixHex(p.tileColor, "#112a56", 0.13)) : C.card; }
 function money(n){ const s = Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); return (n<0?"-$":"$")+s; }
 function pips(n){ const s = Math.abs(n).toFixed(1); return (n>0?"+":n<0?"-":"")+s+" pip"+(Math.abs(n)===1?"":"s"); }
 function price(n){ if(n===null||n===undefined) return "—"; if(Math.abs(n)>=1000) return n.toLocaleString("en-US",{maximumFractionDigits:2}); return String(Number(n.toFixed(5))); }
@@ -108,7 +119,8 @@ function field(row, label, value, color){ const c=row.addStack(); c.layoutVertic
 function renderCard(w, p, detailed){
   const long = p.side==="long";
   const sideColor = long?C.green:C.red;
-  const card = w.addStack(); card.layoutVertically(); card.backgroundColor=C.card; card.cornerRadius=10; card.setPadding(9,11,9,11); card.spacing=5;
+  const card = w.addStack(); card.layoutVertically(); card.backgroundColor=cardColor(p); card.cornerRadius=10; card.setPadding(9,11,9,11); card.spacing=5;
+  if(p.tileColor){ card.borderWidth=1; card.borderColor=new Color(p.tileColor, 0.55); }
   const head = card.addStack(); head.centerAlignContent();
   const sym = head.addText(p.instrument); sym.font=Font.boldSystemFont(14); sym.textColor=Color.white();
   head.addSpacer(6); pill(head, long?"LONG":"SHORT", sideColor); head.addSpacer();
@@ -143,6 +155,13 @@ function renderRow(w, p){
   const long = p.side==="long"; const sideColor = long?C.green:C.red;
   const dotColor = sideColor;
   const row = w.addStack(); row.centerAlignContent(); row.setPadding(3,0,3,0);
+  // A thin bar in the group's colour, ahead of the side dot. This row is a
+  // single line, so a background wash would read as a band across the whole
+  // widget rather than as one position; the bar is what the terminal's compact
+  // list draws too. An uncoloured row reserves the same width so the column of
+  // instruments stays straight.
+  if(p.tileColor){ const bar=row.addStack(); bar.size=new Size(3,15); bar.cornerRadius=1.5; bar.backgroundColor=new Color(p.tileColor); row.addSpacer(6); }
+  else { row.addSpacer(9); }
   const dot = row.addStack(); dot.size = new Size(7,7); dot.cornerRadius = 4; dot.backgroundColor = dotColor;
   row.addSpacer(7);
   const sym = row.addText(p.instrument); sym.font=Font.boldSystemFont(12.5); sym.textColor=Color.white(); sym.lineLimit=1;
@@ -163,6 +182,9 @@ function renderRow(w, p){
 function renderSolo(w, p){
   const long = p.side==="long"; const sideColor = long?C.green:C.red;
   const head = w.addStack(); head.centerAlignContent();
+  // The small widget shows one position, so a wash would colour the whole
+  // widget; a dot beside the instrument says the same thing without that.
+  if(p.tileColor){ const d=head.addStack(); d.size=new Size(8,8); d.cornerRadius=2; d.backgroundColor=new Color(p.tileColor); head.addSpacer(6); }
   const sym = head.addText(p.instrument); sym.font=Font.boldSystemFont(16); sym.textColor=Color.white(); sym.minimumScaleFactor=0.7; sym.lineLimit=1;
   head.addSpacer(6); pill(head, long?"LONG":"SHORT", sideColor);
   w.addSpacer(4);
