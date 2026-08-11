@@ -29,6 +29,7 @@ import {
   userMemberships,
   marketDataLayout,
   marketNewsStreams,
+  ticketPresets,
   priceAlerts,
   investmentAccounts,
   investmentHoldings,
@@ -545,6 +546,8 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // shared 'desk' default row is keyed 'desk', never a userId, so it survives).
     await tx.delete(tradingDeskSettings).where(eq(tradingDeskSettings.id, targetId));
     await tx.delete(tradingBeOverrides).where(eq(tradingBeOverrides.ownerId, targetId));
+    // Their order ticket's quick-size buttons.
+    await tx.delete(ticketPresets).where(eq(ticketPresets.userId, targetId));
     // Notification prefs reference the user on both sides (recipient and the
     // watched trader), so clear rows pointing either way.
     await tx

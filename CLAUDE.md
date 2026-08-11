@@ -340,6 +340,20 @@ workspaces list** (see `theme/nav.ts` order).
       teammates' rows on the book are watch-only by construction. Do not add an
       "act on behalf of" path here; a desk lead editing a teammate's *settings*
       (below) is a different thing entirely from placing their trades.
+    - **The desk book's row controls differ by WHERE THE POSITION LIVES**, and
+      that difference is the design rather than an inconvenience
+      (`editKind` in `DeskPositions.tsx`). A live **OANDA** row's stop and target
+      are instructions sent to the broker, and the whole position can be closed
+      from here. A **funded (`ftp`) or hand-kept (`manual`)** row has no broker
+      behind it, so its stop and target are a *record of what the firm is
+      holding* — editable here since 2026-08 (owner request), through the same
+      owner-scoped routes the Funded and Manual screens use
+      (`PATCH /api/trading/funded/trades/:id`, `PATCH /api/trading/positions/:id`),
+      with the wording saying outright that nothing is sent anywhere. **No Close
+      button on those**: a funded trade is closed from its own screen, where the
+      result screenshot is read. A **Kraken margin** row is neither and stays
+      watch-only, which is what the desk's own `close`/`amend` refusals already
+      say.
     - **Server:** `trading/orderDesk.ts` (validation, journaling, the personal
       boundary) over `trading/deskBrokers.ts` (the adapters) over the two write
       connectors — `brokers/oandaOrders.ts` and `brokers/krakenOrders.ts`. Those
@@ -425,15 +439,68 @@ workspaces list** (see `theme/nav.ts` order).
         as 0.01 for gold — reading that as a "point" would quote the figure in
         cents.
       Never label a non-pair's movement in pips; never size a point from
-      `pipLocation`. The quick-size chips split on a related axis — thousands for
-      whole-unit instruments, fractions for anything the broker allows a
-      fractional size on, and on a **spot** account **amounts of money** ($100 …
-      $5,000, converted at the live price when pressed), because "$500 of bitcoin"
-      is how a coin is actually bought. Always bounded by that instrument's
-      min/max order size and minimum order value. Sizes render through `fmtUnits`
+      `pipLocation`. Sizes render through `fmtUnits`
       (`TradeCard.tsx`), which keeps more decimals the smaller the size — the
       default locale format prints 0.00042 of a bitcoin as "0". Keep all of this
       when adding stocks or another broker.
+    - **THE QUICK-SIZE CHIPS ARE THE TRADER'S OWN** (`ticket_presets`, migration
+      `0125`; `trading/ticketPresets.ts` server-side,
+      `workspaces/trading/ticketPresets.ts` + `TicketPresetMenu.tsx` on the web).
+      The cog at the end of the row is where they are set: what the buttons are,
+      what they mean, and when one reads red.
+      - **The DEFAULT ladders live in the WEB, and the server holds no copy.**
+        They are what the ticket renders before the row has loaded and all it
+        ever renders for an account that customised nothing, so a second copy
+        server-side could only drift from what is on screen. **A null ladder
+        means "the built-in one", never "no buttons"** — which is what lets a
+        default improved in code still reach everyone who never overrode it, and
+        what makes clearing the list hand the built-ins back rather than leaving
+        a trader with no shortcuts.
+      - **Four ladders, kept apart because a number means a different thing in
+        each**: whole-unit instruments (thousands — a micro lot is 1,000),
+        fractional ones (0.01 … 1, for anything the broker allows a fractional
+        size on), **money per pip/point**, and **money spent** on a spot account.
+        1,000 is an ordinary FX size and a ruinous bitcoin one, so one shared
+        ladder would be wrong on whichever instrument it was not written for.
+        `ladderKind` picks: the mode decides, except that units splits by
+        `tradeUnitsPrecision`.
+      - **A money-per-pip chip is a SIZE worked out from the live quote**, never
+        a second sizing model: `unitsForPreset` inverts the same
+        `units × step × factor` the ticket already reads out under the size box,
+        so "$5 a pip" and the "$5.00 / pip" line agree by construction. Without
+        a quote it resolves to **nothing and the chip dims** — a shortcut on an
+        order ticket must never fill in a size derived from a figure that was
+        not read.
+      - **A built-in ladder is filtered to what the broker would accept; a
+        ladder the trader typed is NOT.** The terminal may prune its own
+        suggestions, but a button somebody put there must not vanish without
+        explanation — an unusable one is caught by the ticket's own validation,
+        which says why.
+      - **The margin reading is a share of what is actually available to commit**
+        — free margin, or cash on a spot account — because that is the figure
+        the broker refuses against; a percentage of account value would mark a
+        chip usable that would be rejected. **Red is `>= marginWarnPct`, default
+        100** (the point of refusal) and settable 1–100 for a trader who does not
+        want one position past, say, 70% of their free margin. A red chip is
+        **still pressable**: free margin moves as trades open and close, and a
+        refusal belongs at Review, not at a shortcut.
+      - The same share is restated on the ticket's own **Margin (est.)** cell,
+        taken from the money figure already displayed there rather than
+        recomputed, so the two cannot disagree. The chips price off the **market**
+        (the side the order would pay) while the summary prices off the
+        **order** — a limit order's own trigger — which is the correct difference,
+        not a drift.
+      - **Nobody else's, deliberately** — unlike `trading_desk_settings`, which a
+        desk lead may edit for a teammate. A desk lead may change how a
+        teammate's results are scored; the shortcuts on a ticket belong to
+        whoever sends the order, so the service takes the caller's id and there
+        is no `userId` parameter on either route. In the `admin/service.ts`
+        per-user delete list.
+      - Edits apply to the chips **at once** and are written a beat later
+        (debounced, flushed on unmount): a preset is edited a keystroke at a
+        time and the chips have to follow the typing rather than the network.
+        `loadTicketPresets` shares one read, since a Live Wall can carry several
+        ticket tiles reading the one row.
     - **The stop and target take a PRICE or a DISTANCE**, chosen by the
       Price/Pips toggle beside them (owner request, 2026-08) — "Points" on
       anything that is not a currency pair, off the same `forexPair` switch as

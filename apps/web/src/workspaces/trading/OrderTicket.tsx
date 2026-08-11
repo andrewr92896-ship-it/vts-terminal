@@ -2,7 +2,28 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { api, ApiError } from '../../api/client';
 import { fmtMoney, fmtUnits } from './TradeCard';
 import { forexPair } from './pips';
-import type { DeskAccount, DeskInstrument, DeskOrderType, DeskQuote, TradeSide } from '../../api/types';
+import { TicketPresetMenu, fmtPct } from './TicketPresetMenu';
+import {
+  DEFAULT_PRESETS,
+  costOfSize,
+  forgetTicketPresets,
+  isCustom,
+  ladderFor,
+  ladderKind,
+  loadTicketPresets,
+  resolveMode,
+  saveTicketPresets,
+  unitsForPreset,
+  usagePct,
+} from './ticketPresets';
+import type {
+  DeskAccount,
+  DeskInstrument,
+  DeskOrderType,
+  DeskQuote,
+  TicketPresets,
+  TradeSide,
+} from '../../api/types';
 
 // The order ticket — the one component in the terminal that sends a real order to
 // a real broker. Everything on it is built around not placing a trade the trader
@@ -40,24 +61,15 @@ const TYPES: { key: DeskOrderType; label: string; hint: string }[] = [
   { key: 'stop', label: 'Stop', hint: 'Trigger once price trades through your level' },
 ];
 
-// Quick-size shortcuts. Which ladder applies depends on how the instrument is
-// actually sized: FX and the whole-unit CFDs trade in thousands (a micro lot is
-// 1,000 units), while anything the broker allows a fractional size on — crypto,
-// most notably — trades in fractions of one. A "1k" chip beside a bitcoin
-// ticket is not a shortcut, it is a trap.
-const WHOLE_UNIT_CHIPS = [1000, 5000, 10_000, 25_000, 100_000];
-const FRACTIONAL_CHIPS = [0.01, 0.05, 0.1, 0.5, 1];
-
-// On a spot account the chips are amounts of money instead, because that is how
-// a coin is actually bought: "$500 of bitcoin", never "0.005 of it". The size
-// they set is worked out from the live price at the moment they are pressed.
-const SPOT_COST_CHIPS = [100, 250, 500, 1000, 5000];
-
-// The ladder for one instrument, bounded by what the broker will actually
-// accept. A chip the broker would reject is worse than no chip.
-function sizeChipsFor(spec: DeskInstrument | null): number[] {
-  if (!spec) return WHOLE_UNIT_CHIPS;
-  const ladder = spec.tradeUnitsPrecision > 0 ? FRACTIONAL_CHIPS : WHOLE_UNIT_CHIPS;
+// The quick-size chips a BUILT-IN ladder offers, bounded by what the broker will
+// actually accept — a chip the broker would reject is worse than no chip.
+//
+// A ladder the trader typed themselves is deliberately NOT filtered: the
+// terminal may prune its own suggestions, but a button somebody put there must
+// not vanish without explanation. An unusable one is caught by the ticket's own
+// validation, which says why.
+function usableChips(ladder: number[], spec: DeskInstrument | null, custom: boolean): number[] {
+  if (custom || !spec) return ladder;
   const usable = ladder.filter(
     (n) => n >= spec.minimumTradeSize && (spec.maximumOrderUnits == null || n <= spec.maximumOrderUnits),
   );
@@ -66,12 +78,18 @@ function sizeChipsFor(spec: DeskInstrument | null): number[] {
   return usable.length > 0 ? usable : [spec.minimumTradeSize];
 }
 
-// The cost chips worth offering: one that cannot clear the venue's minimum
-// order value, or that buys less than its minimum size, would only ever be
-// refused.
-function costChipsFor(spec: DeskInstrument | null, price: number | null): number[] {
-  if (!spec || price == null || price <= 0) return [];
-  return SPOT_COST_CHIPS.filter(
+// The money chips worth offering on a spot account: one that cannot clear the
+// venue's minimum order value, or that buys less than its minimum size, would
+// only ever be refused.
+function usableCostChips(
+  ladder: number[],
+  spec: DeskInstrument | null,
+  price: number | null,
+  custom: boolean,
+): number[] {
+  if (!spec || price == null || price <= 0) return custom ? ladder : [];
+  if (custom) return ladder;
+  return ladder.filter(
     (cost) => cost / price >= spec.minimumTradeSize && (spec.minimumOrderCost == null || cost >= spec.minimumOrderCost),
   );
 }
@@ -112,6 +130,54 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const [confirming, setConfirming] = useState(false);
   const [sending, setSending] = useState(false);
   const [result, setResult] = useState<Placed | null>(null);
+  // The trader's own quick-size buttons. Rendered from the built-in ladders
+  // until this lands, so the chips are never missing while it loads.
+  const [presets, setPresets] = useState<TicketPresets>(DEFAULT_PRESETS);
+  const [presetError, setPresetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void loadTicketPresets().then(
+      (p) => { if (live) setPresets(p); },
+      () => { /* the built-in ladders are a working ticket — say nothing */ },
+    );
+    return () => { live = false; };
+  }, []);
+
+  // Applied to the screen at once and written a beat later: a preset is edited a
+  // keystroke at a time, and the chips have to follow the typing rather than the
+  // network.
+  const saveTimer = useRef<number | null>(null);
+  const pending = useRef<Partial<TicketPresets>>({});
+  const flushPresets = useCallback(() => {
+    const patch = pending.current;
+    pending.current = {};
+    if (Object.keys(patch).length === 0) return;
+    void saveTicketPresets(patch).then(
+      () => setPresetError(null),
+      () => {
+        forgetTicketPresets();
+        setPresetError('Could not save your presets');
+      },
+    );
+  }, []);
+  const changePresets = useCallback(
+    (patch: Partial<TicketPresets>) => {
+      setPresets((p) => ({ ...p, ...patch }));
+      pending.current = { ...pending.current, ...patch };
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      saveTimer.current = window.setTimeout(flushPresets, 500);
+    },
+    [flushPresets],
+  );
+  // Leaving the screen mid-edit is exactly when the last keystroke would be lost.
+  useEffect(
+    () => () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+      flushPresets();
+    },
+    [flushPresets],
+  );
 
   const spec = useMemo(
     () => instruments.find((i) => i.instrument === instrument) ?? null,
@@ -266,6 +332,10 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const rr = riskMoney != null && rewardMoney != null && riskMoney > 0 ? rewardMoney / riskMoney : null;
   const notional = reference != null && factor != null && Number.isFinite(units) ? units * reference * factor : null;
   const marginEstimate = notional != null && spec?.marginRate != null ? notional * spec.marginRate : null;
+  // The share of what is available that THIS order would tie up. Taken from the
+  // margin figure the summary is already showing rather than recomputed, so the
+  // percentage and the money beside it can never disagree.
+  const sizePct = usagePct(marginEstimate, account.marginAvailable);
 
   // A spot account buys the asset outright: the whole cost leaves the balance,
   // there is no margin, and a sell disposes of coins already held. A margin
@@ -277,17 +347,43 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   // spot has no bracket). Setting both would silently lose one, so the ticket
   // asks for one and says why.
   const oneProtectiveOrder = account.maxProtectiveOrders < 2;
-  const costChips = spot ? costChipsFor(spec, quote?.ask ?? quote?.bid ?? null) : [];
 
-  // Size from cost, for a spot account: "$500 of bitcoin" is the sizing a crypto
-  // trader actually does. Priced off the side of the book the order will pay,
-  // and never allowed below the venue's minimum size.
-  const setUnitsFromCost = (cost: number) => {
-    const price = side === 'long' ? quote?.ask ?? quote?.bid : quote?.bid ?? quote?.ask;
-    if (!spec || price == null || price <= 0) return;
-    const step = Math.pow(10, spec.tradeUnitsPrecision);
-    const sized = Math.max(spec.minimumTradeSize, Math.floor((cost / price) * step) / step);
-    setUnitsText(String(Number(sized.toFixed(spec.tradeUnitsPrecision))));
+  // ---- the quick-size buttons -----------------------------------------------
+  // The price a chip is sized and costed from is the side of the book the order
+  // would actually pay, not the mid and not a resting order's own trigger — the
+  // margin a size ties up is decided by the market, whatever price the trade is
+  // waiting for.
+  const chipPrice = side === 'long' ? quote?.ask ?? quote?.bid ?? null : quote?.bid ?? quote?.ask ?? null;
+  const presetMode = resolveMode(presets, spot);
+  const presetKind = ladderKind(presetMode, spec);
+  const presetLadder = ladderFor(presets, presetKind);
+  const presetCustom = isCustom(presets, presetKind);
+  const sizeInputs = { spec, price: chipPrice, factor, step };
+  const chips =
+    presetKind === 'cost'
+      ? usableCostChips(presetLadder, spec, chipPrice, presetCustom)
+      : usableChips(presetLadder, spec, presetCustom);
+
+  // What a preset would tie up, as a share of what is there to commit: free
+  // margin on a margin account, cash on a spot one. Null whenever a piece is
+  // missing, so a chip says nothing rather than something wrong.
+  const pctForUnits = (u: number | null): number | null =>
+    u == null ? null : usagePct(costOfSize(u, sizeInputs, spot), account.marginAvailable);
+  const pctForPreset = (value: number): number | null =>
+    pctForUnits(unitsForPreset(value, presetKind, sizeInputs));
+  const overWarn = (pct: number | null): boolean => pct != null && pct >= presets.marginWarnPct;
+
+  // Pressing a chip fills the size box. A money-per-pip or money-spent chip
+  // needs the live quote to work a size out, so before one lands it dims rather
+  // than filling in a size derived from nothing.
+  const applyPreset = (value: number) => {
+    const u = unitsForPreset(value, presetKind, sizeInputs);
+    if (u == null) return;
+    setUnitsText(String(Number(u.toFixed(spec?.tradeUnitsPrecision ?? 0))));
+  };
+  const chipLabel = (value: number): string => {
+    if (presetKind === 'step' || presetKind === 'cost') return `$${value.toLocaleString('en-US')}`;
+    return value >= 1000 ? `${value / 1000}k` : String(value);
   };
 
   // Size from risk: given a stop and an amount to risk, how many units is that.
@@ -502,21 +598,56 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             </div>
           </Field>
         </div>
-        {/* On a spot account the shortcuts are amounts of money, because that is
-            how a coin is bought — "$500 of bitcoin", not "0.0047 of it". The
-            size is worked out from the live price when the chip is pressed. */}
-        <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap' }}>
-          {costChips.length > 0
-            ? costChips.map((cost) => (
-                <button key={cost} onClick={() => setUnitsFromCost(cost)} style={chip} title={`Buy about ${fmtMoney(cost, account.currency)} of ${baseAsset}`}>
-                  {`$${cost.toLocaleString('en-US')}`}
-                </button>
-              ))
-            : sizeChipsFor(spec).map((n) => (
-                <button key={n} onClick={() => setUnitsText(String(n))} style={chip}>
-                  {n >= 1000 ? `${n / 1000}k` : n}
-                </button>
-              ))}
+        {/* The trader's own shortcuts, in whichever unit they set them in: a size
+            in units, an amount of money per pip, or — on a spot account, because
+            that is how a coin is bought — an amount of money spent. Each carries
+            what it would tie up, and turns red at the trader's own threshold.
+            The cog at the end is where all of that is set. */}
+        <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          {chips.map((value) => {
+            const u = unitsForPreset(value, presetKind, sizeInputs);
+            const pct = pctForUnits(u);
+            const over = overWarn(pct);
+            return (
+              <button
+                key={value}
+                onClick={() => applyPreset(value)}
+                disabled={u == null}
+                title={[
+                  presetKind === 'step' ? `${chipLabel(value)} per ${stepName}` : chipLabel(value),
+                  u == null ? null : `${fmtUnits(u)}${spot ? ` ${baseAsset}` : ' units'}`,
+                  pct == null ? null : `${fmtPct(pct)} of your ${spot ? 'cash' : 'free margin'}`,
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                style={{
+                  ...chip,
+                  ...chipStack,
+                  ...(over ? overChip : null),
+                  opacity: u == null ? 0.4 : 1,
+                  cursor: u == null ? 'default' : 'pointer',
+                }}
+              >
+                <span>{chipLabel(value)}</span>
+                {presets.showMargin && pct != null && (
+                  <span style={{ ...chipPct, color: over ? RED : FAINT }}>{fmtPct(pct)}</span>
+                )}
+              </button>
+            );
+          })}
+          <TicketPresetMenu
+            presets={presets}
+            mode={presetMode}
+            kind={presetKind}
+            values={presetLadder}
+            custom={presetCustom}
+            spot={spot}
+            stepName={stepName}
+            baseAsset={baseAsset}
+            pctFor={pctForPreset}
+            onChange={changePresets}
+            saveError={presetError}
+          />
         </div>
       </div>
 
@@ -593,11 +724,16 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           // calling that figure "margin" would be wrong in both directions.
           label={spot ? 'Cost (est.)' : 'Margin (est.)'}
           value={marginEstimate == null ? '—' : fmtMoney(marginEstimate, account.currency)}
+          // The same share the chips carry, on the size actually in the box —
+          // and past the trader's own threshold it reads red here too.
           hint={
             account.marginAvailable != null
-              ? `of ${fmtMoney(account.marginAvailable, account.currency)} ${spot ? 'cash' : 'free'}`
+              ? `of ${fmtMoney(account.marginAvailable, account.currency)} ${spot ? 'cash' : 'free'}${
+                  sizePct == null ? '' : ` · ${fmtPct(sizePct)}`
+                }`
               : undefined
           }
+          hintColor={overWarn(sizePct) ? RED : undefined}
         />
         <SummaryCell
           label="Risk / reward"
@@ -877,12 +1013,24 @@ function SubReading({
 // One reading in the summary block. Stacked label-over-value in a 2×2 grid
 // rather than four label/value rows: the same four facts in half the height,
 // which is what keeps the Review button above the fold on a laptop.
-function SummaryCell({ label, value, hint, color }: { label: string; value: string; hint?: string; color?: string }) {
+function SummaryCell({
+  label,
+  value,
+  hint,
+  color,
+  hintColor,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  color?: string;
+  hintColor?: string;
+}) {
   return (
     <div style={{ minWidth: 0 }}>
       <div style={{ fontSize: 9.5, color: MUTED, letterSpacing: '.4px', textTransform: 'uppercase' }}>{label}</div>
       <div style={{ fontFamily: MONO, fontSize: 13, color: color ?? TEXT, marginTop: 2 }}>{value}</div>
-      {hint && <div style={{ fontSize: 9.5, color: FAINT, marginTop: 1 }}>{hint}</div>}
+      {hint && <div style={{ fontSize: 9.5, color: hintColor ?? FAINT, marginTop: 1 }}>{hint}</div>}
     </div>
   );
 }
@@ -894,6 +1042,12 @@ const segBtn: CSSProperties = { flex: 1, background: 'none', border: 'none', col
 const segActive: CSSProperties = { background: 'rgba(235,203,116,.14)', color: GOLD };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 15, padding: '9px 11px', outline: 'none', fontFamily: MONO };
 const chip: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, color: '#dfe7fa', fontSize: 11.5, fontWeight: 600, padding: '6px 10px', borderRadius: 6, cursor: 'pointer' };
+// A quick-size chip carrying its margin reading underneath, so the row keeps one
+// height whether or not the reading is being shown.
+const chipStack: CSSProperties = { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, padding: '5px 10px 4px', minWidth: 44 };
+const chipPct: CSSProperties = { fontSize: 9, fontWeight: 700, fontFamily: MONO };
+// Past the trader's own threshold — by default, more free margin than they have.
+const overChip: CSSProperties = { borderColor: 'rgba(239,84,104,.55)', background: 'rgba(239,84,104,.08)', color: '#ffb4ab' };
 // Price ⇄ pips for the stop and target pair. Small and to the right of the two
 // fields, since it governs both of them rather than either one.
 const unitToggle: CSSProperties = { display: 'inline-flex', background: 'rgba(255,255,255,.04)', border: `1px solid ${BORDER2}`, borderRadius: 7, overflow: 'hidden' };
