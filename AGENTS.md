@@ -40,8 +40,10 @@ It never touches the network and always exits 0, so it is safe to run anywhere,
 any time. If it says **STOP**, believe it — but the checks are simple enough to
 run by hand, and they are worth knowing:
 
-- **Remote** is `andrewr92896-ship-it/vts-portal`. Anything else is the wrong
-  repo.
+- **Remote** is `andrewr92896-ship-it/vts-terminal`. The repository was renamed
+  from `vts-portal`, and **both spellings are accepted** — GitHub redirects the
+  old name indefinitely and a clone made before the rename keeps its old remote
+  URL until somebody re-points it. Anything else is the wrong repo.
 - **`APP_VERSION`** in `apps/web/src/meta/version.ts` reads `Beta V …`. A
   `Pre-Alpha` or `Stage N` version means an old checkout — the live app left
   those behind long ago.

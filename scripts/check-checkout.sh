@@ -34,7 +34,15 @@ cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}" 
 # The one repository that deploys. Matched as a substring so it works for an
 # https remote, an ssh remote, and the proxied remote used by Claude Code on the
 # web — all three spell the path the same way.
-EXPECTED_REPO="andrewr92896-ship-it/vts-portal"
+#
+# BOTH NAMES ARE ACCEPTED, on purpose. The repository is being renamed
+# vts-portal -> vts-terminal, and a guard that knew only one of them would call
+# every session a wrong checkout for whichever side of the rename it was on —
+# a false STOP on the one check whose entire job is to be believed. GitHub keeps
+# redirecting the old name indefinitely, and a clone made before the rename
+# keeps its old remote URL until someone updates it, so both spellings stay
+# genuinely correct. Drop `vts-portal` once every clone has been re-pointed.
+EXPECTED_REPOS=("andrewr92896-ship-it/vts-terminal" "andrewr92896-ship-it/vts-portal")
 
 REMOTE="$(git remote get-url origin 2>/dev/null || echo 'none')"
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown')"
@@ -50,7 +58,7 @@ note() {
 }
 
 echo ""
-echo "── VTS Portal · checkout check ─────────────────────────────"
+echo "── VTS Terminal · checkout check ───────────────────────────"
 echo "  path      $HERE"
 echo "  remote    $REMOTE"
 echo "  branch    $BRANCH @ $HEAD_SHA  ($COMMITS commits)"
@@ -59,10 +67,15 @@ echo ""
 
 # 1. Right repository. A clone of something else, or no remote at all, is the
 #    clearest possible sign of being in the wrong folder.
-case "$REMOTE" in
-  *"$EXPECTED_REPO"*) ;;
-  *) note "remote is not $EXPECTED_REPO — this is not the portal's repo" ;;
-esac
+repo_ok=0
+for expected in "${EXPECTED_REPOS[@]}"; do
+  case "$REMOTE" in
+    *"$expected"*) repo_ok=1; break ;;
+  esac
+done
+if [ "$repo_ok" -eq 0 ]; then
+  note "remote is not ${EXPECTED_REPOS[0]} — this is not the terminal's repo"
+fi
 
 # 2. Not inside a cloud-sync folder. OneDrive/Dropbox/Drive/iCloud rewrite files
 #    underneath git and corrupt packfiles; the known-bad clone lived in one, and

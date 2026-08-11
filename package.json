@@ -1,8 +1,8 @@
 {
-  "name": "vts-portal",
+  "name": "vts-terminal",
   "version": "0.2.0",
   "private": true,
-  "description": "Vitalis Trading Systems Portal \u2014 monorepo (frontend + backend).",
+  "description": "Vitalis Trading Systems Terminal \u2014 monorepo (frontend + backend).",
   "type": "module",
   "workspaces": [
     "apps/api",
