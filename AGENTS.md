@@ -4675,7 +4675,19 @@ empty, which looks like "no news today" rather than "this source is gone".
 
 ## Verifying changes
 
-Run before merging (both must pass):
+**`npm run verify` runs all of it, and is the only command you need.** It
+typechecks, runs every check below, and builds — in that order, cheapest first,
+so a failure surfaces fast. It generates its own throwaway `CREDENTIALS_KEY` and
+`SESSION_SECRET`, so there is nothing to set up and nothing to remember.
+
+**GitHub Actions runs the same command on every pull request**
+(`.github/workflows/verify.yml`). That is what makes it impossible for work from
+one tool to reach `main` having had fewer checks than work from the other — do
+not add a check to your own routine without adding it to `scripts/verify.sh`,
+where both tools and CI will pick it up.
+
+The individual commands still exist and are worth knowing, because when `verify`
+fails it fails at one of them and that one is the fastest thing to re-run:
 
 - Typecheck: `npm run typecheck` (root; api + web). Single workspace:
   `npm --workspace @vts/api run typecheck` / `@vts/web`.
