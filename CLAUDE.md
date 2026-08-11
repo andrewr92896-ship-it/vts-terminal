@@ -3383,12 +3383,29 @@ particular. Migration `0124` adds `user_team_members.tile_color` and
   **no web mirror of the palette** to drift — unlike `FEATURE_TIER`, nothing on
   the client needs to know what a key means.
 - **A colour is stored as a palette KEY and a raw hex is refused**
-  (`normalizeTileColor`). That is the guard, not tidiness: **green, red, gold and
-  amber are absent from the palette and nothing warm may be added**, because on a
-  trade tile those already mean winning, losing, break-even and a trailing stop.
-  A losing position washed green is the one mistake this feature could make that
-  costs money to misread. Nine cool/neutral choices for a group capped at five
-  people is enough.
+  (`normalizeTileColor`). That is what bounds the palette to colours somebody
+  chose deliberately, rather than whatever a hand-rolled request sends.
+- **THE PALETTE IS THE WHOLE WHEEL, WARM HALF INCLUDED** — sixteen bright,
+  saturated choices (owner decision, 2026-08). The first cut withheld red,
+  orange, yellow and green on the grounds that a trade tile already uses those
+  for winning, losing, break-even and a trailing stop. **The owner overruled
+  that, and the reasoning is worth keeping**: nine cool colours were too close to
+  one another to tell four people apart at a glance, which is the entire job, and
+  a palette that fails at its job is not a safe palette.
+  - **What replaced the rule is that THE COLOUR NEVER TOUCHES A FIGURE.** Every
+    reading that means win or lose keeps its own colour and none are derived
+    from the tile colour: the open P/L number stays green/red, the LONG/SHORT
+    pill and the card's top edge stay green/red for the side, the B/E chip stays
+    gold, TP/SL keep theirs. The tile colour is confined to the card's wash, its
+    left bar and the **owner chip** — surfaces that never carried a meaning of
+    their own. A red tile says "this is Dale's"; the money on it still says
+    green when it is up. **Keep that boundary** — it is the whole safety
+    argument now, and it is what a new position surface has to respect.
+  - Values are picked bright and saturated deliberately, because they are drawn
+    at ~24% over a navy card and a muted hex vanishes at that blend.
+  - Migration `0124`'s own comment still states the original no-warm-colours
+    rule. It is applied and is left exactly as written — a dated record, like a
+    patch note, and never edited (drizzle keys applied migrations on that file).
 - **`slate` is the exact gray funded positions have always carried, and it is the
   funded default.** So a group that never touches this sees the wall it saw
   yesterday: every column is null on deploy, null means "as it was", and only
@@ -3420,9 +3437,17 @@ particular. Migration `0124` adds `user_team_members.tile_color` and
   translucent background would drop the card colour rather than blend with it).
   `tileTint` is exported from `TradeCard` so one blend rule serves all of them.
 - **A row that can be coloured reserves the bar whether or not it has one**
-  (`borderLeft: 3px solid transparent` on the base row style, header included).
-  Without it a list mixing coloured and plain positions steps 3px in and out and
-  the columns stop lining up with their headings.
+  (`borderLeft: 4px solid transparent` on the base row style, header included).
+  Without it a list mixing coloured and plain positions steps in and out and the
+  columns stop lining up with their headings.
+- **The strength was raised once and must not drift back down** (owner
+  instruction, 2026-08). It shipped at a 13% wash with a 3px bar and was too
+  subtle to do its job — four people's cards read as one. Now: **24% on a card,
+  30–32% on a dense row** (a row has far less area, so the same blend reads
+  weaker), a **5px** bar on the card, **4px** on a row, and the owner chip or
+  handle drawn in the colour outright. `tileTint`'s default is the card figure;
+  `tileChip` is the chip. If a colour looks too strong, the answer is a
+  different colour, not a wash nobody can see.
 - Everyone in the group sees the same board — colours belong to the group, not to
   the viewer. Somebody on no group resolves to the defaults, which is the
   appearance every tile had before this existed.

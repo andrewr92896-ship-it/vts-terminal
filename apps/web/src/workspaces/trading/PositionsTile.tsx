@@ -200,17 +200,18 @@ function PositionRow({ t, mine, showMoney, canSeeBalances }: { t: LiveTrade; min
   const plColor = up ? GREEN : RED;
   const owner = t.owner.split('@')[0] || t.owner;
   // Whose position this is, in the group's colour — the same wash the full card
-  // carries, so a row and a card of the same trade read alike. A little stronger
-  // here (18% vs 13%): the same blend over a one-line row is barely visible.
-  // The left bar is what does most of the work when several rows are scanned at
-  // once; the row has no left border of its own, so it costs nothing.
+  // carries, so a row and a card of the same trade read alike. Stronger here
+  // than on the card (32% vs 24%): the same blend over a one-line row covers a
+  // fraction of the area and reads far weaker. The left bar does most of the
+  // work when several rows are scanned at once; the row reserves it either way,
+  // so a coloured row never steps out of line with a plain one.
   const accent = t.tileColor ?? (t.broker === 'ftp' ? OFF_BOOK_GRAY : null);
 
   return (
     <div
       style={
         accent
-          ? { ...row, borderLeft: `3px solid ${accent}`, background: tileTint(accent, 'transparent', 18) }
+          ? { ...row, borderLeft: `4px solid ${accent}`, background: tileTint(accent, 'transparent', 32) }
           : row
       }
     >
@@ -220,7 +221,10 @@ function PositionRow({ t, mine, showMoney, canSeeBalances }: { t: LiveTrade; min
           <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'L' : 'S'}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          {!mine && <span style={{ fontSize: 9.5, color: '#9fb3e0', fontFamily: MONO }}>@{owner}</span>}
+          {/* The handle takes the colour too — on a dense list the name is what
+              the eye lands on, and a coloured name is read faster than a bar in
+              the margin. */}
+          {!mine && <span style={{ fontSize: 9.5, color: accent ?? '#9fb3e0', fontWeight: accent ? 700 : 400, fontFamily: MONO }}>@{owner}</span>}
           <span style={{ fontSize: 9.5, color: FAINT }}>{t.brokerName}</span>
           {t.currentPrice != null && <span style={{ fontSize: 9.5, color: MUTED, fontFamily: MONO }}>@ {fmtPrice(t.currentPrice)}</span>}
         </div>
@@ -287,7 +291,7 @@ const row: CSSProperties = {
   // Every row reserves the tile-colour bar whether or not it has one, so a list
   // mixing coloured and uncoloured positions keeps a straight left edge instead
   // of each coloured row stepping 3px to the right of its neighbours.
-  borderLeft: '3px solid transparent',
+  borderLeft: '4px solid transparent',
 };
 const hint: CSSProperties = { padding: '18px 14px', fontSize: 11.5, color: MUTED, textAlign: 'center', lineHeight: 1.5 };
 const sideBadge: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.4px', borderRadius: 4, padding: '1px 4px' };

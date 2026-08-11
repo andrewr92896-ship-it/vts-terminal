@@ -96,7 +96,7 @@ function mixHex(a, b, t){
   const c = (i) => Math.round(p(a,i)*t + p(b,i)*(1-t)).toString(16).padStart(2,"0");
   return "#" + c(0) + c(1) + c(2);
 }
-function cardColor(p){ return p.tileColor ? new Color(mixHex(p.tileColor, "#112a56", 0.13)) : C.card; }
+function cardColor(p){ return p.tileColor ? new Color(mixHex(p.tileColor, "#112a56", 0.24)) : C.card; }
 function money(n){ const s = Math.abs(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); return (n<0?"-$":"$")+s; }
 function pips(n){ const s = Math.abs(n).toFixed(1); return (n>0?"+":n<0?"-":"")+s+" pip"+(Math.abs(n)===1?"":"s"); }
 function price(n){ if(n===null||n===undefined) return "—"; if(Math.abs(n)>=1000) return n.toLocaleString("en-US",{maximumFractionDigits:2}); return String(Number(n.toFixed(5))); }
@@ -120,12 +120,12 @@ function renderCard(w, p, detailed){
   const long = p.side==="long";
   const sideColor = long?C.green:C.red;
   const card = w.addStack(); card.layoutVertically(); card.backgroundColor=cardColor(p); card.cornerRadius=10; card.setPadding(9,11,9,11); card.spacing=5;
-  if(p.tileColor){ card.borderWidth=1; card.borderColor=new Color(p.tileColor, 0.55); }
+  if(p.tileColor){ card.borderWidth=2; card.borderColor=new Color(p.tileColor, 0.85); }
   const head = card.addStack(); head.centerAlignContent();
   const sym = head.addText(p.instrument); sym.font=Font.boldSystemFont(14); sym.textColor=Color.white();
   head.addSpacer(6); pill(head, long?"LONG":"SHORT", sideColor); head.addSpacer();
   const meta = card.addStack(); meta.centerAlignContent();
-  const ow = meta.addText("@"+p.owner); ow.font=Font.mediumSystemFont(9.5); ow.textColor=new Color("#bcd0ff");
+  const ow = meta.addText("@"+p.owner); ow.font=Font.mediumSystemFont(9.5); ow.textColor=p.tileColor?new Color(p.tileColor):new Color("#bcd0ff");
   meta.addSpacer(6); const bk = meta.addText(p.brokerName||p.broker); bk.font=Font.systemFont(9.5); bk.textColor=C.muted;
   if(detailed){
     const r1 = card.addStack(); r1.spacing=12; field(r1,"Planned",price(p.plannedEntry)); field(r1,"Fill",price(p.entryPrice));
@@ -160,15 +160,15 @@ function renderRow(w, p){
   // widget rather than as one position; the bar is what the terminal's compact
   // list draws too. An uncoloured row reserves the same width so the column of
   // instruments stays straight.
-  if(p.tileColor){ const bar=row.addStack(); bar.size=new Size(3,15); bar.cornerRadius=1.5; bar.backgroundColor=new Color(p.tileColor); row.addSpacer(6); }
-  else { row.addSpacer(9); }
+  if(p.tileColor){ const bar=row.addStack(); bar.size=new Size(4,15); bar.cornerRadius=2; bar.backgroundColor=new Color(p.tileColor); row.addSpacer(6); }
+  else { row.addSpacer(10); }
   const dot = row.addStack(); dot.size = new Size(7,7); dot.cornerRadius = 4; dot.backgroundColor = dotColor;
   row.addSpacer(7);
   const sym = row.addText(p.instrument); sym.font=Font.boldSystemFont(12.5); sym.textColor=Color.white(); sym.lineLimit=1;
   row.addSpacer(5);
   const sd = row.addText(long?"LONG":"SHORT"); sd.font=Font.boldSystemFont(8.5); sd.textColor=sideColor;
   row.addSpacer(7);
-  const ow = row.addText("@"+p.owner); ow.font=Font.systemFont(10); ow.textColor=C.muted; ow.lineLimit=1;
+  const ow = row.addText("@"+p.owner); ow.font=Font.systemFont(10); ow.textColor=p.tileColor?new Color(p.tileColor):C.muted; ow.lineLimit=1;
   row.addSpacer(7);
   const at = row.addText(stamp(p.openedAt)); at.font=Font.regularMonospacedSystemFont(9); at.textColor=C.faint; at.lineLimit=1;
   row.addSpacer();

@@ -222,11 +222,11 @@ function PositionRow({
 
   // Whose position this is, in the group's colour. This row's left border is
   // already spoken for by the side (green long / red short), so the colour is
-  // carried by the background wash alone rather than fighting it — the LONG /
+  // carried by the wash and the owner line rather than fighting it — the LONG /
   // SHORT pill beside the instrument says the side in words either way, but
   // moving that border would be a change to a different thing than was asked
-  // for. The wash is a little stronger than the card's for the same reason the
-  // compact list's is: less area to read it off.
+  // for. The wash is stronger than the card's for the same reason the compact
+  // list's is: far less area to read it off.
   const accent = trade.tileColor ?? (trade.broker === 'ftp' ? OFF_BOOK_GRAY : null);
 
   return (
@@ -234,7 +234,7 @@ function PositionRow({
       style={{
         ...row,
         borderLeft: `2px solid ${long ? GREEN : RED}`,
-        ...(accent ? { background: tileTint(accent, 'transparent', 18) } : {}),
+        ...(accent ? { background: tileTint(accent, 'transparent', 30) } : {}),
       }}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
@@ -317,7 +317,10 @@ function PositionRow({
       )}
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 10.5, color: FAINT }}>
+        {/* The owner line takes the colour, which on a dense book is what the
+            eye actually reads — the wash says two rows differ, the name says
+            whose. */}
+        <span style={{ fontSize: 10.5, color: accent ?? FAINT, fontWeight: accent ? 700 : 400 }}>
           {own ? trade.brokerName : `${trade.owner} · ${trade.brokerName}`}
         </span>
         <span style={{ flex: 1 }} />
