@@ -30,8 +30,14 @@ not find out: the clone sat in a cloud-sync folder where `git fetch` hangs
 outright, and the preview it "verified" against served those same stale files,
 so every check it ran confirmed the wrong thing.
 
-`.claude/hooks/session-start.sh` prints this automatically at the start of every
-session. If it says **STOP**, believe it — but the checks are simple enough to
+The check is `scripts/check-checkout.sh`. **Claude Code runs it automatically**
+at the start of every session, via `.claude/hooks/session-start.sh`. **Codex has
+no repo-level hook, so run it yourself as your first command:**
+
+    bash scripts/check-checkout.sh
+
+It never touches the network and always exits 0, so it is safe to run anywhere,
+any time. If it says **STOP**, believe it — but the checks are simple enough to
 run by hand, and they are worth knowing:
 
 - **Remote** is `andrewr92896-ship-it/vts-portal`. Anything else is the wrong
