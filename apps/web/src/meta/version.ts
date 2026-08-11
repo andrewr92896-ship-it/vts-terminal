@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.09';
+export const APP_VERSION = 'Beta V 7.10';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.10',
+    date: 'August 11, 2026',
+    notes: [
+      'Open trades can now be managed from the Live Wall. Your own positions carry the same Stop / target and Close controls Live Trades has, on the cards and in the compact list alike.',
+      'A stop or target typed here is priced as you type it — the money and the pips it sits from your fill — and closing asks first.',
+      'Only your own positions are editable, and only where there is something to reach: an OANDA trade goes to your broker, while a funded or hand-kept one records what your account is holding and sends nothing anywhere. Teammates’ trades stay watch-only.',
+    ],
+  },
   {
     version: 'Beta V 7.09',
     date: 'August 11, 2026',

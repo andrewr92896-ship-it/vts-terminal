@@ -1,7 +1,16 @@
 import { useState, type CSSProperties } from 'react';
 import { api, ApiError } from '../../api/client';
 import { OFF_BOOK_GRAY, fmtMoney, fmtPrice, fmtUnits, tileTint } from './TradeCard';
-import { fmtPerStep, fmtPips, fmtSteps, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
+import { fmtPerStep, fmtPips, movementFor, movementLeg, type Movement, type MovementLeg } from './pips';
+import {
+  LegReading,
+  PositionActions,
+  ProtectionEditor,
+  miniBtn,
+  miniLabel,
+  usePositionEditKind,
+  usePositionEditor,
+} from './positionEdit';
 import { TradeTimesCell, etSince } from './tradeTime';
 import type { DeskHolding, DeskOrderRecord, DeskWorkingOrder, LiveTrade } from '../../api/types';
 
@@ -37,11 +46,10 @@ const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 const MONO = "'IBM Plex Mono', monospace";
 
-// A Live Wall position id is `${connectionId}:${broker}:${brokerTradeId}`; the
-// broker's own id — what the close/modify endpoints take — is the last segment.
-export function brokerTradeId(id: string): string {
-  return id.slice(id.lastIndexOf(':') + 1);
-}
+// Acting on a position — which ones may be, what each save path does, and the
+// editor itself — is shared with the Live Wall, which now offers the same
+// controls on the same positions. See `positionEdit.tsx`.
+export { brokerTradeId } from './positionEdit';
 
 interface TeamProps {
   trades: LiveTrade[];
@@ -79,6 +87,7 @@ export function TeamPositions({ trades, myUserId, currency, hideMoney, readOnly,
               key={t.id}
               trade={t}
               own
+              sample={sample}
               currency={currency}
               hideMoney={hideMoney}
               readOnly={readOnly}
@@ -97,6 +106,7 @@ export function TeamPositions({ trades, myUserId, currency, hideMoney, readOnly,
               key={t.id}
               trade={t}
               own={false}
+              sample={sample}
               currency={currency}
               hideMoney={hideMoney}
               readOnly={readOnly}
@@ -113,6 +123,7 @@ export function TeamPositions({ trades, myUserId, currency, hideMoney, readOnly,
 function PositionRow({
   trade,
   own,
+  sample,
   currency,
   hideMoney,
   readOnly,
@@ -121,47 +132,20 @@ function PositionRow({
 }: {
   trade: LiveTrade;
   own: boolean;
+  sample: boolean;
   currency: string;
   hideMoney: boolean;
   readOnly: boolean;
   onPick: (instrument: string) => void;
   onChanged: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [confirmClose, setConfirmClose] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sl, setSl] = useState(trade.stopLoss == null ? '' : String(trade.stopLoss));
-  const [tp, setTp] = useState(trade.takeProfit == null ? '' : String(trade.takeProfit));
-
   const long = trade.side === 'long';
   const pl = trade.unrealizedPl;
 
-  // What this row's controls actually do, which differs by where the position
-  // lives — and the difference is the point rather than an inconvenience:
-  //
-  //   • 'broker'  a live OANDA trade. The stop and target are instructions sent
-  //               to the broker, and the whole position can be closed from here.
-  //   • 'note'    a funded (prop-firm) or hand-kept manual position. There is no
-  //               broker behind it, so its stop and target are a record of what
-  //               the firm is holding — worth editing here, since a stop moved
-  //               at the prop firm otherwise reaches the desk only by
-  //               re-importing a screenshot from another screen.
-  //
-  // A Kraken margin row is neither: the desk refuses to close or amend one by
-  // name, so it stays watch-only here too.
-  const editKind: 'broker' | 'note' | null =
-    !own || readOnly
-      ? null
-      : trade.broker === 'oanda'
-        ? 'broker'
-        : trade.broker === 'ftp' || trade.broker === 'manual'
-          ? 'note'
-          : null;
-  const actionable = editKind != null;
-  // Only a real broker position can be closed from the desk. A funded trade is
-  // closed from its own screen, where the result screenshot is read.
-  const closable = editKind === 'broker';
+  // Which of this row's controls are offered, and what saving one does, is
+  // shared with the Live Wall — see `positionEdit.tsx`.
+  const editKind = usePositionEditKind(trade, { own, readOnly, sample });
+  const editor = usePositionEditor(trade, editKind, onChanged);
 
   // What a unit of price movement is worth on this position — pips on a currency
   // pair, points on anything else — and what the stop and target are therefore
@@ -171,92 +155,6 @@ function PositionRow({
   const risk = movementLeg(trade.entryPrice, trade.stopLoss, move);
   const reward = movementLeg(trade.entryPrice, trade.takeProfit, move);
   const rr = risk && reward && risk.steps > 0 ? reward.steps / risk.steps : null;
-
-  // Seed the editor from the position as it stands *now*, not as it stood when
-  // this row first rendered: the book refreshes underneath, so a stop placed or
-  // moved since mount would otherwise open as an empty box — and saving an empty
-  // box means "remove that order".
-  const openEditor = () => {
-    setSl(trade.stopLoss == null ? '' : String(trade.stopLoss));
-    setTp(trade.takeProfit == null ? '' : String(trade.takeProfit));
-    setError(null);
-    setEditing(true);
-  };
-
-  // What the levels being typed into the editor are worth, live.
-  const draftLeg = (text: string): MovementLeg | null => {
-    const value = text.trim() === '' ? null : Number(text);
-    if (value == null || !Number.isFinite(value)) return null;
-    return movementLeg(trade.entryPrice, value, move);
-  };
-
-  const close = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      await api.closeDeskPosition({
-        connectionId: trade.connectionId,
-        tradeId: brokerTradeId(trade.id),
-        instrument: trade.instrument,
-      });
-      setConfirmClose(false);
-      onChanged();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not close the position');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const saveProtection = async () => {
-    // A blank field means "remove that order" (null); a field left as it was is
-    // omitted entirely, so an untouched level is never cancelled and re-placed
-    // at the broker just because the trader opened the editor to change the other.
-    const next = (text: string, current: number | null) => {
-      const value = text.trim() === '' ? null : Number(text);
-      if (value === current) return undefined;
-      if (value != null && !Number.isFinite(value)) return undefined;
-      return value;
-    };
-    const stopLoss = next(sl, trade.stopLoss);
-    const takeProfit = next(tp, trade.takeProfit);
-    if (stopLoss === undefined && takeProfit === undefined) {
-      setEditing(false);
-      return;
-    }
-    const levels = {
-      ...(stopLoss === undefined ? {} : { stopLoss }),
-      ...(takeProfit === undefined ? {} : { takeProfit }),
-    };
-    setBusy(true);
-    setError(null);
-    try {
-      // The id in a Live Wall position is `<something>:<the row's own id>`, so
-      // the last segment is what each of these endpoints takes: a broker trade
-      // id, a funded trade id, or a manual position id. All three are
-      // owner-scoped server-side — a teammate's row is watch-only because no
-      // write path can reach it, not because this hides a button.
-      const id = brokerTradeId(trade.id);
-      if (editKind === 'note' && trade.broker === 'ftp') {
-        await api.setFundedTradeProtection(id, levels);
-      } else if (editKind === 'note') {
-        await api.updatePosition(id, levels);
-      } else {
-        await api.modifyDeskPosition({
-          connectionId: trade.connectionId,
-          tradeId: id,
-          instrument: trade.instrument,
-          ...levels,
-        });
-      }
-      setEditing(false);
-      onChanged();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not change the stop or target');
-    } finally {
-      setBusy(false);
-    }
-  };
 
   // Whose position this is, in the group's colour. This row's left border is
   // already spoken for by the side (green long / red short), so the colour is
@@ -338,7 +236,7 @@ function PositionRow({
           this panel can say, and saying it by omission (the old inline "· sl
           1.14908", absent when unset) meant an unprotected position looked
           exactly like one whose stop had simply scrolled off the line. */}
-      {!editing && (
+      {!editor.editing && (
         <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
           <Protection label="Stop loss" price={trade.stopLoss} leg={risk} move={move} hideMoney={hideMoney} color={RED} />
           <Protection label="Take profit" price={trade.takeProfit} leg={reward} move={move} hideMoney={hideMoney} color={GREEN} />
@@ -362,60 +260,14 @@ function PositionRow({
           {own ? trade.brokerName : `${trade.owner} · ${trade.brokerName}`}
         </span>
         <span style={{ flex: 1 }} />
-        {actionable && !editing && !confirmClose && (
-          <>
-            <button onClick={openEditor} style={miniBtn}>
-              {trade.stopLoss == null && trade.takeProfit == null ? 'Add stop / target' : 'Stop / target'}
-            </button>
-            {closable && (
-              <button onClick={() => setConfirmClose(true)} style={{ ...miniBtn, color: RED, borderColor: 'rgba(239,84,104,.45)' }}>
-                {"Close"}
-              </button>
-            )}
-          </>
-        )}
-        {confirmClose && (
-          <>
-            <span style={{ fontSize: 11, color: MUTED }}>{"Close the whole position?"}</span>
-            <button onClick={() => setConfirmClose(false)} style={miniBtn} disabled={busy}>{"No"}</button>
-            <button onClick={() => void close()} disabled={busy} style={{ ...miniBtn, color: '#fff', background: RED, borderColor: RED }}>
-              {busy ? 'Closing…' : 'Yes, close'}
-            </button>
-          </>
-        )}
+        {editKind && <PositionActions trade={trade} kind={editKind} editor={editor} />}
       </div>
 
-      {editing && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          {/* Each box opens on the level the broker is holding right now, and
-              prices what is typed into it as it is typed — the same money · pips
-              reading the order ticket gives, so amending a stop is scored the
-              same way as setting one. */}
-          <label style={miniField}>
-            <span style={miniLabel}>{"Stop loss"}</span>
-            <input value={sl} onChange={(e) => setSl(e.target.value)} inputMode="decimal" placeholder="none" style={miniInput} />
-            <LegReading leg={draftLeg(sl)} move={move} hideMoney={hideMoney} color={RED} />
-          </label>
-          <label style={miniField}>
-            <span style={miniLabel}>{"Take profit"}</span>
-            <input value={tp} onChange={(e) => setTp(e.target.value)} inputMode="decimal" placeholder="none" style={miniInput} />
-            <LegReading leg={draftLeg(tp)} move={move} hideMoney={hideMoney} color={GREEN} />
-          </label>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 16 }}>
-            <button onClick={() => setEditing(false)} style={miniBtn} disabled={busy}>{"Cancel"}</button>
-            <button onClick={() => void saveProtection()} disabled={busy} style={{ ...miniBtn, color: '#0c2768', background: GOLD, borderColor: GOLD, fontWeight: 700 }}>
-              {busy ? 'Saving…' : 'Save'}
-            </button>
-          </div>
-          <div style={{ fontSize: 10, color: FAINT, width: '100%' }}>
-            {editKind === 'note'
-              ? 'Leave a box empty to clear that level. This records what your account is holding — nothing is sent to a broker.'
-              : 'Leave a box empty to remove that order.'}
-          </div>
-        </div>
+      {editKind && editor.editing && (
+        <ProtectionEditor kind={editKind} editor={editor} move={move} hideMoney={hideMoney} />
       )}
 
-      {error && <div style={{ fontSize: 11, color: RED, marginTop: 6 }}>{error}</div>}
+      {editor.error && <div style={{ fontSize: 11, color: RED, marginTop: 6 }}>{editor.error}</div>}
     </div>
   );
 }
@@ -446,30 +298,6 @@ function Protection({
         {price == null ? 'none' : fmtPrice(price)}
       </div>
       <LegReading leg={leg} move={move} hideMoney={hideMoney} color={MUTED} />
-    </div>
-  );
-}
-
-// The money and distance of one leg, e.g. "$60.00 · 15 pips". The blank line is
-// kept when there is nothing to say so a row of these does not jump about as
-// levels are typed in and cleared.
-function LegReading({
-  leg,
-  move,
-  hideMoney,
-  color,
-}: {
-  leg: MovementLeg | null;
-  move: Movement;
-  hideMoney: boolean;
-  color: string;
-}) {
-  const money = leg && !hideMoney && leg.money != null ? fmtMoney(leg.money, move.currency) : null;
-  if (!leg) return <div style={{ height: 14 }} />;
-  return (
-    <div style={{ fontSize: 10, color, fontFamily: MONO, marginTop: 2, height: 14 }} title="Distance from your fill">
-      {money != null ? `${money} · ` : ''}
-      {fmtSteps(leg.steps, move)}
     </div>
   );
 }
@@ -663,11 +491,7 @@ const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`,
 const row: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER}`, borderRadius: 9, padding: '10px 12px', marginBottom: 8 };
 const instrumentBtn: CSSProperties = { background: 'none', border: 'none', color: GOLD, fontFamily: MONO, fontWeight: 700, fontSize: 13, padding: 0, cursor: 'pointer' };
 const sidePill: CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '.4px', border: '1px solid', borderRadius: 999, padding: '2px 8px', fontFamily: MONO };
-const miniBtn: CSSProperties = { background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, color: '#dfe7fa', fontSize: 11, fontWeight: 600, padding: '5px 10px', borderRadius: 6, cursor: 'pointer' };
-const miniField: CSSProperties = { display: 'flex', flexDirection: 'column', gap: 3 };
 // Wide enough for the level, its money reading, and the editor's own input box,
 // so the stop and target line up as columns from row to row and stay put when a
 // row is opened for editing.
 const protectionCell: CSSProperties = { minWidth: 126 };
-const miniLabel: CSSProperties = { fontSize: 9.5, color: FAINT, letterSpacing: '.4px', textTransform: 'uppercase' };
-const miniInput: CSSProperties = { background: 'rgba(3,12,32,.8)', border: `1px solid ${BORDER2}`, borderRadius: 6, color: TEXT, fontSize: 13, padding: '6px 8px', outline: 'none', fontFamily: MONO, width: 104 };
