@@ -20,6 +20,8 @@ import {
   aiUsage,
   notificationPrefs,
   sessionAlertPrefs,
+  alertPrefs,
+  pushoverReceipts,
   userFeatures,
   aiViolations,
   budgetCategories,
@@ -339,6 +341,10 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     displayTimezone: null,
     // On the public study leaderboards by default; switched off in Preferences.
     hideFromLeaderboards: false,
+    // No home page chosen — the terminal opens where it always did until they
+    // pick one in My Terminal ▸ Settings.
+    homeWorkspace: null,
+    homeScreen: null,
     teamId,
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,
@@ -581,6 +587,12 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // Pushover user key behind after the account is gone).
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, targetId));
     await tx.delete(pushoverUsers).where(eq(pushoverUsers.userId, targetId));
+    // How long their repeating alerts repeated for, and the record of which ones
+    // fired and were answered. The receipts are NOT an access audit — nothing
+    // here records a credential being used, only that this person's own phone
+    // was buzzed — so unlike credential_audit they go with the account.
+    await tx.delete(alertPrefs).where(eq(alertPrefs.userId, targetId));
+    await tx.delete(pushoverReceipts).where(eq(pushoverReceipts.userId, targetId));
     // Per-user Studies progress (learned terms, custom vocab, starred questions,
     // custom subsections, game/test state and banked leaderboard runs).
     await tx.delete(studyLearned).where(eq(studyLearned.userId, targetId));

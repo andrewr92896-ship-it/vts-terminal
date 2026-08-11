@@ -477,24 +477,83 @@ workspaces list** (see `theme/nav.ts` order).
       3am reads the first line on a lock screen and little more; a test
       indistinguishable from a fill gets acted on, and a notification system
       that cries wolf is worse than one that stays quiet.
-    - **The emergency test is the one that answers the real question.**
-      `PUSHOVER_EMERGENCY` (priority 2) repeats until acknowledged and is the
-      **only** level iOS lets through silent mode and Focus — and only once the
-      recipient switches **Override Silent Mode** on under Emergency Priority in
-      the Pushover app. That is a phone setting the terminal cannot make on
-      somebody's behalf, so firing one and seeing is the only honest way to know
-      it is right. This is what caused the missed nights that prompted the
-      screen: everything the terminal actually sends goes at priority **1**,
-      which Do Not Disturb silences.
-      - Pushover **refuses** a priority-2 message without both `retry` and
-        `expire`, so `sendOne` supplies them unconditionally at that priority —
-        a caller forgetting one must never become a silent non-delivery. Its
-        bounds are retry ≥ 30s, expire ≤ 10800s (3 hours); a test uses 30s/120s
-        deliberately, so nobody is left with a phone nagging for three hours
-        because they sent a test and put it down.
-      - **The live alert pipeline is UNCHANGED and still sends at priority 1.**
-        Emergency is reachable only from the test button. Moving the real
-        notifications onto it is a separate owner decision, not a tidy-up.
+    - **EVERY TRADE EVENT HAS ITS OWN VOLUME** — the four-rung ladder in
+      `notifications/prefs.ts` (`NOTIF_LEVELS`, `LEVEL_PRIORITY`), stored per
+      `(recipient, watched trader, event)` beside the on/off boolean that
+      already existed (migration `0121`).
+      | level | Pushover priority | what the phone does |
+      | --- | --- | --- |
+      | `silent` | −1 | shows, no sound, no vibration |
+      | `normal` | 0 | sound, respects Pushover's quiet hours |
+      | `alert` | 1 | sound through quiet hours — **what everything sent before** |
+      | `repeating` | 2 | repeats until acknowledged |
+      - **The boolean still decides WHETHER, the level decides HOW LOUD.** Two
+        separate questions: off means you never hear about the event, silent
+        means it is waiting for you when you look.
+      - **`alert` is the default AND the fallback for an unrecognised value.** It
+        is what every notification sent before levels existed, so nothing stored
+        changed meaning and no backfill was needed — and a level nobody
+        recognises must never silence an alert somebody is relying on.
+      - **PUSHOVER ONLY.** Web push has no equivalent — a browser notification is
+        a browser notification — so a level never changes whether the phone-alert
+        copy is sent. `recipientLevelsForEvent` answers who *and* how loud in one
+        query, and `recipientsWantingEvent` is the thin id-only wrapper web push
+        uses; reading them separately is how two channels come to disagree about
+        who is being notified.
+      - **A flags-only save leaves levels alone** (`setPref`'s optional fourth
+        argument, and the route's union schema). The web app is a
+        service-worker-cached PWA, so a browser on an old bundle posts bare flags
+        — and that must not silently reset somebody's repeating alert.
+    - **`alert_prefs` — how often a repeating alert repeats and for how long.**
+      ONE row per user, deliberately not per watched trader: anything worth
+      waking somebody for wants the same urgency, and six copies of two numbers
+      is six things to keep in step. Pushover **refuses** a priority-2 message
+      without both `retry` and `expire`, so `deliver` supplies them
+      unconditionally at that priority. Its bounds are retry ≥ 30s, expire ≤
+      10800s (3 hours), and `normalizeRepeatPrefs` **clamps rather than
+      rejects** — refusing a save here would leave an alert that does not repeat
+      at all, the opposite of what was asked for. Normalized on read too, so a
+      row stored before a bound moved can never hand Pushover a value it refuses.
+    - **A REPEATING ALERT IS ACKNOWLEDGED FROM THE TERMINAL, AND OPENING THE APP
+      IS THE ACKNOWLEDGEMENT** (owner decision, 2026-08). `pushover_receipts`
+      stores the receipt Pushover returns for every priority-2 send — that
+      receipt is the only way to stop the repeats from this side, so without the
+      row the terminal would be drawing a button it could not honour.
+      - **`LiveAlertBanner` silences on arrival**, on mount and on the tab
+        becoming visible or focused (already-open is the case a mount misses).
+        A repeating alert exists to get somebody to the desk, so arriving *is*
+        answering it.
+      - **There is deliberately NO "do you want to acknowledge?" prompt.** It was
+        proposed and rejected: the phone is still making noise while somebody
+        reads a dialog, and a question at 3am is the worst moment to ask one.
+        What replaces it is a card that does not ask but **tells** — what fired
+        and when — and stays until dismissed, so an alert can never be silenced
+        without a trace. That was the only thing the prompt was protecting.
+      - **The row is marked answered even when Pushover's cancel call fails.**
+        The alternative is a banner that will not clear because of a network
+        hiccup, while the phone stops on its own at expiry anyway.
+      - **`callback_token` is what makes the public callback route safe.**
+        Pushover signs nothing, so `POST /api/pushover/callback/:token` is
+        unauthenticated by necessity and matches on an unguessable value —
+        otherwise anybody who could guess a receipt id could mark somebody
+        else's alert answered. It answers 200 whatever happens; Pushover retries
+        what it considers a failure, and there is nothing useful to retry.
+      - **Pushover's own acknowledge button stays the fallback.** If the terminal
+        is unreachable, that is the path that still stops the noise, so nothing
+        here may become the only way out.
+      - Rows are **kept** after resolution rather than deleted — they are the
+        record that an alert fired and that somebody answered it, which is what
+        "did I sleep through one?" needs. A null `resolved_at` is what makes an
+        alert live; the stored `expires_at` is what lets an unanswered one stop
+        being reported without a round trip to Pushover.
+    - **The repeating TEST goes through the same path** as a real one, so it uses
+      the user's own repeat timing and is cancellable from the terminal. A test
+      you cannot acknowledge the way you acknowledge a real alert is not testing
+      the thing the terminal does.
+    - `npm run db:check-alerts` walks all of it through the real services against
+      a scratch database. Like `db:check-sharing` it **writes**, so it refuses any
+      database that already holds a user. Run it after touching `prefs.ts`,
+      `alertPrefs.ts` or `pushoverReceipts.ts`.
     - **The push hook and the Pushover status are owned by the SCREEN and passed
       down** (`PushControls`, `onConnectedChange`). Two hook instances do not see
       each other, so turning phone alerts on in one panel left the test panel
@@ -1268,7 +1327,25 @@ workspaces list** (see `theme/nav.ts` order).
       null with a note, rather than adding currencies. `getLiveWall`'s **sample**
       fallback is ignored — a made-up position has no place in a figure about
       what someone actually owns.
-  - **Net Worth** (`my_networth`, `workspaces/myportal/NetWorth.tsx` over
+  - **The screen the terminal OPENS ON is a setting** (`users.home_workspace` /
+  `home_screen`, migration `0122`; `theme/homeScreen.ts`, picked in My Terminal ▸
+  Settings). Both null = never chosen, which keeps the original behaviour
+  (`pickInitialWorkspace`, then that workspace's `DEFAULT_SCREEN`) — nobody who
+  ignores the setting notices it shipped.
+  - **`homeScreen.ts` is ONE module because the picker and the launcher have to
+    agree.** Both call `homeOptions`, so a screen the picker offers is one the
+    launcher will open, and the section filters mirror `Sidebar.tsx` exactly — a
+    row hidden there must not be offerable as a home page.
+  - **A stored choice means "go here if you still can", not "go here".** Roles,
+    opt-ins and membership all move after it is saved, so `resolveHome` re-checks
+    on every launch: an unreachable *section* falls back to its workspace's
+    default screen (closer to what was asked for than leaving entirely), an
+    unreachable *workspace* falls back to the old behaviour. The pair moves
+    together — a section key means nothing without its workspace — so a
+    half-stored choice resolves as no choice.
+  - Resolved once in a **lazy initializer**, so it is a starting point rather
+    than something that yanks the screen back whenever the user record refreshes.
+- **Net Worth** (`my_networth`, `workspaces/myportal/NetWorth.tsx` over
     `myportal/netWorth.ts` → `/api/my-portal/net-worth`) — everything you own
     minus everything you owe, tracked over time. **Built.** Lives in My Terminal
     rather than Investments as a personal cross-workspace summary, keeping the

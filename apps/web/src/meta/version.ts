@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.02';
+export const APP_VERSION = 'Beta V 7.03';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.03',
+    date: 'August 11, 2026',
+    notes: [
+      'Each trade notification now has its own volume. Pick Silent (shows on your phone, no sound), Normal, Alert, or Repeating for placing a trade, closing one, and each stop or target change — so a stop being moved can be a quiet note while a fill wakes you.',
+      'Repeating alerts keep going until you acknowledge them, and you set how often they buzz and for how long on the same screen. "Emergency" is now called "Repeating" throughout.',
+      'You no longer have to acknowledge in the Pushover app. Opening the terminal silences anything still repeating, and a card tells you what it was so nothing is ever silenced without a trace. Acknowledging on your phone still works and clears the terminal too.',
+      'You can choose which screen the terminal opens on, in My Terminal ▸ Settings — any workspace and section your account can reach. If that screen later becomes unavailable, the terminal falls back instead of landing you somewhere you cannot use.',
+    ],
+  },
   {
     version: 'Beta V 7.02',
     date: 'August 11, 2026',

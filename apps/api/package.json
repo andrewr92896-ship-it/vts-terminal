@@ -14,6 +14,7 @@
     "db:seed": "tsx src/seed.ts",
     "db:verify-positions": "tsx src/trading/verifyPositions.ts",
     "db:check-sharing": "tsx src/studies/checkSharing.ts",
+    "db:check-alerts": "tsx src/notifications/checkAlerts.ts",
     "verify:market-macro": "tsx src/trading/verifyMarketMacro.ts",
     "verify:investments": "tsx src/investments/verifyInvestments.ts",
     "verify:migrations": "tsx src/db/verifyMigrations.ts",

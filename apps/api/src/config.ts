@@ -101,6 +101,13 @@ const envSchema = z.object({
   // the trader's own per-app sound choice in the Pushover app applies.
   PUSHOVER_APP_TOKEN: z.string().optional(),
   PUSHOVER_SOUND: z.string().optional(),
+  // The public origin Pushover should POST to when somebody acknowledges a
+  // repeating alert on their phone. Optional, and it degrades cleanly: with no
+  // reachable URL the terminal simply never learns about a phone-side
+  // acknowledgement, so its own Acknowledge button stays the way to clear the
+  // banner. Falls back to WEB_ORIGIN when that is a real public address —
+  // localhost is skipped rather than sent, since Pushover cannot reach it.
+  PUSHOVER_CALLBACK_ORIGIN: z.string().optional(),
   // Outbound email (SMTP) — currently only used to deliver the Employee
   // Portal's sign-in codes. Optional: when unset, a code is printed to the
   // server log instead of emailed (same "printed once to logs" fallback as an

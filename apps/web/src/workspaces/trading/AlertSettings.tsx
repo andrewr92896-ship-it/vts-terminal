@@ -6,6 +6,7 @@ import {
   PerUserNotificationsSection,
   PhoneNotificationsSection,
   PushoverSection,
+  RepeatTimingSection,
   SendTestSection,
   sectionLabel,
   hintStyle,
@@ -117,6 +118,11 @@ export function AlertSettings() {
           <>
             <Divider />
             <PerUserNotificationsSection accent={accent} accentText={accentText} />
+            <Divider />
+            {/* Directly under the per-event levels, because it is the setting
+                the Repeating rung above depends on — reading them apart would
+                leave "Repeating" meaning nothing in particular. */}
+            <RepeatTimingSection />
           </>
         )}
 

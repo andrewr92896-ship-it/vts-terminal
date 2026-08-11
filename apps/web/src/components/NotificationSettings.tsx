@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { api, ApiError, type NotifTarget, type NotifPrefFlags, type PushoverTestKind } from '../api/client';
+import {
+  api,
+  ApiError,
+  type AlertRepeatPrefs,
+  type NotifLevel,
+  type NotifPrefFlags,
+  type NotifPrefLevels,
+  type NotifTarget,
+  type PushoverTestKind,
+} from '../api/client';
 import { hasEntitlement, tierOfFeature } from '../auth/access';
 import { TierMark } from './TierMark';
 import { UpgradeNotice } from './UpgradeNotice';
@@ -327,7 +336,7 @@ export function PushoverSection({
 // alert indistinguishable from a fill is worse than no test at all, because
 // somebody woken at 3am reads the first line and acts on it.
 //
-// The emergency test is the one that answers the question the standard test
+// The repeating test is the one that answers the question the standard test
 // cannot: whether an alert reaches you through silent mode and Focus. On iPhone
 // that needs Critical Alerts switched on in the Pushover app, which is a phone
 // setting the terminal cannot make on the user's behalf — so the only honest way
@@ -358,8 +367,8 @@ export function SendTestSection({
         setMsg({
           ok: true,
           text:
-            which === 'emergency'
-              ? 'Emergency test sent. It repeats for about 2 minutes until you acknowledge it in the Pushover app.'
+            which === 'repeating'
+              ? 'Repeating test sent. It keeps going until you acknowledge it — in the Pushover app, or just by opening the terminal.'
               : 'Test sent to Pushover.',
         });
       }
@@ -383,7 +392,7 @@ export function SendTestSection({
     minHeight: 40,
   });
   const loudBtn: React.CSSProperties = {
-    ...btn(busy === 'emergency'),
+    ...btn(busy === 'repeating'),
     background: accent,
     border: 'none',
     color: accentText,
@@ -408,8 +417,8 @@ export function SendTestSection({
             <button onClick={() => void fire('standard')} disabled={busy != null} style={btn(busy === 'standard')}>
               {busy === 'standard' ? 'Sending…' : 'Test Pushover'}
             </button>
-            <button onClick={() => void fire('emergency')} disabled={busy != null} style={loudBtn}>
-              {busy === 'emergency' ? 'Sending…' : 'Test emergency alert'}
+            <button onClick={() => void fire('repeating')} disabled={busy != null} style={loudBtn}>
+              {busy === 'repeating' ? 'Sending…' : 'Test repeating alert'}
             </button>
           </>
         )}
@@ -422,9 +431,9 @@ export function SendTestSection({
       )}
       {pushoverReady && (
         <p style={{ ...hintStyle, marginTop: 10, marginBottom: 0 }}>
-          An emergency alert repeats until you acknowledge it in the Pushover app, and is the only
-          kind that sounds through silent mode and Focus on iPhone — which needs Override Silent Mode
-          switched on under Emergency Priority in the Pushover app’s notification settings.
+          A repeating alert keeps going until you acknowledge it, and is the only kind that sounds
+          through silent mode and Focus on iPhone — which needs Override Silent Mode switched on
+          under Emergency Priority in the Pushover app’s notification settings.
         </p>
       )}
       {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
@@ -454,6 +463,7 @@ const NOTIF_EVENT_ROWS: { key: keyof NotifPrefFlags; label: string }[] = [
 export function PerUserNotificationsSection({ accent, accentText }: { accent: string; accentText: string }) {
   const [targets, setTargets] = useState<NotifTarget[] | null>(null);
   const [prefs, setPrefs] = useState<Record<string, NotifPrefFlags>>({});
+  const [levels, setLevels] = useState<Record<string, NotifPrefLevels>>({});
   const [selected, setSelected] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
@@ -465,6 +475,7 @@ export function PerUserNotificationsSection({ accent, accentText }: { accent: st
         if (!alive) return;
         setTargets(d.targets);
         setPrefs(d.prefs);
+        setLevels(d.levels);
         if (d.targets.length) setSelected(d.targets[0].id);
       })
       .catch(() => alive && setTargets([]));
@@ -473,23 +484,37 @@ export function PerUserNotificationsSection({ accent, accentText }: { accent: st
     };
   }, []);
 
-  async function toggle(key: keyof NotifPrefFlags) {
+  // Flags and levels are saved together, so both writes go through here. The
+  // optimistic update is reverted as a pair on failure — reverting one and not
+  // the other would leave the screen showing a combination nothing stored.
+  async function save(nextFlags: NotifPrefFlags, nextLevels: NotifPrefLevels) {
     if (!selected) return;
-    const current = prefs[selected];
-    if (!current) return;
-    const next = { ...current, [key]: !current[key] };
-    setPrefs((p) => ({ ...p, [selected]: next }));
+    const prevFlags = prefs[selected];
+    const prevLevels = levels[selected];
+    setPrefs((p) => ({ ...p, [selected]: nextFlags }));
+    setLevels((l) => ({ ...l, [selected]: nextLevels }));
     setError(null);
     try {
-      await api.setNotificationPref(selected, next);
+      await api.setNotificationPref(selected, nextFlags, nextLevels);
     } catch (e) {
-      // Revert the optimistic flip on failure.
-      setPrefs((p) => ({ ...p, [selected]: current }));
+      if (prevFlags) setPrefs((p) => ({ ...p, [selected]: prevFlags }));
+      if (prevLevels) setLevels((l) => ({ ...l, [selected]: prevLevels }));
       setError(e instanceof ApiError ? e.message : 'Couldn’t save that — try again.');
     }
   }
 
   const flags = selected ? prefs[selected] : undefined;
+  const lv = selected ? levels[selected] : undefined;
+
+  function toggle(key: keyof NotifPrefFlags) {
+    if (!flags || !lv) return;
+    void save({ ...flags, [key]: !flags[key] }, lv);
+  }
+
+  function setLevel(key: keyof NotifPrefFlags, level: NotifLevel) {
+    if (!flags || !lv) return;
+    void save(flags, { ...lv, [key]: level });
+  }
 
   return (
     <section>
@@ -524,30 +549,184 @@ export function PerUserNotificationsSection({ accent, accentText }: { accent: st
             </select>
           )}
 
-          {flags && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {flags && lv && (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
               {NOTIF_EVENT_ROWS.map((row) => (
-                <label
-                  key={row.key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '10px 2px',
-                    cursor: 'pointer',
-                    fontSize: 13.5,
-                    color: '#dfe7fa',
-                  }}
-                >
-                  <span>{row.label}</span>
-                  <ToggleSwitch on={flags[row.key]} accent={accent} accentText={accentText} onClick={() => void toggle(row.key)} />
-                </label>
+                <div key={row.key} style={{ padding: '10px 0', borderTop: '1px solid #16294f' }}>
+                  <label
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      fontSize: 13.5,
+                      color: '#dfe7fa',
+                    }}
+                  >
+                    <span>{row.label}</span>
+                    <ToggleSwitch on={flags[row.key]} accent={accent} accentText={accentText} onClick={() => toggle(row.key)} />
+                  </label>
+                  {/* The level only means something for an event you are being
+                      told about at all, so it appears with the switch on rather
+                      than sitting there greyed out. */}
+                  {flags[row.key] && (
+                    <LevelPicker value={lv[row.key]} onChange={(v) => setLevel(row.key, v)} />
+                  )}
+                </div>
               ))}
             </div>
           )}
         </>
       )}
       {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
+    </section>
+  );
+}
+
+// How loud one event is, quietest first. The labels say what the PHONE does
+// rather than naming a priority — "Silent" is meaningful to somebody choosing;
+// "priority -1" is not.
+const LEVEL_ROWS: { key: NotifLevel; label: string; hint: string }[] = [
+  { key: 'silent', label: 'Silent', hint: 'Shows on your phone, no sound' },
+  { key: 'normal', label: 'Normal', hint: 'Sound, unless you are in Pushover’s quiet hours' },
+  { key: 'alert', label: 'Alert', hint: 'Sound, even during quiet hours' },
+  { key: 'repeating', label: 'Repeating', hint: 'Repeats until you acknowledge it' },
+];
+
+// Pushover only — web push has no equivalent, so this never changes whether the
+// phone-alert copy is sent, just how Pushover delivers its own.
+function LevelPicker({ value, onChange }: { value: NotifLevel; onChange: (v: NotifLevel) => void }) {
+  const active = LEVEL_ROWS.find((r) => r.key === value) ?? LEVEL_ROWS[2];
+  return (
+    <div style={{ marginTop: 8 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {LEVEL_ROWS.map((r) => {
+          const on = r.key === value;
+          return (
+            <button
+              key={r.key}
+              onClick={() => onChange(r.key)}
+              title={r.hint}
+              style={{
+                fontSize: 11.5,
+                fontWeight: 600,
+                padding: '6px 11px',
+                borderRadius: 999,
+                cursor: 'pointer',
+                color: on ? '#0c2768' : '#9fb0d6',
+                background: on ? '#EBCB74' : 'rgba(255,255,255,.05)',
+                border: `1px solid ${on ? '#EBCB74' : '#1d3560'}`,
+              }}
+            >
+              {r.label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ ...hintStyle, marginTop: 6 }}>{active.hint} · Pushover only</div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Repeat timing
+// ---------------------------------------------------------------------------
+
+// How often a repeating alert repeats and for how long. ONE setting shared by
+// every event set to Repeating — anything worth waking somebody for wants the
+// same urgency, and six copies of two numbers is six things to keep in step.
+//
+// The bounds are Pushover's, not a preference: it refuses a retry under 30
+// seconds or an expiry over 3 hours. The server clamps rather than rejects, so
+// these inputs are a convenience, not the enforcement.
+export function RepeatTimingSection() {
+  const [prefs, setPrefs] = useState<AlertRepeatPrefs | null>(null);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .alertRepeatPrefs()
+      .then((r) => alive && setPrefs(r.prefs))
+      .catch(() => alive && setPrefs({ repeatEverySeconds: 30, repeatForSeconds: 300 }));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function persist(next: AlertRepeatPrefs) {
+    setPrefs(next);
+    setStatus('saving');
+    try {
+      const r = await api.saveAlertRepeatPrefs(next);
+      // Take the server's answer back: it clamps, so this is where an
+      // out-of-range number visibly becomes the one actually in force.
+      setPrefs(r.prefs);
+      setStatus('saved');
+      window.setTimeout(() => setStatus((s) => (s === 'saved' ? 'idle' : s)), 1800);
+    } catch {
+      setStatus('error');
+    }
+  }
+
+  if (!prefs) return null;
+
+  const everyMin = Math.round((prefs.repeatEverySeconds / 60) * 10) / 10;
+  const forMin = Math.round(prefs.repeatForSeconds / 60);
+
+  return (
+    <section>
+      <div style={sectionLabel}>Repeating alerts</div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        How often a repeating alert buzzes, and how long it keeps going if you don’t acknowledge it.
+        Used by every event you set to Repeating.
+      </p>
+
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#9fb0d6' }}>
+          Repeat every
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="number"
+              min={30}
+              max={3600}
+              step={30}
+              value={prefs.repeatEverySeconds}
+              onChange={(e) => setPrefs({ ...prefs, repeatEverySeconds: Number(e.target.value) || 0 })}
+              onBlur={() => void persist(prefs)}
+              style={{ ...inputStyle, width: 110 }}
+            />
+            <span style={{ fontSize: 12, color: '#6f84b2' }}>seconds</span>
+          </span>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: '#9fb0d6' }}>
+          Keep going for
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="number"
+              min={1}
+              max={180}
+              step={1}
+              value={forMin}
+              onChange={(e) =>
+                setPrefs({ ...prefs, repeatForSeconds: Math.max(0, Number(e.target.value) || 0) * 60 })
+              }
+              onBlur={() => void persist(prefs)}
+              style={{ ...inputStyle, width: 110 }}
+            />
+            <span style={{ fontSize: 12, color: '#6f84b2' }}>minutes</span>
+          </span>
+        </label>
+      </div>
+
+      <p style={{ ...hintStyle, marginTop: 10, marginBottom: 0 }}>
+        Currently: every {everyMin === Math.round(everyMin) ? everyMin : everyMin.toFixed(1)} min
+        {everyMin === 1 ? '' : 's'} for up to {forMin} minute{forMin === 1 ? '' : 's'}. Pushover’s own
+        limits are 30 seconds at the shortest and 3 hours at the longest.
+      </p>
+      <div style={{ fontSize: 11, color: status === 'error' ? '#ffb4ab' : '#6f84b2', marginTop: 6, minHeight: 14 }}>
+        {status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : status === 'error' ? 'Could not save — try again.' : ''}
+      </div>
     </section>
   );
 }

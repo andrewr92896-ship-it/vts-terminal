@@ -1,0 +1,21 @@
+-- The screen the terminal opens on, chosen by the user.
+--
+-- On `users` rather than in a preferences table, and on the ACCOUNT rather than
+-- the device, for the same reason `display_timezone` is: it follows the person
+-- between their phone and their desk, which is what somebody means by "my home
+-- page". It sits beside that column and is read on the same row load, so it
+-- costs no extra query.
+--
+-- BOTH nullable, and null is the whole compatibility story: it means "no choice
+-- made", which falls through to the existing behaviour (pickInitialWorkspace,
+-- then that workspace's DEFAULT_SCREEN). Nobody who never opens the setting
+-- notices this shipped.
+--
+-- Stored as the raw workspace and section KEYS, which is why every rename in
+-- this codebase changes a label and never a key. They are deliberately NOT
+-- validated by the database: what a given account can actually reach depends on
+-- its roles, its opt-ins and its membership, all of which change after the value
+-- is written — so the check has to happen at read time, every time. A stored
+-- screen the account can no longer reach falls back rather than failing.
+ALTER TABLE `users` ADD `home_workspace` text;--> statement-breakpoint
+ALTER TABLE `users` ADD `home_screen` text;
