@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 //   1. The .sql file is not registered in migrations/meta/_journal.json.
 //      Drizzle iterates the journal, not the directory, so an unregistered file
 //      is invisible. 0086_market_news_channel_repair sat in the tree for weeks
-//      looking applied, and CLAUDE.md described its effects as fact.
+//      looking applied, and AGENTS.md described its effects as fact.
 //
 //   2. The file holds more than one statement but carries no
 //      `--> statement-breakpoint` markers. Drizzle hands an unmarked file over

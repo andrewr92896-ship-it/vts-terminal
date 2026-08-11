@@ -17,7 +17,7 @@ spec is authoritative for everything they demonstrate.
 `copy-editing-spec.md`: the floating pencil, edit mode, the anchored popover with
 Save / Reset / Hide, the `[[vts:hidden]]` sentinel, `isDeveloper` on the session,
 and `PUT|DELETE /api/employee/copy/:key`. See the Employee Portal section of
-`CLAUDE.md` for how it works.
+`AGENTS.md` for how it works.
 
 **Done — typography** (Beta V 5.60). Source Sans 3 and Source Serif 4 are
 self-hosted via `@fontsource` in `src/employee/fonts.css` and exposed as

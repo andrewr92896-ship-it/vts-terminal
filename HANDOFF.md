@@ -1,9 +1,9 @@
 # VTS Portal — Handoff for a New Claude Code Chat
 
-> ⚠️ **OUTDATED — superseded by `CLAUDE.md`.** This handoff describes an earlier
+> ⚠️ **OUTDATED — superseded by `AGENTS.md`.** This handoff describes an earlier
 > stage of the project (including workspaces since **removed** — Kia Sales,
 > Vitalis Wealth Management, Personal Finance, the Vitalis LLC workspace — an
-> older role model, and paths to files that no longer exist). **`CLAUDE.md` is
+> older role model, and paths to files that no longer exist). **`AGENTS.md` is
 > now the single source of truth** for the stack, conventions, workflow, and how
 > the portal behaves. Start there, not here.
 

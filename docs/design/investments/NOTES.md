@@ -131,7 +131,7 @@ A manual price is the user's own figure with the date they entered it; it is
 never dressed up as a live quote. This mirrors the `sample: true` honesty rule on
 the Market Data board — keep it accurate when a provider is wired.
 
-**Do not try Stooq for quotes.** CLAUDE.md records it was tried twice for the
+**Do not try Stooq for quotes.** AGENTS.md records it was tried twice for the
 metals and does not answer a server.
 
 ## Open questions for the owner
@@ -150,7 +150,7 @@ metals and does not answer a server.
   |---|---|---|
   | `0083_user_features` | the grandfathering `INSERT` | **Likely real.** Every pre-existing account was meant to be carried into Advanced Trading with a stamped acknowledgement. It was not, so those users have no `user_features` row and read `advancedTrading: false` — i.e. they lost the desk on that deploy until they re-opted in from Feature Access. `seed.ts` covers only the first-boot owner, so the owner's own account is fine; anyone else invited before that deploy is not. |
   | `0084_market_news_channels` | `CREATE UNIQUE INDEX … (team_id, key)` | **Real but minor.** The per-team uniqueness of a Market News channel is not enforced in the database, so duplicate channel rows are possible. |
-  | `0085_connection_labels_name_the_venue` | 3 of 4 statements | **Harmless.** CLAUDE.md already states this migration is not the enforcement — `backfillConnectionLabels()` re-applies it on every boot, which is why the labels are correct anyway. |
+  | `0085_connection_labels_name_the_venue` | 3 of 4 statements | **Harmless.** AGENTS.md already states this migration is not the enforcement — `backfillConnectionLabels()` re-applies it on every boot, which is why the labels are correct anyway. |
   | `0086_market_news_channel_repair` | all of it (not in the journal) | **Superseded.** The starter channel ids it would have backfilled are now seeded outright, and the background resolver fills any gap. Worth deleting the file or registering it, but nothing is broken. |
 
   The repair is a **new** migration rather than edits to these: drizzle records a

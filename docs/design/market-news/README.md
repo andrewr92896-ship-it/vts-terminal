@@ -179,7 +179,7 @@ or row is **replaced in place** by a form. All are reachable in `current-state.h
   DB-backed wording and don't cover this screen.)
 - **Read-only must be a first-class state**, not an afterthought — the public demo
   renders every Trading workspace read-only.
-- **`tradeNote` is advice-flavoured.** Per the launch posture in `CLAUDE.md`, any
+- **`tradeNote` is advice-flavoured.** Per the launch posture in `AGENTS.md`, any
   surface carrying it needs an "informational only, not investment advice"
   disclaimer. Today there isn't one — the redesign should give it a home.
 - **Shared components.** `newsFormat.ts` (time + entity decoding) and
