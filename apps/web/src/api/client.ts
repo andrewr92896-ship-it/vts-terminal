@@ -163,6 +163,9 @@ export interface NotifPrefFlags {
   moveTp: boolean;
 }
 
+// How a Pushover test is sent. Mirrors the server's PushoverTestKind.
+export type PushoverTestKind = 'standard' | 'emergency';
+
 
 // Status of the caller's home-screen widget token (never the token itself,
 // which is shown once at generation). `exists` drives the Regenerate/Revoke UI.
@@ -1615,8 +1618,11 @@ export const api = {
   pushoverDisconnect(): Promise<{ ok: true }> {
     return request('/api/pushover/connect', { method: 'DELETE' });
   },
-  pushoverTest(): Promise<{ ok: true }> {
-    return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({}) });
+  // 'standard' goes out exactly the way a real trade notification does;
+  // 'emergency' repeats until acknowledged in the Pushover app, which is the
+  // only level iOS lets through silent mode and Focus.
+  pushoverTest(kind: PushoverTestKind = 'standard'): Promise<{ ok: true }> {
+    return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({ kind }) });
   },
   // ---- Per-user notification preferences ----
   notificationPrefs(): Promise<{ targets: NotifTarget[]; prefs: Record<string, NotifPrefFlags> }> {

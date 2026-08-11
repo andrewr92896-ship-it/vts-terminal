@@ -115,16 +115,24 @@ export const NAV: NavWorkspace[] = [
       // plenty of traders keep a manual book without ever running a challenge.
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
       { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
-      // Premium. Last because it is the one row here that is not a record of
-      // trades.
+      // Premium. Second-to-last because it is not a record of trades — it is a
+      // plan for making them.
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
-      // (Trading Alerts was removed outright — owner instruction, 2026-08. The
-      // two settings that lived on it and had no other home moved rather than
-      // going with it: the session open/close/pre-open alerts are on Strategy
-      // Sessions, and price alerts are in My Terminal ▸ Settings beside the
-      // other notification controls. The TradingView alert feed, its screen and
-      // its how-to entry are gone; the webhook, the `trading_alerts` table and
-      // the Live Wall's Alerts tile are untouched.)
+      // Premium. LAST, because it is the only row here that is not about trades
+      // at all: it is how the terminal reaches you.
+      //
+      // The `alerts` key is the one the removed Trading Alerts screen used
+      // (owner instruction, 2026-08 — the TradingView alert FEED is gone and is
+      // not coming back). Reusing it is deliberate: nothing linked to that
+      // screen, and a stale link now lands on the alert settings rather than
+      // nowhere. The feed's webhook, the `trading_alerts` table and the Live
+      // Wall's Alerts tile were always untouched by that removal.
+      //
+      // This is now the ONE home for every alert control — phone notifications,
+      // Pushover, which trade events buzz you, the alert sound, the session
+      // open/close alerts, price alerts, and the test tools. They were spread
+      // across My Terminal ▸ Settings and Strategy Sessions before.
+      { key: 'alerts', label: 'Alert Settings', icon: 'bell' },
     ],
   },
   // Finances (green) — personal money for an ordinary person: what you are worth

@@ -11,20 +11,21 @@ import type {
 
 // The two alert SETTINGS panels. They lived on the Trading Alerts screen, which
 // was removed outright (owner instruction, 2026-08) — but neither of them is a
-// TradingView alert, and each was the only way to reach a real feature:
+// TradingView alert, and each was the only way to reach a real feature. They
+// spent a while apart afterwards (sessions on Strategy Sessions, price alerts in
+// My Terminal ▸ Settings) and now sit together again on **Advanced Trading ▸
+// Alert Settings**, which is the one home for every alert control.
 //
 //  - `SessionAlertSettings` is the only control for the session open / close /
-//    pre-open notifications the server fires, so it moved to the screen those
-//    sessions are built on (Strategy Sessions).
+//    pre-open notifications the server fires. Behind `alertSettings` (Premium)
+//    on that screen, matching Strategy Sessions itself.
 //  - `PriceAlertSettings` is price alerts, which are INCLUDED WITH EVERY
-//    ACCOUNT and deliberately not behind the Advanced Trading opt-in — so it
-//    moved to My Terminal ▸ Settings, beside the other notification controls,
-//    where an account without the desk can actually reach it. That is a better
-//    home than the desk-gated screen it was on.
+//    ACCOUNT and are deliberately rendered OUTSIDE the paid block — an alert
+//    nobody can be told about is not an alert.
 //
-// They are in their own module rather than in either host screen because they
-// are self-contained panels with their own fetches, and neither host has
-// anything to do with the other's.
+// Each draws its own collapsible header, so the host screen adds no label above
+// them. They stay in their own module rather than in the screen because they are
+// self-contained panels with their own fetches.
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -77,7 +78,7 @@ export function SessionAlertSettings() {
   const lead = prefs.preOpenLeadMin;
 
   return (
-    <div style={{ ...card, marginBottom: 14, padding: 0, overflow: 'hidden' }}>
+    <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
       <button
         onClick={() => setOpen((v) => !v)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', color: TEXT, cursor: 'pointer', padding: '13px 16px', textAlign: 'left' }}
@@ -90,11 +91,6 @@ export function SessionAlertSettings() {
       </button>
       {open && (
         <div style={{ padding: '0 16px 14px' }}>
-          {/* Where phone alerts are switched on is not discoverable from this
-              screen, so it is named. */}
-          <div style={{ fontSize: 12, color: MUTED, marginBottom: 12, lineHeight: 1.5 }}>
-            {"Phone alerts are turned on in My Terminal ▸ Settings."}
-          </div>
           <ToggleRow
             label={"Before a session opens"}
             on={prefs.notifyPreOpen}
@@ -231,7 +227,7 @@ export function PriceAlertSettings() {
   const activeCount = alerts.filter((a) => a.active).length;
 
   return (
-    <div style={{ ...card, marginTop: 14, padding: 0, overflow: 'hidden' }}>
+    <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
       <button
         onClick={() => setOpen((v) => !v)}
         style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, background: 'none', border: 'none', color: TEXT, cursor: 'pointer', padding: '13px 16px', textAlign: 'left' }}

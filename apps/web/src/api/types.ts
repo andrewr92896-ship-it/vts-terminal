@@ -2357,6 +2357,7 @@ export const PREMIUM_FEATURES = [
   'presetStreams',
   'suggestions',
   'supportChat',
+  'alertSettings',
 ] as const;
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
