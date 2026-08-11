@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { alertPrefs } from '../db/schema.js';
 
@@ -27,10 +27,26 @@ export interface AlertRepeatPrefs {
   repeatForSeconds: number;
 }
 
+// The two account-level switches. Both default ON, matching the convention
+// notification_prefs follows — an account with no stored row hears about
+// everything — so nothing already working goes quiet on deploy.
+export interface AlertSwitches {
+  // The master switch: off silences every channel on every device for this
+  // account. Per ACCOUNT, unlike phone notifications which are per device.
+  accountAlerts: boolean;
+  // Whether somebody else in this user's private group may buzz their phone.
+  groupAlerts: boolean;
+}
+
+export type AlertPrefs = AlertRepeatPrefs & AlertSwitches;
+
 export const DEFAULT_REPEAT_PREFS: AlertRepeatPrefs = {
   repeatEverySeconds: DEFAULT_REPEAT_EVERY_SECONDS,
   repeatForSeconds: DEFAULT_REPEAT_FOR_SECONDS,
 };
+
+export const DEFAULT_SWITCHES: AlertSwitches = { accountAlerts: true, groupAlerts: true };
+export const DEFAULT_ALERT_PREFS: AlertPrefs = { ...DEFAULT_REPEAT_PREFS, ...DEFAULT_SWITCHES };
 
 function clamp(v: number, lo: number, hi: number): number {
   if (!Number.isFinite(v)) return lo;
@@ -55,24 +71,73 @@ export function normalizeRepeatPrefs(input: Partial<AlertRepeatPrefs>): AlertRep
   return { repeatEverySeconds: every, repeatForSeconds: forSecs };
 }
 
-export async function getRepeatPrefs(userId: string): Promise<AlertRepeatPrefs> {
+export async function getAlertPrefs(userId: string): Promise<AlertPrefs> {
   const row = (
     await db.select().from(alertPrefs).where(eq(alertPrefs.userId, userId)).limit(1)
   )[0];
-  if (!row) return { ...DEFAULT_REPEAT_PREFS };
-  // Normalized on READ as well as write: a row stored before a bound moved must
-  // never hand Pushover a value it will refuse.
-  return normalizeRepeatPrefs({
-    repeatEverySeconds: row.repeatEverySeconds,
-    repeatForSeconds: row.repeatForSeconds,
-  });
+  if (!row) return { ...DEFAULT_ALERT_PREFS };
+  return {
+    // Normalized on READ as well as write: a row stored before a bound moved
+    // must never hand Pushover a value it will refuse.
+    ...normalizeRepeatPrefs({
+      repeatEverySeconds: row.repeatEverySeconds,
+      repeatForSeconds: row.repeatForSeconds,
+    }),
+    accountAlerts: row.accountAlerts,
+    groupAlerts: row.groupAlerts,
+  };
 }
 
-export async function setRepeatPrefs(
+export async function getRepeatPrefs(userId: string): Promise<AlertRepeatPrefs> {
+  const { repeatEverySeconds, repeatForSeconds } = await getAlertPrefs(userId);
+  return { repeatEverySeconds, repeatForSeconds };
+}
+
+// Narrow a set of candidate recipients to those whose ACCOUNT switch is on.
+// Applied by both send channels, so the switch means what it says rather than
+// governing only whichever feature happened to remember it.
+//
+// A user with no row is included: no row means never touched, which is on.
+export async function filterAccountAlerts(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return userIds;
+  const rows = await db
+    .select({ userId: alertPrefs.userId, on: alertPrefs.accountAlerts })
+    .from(alertPrefs)
+    .where(inArray(alertPrefs.userId, [...new Set(userIds)]));
+  const off = new Set(rows.filter((r) => !r.on).map((r) => r.userId));
+  return userIds.filter((id) => !off.has(id));
+}
+
+// The same, for the group nudge: both switches have to be on. Somebody who has
+// silenced their account has silenced this too — the master switch is a
+// superset, not a parallel setting.
+export async function recipientsAcceptingGroupAlerts(userIds: string[]): Promise<string[]> {
+  if (userIds.length === 0) return userIds;
+  const rows = await db
+    .select({
+      userId: alertPrefs.userId,
+      account: alertPrefs.accountAlerts,
+      group: alertPrefs.groupAlerts,
+    })
+    .from(alertPrefs)
+    .where(inArray(alertPrefs.userId, [...new Set(userIds)]));
+  const off = new Set(rows.filter((r) => !r.account || !r.group).map((r) => r.userId));
+  return userIds.filter((id) => !off.has(id));
+}
+
+export async function setAlertPrefs(
   userId: string,
-  input: Partial<AlertRepeatPrefs>,
-): Promise<AlertRepeatPrefs> {
-  const next = normalizeRepeatPrefs(input);
+  input: Partial<AlertPrefs>,
+): Promise<AlertPrefs> {
+  const current = await getAlertPrefs(userId);
+  const next: AlertPrefs = {
+    ...normalizeRepeatPrefs({
+      repeatEverySeconds: input.repeatEverySeconds ?? current.repeatEverySeconds,
+      repeatForSeconds: input.repeatForSeconds ?? current.repeatForSeconds,
+    }),
+    accountAlerts: input.accountAlerts ?? current.accountAlerts,
+    groupAlerts: input.groupAlerts ?? current.groupAlerts,
+  };
   const now = new Date();
   await db
     .insert(alertPrefs)
@@ -81,6 +146,8 @@ export async function setRepeatPrefs(
       userId,
       repeatEverySeconds: next.repeatEverySeconds,
       repeatForSeconds: next.repeatForSeconds,
+      accountAlerts: next.accountAlerts,
+      groupAlerts: next.groupAlerts,
       createdAt: now,
       updatedAt: now,
     })
@@ -89,8 +156,17 @@ export async function setRepeatPrefs(
       set: {
         repeatEverySeconds: next.repeatEverySeconds,
         repeatForSeconds: next.repeatForSeconds,
+        accountAlerts: next.accountAlerts,
+        groupAlerts: next.groupAlerts,
         updatedAt: now,
       },
     });
   return next;
+}
+
+export async function setRepeatPrefs(
+  userId: string,
+  input: Partial<AlertRepeatPrefs>,
+): Promise<AlertRepeatPrefs> {
+  return setAlertPrefs(userId, input);
 }

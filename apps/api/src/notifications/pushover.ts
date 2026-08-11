@@ -5,7 +5,7 @@ import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
 import { config } from '../config.js';
 import { recipientLevelsForEvent, LEVEL_PRIORITY, type NotifEvent } from './prefs.js';
-import { getRepeatPrefs } from './alertPrefs.js';
+import { filterAccountAlerts, getRepeatPrefs } from './alertPrefs.js';
 import { liveReceiptRows, markResolved, newCallbackToken, recordReceipt } from './pushoverReceipts.js';
 import { entitledUserIds } from '../memberships/service.js';
 
@@ -247,12 +247,18 @@ export async function sendPushoverToUsers(
   userIds: string[],
   msg: PushoverMessage,
   kind = 'alert',
+  opts: { ignoreAccountSwitch?: boolean } = {},
 ): Promise<void> {
   if (!pushoverConfigured() || userIds.length === 0) return;
+  // The account-level master switch, applied at the one place every Pushover
+  // message leaves the server so a caller cannot forget it. The exception is
+  // the test button — see sendPushoverTest.
+  const ids = opts.ignoreAccountSwitch ? userIds : await filterAccountAlerts(userIds);
+  if (ids.length === 0) return;
   const rows = await db
     .select()
     .from(pushoverUsers)
-    .where(inArray(pushoverUsers.userId, [...new Set(userIds)]));
+    .where(inArray(pushoverUsers.userId, [...new Set(ids)]));
   await Promise.all(rows.map((r) => deliver(r.userId, r.userKey, msg, kind)));
 }
 
@@ -296,10 +302,15 @@ export async function sendPushoverToDesk(msg: PushoverMessage, opts: PushoverDes
   if (ownerId && event) {
     const levels = await recipientLevelsForEvent(recipients, ownerId, event);
     if (levels.size === 0) return;
+    // This branch calls `deliver` directly rather than going through
+    // sendPushoverToUsers (each recipient gets a different priority), so the
+    // account master switch has to be applied here too.
+    const allowed = await filterAccountAlerts([...levels.keys()]);
+    if (allowed.length === 0) return;
     const keys = await db
       .select()
       .from(pushoverUsers)
-      .where(inArray(pushoverUsers.userId, [...levels.keys()]));
+      .where(inArray(pushoverUsers.userId, allowed));
     await Promise.all(
       keys.map((r) =>
         deliver(

@@ -4,6 +4,7 @@ import {
   api,
   ApiError,
   type AlertRepeatPrefs,
+  type GroupAlertKind,
   type NotifLevel,
   type NotifPrefFlags,
   type NotifPrefLevels,
@@ -12,6 +13,7 @@ import {
 } from '../api/client';
 import { hasEntitlement, tierOfFeature } from '../auth/access';
 import { TierMark } from './TierMark';
+import { ReviewMark } from './ReviewMark';
 import { UpgradeNotice } from './UpgradeNotice';
 import { usePushNotifications } from '../push/usePushNotifications';
 
@@ -122,7 +124,129 @@ export function PhoneNotificationsSection({
         On iPhone this only works once the terminal is installed to your Home Screen.
       </p>
       {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 8 }}>{error}</div>}
+
+      {/* The two ACCOUNT-level switches, under the per-device one they qualify.
+          Phone notifications above are this browser; these follow the person. */}
+      <AccountSwitches accent={accent} accentText={accentText} />
     </section>
+  );
+}
+
+// The account master switch, and whether the group may buzz you.
+//
+// They sit inside Phone notifications rather than in a section of their own
+// because they answer the same question at a different scope — that panel turns
+// this DEVICE on and off, and these turn the ACCOUNT on and off. Splitting them
+// apart would leave somebody switching a device off and wondering why their
+// other phone still rang.
+function AccountSwitches({ accent, accentText }: { accent: string; accentText: string }) {
+  const { user } = useAuth();
+  const [prefs, setPrefs] = useState<AlertRepeatPrefs | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Group alerts are part of Private Groups, which is Max — so the same feature
+  // key gates and marks them. Reaching them also needs the grant, which is what
+  // `teamId` stands in for here: an account in no group has nobody to be nudged
+  // by, so the row would be a switch over nothing.
+  const canGroup = !!user && hasEntitlement(user, 'teams');
+  const inGroup = !!user?.teamId;
+
+  useEffect(() => {
+    let alive = true;
+    api
+      .alertRepeatPrefs()
+      .then((r) => alive && setPrefs(r.prefs))
+      .catch(() => {
+        /* leave the rows out entirely rather than drawing switches that cannot save */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  async function save(patch: Partial<AlertRepeatPrefs>) {
+    if (!prefs) return;
+    const before = prefs;
+    setPrefs({ ...prefs, ...patch });
+    setError(null);
+    try {
+      const r = await api.saveAlertRepeatPrefs(patch);
+      setPrefs(r.prefs);
+    } catch (e) {
+      setPrefs(before);
+      setError(e instanceof ApiError ? e.message : 'Couldn’t save that — try again.');
+    }
+  }
+
+  if (!prefs) return null;
+
+  return (
+    <div style={{ marginTop: 16, borderTop: '1px solid #16294f', paddingTop: 6 }}>
+      <SwitchRow
+        label="Account notifications"
+        hint="Off silences every alert for your account, on every device."
+        on={prefs.accountAlerts}
+        accent={accent}
+        accentText={accentText}
+        onClick={() => void save({ accountAlerts: !prefs.accountAlerts })}
+      />
+      {inGroup && (
+        <SwitchRow
+          label="Group notifications"
+          hint={
+            canGroup
+              ? 'Let people in your group send you a notification.'
+              : 'Included with Max. Lets people in your group send you a notification.'
+          }
+          on={canGroup && prefs.groupAlerts}
+          disabled={!canGroup}
+          accent={accent}
+          accentText={accentText}
+          mark={
+            <>
+              <TierMark tier={tierOfFeature('teams', user?.access.membership)} size={12} dim={!canGroup} />
+              {/* Founder-level only — an ordinary member sees nothing. */}
+              <ReviewMark id="groupAlerts" size={12} />
+            </>
+          }
+          onClick={() => canGroup && void save({ groupAlerts: !prefs.groupAlerts })}
+        />
+      )}
+      {error && <div style={{ fontSize: 12, color: '#ff9a9a', marginTop: 6 }}>{error}</div>}
+    </div>
+  );
+}
+
+function SwitchRow({
+  label,
+  hint,
+  on,
+  accent,
+  accentText,
+  onClick,
+  mark,
+  disabled,
+}: {
+  label: string;
+  hint: string;
+  on: boolean;
+  accent: string;
+  accentText: string;
+  onClick: () => void;
+  mark?: React.ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <div style={{ padding: '10px 0', opacity: disabled ? 0.65 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, color: '#dfe7fa' }}>
+          {label}
+          {mark}
+        </span>
+        <ToggleSwitch on={on} accent={accent} accentText={accentText} onClick={onClick} />
+      </div>
+      <div style={{ ...hintStyle, marginTop: 4 }}>{hint}</div>
+    </div>
   );
 }
 
@@ -629,6 +753,102 @@ function LevelPicker({ value, onChange }: { value: NotifLevel; onChange: (v: Not
 }
 
 // ---------------------------------------------------------------------------
+// Nudge the group
+// ---------------------------------------------------------------------------
+
+// Send everybody else in your private group a notification. Rendered in TWO
+// places — here on Alert Settings, and on My Terminal ▸ My Group — from this one
+// component, so the two can never offer different things.
+//
+// **There is no message box, deliberately** (owner instruction, 2026-08). The
+// notification carries the sender's name and nothing else. Free text on a push
+// that sounds through silent mode on other people's phones is a different
+// feature with a different set of problems, and on a trading desk it is the
+// point at which a nudge would become a signal to act.
+//
+// The sender picks only how loud: a standard alert, or a repeating one.
+export function GroupAlertSender({ accent, accentText }: { accent: string; accentText: string }) {
+  const { user } = useAuth();
+  const [busy, setBusy] = useState<GroupAlertKind | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const canSend = !!user && hasEntitlement(user, 'teams');
+  const inGroup = !!user?.teamId;
+  // Hidden outright for anybody not in a group, matching how the rest of the
+  // group features behave — there is nothing to buy that would give you one.
+  if (!inGroup || user?.isDemo) return null;
+
+  async function send(kind: GroupAlertKind) {
+    setBusy(kind);
+    setMsg(null);
+    try {
+      const r = await api.sendGroupAlert(kind);
+      setMsg({
+        ok: true,
+        text:
+          r.recipients === 0
+            ? 'Nobody in your group has group notifications switched on, so nothing was sent.'
+            : `Sent to ${r.recipients} ${r.recipients === 1 ? 'person' : 'people'}.`,
+      });
+    } catch (e) {
+      setMsg({ ok: false, text: e instanceof ApiError ? e.message : 'Couldn’t send that — try again.' });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const ghost: React.CSSProperties = {
+    background: 'rgba(255,255,255,.05)',
+    border: '1px solid #1d3560',
+    color: '#dfe7fa',
+    fontWeight: 600,
+    fontSize: 12.5,
+    padding: '10px 14px',
+    borderRadius: 8,
+    cursor: busy ? 'default' : 'pointer',
+    opacity: busy ? 0.6 : 1,
+    minHeight: 40,
+  };
+
+  return (
+    <section>
+      <div style={{ ...sectionLabel, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>Notify your group</span>
+        <TierMark tier={tierOfFeature('teams', user?.access.membership)} size={12} dim={!canSend} />
+        <ReviewMark id="groupAlerts" size={12} />
+      </div>
+      <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
+        Buzz everybody else in your group. They see your name and nothing else — there is no message.
+      </p>
+
+      {!canSend ? (
+        <UpgradeNotice feature="teams" compact />
+      ) : (
+        <>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => void send('standard')} disabled={busy != null} style={ghost}>
+              {busy === 'standard' ? 'Sending…' : 'Send alert'}
+            </button>
+            <button
+              onClick={() => void send('repeating')}
+              disabled={busy != null}
+              style={{ ...ghost, background: accent, border: 'none', color: accentText }}
+            >
+              {busy === 'repeating' ? 'Sending…' : 'Send repeating alert'}
+            </button>
+          </div>
+          <p style={{ ...hintStyle, marginTop: 10, marginBottom: 0 }}>
+            A repeating alert keeps going on their phone until they acknowledge it. One notification
+            per minute.
+          </p>
+        </>
+      )}
+      {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Repeat timing
 // ---------------------------------------------------------------------------
 
@@ -648,7 +868,11 @@ export function RepeatTimingSection() {
     api
       .alertRepeatPrefs()
       .then((r) => alive && setPrefs(r.prefs))
-      .catch(() => alive && setPrefs({ repeatEverySeconds: 30, repeatForSeconds: 300 }));
+      .catch(
+        () =>
+          alive &&
+          setPrefs({ repeatEverySeconds: 30, repeatForSeconds: 300, accountAlerts: true, groupAlerts: true }),
+      );
     return () => {
       alive = false;
     };

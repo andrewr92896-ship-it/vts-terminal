@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { requireMarkets, requirePremium } from '../auth/middleware.js';
+import { requireMarkets, requirePremium, requireTradingTeams } from '../auth/middleware.js';
 import {
   acknowledgeLiveAlerts,
   getPushoverKey,
@@ -11,7 +11,9 @@ import {
   sendPushoverTest,
   type PushoverTestKind,
 } from '../notifications/pushover.js';
-import { getRepeatPrefs, setRepeatPrefs } from '../notifications/alertPrefs.js';
+import { getAlertPrefs, setAlertPrefs } from '../notifications/alertPrefs.js';
+import { GroupAlertError, sendGroupAlert } from '../notifications/groupAlerts.js';
+import { isDemoUser } from '../demo/identity.js';
 import { liveAlerts, resolveByCallbackToken } from '../notifications/pushoverReceipts.js';
 
 // Pushover connection management. Each user pastes their own Pushover "user
@@ -91,8 +93,11 @@ export async function pushoverRoutes(app: FastifyInstance) {
   // than `paid` deliberately: reading and changing your own alert timing is not
   // a use of the Pushover credential, and a lapsed member must not be stuck with
   // a repeat setting they can no longer edit.
+  // Carries the two account switches as well as the repeat timing — one row,
+  // one read, one save. Kept on the `/pushover` path it shipped on so a browser
+  // running a cached bundle keeps working.
   app.get('/api/pushover/repeat-prefs', signedIn, async (request) => {
-    return { prefs: await getRepeatPrefs(request.currentUser!.id) };
+    return { prefs: await getAlertPrefs(request.currentUser!.id) };
   });
 
   app.put('/api/pushover/repeat-prefs', signedIn, async (request, reply) => {
@@ -100,12 +105,45 @@ export async function pushoverRoutes(app: FastifyInstance) {
       .object({
         repeatEverySeconds: z.number().int().optional(),
         repeatForSeconds: z.number().int().optional(),
+        accountAlerts: z.boolean().optional(),
+        groupAlerts: z.boolean().optional(),
       })
       .safeParse(request.body ?? {});
-    if (!parsed.success) return reply.code(400).send({ error: 'Invalid repeat settings' });
-    // Out-of-range values are clamped rather than refused — see alertPrefs.ts.
-    return { prefs: await setRepeatPrefs(request.currentUser!.id, parsed.data) };
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid alert settings' });
+    // Every field is optional and an absent one is left alone, so a client that
+    // only knows about repeat timing cannot switch somebody's alerts off by
+    // omission. Out-of-range numbers are clamped rather than refused — see
+    // alertPrefs.ts.
+    return { prefs: await setAlertPrefs(request.currentUser!.id, parsed.data) };
   });
+
+  // Nudge everybody else in your private group. No message — the notification
+  // says who sent it and nothing more.
+  //
+  // Three guards, and each answers a different question: the grant says private
+  // groups are available to this account at all, the tier says group alerts are
+  // paid, and the demo is refused because it writes to other people's phones.
+  app.post(
+    '/api/notifications/group-alert',
+    { preHandler: [requireMarkets, requireTradingTeams, requirePremium('teams')] },
+    async (request, reply) => {
+      const me = request.currentUser!;
+      if (isDemoUser(me)) return reply.code(403).send({ error: 'The demo cannot send notifications.' });
+      const parsed = z
+        .object({ kind: z.enum(['standard', 'repeating']).optional() })
+        .safeParse(request.body ?? {});
+      const kind = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
+      try {
+        return await sendGroupAlert(
+          { id: me.id, teamId: me.teamId ?? null, displayName: me.displayName, username: me.username },
+          kind,
+        );
+      } catch (err) {
+        if (err instanceof GroupAlertError) return reply.code(400).send({ error: err.message });
+        throw err;
+      }
+    },
+  );
 
   // What is still sounding on this user's phone. Polled by the terminal so the
   // banner appears without a reload, and read on arrival so opening the app can

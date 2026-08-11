@@ -1020,6 +1020,15 @@ export const alertPrefs = sqliteTable('alert_prefs', {
     .references(() => users.id, { onDelete: 'cascade' }),
   repeatEverySeconds: integer('repeat_every_seconds').notNull().default(30),
   repeatForSeconds: integer('repeat_for_seconds').notNull().default(300),
+  // The MASTER switch for this account (migration 0123). Phone notifications are
+  // per device; this is per account, so off silences every channel on every
+  // device. It gates the existing notification paths too — a master switch that
+  // only governed new features would be a lie.
+  accountAlerts: integer('account_alerts', { mode: 'boolean' }).notNull().default(true),
+  // Whether somebody else in this user's private group may buzz their phone.
+  // A different question from the master switch: one is "do I want to be
+  // notified", the other is "may other people do it".
+  groupAlerts: integer('group_alerts', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });

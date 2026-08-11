@@ -2,6 +2,7 @@
 // real services against a scratch database. Writes, so it refuses a database
 // that already holds users (same guard as db:check-sharing).
 import crypto from 'node:crypto';
+import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
 import * as S from './prefs.js';
@@ -119,6 +120,64 @@ check('callback token resolves it', await R.resolveByCallbackToken(token));
 check('resolved is no longer live', (await R.liveAlerts(me)).length === 0);
 check('the same token cannot resolve twice', !(await R.resolveByCallbackToken(token)));
 check('an unknown token resolves nothing', !(await R.resolveByCallbackToken('nope')));
+
+console.log('\nAccount + group switches');
+// Both default on for an account that has never touched them.
+const fresh = await A.getAlertPrefs(trader);
+check('both switches default on', fresh.accountAlerts && fresh.groupAlerts, fresh);
+check('no row → included by the master filter', (await A.filterAccountAlerts([trader])).length === 1);
+
+await A.setAlertPrefs(trader, { accountAlerts: false });
+check('master off → filtered out', (await A.filterAccountAlerts([trader])).length === 0);
+check('master off also blocks group alerts', (await A.recipientsAcceptingGroupAlerts([trader])).length === 0);
+check('repeat timing survives a switch-only save', (await A.getAlertPrefs(trader)).repeatEverySeconds === 30);
+
+await A.setAlertPrefs(trader, { accountAlerts: true, groupAlerts: false });
+check('master back on', (await A.filterAccountAlerts([trader])).length === 1);
+check('group off → no group alerts', (await A.recipientsAcceptingGroupAlerts([trader])).length === 0);
+
+await A.setAlertPrefs(trader, { groupAlerts: true });
+check('group back on', (await A.recipientsAcceptingGroupAlerts([trader])).length === 1);
+check('switch-only save left the master alone', (await A.getAlertPrefs(trader)).accountAlerts);
+
+// Alice never saved switches, so she is on by default and unaffected by Bob's.
+check('one account’s switches do not touch another’s',
+  (await A.filterAccountAlerts([me, trader])).length === 2);
+
+console.log('\nGroup nudge');
+const G = await import('./groupAlerts.js');
+G.resetGroupAlertCooldown();
+// Nobody is on a team in this fixture, so the send must refuse rather than
+// quietly buzzing the whole install.
+let refused = false;
+try {
+  await G.sendGroupAlert({ id: me, teamId: null, displayName: 'Alice', username: 'alice' }, 'standard');
+} catch (e) {
+  refused = e instanceof G.GroupAlertError;
+}
+check('no group → refused', refused);
+
+// With a group, the sender is never a recipient of their own nudge.
+await db.update(users).set({ teamId: 'team-x' }).where(eq(users.id, me));
+await db.update(users).set({ teamId: 'team-x' }).where(eq(users.id, trader));
+G.resetGroupAlertCooldown();
+const sent = await G.sendGroupAlert({ id: me, teamId: 'team-x', displayName: 'Alice', username: 'alice' }, 'standard');
+check('reaches the one teammate, not the sender', sent.recipients === 1, sent);
+check('a second send inside the cooldown is refused', G.cooldownRemainingMs(me) > 0);
+
+let cooled = false;
+try {
+  await G.sendGroupAlert({ id: me, teamId: 'team-x', displayName: 'Alice', username: 'alice' }, 'standard');
+} catch (e) {
+  cooled = e instanceof G.GroupAlertError;
+}
+check('cooldown refuses with an error, not silently', cooled);
+
+// A teammate who switched group alerts off drops out.
+await A.setAlertPrefs(trader, { groupAlerts: false });
+G.resetGroupAlertCooldown();
+const none = await G.sendGroupAlert({ id: me, teamId: 'team-x', displayName: 'Alice', username: 'alice' }, 'standard');
+check('opted-out teammate is not reached', none.recipients === 0, none);
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

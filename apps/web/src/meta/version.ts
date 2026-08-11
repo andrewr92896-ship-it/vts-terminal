@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.03';
+export const APP_VERSION = 'Beta V 7.04';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.04',
+    date: 'August 11, 2026',
+    notes: [
+      'You can now send everybody in your group a notification, from either My Terminal ▸ My Group or Alert Settings. Choose a normal alert or a repeating one. There is no message box — the notification says who sent it and nothing else — and it is limited to one a minute.',
+      'Two new switches sit under Phone notifications. Account notifications is a master switch for your whole account, on every device. Group notifications controls whether people in your group can buzz you, and is included with Max.',
+    ],
+  },
   {
     version: 'Beta V 7.03',
     date: 'August 11, 2026',

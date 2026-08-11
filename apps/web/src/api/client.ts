@@ -185,7 +185,15 @@ export interface LiveAlert {
 export interface AlertRepeatPrefs {
   repeatEverySeconds: number;
   repeatForSeconds: number;
+  // The master switch for this ACCOUNT (phone alerts are per device), and
+  // whether somebody else in your private group may buzz your phone.
+  accountAlerts: boolean;
+  groupAlerts: boolean;
 }
+
+// How loud a group nudge is sent. No message ever travels — the notification
+// says who sent it and nothing more.
+export type GroupAlertKind = 'standard' | 'repeating';
 
 
 // Status of the caller's home-screen widget token (never the token itself,
@@ -1675,6 +1683,15 @@ export const api = {
   },
   saveAlertRepeatPrefs(prefs: Partial<AlertRepeatPrefs>): Promise<{ prefs: AlertRepeatPrefs }> {
     return request('/api/pushover/repeat-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
+  },
+  // Nudge everybody else in your private group. Answers with how many people it
+  // actually reached, so the sender is told the truth rather than a cheerful
+  // "sent" when everyone has group alerts switched off.
+  sendGroupAlert(kind: GroupAlertKind): Promise<{ recipients: number }> {
+    return request('/api/notifications/group-alert', {
+      method: 'POST',
+      body: JSON.stringify({ kind }),
+    });
   },
   liveAlerts(): Promise<{ alerts: LiveAlert[] }> {
     return request('/api/pushover/live-alerts');

@@ -550,10 +550,63 @@ workspaces list** (see `theme/nav.ts` order).
       the user's own repeat timing and is cancellable from the terminal. A test
       you cannot acknowledge the way you acknowledge a real alert is not testing
       the thing the terminal does.
+    - **TWO ACCOUNT SWITCHES sit under Phone notifications** (`alert_prefs`,
+      migration `0123`), and the scope difference is the point: phone
+      notifications are per **device** (a push subscription belongs to one
+      browser), these are per **account**.
+      - **`accountAlerts` is the master switch**, and it gates the EXISTING send
+        paths as well as the new one — `filterAccountAlerts` is applied inside
+        `sendToUsers` and `sendPushoverToUsers`, the one place each channel
+        leaves the server, so no caller can forget it. A master switch that only
+        governed whichever feature remembered it would be a lie.
+        - **The test buttons deliberately ignore it** (`ignoreAccountSwitch`). A
+          test is a direct request made in the moment, and a test that silently
+          does nothing is indistinguishable from a broken setup — which is the
+          exact failure the test exists to detect.
+      - **`groupAlerts`** is whether somebody else in your group may buzz you.
+        A different question from the master switch, and the master switch is a
+        **superset**: `recipientsAcceptingGroupAlerts` requires both.
+      - **Both default ON**, matching the `notification_prefs` convention (no
+        row = hears about everything), so nothing already working went quiet on
+        deploy. `groupAlerts` is reachable only by an account holding the
+        Trading Teams grant, so defaulting it on cannot expose anybody who was
+        not deliberately put in a group.
+    - **THE GROUP NUDGE — one member buzzing the rest** (`notifications/
+      groupAlerts.ts`, `POST /api/notifications/group-alert`; `GroupAlertSender`
+      rendered on **both** Alert Settings and My Terminal ▸ My Group).
+      - **THERE IS NO MESSAGE, DELIBERATELY** (owner instruction, 2026-08). The
+        notification carries the sender's name and nothing more. Free text on a
+        push that sounds through silent mode on other people's phones is a
+        different feature with a different set of problems — moderation, abuse,
+        and on a trading desk the point at which a nudge becomes a signal to
+        act. **Do not add a message field.** The sender picks only how loud:
+        standard, or repeating.
+      - **`sendToUsers`, not `sendToTradingDesk`.** The desk sender additionally
+        requires the recipient to hold the Advanced Trading opt-in, and a private
+        group is not the trading desk — somebody in your group who never turned
+        the desk on must still be reachable.
+      - **One per sender per minute**, in memory like the AI burst limit. Not
+        really a policy question: this is a repeating alert that ignores silent
+        mode, fired at other people's phones by pressing a button, so without a
+        cooldown a slip of the finger is a siren nobody can stop from their side.
+        The cooldown is stamped **even when nobody was reachable**, or "everyone
+        has it switched off" would be an unlimited retry loop against the send
+        path.
+      - **It reports how many people it actually reached**, so the sender is told
+        the truth rather than a cheerful "sent" when the whole group has group
+        notifications off.
+      - Three guards, each a different question: `requireTradingTeams` (the
+        grant), `requirePremium('teams')` (the tier — group alerts are part of
+        Private Groups, so they reuse that key rather than inventing a feature),
+        and the demo refused because this writes to other people's phones.
+      - Marked with the **`teams` diamond** and the **`groupAlerts` review mark**
+        (owner instruction) — `wip` for everyone, plus a founder-only `risk` note
+        that one user making another user's phone sound needs compliance review
+        before public launch.
     - `npm run db:check-alerts` walks all of it through the real services against
       a scratch database. Like `db:check-sharing` it **writes**, so it refuses any
       database that already holds a user. Run it after touching `prefs.ts`,
-      `alertPrefs.ts` or `pushoverReceipts.ts`.
+      `alertPrefs.ts`, `pushoverReceipts.ts` or `groupAlerts.ts`.
     - **The push hook and the Pushover status are owned by the SCREEN and passed
       down** (`PushControls`, `onConnectedChange`). Two hook instances do not see
       each other, so turning phone alerts on in one panel left the test panel
