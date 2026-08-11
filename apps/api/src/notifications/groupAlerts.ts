@@ -6,7 +6,8 @@ import { sendToUsers } from './push.js';
 import { sendPushoverToUsers, PUSHOVER_EMERGENCY } from './pushover.js';
 import { recipientsAcceptingGroupAlerts } from './alertPrefs.js';
 
-// "Nudge my group" — one person in a private group buzzing everybody else in it.
+// "Nudge my group" — one person in a private group buzzing the others in it,
+// either everybody or a few people they pick.
 //
 // **There is deliberately no message.** The notification says who sent it and
 // nothing more (owner instruction, 2026-08). A free-text field on a push that
@@ -15,8 +16,7 @@ import { recipientsAcceptingGroupAlerts } from './alertPrefs.js';
 // reads as instructions to trade. The sender's name is the whole payload, and
 // the meaning is "look at the terminal", which is what a nudge is for.
 //
-// The sender picks only HOW LOUD: a standard alert, or a repeating one that
-// keeps going until the recipient acknowledges it.
+// The sender picks only WHO and HOW LOUD.
 
 export type GroupAlertKind = 'standard' | 'repeating';
 
@@ -52,6 +52,9 @@ export function resetGroupAlertCooldown(senderId?: string): void {
 export async function sendGroupAlert(
   sender: { id: string; teamId: string | null; displayName: string; username: string },
   kind: GroupAlertKind,
+  // Who to reach. Empty or absent = everybody else in the group, which is what
+  // the button did before picking people was possible.
+  targetIds: string[] = [],
 ): Promise<GroupAlertResult> {
   if (!sender.teamId) throw new GroupAlertError('You are not in a group.');
 
@@ -70,8 +73,25 @@ export async function sendGroupAlert(
     .from(users)
     .where(and(eq(users.teamId, sender.teamId), ne(users.id, sender.id), eq(users.active, true)));
 
-  const candidates = rows.filter((r) => !isDemoUser({ username: r.username })).map((r) => r.id);
+  const inGroup = rows.filter((r) => !isDemoUser({ username: r.username })).map((r) => r.id);
+
+  // Narrowing to specific people is done against the group we just read, so an
+  // id that is not in it reaches nobody — the picker cannot become a way to
+  // buzz an arbitrary account. A selection that resolves to NOBODY is refused
+  // rather than quietly falling back to everyone: silently widening "just Dale"
+  // into "the whole desk" is the worst possible reading of an ambiguous input.
+  let candidates = inGroup;
+  if (targetIds.length > 0) {
+    const wanted = new Set(targetIds);
+    candidates = inGroup.filter((id) => wanted.has(id));
+    if (candidates.length === 0) {
+      throw new GroupAlertError('Those people are not in your group.');
+    }
+  }
+
   // Both switches: somebody who silenced their account has silenced this too.
+  // Applied to a picked person as well — being named individually does not
+  // override somebody's decision not to be buzzed.
   const recipients = await recipientsAcceptingGroupAlerts(candidates);
 
   // The cooldown is stamped even when nobody is reachable. Otherwise "nobody

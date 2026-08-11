@@ -351,7 +351,9 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
           there because this is the screen you are on when you are thinking
           about the people in your group. */}
       <div style={{ ...panel(theme), marginBottom: 16 }}>
-        <GroupAlertSender accent={grad} accentText={theme.accentText} />
+        {/* The roster is already loaded here, so it is handed over rather than
+            fetched a second time. */}
+        <GroupAlertSender accent={grad} accentText={theme.accentText} members={team.members} />
       </div>
 
       {/* Roster */}

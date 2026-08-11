@@ -1698,13 +1698,17 @@ export const api = {
   saveAlertRepeatPrefs(prefs: Partial<AlertRepeatPrefs>): Promise<{ prefs: AlertRepeatPrefs }> {
     return request('/api/pushover/repeat-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
   },
-  // Nudge everybody else in your private group. Answers with how many people it
-  // actually reached, so the sender is told the truth rather than a cheerful
-  // "sent" when everyone has group alerts switched off.
-  sendGroupAlert(kind: GroupAlertKind): Promise<{ recipients: number }> {
+  // Nudge people in your private group — everybody, or the ones you pick.
+  // An empty `userIds` means everybody, which is also what an older bundle
+  // sends by omitting it entirely.
+  //
+  // Answers with how many people it actually reached, so the sender is told the
+  // truth rather than a cheerful "sent" when the recipients have group alerts
+  // switched off.
+  sendGroupAlert(kind: GroupAlertKind, userIds: string[] = []): Promise<{ recipients: number }> {
     return request('/api/notifications/group-alert', {
       method: 'POST',
-      body: JSON.stringify({ kind }),
+      body: JSON.stringify({ kind, userIds }),
     });
   },
   liveAlerts(): Promise<{ alerts: LiveAlert[] }> {

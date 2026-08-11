@@ -179,5 +179,57 @@ G.resetGroupAlertCooldown();
 const none = await G.sendGroupAlert({ id: me, teamId: 'team-x', displayName: 'Alice', username: 'alice' }, 'standard');
 check('opted-out teammate is not reached', none.recipients === 0, none);
 
+console.log('\nPicking specific people');
+const carol = await mkUser('carol');
+const outsider = await mkUser('dave');
+await db.update(users).set({ teamId: 'team-x' }).where(eq(users.id, carol));
+await A.setAlertPrefs(trader, { groupAlerts: true });
+await A.setAlertPrefs(carol, { groupAlerts: true });
+const alice = { id: me, teamId: 'team-x', displayName: 'Alice', username: 'alice' };
+
+G.resetGroupAlertCooldown();
+const everyone = await G.sendGroupAlert(alice, 'standard');
+check('no selection still means everyone', everyone.recipients === 2, everyone);
+
+G.resetGroupAlertCooldown();
+const justOne = await G.sendGroupAlert(alice, 'standard', [trader]);
+check('picking one reaches only that person', justOne.recipients === 1, justOne);
+
+G.resetGroupAlertCooldown();
+const two = await G.sendGroupAlert(alice, 'standard', [trader, carol]);
+check('picking two reaches both', two.recipients === 2, two);
+
+// The picker must not become a way to buzz somebody outside the group.
+G.resetGroupAlertCooldown();
+let outsiderRefused = false;
+try {
+  await G.sendGroupAlert(alice, 'standard', [outsider]);
+} catch (e) {
+  outsiderRefused = e instanceof G.GroupAlertError;
+}
+check('an id outside the group is refused, not sent to', outsiderRefused);
+
+// A mixed list keeps the valid part and silently drops the rest rather than
+// failing the whole send — but must never widen to everybody.
+G.resetGroupAlertCooldown();
+const mixed = await G.sendGroupAlert(alice, 'standard', [trader, outsider]);
+check('a mixed list reaches only the valid member', mixed.recipients === 1, mixed);
+
+// Naming somebody individually does not override their own opt-out.
+await A.setAlertPrefs(carol, { groupAlerts: false });
+G.resetGroupAlertCooldown();
+const optedOut = await G.sendGroupAlert(alice, 'standard', [carol]);
+check('picking an opted-out person still reaches nobody', optedOut.recipients === 0, optedOut);
+
+// The sender cannot nudge themselves, even by naming themselves.
+G.resetGroupAlertCooldown();
+let selfRefused = false;
+try {
+  await G.sendGroupAlert(alice, 'standard', [me]);
+} catch (e) {
+  selfRefused = e instanceof G.GroupAlertError;
+}
+check('picking yourself reaches nobody', selfRefused);
+
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);
