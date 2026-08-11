@@ -579,8 +579,21 @@ workspaces list** (see `theme/nav.ts` order).
         push that sounds through silent mode on other people's phones is a
         different feature with a different set of problems — moderation, abuse,
         and on a trading desk the point at which a nudge becomes a signal to
-        act. **Do not add a message field.** The sender picks only how loud:
-        standard, or repeating.
+        act. **Do not add a message field.** The sender picks only WHO and how
+        loud.
+      - **It can be aimed at specific people** (owner request, 2026-08), and the
+        narrowing is done against the group membership the service just read —
+        so the picker cannot become a way to buzz an arbitrary account. Three
+        rules carry it:
+        - **An empty selection means EVERYBODY**, which is what the button did
+          before picking existed, so a cached bundle omitting the field keeps
+          working unchanged.
+        - **A selection resolving to nobody is REFUSED, never widened.**
+          Silently turning "just Dale" into "the whole desk" is the worst
+          reading of an ambiguous input available here.
+        - **Being named individually does not override an opt-out.**
+          `recipientsAcceptingGroupAlerts` is applied to a picked person exactly
+          as to the whole group.
       - **`sendToUsers`, not `sendToTradingDesk`.** The desk sender additionally
         requires the recipient to hold the Advanced Trading opt-in, and a private
         group is not the trading desk — somebody in your group who never turned

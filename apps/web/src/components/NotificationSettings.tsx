@@ -767,27 +767,69 @@ function LevelPicker({ value, onChange }: { value: NotifLevel; onChange: (v: Not
 // point at which a nudge would become a signal to act.
 //
 // The sender picks only how loud: a standard alert, or a repeating one.
-export function GroupAlertSender({ accent, accentText }: { accent: string; accentText: string }) {
+export function GroupAlertSender({
+  accent,
+  accentText,
+  members,
+}: {
+  accent: string;
+  accentText: string;
+  // The group roster, when the host screen already has it (My Group does). When
+  // absent — Alert Settings — it is fetched here, so the two renders offer the
+  // same thing without the settings screen needing to know about groups.
+  members?: { userId: string; displayName: string; username: string }[];
+}) {
   const { user } = useAuth();
   const [busy, setBusy] = useState<GroupAlertKind | null>(null);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [fetched, setFetched] = useState<{ userId: string; displayName: string; username: string }[]>([]);
+  // Empty = everybody, which is both the default and what the button did before
+  // picking people was possible.
+  const [picked, setPicked] = useState<string[]>([]);
 
   const canSend = !!user && hasEntitlement(user, 'teams');
   const inGroup = !!user?.teamId;
+  const provided = members != null;
+
+  useEffect(() => {
+    if (provided || !inGroup || !canSend) return;
+    let alive = true;
+    api
+      .myPortal()
+      .then((d) => {
+        if (alive) setFetched(d.team?.members ?? []);
+      })
+      .catch(() => {
+        /* fall back to whole-group only — the send still works without a roster */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [provided, inGroup, canSend]);
+
+  // Never offer yourself: the server excludes the sender anyway, so a row for
+  // yourself would be a checkbox that changes nothing.
+  const roster = (provided ? members : fetched).filter((m) => m.userId !== user?.id);
+
   // Hidden outright for anybody not in a group, matching how the rest of the
   // group features behave — there is nothing to buy that would give you one.
   if (!inGroup || user?.isDemo) return null;
+
+  function toggle(id: string) {
+    setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  }
 
   async function send(kind: GroupAlertKind) {
     setBusy(kind);
     setMsg(null);
     try {
-      const r = await api.sendGroupAlert(kind);
+      const r = await api.sendGroupAlert(kind, picked);
+      const who = picked.length === 0 ? 'in your group' : 'of the people you picked';
       setMsg({
         ok: true,
         text:
           r.recipients === 0
-            ? 'Nobody in your group has group notifications switched on, so nothing was sent.'
+            ? `Nobody ${who} has group notifications switched on, so nothing was sent.`
             : `Sent to ${r.recipients} ${r.recipients === 1 ? 'person' : 'people'}.`,
       });
     } catch (e) {
@@ -818,13 +860,32 @@ export function GroupAlertSender({ accent, accentText }: { accent: string; accen
         <ReviewMark id="groupAlerts" size={12} />
       </div>
       <p style={{ ...hintStyle, marginTop: 0, marginBottom: 12 }}>
-        Buzz everybody else in your group. They see your name and nothing else — there is no message.
+        Buzz your whole group, or just the people you pick. They see your name and nothing else —
+        there is no message.
       </p>
 
       {!canSend ? (
         <UpgradeNotice feature="teams" compact />
       ) : (
         <>
+          {/* Who to reach. "Everyone" is a chip rather than a checkbox because
+              it is a state, not an extra recipient — picking nobody IS
+              everybody, so pressing it simply clears the selection. Drawn only
+              when there is somebody to choose between. */}
+          {roster.length > 0 && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+              <PickChip label="Everyone" on={picked.length === 0} onClick={() => setPicked([])} />
+              {roster.map((m) => (
+                <PickChip
+                  key={m.userId}
+                  label={m.displayName?.trim() || m.username}
+                  on={picked.includes(m.userId)}
+                  onClick={() => toggle(m.userId)}
+                />
+              ))}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => void send('standard')} disabled={busy != null} style={ghost}>
               {busy === 'standard' ? 'Sending…' : 'Send alert'}
@@ -845,6 +906,30 @@ export function GroupAlertSender({ accent, accentText }: { accent: string; accen
       )}
       {msg && <div style={msgStyle(msg.ok)}>{msg.text}</div>}
     </section>
+  );
+}
+
+// One selectable name in the recipient picker. Same shape as the level chips
+// above, so the two read as one control family.
+function PickChip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      style={{
+        fontSize: 11.5,
+        fontWeight: 600,
+        padding: '6px 11px',
+        borderRadius: 999,
+        cursor: 'pointer',
+        color: on ? '#0c2768' : '#9fb0d6',
+        background: on ? '#EBCB74' : 'rgba(255,255,255,.05)',
+        border: `1px solid ${on ? '#EBCB74' : '#1d3560'}`,
+      }}
+    >
+      {label}
+    </button>
   );
 }
 

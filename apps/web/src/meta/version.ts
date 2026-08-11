@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.06';
+export const APP_VERSION = 'Beta V 7.07';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.07',
+    date: 'August 11, 2026',
+    notes: [
+      'You can now send a group notification to specific people instead of the whole group. Tap the names you want; leave it on Everyone to buzz them all, as before. Available from both My Group and Alert Settings.',
+      'Picking somebody still respects their own settings — if they have group notifications switched off, naming them individually does not override it.',
+    ],
+  },
   {
     version: 'Beta V 7.06',
     date: 'August 11, 2026',

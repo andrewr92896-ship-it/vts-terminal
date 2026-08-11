@@ -130,13 +130,23 @@ export async function pushoverRoutes(app: FastifyInstance) {
       const me = request.currentUser!;
       if (isDemoUser(me)) return reply.code(403).send({ error: 'The demo cannot send notifications.' });
       const parsed = z
-        .object({ kind: z.enum(['standard', 'repeating']).optional() })
+        .object({
+          kind: z.enum(['standard', 'repeating']).optional(),
+          // Who to reach. Absent or empty = everybody else in the group, which
+          // is what this endpoint did before picking people was possible, so a
+          // browser on a cached bundle keeps working unchanged. Capped simply
+          // to bound the input; the ids are checked against the real group
+          // membership in the service, which is the actual enforcement.
+          userIds: z.array(z.string().min(1).max(64)).max(50).optional(),
+        })
         .safeParse(request.body ?? {});
       const kind = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
+      const userIds = parsed.success ? (parsed.data.userIds ?? []) : [];
       try {
         return await sendGroupAlert(
           { id: me.id, teamId: me.teamId ?? null, displayName: me.displayName, username: me.username },
           kind,
+          userIds,
         );
       } catch (err) {
         if (err instanceof GroupAlertError) return reply.code(400).send({ error: err.message });
