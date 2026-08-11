@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.05';
+export const APP_VERSION = 'Beta V 7.06';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.06',
+    date: 'August 11, 2026',
+    notes: [
+      'Trade tile colours are much stronger, and there are fifteen of them — red, orange, amber, yellow, lime, green, teal, cyan, sky, indigo, violet, plum, magenta, pink and slate. The first set was too faint to tell people apart at a glance.',
+      'The colour now also fills the name chip on each card, so whose trade it is reads instantly instead of having to be picked out of a faint background.',
+      'Your P/L, the long/short marker and the break-even chip keep their own green, red and gold — the tile colour never touches a figure, so a red tile still shows green money when it is up.',
+    ],
+  },
   {
     version: 'Beta V 7.05',
     date: 'August 11, 2026',

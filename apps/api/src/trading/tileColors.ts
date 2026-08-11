@@ -19,28 +19,51 @@ import type { BrokerKey } from './types.js';
 // The palette
 // ---------------------------------------------------------------------------
 //
-// GREEN, RED, GOLD AND AMBER ARE DELIBERATELY ABSENT, and nothing warm may be
-// added. On a trade tile those four already carry meaning — green is winning,
-// red is losing, gold is break-even, amber is a trailing stop — so a losing
-// position washed green would be the one mistake this feature could make that
-// actually costs money to misread. What is left is the cool half of the wheel
-// plus two neutrals, which is still nine choices for a group capped at five
-// people.
+// THE WHOLE WHEEL, INCLUDING THE WARM HALF (owner decision, 2026-08). The first
+// cut of this palette deliberately withheld red, orange, yellow and green,
+// because on a trade tile those already carry meaning — winning, losing,
+// break-even, a trailing stop. The owner overruled that: nine cool colours were
+// too close to each other to tell four people apart at a glance, which is the
+// entire job, and a palette that fails at its job is not a safe palette.
+//
+// WHAT KEEPS IT HONEST IS THAT THE COLOUR NEVER TOUCHES A FIGURE. Every reading
+// that means win or lose is drawn in its own colour, and none of them are
+// derived from the tile colour: the open P/L number stays green/red, the LONG /
+// SHORT pill and the card's top edge stay green/red for the side, the B/E chip
+// stays gold, and TP/SL keep theirs. The tile colour is confined to the card's
+// wash, its left bar, and the owner chip — surfaces that never carried a
+// meaning of their own. So a red tile says "this is Dale's", and the money on
+// it still says green when it is up.
+//
+// Values are picked bright and saturated on purpose: these sit at 24% over a
+// navy card, and a muted hex disappears at that blend, which is what made the
+// first version too subtle to use.
 //
 // `slate` is the exact gray funded positions have always been drawn in, which is
 // why it is the funded default below: the group that never touches this feature
-// sees the wall it saw yesterday.
+// sees the wall it saw yesterday. Keep that hex as it is.
 export const TILE_COLORS = {
+  red: { label: 'Red', hex: '#FF5566' },
+  orange: { label: 'Orange', hex: '#FF8A3D' },
+  amber: { label: 'Amber', hex: '#FFB020' },
+  yellow: { label: 'Yellow', hex: '#FFE04D' },
+  lime: { label: 'Lime', hex: '#B6E24A' },
+  green: { label: 'Green', hex: '#3FD97F' },
+  teal: { label: 'Teal', hex: '#2FD1C0' },
+  cyan: { label: 'Cyan', hex: '#35C9E8' },
+  sky: { label: 'Sky', hex: '#4FA8F5' },
+  indigo: { label: 'Indigo', hex: '#6C7CF2' },
   violet: { label: 'Violet', hex: '#9B7BF0' },
   plum: { label: 'Plum', hex: '#C173E8' },
-  magenta: { label: 'Magenta', hex: '#E86FC4' },
-  indigo: { label: 'Indigo', hex: '#6C7CF2' },
-  sky: { label: 'Sky', hex: '#4FA8F5' },
-  cyan: { label: 'Cyan', hex: '#32BDD4' },
-  teal: { label: 'Teal', hex: '#2FB6B0' },
-  steel: { label: 'Steel', hex: '#7C9AC8' },
+  magenta: { label: 'Magenta', hex: '#F062C8' },
+  pink: { label: 'Pink', hex: '#FF7A9C' },
   slate: { label: 'Slate', hex: '#8892A6' },
 } as const;
+// A `steel` blue-gray was offered briefly and removed: washed onto a card it was
+// within a hair of `slate`, so two people given those two read as one — the one
+// failure the palette exists to prevent. `slate` is the one that had to stay,
+// being the funded default. A stored key that leaves the palette resolves to no
+// colour rather than throwing (see `hexForTileColor`), so dropping one is safe.
 
 export type TileColorKey = keyof typeof TILE_COLORS;
 

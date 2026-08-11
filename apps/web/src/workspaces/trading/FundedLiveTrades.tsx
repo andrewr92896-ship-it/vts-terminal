@@ -251,7 +251,7 @@ function LiveTradeRow({
           ...row,
           borderBottom: closing || editing ? 'none' : `1px solid ${BORDER}`,
           flexWrap: 'wrap',
-          ...(tileColor ? { borderLeft: `3px solid ${tileColor}`, background: tileTint(tileColor, 'transparent', 18) } : {}),
+          ...(tileColor ? { borderLeft: `4px solid ${tileColor}`, background: tileTint(tileColor, 'transparent', 32) } : {}),
         }}
       >
         <span style={{ flex: '1 1 120px', fontWeight: 600, color: TEXT, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
@@ -489,7 +489,7 @@ const row: CSSProperties = {
   padding: '9px 12px',
   fontSize: 11.5,
   fontFamily: MONO,
-  borderLeft: '3px solid transparent',
+  borderLeft: '4px solid transparent',
 };
 const col: CSSProperties = { flex: '0 0 60px' };
 // Holds the two row controls side by side; wraps rather than truncating either.

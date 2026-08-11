@@ -193,9 +193,10 @@ export function TradeCard({
         padding: 0,
         overflow: 'hidden',
         borderTop: `2px solid ${sideColor}`,
-        // Gray wash + left accent on an off-book (funded) position, so it reads
-        // as separate from the desk's on-book positions.
-        ...(accent ? { borderLeft: `3px solid ${accent}`, background: tileTint(accent, CARD) } : {}),
+        // The tile colour: a wash across the whole card and a bar down its left
+        // edge. The bar is 5px rather than 3 — at 3 it was invisible against the
+        // card's own border on a real wall.
+        ...(accent ? { borderLeft: `5px solid ${accent}`, background: tileTint(accent, CARD) } : {}),
       }}
     >
       {/* Header row */}
@@ -210,11 +211,22 @@ export function TradeCard({
               the owner tag is dropped. On teammates' cards show their handle
               (the part of the email before the domain) so it's clear whose it
               is. */}
-          {!mine && <span style={ownerTag(false)} title={t.owner}>@{ownerHandle(t.owner)}</span>}
+          {/* The identity chip carries the tile colour at full strength. On a
+              teammate's card that is the @handle; on the viewer's own there is
+              no handle (the broker name already identifies it), so the broker
+              chip takes it instead — every card gets one coloured chip in its
+              header rather than the viewer's own being the one that does not.
+              The off-book chip keeps its gold: "off-book" is a fact about the
+              account that the colour is not allowed to overwrite. */}
+          {!mine && (
+            <span style={{ ...ownerTag(false), ...(accent ? tileChip(accent) : {}) }} title={t.owner}>
+              @{ownerHandle(t.owner)}
+            </span>
+          )}
           {t.broker === 'ftp' ? (
             <span style={ftpTag} title="Hand-tracked position — priced off OANDA, and kept off the Trade Log & Live Brokers capital">{t.brokerName} · off-book</span>
           ) : (
-            <span style={brokerTag}>{t.brokerName}</span>
+            <span style={{ ...brokerTag, ...(accent && mine ? tileChip(accent) : {}) }}>{t.brokerName}</span>
           )}
         </div>
       </div>
@@ -372,14 +384,32 @@ function RRBox({ label, pips, money, ccy, color }: { label: string; pips: number
 
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12 };
 
-// A subtle wash of an accent colour blended into a tile's base background, so
-// the whole tile reads in that colour. Exported because four surfaces draw the
-// same position — the full card, the board tile's compact list, the Trade Desk's
-// book and the funded screen — and a group's colour has to look like one colour
-// across all of them. `pct` lets a dense row carry a slightly stronger wash than
-// a large card, where the same blend over a much smaller area is barely there.
-export function tileTint(accent: string, base: string, pct = 13): string {
+// A wash of an accent colour blended into a tile's base background, so the whole
+// tile reads in that colour. Exported because four surfaces draw the same
+// position — the full card, the board tile's compact list, the Trade Desk's book
+// and the funded screen — and a group's colour has to look like one colour
+// across all of them. `pct` lets a dense row carry a stronger wash than a large
+// card, where the same blend over a much bigger area reads heavier.
+//
+// The default was 13% and was raised to 24% (owner instruction, 2026-08): at 13%
+// four people's cards were nearly indistinguishable on a real wall, which is the
+// whole job. Do not quietly lower it again — if a colour looks too strong, the
+// answer is a different colour, not a wash nobody can see.
+export function tileTint(accent: string, base: string, pct = 24): string {
   return `color-mix(in srgb, ${accent} ${pct}%, ${base})`;
+}
+
+// The identity chip — the owner or broker label in a card's header, drawn in
+// that position's colour. This is what actually makes a tile "pop": the wash
+// tells you two cards differ, and a saturated chip beside the name tells you
+// whose it is without decoding anything. Kept off every figure on the card, so
+// the money and the side keep their own green/red meaning.
+export function tileChip(accent: string): CSSProperties {
+  return {
+    color: accent,
+    background: `color-mix(in srgb, ${accent} 22%, transparent)`,
+    border: `1px solid ${accent}`,
+  };
 }
 const fxLabel: CSSProperties = { fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT };
 const fxTag: CSSProperties = {
