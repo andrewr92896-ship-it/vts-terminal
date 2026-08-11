@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.07';
+export const APP_VERSION = 'Beta V 7.08';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.08',
+    date: 'August 11, 2026',
+    notes: [
+      'The "Update available" prompt now plays a short chime, so a new build does not sit unnoticed on a screen you are not looking at.',
+      'It can be switched off from My Terminal ▸ Settings, under App. On by default, and set per device.',
+    ],
+  },
   {
     version: 'Beta V 7.07',
     date: 'August 11, 2026',
