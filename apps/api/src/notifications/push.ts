@@ -157,9 +157,12 @@ export async function sendToTradingDesk(payload: PushPayload, opts: DeskSendOpts
 
 // Used by tests / a manual "send test" so a user can confirm a device works.
 export async function sendTest(userId: string): Promise<void> {
+  // Says TEST in the title, before anything else. A lock-screen glance shows the
+  // first line and little more — if that line reads like a real fill, somebody
+  // acts on a trade that never happened.
   await sendToUsers([userId], {
-    title: 'VTS Terminal',
-    body: 'Phone alerts are on. You’ll get a buzz when trades and alerts fire.',
+    title: 'TEST · VTS Terminal',
+    body: 'This is a test alert. Nothing has happened on your desk — phone alerts are working.',
     url: '/',
     tag: 'vts-test',
   });

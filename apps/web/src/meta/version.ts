@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.01';
+export const APP_VERSION = 'Beta V 7.02';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.02',
+    date: 'August 11, 2026',
+    notes: [
+      'Everything the terminal can buzz you about now lives on one screen — Advanced Trading ▸ Alert Settings. Phone alerts, Pushover, which trade events reach you, the alert sound, session alerts and price alerts were spread across My Terminal ▸ Settings and Strategy Sessions; they are all in one place now, and nothing about how alerts work has changed.',
+      'You can send yourself a test alert from there, so you can check one actually reaches you without waiting for a real trade. Every test says TEST in its title, so it can never be mistaken for a live fill.',
+      'The Pushover test can also be sent as an emergency alert — it repeats until you acknowledge it in the Pushover app, and it is the only kind that sounds through silent mode and Focus on iPhone. Use it to prove the setup that has to wake you actually works.',
+    ],
+  },
   {
     version: 'Beta V 7.01',
     date: 'August 10, 2026',

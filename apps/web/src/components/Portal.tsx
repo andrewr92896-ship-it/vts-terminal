@@ -66,6 +66,7 @@ import { TradeHistory } from '../workspaces/trading/TradeHistory';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
 import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
+import { AlertSettings } from '../workspaces/trading/AlertSettings';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
@@ -139,10 +140,12 @@ function renderScreen(
   switch (screen) {
     case 'live':
       return <LiveWall onOpenMembership={() => onNavigate('my_access')} />;
-    // (`alerts` — Trading Alerts — was removed outright, owner instruction
-    // 2026-08. The key routes nowhere and falls through to the placeholder,
-    // which is correct: the screen is gone rather than moved, so there is
-    // nothing for a stale link to land on.)
+    // `alerts` is Alert Settings — every control for what the terminal buzzes
+    // you about, in one place (owner instruction, 2026-08). The key is the one
+    // the removed Trading Alerts screen used; the alert FEED is still gone, so
+    // a stale link lands on the settings rather than nowhere.
+    case 'alerts':
+      return <AlertSettings />;
     // Placing trades (Live Trades) and reviewing them (Closed Trades & Metrics)
     // are two screens. `desk` stays on the review screen, which is what that key
     // has always routed to.

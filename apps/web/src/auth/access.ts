@@ -188,6 +188,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   presetStreams: 'Live stream wall',
   suggestions: 'Suggestions',
   supportChat: 'General support',
+  alertSettings: 'Alert settings',
 };
 
 // One line on what each buys, for the tier boxes on the Premium Features screen.
@@ -211,6 +212,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   presetStreams: 'Bloomberg, Reuters and the Fed alongside Yahoo Finance, and up to four playing at once.',
   suggestions: 'Send ideas straight to the developers.',
   supportChat: 'Talk to a person about anything that is not a bug.',
+  alertSettings: 'Tune which trade events buzz you, and send yourself a test alert.',
 };
 
 // The colour and glyph each tier is marked with across the terminal — the badge
@@ -255,6 +257,10 @@ export const SECTION_FEATURE: Record<string, PremiumFeature> = {
   sessions: 'strategySessions',
   prop: 'funded',
   st_decks: 'studyCreation',
+  // Alert Settings. Marked Premium even though two panels on it (turning phone
+  // alerts on, and price alerts) are free for anyone who reaches the screen —
+  // the same shape as `data`, whose board is Premium while its calendar is not.
+  alerts: 'alertSettings',
 };
 
 // The same, for a whole WORKSPACE. Empty today — no workspace is entirely paid,

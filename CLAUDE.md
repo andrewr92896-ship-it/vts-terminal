@@ -162,6 +162,16 @@ Tech:
   opt-in: price alerts are included with every account, and
   gating the delivery channel behind the desk left a user without the desk able to set
   an alert and never be told it fired.
+  - **The SERVER guards are still exactly that. The SCREEN is not** (owner
+    instruction, 2026-08). Every alert control now lives on **Advanced Trading ▸
+    Alert Settings**, and that workspace is an opt-in — so an account without
+    the desk can no longer *reach* the free web-push and price-alert controls,
+    even though the routes behind them still answer any signed-in caller. That
+    is a deliberate trade the owner made to get one home for alerts instead of
+    three, and it is the one thing to revisit at public launch: the guards are
+    already right, so the fix would be a reachable second entry point rather
+    than a server change. **Do not "correct" the guards to match the nav** —
+    they are the half that is correct.
 
 ### Where things live
 
@@ -270,33 +280,32 @@ workspaces list** (see `theme/nav.ts` order).
   Strategy Sessions (`sessions` — per-weekday ET windows with a Bull/Bear/Two-way
   bias; each session picks its own Mon–Fri days + hours, or is filled to the
   instrument's full market hours via the `/api/trading/market-hours` AI lookup.
-  Open/close/pre-open notifications are opt-in from a card on this same screen
-  — see below),
+  Open/close/pre-open notifications are opt-in from **Alert Settings**, not from
+  this screen — it builds and edits the sessions themselves),
   Manual Trades (`funded` key, `FundedScreen`), **Funded Trades**
   (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below.
   Labelled "Funded Account" until 2026-08; the key, the opt-in and the paid
   feature are all still `funded`/`prop`).
   **The sidebar order here follows the TRADE'S LIFE, not the tier stacking**
   (owner instruction, 2026-08): Live Wall → Live Trades → Closed Trades &
-  Metrics → Funded Trades → Manual Trades → Deleted Trades → Strategy Sessions.
+  Metrics → Funded Trades → Manual Trades → Deleted Trades → Strategy Sessions →
+  Alert Settings.
   The wall leads because it is the board the rest of the workspace is summarised
   onto; the rows after it are the trade's own sequence. It is the one
   workspace that does not stack Max → Premium → free, because a trader reads
-  these rows as a sequence rather than as a price list; Strategy Sessions comes
-  last as the only row that is not a record of trades.
-  **Trading Alerts (`alerts`) was REMOVED outright** (owner instruction,
-  2026-08) — the screen, its route, its how-to guide, its demo-tour step and
-  `Alerts.tsx` are gone, and the key routes nowhere. **Two things on it were
-  kept, because neither was a TradingView alert and each was the only way to
-  reach a real feature:** the **session open/close/pre-open settings** moved to
-  the Strategy Sessions screen, and **price alerts** moved to My Terminal ▸
-  Settings — a better home regardless, since a price alert is included with
-  every account and is deliberately not behind the desk opt-in, so on the old
-  screen an account without Advanced Trading could never reach it. Both live in
-  `workspaces/trading/alertSettings.tsx`. **The alert plumbing is untouched**:
-  the TradingView webhook, the `trading_alerts` table, the alert sound and the
-  Live Wall's Alerts tile all still work — so the wall can still show alerts
-  even though the section is gone.
+  these rows as a sequence rather than as a price list. The last two rows are
+  the ones that are not records of trades: Strategy Sessions is a plan for
+  making them, and Alert Settings is how the terminal reaches you.
+  **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` — see its
+  own section below).
+  **The Trading Alerts FEED was REMOVED outright** (owner instruction, 2026-08)
+  — the screen, its route, its how-to guide, its demo-tour step and `Alerts.tsx`
+  are gone and are not to be rebuilt. **The alert plumbing is untouched**: the
+  TradingView webhook, the `trading_alerts` table, the alert sound and the Live
+  Wall's Alerts tile all still work, so the wall can still show alerts even
+  though the feed screen is gone. **The `alerts` KEY was reused** for Alert
+  Settings (owner instruction, 2026-08): nothing linked to the removed screen,
+  so a stale link now lands on the alert settings rather than nowhere.
   **To Do moved
   to My Terminal** (owner decision, 2026-08 — a to-do list is personal, not a
   desk instrument); its key is still `td_trading`, so in-app links keep working.
@@ -448,6 +457,52 @@ workspaces list** (see `theme/nav.ts` order).
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
+  - **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` over
+    `components/NotificationSettings.tsx` + `workspaces/trading/alertPanels.tsx`)
+    is the **ONE home for everything the terminal can buzz you about** (owner
+    instruction, 2026-08). The controls were in three places — phone
+    notifications, Pushover and the per-trade toggles in My Terminal ▸ Settings,
+    price alerts under them, and the session open/close toggles on Strategy
+    Sessions — which is three places to look for one job.
+    - **Marked Premium** (`SECTION_FEATURE.alerts` → the new `alertSettings`
+      feature). **Two panels are deliberately OUTSIDE that feature** and render
+      for any account reaching the screen: **phone notifications** (web push
+      takes no credential, so a free account is still told when its price alert
+      fires) and **price alerts** (included with every account — an alert nobody
+      can be told about is not an alert). That is the same split Market Data
+      makes with its free calendar, and it is what keeps charging for Pushover
+      honest. **Do not fold those two into the paid block.**
+    - **Every test SAYS it is a test, in the title, before anything else** —
+      `TEST · VTS Terminal`, on Pushover and web push alike. Somebody woken at
+      3am reads the first line on a lock screen and little more; a test
+      indistinguishable from a fill gets acted on, and a notification system
+      that cries wolf is worse than one that stays quiet.
+    - **The emergency test is the one that answers the real question.**
+      `PUSHOVER_EMERGENCY` (priority 2) repeats until acknowledged and is the
+      **only** level iOS lets through silent mode and Focus — and only once the
+      recipient switches **Override Silent Mode** on under Emergency Priority in
+      the Pushover app. That is a phone setting the terminal cannot make on
+      somebody's behalf, so firing one and seeing is the only honest way to know
+      it is right. This is what caused the missed nights that prompted the
+      screen: everything the terminal actually sends goes at priority **1**,
+      which Do Not Disturb silences.
+      - Pushover **refuses** a priority-2 message without both `retry` and
+        `expire`, so `sendOne` supplies them unconditionally at that priority —
+        a caller forgetting one must never become a silent non-delivery. Its
+        bounds are retry ≥ 30s, expire ≤ 10800s (3 hours); a test uses 30s/120s
+        deliberately, so nobody is left with a phone nagging for three hours
+        because they sent a test and put it down.
+      - **The live alert pipeline is UNCHANGED and still sends at priority 1.**
+        Emergency is reachable only from the test button. Moving the real
+        notifications onto it is a separate owner decision, not a tidy-up.
+    - **The push hook and the Pushover status are owned by the SCREEN and passed
+      down** (`PushControls`, `onConnectedChange`). Two hook instances do not see
+      each other, so turning phone alerts on in one panel left the test panel
+      still reading "off" with its button disabled for no visible reason.
+    - `alertPanels.tsx` was `alertSettings.tsx` and had to be renamed: it differs
+      from the screen's `AlertSettings.tsx` only in casing, which is the same
+      file on a case-insensitive filesystem and a hard `TS1149` on a
+      case-sensitive one.
   - **The trader's own money is three KPI cards on the Trade Log** — Deposited
     Capital, Withdrawn Capital, and Total Capital (`CapitalCards` in
     `TradeLog.tsx`, served by `trading/traderCapital.ts` over
@@ -1886,13 +1941,13 @@ They are split because `service.ts` asks `rbac.ts` who is an admin and `rbac.ts`
 needs the membership *type* for the public user — importing each other would be a
 cycle.
 
-- **`FEATURE_TIER` is the entire paywall, in one object.** Eighteen paid features
+- **`FEATURE_TIER` is the entire paywall, in one object.** Nineteen paid features
   (owner decisions, 2026-08). **Max:** `ai`, `studyAsk`, `tradeDesk`, `teams`,
   `teamChat`, `customStreams`, `brokerConnections` (**Trade History ▸ Live
   Brokers carries its diamond**), `pushover`. **Premium:** `funded`,
   `studyExplain`, `studyCreation`, `customBoards`, `premiumBadges`,
   `strategySessions`, `marketData`, `presetStreams`, `suggestions`,
-  `supportChat`. Everything absent
+  `supportChat`, `alertSettings`. Everything absent
   from that map is included with every account. **Moving a feature between tiers
   is a one-word edit there** and every guard, lock icon and upgrade prompt
   follows — that is the whole reason features ask `hasEntitlement(user, 'ai')` and
@@ -2038,7 +2093,7 @@ cycle.
     | `teamChat` | the chat bubble's Team chat tab |
     | `suggestions`, `supportChat` | the intake choices in `SupportTab` |
     | `brokerConnections` | Trade History ▸ Live Brokers, **and** the Settings section |
-    | `pushover` | its row in `DeviceSettings` |
+    | `pushover` | its panel on Advanced Trading ▸ Alert Settings |
     | `premiumBadges` | the **Badge** button in My Terminal ▸ My Group |
     | `customBoards` | the Live Wall's "Build your own" button |
     | `studyCreation` | the Studies **Create** `ActionTile` |
@@ -2046,7 +2101,8 @@ cycle.
     | `studyAsk` | beside the tutor's send button, on the field you type into |
     | `presetStreams`, `customStreams` | the Market News channel rail |
     Everything else is a nav row (`tradeDesk`, `teams`, `marketData`,
-    `strategySessions`, `funded`, `studyCreation`) and marked there.
+    `strategySessions`, `funded`, `studyCreation`, `alertSettings`) and marked
+    there.
     `customBoards` is deliberately **not** in `SECTION_FEATURE`: the Live Wall
     section itself is free — a free account gets the three built-in layouts, a
     working screen — and only *saving your own* arrangement is paid, so marking
@@ -3615,13 +3671,15 @@ for founders, software developers and admins — **Administrator chat**.
   `sendPushoverToDesk` take an options object `{ excludeUserId?, scopeIds?,
   ownerId?, event? }` and apply the pref filter only when both `ownerId` and
   `event` are given — alerts pass neither (team-wide, not one trader's action).
-  UI is the "Notify me about a trader" section in `DeviceSettings.tsx`.
+  UI is the "Trade notifications" panel on **Advanced Trading ▸ Alert Settings**
+  (`components/NotificationSettings.tsx`).
 - **Session alert prefs** (`trading/sessionAlertPrefs.ts`, `session_alert_prefs`
   table, one row per user): per-user opt-in toggles for **session open / close /
   pre-open** plus a `preOpenLeadMin` (1–240, default 30). Routes
   `GET|PUT /api/trading/session-alert-prefs`; UI is the collapsible "Strategy
-  session alerts" card at the top of the Strategy Sessions screen
-  (`alertSettings.tsx`, rendered by `StrategySessions.tsx`).
+  session alerts" card on **Advanced Trading ▸ Alert Settings**
+  (`alertPanels.tsx`, rendered by `AlertSettings.tsx` — it was on the Strategy
+  Sessions screen until 2026-08).
   All default **off** (opt-in). The session watch reads these to fire a trader's
   own session notifications.
 

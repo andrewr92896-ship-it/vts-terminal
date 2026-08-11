@@ -8,6 +8,7 @@ import {
   removePushoverKey,
   savePushoverKey,
   sendPushoverTest,
+  type PushoverTestKind,
 } from '../notifications/pushover.js';
 
 // Pushover connection management. Each user pastes their own Pushover "user
@@ -61,9 +62,18 @@ export async function pushoverRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  // A test is sent either the way a real trade notification goes out, or at
+  // emergency priority so the recipient can prove the setup that has to wake
+  // them. An unrecognised or absent kind falls back to `standard` rather than
+  // failing — the worst outcome of a malformed test request is a quieter test,
+  // never an unexpected repeating one.
   app.post('/api/pushover/test', paid, async (request, reply) => {
     if (!pushoverConfigured()) return reply.code(503).send({ error: 'Pushover is not configured on the server' });
-    const ok = await sendPushoverTest(request.currentUser!.id);
+    const parsed = z
+      .object({ kind: z.enum(['standard', 'emergency']).optional() })
+      .safeParse(request.body ?? {});
+    const kind: PushoverTestKind = parsed.success ? (parsed.data.kind ?? 'standard') : 'standard';
+    const ok = await sendPushoverTest(request.currentUser!.id, kind);
     if (!ok) return reply.code(400).send({ error: 'Connect your Pushover user key first, or check that it’s valid.' });
     return { ok: true };
   });
