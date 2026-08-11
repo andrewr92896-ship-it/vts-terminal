@@ -9,6 +9,7 @@ import { useAuth } from '../../auth/AuthContext';
 import { canAccessFunded, canAccessWorkspace, workspacesForRoles } from '../../auth/access';
 import { homeOptions, pickInitialWorkspace, resolveHome } from '../../theme/homeScreen';
 import { NotificationsConnectionsPanel } from '../../components/DeviceSettings';
+import { isUpdateChimeOn, previewUpdateChime, setUpdateChimeOn } from '../../sound/updateChime';
 import { SectionHeader, panel, panelLabel } from '../admin/adminUi';
 
 // Which screen the terminal opens on. Two pickers rather than one long list of
@@ -167,6 +168,10 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
   const { user } = useAuth();
   const { privacy, toggle: togglePrivacy } = usePrivacy();
   const appUpdate = useCheckForUpdates();
+
+  // The chime that sounds when the "Update available" prompt appears. Stored on
+  // this device, defaulting on.
+  const [chime, setChime] = useState<boolean>(isUpdateChimeOn);
 
   // `features` is required, not optional — canAccessWorkspace reads the desk
   // opt-in off it and answers false for everyone when it is missing.
@@ -339,6 +344,47 @@ export function MyPortalSettings({ theme }: { theme: Theme }) {
                     ? 'Couldn’t check — try again'
                     : 'Check for updates'}
           </button>
+          <button
+            onClick={() => {
+              const next = !chime;
+              setChime(next);
+              setUpdateChimeOn(next);
+              // Switching it on plays it once: this press is a real gesture, so
+              // it also unlocks playback for the later, gesture-less chime.
+              if (next) previewUpdateChime();
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              width: '100%',
+              textAlign: 'left',
+              marginTop: 10,
+              background: 'rgba(0,0,0,.18)',
+              border: `1px solid ${theme.navBorder}`,
+              borderRadius: 8,
+              padding: '12px 14px',
+              cursor: 'pointer',
+              color: C.text,
+            }}
+          >
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: '50%',
+                background: chime ? C.green : C.faint,
+                flex: 'none',
+              }}
+            />
+            <span style={{ fontSize: 13.5, fontWeight: 600 }}>{"Update chime"}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11.5, color: C.faint }}>
+              {chime ? 'on' : 'off'}
+            </span>
+          </button>
+          <p style={{ margin: '10px 0 0', fontSize: 11.5, color: C.faint, lineHeight: 1.5 }}>
+            {"A short chime when the update prompt appears. This device only."}
+          </p>
         </section>
       </div>
     </div>
