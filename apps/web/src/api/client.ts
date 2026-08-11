@@ -122,6 +122,7 @@ import type {
   MyPortalData,
   MyTeam,
   TeamMemberPermissions,
+  TileColorOption,
   InvestmentPortfolio,
   InvestmentAccountInput,
   InvestmentHoldingInput,
@@ -334,7 +335,7 @@ export const api = {
   myPortal(): Promise<MyPortalData> {
     return request('/api/my-portal/team');
   },
-  myPortalConfig(): Promise<{ badgePresets: string[]; maxMembers: number }> {
+  myPortalConfig(): Promise<{ badgePresets: string[]; maxMembers: number; tileColors: TileColorOption[] }> {
     return request('/api/my-portal/config');
   },
   createMyTeam(name: string): Promise<{ team: MyTeam }> {
@@ -369,6 +370,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ badge }),
     });
+  },
+  // The colour one person's open positions are washed in on every trade tile.
+  // Leader-only, enforced server-side. `null` clears it back to no wash.
+  setMyTeamMemberTileColor(userId: string, color: string | null): Promise<{ team: MyTeam }> {
+    return request(`/api/my-portal/team/members/${encodeURIComponent(userId)}/tile-color`, {
+      method: 'POST',
+      body: JSON.stringify({ color }),
+    });
+  },
+  // The funded and manual tile colours — group-wide, not tied to a person. An
+  // omitted key is left alone, so setting one never blanks the other.
+  setMyTeamTileColors(patch: { funded?: string | null; manual?: string | null }): Promise<{ team: MyTeam }> {
+    return request('/api/my-portal/team/tile-colors', { method: 'POST', body: JSON.stringify(patch) });
   },
   setMyTeamMemberPermissions(
     userId: string,

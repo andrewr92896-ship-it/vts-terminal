@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.04';
+export const APP_VERSION = 'Beta V 7.05';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.05',
+    date: 'August 11, 2026',
+    notes: [
+      'Open trades can now be colour-coded by whose they are. The group leader picks a colour per person in My Terminal ▸ My Group, and that person’s positions carry it everywhere they show — the Live Wall cards, the Open Positions tile, the Trade Desk book and the iPhone widget.',
+      'Funded and manual trades have their own two colours, set separately from anybody’s, because those positions belong to no one person.',
+      'Nothing changes until a colour is chosen, and funded trades keep the gray they have always had. Green, red and gold are deliberately not offered — they already mean winning, losing and break-even on a trade tile.',
+    ],
+  },
   {
     version: 'Beta V 7.04',
     date: 'August 11, 2026',

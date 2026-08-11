@@ -22,6 +22,7 @@ import {
 import { resolveOandaPricingConfig } from './priceSource.js';
 import { isDemoUser } from '../demo/identity.js';
 import { getDeskSettings } from './settings.js';
+import { paintTiles, resolveTilePalette } from './tileColors.js';
 import { pushConfigured } from '../notifications/push.js';
 import { pushoverConfigured } from '../notifications/pushover.js';
 import { config } from '../config.js';
@@ -294,7 +295,18 @@ async function loadConnection(
   }
 }
 
+// Every position the viewer may see, each stamped with the colour its tile is
+// drawn in. The paint step wraps the build rather than living inside it because
+// `buildLiveWall` returns from four places — the sample feed, the unreadable
+// feed, the empty desk and the live one — and a colour applied at three of them
+// is a wall that loses its colours whenever a broker goes quiet.
 export async function getLiveWall(user: UserRow): Promise<LiveWall> {
+  const wall = await buildLiveWall(user);
+  const palette = await resolveTilePalette(user.id);
+  return { ...wall, trades: paintTiles(wall.trades, palette) };
+}
+
+async function buildLiveWall(user: UserRow): Promise<LiveWall> {
   // Anyone reaching this route holds a trading role (the workspace guard enforces
   // it), so balances are open to them in full — no separate viewBrokerage grant.
   // What they see is scoped to their team below.

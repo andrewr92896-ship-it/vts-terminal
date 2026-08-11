@@ -19,8 +19,13 @@ const TEXT = '#eef3ff';
 const MUTED = '#9fb0d6';
 const FAINT = '#6f84b0';
 // Neutral gray used to mute off-book (funded/FTP) positions — they sit last on
-// the wall and read as separate from the desk's on-book book.
-const GRAY = '#8892a6';
+// the wall and read as separate from the desk's on-book book. It is also the
+// palette's `slate`, which is what the server falls back to when a group has not
+// chosen a funded colour, so a desk that never touches tile colours sees the
+// wall it always saw. Exported so the other position surfaces fall back to the
+// same gray rather than each carrying the literal.
+export const OFF_BOOK_GRAY = '#8892a6';
+const GRAY = OFF_BOOK_GRAY;
 const CARD = 'rgba(13,31,68,.5)';
 const PANEL = 'rgba(11,26,58,.5)';
 const BORDER = '#16294f';
@@ -117,12 +122,18 @@ export function TradeCard({
 }) {
   const long = t.side === 'long';
   const sideColor = long ? GREEN : RED;
-  // Off-book (funded/FTP) positions are muted gray and always sorted last on the
-  // wall, regardless of who placed them. On-book positions take no accent: a
-  // position is not coloured by whose it is (the Chief Strategist / Chief Analyst
-  // tints were removed — owner decision, 2026-08).
+  // The tile's wash: whose position it is, or that it is a funded / manual one.
+  // The colour is resolved server-side from the group's palette (the leader sets
+  // it in My Terminal ▸ My Group), so this card never maps a person to a colour
+  // and cannot disagree with the compact list, the desk book or the funded
+  // screen about whose trade is whose.
+  //
+  // The fallback keeps the long-standing behaviour for anything the server did
+  // not paint: an off-book (funded) position reads muted gray, and everything
+  // else takes no accent. Off-book positions are also always sorted last on the
+  // wall, which is separate from the colour and unchanged.
   const offBook = t.broker === 'ftp';
-  const accent = offBook ? GRAY : null;
+  const accent = t.tileColor ?? (offBook ? GRAY : null);
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
   // While open, a position sitting inside the desk's break-even band (its move
@@ -361,10 +372,14 @@ function RRBox({ label, pips, money, ccy, color }: { label: string; pips: number
 
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12 };
 
-// A subtle wash of an accent colour blended into the card's base background, so
-// the whole tile reads in that colour. Only off-book (funded) positions use it.
-function tileTint(accent: string, base: string): string {
-  return `color-mix(in srgb, ${accent} 13%, ${base})`;
+// A subtle wash of an accent colour blended into a tile's base background, so
+// the whole tile reads in that colour. Exported because four surfaces draw the
+// same position — the full card, the board tile's compact list, the Trade Desk's
+// book and the funded screen — and a group's colour has to look like one colour
+// across all of them. `pct` lets a dense row carry a slightly stronger wash than
+// a large card, where the same blend over a much smaller area is barely there.
+export function tileTint(accent: string, base: string, pct = 13): string {
+  return `color-mix(in srgb, ${accent} ${pct}%, ${base})`;
 }
 const fxLabel: CSSProperties = { fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT };
 const fxTag: CSSProperties = {

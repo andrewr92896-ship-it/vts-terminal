@@ -16,6 +16,7 @@ import { DEMO_USERNAME } from '../demo/identity.js';
 import type { ParsedHistoryTrade } from '../ai/claude.js';
 import { pnlWindows, type PnlWindows } from './pnl.js';
 import { visibleTraderIdsForUser } from './scope.js';
+import { resolveTilePalette } from './tileColors.js';
 
 // Funded platforms (FTP and other prop accounts) are tracked separately from the
 // Live Wall / Trade Log: they have no usable API, so the trader keeps the balance
@@ -74,6 +75,11 @@ export interface FundedAccountView {
 
 export interface FundedData {
   accounts: FundedAccountView[];
+  // The colour funded tiles are washed in, so the live positions listed here
+  // read the same as the ones on the Live Wall rather than being the one place
+  // the group's choice does not apply. Every position in this payload is funded
+  // by definition, so it is one colour for the screen rather than one per row.
+  fundedTileColor: string | null;
 }
 
 export interface FundedAccountInput {
@@ -233,6 +239,7 @@ export async function getFunded(userId: string): Promise<FundedData> {
     byAccount.set(t.accountId, list);
   }
   const now = Date.now();
+  const palette = await resolveTilePalette(userId);
   return {
     accounts: accounts
       .map((r) =>
@@ -240,6 +247,7 @@ export async function getFunded(userId: string): Promise<FundedData> {
       )
       // The viewer's own first — they are the ones they act on.
       .sort((a, b) => Number(b.isMine) - Number(a.isMine)),
+    fundedTileColor: palette.funded,
   };
 }
 

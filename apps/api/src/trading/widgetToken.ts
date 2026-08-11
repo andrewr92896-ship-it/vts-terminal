@@ -95,6 +95,8 @@ export interface WidgetPosition {
   slippage: number | null;
   unrealizedPl: number | null;
   openedAt: number | null;
+  // Hex, or null when the group has not coloured this kind of position.
+  tileColor: string | null;
   forex: {
     accountCurrency: string;
     moneyPerPip: number | null;
@@ -154,6 +156,12 @@ export async function buildWidgetPositions(
     slippage: t.slippage,
     unrealizedPl: t.unrealizedPl,
     openedAt: t.openedAt,
+    // The group's tile colour for this position, already resolved by
+    // getLiveWall. A Home Screen glance is where "whose trade is this" is
+    // hardest to read — the owner handle is one small line — so the widget gets
+    // the same wash the terminal draws rather than being the one surface the
+    // colours do not reach.
+    tileColor: t.tileColor ?? null,
     forex: t.forex
       ? {
           accountCurrency: t.forex.accountCurrency,
