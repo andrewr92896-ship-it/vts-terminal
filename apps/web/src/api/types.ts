@@ -555,7 +555,11 @@ export interface BrokerStatus {
 
 // ---- Trading — Live Wall (mirror of apps/api/src/trading/types.ts) ----
 export type TradeSide = 'long' | 'short';
-export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
+// 'manual' is a hand-kept position on a manual connection — the server has sent
+// it since manual books existed (trading/manual.ts) and this mirror simply
+// omitted it, so a screen comparing against it got a type error for a value that
+// genuinely arrives.
+export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation' | 'manual';
 
 // Forex pip math attached to currency-pair positions (mirror of
 // apps/api/src/trading/forex.ts). Money fields are null when balances are hidden.
@@ -751,6 +755,23 @@ export interface DeskQuote {
   // Quote currency → account currency, so a stop can be priced in real money on
   // any instrument (not just the ones quoted in the account's own currency).
   quoteHomeFactor: number | null;
+}
+
+// The order ticket's quick-size buttons, as this trader has set them up (mirror
+// of apps/api/src/trading/ticketPresets.ts). A null ladder means "the built-in
+// one" — the defaults live in the web (workspaces/trading/ticketPresets.ts),
+// because that is where they are rendered from before this ever loads.
+export type TicketPresetMode = 'units' | 'per_step' | 'cost';
+
+export interface TicketPresets {
+  mode: TicketPresetMode | null;
+  units: number[] | null;
+  fractional: number[] | null;
+  step: number[] | null;
+  cost: number[] | null;
+  showMargin: boolean;
+  /** At or above this share of free margin (cash, on spot) a preset reads red. */
+  marginWarnPct: number;
 }
 
 export interface DeskWorkingOrder {

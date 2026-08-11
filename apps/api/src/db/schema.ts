@@ -1137,6 +1137,43 @@ export const userFeatures = sqliteTable('user_features', {
 });
 export type UserFeatureRow = typeof userFeatures.$inferSelect;
 
+// ---- Trading — order ticket size presets ----
+// One row per trader holding the quick-size buttons under the order ticket's
+// size box: which values they are, what they mean (a size in units, or an amount
+// of money per pip/point), and when the margin reading on one turns red.
+//
+// The trader's OWN ticket, deliberately — unlike trading_desk_settings, which a
+// desk lead can edit for a teammate, nothing here is reachable by anyone else:
+// the service takes the caller's id and there is no parameter that could widen
+// it. A trader with no row gets the built-in ladders, which is what every ticket
+// showed before this table existed.
+//
+// The four ladders are JSON arrays of numbers and every one is NULLABLE, where
+// null means "the built-in ladder" rather than "no buttons" — so a default that
+// changes in code still reaches anybody who never customised that ladder. They
+// are kept apart because a ladder means a different thing in each: 1,000 is a
+// sensible FX size and a ruinous bitcoin one.
+export const ticketPresets = sqliteTable('ticket_presets', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // 'units' | 'per_step' | 'cost'. Null = whatever suits the account (cost on a
+  // spot account, units everywhere else), which is what the chips did before.
+  mode: text('mode'),
+  unitsPresets: text('units_presets'), // whole-unit instruments (FX, indices)
+  fractionalPresets: text('fractional_presets'), // instruments sized in fractions
+  stepPresets: text('step_presets'), // money per pip / per point
+  costPresets: text('cost_presets'), // money spent, on a spot account
+  showMargin: integer('show_margin', { mode: 'boolean' }).notNull().default(true),
+  // At or above this share of free margin (cash, on spot) a preset reads red.
+  marginWarnPct: integer('margin_warn_pct').notNull().default(100),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TicketPresetRow = typeof ticketPresets.$inferSelect;
+
 // ---- Trading — Market Data board layout ----
 // One row per trader holding how they have arranged the Market Data screen:
 // which series are pinned to the strip (ordered), which they removed from the

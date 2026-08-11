@@ -136,9 +136,32 @@ function PositionRow({
 
   const long = trade.side === 'long';
   const pl = trade.unrealizedPl;
-  // Only a live OANDA position can be acted on from here — a hand-entered manual
-  // or funded row has no broker to send the instruction to.
-  const actionable = own && !readOnly && trade.broker === 'oanda';
+
+  // What this row's controls actually do, which differs by where the position
+  // lives — and the difference is the point rather than an inconvenience:
+  //
+  //   • 'broker'  a live OANDA trade. The stop and target are instructions sent
+  //               to the broker, and the whole position can be closed from here.
+  //   • 'note'    a funded (prop-firm) or hand-kept manual position. There is no
+  //               broker behind it, so its stop and target are a record of what
+  //               the firm is holding — worth editing here, since a stop moved
+  //               at the prop firm otherwise reaches the desk only by
+  //               re-importing a screenshot from another screen.
+  //
+  // A Kraken margin row is neither: the desk refuses to close or amend one by
+  // name, so it stays watch-only here too.
+  const editKind: 'broker' | 'note' | null =
+    !own || readOnly
+      ? null
+      : trade.broker === 'oanda'
+        ? 'broker'
+        : trade.broker === 'ftp' || trade.broker === 'manual'
+          ? 'note'
+          : null;
+  const actionable = editKind != null;
+  // Only a real broker position can be closed from the desk. A funded trade is
+  // closed from its own screen, where the result screenshot is read.
+  const closable = editKind === 'broker';
 
   // What a unit of price movement is worth on this position — pips on a currency
   // pair, points on anything else — and what the stop and target are therefore
@@ -201,16 +224,31 @@ function PositionRow({
       setEditing(false);
       return;
     }
+    const levels = {
+      ...(stopLoss === undefined ? {} : { stopLoss }),
+      ...(takeProfit === undefined ? {} : { takeProfit }),
+    };
     setBusy(true);
     setError(null);
     try {
-      await api.modifyDeskPosition({
-        connectionId: trade.connectionId,
-        tradeId: brokerTradeId(trade.id),
-        instrument: trade.instrument,
-        ...(stopLoss === undefined ? {} : { stopLoss }),
-        ...(takeProfit === undefined ? {} : { takeProfit }),
-      });
+      // The id in a Live Wall position is `<something>:<the row's own id>`, so
+      // the last segment is what each of these endpoints takes: a broker trade
+      // id, a funded trade id, or a manual position id. All three are
+      // owner-scoped server-side — a teammate's row is watch-only because no
+      // write path can reach it, not because this hides a button.
+      const id = brokerTradeId(trade.id);
+      if (editKind === 'note' && trade.broker === 'ftp') {
+        await api.setFundedTradeProtection(id, levels);
+      } else if (editKind === 'note') {
+        await api.updatePosition(id, levels);
+      } else {
+        await api.modifyDeskPosition({
+          connectionId: trade.connectionId,
+          tradeId: id,
+          instrument: trade.instrument,
+          ...levels,
+        });
+      }
       setEditing(false);
       onChanged();
     } catch (e) {
@@ -329,9 +367,11 @@ function PositionRow({
             <button onClick={openEditor} style={miniBtn}>
               {trade.stopLoss == null && trade.takeProfit == null ? 'Add stop / target' : 'Stop / target'}
             </button>
-            <button onClick={() => setConfirmClose(true)} style={{ ...miniBtn, color: RED, borderColor: 'rgba(239,84,104,.45)' }}>
-              {"Close"}
-            </button>
+            {closable && (
+              <button onClick={() => setConfirmClose(true)} style={{ ...miniBtn, color: RED, borderColor: 'rgba(239,84,104,.45)' }}>
+                {"Close"}
+              </button>
+            )}
           </>
         )}
         {confirmClose && (
@@ -368,7 +408,9 @@ function PositionRow({
             </button>
           </div>
           <div style={{ fontSize: 10, color: FAINT, width: '100%' }}>
-            {"Leave a box empty to remove that order."}
+            {editKind === 'note'
+              ? 'Leave a box empty to clear that level. This records what your account is holding — nothing is sent to a broker.'
+              : 'Leave a box empty to remove that order.'}
           </div>
         </div>
       )}

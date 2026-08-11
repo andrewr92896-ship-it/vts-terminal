@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.08';
+export const APP_VERSION = 'Beta V 7.09';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.09',
+    date: 'August 11, 2026',
+    notes: [
+      'The quick-size buttons on the order ticket are now yours to set. The cog at the end of the row is where you choose what they are.',
+      'They can be sizes as before, or amounts of money per pip — a button marked $5 works out the size that makes the trade worth $5 a pip. On anything that is not a currency pair it reads per point instead, and on a crypto spot account you can keep sizing in money spent.',
+      'Each button shows how much of your free margin that size would use, and turns red past a limit you set — 100% by default, which is the point your broker would refuse it.',
+      'Funded and hand-kept positions can now have their stop and target set straight from Live Trades, the same way the Funded Trades screen does it. Nothing is sent to a broker — it records what your account is holding.',
+    ],
+  },
   {
     version: 'Beta V 7.08',
     date: 'August 11, 2026',

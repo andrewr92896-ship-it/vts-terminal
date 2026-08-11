@@ -82,6 +82,7 @@ import type {
   DeskQuote,
   DeskWorkingOrder,
   DeskOrderRecord,
+  TicketPresets,
   PlaceOrderInput,
   PlaceOrderResult,
   CloseOrderInput,
@@ -679,6 +680,14 @@ export const api = {
   updateDeskSettings(patch: Partial<DeskSettings>, userId?: string): Promise<DeskSettings> {
     const body = userId ? { ...patch, userId } : patch;
     return request('/api/trading/desk-settings', { method: 'PATCH', body: JSON.stringify(body) });
+  },
+  // The order ticket's quick-size buttons. Always the caller's own — there is no
+  // `userId` here and no route that would take one.
+  ticketPresets(): Promise<TicketPresets> {
+    return request('/api/trading/ticket-presets');
+  },
+  saveTicketPresets(patch: Partial<TicketPresets>): Promise<TicketPresets> {
+    return request('/api/trading/ticket-presets', { method: 'PUT', body: JSON.stringify(patch) });
   },
   // The viewer's own capital: deposited, withdrawn, and what their connected
   // accounts hold right now. Self-only — there is no userId parameter.

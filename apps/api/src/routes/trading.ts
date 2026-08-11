@@ -27,6 +27,7 @@ import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../tradin
 import { getHistory, removePosition, updateClosedPosition } from '../trading/history.js';
 import { listDeletedTrades, restoreDeleted } from '../trading/deleted.js';
 import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
+import { getTicketPresets, setTicketPresets } from '../trading/ticketPresets.js';
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { visibleTraderIds } from '../trading/scope.js';
@@ -323,6 +324,23 @@ export async function tradingRoutes(app: FastifyInstance) {
       editableDeskMembers(me),
     ]);
     return { ...settings, instruments, userId: target, editableMembers };
+  });
+
+  // ---- The order ticket's quick-size buttons -------------------------------
+  //
+  // Always the caller's own — no `userId` parameter, deliberately unlike the
+  // desk settings above: a desk lead may change how a teammate's results are
+  // scored, but the shortcuts on the ticket belong to whoever sends the order.
+  app.get('/api/trading/ticket-presets', read, async (request) =>
+    getTicketPresets(request.currentUser!.id),
+  );
+
+  app.put('/api/trading/ticket-presets', write, async (request, reply) => {
+    const parsed = ticketPresetsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the preset sizes and try again' });
+    }
+    return setTicketPresets(request.currentUser!.id, parsed.data);
   });
 
   // ---- The trader's own capital: put in, taken out, held now ----------------
@@ -1522,6 +1540,24 @@ const deskSettingsSchema = z
     // The full per-instrument override list; when present it replaces the stored
     // set. Capped so one request can't insert an unbounded number of rows.
     breakEvenOverrides: z.array(beOverrideSchema).max(200).optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
+// The order ticket's quick-size buttons. A ladder sent as null asks for the
+// built-in one back, which is why every field is nullable rather than merely
+// optional — and an omitted field leaves what is stored alone, so saving the
+// warning threshold never rewrites somebody's sizes. The service normalizes and
+// clamps whatever arrives (trading/ticketPresets.ts); this is the outer bound.
+const presetLadder = z.array(z.number().finite().positive().max(1_000_000_000)).max(6).nullable();
+const ticketPresetsSchema = z
+  .object({
+    mode: z.enum(['units', 'per_step', 'cost']).nullable().optional(),
+    units: presetLadder.optional(),
+    fractional: presetLadder.optional(),
+    step: presetLadder.optional(),
+    cost: presetLadder.optional(),
+    showMargin: z.boolean().optional(),
+    marginWarnPct: z.number().finite().min(1).max(100).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
