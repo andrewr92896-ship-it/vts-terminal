@@ -8,7 +8,7 @@ import { AFFILIATION_NOTICE, EDUCATIONAL_NOTICE, RIGHTS_NOTICE, SCORE_NOTICE } f
 //
 // Study content is team-built and may teach *about* a third party's method,
 // brand, or name — e.g. a game covering a well-known finance philosophy. This
-// strip keeps that content in the terminal's low-liability posture (see CLAUDE.md
+// strip keeps that content in the terminal's low-liability posture (see AGENTS.md
 // "informational only, not investment advice"): it says the content is
 // educational, is not affiliated with or endorsed by anyone it references, and
 // is not financial/investment/legal/tax advice.
