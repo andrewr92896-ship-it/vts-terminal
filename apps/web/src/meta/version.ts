@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.10';
+export const APP_VERSION = 'Beta V 7.11';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.11',
+    date: 'August 12, 2026',
+    notes: [
+      'A size ladder can now hold up to fifteen preset buttons instead of six. The row wraps, and the list inside the cog scrolls once it gets long.',
+    ],
+  },
   {
     version: 'Beta V 7.10',
     date: 'August 12, 2026',

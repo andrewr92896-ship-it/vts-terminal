@@ -60,9 +60,10 @@ export const DEFAULT_TICKET_PRESETS: TicketPresets = {
   valueWarnPct: 100,
 };
 
-// How many shortcuts fit under the size box before the row wraps into something
-// nobody scans. A cap rather than a rule about trading.
-const MAX_PRESETS = 6;
+// A runaway-input guard, not a view about how many shortcuts a trader should
+// have: fifteen is plenty of room for a full ladder and still a bounded list to
+// store, validate and draw. Mirrored in the web's own MAX_PRESETS.
+const MAX_PRESETS = 15;
 
 function isMode(v: unknown): v is TicketPresetMode {
   return v === 'units' || v === 'per_step' || v === 'cost';
