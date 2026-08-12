@@ -1,5 +1,5 @@
 import { api } from '../../api/client';
-import type { DeskInstrument, TicketPresetMode, TicketPresets } from '../../api/types';
+import type { DeskInstrument, MarginBasis, TicketPresetMode, TicketPresets } from '../../api/types';
 
 // The order ticket's quick-size buttons: what the built-in ones are, which
 // ladder a given instrument uses, and what a button is worth once it is pressed.
@@ -49,8 +49,49 @@ export const DEFAULT_PRESETS: TicketPresets = {
   step: null,
   cost: null,
   showMargin: true,
+  marginBasis: null,
   marginWarnPct: 100,
+  valueWarnPct: 100,
 };
+
+/** Which reading colours a preset. Null is 'free', as it was before the second. */
+export function resolveBasis(presets: TicketPresets): MarginBasis {
+  return presets.marginBasis === 'value' ? 'value' : 'free';
+}
+
+/** The threshold that applies to the basis in force — one per basis, never shared. */
+export function warnPctFor(presets: TicketPresets, basis: MarginBasis): number {
+  return basis === 'value' ? presets.valueWarnPct : presets.marginWarnPct;
+}
+
+/** The patch that writes the threshold for one basis. */
+export function warnPatch(basis: MarginBasis, pct: number): Partial<TicketPresets> {
+  return basis === 'value' ? { valueWarnPct: pct } : { marginWarnPct: pct };
+}
+
+// What one size reads as on both bases at once. Either can be null — an account
+// that will not report its value, or a quote that has not landed — and a null is
+// simply not shown rather than filled in with the other one.
+export interface Usage {
+  free: number | null;
+  value: number | null;
+}
+
+export function usageFor(
+  cost: number | null,
+  available: number | null,
+  accountValue: number | null,
+): Usage {
+  return { free: usagePct(cost, available), value: usagePct(cost, accountValue) };
+}
+
+export function primaryPct(usage: Usage, basis: MarginBasis): number | null {
+  return basis === 'value' ? usage.value : usage.free;
+}
+
+export function secondaryPct(usage: Usage, basis: MarginBasis): number | null {
+  return basis === 'value' ? usage.free : usage.value;
+}
 
 // What the buttons mean on THIS account. A stored 'cost' is ignored on a margin
 // account — buying "$500 of EUR/USD" is not how a margin position is sized — so

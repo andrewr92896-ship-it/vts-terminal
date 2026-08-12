@@ -1,0 +1,24 @@
+-- Which figure the preset buttons' colour is measured against.
+--
+-- A preset's margin reading was always a share of FREE margin, which answers
+-- "can I place this right now" — the figure the broker refuses against. On an
+-- account already carrying positions that is the whole story and also a useless
+-- sizing guide: with 88% of the account committed, every preset reads several
+-- hundred percent and the row is a wall of red, saying nothing about whether
+-- the size itself is sensible.
+--
+-- So a second basis: the account VALUE, regardless of what is open. "$6 a pip
+-- is two thirds of my account" is a fact about the size; "583% of what is left"
+-- is a fact about today. Both are true and they answer different questions, so
+-- the chips show BOTH and this column says which one carries the colour.
+--
+-- NULL = 'free', which is exactly what every ticket did before, so nobody's
+-- buttons change on deploy.
+--
+-- The threshold is stored PER BASIS. One shared number would be wrong on
+-- whichever basis it was not set for — 100% is the point of refusal against
+-- free margin, and a position worth 100% of the account is a different kind of
+-- extreme — so switching basis would silently re-interpret a figure the trader
+-- chose deliberately.
+ALTER TABLE `ticket_presets` ADD `margin_basis` text;--> statement-breakpoint
+ALTER TABLE `ticket_presets` ADD `value_warn_pct` integer DEFAULT 100 NOT NULL;

@@ -1557,7 +1557,12 @@ const ticketPresetsSchema = z
     step: presetLadder.optional(),
     cost: presetLadder.optional(),
     showMargin: z.boolean().optional(),
+    // Which reading colours a preset, and the threshold for each — one per
+    // basis, since 100% of free margin and 100% of the account are different
+    // statements and switching must not re-interpret a figure somebody chose.
+    marginBasis: z.enum(['free', 'value']).nullable().optional(),
     marginWarnPct: z.number().finite().min(1).max(100).optional(),
+    valueWarnPct: z.number().finite().min(1).max(100).optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
