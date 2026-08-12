@@ -477,14 +477,32 @@ workspaces list** (see `theme/nav.ts` order).
         suggestions, but a button somebody put there must not vanish without
         explanation — an unusable one is caught by the ticket's own validation,
         which says why.
-      - **The margin reading is a share of what is actually available to commit**
-        — free margin, or cash on a spot account — because that is the figure
-        the broker refuses against; a percentage of account value would mark a
-        chip usable that would be rejected. **Red is `>= marginWarnPct`, default
-        100** (the point of refusal) and settable 1–100 for a trader who does not
-        want one position past, say, 70% of their free margin. A red chip is
-        **still pressable**: free margin moves as trades open and close, and a
-        refusal belongs at Review, not at a shortcut.
+      - **EVERY CHIP CARRIES TWO READINGS, because they answer different
+        questions** (migration `0126`; `marginBasis`, `usageFor` /
+        `primaryPct` / `secondaryPct`). A share of **free margin** (cash on
+        spot) is "can this go on right now" — the figure the broker refuses
+        against — and a share of the **account value** is "how big is this for
+        this account", regardless of what is open. On a desk already 90%
+        committed the first reads several hundred percent for every size, which
+        is true and says nothing about whether the size is sensible; that is the
+        case the second exists for.
+        - **The basis chooses which one LEADS and is coloured**, green under the
+          threshold and red at or above it; the other sits beside it in grey.
+          Colouring both was tried in the design and rejected — two coloured
+          percentages on one small button is a chip nobody reads at a glance.
+        - **The threshold is stored PER BASIS** (`marginWarnPct` /
+          `valueWarnPct`, both default 100, both 1–100). One shared number would
+          be re-interpreted on switching: 100% of free margin is the point of
+          refusal, while a position worth 100% of the account is a different kind
+          of extreme — a trader sizing against the account wants something like
+          30 there.
+        - **Null `marginBasis` is 'free'**, exactly what every ticket read before
+          the second basis existed, so nobody's buttons changed on deploy. A null
+          *reading* is left unsaid rather than filled in from the other — an
+          account not reporting its value disables the Account value choice
+          rather than quietly measuring against something else.
+        - A red chip is **still pressable**: free margin moves as trades open and
+          close, and a refusal belongs at Review, not at a shortcut.
       - The same share is restated on the ticket's own **Margin (est.)** cell,
         taken from the money figure already displayed there rather than
         recomputed, so the two cannot disagree. The chips price off the **market**

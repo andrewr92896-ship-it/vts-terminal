@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Icon } from '../../components/Icon';
-import { DEFAULT_LADDER, MAX_PRESETS, ladderPatch, type PresetKind } from './ticketPresets';
-import type { TicketPresetMode, TicketPresets } from '../../api/types';
+import { DEFAULT_LADDER, MAX_PRESETS, ladderPatch, warnPatch, type PresetKind } from './ticketPresets';
+import type { MarginBasis, TicketPresetMode, TicketPresets } from '../../api/types';
 
 // The cog at the end of the order ticket's quick-size row: what the buttons are,
 // what they mean, and when one reads red.
@@ -43,7 +43,12 @@ interface Props {
   stepName: string;
   /** The base asset on a spot account, for the units label ("BTC"). */
   baseAsset: string;
-  /** What a preset would tie up, as a share of what is available. Null when unknown. */
+  /** Which reading colours a preset, and its own threshold. */
+  basis: MarginBasis;
+  warnPct: number;
+  /** Whether the account is reporting a value to measure the second basis against. */
+  hasAccountValue: boolean;
+  /** What a preset would tie up on the basis in force. Null when unknown. */
   pctFor: (value: number) => number | null;
   onChange: (patch: Partial<TicketPresets>) => void;
   saveError: string | null;
@@ -58,6 +63,9 @@ export function TicketPresetMenu({
   spot,
   stepName,
   baseAsset,
+  basis,
+  warnPct,
+  hasAccountValue,
   pctFor,
   onChange,
   saveError,
@@ -160,7 +168,7 @@ export function TicketPresetMenu({
             {draft.rows.map((row, i) => {
               const n = Number(row.replace(/[, $]/g, ''));
               const pct = Number.isFinite(n) && n > 0 ? pctFor(n) : null;
-              const over = pct != null && pct >= presets.marginWarnPct;
+              const over = pct != null && pct >= warnPct;
               return (
                 <div key={i} style={presetRow}>
                   {money && <span style={{ color: FAINT, fontFamily: MONO, fontSize: 12 }}>{"$"}</span>}
@@ -215,21 +223,64 @@ export function TicketPresetMenu({
             <span>{spot ? 'Show cash used on each button' : 'Show margin used on each button'}</span>
           </label>
 
-          <div style={{ ...switchRow, marginTop: 10, color: MUTED }}>
-            <span>{"Turn red at"}</span>
-            <input
-              value={String(presets.marginWarnPct)}
-              inputMode="numeric"
-              aria-label="Turn red at this percentage"
-              onChange={(e) => {
-                const n = Number(e.target.value.replace(/[^0-9]/g, ''));
-                if (!Number.isFinite(n)) return;
-                onChange({ marginWarnPct: Math.max(1, Math.min(100, n || 1)) });
-              }}
-              style={{ ...rowInput, width: 52, flex: '0 0 auto', textAlign: 'right' }}
-            />
-            <span>{spot ? '% of cash' : '% of free margin'}</span>
-          </div>
+          {presets.showMargin && (
+            <>
+              {/* Both readings are always on the chip; this picks the one that
+                  carries the colour and is measured against the threshold. On an
+                  account already holding positions the free-margin reading runs
+                  into the hundreds of percent for every size, so a trader sizing
+                  against the account as a whole wants the other one leading. */}
+              <div style={{ marginTop: 13 }}>
+                <MiniLabel>{"Colour by"}</MiniLabel>
+                <div style={seg}>
+                  {([
+                    ['free', spot ? 'Free cash' : 'Free margin'],
+                    ['value', 'Account value'],
+                  ] as const).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => onChange({ marginBasis: key })}
+                      aria-pressed={basis === key}
+                      disabled={key === 'value' && !hasAccountValue}
+                      title={
+                        key === 'value' && !hasAccountValue
+                          ? 'This account is not reporting a value right now'
+                          : key === 'value'
+                            ? 'The whole account, whatever is already open'
+                            : 'What is left to commit right now'
+                      }
+                      style={{
+                        ...segBtn,
+                        ...(basis === key ? segOn : null),
+                        opacity: key === 'value' && !hasAccountValue ? 0.4 : 1,
+                      }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ ...switchRow, marginTop: 10, color: MUTED }}>
+                <span>{"Turn red at"}</span>
+                <input
+                  value={String(warnPct)}
+                  inputMode="numeric"
+                  aria-label="Turn red at this percentage"
+                  onChange={(e) => {
+                    const n = Number(e.target.value.replace(/[^0-9]/g, ''));
+                    if (!Number.isFinite(n)) return;
+                    // Per basis: 100% of free margin is the point of refusal,
+                    // 100% of the account is a different statement, so switching
+                    // must not re-interpret a figure somebody set deliberately.
+                    onChange(warnPatch(basis, Math.max(1, Math.min(100, n || 1))));
+                  }}
+                  style={{ ...rowInput, width: 52, flex: '0 0 auto', textAlign: 'right' }}
+                />
+                <span>{basis === 'value' ? '% of account value' : spot ? '% of cash' : '% of free margin'}</span>
+              </div>
+            </>
+          )}
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 13 }}>
             {custom && (

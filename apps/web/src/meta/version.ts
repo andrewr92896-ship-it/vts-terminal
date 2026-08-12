@@ -11,16 +11,25 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.10';
+export const APP_VERSION = 'Beta V 7.11';
 
 export const PATCH_NOTES: PatchNote[] = [
   {
-    version: 'Beta V 7.10',
-    date: 'August 11, 2026',
+    version: 'Beta V 7.11',
+    date: 'August 12, 2026',
     notes: [
       'Open trades can now be managed from the Live Wall. Your own positions carry the same Stop / target and Close controls Live Trades has, on the cards and in the compact list alike.',
       'A stop or target typed here is priced as you type it — the money and the pips it sits from your fill — and closing asks first.',
       'Only your own positions are editable, and only where there is something to reach: an OANDA trade goes to your broker, while a funded or hand-kept one records what your account is holding and sends nothing anywhere. Teammates’ trades stay watch-only.',
+    ],
+  },
+  {
+    version: 'Beta V 7.10',
+    date: 'August 12, 2026',
+    notes: [
+      'Every size preset now shows two readings: what it would use of your free margin, and what it would use of your whole account value regardless of what is already open.',
+      'The cog picks which one carries the colour — green under your limit, red at or above it. The other stays beside it in grey.',
+      'The red limit is kept per reading. 100% of free margin is the point your broker refuses; the account-value limit is yours to set, and switching between them never rewrites the other.',
     ],
   },
   {

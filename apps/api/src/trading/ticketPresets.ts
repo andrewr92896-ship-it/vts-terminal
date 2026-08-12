@@ -24,6 +24,13 @@ import { ticketPresets, type TicketPresetRow } from '../db/schema.js';
 
 export type TicketPresetMode = 'units' | 'per_step' | 'cost';
 
+// Which of the two readings on a preset carries its colour. They answer
+// different questions and the chips show both: 'free' is what is left to commit
+// right now — the figure the broker refuses against — and 'value' is the share
+// of the whole account, regardless of what is already open, which is the one
+// that still means something on a desk carrying positions.
+export type MarginBasis = 'free' | 'value';
+
 export interface TicketPresets {
   /** Null = whatever suits the account: money spent on a spot account, units elsewhere. */
   mode: TicketPresetMode | null;
@@ -32,8 +39,13 @@ export interface TicketPresets {
   step: number[] | null; // money per pip / per point
   cost: number[] | null; // money spent, on a spot account
   showMargin: boolean;
+  /** Which reading colours a preset. Null = 'free', as it always was. */
+  marginBasis: MarginBasis | null;
   /** At or above this share of free margin (cash, on spot) a preset reads red. */
   marginWarnPct: number;
+  /** The same, measured against the whole account value. Kept separate: one
+   *  number cannot mean the right thing on both bases. */
+  valueWarnPct: number;
 }
 
 export const DEFAULT_TICKET_PRESETS: TicketPresets = {
@@ -43,7 +55,9 @@ export const DEFAULT_TICKET_PRESETS: TicketPresets = {
   step: null,
   cost: null,
   showMargin: true,
+  marginBasis: null,
   marginWarnPct: 100,
+  valueWarnPct: 100,
 };
 
 // How many shortcuts fit under the size box before the row wraps into something
@@ -52,6 +66,10 @@ const MAX_PRESETS = 6;
 
 function isMode(v: unknown): v is TicketPresetMode {
   return v === 'units' || v === 'per_step' || v === 'cost';
+}
+
+function isBasis(v: unknown): v is MarginBasis {
+  return v === 'free' || v === 'value';
 }
 
 // A stored ladder, read back. Anything unusable is dropped rather than refused —
@@ -94,7 +112,9 @@ function rowToPresets(row: TicketPresetRow): TicketPresets {
     step: parseLadder(row.stepPresets),
     cost: parseLadder(row.costPresets),
     showMargin: row.showMargin,
+    marginBasis: isBasis(row.marginBasis) ? row.marginBasis : null,
     marginWarnPct: clampWarn(row.marginWarnPct),
+    valueWarnPct: clampWarn(row.valueWarnPct),
   };
 }
 
@@ -128,8 +148,16 @@ export async function setTicketPresets(
     step: patch.step === undefined ? current.step : normalizeLadder(patch.step),
     cost: patch.cost === undefined ? current.cost : normalizeLadder(patch.cost),
     showMargin: patch.showMargin === undefined ? current.showMargin : !!patch.showMargin,
+    marginBasis:
+      patch.marginBasis === undefined
+        ? current.marginBasis
+        : isBasis(patch.marginBasis)
+          ? patch.marginBasis
+          : null,
     marginWarnPct:
       patch.marginWarnPct === undefined ? current.marginWarnPct : clampWarn(patch.marginWarnPct),
+    valueWarnPct:
+      patch.valueWarnPct === undefined ? current.valueWarnPct : clampWarn(patch.valueWarnPct),
   };
   const json = (v: number[] | null) => (v == null ? null : JSON.stringify(v));
   const now = new Date();
@@ -140,7 +168,9 @@ export async function setTicketPresets(
     stepPresets: json(next.step),
     costPresets: json(next.cost),
     showMargin: next.showMargin,
+    marginBasis: next.marginBasis,
     marginWarnPct: next.marginWarnPct,
+    valueWarnPct: next.valueWarnPct,
     updatedAt: now,
   };
   await db
