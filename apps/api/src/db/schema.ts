@@ -1167,8 +1167,15 @@ export const ticketPresets = sqliteTable('ticket_presets', {
   stepPresets: text('step_presets'), // money per pip / per point
   costPresets: text('cost_presets'), // money spent, on a spot account
   showMargin: integer('show_margin', { mode: 'boolean' }).notNull().default(true),
-  // At or above this share of free margin (cash, on spot) a preset reads red.
+  // Which reading carries the colour: 'free' (what is left to commit) or 'value'
+  // (the whole account, regardless of what is open). Both are always shown; this
+  // says which one turns a preset red. Null = 'free', as it always was.
+  marginBasis: text('margin_basis'),
+  // At or above this share a preset reads red — one threshold per basis, because
+  // 100% means the point of refusal against free margin and something else
+  // entirely against the account's whole value.
   marginWarnPct: integer('margin_warn_pct').notNull().default(100),
+  valueWarnPct: integer('value_warn_pct').notNull().default(100),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
