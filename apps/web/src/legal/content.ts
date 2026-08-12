@@ -2,7 +2,7 @@
 // consistently in Site Help and in the first-run acceptance gate.
 //
 // These are long-form legal paragraphs, NOT site "wording": they are
-// deliberately NOT wrapped in <EditableText> (see CLAUDE.md — paragraphs and
+// deliberately NOT wrapped in <EditableText> (see AGENTS.md — paragraphs and
 // legal copy are excluded from inline editing). Edit the text here when the
 // documents change, and bump LEGAL_VERSION below AND the matching constant in
 // apps/api/src/legal/version.ts together so the acceptance gate re-prompts

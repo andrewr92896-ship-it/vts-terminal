@@ -5,12 +5,12 @@
 > Sales, Vitalis Retirement & Wealth Management, Personal Finance, the Vitalis
 > LLC workspace, the standalone To-Do workspace) and an older role model. It is
 > kept as history, not as a description of the current app. **For how the portal
-> is built and behaves today, `CLAUDE.md` is the single source of truth** —
+> is built and behaves today, `AGENTS.md` is the single source of truth** —
 > trust it and the code over anything below.
 
 A retrospective record of what was built, why, and how it worked at the time.
 For *how to continue working* today (stack, conventions, workflow), see
-`CLAUDE.md`.
+`AGENTS.md`.
 
 ---
 

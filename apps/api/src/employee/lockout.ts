@@ -4,7 +4,7 @@ import { employeeLoginAttempts } from '../db/schema.js';
 
 // Progressive lockout for employee-portal sign-ins.
 //
-// The main terminal has no login throttle at all (see CLAUDE.md) — this surface
+// The main terminal has no login throttle at all (see AGENTS.md) — this surface
 // does, because it is the one an attacker would actually target. Two counters
 // are kept for every attempt: one keyed on the account and one on the source
 // address, so neither spraying a single account from a botnet nor working

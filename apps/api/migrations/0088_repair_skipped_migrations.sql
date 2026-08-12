@@ -23,7 +23,7 @@
 -- database that has already seen it. The repair has to be a new migration, which
 -- is this one.
 --
--- 0085 needs nothing here: CLAUDE.md already records that it is not the
+-- 0085 needs nothing here: AGENTS.md already records that it is not the
 -- enforcement — `backfillConnectionLabels()` re-applies the venue-naming rule to
 -- every connection on every boot, which is why the labels are correct in spite
 -- of this. That leaves 0083, 0084 and 0086, below.
