@@ -165,6 +165,10 @@ export function TicketPresetMenu({
 
           <div style={{ marginTop: 13 }}>
             <MiniLabel>{presets.showMargin ? 'Buttons — margin each would use' : 'Buttons'}</MiniLabel>
+            {/* A full ladder is fifteen rows, which is taller than a phone. The
+                list scrolls inside the menu rather than pushing Done off the
+                bottom of the screen. */}
+            <div style={presetScroll}>
             {draft.rows.map((row, i) => {
               const n = Number(row.replace(/[, $]/g, ''));
               const pct = Number.isFinite(n) && n > 0 ? pctFor(n) : null;
@@ -206,6 +210,7 @@ export function TicketPresetMenu({
                 </div>
               );
             })}
+            </div>
             {draft.rows.length < MAX_PRESETS && (
               <button onClick={() => commit([...draft.rows, ''])} style={{ ...ghost, marginTop: 2 }}>
                 {"＋ Add a button"}
@@ -347,6 +352,10 @@ const seg: CSSProperties = { display: 'flex', background: INPUT_BG, border: `1px
 const segBtn: CSSProperties = { flex: 1, background: 'none', border: 'none', color: MUTED, fontSize: 11, fontWeight: 600, padding: '7px 4px', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' };
 const segOn: CSSProperties = { background: 'rgba(235,203,116,.16)', color: GOLD };
 const presetRow: CSSProperties = { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 };
+// Room for about seven rows before it scrolls, so a long ladder never pushes the
+// menu past the bottom of a phone. `2px` of side padding keeps a focused input's
+// ring from being clipped by the scroll container.
+const presetScroll: CSSProperties = { maxHeight: 214, overflowY: 'auto', margin: '0 -2px', padding: '0 2px' };
 const rowInput: CSSProperties = {
   background: 'rgba(3,12,32,.8)',
   border: `1px solid ${BORDER2}`,

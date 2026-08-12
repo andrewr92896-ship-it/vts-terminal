@@ -1548,7 +1548,7 @@ const deskSettingsSchema = z
 // optional — and an omitted field leaves what is stored alone, so saving the
 // warning threshold never rewrites somebody's sizes. The service normalizes and
 // clamps whatever arrives (trading/ticketPresets.ts); this is the outer bound.
-const presetLadder = z.array(z.number().finite().positive().max(1_000_000_000)).max(6).nullable();
+const presetLadder = z.array(z.number().finite().positive().max(1_000_000_000)).max(15).nullable();
 const ticketPresetsSchema = z
   .object({
     mode: z.enum(['units', 'per_step', 'cost']).nullable().optional(),

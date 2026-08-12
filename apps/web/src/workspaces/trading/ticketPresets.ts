@@ -40,7 +40,10 @@ export const DEFAULT_LADDER: Record<PresetKind, number[]> = {
   cost: SPOT_COST_CHIPS,
 };
 
-export const MAX_PRESETS = 6;
+// Mirrors the server's own cap (trading/ticketPresets.ts). A runaway-input
+// guard rather than a view about how many shortcuts a ladder should carry — the
+// chip row wraps, and the editor scrolls, so a long ladder is the trader's call.
+export const MAX_PRESETS = 15;
 
 export const DEFAULT_PRESETS: TicketPresets = {
   mode: null,
