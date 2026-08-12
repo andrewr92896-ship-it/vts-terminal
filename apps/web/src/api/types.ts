@@ -763,6 +763,13 @@ export interface DeskQuote {
 // because that is where they are rendered from before this ever loads.
 export type TicketPresetMode = 'units' | 'per_step' | 'cost';
 
+// Which of a preset's two readings carries its colour. Both are always shown —
+// 'free' is what is left to commit right now (the figure the broker refuses
+// against), 'value' is the share of the whole account regardless of what is
+// already open (the figure that still means something on a desk holding
+// positions).
+export type MarginBasis = 'free' | 'value';
+
 export interface TicketPresets {
   mode: TicketPresetMode | null;
   units: number[] | null;
@@ -770,8 +777,13 @@ export interface TicketPresets {
   step: number[] | null;
   cost: number[] | null;
   showMargin: boolean;
+  /** Null = 'free', which is what every ticket read before the second basis. */
+  marginBasis: MarginBasis | null;
   /** At or above this share of free margin (cash, on spot) a preset reads red. */
   marginWarnPct: number;
+  /** The same, against the whole account value. Separate: one number cannot mean
+   *  the right thing on both bases. */
+  valueWarnPct: number;
 }
 
 export interface DeskWorkingOrder {

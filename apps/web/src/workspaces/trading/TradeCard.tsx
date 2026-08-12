@@ -3,6 +3,14 @@ import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
 import { TradeTimes, etSince } from './tradeTime';
+import { fmtMoney, fmtPips, fmtPrice, usd } from './tradeFormat';
+import {
+  PositionActions,
+  ProtectionEditor,
+  usePositionEditKind,
+  usePositionEditor,
+  wallMovement,
+} from './positionEdit';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
 
 // The full "trading card" for one open position — the rich card shown on the
@@ -32,39 +40,11 @@ const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 const MONO = "'IBM Plex Mono', monospace";
 
-export const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US');
-
-// Money in the account currency. USD shows as "$"; other currencies append the
-// code so the number is never mistaken for dollars.
-export function fmtMoney(n: number, ccy: string): string {
-  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const sign = n < 0 ? '-' : '';
-  return ccy === 'USD' ? `${sign}$${abs}` : `${sign}${abs} ${ccy}`;
-}
-
-// Pips with one decimal and an optional sign (for signed open-P/L distances).
-export function fmtPips(n: number, signed = false): string {
-  const s = n.toLocaleString('en-US', { maximumFractionDigits: 1 });
-  return `${signed && n > 0 ? '+' : ''}${s} pip${Math.abs(n) === 1 ? '' : 's'}`;
-}
-
-// A position size, at whatever precision it actually needs. Sizes span
-// 100,000 units of EUR/USD down to 0.00042 of a bitcoin, and the default
-// three-decimal locale format prints that second one as "0" — so the smaller
-// the size, the more decimals it keeps.
-export function fmtUnits(n: number): string {
-  const abs = Math.abs(n);
-  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
-  return Number(n.toFixed(digits)).toLocaleString('en-US', { maximumFractionDigits: digits });
-}
-
-// Prices span forex (1.08425), indices (38,958), and crypto (64,255). Show
-// thousands with separators and few decimals; sub-1000 prices keep precision.
-export function fmtPrice(n: number | null): string {
-  if (n == null) return '—';
-  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  return String(Number(n.toFixed(5)));
-}
+// The desk's number formatters live in `tradeFormat.ts` — this card imports the
+// shared position editor, and the editor needs them, so keeping them here would
+// have the two files importing each other. Re-exported so every existing
+// `import { fmtMoney } from './TradeCard'` keeps working.
+export { usd, fmtMoney, fmtPips, fmtUnits, fmtPrice } from './tradeFormat';
 
 // Fixed to Eastern, deliberately: its remaining callers are Market Data's Fed
 // bar and economic calendar, and a 2:00 PM statement is a fact about the market
@@ -104,21 +84,27 @@ export function TradeCard({
   config,
   mine,
   readOnly,
+  sample,
   showMoney,
   showFxMoney,
   canSeeBalances,
-  onClosed,
+  onChanged,
 }: {
   t: LiveTrade;
   config: BreakEvenConfig;
   mine: boolean; // the position is on the viewer's own broker account
   readOnly: boolean;
+  // The wall previews itself with representative trades when no broker has ever
+  // been connected. Nothing on one is actionable — there is no real position
+  // behind it to close or amend.
+  sample: boolean;
   showMoney: boolean;
   // Forex pip money is shown to every trader (not balance-gated), but still
   // hidden by the privacy and Hide-$ toggles.
   showFxMoney: boolean;
   canSeeBalances: boolean;
-  onClosed: () => void;
+  // Reload the wall — this position was closed, or its stop/target changed.
+  onChanged: () => void;
 }) {
   const long = t.side === 'long';
   const sideColor = long ? GREEN : RED;
@@ -142,11 +128,19 @@ export function TradeCard({
     t.currentPrice != null &&
     classifyOutcome(t.side, t.entryPrice, t.currentPrice, t.unrealizedPl, t.instrument, config) === 'breakeven';
 
+  // Acting on the position: the same stop/target editing and closing the Live
+  // Trades desk book offers, on the same positions, through the same shared save
+  // paths — so a trade can be managed from the board it is being watched on
+  // rather than only from the screen that placed it.
+  const editKind = usePositionEditKind(t, { own: mine, readOnly, sample });
+  const editor = usePositionEditor(t, editKind, onChanged);
+  const move = wallMovement(t);
+
   // A funded (FTP off-book) position the viewer owns can be closed right here on
   // the wall: its id is `funded:<tradeId>`. Closing reads a trade-result
   // screenshot to stamp the exit/P-L and drop it off the wall.
   const fundedTradeId = t.broker === 'ftp' && t.id.startsWith('funded:') ? t.id.slice('funded:'.length) : null;
-  const canClose = mine && !readOnly && fundedTradeId != null;
+  const canClose = mine && !readOnly && !sample && fundedTradeId != null;
   const [closing, setClosing] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
   const [closeErr, setCloseErr] = useState<string | null>(null);
@@ -161,7 +155,7 @@ export function TradeCard({
       try {
         await api.closeFundedTrade(fundedTradeId, { imageBase64: reader.result as string, mediaType: file.type });
         setClosing(false);
-        onClosed(); // reload the wall — the position drops off once it's closed
+        onChanged(); // reload the wall — the position drops off once it's closed
       } catch (e) {
         setCloseErr(e instanceof ApiError ? e.message : 'Could not read that trade-result screenshot');
       } finally {
@@ -288,12 +282,38 @@ export function TradeCard({
         </div>
       </div>
 
-      {/* Close trade — funded (off-book) positions the viewer owns */}
-      {canClose && (
-        <div style={{ borderTop: `1px solid ${BORDER}`, padding: '10px 14px', background: PANEL }}>
-          {!closing ? (
-            <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}>{"Close trade"}</button>
-          ) : (
+      {/* Managing the position — ONE footer, however many things this particular
+          position can have done to it. A funded card carries both the
+          stop/target note and the screenshot close, and two bordered strips
+          stacked under one card read as two cards.
+
+          What appears is the trader's own position, and only where there is
+          something a save could reach: an OANDA trade's stop and target are
+          instructions to the broker and the whole position can be closed here,
+          while a funded or hand-kept one records what the account is holding.
+          A teammate's card, a Kraken margin row and the sample book carry
+          nothing, which is the same rule the desk book draws. */}
+      {(editKind || canClose) && (
+        <div style={{ borderTop: `1px solid ${BORDER}`, padding: '9px 14px', background: PANEL }}>
+          {/* One flow at a time: opening the stop/target editor puts the
+              screenshot close away and vice versa, so the card never asks for
+              two different things at once. */}
+          {!closing && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {editKind && <PositionActions trade={t} kind={editKind} editor={editor} />}
+              {canClose && !editor.editing && (
+                <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}>{"Close trade"}</button>
+              )}
+            </div>
+          )}
+          {editKind && editor.editing && (
+            <ProtectionEditor kind={editKind} editor={editor} move={move} hideMoney={!showMoney} />
+          )}
+          {editor.error && <div style={{ fontSize: 11, color: RED, marginTop: 6 }}>{editor.error}</div>}
+
+          {/* Closing a funded trade reads the result off a screenshot: it has no
+              broker to ask, so the exit price and P/L come from the picture. */}
+          {closing && (
             <div>
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 9, lineHeight: 1.45 }}>
                 Paste or upload a screenshot of the <b>closed</b> trade — VTS AI reads the exit price and P/L to finalize it, and

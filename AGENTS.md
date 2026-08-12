@@ -363,7 +363,8 @@ workspaces list** (see `theme/nav.ts` order).
       (below) is a different thing entirely from placing their trades.
     - **The desk book's row controls differ by WHERE THE POSITION LIVES**, and
       that difference is the design rather than an inconvenience
-      (`editKind` in `DeskPositions.tsx`). A live **OANDA** row's stop and target
+      (`positionEditKind` in `workspaces/trading/positionEdit.tsx` — shared with
+      the Live Wall, see below). A live **OANDA** row's stop and target
       are instructions sent to the broker, and the whole position can be closed
       from here. A **funded (`ftp`) or hand-kept (`manual`)** row has no broker
       behind it, so its stop and target are a *record of what the firm is
@@ -497,14 +498,32 @@ workspaces list** (see `theme/nav.ts` order).
         suggestions, but a button somebody put there must not vanish without
         explanation — an unusable one is caught by the ticket's own validation,
         which says why.
-      - **The margin reading is a share of what is actually available to commit**
-        — free margin, or cash on a spot account — because that is the figure
-        the broker refuses against; a percentage of account value would mark a
-        chip usable that would be rejected. **Red is `>= marginWarnPct`, default
-        100** (the point of refusal) and settable 1–100 for a trader who does not
-        want one position past, say, 70% of their free margin. A red chip is
-        **still pressable**: free margin moves as trades open and close, and a
-        refusal belongs at Review, not at a shortcut.
+      - **EVERY CHIP CARRIES TWO READINGS, because they answer different
+        questions** (migration `0126`; `marginBasis`, `usageFor` /
+        `primaryPct` / `secondaryPct`). A share of **free margin** (cash on
+        spot) is "can this go on right now" — the figure the broker refuses
+        against — and a share of the **account value** is "how big is this for
+        this account", regardless of what is open. On a desk already 90%
+        committed the first reads several hundred percent for every size, which
+        is true and says nothing about whether the size is sensible; that is the
+        case the second exists for.
+        - **The basis chooses which one LEADS and is coloured**, green under the
+          threshold and red at or above it; the other sits beside it in grey.
+          Colouring both was tried in the design and rejected — two coloured
+          percentages on one small button is a chip nobody reads at a glance.
+        - **The threshold is stored PER BASIS** (`marginWarnPct` /
+          `valueWarnPct`, both default 100, both 1–100). One shared number would
+          be re-interpreted on switching: 100% of free margin is the point of
+          refusal, while a position worth 100% of the account is a different kind
+          of extreme — a trader sizing against the account wants something like
+          30 there.
+        - **Null `marginBasis` is 'free'**, exactly what every ticket read before
+          the second basis existed, so nobody's buttons changed on deploy. A null
+          *reading* is left unsaid rather than filled in from the other — an
+          account not reporting its value disables the Account value choice
+          rather than quietly measuring against something else.
+        - A red chip is **still pressable**: free margin moves as trades open and
+          close, and a refusal belongs at Review, not at a shortcut.
       - The same share is restated on the ticket's own **Margin (est.)** cell,
         taken from the money figure already displayed there rather than
         recomputed, so the two cannot disagree. The chips price off the **market**
@@ -2522,6 +2541,35 @@ on). Before the move the wall was reachable by everyone.
 > Live Trades `OrderTicket` itself, and Desk Metrics computes through the same
 > `tradeStats.ts` functions the Trade Log calls. A tile that shares the code
 > cannot disagree with the screen.
+
+**A POSITION IS MANAGED FROM THE WALL, THROUGH THE SAME CODE THE DESK USES**
+(owner request, 2026-08). A trade is watched on the board and was only editable
+on Live Trades, so moving a stop meant leaving the screen it was being watched
+on. The stop/target editor and the Close control are now on the wall's trade
+cards (`TradeCard`, so both the Positions view and the Open Positions tile's
+cards layout) and on that tile's compact list.
+
+- **`workspaces/trading/positionEdit.tsx` is the one place that decides who may
+  act and what a save does** — `positionEditKind`, `usePositionEditor`,
+  `PositionActions`, `ProtectionEditor`. Live Trades' desk book
+  (`DeskPositions.tsx`) was rewritten onto it rather than copied from, so the
+  three save paths (`modifyDeskPosition` for a broker trade,
+  `setFundedTradeProtection` for a funded one, `updatePosition` for a manual
+  one) exist once. **Two screens deciding this separately is how one of them
+  comes to offer a Close the server refuses, or send a level to the wrong
+  endpoint.**
+- **Nothing about the boundary moved.** Only the viewer's **own** positions are
+  actionable, every write is owner-scoped server-side, a Kraken margin row stays
+  watch-only, and a **sample** row carries no controls at all — there is no real
+  position behind it. `TradeCard` takes `sample` for exactly that reason; the
+  desk book already had it.
+- **A broker position's controls are gated on `tradeDesk` here, unlike on Live
+  Trades.** That screen is behind `requirePremium('tradeDesk')` in its entirety;
+  the wall is reachable on any membership, so without the check a Premium member
+  would meet a Close button that only ever answers 402. A hand-kept stop is not
+  an order and is not gated.
+- The desk's own money formatters moved to `tradeFormat.ts` (re-exported from
+  `TradeCard`) so the card and the editor do not import each other.
 
 **`source` has THREE states, and the third one is the point** (`trading/types.ts`,
 mirrored in the web `api/types.ts` and on the widget payload):

@@ -5,6 +5,13 @@ import { usePrivacy } from '../../privacy/privacy';
 import type { BoardTile, LiveTrade, LiveWall } from '../../api/types';
 import { configFrom } from './outcome';
 import { OFF_BOOK_GRAY, TradeCard, tileTint } from './TradeCard';
+import {
+  PositionActions,
+  ProtectionEditor,
+  usePositionEditKind,
+  usePositionEditor,
+  wallMovement,
+} from './positionEdit';
 import { etSince, etStamp, etStampFull } from './tradeTime';
 import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
@@ -176,24 +183,50 @@ export function PositionsTile({
                 config={configFrom(data)}
                 mine={t.ownerId === user?.id}
                 readOnly={readOnly}
+                sample={data.source === 'sample'}
                 showMoney={showMoney}
                 showFxMoney={!privacy}
                 canSeeBalances={data.canSeeBalances}
-                onClosed={() => void load()}
+                onChanged={() => void load()}
               />
             ))}
           </div>
         )}
         {data && data.trades.length > 0 && layoutMode === 'list' &&
           data.trades.map((t) => (
-            <PositionRow key={t.id} t={t} mine={t.ownerId === user?.id} showMoney={showMoney} canSeeBalances={data.canSeeBalances} />
+            <PositionRow
+              key={t.id}
+              t={t}
+              mine={t.ownerId === user?.id}
+              readOnly={readOnly}
+              sample={data.source === 'sample'}
+              showMoney={showMoney}
+              canSeeBalances={data.canSeeBalances}
+              onChanged={() => void load()}
+            />
           ))}
       </div>
     </div>
   );
 }
 
-function PositionRow({ t, mine, showMoney, canSeeBalances }: { t: LiveTrade; mine: boolean; showMoney: boolean; canSeeBalances: boolean }) {
+function PositionRow({
+  t,
+  mine,
+  readOnly,
+  sample,
+  showMoney,
+  canSeeBalances,
+  onChanged,
+}: {
+  t: LiveTrade;
+  mine: boolean;
+  readOnly: boolean;
+  sample: boolean;
+  showMoney: boolean;
+  canSeeBalances: boolean;
+  onChanged: () => void;
+}) {
   const long = t.side === 'long';
   const sideColor = long ? GREEN : RED;
   const up = (t.unrealizedPl ?? 0) >= 0;
@@ -207,6 +240,14 @@ function PositionRow({ t, mine, showMoney, canSeeBalances }: { t: LiveTrade; min
   // so a coloured row never steps out of line with a plain one.
   const accent = t.tileColor ?? (t.broker === 'ftp' ? OFF_BOOK_GRAY : null);
 
+  // The same stop/target and close controls the cards and the Live Trades desk
+  // book carry, on a row a quarter their size — a board is where a position is
+  // watched, so it is where a stop most often needs moving. Drawn only on the
+  // viewer's own actionable positions, so a dense list of teammates' trades is
+  // exactly as it was.
+  const editKind = usePositionEditKind(t, { own: mine, readOnly, sample });
+  const editor = usePositionEditor(t, editKind, onChanged);
+
   return (
     <div
       style={
@@ -215,41 +256,53 @@ function PositionRow({ t, mine, showMoney, canSeeBalances }: { t: LiveTrade; min
           : row
       }
     >
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{t.instrument}</span>
-          <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'L' : 'S'}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          {/* The handle takes the colour too — on a dense list the name is what
-              the eye lands on, and a coloured name is read faster than a bar in
-              the margin. */}
-          {!mine && <span style={{ fontSize: 9.5, color: accent ?? '#9fb3e0', fontWeight: accent ? 700 : 400, fontFamily: MONO }}>@{owner}</span>}
-          <span style={{ fontSize: 9.5, color: FAINT }}>{t.brokerName}</span>
-          {t.currentPrice != null && <span style={{ fontSize: 9.5, color: MUTED, fontFamily: MONO }}>@ {fmtPrice(t.currentPrice)}</span>}
-        </div>
-      </div>
-      <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-        {!canSeeBalances ? (
-          <span style={{ fontSize: 10, color: FAINT }}>P/L hidden</span>
-        ) : t.unrealizedPl == null ? (
-          <span style={{ fontSize: 12, color: MUTED, fontFamily: MONO }}>—</span>
-        ) : (
-          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: MONO, color: plColor }}>
-            {showMoney ? `${up ? '+' : ''}${usd(t.unrealizedPl)}` : '•••'}
-          </span>
-        )}
-        {t.forex?.pipsOpen != null && (
-          <div style={{ fontSize: 10, fontWeight: 600, fontFamily: MONO, color: t.forex.pipsOpen >= 0 ? GREEN : RED, marginTop: 1 }}>
-            {t.forex.pipsOpen > 0 ? '+' : ''}
-            {t.forex.pipsOpen.toLocaleString('en-US', { maximumFractionDigits: 1 })} pips
+      <div style={rowMain}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{t.instrument}</span>
+            <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'L' : 'S'}</span>
           </div>
-        )}
-        {/* When the position opened, and how long ago that was. */}
-        <div style={{ fontSize: 9, fontFamily: MONO, color: FAINT, marginTop: 2 }} title={etStampFull(t.openedAt)}>
-          {etStamp(t.openedAt)} · {etSince(t.openedAt)}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+            {/* The handle takes the colour too — on a dense list the name is what
+                the eye lands on, and a coloured name is read faster than a bar in
+                the margin. */}
+            {!mine && <span style={{ fontSize: 9.5, color: accent ?? '#9fb3e0', fontWeight: accent ? 700 : 400, fontFamily: MONO }}>@{owner}</span>}
+            <span style={{ fontSize: 9.5, color: FAINT }}>{t.brokerName}</span>
+            {t.currentPrice != null && <span style={{ fontSize: 9.5, color: MUTED, fontFamily: MONO }}>@ {fmtPrice(t.currentPrice)}</span>}
+          </div>
+        </div>
+        <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+          {!canSeeBalances ? (
+            <span style={{ fontSize: 10, color: FAINT }}>P/L hidden</span>
+          ) : t.unrealizedPl == null ? (
+            <span style={{ fontSize: 12, color: MUTED, fontFamily: MONO }}>—</span>
+          ) : (
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: MONO, color: plColor }}>
+              {showMoney ? `${up ? '+' : ''}${usd(t.unrealizedPl)}` : '•••'}
+            </span>
+          )}
+          {t.forex?.pipsOpen != null && (
+            <div style={{ fontSize: 10, fontWeight: 600, fontFamily: MONO, color: t.forex.pipsOpen >= 0 ? GREEN : RED, marginTop: 1 }}>
+              {t.forex.pipsOpen > 0 ? '+' : ''}
+              {t.forex.pipsOpen.toLocaleString('en-US', { maximumFractionDigits: 1 })} pips
+            </div>
+          )}
+          {/* When the position opened, and how long ago that was. */}
+          <div style={{ fontSize: 9, fontFamily: MONO, color: FAINT, marginTop: 2 }} title={etStampFull(t.openedAt)}>
+            {etStamp(t.openedAt)} · {etSince(t.openedAt)}
+          </div>
         </div>
       </div>
+
+      {editKind && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end', marginTop: 5 }}>
+          <PositionActions trade={t} kind={editKind} editor={editor} size="small" />
+        </div>
+      )}
+      {editKind && editor.editing && (
+        <ProtectionEditor kind={editKind} editor={editor} move={wallMovement(t)} hideMoney={!showMoney} />
+      )}
+      {editor.error && <div style={{ fontSize: 10.5, color: RED, marginTop: 5 }}>{editor.error}</div>}
     </div>
   );
 }
@@ -282,16 +335,21 @@ const header: CSSProperties = {
 };
 const body: CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto' };
 const row: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 8,
   padding: '7px 11px',
   borderBottom: `1px solid rgba(22,41,79,.6)`,
   // Every row reserves the tile-colour bar whether or not it has one, so a list
   // mixing coloured and uncoloured positions keeps a straight left edge instead
   // of each coloured row stepping 3px to the right of its neighbours.
   borderLeft: '4px solid transparent',
+};
+// The reading half of a row. It is the row's only content until the trader opens
+// the stop/target editor, which lays out underneath it rather than squeezing in
+// beside a P/L figure.
+const rowMain: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 8,
 };
 const hint: CSSProperties = { padding: '18px 14px', fontSize: 11.5, color: MUTED, textAlign: 'center', lineHeight: 1.5 };
 const sideBadge: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.4px', borderRadius: 4, padding: '1px 4px' };

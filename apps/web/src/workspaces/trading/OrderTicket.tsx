@@ -11,10 +11,15 @@ import {
   ladderFor,
   ladderKind,
   loadTicketPresets,
+  primaryPct,
+  resolveBasis,
   resolveMode,
   saveTicketPresets,
+  secondaryPct,
   unitsForPreset,
-  usagePct,
+  usageFor,
+  warnPctFor,
+  type Usage,
 } from './ticketPresets';
 import type {
   DeskAccount,
@@ -332,10 +337,11 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
   const rr = riskMoney != null && rewardMoney != null && riskMoney > 0 ? rewardMoney / riskMoney : null;
   const notional = reference != null && factor != null && Number.isFinite(units) ? units * reference * factor : null;
   const marginEstimate = notional != null && spec?.marginRate != null ? notional * spec.marginRate : null;
-  // The share of what is available that THIS order would tie up. Taken from the
-  // margin figure the summary is already showing rather than recomputed, so the
-  // percentage and the money beside it can never disagree.
-  const sizePct = usagePct(marginEstimate, account.marginAvailable);
+  // The share of what is available that THIS order would tie up, read the same
+  // two ways the chips are. Taken from the margin figure the summary is already
+  // showing rather than recomputed, so the percentage and the money beside it
+  // can never disagree.
+  const sizeUsage = usageFor(marginEstimate, account.marginAvailable, account.nav);
 
   // A spot account buys the asset outright: the whole cost leaves the balance,
   // there is no margin, and a sell disposes of coins already held. A margin
@@ -364,14 +370,32 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
       ? usableCostChips(presetLadder, spec, chipPrice, presetCustom)
       : usableChips(presetLadder, spec, presetCustom);
 
-  // What a preset would tie up, as a share of what is there to commit: free
-  // margin on a margin account, cash on a spot one. Null whenever a piece is
-  // missing, so a chip says nothing rather than something wrong.
-  const pctForUnits = (u: number | null): number | null =>
-    u == null ? null : usagePct(costOfSize(u, sizeInputs, spot), account.marginAvailable);
-  const pctForPreset = (value: number): number | null =>
-    pctForUnits(unitsForPreset(value, presetKind, sizeInputs));
-  const overWarn = (pct: number | null): boolean => pct != null && pct >= presets.marginWarnPct;
+  // What a preset would tie up, read TWO ways, because they answer different
+  // questions and a trader carrying positions needs both:
+  //
+  //   • of FREE margin (cash on spot) — can this go on right now. It is the
+  //     figure the broker refuses against, and on a desk already 90% committed
+  //     it reads in the hundreds of percent for every size, which is true and
+  //     says nothing about whether the size itself is sensible;
+  //   • of the ACCOUNT VALUE, regardless of what is open — how big this trade is
+  //     for this account, which is the sizing question.
+  //
+  // Both are shown on every chip; `basis` decides which one carries the colour
+  // and is measured against the threshold. Either is null when the account or
+  // the quote cannot supply it, and a null is left unsaid rather than filled in
+  // from the other — they are not interchangeable.
+  const basis = resolveBasis(presets);
+  const warnPct = warnPctFor(presets, basis);
+  // Spot commits cash outright rather than posting margin, so the word changes
+  // even though the figure is the same one the venue would refuse against.
+  const freeLabel = spot ? 'cash' : 'free margin';
+  const usageForUnits = (u: number | null): Usage =>
+    u == null
+      ? { free: null, value: null }
+      : usageFor(costOfSize(u, sizeInputs, spot), account.marginAvailable, account.nav);
+  const usageForPreset = (value: number): Usage =>
+    usageForUnits(unitsForPreset(value, presetKind, sizeInputs));
+  const overWarn = (pct: number | null): boolean => pct != null && pct >= warnPct;
 
   // Pressing a chip fills the size box. A money-per-pip or money-spent chip
   // needs the live quote to work a size out, so before one lands it dims rather
@@ -606,8 +630,10 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
         <div style={{ display: 'flex', gap: 5, marginTop: 7, flexWrap: 'wrap', alignItems: 'flex-start' }}>
           {chips.map((value) => {
             const u = unitsForPreset(value, presetKind, sizeInputs);
-            const pct = pctForUnits(u);
-            const over = overWarn(pct);
+            const usage = usageForPreset(value);
+            const lead = primaryPct(usage, basis);
+            const second = secondaryPct(usage, basis);
+            const over = overWarn(lead);
             return (
               <button
                 key={value}
@@ -616,7 +642,8 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
                 title={[
                   presetKind === 'step' ? `${chipLabel(value)} per ${stepName}` : chipLabel(value),
                   u == null ? null : `${fmtUnits(u)}${spot ? ` ${baseAsset}` : ' units'}`,
-                  pct == null ? null : `${fmtPct(pct)} of your ${spot ? 'cash' : 'free margin'}`,
+                  usage.free == null ? null : `${fmtPct(usage.free)} of your ${freeLabel}`,
+                  usage.value == null ? null : `${fmtPct(usage.value)} of your account value`,
                 ]
                   .filter(Boolean)
                   .join(' · ')}
@@ -629,8 +656,14 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
                 }}
               >
                 <span>{chipLabel(value)}</span>
-                {presets.showMargin && pct != null && (
-                  <span style={{ ...chipPct, color: over ? RED : FAINT }}>{fmtPct(pct)}</span>
+                {/* Both readings, the one that carries the colour first. The
+                    second is deliberately quiet: two coloured percentages on one
+                    small button is a chip nobody can read at a glance. */}
+                {presets.showMargin && lead != null && (
+                  <span style={chipPct}>
+                    <span style={{ color: over ? RED : GREEN }}>{fmtPct(lead)}</span>
+                    {second != null && <span style={{ color: FAINT }}>{` · ${fmtPct(second)}`}</span>}
+                  </span>
                 )}
               </button>
             );
@@ -644,7 +677,10 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
             spot={spot}
             stepName={stepName}
             baseAsset={baseAsset}
-            pctFor={pctForPreset}
+            basis={basis}
+            warnPct={warnPct}
+            hasAccountValue={account.nav != null}
+            pctFor={(value) => primaryPct(usageForPreset(value), basis)}
             onChange={changePresets}
             saveError={presetError}
           />
@@ -724,16 +760,12 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
           // calling that figure "margin" would be wrong in both directions.
           label={spot ? 'Cost (est.)' : 'Margin (est.)'}
           value={marginEstimate == null ? '—' : fmtMoney(marginEstimate, account.currency)}
-          // The same share the chips carry, on the size actually in the box —
-          // and past the trader's own threshold it reads red here too.
-          hint={
-            account.marginAvailable != null
-              ? `of ${fmtMoney(account.marginAvailable, account.currency)} ${spot ? 'cash' : 'free'}${
-                  sizePct == null ? '' : ` · ${fmtPct(sizePct)}`
-                }`
-              : undefined
-          }
-          hintColor={overWarn(sizePct) ? RED : undefined}
+          // The same reading the chips carry, on the size actually in the box,
+          // measured against whichever figure the trader chose — and past their
+          // threshold it reads red here too. Only the one basis: the chips are
+          // where the two are compared, and this cell has a quarter of the room.
+          hint={marginHint(basis, account, spot, sizeUsage) ?? undefined}
+          hintColor={overWarn(primaryPct(sizeUsage, basis)) ? RED : undefined}
         />
         <SummaryCell
           label="Risk / reward"
@@ -814,6 +846,22 @@ export function OrderTicket({ account, instruments, instrument, onInstrument, re
       )}
     </div>
   );
+}
+
+// "of $237.60 free · 583%" — the money this order is measured against and the
+// share of it, on whichever basis the trader chose. Null when that figure is not
+// being reported, since a share of an unknown total says nothing.
+function marginHint(
+  basis: 'free' | 'value',
+  account: DeskAccount,
+  spot: boolean,
+  usage: Usage,
+): string | null {
+  const total = basis === 'value' ? account.nav : account.marginAvailable;
+  if (total == null) return null;
+  const noun = basis === 'value' ? 'value' : spot ? 'cash' : 'free';
+  const pct = primaryPct(usage, basis);
+  return `of ${fmtMoney(total, account.currency)} ${noun}${pct == null ? '' : ` · ${fmtPct(pct)}`}`;
 }
 
 // ---- the instrument picker ----
