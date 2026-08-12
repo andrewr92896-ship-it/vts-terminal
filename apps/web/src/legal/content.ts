@@ -12,8 +12,8 @@
 // drafted to reduce liability; they are not a substitute for review by a
 // licensed attorney before public launch.
 
-export const LEGAL_VERSION = '2026-08-04.1';
-export const LEGAL_EFFECTIVE_DATE = 'August 4, 2026';
+export const LEGAL_VERSION = '2026-08-12.1';
+export const LEGAL_EFFECTIVE_DATE = 'August 12, 2026';
 
 export const COMPANY = {
   entity: 'Vitalis Trading Systems LLC',
@@ -81,21 +81,31 @@ export const TERMS: LegalDoc = {
       blocks: [
         {
           p:
-            `${COMPANY.product} is a private, invite-only, read-only tracking and collaboration tool for a ` +
+            `${COMPANY.product} is a private, invite-only tracking, analysis and collaboration tool for a ` +
             'small group of individuals who already know and trust one another. It lets you and your ' +
             'chosen group record, view, organize, and discuss your own trading activity, connect ' +
-            'read-only broker data, study together, and share notes. It is intended purely for ' +
+            'your own broker accounts, study together, and share notes. It is intended purely for ' +
             'informational, organizational, educational, and personal-reference purposes.',
         },
         {
           p:
             'The Service is a tracker and a workspace. It does not operate as a brokerage, an exchange, a ' +
-            'trading platform, a money-transmitter, a copy-trading or signal service, an investment adviser, ' +
-            'a broker-dealer, or a bank. The Service does not place, execute, route, copy, mirror, or manage ' +
-            'trades or orders, does not hold, move, or custody money or assets, does not provide financial ' +
-            'products or advisory services, and does not manage anyone’s account. Any actual trading you do ' +
-            'happens entirely outside the Service, through your own broker, under your own control and ' +
-            'responsibility.',
+            'money-transmitter, a copy-trading or signal service, an investment adviser, a broker-dealer, ' +
+            'or a bank. It does not hold, move, or custody money or assets, does not provide financial ' +
+            'products or advisory services, does not manage anyone’s account, and does not copy, mirror, ' +
+            'or follow anyone else’s trading.',
+        },
+        {
+          p:
+            'Some features transmit orders to your own broker. Where you connect a broker and enable those ' +
+            'features, the Service can send an order you have composed and confirmed to the broker or ' +
+            'exchange at which you already hold an account, using credentials you supply. The account is ' +
+            `yours and the broker relationship is yours: your broker — not ${COMPANY.short} — accepts, ` +
+            'prices, executes, and settles the order, becomes your counterparty, and holds all funds and ' +
+            'positions. The Service never trades on your behalf or at its own discretion, and never places ' +
+            'an order you have not reviewed and submitted yourself. Nothing in the Service places an order ' +
+            'automatically, and no alert, signal, or notification causes an order to be placed. Every ' +
+            'trading decision, and every consequence of it, is yours.',
         },
         {
           p:
@@ -360,8 +370,9 @@ export const TERMS: LegalDoc = {
       blocks: [
         {
           p:
-            'The Service can connect to third-party services, including brokers and exchanges (for example ' +
-            'via read-only API keys or tokens), notification providers, and AI providers. Those services are ' +
+            'The Service can connect to third-party services, including brokers and exchanges (via API keys ' +
+            'or tokens you supply, which — depending on the features you choose to enable — may be able to ' +
+            'place orders on your account), notification providers, and AI providers. Those services are ' +
             'operated by third parties under their own terms and privacy policies, and we do not control and ' +
             'are not responsible for them.',
         },
@@ -369,15 +380,18 @@ export const TERMS: LegalDoc = {
           note:
             'You are responsible for complying with all terms, conditions, policies, and acceptable-use ' +
             'and API rules of any third-party service you connect or use with the Service. This includes ' +
-            'using only the access you are permitted to use (for example, read-only keys where required) ' +
-            'and honoring any restrictions your broker or an API provider imposes.',
+            'using only the access you are permitted to use, and honoring any restrictions your broker or ' +
+            'an API provider imposes, including any limits on third-party or automated access.',
         },
         {
           p:
             'You are solely responsible for your own relationships and accounts with your broker and any ' +
             'other third party, and for any consequences of connecting them to the Service. We strongly ' +
-            'recommend using read-only or query-only credentials wherever available. You are responsible for ' +
-            'the credentials you provide and for revoking them if needed.',
+            'recommend giving the Service the narrowest credential that supports the features you actually ' +
+            'use: a read-only or query-only credential if you only want to view your positions and results, ' +
+            'and — if you place orders through the Service — one that can trade but carries no funding, ' +
+            'withdrawal, or transfer rights, which the Service neither needs nor uses. You are responsible ' +
+            'for the credentials you provide and for revoking them if needed.',
         },
         {
           p:
@@ -564,8 +578,10 @@ export const PRIVACY: LegalDoc = {
   intro:
     `This Privacy Policy explains how ${COMPANY.entity} ("${COMPANY.short}," "we," "us," or "our") ` +
     `collects, uses, shares, and protects information in connection with ${COMPANY.product} (the "Service"). ` +
-    `${COMPANY.product} is a private, invite-only, read-only trading tracker and collaboration tool. By ` +
-    'using the Service, you agree to this Policy. If you do not agree, do not use the Service.',
+    `${COMPANY.product} is a private, invite-only trading tracker, analysis and collaboration tool. Some ` +
+    'features transmit orders you compose and confirm to your own broker; the Service never holds funds ' +
+    'or assets. By using the Service, you agree to this Policy. If you do not agree, do not use the ' +
+    'Service.',
   sections: [
     {
       heading: '1. Who we are',
@@ -590,10 +606,12 @@ export const PRIVACY: LegalDoc = {
             'Content you provide: trades, positions, results, notes and journals, strategy sessions, ' +
               'study games, flashcards and study guides, to-do items, group chat messages, announcements, ' +
               'bug reports, suggestions, feedback, and any files or screenshots you upload.',
-            'Broker and third-party connection data: information needed to connect read-only broker or ' +
-              'exchange feeds (such as API keys or tokens and account identifiers) and the resulting ' +
-              'read-only trading data (positions, balances/NAV, and closed trades). Broker credentials are ' +
-              'stored encrypted (see Security).',
+            'Broker and third-party connection data: information needed to connect your broker or ' +
+              'exchange accounts (such as API keys or tokens and account identifiers) and the resulting ' +
+              'trading data (positions, balances/NAV, and closed trades) — and, where you place orders ' +
+              'through the Service, a record of each order you submit and your broker’s response, ' +
+              'including orders your broker refused. Broker credentials are stored encrypted (see ' +
+              'Security).',
             'AI and support interactions: support and bug-intake conversations, which are stored so the ' +
               'VTS staff can act on them. Ordinary conversations with the AI assistants are NOT stored — they ' +
               'are sent to our AI provider to produce a reply and are not retained by us. The exceptions ' +
@@ -625,7 +643,8 @@ export const PRIVACY: LegalDoc = {
             'Provide, operate, maintain, and secure the Service and its features;',
             'Authenticate you, manage your account, groups, roles, and permissions;',
             'Display your data to you and, where you have chosen to share it, to the others in your group;',
-            'Connect and refresh read-only broker data and deliver notifications you opt into;',
+            'Connect and refresh your broker data, transmit orders you submit to your own broker, and ' +
+              'deliver notifications you opt into;',
             'Provide AI-assisted features and support, and process and review those interactions for ' +
               'quality, safety, and rule enforcement;',
             'Monitor for, investigate, and prevent prohibited conduct, security incidents, abuse, and ' +
@@ -729,8 +748,8 @@ export const PRIVACY: LegalDoc = {
               '(Anthropic, which processes AI prompts and content to generate responses), and ' +
               'push-notification providers. They may process information only to provide their services to ' +
               'us.',
-            'With brokers and third parties you connect: to retrieve the read-only data you ask us to ' +
-              'display, subject to their terms and privacy policies.',
+            'With brokers and third parties you connect: to retrieve the data you ask us to display and ' +
+              'to transmit any order you submit, subject to their terms and privacy policies.',
             'For legal and safety reasons: when we believe disclosure is reasonably necessary to comply ' +
               'with law or legal process, enforce our Terms, or protect the rights, property, or safety of ' +
               'our users, the public, or us.',
@@ -764,6 +783,15 @@ export const PRIVACY: LegalDoc = {
             'security, and enforce our agreements. When you delete content or your account, we delete or ' +
             'de-identify the associated personal information within a reasonable period, except where we are ' +
             'required or permitted to retain it (for example, in backups or logs for a limited time).',
+        },
+        {
+          p:
+            'One category is deliberately kept after an account is deleted: records of when a broker ' +
+            'credential was used — which connection, when, from where, and for what purpose. Those records ' +
+            'exist so that any use of a credential can be reconstructed afterwards, which protects you at ' +
+            'least as much as us, and they cannot serve that purpose if deleting an account erases them. ' +
+            'They identify the connection and the action, never the credential itself. The audit log for ' +
+            'the Employee Portal is retained after account deletion for the same reason.',
         },
       ],
     },
@@ -955,8 +983,9 @@ export const RULES: RulesDoc = {
         'One person per account. Do not share, sell, or let anyone else use your account.',
         'Do not upload copyrighted or other material you don’t have the right to use — including in ' +
           'study games, flashcards, and study guides.',
-        'Follow the terms of any third-party service you connect, especially broker and API rules. Prefer ' +
-          'read-only broker access, and you remain responsible for your own broker relationship.',
+        'Follow the terms of any third-party service you connect, especially broker and API rules. Give ' +
+          'the Service the narrowest credential the features you use require, and you remain responsible ' +
+          'for your own broker relationship.',
       ],
     },
   ],

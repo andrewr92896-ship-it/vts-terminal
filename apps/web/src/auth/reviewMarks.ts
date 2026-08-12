@@ -105,7 +105,9 @@ export const REVIEW_MARKS: Record<ReviewKey, ReviewMark> = {
   // ---- Documents ----
   // No control of its own — it is carried here so the review list is complete.
   legalCredentials: {
-    risk: 'Terms and Privacy both describe broker credentials as read-only. That is false: the keys can trade.',
+    risk:
+      'Terms and Privacy described the product and its broker credentials as read-only, which was false — ' +
+      'the keys can trade. Corrected 2026-08-12. Both documents still need attorney review before launch.',
   },
 
   // ---- Still being built ahead of launch ----

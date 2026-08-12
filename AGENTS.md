@@ -3163,9 +3163,17 @@ instead. The twelve entries and their notes came from the compliance handoff.
 - **Gated on the reader's REAL roles**, like the "View as role" control. Previewing
   as a member is for checking what a member reaches, not for hiding the owner's
   own notes from the owner.
-- `legalCredentials` has no control anywhere: it records that Terms and Privacy
-  both describe broker credentials as read-only, which is false. It lives in the
-  map so the review list is complete.
+- `legalCredentials` has no control anywhere: it recorded that Terms and Privacy
+  both described the product and its broker credentials as **read-only**, which
+  was false — the keys can trade, and the Terms went further and stated outright
+  that the Service "does not place, execute, route… orders". **Corrected
+  2026-08-12** (`LEGAL_VERSION` `2026-08-12.1`): both documents now say that some
+  features transmit an order the user has composed and confirmed to the user's
+  own broker, that the broker executes and holds all funds, that nothing places
+  an order automatically, and that no alert causes one. The entry is **kept
+  rather than removed** because the underlying question — whether the documents
+  as a whole survive attorney review — is still open, and this is the list that
+  makes such things findable.
 
 ## Identity — display names and email
 
@@ -3325,9 +3333,11 @@ required is what turns the next one into a compile error. Same for
 > same precedent set when "portal" became "terminal". **`LEGAL_VERSION` was
 > deliberately NOT bumped** (owner decision): no obligation changed, only the
 > word for the feature, so nobody is re-prompted to accept. The substantive
-> correction still owed to those documents — they describe broker credentials as
-> read-only, which is false — is a separate job, and that is the one that should
-> move the effective date.
+> correction those documents were owed — they described the product and its
+> broker credentials as read-only, which is false — **landed separately on
+> 2026-08-12** and did move the effective date, which is the distinction to keep
+> in mind when deciding whether a wording change re-prompts everyone: a changed
+> label does not, a changed obligation does.
 
 A **trading team** is a group a user belongs to at most one of (`users.team_id`).
 Two owner decisions (2026-08) reshaped what a team *is*, and both matter more

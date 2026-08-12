@@ -7,4 +7,4 @@
 // and accept the updated documents before they can operate the terminal again, so
 // only change it when the Terms or Privacy Policy substantively change — and keep
 // it in step with the web copy in apps/web/src/legal/content.ts (LEGAL_VERSION).
-export const LEGAL_VERSION = '2026-08-04.1';
+export const LEGAL_VERSION = '2026-08-12.1';
