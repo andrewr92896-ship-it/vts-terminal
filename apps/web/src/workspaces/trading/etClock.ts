@@ -113,11 +113,31 @@ const dayFmt = new Intl.DateTimeFormat('en-US', {
   day: 'numeric',
 });
 const mdFmt = new Intl.DateTimeFormat('en-US', { timeZone: ET, month: 'short', day: 'numeric' });
+const fullFmt = new Intl.DateTimeFormat('en-US', {
+  timeZone: ET,
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
 
 export const etTime = (ms: number): string => timeFmt.format(ms);
 export const etClock = (ms: number): string => clockFmt.format(ms); // with seconds
 export const etDay = (ms: number): string => dayFmt.format(ms); // "Wed, Sep 16"
 export const etMonthDay = (ms: number): string => mdFmt.format(ms); // "Sep 16"
+
+// A whole instant written in Eastern and SAID to be Eastern — for a reading that
+// must say the same thing to every reader whatever display zone they picked.
+// `tradeTime.tsx` is still the right module for a position's own stamps, which
+// follow the reader's zone; these two are for the readings that do not, because
+// the thing being stamped is cut on the Eastern trading day.
+//
+// The year is spelled out in the long form deliberately: a "last updated" line
+// is exactly the reading that can be a year old, and "Aug 12" alone would be
+// read as this year's.
+export const etDateTime = (ms: number): string => `${etMonthDay(ms)} · ${etTime(ms)} ET`; // "Sep 16 · 2:14 PM ET"
+export const etDateTimeFull = (ms: number): string => `${fullFmt.format(ms)} ET`; // "Sep 16, 2026, 2:14 PM ET"
 
 // Are two instants on the same ET calendar day?
 export function sameEtDay(a: number, b: number): boolean {

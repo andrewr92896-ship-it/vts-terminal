@@ -874,6 +874,35 @@ workspaces list** (see `theme/nav.ts` order).
       on an account that has never traded. Caught by running the endpoint, not
       by the typecheck — `newRow` takes the size for exactly this reason.
     - `MAX_PER_TRADER` (12) is a runaway-input guard, not a licence question.
+  - **EVERY FUNDED ACCOUNT STATES WHEN IT WAS LAST UPDATED, IN EASTERN**
+    (`updatedAt` on `ChallengeData`; `LastUpdated` at the top of the equity card
+    in `FundedChallenge.tsx`, restated as a row on the Live Wall's
+    `ChallengeTile`). A prop firm has no API, so nothing on that screen refreshes
+    itself — the equity, the profit, the progress bar and **both drawdown
+    gauges** are all derived from a figure the trader last typed, synced, or read
+    off a screenshot. A three-day-old equity rendered identically to one set a
+    minute ago, which on the gauge that says whether a challenge is about to
+    breach is the worst thing a stale figure can do quietly. Same family of rule
+    as Market Data's `sample: true` and the Live Wall's `unavailable`: **a figure
+    that may not be current must say so.**
+    - **`updatedAt` is the trader's own last change, not the row's last write.**
+      `updateChallenge` bumps it — which is every path that sets a figure (the
+      settings save, `syncEquityFromTradeLog`, the balance-screenshot read) —
+      while `rollDayStart` deliberately does not. That is what makes it mean
+      "when was this equity last set" rather than "when was this row last
+      touched", and it is why the day-start roll's existing comment must stay
+      true. **Do not bump it from a background pass.**
+    - **Eastern for every reader, whatever display zone they picked**
+      (`etDateTime` / `etDateTimeFull` in `etClock.ts`, never `tradeTime.tsx`).
+      This is the trading-day exception the timezone rules already carve out: the
+      daily-drawdown floor directly beneath it rolls on the ET calendar day, so
+      "updated 9:40 PM" only answers "was that before or after today's reset" if
+      it is an Eastern reading. The zone is **named on the stamp** for exactly
+      that reason, and the long form spells the year out — a last-updated line is
+      precisely the reading that can be a year old.
+    - **Never gated by `canSeeBalances` or the Hide $ toggle.** It is a time, not
+      money, and hiding it would take away the one thing that says whether the
+      hidden figures are current.
   - **The Funded screen carries the funded book's own STATS and its PAST
     TRADES** (`FundedStats.tsx`, `FundedPastTrades.tsx`, both under `FundedBook`
     in `FundedChallenge.tsx`). Funded trades never reconcile into

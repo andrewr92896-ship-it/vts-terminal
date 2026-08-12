@@ -4,6 +4,7 @@ import { usePrivacy } from '../../../privacy/privacy';
 import type { BoardTile, HistoryRecord, SessionBias, SessionStatus } from '../../../api/types';
 import { FAINT, GOLD, GREEN, MONO, MUTED, RED, TEXT } from '../tvChart';
 import { TradeTimesCell } from '../tradeTime';
+import { etDateTime } from '../etClock';
 import { excludedNote, excludedShort } from '../excludedNote';
 import {
   HIDDEN,
@@ -392,6 +393,13 @@ export function ChallengeTile({ tile, editing, onRemove }: TileProps) {
               color={m.breaches.max ? RED : m.maxHeadroomPct < 0.25 ? AMBER : TEXT}
             />
           )}
+          {/* When the trader last set this equity. Nothing above refreshes on
+              its own — a prop firm has no API — so a glance at the board needs
+              to know how old the figure is, and a tile has no screen around it
+              to say so. Eastern like the screen's own banner, since the daily
+              floor rolls on the ET day. Never hidden by the money toggle: it is
+              a time, not a balance. */}
+          <TileRow label="Last updated" value={etDateTime(data.updatedAt)} />
         </>
       )}
     </TileFrame>

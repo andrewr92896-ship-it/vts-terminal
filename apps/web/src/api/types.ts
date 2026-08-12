@@ -981,6 +981,10 @@ export interface ChallengeData {
   label: string;
   trailing: boolean;
   startedAt: number;
+  // When the trader last changed this account — a save, an equity sync, or a
+  // balance read off a screenshot. Never moved by the daily-drawdown roll, so it
+  // means "when was this figure last set", not "when was this row last written".
+  updatedAt: number;
   targetPct: number;
   dailyDdPct: number;
   maxDdPct: number;

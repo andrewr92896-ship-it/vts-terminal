@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.11';
+export const APP_VERSION = 'Beta V 7.12';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.12',
+    date: 'August 12, 2026',
+    notes: [
+      'Every funded account now states when it was last updated, in bold at the top of its equity card — the date and time in Eastern, and how long ago that was.',
+      'Nothing on that screen refreshes on its own, so the stamp says how current the equity, the profit and both drawdown gauges under it really are. It moves whenever you save the account, sync it from the Trade Log, or read a balance off a screenshot.',
+      'The Funded Account tile on the Live Wall carries the same reading.',
+    ],
+  },
   {
     version: 'Beta V 7.11',
     date: 'August 12, 2026',

@@ -43,6 +43,13 @@ export interface ChallengeData {
   label: string;
   trailing: boolean;
   startedAt: number;
+  // When the trader last changed this account — a save, an equity sync, or a
+  // balance read off a screenshot. A prop firm has no API, so every figure on
+  // this card is only as current as this stamp: the screen states it outright
+  // rather than leaving a stale equity looking live. Deliberately NOT moved by
+  // the day-start roll (see rollDayStart), and never gated by canSeeBalances —
+  // it is a time, not money.
+  updatedAt: number;
   targetPct: number;
   dailyDdPct: number;
   maxDdPct: number;
@@ -226,6 +233,7 @@ function toData(row: TradingChallengeRow, viewerId: string, owner: string, canSe
     label: row.label,
     trailing: row.trailing,
     startedAt: row.startedAt.getTime(),
+    updatedAt: row.updatedAt.getTime(),
     targetPct: bpToPct(row.targetBp),
     dailyDdPct: bpToPct(row.dailyDdBp),
     maxDdPct: bpToPct(row.maxDdBp),

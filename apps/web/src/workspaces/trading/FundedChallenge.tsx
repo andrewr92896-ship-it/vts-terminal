@@ -9,6 +9,8 @@ import { readClipboardImage, imageFromPasteEvent } from '../../lib/clipboard';
 import { FundedLiveTrades } from './FundedLiveTrades';
 import { FundedPastTrades } from './FundedPastTrades';
 import { FundedStats } from './FundedStats';
+import { etDateTimeFull } from './etClock';
+import { etSince } from './tradeTime';
 import { useLivePrices } from './useLivePrices';
 import type { ChallengeData, ChallengeInput, FundedData } from '../../api/types';
 
@@ -309,8 +311,9 @@ function ChallengeCard({
         </div>
       )}
 
-      {/* Equity + progress to target */}
+      {/* Equity + progress to target, led by the stamp that qualifies all of it. */}
       <div style={{ ...card, marginBottom: 14 }}>
+        <LastUpdated at={data.updatedAt} />
         <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <div style={label}>{"Current Equity"}</div>
@@ -335,6 +338,35 @@ function ChallengeCard({
         <Gauge title="Max Drawdown" subtitle={`${data.trailing ? 'Trailing' : 'Static'} · ${data.maxDdPct}%`} floorLabel="Floor" floor={dollars(m.maxFloor)} headroom={dollars(m.maxHeadroom)} headroomPct={m.maxHeadroomPct} breached={m.breaches.max} canSee={canSee} showMoney={showMoney} />
         <Gauge title="Daily Drawdown" subtitle={`Resets daily · ${data.dailyDdPct}%`} floorLabel="Today's floor" floor={dollars(m.dailyFloor)} headroom={dollars(m.dailyHeadroom)} headroomPct={m.dailyHeadroomPct} breached={m.breaches.daily} canSee={canSee} showMoney={showMoney} />
       </div>
+    </div>
+  );
+}
+
+// WHEN THIS ACCOUNT WAS LAST TOUCHED — the first thing on the equity card,
+// because it qualifies every figure under it.
+//
+// A prop firm has no API, so nothing on this screen refreshes itself: the
+// equity, both drawdown floors and the progress bar are all derived from a
+// number the trader last typed in, synced from the Trade Log, or read off a
+// screenshot. A three-day-old equity renders identically to one set a minute
+// ago, which on the gauge that says whether a challenge is about to be breached
+// is the worst thing a stale figure can do quietly. So the stamp is stated
+// outright, in full, rather than left to be inferred.
+//
+// **Eastern, whatever zone the reader displays in** — the exception the timezone
+// module carves out for anything cut on the trading day. The daily-drawdown
+// floor beneath this rolls on the ET calendar day, so "updated 9:40 PM" only
+// answers "was this before or after today's reset" if it is an Eastern reading.
+// The zone is named on the stamp for exactly that reason.
+//
+// The relative age sits beside it because on a hand-kept account that is the
+// reading people actually act on; the absolute stamp is what makes it precise.
+function LastUpdated({ at }: { at: number }) {
+  return (
+    <div style={updatedBar}>
+      <span style={updatedTag}>{"Last updated"}</span>
+      <span style={updatedStamp}>{etDateTimeFull(at)}</span>
+      <span style={updatedAge}>{etSince(at)}</span>
     </div>
   );
 }
@@ -478,6 +510,27 @@ const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`,
 const label: CSSProperties = { fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 4 };
 const input: CSSProperties = { background: INPUT_BG, border: `1px solid ${BORDER2}`, borderRadius: 7, color: TEXT, fontSize: 12.5, padding: '9px 11px', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const pill: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', borderRadius: 5, padding: '2px 8px' };
+// The last-updated strip. Gold-on-navy and boxed so it reads as its own
+// statement rather than as a caption on the equity below it, and `flexWrap` so
+// the stamp keeps its size on a phone instead of being squeezed or clipped —
+// the bar grows taller, the same rule the employee portal's nav follows.
+const updatedBar: CSSProperties = {
+  display: 'flex',
+  alignItems: 'baseline',
+  gap: 10,
+  flexWrap: 'wrap',
+  background: 'rgba(235,203,116,.09)',
+  border: '1px solid rgba(235,203,116,.4)',
+  borderRadius: 9,
+  padding: '10px 13px',
+  marginBottom: 16,
+};
+const updatedTag: CSSProperties = { fontSize: 10, fontWeight: 700, letterSpacing: '0.7px', textTransform: 'uppercase', color: MUTED };
+// `nowrap` so the stamp breaks BETWEEN the three parts of the strip rather than
+// inside itself — at 390px the bar wraps to "Last updated" / the stamp / the
+// age, which reads fine, whereas a date split after its comma does not.
+const updatedStamp: CSSProperties = { fontFamily: "'IBM Plex Mono', monospace", fontSize: 17, fontWeight: 700, color: GOLD, letterSpacing: '0.2px', whiteSpace: 'nowrap' };
+const updatedAge: CSSProperties = { fontSize: 11.5, color: FAINT };
 const privatePill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT, background: 'rgba(159,176,214,.1)', border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 8px' };
 // Whose account a card is — drawn only on a teammate's.
 const ownerPill: CSSProperties = { fontSize: 9.5, fontWeight: 700, letterSpacing: '0.4px', color: '#bcd0ff', background: 'rgba(90,200,250,.1)', border: '1px solid rgba(90,200,250,.35)', borderRadius: 5, padding: '2px 8px' };
