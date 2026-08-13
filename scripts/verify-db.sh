@@ -16,12 +16,20 @@ cd "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 : "${SESSION_SECRET:=$(node -e 'console.log(require("crypto").randomBytes(32).toString("base64"))')}"
 export CREDENTIALS_KEY SESSION_SECRET
 
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+SCRATCH_DIR="$(mktemp -d)"
+trap 'rm -rf "$SCRATCH_DIR"' EXIT
+
+# Git Bash gives shell tools a POSIX path such as /tmp/x, while the Node process
+# it starts is Windows-native and needs the matching C:/... path. Linux and
+# Railway have no cygpath, so they keep the ordinary POSIX path unchanged.
+NODE_SCRATCH_DIR="$SCRATCH_DIR"
+if command -v cygpath >/dev/null 2>&1; then
+  NODE_SCRATCH_DIR="$(cygpath -m "$SCRATCH_DIR")"
+fi
 
 run_check() {
   local script="$1"
-  export DATABASE_URL="file:$TMP/${script//:/-}.db"
+  export DATABASE_URL="file:$NODE_SCRATCH_DIR/${script//:/-}.db"
   npm run db:migrate >/dev/null
   npm run "$script"
 }

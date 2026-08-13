@@ -4730,6 +4730,13 @@ typechecks, runs every check below, and builds — in that order, cheapest first
 so a failure surfaces fast. It generates its own throwaway `CREDENTIALS_KEY` and
 `SESSION_SECRET`, so there is nothing to set up and nothing to remember.
 
+The npm entry point is cross-platform: `scripts/run-bash.mjs` uses ordinary
+`bash` on Linux/Railway and finds Git Bash on Windows, where the bare `bash.exe`
+on `PATH` may instead be WSL with no distribution installed. The database checks
+also translate Git Bash's POSIX scratch path for the Windows-native Node process.
+Keep both seams when changing verification — CI and Local Codex must continue to
+run this same command.
+
 **GitHub Actions runs the same command on every pull request**
 (`.github/workflows/verify.yml`). That is what makes it impossible for work from
 one tool to reach `main` having had fewer checks than work from the other — do
