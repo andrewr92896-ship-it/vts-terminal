@@ -65,16 +65,31 @@ echo "  branch    $BRANCH @ $HEAD_SHA  ($COMMITS commits)"
 echo "  version   ${VERSION:-<not found>}"
 echo ""
 
-# 1. Right repository. A clone of something else, or no remote at all, is the
-#    clearest possible sign of being in the wrong folder.
-repo_ok=0
-for expected in "${EXPECTED_REPOS[@]}"; do
-  case "$REMOTE" in
-    *"$expected"*) repo_ok=1; break ;;
-  esac
-done
-if [ "$repo_ok" -eq 0 ]; then
-  note "remote is not ${EXPECTED_REPOS[0]} — this is not the terminal's repo"
+# 1. Right repository. A clone of something else is the clearest possible sign
+#    of being in the wrong folder.
+#
+#    NO REMOTE AT ALL IS A DIFFERENT STATE, and treating it as wrong was a real
+#    fault: a managed cloud environment — Codex cloud, and CI — provisions the
+#    checkout itself and leaves no `origin` behind, so the guard printed STOP on
+#    every single cloud session. A guard that cries wolf every time is a guard
+#    people learn to scroll past, which is the exact failure it exists to
+#    prevent. It is reported plainly and counted as fine, because the
+#    environment chose the repository rather than the person, and the other
+#    three checks below still run and still mean what they meant.
+if [ "$REMOTE" = "none" ]; then
+  echo "  ℹ  no git remote — the environment provided this checkout (cloud or CI)."
+  echo "     Nothing to confirm against a remote from here."
+  echo ""
+else
+  repo_ok=0
+  for expected in "${EXPECTED_REPOS[@]}"; do
+    case "$REMOTE" in
+      *"$expected"*) repo_ok=1; break ;;
+    esac
+  done
+  if [ "$repo_ok" -eq 0 ]; then
+    note "remote is not ${EXPECTED_REPOS[0]} — this is not the terminal's repo"
+  fi
 fi
 
 # 2. Not inside a cloud-sync folder. OneDrive/Dropbox/Drive/iCloud rewrite files
@@ -108,8 +123,10 @@ else
 fi
 
 echo ""
-echo "  Before editing, confirm you are current:"
-echo "      git fetch origin main && git log --oneline -1 origin/main"
+if [ "$REMOTE" != "none" ]; then
+  echo "  Before editing, confirm you are current:"
+  echo "      git fetch origin main && git log --oneline -1 origin/main"
+fi
 echo "  main is what deploys. Merging to main IS the production release."
 echo "  Never deploy, open a PR, or merge unless Andrew asks in this session."
 echo "────────────────────────────────────────────────────────────"

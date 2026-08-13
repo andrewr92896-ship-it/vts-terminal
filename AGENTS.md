@@ -43,7 +43,11 @@ run by hand, and they are worth knowing:
 - **Remote** is `andrewr92896-ship-it/vts-terminal`. The repository was renamed
   from `vts-portal`, and **both spellings are accepted** — GitHub redirects the
   old name indefinitely and a clone made before the rename keeps its old remote
-  URL until somebody re-points it. Anything else is the wrong repo.
+  URL until somebody re-points it. Anything else is the wrong repo — **except no
+  remote at all**, which is a managed environment (Codex cloud, CI) that
+  provisioned the checkout itself, and is reported as fine. Treating that as
+  wrong printed STOP on every cloud session, and a guard that cries wolf every
+  time is one people learn to scroll past.
 - **`APP_VERSION`** in `apps/web/src/meta/version.ts` reads `Beta V …`. A
   `Pre-Alpha` or `Stage N` version means an old checkout — the live app left
   those behind long ago.
