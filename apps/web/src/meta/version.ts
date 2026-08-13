@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.13';
+export const APP_VERSION = 'Beta V 7.14';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.14',
+    date: 'August 13, 2026',
+    notes: [
+      'The Live Wall’s Open Positions tile now shows everything Live Trades shows for a position: the size, what one pip is worth on it, and the stop and target with what each is worth from here. It renders the Live Trades row itself, so the two can’t drift apart.',
+      'Position sizes read in lots on a currency pair — 1.00 lots rather than 100000 — everywhere a position is shown. Anything without a lot convention (crypto, indices, metals) keeps its units, and the raw units are on the hover either way.',
+    ],
+  },
   {
     version: 'Beta V 7.13',
     date: 'August 13, 2026',

@@ -17,7 +17,7 @@ import {
   filterSelect,
   groupTrades,
 } from './tradeBreakdown';
-import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
+import { tradePips, fmtPips, fmtSize, netPips, hasAnyPips, pipsParenthetical, sizeTitle } from './pips';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { getTradeLayout, type Layout } from './preferences';
 import { ScreenTitle } from './ScreenTitle';
@@ -787,7 +787,11 @@ function DeckCard({
       <div style={{ display: 'flex', gap: 14, padding: '0 14px 9px', flexWrap: 'wrap' }}>
         <Field label="TP" value={fmtPrice(t.takeProfit)} color={GREEN} />
         <Field label="SL" value={fmtPrice(t.stopLoss)} color={RED} />
-        <Field label="Size" value={String(t.units)} />
+        {/* Lots on a currency pair, units on anything else, with the raw units
+            on the hover — the same reading every other position surface gives
+            (`fmtSize`). It printed the units unformatted, so a standard lot read
+            "100000". */}
+        <Field label="Size" value={fmtSize(t.instrument, t.units)} title={sizeTitle(t.instrument, t.units)} />
       </div>
 
       {(t.strategy || t.timeframe) && (
@@ -1062,9 +1066,9 @@ function NumInput({ v, set, ph }: { v: string; set: (s: string) => void; ph: str
   );
 }
 
-function Field({ label, value, strong, color }: { label: string; value: string; strong?: boolean; color?: string }) {
+function Field({ label, value, strong, color, title }: { label: string; value: string; strong?: boolean; color?: string; title?: string }) {
   return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+    <span title={title} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
       <span style={{ fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{label}</span>
       <span style={{ fontSize: strong ? 14 : 12.5, fontWeight: strong ? 700 : 500, color: color ?? TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{value}</span>
     </span>
