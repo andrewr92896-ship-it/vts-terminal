@@ -352,14 +352,29 @@ export function TradeLog() {
       )
     : traderTrades;
 
+  // The open book — every position this scope is currently in, and NEVER
+  // narrowed by the day/month filter. Those filters select on the CLOSE day, so
+  // an open position has nothing for them to match and drops out of
+  // `shownTrades` the moment one is on. That is right for the closed-trade
+  // metrics and wrong for the open ones: with a month picked, "Unrealized P/L
+  // $0 · 0 open" was a flat statement that the desk held nothing, made while
+  // the wall beside it showed live positions. Same rule the Live Wall's
+  // `source` union follows — a figure that was not measured must never be
+  // reported as a measured one, and here it can be measured, so it is.
+  const openBook = traderTrades.filter((t) => t.status === 'open');
+  const openPl = openBook.reduce((sum, t) => sum + (t.unrealizedPl ?? 0), 0);
+
   // The server's summary only describes the whole desk unfiltered, so any
   // narrowing recomputes it here — the same rule History followed, so a filtered
   // selection scores exactly the way the unfiltered one does.
   const s = trader || filterActive ? summarizeTrades(shownTrades, config) : data.summary;
   const pf = profitFactorStats(shownTrades, config);
   // "If I closed everything right now" — realized closed trades with each open
-  // position's live P/L folded in as though it were just realized.
-  const ppf = projectedProfitFactorStats(shownTrades, config);
+  // position's live P/L folded in as though it were just realized. The open leg
+  // comes from the open book rather than the selection, so the reading keeps
+  // meaning what it says while a filter is on; unfiltered, `shownTrades`
+  // already carries those rows and adding them again would double-count.
+  const ppf = projectedProfitFactorStats(filterActive ? [...shownTrades, ...openBook] : shownTrades, config);
   // Pips are the desk's preferred unit — show them next to every $ metric, but
   // only when the desk actually trades forex (otherwise there's no pip to show).
   const showPips = hasAnyPips(shownTrades);
@@ -383,7 +398,15 @@ export function TradeLog() {
   // forex trades. Realized P/L is signed (direction matters); the gross cards
   // carry the sign of the bucket they total.
   const kpis: { label: string; val: string; sub: string; pips?: string }[] = [
-    { label: 'Trades', val: String(s.total), sub: `${s.open} open · ${s.closed} closed` },
+    {
+      label: 'Trades',
+      val: String(s.total),
+      // A filtered selection is closed rows only, so "0 open" beside them is a
+      // claim about the book rather than about the selection — and a false one
+      // whenever a position is running. The count of what is open is on the
+      // Unrealized card, which is measured over the whole book.
+      sub: filterActive ? `${s.closed} closed in this selection` : `${s.open} open · ${s.closed} closed`,
+    },
     { label: 'Win Rate', val: s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—', sub: wlSub },
     {
       label: 'Realized P/L',
@@ -394,13 +417,11 @@ export function TradeLog() {
     {
       // The live open P/L across currently-open positions — the leg realized P/L
       // leaves out. Signed so a green open book reads as a gain at a glance.
+      // Always the whole open book (see `openBook` above), so a day/month filter
+      // narrows the closed record without ever reading as a flat desk.
       label: 'Unrealized P/L',
-      val: !canSeeBalances
-        ? 'hidden'
-        : showMoney
-          ? `${(s.totalUnrealizedPl ?? 0) > 0 ? '+' : ''}${usd(s.totalUnrealizedPl ?? 0)}`
-          : '•••••',
-      sub: `${s.open} open`,
+      val: !canSeeBalances ? 'hidden' : showMoney ? `${openPl > 0 ? '+' : ''}${usd(openPl)}` : '•••••',
+      sub: filterActive ? `${openBook.length} open · whole book` : `${openBook.length} open`,
     },
     {
       label: 'Gross Profit',
