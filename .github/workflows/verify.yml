@@ -4,7 +4,7 @@ name: verify
 # either Claude Code or GPT Codex meets the same bar regardless of what the
 # session remembered to run. If this is red, the branch is not ready to deploy.
 #
-# NO SECRETS ARE NEEDED HERE, deliberately. scripts/verify.sh generates its own
+# NO SECRETS ARE NEEDED HERE, deliberately. scripts/verify.mjs generates its own
 # throwaway CREDENTIALS_KEY and SESSION_SECRET, because nothing in the checks
 # reads a real credential or a real database. Do not add repository secrets for
 # them — there is nothing for a real key to protect in a build, and a real key
