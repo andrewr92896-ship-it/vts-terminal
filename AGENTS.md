@@ -4733,8 +4733,20 @@ so a failure surfaces fast. It generates its own throwaway `CREDENTIALS_KEY` and
 **GitHub Actions runs the same command on every pull request**
 (`.github/workflows/verify.yml`). That is what makes it impossible for work from
 one tool to reach `main` having had fewer checks than work from the other — do
-not add a check to your own routine without adding it to `scripts/verify.sh`,
+not add a check to your own routine without adding it to `scripts/verify.mjs`,
 where both tools and CI will pick it up.
+
+**Those scripts are Node, not bash, and that is deliberate — the repo is worked
+on from Windows as well as Linux.** Both failed on Windows as shell scripts, for
+two reasons that are invisible on Linux: npm on Windows runs scripts through
+`cmd.exe`, where `bash` may not be on `PATH` at all, and `mktemp -d` under Git
+Bash returns a POSIX path (`/tmp/tmp.AbC`) that Node cannot then resolve. The
+scratch databases live in a gitignored `.tmp-verify/` at the repo root, and their
+`DATABASE_URL` is built with `pathToFileURL` on an **absolute** path — a
+repo-relative one is resolved by whichever process opens it, and these checks
+reach the database through `npm --workspace @vts/api`, whose cwd is `apps/api`,
+so a relative URL looks one directory too deep and fails to connect. Keep any
+new tooling here in Node for the same reason.
 
 The individual commands still exist and are worth knowing, because when `verify`
 fails it fails at one of them and that one is the fastest thing to re-run:
