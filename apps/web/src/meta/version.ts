@@ -11,9 +11,25 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.12';
+export const APP_VERSION = 'Beta V 7.14';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.14',
+    date: 'August 13, 2026',
+    notes: [
+      'The Live Wall’s Open Positions tile now shows everything Live Trades shows for a position: the size, what one pip is worth on it, and the stop and target with what each is worth from here. It renders the Live Trades row itself, so the two can’t drift apart.',
+      'Position sizes read in lots on a currency pair — 1.00 lots rather than 100000 — everywhere a position is shown. Anything without a lot convention (crypto, indices, metals) keeps its units, and the raw units are on the hover either way.',
+    ],
+  },
+  {
+    version: 'Beta V 7.13',
+    date: 'August 13, 2026',
+    notes: [
+      'Unrealized P/L on Closed Trades & Metrics now always reads your open positions, even with a day or month picked. Those filters select on the day a trade closed, so an open trade has no day to match and the card used to read $0 while positions were running.',
+      'Projected PF folds the same open positions in, so "if closed now" still means that under a filter. The Trades card no longer claims "0 open" for a filtered selection.',
+    ],
+  },
   {
     version: 'Beta V 7.12',
     date: 'August 12, 2026',

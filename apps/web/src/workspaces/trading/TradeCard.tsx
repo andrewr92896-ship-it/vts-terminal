@@ -4,6 +4,7 @@ import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
 import { TradeTimes, etSince } from './tradeTime';
 import { fmtMoney, fmtPips, fmtPrice, usd } from './tradeFormat';
+import { fmtPerStep, fmtSize, sizeTitle } from './pips';
 import {
   PositionActions,
   ProtectionEditor,
@@ -246,7 +247,17 @@ export function TradeCard({
         <Field label="SL" value={fmtPrice(t.stopLoss)} color={RED} />
         {t.trailingStopLoss != null && <Field label="Trail SL" value={fmtPrice(t.trailingStopLoss)} color={AMBER} />}
         {t.currentPrice != null && <Field label="Mark" value={fmtPrice(t.currentPrice)} />}
-        <Field label="Size" value={String(t.units)} />
+        {/* How big the position is, and what one unit of movement is worth on
+            it — side by side, because neither answers "how much am I risking"
+            on its own. A currency pair is sized in lots (with the raw units on
+            the hover) and moves in pips; everything else keeps its units and
+            moves in points. `wallMovement` is the same reading the stop/target
+            editor prices a level with, so the card and the editor cannot
+            disagree about what a pip is worth here. */}
+        <Field label="Size" value={fmtSize(t.instrument, t.units)} title={sizeTitle(t.instrument, t.units)} />
+        {showFxMoney && move.perStep != null && (
+          <Field label={`Per ${move.unit}`} value={fmtPerStep(move.perStep, move.currency)} />
+        )}
       </div>
 
       {/* Forex pip math: per-pip value, risk/reward to SL/TP, and R:R */}
@@ -346,32 +357,45 @@ export function TradeCard({
   );
 }
 
-function Field({ label, value, strong, color }: { label: string; value: string; strong?: boolean; color?: string }) {
+function Field({
+  label,
+  value,
+  strong,
+  color,
+  title,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  color?: string;
+  title?: string;
+}) {
   return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+    <span title={title} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
       <span style={{ fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{label}</span>
       <span style={{ fontSize: strong ? 14 : 12.5, fontWeight: strong ? 700 : 500, color: color ?? TEXT, fontFamily: MONO }}>{value}</span>
     </span>
   );
 }
 
-// Forex-only detail block: the money value of one pip, the risk and reward to
-// the stop loss and take profit (in pips and account-currency money), and the
-// resulting reward-to-risk ratio. Money is shown only when balances are visible;
-// pips and R:R always show because they are price facts, not balances.
+// Forex-only detail block: the risk and reward to the stop loss and take profit
+// (in pips and account-currency money), and the resulting reward-to-risk ratio.
+// Money is shown only when balances are visible; pips and R:R always show
+// because they are price facts, not balances.
+//
+// What one pip is worth used to be here too, and is now on the size row above —
+// next to the size it is derived from, which is the pairing a trader reads. Do
+// not restate it here: one card stating the same figure twice invites the two to
+// drift when one of them is edited.
 function ForexDetails({ f, showMoney }: { f: ForexMetrics; showMoney: boolean }) {
   const ccy = f.accountCurrency;
-  const showPerPip = showMoney && f.moneyPerPip != null;
   const hasRR = !!(f.risk || f.reward || f.rr != null);
-  if (!showPerPip && !hasRR) return null;
+  if (!hasRR) return null;
   return (
     <div style={{ padding: '0 14px 10px' }}>
       <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 9, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={fxTag}>FOREX</span>
-          {showPerPip && (
-            <span style={{ fontSize: 11, color: MUTED, fontFamily: MONO }}>{fmtMoney(f.moneyPerPip!, ccy)} / pip</span>
-          )}
         </div>
         {hasRR && (
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>

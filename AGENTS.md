@@ -2846,6 +2846,22 @@ usually not the one they want on a desktop.
   and **what it costs** (`feature`, `desk`, `funded`). `tileLock()` answers "can
   this reader have it", and `newTile()` builds one. The board itself no longer
   knows what kinds exist.
+- **`workspaces/trading/DeskPositionRow.tsx`** — the ONE open-position row, drawn
+  by both surfaces that list positions densely: Live Trades' "Desk right now"
+  panel and the Live Wall's Open Positions tile in its **list** layout (owner
+  request, 2026-08). The tile had a thinner row of its own, so the same position
+  read as two different amounts of information depending on which screen it was
+  watched on — and the half a trader acts on (what a pip is worth here, where
+  the stop sits, what that stop costs) was on the screen they were not looking
+  at. `onPick` (load into the ticket) is optional, since only Live Trades has a
+  ticket; everything about who may act still comes from `positionEdit.tsx`.
+- **A position's SIZE reads in the unit the instrument is sized in**
+  (`fmtSize` / `sizeTitle` in `pips.ts`): **lots** on a genuine currency pair —
+  1.00 lots, not 100000 — and units on anything else, with the raw units on the
+  hover. It splits on the same `forexPair` test the pip/point reading does, so a
+  size in lots is never quoted beside a per-point figure. Drawn on the full
+  card, the shared row above and the Trade Log's card. **The order ticket stays
+  in units** deliberately: that is the number sent to the broker.
 - **`workspaces/trading/tiles/`** — one renderer per kind, over the shared
   `TileFrame` (header, drag handle, per-tile settings, scrolling body) and
   `useTileData` (poll, keep the last good data on a failed refresh, write nothing
