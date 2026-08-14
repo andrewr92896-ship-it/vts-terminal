@@ -11,9 +11,18 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.16';
+export const APP_VERSION = 'Beta V 7.17';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.17',
+    date: 'August 14, 2026',
+    notes: [
+      'Study Creation now lists the study packages you have made, and says what each one is missing.',
+      'Finish adds a part a package was created without — a study game, flashcards, a presentation or lessons. It builds a handoff for your own AI against the categories the package already uses, so what comes back scores with everything else in it. A part that is already there is refused rather than replaced.',
+      'Update renames a package, and opens each part it already has in the maker that edits it. Package content has always been listed in those makers; there was nothing saying so.',
+    ],
+  },
   {
     version: 'Beta V 7.16',
     date: 'August 14, 2026',

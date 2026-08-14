@@ -12,6 +12,8 @@ import { ManualEntry } from './wizard/ManualEntry';
 import { PackageDone } from './wizard/PackageDone';
 import { clearDraft, loadDraft, setDraftStage } from './wizard/draft';
 import { needsExternalAi } from './wizard/blueprint';
+import { PackageFinish } from './wizard/PackageFinish';
+import { YourPackages } from './YourPackages';
 
 // The "Study Creation" section — the one place a team builds its own study
 // content. Three makers: study games (quizzes), flashcard sets (term/definition
@@ -72,6 +74,9 @@ export function StudyCreation({
   // up from, not something to yank the screen back to on every re-render.
   const [pending, setPending] = useState<WizardResult | null>(() => resumeEnding(userId));
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
+  // Finishing a package that already exists — adding a part it was created
+  // without. A separate flow from `pending`, which is a package being made.
+  const [finishing, setFinishing] = useState<string | null>(null);
 
   // The blueprint is finished. Which ending it lands on is the route the wizard
   // resolved: the AI handoff, or typing the questions in. Neither has written
@@ -109,6 +114,22 @@ export function StudyCreation({
     );
   }
 
+  if (finishing) {
+    return (
+      <PackageFinish
+        theme={theme}
+        packageId={finishing}
+        onBack={() => setFinishing(null)}
+        // Deliberately NOT onCreated: nothing was created, so the draft that
+        // describes an unrelated package in progress must not be cleared.
+        onFinished={(pkg) => {
+          setFinishing(null);
+          setCreated(pkg);
+        }}
+      />
+    );
+  }
+
   if (maker) {
     return (
       <div style={{ animation: 'fadeIn .25s ease' }}>
@@ -134,6 +155,10 @@ export function StudyCreation({
           {"Build your own study content."}
         </p>
       </div>
+
+      {!readOnly && (
+        <YourPackages theme={theme} onFinish={setFinishing} onEditPart={setMaker} />
+      )}
 
       <div style={{ marginBottom: 12 }}>
         <ActionTile
