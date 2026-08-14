@@ -7,12 +7,13 @@
 # `git fetch` fails outright, and the preview it "verified" against served the
 # same stale files. Every conclusion after that was wrong.
 #
-# The terminal is worked on from more than one machine AND from more than one
-# tool, so this check belongs in the repo rather than in anyone's memory. It
-# lives here — not in `.claude/` — for exactly that reason: Claude Code runs it
-# automatically from `.claude/hooks/session-start.sh`, and GPT Codex, which has
-# no repo-level hook mechanism, runs it by hand as its first command. A guard
-# that only one tool runs protects only half the work.
+# The terminal is worked on from more than one machine, so this check belongs in
+# the repo rather than in anyone's memory: it runs at the start of every session
+# on every machine and prints what is actually checked out.
+#
+# It lives in `scripts/` rather than inside `.claude/` so it can be run by hand
+# as well as by the hook — by CI, or by any environment that does not run the
+# hook. A guard reachable from only one place protects only some of the work.
 #
 # DESIGN RULES, all learned from that failure:
 #   * Never touch the network. `git fetch` is the exact call that hangs for ten
@@ -26,9 +27,9 @@
 
 set -uo pipefail
 
-# Resolve the repo root without depending on any one tool's environment
-# variable: Claude Code sets CLAUDE_PROJECT_DIR, Codex sets nothing, and the
-# script must also work when run by hand from a subdirectory.
+# Resolve the repo root without depending on the environment variable being set:
+# Claude Code sets CLAUDE_PROJECT_DIR, a hand-run or a CI job sets nothing, and
+# the script must also work when run from a subdirectory.
 cd "${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}" 2>/dev/null || exit 0
 
 # The one repository that deploys. Matched as a substring so it works for an
@@ -69,9 +70,9 @@ echo ""
 #    of being in the wrong folder.
 #
 #    NO REMOTE AT ALL IS A DIFFERENT STATE, and treating it as wrong was a real
-#    fault: a managed cloud environment — Codex cloud, and CI — provisions the
-#    checkout itself and leaves no `origin` behind, so the guard printed STOP on
-#    every single cloud session. A guard that cries wolf every time is a guard
+#    fault: a managed environment — CI, and some hosted agent runners —
+#    provisions the checkout itself and leaves no `origin` behind, so the guard
+#    printed STOP on every single session there. A guard that cries wolf every time is a guard
 #    people learn to scroll past, which is the exact failure it exists to
 #    prevent. It is reported plainly and counted as fine, because the
 #    environment chose the repository rather than the person, and the other

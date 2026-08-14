@@ -8,18 +8,23 @@ longer exist) — trust this file and the code, not the README.
 > When you change how the terminal works, update the relevant part of this file
 > in the same change so it never goes stale.
 
-## One instruction file, two tools
+## One instruction file
 
-This repo is worked on with **both Claude Code and GPT Codex**, and the two read
-different filenames. **`AGENTS.md` — this file — is the canonical one.**
+**`AGENTS.md` — this file — is the canonical one, and everything goes in it.**
 `CLAUDE.md` exists only to import it (`@AGENTS.md`, Claude Code's documented
 import syntax) and holds no instructions of its own.
 
-So **write every instruction here.** Anything put only in `CLAUDE.md`, only in a
-Claude Code skill, or only in a Claude Code hook is invisible to Codex, and a
-session on the other tool will never know it exists. Two instruction files drift
-within a month, and the tool reading the stale one then does the wrong thing
-confidently — which is the whole failure this arrangement exists to prevent.
+**This repo is worked on with Claude Code** (owner decision, 2026-08 — GPT Codex
+was set up alongside it and then dropped). The two-file arrangement is kept
+anyway, because it costs nothing and `AGENTS.md` is the filename every other
+coding agent reads: adding a second tool later is a decision rather than a
+migration. Nothing about it changes how Claude Code behaves — the import is
+expanded at session start, so this file is read in full exactly as `CLAUDE.md`
+would be.
+
+The rule that matters is unchanged: **write every instruction here**, not in
+`CLAUDE.md`. Two instruction files drift within a month, and whichever one is
+stale then gets followed confidently.
 
 ## Before you touch anything: confirm this is the live checkout
 
@@ -30,9 +35,11 @@ not find out: the clone sat in a cloud-sync folder where `git fetch` hangs
 outright, and the preview it "verified" against served those same stale files,
 so every check it ran confirmed the wrong thing.
 
-The check is `scripts/check-checkout.sh`. **Claude Code runs it automatically**
-at the start of every session, via `.claude/hooks/session-start.sh`. **Codex has
-no repo-level hook, so run it yourself as your first command:**
+The check is `scripts/check-checkout.sh`, and **Claude Code runs it
+automatically** at the start of every session via
+`.claude/hooks/session-start.sh` — so ordinarily it is read rather than run. It
+lives in `scripts/` rather than inside the hook so it can also be run by hand,
+which is what CI and any environment without that hook does:
 
     bash scripts/check-checkout.sh
 
@@ -4565,8 +4572,8 @@ some documented vars aren't in the schema and vice-versa.
 
 ## Reporting back to the owner
 
-The owner drives this terminal through coding agents — Claude Code and GPT Codex
-— but is **not a developer** and does not read the code. A long technical write-up is not thoroughness here — it
+The owner drives this terminal through Claude Code but is **not a developer** and
+does not read the code. A long technical write-up is not thoroughness here — it
 is unreadable, and it forces a judgment call the owner has no way to make. So:
 
 - **One short paragraph when a job is done.** Not a section-by-section account,
@@ -4751,10 +4758,12 @@ so a failure surfaces fast. It generates its own throwaway `CREDENTIALS_KEY` and
 `SESSION_SECRET`, so there is nothing to set up and nothing to remember.
 
 **GitHub Actions runs the same command on every pull request**
-(`.github/workflows/verify.yml`). That is what makes it impossible for work from
-one tool to reach `main` having had fewer checks than work from the other — do
-not add a check to your own routine without adding it to `scripts/verify.mjs`,
-where both tools and CI will pick it up.
+(`.github/workflows/verify.yml`). That is what makes it impossible for a branch
+to reach `main` having had fewer checks than the session running it happened to
+remember — several sessions are usually in flight at once, and the checks used
+to be a list in this file that each of them was trusted to work through. Do not
+add a check to your own routine without adding it to `scripts/verify.mjs`, where
+every session and CI will pick it up.
 
 **Those scripts are Node, not bash, and that is deliberate — the repo is worked
 on from Windows as well as Linux.** Both failed on Windows as shell scripts, for
@@ -4838,8 +4847,8 @@ Run it after touching `packageAccess.ts`, `packageSharing.ts`,
 ## Deployment workflow (owner preference)
 
 This is a **private web terminal** for a single owner, but work is often split
-across **several agent sessions running at once** — Claude Code, GPT Codex, or
-both — each on its own branch. Whether a finished branch should go live — and in what order relative
+across **several Claude Code sessions running at once**, each on its own
+branch. Whether a finished branch should go live — and in what order relative
 to the other branches in flight — is the owner's call, not the session's.
 Because of that:
 
