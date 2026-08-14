@@ -7,6 +7,7 @@ import { NumberField } from '../NumberField';
 import { emptyBlueprint, type Audience, type Depth, type StudyPackageBlueprint } from './blueprint';
 import { newDraftId } from './draft';
 import { PackageHandoff } from './PackageHandoff';
+import { PackageImport } from './PackageImport';
 import type { WizardResult } from './PackageWizard';
 import { BORDER, FAINT, MUTED, TEXT, primaryBtn, secondaryBtn } from './wizardUi';
 
@@ -41,6 +42,24 @@ export function finishBlueprint(
   pkg: StudyPackageDetail,
   want: { questions: boolean; flashcards: boolean; presentation: boolean; lessons: boolean },
   questionCount: number,
+  /**
+   * The creator already has a finished file, written before this package's plan
+   * existed or against a different one.
+   *
+   * The blueprint then describes only WHICH PARTS to take, and stops making
+   * demands about the shape of them: the categories are not locked and no
+   * question counts are required, so a file with its own four categories is
+   * accepted rather than refused for not matching a package that happens to
+   * carry one. `addToPackage` reuses a category the package already has by name
+   * and appends the rest, so the file's own structure survives intact.
+   *
+   * Everything that protects the package is untouched — a part it already has
+   * is still refused, every limit still applies, and a malformed file is still
+   * rejected. What is dropped is only the plan-conformance half, which cannot
+   * be true of a file written against a different plan and which nothing needs
+   * to be true in order to store the content correctly.
+   */
+  permissive = false,
 ): StudyPackageBlueprint {
   const bp = emptyBlueprint();
   bp.packageName = pkg.name;
@@ -55,7 +74,9 @@ export function finishBlueprint(
   // what the rest of the package settled on.
   bp.explanationMode = 'always';
   bp.categoriesEnabled = pkg.categories.length > 0;
-  bp.categoryAuthor = 'user';
+  // 'user' locks the categories to exactly these ids — right when the AI is
+  // being told them, wrong when the file already exists and brought its own.
+  bp.categoryAuthor = permissive ? 'ai' : 'user';
   bp.categories = pkg.categories.map((c) => ({ id: c.id, name: c.name, weight: c.weight }));
   // Weights already stored on the package are the exam's blueprint. Declaring
   // them used is what makes the handoff ask for a proportional split rather
@@ -64,7 +85,9 @@ export function finishBlueprint(
   bp.weightAuthor = 'user';
   bp.questionMethod = want.questions ? 'ai_create' : 'manual';
   bp.sourceMaterial = want.questions ? 'topic_and_instructions' : null;
-  bp.questionCountMode = 'fixed';
+  // 'fixed' makes the exact total a requirement the file must meet. A file that
+  // already exists has however many questions it has.
+  bp.questionCountMode = permissive ? 'ai_recommend' : 'fixed';
   bp.questionCount = want.questions ? questionCount : 0;
   bp.includeFlashcards = want.flashcards;
   bp.flashcardFocus = want.flashcards ? 'mix' : null;
@@ -90,6 +113,9 @@ export function PackageFinish({
   const [want, setWant] = useState({ questions: false, flashcards: false, presentation: false, lessons: false });
   const [count, setCount] = useState(50);
   const [started, setStarted] = useState<WizardResult | null>(null);
+  // 'handoff' composes a prompt to take away; 'paste' goes straight to the box,
+  // for a creator whose AI has already written the thing.
+  const [route, setRoute] = useState<'handoff' | 'paste'>('handoff');
 
   useEffect(() => {
     let alive = true;
@@ -131,9 +157,30 @@ export function PackageFinish({
     );
   }
 
-  // Once the handoff is on screen this is the ordinary import path, aimed at
-  // this package rather than at a new one.
+  // From here it is the ordinary import path, aimed at this package rather than
+  // at a new one. The two routes differ only in whether a prompt is composed on
+  // the way — the reading, checking and writing are the same code either way.
   if (started) {
+    if (route === 'paste') {
+      return (
+        <Shell theme={theme} onBack={() => setStarted(null)} backLabel="← What to add">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
+            <Icon name="layers" size={17} color={theme.accent} />
+            <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#fff' }}>{pkg.name}</h2>
+          </div>
+          <p style={{ margin: '0 0 16px', fontSize: 12.5, color: MUTED, lineHeight: 1.6 }}>
+            {'Add the file your AI made. It is read and checked exactly as a new package is, then added to this one.'}
+          </p>
+          <PackageImport
+            theme={theme}
+            blueprint={started.blueprint}
+            draftId={started.draftId}
+            onImported={onFinished}
+            addToPackageId={pkg.id}
+          />
+        </Shell>
+      );
+    }
     return (
       <PackageHandoff
         theme={theme}
@@ -172,7 +219,7 @@ export function PackageFinish({
       </p>
       {pkg.categories.length > 0 && (
         <p style={{ margin: '0 0 14px', fontSize: 12, color: FAINT, lineHeight: 1.55 }}>
-          {`It will be written against the ${pkg.categories.length} categories this package already uses, so it scores with everything else in it.`}
+          {`It will be written against the ${pkg.categories.length === 1 ? 'one category' : `${pkg.categories.length} categories`} this package already uses, so it scores with everything else in it.`}
         </p>
       )}
 
@@ -250,12 +297,33 @@ export function PackageFinish({
             <button
               type="button"
               disabled={!ready}
-              onClick={() => setStarted({ draftId: newDraftId(), blueprint: finishBlueprint(pkg, want, count), route: 'ai_handoff' })}
+              onClick={() => {
+                setRoute('handoff');
+                setStarted({ draftId: newDraftId(), blueprint: finishBlueprint(pkg, want, count), route: 'ai_handoff' });
+              }}
               style={primaryBtn(theme, !ready)}
             >
               {'Build the handoff'}
             </button>
+            {/* The creator who has already done the AI half. Without this the
+                only way to a paste box was through composing a prompt they did
+                not need — and the prompt's plan then refused their file for not
+                matching a package it was never written against. */}
+            <button
+              type="button"
+              disabled={!picked}
+              onClick={() => {
+                setRoute('paste');
+                setStarted({ draftId: newDraftId(), blueprint: finishBlueprint(pkg, want, count, true), route: 'ai_handoff' });
+              }}
+              style={secondaryBtn(theme)}
+            >
+              {'I already have the file'}
+            </button>
           </div>
+          <p style={{ margin: '9px 0 0', fontSize: 12, color: FAINT, lineHeight: 1.5 }}>
+            {'Already had your AI write it? Add it straight in — it is taken as it is, with its own categories.'}
+          </p>
         </>
       )}
     </Shell>
@@ -276,12 +344,22 @@ function list(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 
-function Shell({ theme, onBack, children }: { theme: Theme; onBack: () => void; children: React.ReactNode }) {
+function Shell({
+  theme,
+  onBack,
+  children,
+  backLabel = '← Study Creation',
+}: {
+  theme: Theme;
+  onBack: () => void;
+  children: React.ReactNode;
+  backLabel?: string;
+}) {
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 14 }}>
         <button onClick={onBack} style={secondaryBtn(theme)}>
-          {'← Study Creation'}
+          {backLabel}
         </button>
       </div>
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 18, background: 'rgba(255,255,255,.02)' }}>

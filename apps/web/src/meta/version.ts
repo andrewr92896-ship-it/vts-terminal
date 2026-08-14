@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.18';
+export const APP_VERSION = 'Beta V 7.19';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.19',
+    date: 'August 14, 2026',
+    notes: [
+      'Finishing a package now has an "I already have the file" button beside "Build the handoff". If your AI has already written it, add it straight in — no prompt to generate first.',
+      'A file added that way is taken as it is, with its own categories and however many questions it has, instead of being refused for not matching a plan it was never written against. Categories the package already has are matched by name and keep their history; the rest are added alongside.',
+    ],
+  },
   {
     version: 'Beta V 7.18',
     date: 'August 14, 2026',
