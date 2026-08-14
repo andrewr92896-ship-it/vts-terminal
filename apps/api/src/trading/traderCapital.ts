@@ -1,43 +1,108 @@
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, ne } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingDeskSettings } from '../db/schema.js';
-import { getAllActiveDecrypted, type KrakenCreds, type OandaCreds } from './connections.js';
+import {
+  brokerConnections,
+  tradingCapitalAccounts,
+  tradingDeskSettings,
+  type BrokerConnectionKind,
+  type TradingCapitalAccountRow,
+} from '../db/schema.js';
+import { getAllActiveDecrypted, listConnections, type KrakenCreds, type OandaCreds } from './connections.js';
 import { fetchOandaAccountSummary, fetchOandaFunding } from './brokers/oanda.js';
 import { fetchKrakenTradeBalance } from './brokers/krakenOrders.js';
-import type { AuditActor } from './credentialAudit.js';
+import { recordCredentialUse, type AuditActor } from './credentialAudit.js';
 
-// The trader's own capital, as three figures on the Trade History KPI row: what
+// A trader's own capital, as three figures on the Trade History KPI row: what
 // they put in, what they have taken back out, and what they are holding now.
 //
-// **Everything here is the CALLER'S OWN and never the desk's.** Live Brokers
-// (capital.ts) is deliberately team-scoped — a desk sees its own accounts'
-// capital — but this answers "what have I put in and what do I hold", which is
-// one person's money by definition. So the scope is a single id rather than
-// visibleTraderIds, and there is no parameter that could widen it.
+// **CAPITAL IS PER ACCOUNT, NOT PER TRADER** (owner instruction, 2026-08). It
+// was one deposited figure and one withdrawn figure per person, each with one
+// sync switch — which cannot describe either shape a real desk takes:
 //
-// Each of the two flow figures is either TYPED or SYNCED from the broker's
-// funding history, chosen per figure. The two are stored separately, so turning
-// sync off hands the trader back the number they typed rather than leaving the
-// broker's in its place.
+//   • several broker accounts under ONE login (a partner whose account the desk
+//     lead connected). The sync summed every account's funding history into one
+//     number, so "my deposit" was really everybody's, and turning sync on for
+//     one account turned it on for all of them.
+//   • partners who sign in themselves, each holding their own account.
+//
+// So each (trader, account) pair carries its own deposited and withdrawn
+// figures, each independently TYPED or SYNCED from that one account's funding
+// history. The card shows the total across a trader's accounts and says how
+// that total was arrived at; the breakdown says which account is which.
+//
+// **Whose capital is a parameter now, and that is a widening.** It used to take
+// a single id with nothing that could reach past the caller. A desk lead — a
+// group leader holding the Trading Teams grant, or an admin — may now read and
+// set a member's capital, gated by the same `canEditDeskSettingsFor` that
+// already governs how a teammate's results are scored. Everybody else resolves
+// to themselves: the route passes the caller's own id unless it has checked
+// that gate. A public signup is unaffected by construction, since the grant is
+// handed out by hand.
 
 export type CapitalMode = 'manual' | 'synced';
 
 export interface CapitalFigure {
-  // What to show. Null means "not stated" — the trader has typed nothing and
-  // nothing has been synced. Deliberately not zero: zero is a real answer.
+  // What to show. Null means "not stated" — nothing typed and nothing synced.
+  // Deliberately not zero: zero is a real answer.
   value: number | null;
   mode: CapitalMode;
   manual: number | null; // what the trader typed, kept while synced
   synced: number | null; // the last GOOD broker reading
 }
 
-export interface TraderCapital {
+// The account-less bucket: capital that is not behind a connected broker
+// account. A hand-kept prop book, or a trader with no broker connected at all.
+export const OTHER_ACCOUNT = 'other';
+
+export interface CapitalAccount {
+  // A broker_connections id, or OTHER_ACCOUNT.
+  key: string;
+  label: string;
+  broker: BrokerConnectionKind | null;
+  summary: string | null;
+  // False for a paused/removed connection: its figures still count (the money
+  // was paid in) but nothing can be read from it.
+  active: boolean;
+  // Whether this one account can be kept in step with its broker. OANDA only —
+  // Kraken's ledger records "0.5 BTC in", which needs the price on the day it
+  // landed to become capital in dollars, a figure the terminal does not have.
+  canSync: boolean;
   deposited: CapitalFigure;
   withdrawn: CapitalFigure;
-  // What the trader holds right now: NAV summed across their OWN connected
-  // broker accounts. Null when it cannot be totalled — no connection, none of
-  // them answered, or they are kept in different currencies (adding those would
-  // be a number that is simply wrong, the same rule Net Worth follows).
+  // What the broker said this account is denominated in. Null until something
+  // has been synced from it — a typed figure was never asked.
+  currency: string | null;
+  syncedAt: number | null;
+  // Why this account's synced figure is missing, stale or partial.
+  note: string | null;
+}
+
+// A trader's headline figure: the sum across their accounts, and how it was
+// arrived at. `stated`/`unstated` are the same honesty rule the live total
+// follows — a figure that leaves an account out must say so rather than reading
+// as complete.
+export interface CapitalTotal {
+  value: number | null;
+  mode: 'manual' | 'synced' | 'mixed' | 'none';
+  stated: number;
+  unstated: number;
+  // Set when the accounts stating a figure are kept in different currencies, in
+  // which case there is no total: adding GBP to USD is a plausible-looking
+  // number that is simply wrong. The breakdown still reads correctly.
+  mixedCurrency: boolean;
+}
+
+export interface TraderCapital {
+  // Whose these are — the caller's own unless a desk lead asked for a member's.
+  userId: string;
+  deposited: CapitalTotal;
+  withdrawn: CapitalTotal;
+  // One entry per account that can hold capital, plus the 'other' bucket.
+  breakdown: CapitalAccount[];
+  // What the trader holds right now: NAV summed across their connected broker
+  // accounts. Null when it cannot be totalled — no connection, none of them
+  // answered, or they are kept in different currencies (adding those would be a
+  // number that is simply wrong, the same rule Net Worth follows).
   total: number | null;
   accounts: number; // connected accounts the total covers
   // Connected accounts that did not answer. Named rather than silently left
@@ -46,7 +111,7 @@ export interface TraderCapital {
   currency: string | null;
   // Whether syncing is available at all: it needs a connected OANDA account.
   canSync: boolean;
-  syncedAt: number | null;
+  syncedAt: number | null; // the most recent reading across the accounts
   // Funding events OANDA files as transfers that are not client deposits —
   // between the trader's own accounts, or an entity migration. Reported so the
   // figure can say what it left out rather than quietly disagreeing with the
@@ -54,6 +119,11 @@ export interface TraderCapital {
   otherTransfers: number;
   // Why a synced figure is missing or stale. Null when there is nothing to say.
   note: string | null;
+  // Whether the viewer may change these. False when a desk lead is reading a
+  // member's capital they may see but not set — which cannot currently happen
+  // (the same gate governs both), but the client draws its controls off this
+  // rather than re-deriving who it is.
+  canEdit: boolean;
 }
 
 // A synced figure is refreshed on read once it is this old. Deposits move a few
@@ -77,28 +147,105 @@ interface TotalCache {
 }
 const totalCache = new Map<string, TotalCache>();
 
-function figure(mode: CapitalMode, manual: number | null, synced: number | null): CapitalFigure {
-  return { value: mode === 'synced' ? synced : manual, mode, manual, synced };
+function figure(row: CapitalRow | undefined, which: 'deposited' | 'withdrawn'): CapitalFigure {
+  const manual = (which === 'deposited' ? row?.depositedCapital : row?.withdrawnCapital) ?? null;
+  const synced = (which === 'deposited' ? row?.syncedDeposited : row?.syncedWithdrawn) ?? null;
+  const on = which === 'deposited' ? !!row?.depositedSync : !!row?.withdrawnSync;
+  return { value: on ? synced : manual, mode: on ? 'synced' : 'manual', manual, synced };
 }
 
-async function row(userId: string) {
-  return (
-    await db.select().from(tradingDeskSettings).where(eq(tradingDeskSettings.id, userId)).limit(1)
-  )[0];
+// The headline figure for one side: the sum of the accounts that state one.
+// Accounts stating nothing are counted rather than read as zero — the same rule
+// the live total follows for an account that would not answer.
+function rollUp(accounts: CapitalAccount[], which: 'deposited' | 'withdrawn'): CapitalTotal {
+  const stated = accounts.filter((a) => a[which].value != null);
+  const synced = stated.filter((a) => a[which].mode === 'synced').length;
+  // Only a currency the broker actually reported counts here. A typed figure was
+  // never asked what it is denominated in, so it joins whatever the desk holds
+  // rather than blocking a total on a question nobody was asked.
+  const currencies = new Set(stated.map((a) => a.currency).filter((c): c is string => !!c));
+  const mixedCurrency = currencies.size > 1;
+  return {
+    value:
+      stated.length === 0 || mixedCurrency
+        ? null
+        : Number(stated.reduce((s, a) => s + (a[which].value as number), 0).toFixed(2)),
+    mixedCurrency,
+    mode:
+      stated.length === 0
+        ? 'none'
+        : synced === stated.length
+          ? 'synced'
+          : synced === 0
+            ? 'manual'
+            : 'mixed',
+    stated: stated.length,
+    unstated: accounts.length - stated.length,
+  };
 }
 
-// The trader's own active OANDA connections. Kraken is deliberately absent: its
-// ledger records a deposit in whatever asset arrived, so "0.5 BTC in" needs the
-// price on the day it landed to become capital in dollars — a figure the
-// terminal does not have and would have to invent. A crypto deposit is typed in
-// by hand until there is an honest way to price it.
-async function ownOandaConnections(userId: string, actor: AuditActor | undefined, purpose: 'capital' | 'funding') {
-  const conns = await getAllActiveDecrypted(new Set([userId]), { purpose, actor });
-  return conns.filter((c) => c.broker === 'oanda' && c.ownerId === userId);
+type CapitalRow = TradingCapitalAccountRow;
+
+async function capitalRows(userId: string): Promise<Map<string, CapitalRow>> {
+  const rows = await db
+    .select()
+    .from(tradingCapitalAccounts)
+    .where(eq(tradingCapitalAccounts.userId, userId));
+  return new Map(rows.map((r) => [r.accountKey, r]));
 }
 
-function oandaCfg(c: { creds: unknown }) {
-  const cr = c.creds as OandaCreds;
+// The accounts a trader's capital can sit behind, in the order the rest of the
+// terminal lists their connections. A `manual` connection is excluded — it holds
+// no money of its own, it is a hand-kept record of a book somewhere else, and
+// that is what the 'other' bucket is for.
+interface AccountSlot {
+  key: string;
+  label: string;
+  broker: BrokerConnectionKind | null;
+  summary: string | null;
+  active: boolean;
+  canSync: boolean;
+}
+
+async function slotsFor(userId: string, rows: Map<string, CapitalRow>): Promise<AccountSlot[]> {
+  const conns = (await listConnections(userId)).filter((c) => c.broker !== 'manual');
+  const slots: AccountSlot[] = conns.map((c) => ({
+    key: c.id,
+    label: c.label,
+    broker: c.broker,
+    summary: c.summary,
+    active: c.active,
+    canSync: c.broker === 'oanda' && c.active,
+  }));
+  // A row whose connection has since been removed keeps its place, named for
+  // what it is. Dropping it would take a figure the trader entered off the card
+  // with nothing said — the money was still paid in.
+  const known = new Set(slots.map((s) => s.key));
+  for (const key of rows.keys()) {
+    if (key === OTHER_ACCOUNT || known.has(key)) continue;
+    slots.push({
+      key,
+      label: 'Account no longer connected',
+      broker: null,
+      summary: null,
+      active: false,
+      canSync: false,
+    });
+  }
+  // The account-less bucket is always offered, and always last.
+  slots.push({
+    key: OTHER_ACCOUNT,
+    label: 'Not from a connected account',
+    broker: null,
+    summary: null,
+    active: true,
+    canSync: false,
+  });
+  return slots;
+}
+
+function oandaCfg(creds: unknown) {
+  const cr = creds as OandaCreds;
   return {
     token: cr.token,
     accountId: cr.accountId,
@@ -126,7 +273,7 @@ async function liveTotal(userId: string, actor: AuditActor | undefined): Promise
     conns.map(async (c): Promise<{ value: number; currency: string } | null | 'failed'> => {
       try {
         if (c.broker === 'oanda') {
-          const cap = await fetchOandaAccountSummary(oandaCfg(c));
+          const cap = await fetchOandaAccountSummary(oandaCfg(c.creds));
           return cap.nav == null ? 'failed' : { value: cap.nav, currency: cap.currency };
         }
         const cr = c.creds as KrakenCreds;
@@ -158,120 +305,177 @@ async function liveTotal(userId: string, actor: AuditActor | undefined): Promise
   return next;
 }
 
-// Pull the funding history and store it as the last good reading. Returns null
-// when nothing could be read, leaving whatever was stored in place.
-async function refreshSynced(
+const STALE_NOTE =
+  'The broker’s funding history could not be read just now, so this is the last figure that came back.';
+const TRUNCATED_NOTE = 'Only part of the funding history could be read, so these totals are understated.';
+
+// Pull the funding history for the named accounts and store each one's reading
+// on its own row. One account at a time, deliberately: summing several accounts
+// into one figure is the fault this whole file exists to correct.
+async function refreshAccounts(
   userId: string,
+  keys: string[],
   actor: AuditActor | undefined,
-): Promise<{ deposits: number; withdrawals: number; otherTransfers: number; truncated: boolean } | null> {
-  const conns = await ownOandaConnections(userId, actor, 'funding');
-  if (conns.length === 0) return null;
-  const results = await Promise.all(
-    conns.map(async (c) => {
-      try {
-        return await fetchOandaFunding(oandaCfg(c));
-      } catch {
-        return null;
-      }
-    }),
-  );
-  const ok = results.filter((r): r is NonNullable<typeof r> => r != null);
-  // Nothing readable — keep the last good figures rather than writing zeros over
-  // them. A stale deposit total is a far better answer than a wrong one.
-  if (ok.length === 0) return null;
-  // Accounts in different currencies cannot be added, so the sync refuses rather
-  // than totalling them. The trader can still type the figure.
-  if (new Set(ok.map((r) => r.currency)).size > 1) return null;
-  const totals = {
-    deposits: Number(ok.reduce((s, r) => s + r.deposits, 0).toFixed(2)),
-    withdrawals: Number(ok.reduce((s, r) => s + r.withdrawals, 0).toFixed(2)),
-    otherTransfers: ok.reduce((s, r) => s + r.otherTransfers, 0),
-    truncated: ok.some((r) => r.truncated),
-  };
-  await db
-    .insert(tradingDeskSettings)
-    .values({
-      id: userId,
-      syncedDeposited: totals.deposits,
-      syncedWithdrawn: totals.withdrawals,
-      capitalSyncedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: tradingDeskSettings.id,
-      set: {
-        syncedDeposited: totals.deposits,
-        syncedWithdrawn: totals.withdrawals,
+): Promise<Map<string, { otherTransfers: number; truncated: boolean } | null>> {
+  const out = new Map<string, { otherTransfers: number; truncated: boolean } | null>();
+  if (keys.length === 0) return out;
+
+  // One decrypt pass for the whole refresh. `deferred` because the audit row is
+  // written below, per account, with the outcome the broker actually gave —
+  // recording a funding read against a connection this pass never asked about
+  // would be false on the one screen whose job is telling somebody their key was
+  // used.
+  const conns = await getAllActiveDecrypted(new Set([userId]), {
+    purpose: 'funding',
+    actor,
+    deferred: true,
+  });
+  const byId = new Map(conns.filter((c) => c.ownerId === userId).map((c) => [c.id, c]));
+
+  for (const key of keys) {
+    const conn = byId.get(key);
+    if (!conn || conn.broker !== 'oanda') {
+      out.set(key, null);
+      continue;
+    }
+    try {
+      const funding = await fetchOandaFunding(oandaCfg(conn.creds));
+      const reading = {
+        syncedDeposited: funding.deposits,
+        syncedWithdrawn: funding.withdrawals,
+        currency: funding.currency,
         capitalSyncedAt: new Date(),
-      },
-    });
-  return totals;
+        updatedAt: new Date(),
+      };
+      await db
+        .insert(tradingCapitalAccounts)
+        .values({ userId, accountKey: key, ...reading })
+        .onConflictDoUpdate({
+          target: [tradingCapitalAccounts.userId, tradingCapitalAccounts.accountKey],
+          set: reading,
+        });
+      recordCredentialUse({ connectionId: key, ownerUserId: userId, purpose: 'funding', actor, ok: true });
+      out.set(key, { otherTransfers: funding.otherTransfers, truncated: funding.truncated });
+    } catch (err) {
+      // Nothing readable — keep the last good figure rather than writing a zero
+      // over it. A stale deposit total is a far better answer than a wrong one.
+      recordCredentialUse({
+        connectionId: key,
+        ownerUserId: userId,
+        purpose: 'funding',
+        actor,
+        ok: false,
+        error: err instanceof Error ? err.message : 'Could not read funding history',
+      });
+      out.set(key, null);
+    }
+  }
+  return out;
 }
 
 export interface CapitalOptions {
   actor?: AuditActor;
-  // Force a refresh now, whatever the age of the stored reading. This is the
-  // Sync button; an ordinary read refreshes only once the figure is stale.
-  refresh?: boolean;
+  // Account keys to refresh now, whatever the age of the stored reading. This is
+  // the Sync button; an ordinary read refreshes only what has gone stale.
+  refresh?: string[];
 }
 
 export async function getTraderCapital(userId: string, opts: CapitalOptions = {}): Promise<TraderCapital> {
-  let r = await row(userId);
-  const wantsSync = !!r?.depositedSync || !!r?.withdrawnSync;
-  const stale = !r?.capitalSyncedAt || Date.now() - r.capitalSyncedAt.getTime() > SYNC_TTL_MS;
+  let rows = await capitalRows(userId);
+  const slots = await slotsFor(userId, rows);
+  const forced = new Set(opts.refresh ?? []);
 
-  let note: string | null = null;
+  // Which accounts want a broker reading: syncing is on for one of their two
+  // figures, and there is something to read it from.
+  const due = slots
+    .filter((s) => s.canSync)
+    .filter((s) => {
+      const r = rows.get(s.key);
+      if (!r || (!r.depositedSync && !r.withdrawnSync)) return false;
+      if (forced.has(s.key)) return true;
+      return !r.capitalSyncedAt || Date.now() - r.capitalSyncedAt.getTime() > SYNC_TTL_MS;
+    })
+    .map((s) => s.key);
+
+  const refreshed = await refreshAccounts(userId, due, opts.actor);
+  if (due.length > 0) rows = await capitalRows(userId);
+
   let otherTransfers = 0;
-  let truncated = false;
-  if (wantsSync && (opts.refresh || stale)) {
-    const fresh = await refreshSynced(userId, opts.actor);
-    if (fresh) {
-      otherTransfers = fresh.otherTransfers;
-      truncated = fresh.truncated;
-      r = await row(userId);
-    } else {
+  for (const r of refreshed.values()) if (r) otherTransfers += r.otherTransfers;
+
+  const breakdown: CapitalAccount[] = slots.map((s) => {
+    const row = rows.get(s.key);
+    const result = refreshed.get(s.key);
+    const syncing = !!row?.depositedSync || !!row?.withdrawnSync;
+    let note: string | null = null;
+    if (syncing && refreshed.has(s.key)) {
       // Say so rather than showing a figure that quietly stopped moving.
-      note = 'The broker’s funding history could not be read just now, so this is the last figure that came back.';
+      if (result == null) note = STALE_NOTE;
+      else if (result.truncated) note = TRUNCATED_NOTE;
     }
-  }
+    return {
+      key: s.key,
+      label: s.label,
+      broker: s.broker,
+      summary: s.summary,
+      active: s.active,
+      canSync: s.canSync,
+      deposited: figure(row, 'deposited'),
+      withdrawn: figure(row, 'withdrawn'),
+      currency: row?.currency ?? null,
+      syncedAt: row?.capitalSyncedAt ? row.capitalSyncedAt.getTime() : null,
+      note,
+    };
+  });
 
   const total = await liveTotal(userId, opts.actor);
-  const canSync = total.hasOanda;
-
-  if (truncated) {
-    note = 'Only part of the funding history could be read, so these totals are understated.';
-  }
+  const syncedAt = breakdown.reduce<number | null>(
+    (latest, a) => (a.syncedAt != null && (latest == null || a.syncedAt > latest) ? a.syncedAt : latest),
+    null,
+  );
+  const stale = breakdown.filter((a) => a.note === STALE_NOTE).length;
+  const truncated = breakdown.some((a) => a.note === TRUNCATED_NOTE);
 
   return {
-    deposited: figure(r?.depositedSync ? 'synced' : 'manual', r?.depositedCapital ?? null, r?.syncedDeposited ?? null),
-    withdrawn: figure(r?.withdrawnSync ? 'synced' : 'manual', r?.withdrawnCapital ?? null, r?.syncedWithdrawn ?? null),
+    userId,
+    deposited: rollUp(breakdown, 'deposited'),
+    withdrawn: rollUp(breakdown, 'withdrawn'),
+    breakdown,
     total: total.total,
     accounts: total.accounts,
     unreadable: total.unreadable,
     currency: total.currency,
-    canSync,
-    syncedAt: r?.capitalSyncedAt ? r.capitalSyncedAt.getTime() : null,
+    canSync: total.hasOanda,
+    syncedAt,
     otherTransfers,
-    note,
+    note: stale > 0 ? STALE_NOTE : truncated ? TRUNCATED_NOTE : null,
+    canEdit: true,
   };
 }
 
-// The Sync button: turn syncing on for one figure and pull it now. Refused
-// outright with no OANDA connection — the client hides the button then, so the
-// only way to reach this is a hand-rolled request, and turning sync on with
-// nothing behind it would leave the card reading "—" in auto mode forever.
+// The Sync button on one account: turn syncing on for one figure and pull it
+// now. Refused outright unless that account is a live OANDA connection — the
+// client only draws the button there, so the only way to reach this is a
+// hand-rolled request, and turning sync on with nothing behind it would leave
+// the row reading "—" in auto mode forever.
 export async function syncCapital(
   userId: string,
+  account: string,
   which: 'deposited' | 'withdrawn',
   actor?: AuditActor,
 ): Promise<TraderCapital> {
-  const conns = await ownOandaConnections(userId, actor, 'capital');
-  if (conns.length === 0) throw new Error('Connect an OANDA account to sync from');
-  const patch: CapitalPatch = which === 'deposited' ? { depositedSync: true } : { withdrawnSync: true };
-  return updateTraderCapital(userId, patch, { actor, refresh: true });
+  const conn = (await listConnections(userId)).find((c) => c.id === account);
+  if (!conn || conn.broker !== 'oanda' || !conn.active) {
+    throw new Error('That account cannot be synced — connect an active OANDA account to sync from');
+  }
+  const patch: CapitalPatch =
+    which === 'deposited' ? { account, depositedSync: true } : { account, withdrawnSync: true };
+  return updateTraderCapital(userId, patch, { actor, refresh: [account] });
 }
 
 export interface CapitalPatch {
+  // Which account this is about: a connection id, or OTHER_ACCOUNT.
+  account: string;
   // A number sets the typed figure AND returns that figure to manual mode —
   // typing over a synced number is how a trader takes it back. Null clears it.
   deposited?: number | null;
@@ -290,8 +494,14 @@ export async function updateTraderCapital(
   patch: CapitalPatch,
   opts: CapitalOptions = {},
 ): Promise<TraderCapital> {
-  const current = await row(userId);
-  const set: Partial<typeof tradingDeskSettings.$inferInsert> = { updatedAt: new Date() };
+  const rows = await capitalRows(userId);
+  const slots = await slotsFor(userId, rows);
+  // An account key that is not one of this trader's own is refused rather than
+  // stored: a row keyed on somebody else's connection would be a figure with
+  // nothing behind it, and nothing later would tell them apart.
+  if (!slots.some((s) => s.key === patch.account)) throw new Error('Unknown account');
+
+  const set: Partial<typeof tradingCapitalAccounts.$inferInsert> = { updatedAt: new Date() };
 
   if (patch.deposited !== undefined) {
     set.depositedCapital = money(patch.deposited);
@@ -306,17 +516,117 @@ export async function updateTraderCapital(
   if (patch.withdrawnSync !== undefined) set.withdrawnSync = patch.withdrawnSync;
 
   await db
-    .insert(tradingDeskSettings)
-    .values({
-      id: userId,
-      breakEvenMode: current?.breakEvenMode ?? 'percent',
-      breakEvenPct: current?.breakEvenPct ?? 0,
-      breakEvenAmount: current?.breakEvenAmount ?? 0,
-      minTradeUnits: current?.minTradeUnits ?? 0,
-      ...set,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({ target: tradingDeskSettings.id, set });
+    .insert(tradingCapitalAccounts)
+    .values({ userId, accountKey: patch.account, ...set, updatedAt: new Date() })
+    .onConflictDoUpdate({
+      target: [tradingCapitalAccounts.userId, tradingCapitalAccounts.accountKey],
+      set,
+    });
 
   return getTraderCapital(userId, opts);
+}
+
+// ---- Carrying the old per-trader figures across (migration 0127) ------------
+//
+// Run on boot rather than in the migration, because the split needs to know
+// which of a trader's connections exist and which can be synced — that is code,
+// not SQL. It is idempotent: a trader who already has per-account rows is left
+// alone, so this does nothing from the second boot onwards and never undoes
+// somebody's later edit.
+//
+// The rules, per figure:
+//   • sync was ON  → every OANDA connection the trader holds gets that sync
+//     switch, so the total comes back to the same number the old summed sync
+//     was showing, already split by account. Each row's first read fills in its
+//     own reading.
+//   • sync was ON with no OANDA connection left → the last synced figure is
+//     carried to the 'other' bucket as a typed number, so what was on the card
+//     stays on the card rather than blanking.
+//   • sync was OFF → the typed figure moves to the 'other' bucket. It is the
+//     honest place for it: nothing recorded which account it referred to.
+//
+// A figure typed while that side was synced is NOT carried: it was not the
+// number on screen, and adding it to the 'other' bucket would silently inflate
+// the total. It stays in the old column, which is why those are kept.
+export async function backfillCapitalAccounts(): Promise<void> {
+  const legacy = await db
+    .select()
+    .from(tradingDeskSettings)
+    // The shared 'desk' default row must never answer a capital question: one
+    // trader's deposit is not another's.
+    .where(ne(tradingDeskSettings.id, 'desk'));
+  const carry = legacy.filter(
+    (r) =>
+      r.depositedCapital != null ||
+      r.withdrawnCapital != null ||
+      r.depositedSync ||
+      r.withdrawnSync ||
+      r.syncedDeposited != null ||
+      r.syncedWithdrawn != null,
+  );
+  if (carry.length === 0) return;
+
+  const ids = carry.map((r) => r.id);
+  const existing = new Set(
+    (
+      await db
+        .select({ userId: tradingCapitalAccounts.userId })
+        .from(tradingCapitalAccounts)
+        .where(inArray(tradingCapitalAccounts.userId, ids))
+    ).map((r) => r.userId),
+  );
+  const todo = carry.filter((r) => !existing.has(r.id));
+  if (todo.length === 0) return;
+
+  const oanda = await db
+    .select({ id: brokerConnections.id, userId: brokerConnections.userId })
+    .from(brokerConnections)
+    .where(
+      and(
+        inArray(brokerConnections.userId, todo.map((r) => r.id)),
+        eq(brokerConnections.broker, 'oanda'),
+        eq(brokerConnections.active, true),
+      ),
+    );
+
+  let moved = 0;
+  for (const row of todo) {
+    const conns = oanda.filter((c) => c.userId === row.id).map((c) => c.id);
+    const values: (typeof tradingCapitalAccounts.$inferInsert)[] = [];
+
+    const depositedToConns = row.depositedSync && conns.length > 0;
+    const withdrawnToConns = row.withdrawnSync && conns.length > 0;
+    for (const id of conns) {
+      if (!depositedToConns && !withdrawnToConns) break;
+      values.push({
+        userId: row.id,
+        accountKey: id,
+        depositedSync: depositedToConns,
+        withdrawnSync: withdrawnToConns,
+        updatedAt: new Date(),
+      });
+    }
+
+    const other: typeof tradingCapitalAccounts.$inferInsert = {
+      userId: row.id,
+      accountKey: OTHER_ACCOUNT,
+      depositedCapital: row.depositedSync
+        ? depositedToConns
+          ? null
+          : (row.syncedDeposited ?? null)
+        : (row.depositedCapital ?? null),
+      withdrawnCapital: row.withdrawnSync
+        ? withdrawnToConns
+          ? null
+          : (row.syncedWithdrawn ?? null)
+        : (row.withdrawnCapital ?? null),
+      updatedAt: new Date(),
+    };
+    if (other.depositedCapital != null || other.withdrawnCapital != null) values.push(other);
+
+    if (values.length === 0) continue;
+    await db.insert(tradingCapitalAccounts).values(values).onConflictDoNothing();
+    moved += 1;
+  }
+  if (moved > 0) console.log(`[capital] carried ${moved} trader capital record(s) onto per-account rows`);
 }

@@ -33,8 +33,8 @@ import { getTradeLayout, type Layout } from './preferences';
 import { ScreenTitle } from './ScreenTitle';
 import { TradeTimes, TradeTimesCell, ageLabel } from './tradeTime';
 import { excludedNote } from './excludedNote';
+import { CapitalCards } from './CapitalCards';
 import type {
-  CapitalFigure,
   ExcludedTrades,
   RemovedTrade,
   TradeInput,
@@ -42,7 +42,6 @@ import type {
   TradeRecord,
   TradeSide,
   TradeStatus,
-  TraderCapital,
 } from '../../api/types';
 
 // Trading navy/gold palette — self-contained, matching the Live Wall.
@@ -1270,262 +1269,6 @@ function ExportPanel({
   );
 }
 
-// The trader's own money, as three KPI cards: Deposited Capital, Withdrawn
-// Capital, and Total Capital (what their connected accounts hold right now).
-//
-// They sit in the KPI row rather than in the desk-settings modal because they
-// are read as metrics, not configured as preferences — and the figure they give
-// meaning to (return on what you put in) is on that row. Always the VIEWER'S
-// own: a teammate's deposits are their business, so unlike the rest of the row
-// these do not change with the trader filter.
-//
-// Deposited and Withdrawn are each either TYPED (the Edit button) or SYNCED
-// from the connected OANDA account's funding history (the Sync button, behind a
-// confirm). The two figures switch independently, and typing over a synced
-// figure returns that card to manual — the server keeps both numbers, so
-// nothing typed is ever lost to a sync.
-function CapitalCards({
-  realizedPl,
-  showMoney,
-  readOnly,
-}: {
-  realizedPl: number;
-  showMoney: boolean;
-  readOnly: boolean;
-}) {
-  const [cap, setCap] = useState<TraderCapital | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    api
-      .traderCapital()
-      .then((c) => alive && setCap(c))
-      .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Could not load capital'));
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // One card errored the whole block: these three share a payload, so a load
-  // failure is reported once, on the first card, rather than three times.
-  if (loadError) {
-    return (
-      <div style={card}>
-        <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{"Deposited Capital"}</div>
-        <div style={{ fontSize: 11.5, color: '#ffb4ab', marginTop: 8 }}>{loadError}</div>
-      </div>
-    );
-  }
-
-  const pct =
-    cap?.deposited.value != null && cap.deposited.value > 0 ? (realizedPl / cap.deposited.value) * 100 : null;
-
-  return (
-    <>
-      <CapitalFlowCard
-        label="Deposited Capital"
-        figure={cap?.deposited ?? null}
-        canSync={!!cap?.canSync}
-        showMoney={showMoney}
-        readOnly={readOnly}
-        loaded={cap != null}
-        note={cap?.note ?? null}
-        extra={
-          pct != null ? (
-            <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 12, fontWeight: 600, color: pct >= 0 ? GREEN : RED, marginTop: 3 }}>
-              {pct >= 0 ? '+' : ''}{pct.toFixed(1)}% return
-            </div>
-          ) : null
-        }
-        sub={cap?.deposited.value == null ? 'not set' : 'your own closed trades'}
-        onSave={async (value) => setCap(await api.updateTraderCapital({ deposited: value }))}
-        onSync={async () => setCap(await api.syncTraderCapital('deposited'))}
-        onUnsync={async () => setCap(await api.updateTraderCapital({ depositedSync: false }))}
-      />
-      <CapitalFlowCard
-        label="Withdrawn Capital"
-        figure={cap?.withdrawn ?? null}
-        canSync={!!cap?.canSync}
-        showMoney={showMoney}
-        readOnly={readOnly}
-        loaded={cap != null}
-        note={cap?.note ?? null}
-        extra={null}
-        sub={cap?.withdrawn.value == null ? 'not set' : 'taken out of the account'}
-        onSave={async (value) => setCap(await api.updateTraderCapital({ withdrawn: value }))}
-        onSync={async () => setCap(await api.syncTraderCapital('withdrawn'))}
-        onUnsync={async () => setCap(await api.updateTraderCapital({ withdrawnSync: false }))}
-      />
-      <div style={card}>
-        <div style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{"Total Capital"}</div>
-        <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 22, fontWeight: 600, color: '#fff', marginTop: 6 }}>
-          {cap == null ? '…' : cap.total == null ? '—' : showMoney ? usd(cap.total) : '•••••'}
-        </div>
-        <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>
-          {cap == null
-            ? 'reading your accounts'
-            : cap.total == null
-              ? cap.accounts > 1
-                ? 'accounts use different currencies'
-                : cap.unreadable > 0
-                  ? 'your broker did not answer'
-                  : 'no broker account connected'
-              : `held now · ${cap.accounts} account${cap.accounts === 1 ? '' : 's'}`}
-        </div>
-        {/* An account left out makes the total an understatement — say so
-            rather than letting it read as complete. */}
-        {cap != null && cap.total != null && cap.unreadable > 0 && (
-          <div style={{ fontSize: 10, color: '#e0a23a', marginTop: 4 }}>
-            {`${cap.unreadable} connected account${cap.unreadable === 1 ? '' : 's'} could not be read and ${cap.unreadable === 1 ? 'is' : 'are'} not in this total.`}
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-// One of the two flow cards (deposited / withdrawn): the figure, an Edit button
-// for typing it, and a Sync control that keeps it in step with the broker.
-function CapitalFlowCard({
-  label,
-  figure,
-  canSync,
-  showMoney,
-  readOnly,
-  loaded,
-  note,
-  extra,
-  sub,
-  onSave,
-  onSync,
-  onUnsync,
-}: {
-  label: string;
-  figure: CapitalFigure | null;
-  canSync: boolean;
-  showMoney: boolean;
-  readOnly: boolean;
-  loaded: boolean;
-  note: string | null;
-  extra: React.ReactNode;
-  sub: string;
-  onSave: (value: number | null) => Promise<void>;
-  onSync: () => Promise<void>;
-  onUnsync: () => Promise<void>;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const synced = figure?.mode === 'synced';
-
-  function open() {
-    setText(figure?.value == null ? '' : String(figure.value));
-    setError(null);
-    setEditing(true);
-  }
-
-  async function run(action: () => Promise<void>) {
-    setBusy(true);
-    setError(null);
-    try {
-      await action();
-      setEditing(false);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not save');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function save() {
-    const raw = text.trim();
-    // An emptied box clears the figure back to "not stated" rather than storing
-    // a zero, which would be a claim the trader did not make.
-    const value = raw === '' ? null : Number(raw);
-    if (value != null && (!Number.isFinite(value) || value < 0)) {
-      setError('Enter an amount');
-      return;
-    }
-    await run(() => onSave(value));
-  }
-
-  function confirmSync() {
-    // The plain question, because the answer changes where the number comes
-    // from: the broker's funding history takes over until sync is turned off.
-    if (!window.confirm(`Are you sure you want to sync? ${label} will update automatically from your broker's deposit history, and the figure you typed will be set aside until you switch back.`)) return;
-    void run(onSync);
-  }
-
-  return (
-    <div style={card}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-        <span style={{ fontSize: 10, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED }}>{label}</span>
-        {!readOnly && loaded && !editing && (
-          <button onClick={open} style={miniGhost} disabled={busy}>{figure?.value == null && !synced ? 'Set' : 'Edit'}</button>
-        )}
-      </div>
-
-      {editing ? (
-        <div style={{ marginTop: 6 }}>
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') void save();
-              if (e.key === 'Escape') setEditing(false);
-            }}
-            type="number"
-            step="any"
-            min="0"
-            autoFocus
-            placeholder="0.00"
-            style={{ ...inputBase, width: '100%', fontFamily: "'IBM Plex Mono', monospace" }}
-          />
-          <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-            <button onClick={() => void save()} disabled={busy} style={{ ...miniGold, opacity: busy ? 0.6 : 1 }}>
-              {busy ? 'Saving…' : 'Save'}
-            </button>
-            <button onClick={() => setEditing(false)} style={miniGhost}>{"Cancel"}</button>
-          </div>
-          {synced && (
-            <div style={{ fontSize: 10, color: FAINT, marginTop: 6 }}>{"Saving a figure switches this card back to manual."}</div>
-          )}
-          {error && <div style={{ fontSize: 10.5, color: '#ffb4ab', marginTop: 6 }}>{error}</div>}
-        </div>
-      ) : (
-        <>
-          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 22, fontWeight: 600, color: '#fff', marginTop: 6 }}>
-            {!loaded ? '…' : figure?.value == null ? '—' : showMoney ? usd(figure.value) : '•••••'}
-          </div>
-          {extra}
-          <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>{sub}</div>
-
-          {/* The sync state, below the figure. Auto mode names itself so a
-              number that moves on its own is never a mystery. */}
-          {!readOnly && loaded && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-              {synced ? (
-                <>
-                  <span style={syncedPill}>{"Auto · synced"}</span>
-                  <button onClick={() => void run(onUnsync)} disabled={busy} style={miniGhost}>{"Turn off"}</button>
-                </>
-              ) : canSync ? (
-                <button onClick={confirmSync} disabled={busy} style={miniGhost} title="Keep this figure in step with your broker's deposit history">
-                  {busy ? 'Syncing…' : 'Sync'}
-                </button>
-              ) : null}
-            </div>
-          )}
-          {synced && note && <div style={{ fontSize: 10, color: '#e0a23a', marginTop: 6 }}>{note}</div>}
-          {error && <div style={{ fontSize: 10.5, color: '#ffb4ab', marginTop: 6 }}>{error}</div>}
-        </>
-      )}
-    </div>
-  );
-}
-
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, padding: 16 };
 const panel: CSSProperties = { background: PANEL, border: `1px solid ${BORDER}`, borderRadius: 10, padding: '14px 16px' };
 const panelLabel: CSSProperties = { fontSize: 10.5, letterSpacing: '0.6px', textTransform: 'uppercase', color: MUTED, marginBottom: 10 };
@@ -1533,11 +1276,6 @@ const inputBase: CSSProperties = { background: INPUT_BG, border: `1px solid ${BO
 const goldBtn: CSSProperties = { border: 'none', background: `linear-gradient(180deg,${GOLD},#C9A24B)`, color: '#0c2768', fontWeight: 700, fontSize: 12, padding: '8px 14px', borderRadius: 7, cursor: 'pointer' };
 const ghostBtn: CSSProperties = { fontSize: 11.5, fontWeight: 600, color: '#dfe7fa', background: 'rgba(255,255,255,.05)', border: `1px solid ${BORDER2}`, padding: '8px 12px', borderRadius: 7, cursor: 'pointer' };
 const iconBtn: CSSProperties = { background: 'none', border: `1px solid ${BORDER2}`, color: MUTED, fontSize: 13, lineHeight: 1, padding: '4px 7px', borderRadius: 6, cursor: 'pointer' };
-// Small enough to sit inside a KPI card without crowding the figure.
-const miniGhost: CSSProperties = { ...ghostBtn, padding: '3px 8px', fontSize: 10.5 };
-const miniGold: CSSProperties = { ...goldBtn, padding: '5px 11px', fontSize: 11 };
-// The "this number moves on its own" tag on a synced capital card.
-const syncedPill: CSSProperties = { fontSize: 9, fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: '#8fe3b0', background: 'rgba(53,196,123,.12)', border: '1px solid rgba(53,196,123,.4)', borderRadius: 5, padding: '2px 7px' };
 const codeChip: CSSProperties = { fontSize: 9.5, fontWeight: 700, color: '#bcd0ff', background: 'rgba(120,150,220,.12)', border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '2px 6px', fontFamily: "'IBM Plex Mono', monospace" };
 const sideBadge: CSSProperties = { fontSize: 9, fontWeight: 800, letterSpacing: '0.6px', borderRadius: 4, padding: '2px 6px' };
 const metaChip: CSSProperties = { fontSize: 10, fontWeight: 600, color: MUTED, border: `1px solid ${BORDER2}`, borderRadius: 5, padding: '3px 8px' };

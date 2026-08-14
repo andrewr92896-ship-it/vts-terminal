@@ -746,26 +746,64 @@ workspaces list** (see `theme/nav.ts` order).
       from the screen's `AlertSettings.tsx` only in casing, which is the same
       file on a case-insensitive filesystem and a hard `TS1149` on a
       case-sensitive one.
-  - **The trader's own money is three KPI cards on the Trade Log** — Deposited
-    Capital, Withdrawn Capital, and Total Capital (`CapitalCards` in
-    `TradeLog.tsx`, served by `trading/traderCapital.ts` over
-    `GET|PATCH /api/trading/capital` + `POST /api/trading/capital/sync`;
-    columns on `trading_desk_settings`, migrations `0109`/`0110`). The row could
-    say what the trades made and never what they were made **on**, so "+$378
-    realized" read the same on a $2,000 account as on a $200,000 one.
-    - **Always the VIEWER'S own, and never the desk's** — unlike Live Brokers,
-      which is deliberately desk-wide. The service takes a single id, there is
-      no parameter that could widen it, and the cards do not change with the
-      trader filter. The return on the Deposited card is likewise measured over
-      the viewer's **own** closed rows within the current filters (`t.isMine`):
-      dividing the desk's P/L by one person's deposit is a return nobody earned.
-      The Live Wall's **Desk Metrics** tile restates all three, and takes both
-      rules with it — the figures do not follow that tile's trader picker, and
-      the return is over the viewer's own rows. They are **read-only** there:
-      the Trade Log is the one screen that writes them, so a board tile cannot
-      become a second writer of a number two surfaces already have to agree on.
-    - **Deposited and Withdrawn are each TYPED or SYNCED, chosen per figure**
-      (`deposited_sync` / `withdrawn_sync`). Synced reads the connected OANDA
+  - **Capital is three KPI cards on the Trade Log** — Deposited Capital,
+    Withdrawn Capital, and Total Capital (`workspaces/trading/CapitalCards.tsx`,
+    served by `trading/traderCapital.ts` over
+    `GET|PATCH /api/trading/capital` + `POST /api/trading/capital/sync`). The row
+    could say what the trades made and never what they were made **on**, so
+    "+$378 realized" read the same on a $2,000 account as on a $200,000 one.
+    - **THE FIGURES ARE PER BROKER ACCOUNT, AND THE CARD IS THE TOTAL** (owner
+      instruction, 2026-08; `trading_capital_accounts`, migration `0127`). It was
+      one deposited figure and one withdrawn figure per person, on
+      `trading_desk_settings` — which cannot describe either shape a real desk
+      takes: **several accounts under one login** (a partner whose account the
+      lead connected), where the sync summed every account's funding into one
+      number so "my deposit" was really everybody's and one sync switch governed
+      the lot; and **partners who sign in themselves**, each holding their own.
+      Each `(trader, account)` pair now carries its own deposited and withdrawn
+      figures, each independently typed or synced. `accountKey` is a
+      `broker_connections.id`, or **`'other'`** for capital behind no connected
+      account — a hand-kept book, or a trader with no broker at all.
+      - **No foreign key on `accountKey`, deliberately.** Removing a connection
+        must not delete the record of money that was paid into it; the row
+        survives as "Account no longer connected" and its figure still counts,
+        until the trader clears it themselves.
+      - **The rollup says how it was arrived at** (`CapitalTotal`): how many
+        accounts state a figure, how many state nothing, and whether any of it
+        is automatic. An account stating nothing is **counted, never read as
+        zero**, and accounts in **different currencies refuse to be added** —
+        the same rule Total Capital and Net Worth already follow. `capitalSub`
+        phrases it once, for the card and the Live Wall tile alike.
+      - The old columns are **kept, not dropped**, as the archive.
+        `backfillCapitalAccounts()` carries them across **on boot** rather than
+        in the migration, because splitting one summed figure needs to know
+        which of a trader's connections exist and which can be synced. A sync
+        that was on becomes that same sync on **each** of their OANDA accounts —
+        never the summed figure attributed to one of them, which is a number
+        that account never held — and each row then reads its own. Idempotent:
+        a trader who already has per-account rows is left alone.
+    - **The CARDS are always the VIEWER'S own; WHOSE capital can be set is a
+      parameter.** The cards do not follow the trader filter, and the return
+      beside the Deposited figure is measured over the viewer's **own** closed
+      rows within the current filters (`t.isMine`): dividing the desk's P/L by
+      one person's deposit is a return nobody earned. What is new is the Manage
+      panel's "whose capital" picker — a **desk lead** (group leader holding the
+      Trading Teams grant, or an admin) may read and set a member's, gated by
+      the same `canEditDeskSettingsFor` that already governs how a teammate's
+      results are scored, checked on **every** request. It is what lets a lead
+      keep their own deposit typed by hand while a partner's account beside it
+      syncs itself. Everybody else resolves to their own id, so a public signup
+      is unaffected by construction rather than by a filter somebody has to
+      remember. Reading a member's capital does **not** change the cards behind
+      the panel.
+      The Live Wall's **Desk Metrics** tile restates all three and takes every
+      rule with it — no `userId`, so always the viewer's own; the figures do not
+      follow that tile's trader picker; the return is over the viewer's own
+      rows. They are **read-only** there: the Trade Log is the one screen that
+      writes them, so a board tile cannot become a second writer of a number two
+      surfaces already have to agree on.
+    - **Deposited and Withdrawn are each TYPED or SYNCED, per figure and per
+      account** (`deposited_sync` / `withdrawn_sync`). Synced reads **one**
       account's funding history — `fetchOandaFunding` in `brokers/oanda.ts`
       counts **only `CLIENT_FUNDING`** transfers, because OANDA also files
       transfers between the trader's own sub-accounts and entity migrations as
@@ -773,20 +811,22 @@ workspaces list** (see `theme/nav.ts` order).
       put in". Excluded events are counted and surfaced (`otherTransfers`), and
       a truncated history walk says so rather than understating silently.
     - **The typed and synced figures are SEPARATE columns** (`deposited_capital`
-      vs `synced_deposited`), so turning sync off hands back the trader's own
-      number, and typing a figure returns that card to manual. The synced pair
-      is the **last good reading**: a failed refresh keeps it, stamped, instead
-      of blanking to zero (`stale-while-revalidate`, refreshed on read past a
-      15-minute TTL and immediately by the Sync button — which sits behind an
-      "Are you sure you want to sync?" confirm). Kraken deliberately does not
-      feed the sync: its ledger records "0.5 BTC in", and turning that into
-      dollars needs the price on the day it landed, which the terminal does not
-      have.
+      vs `synced_deposited`), so turning sync off hands back the figure typed on
+      **that** account, and typing a figure returns that one account to manual —
+      leaving every other account, sync included, exactly as it was. That
+      isolation is the whole point of the change. The synced pair is the **last
+      good reading**: a failed refresh keeps it, stamped, instead of blanking to
+      zero (`stale-while-revalidate`, refreshed on read past a 15-minute TTL and
+      immediately by the Sync button — which sits behind an "Are you sure you
+      want to sync?" confirm). Kraken deliberately does not feed the sync: its
+      ledger records "0.5 BTC in", and turning that into dollars needs the price
+      on the day it landed, which the terminal does not have.
     - **Null is "not stated" and is NEVER inherited.** Every other desk setting
-      falls back to the shared `'desk'` row; these are read from the trader's
-      **own** row only, because one trader's deposit is not another's. **Zero is
-      a real answer** and stays distinct from null: the card shows the money
-      with no percentage rather than dividing by zero. These fields are owned by
+      falls back to the shared `'desk'` row; capital is read from the trader's
+      **own** rows only, because one trader's deposit is not another's — and the
+      carry-over skips the `'desk'` row outright. **Zero is a real answer** and
+      stays distinct from null: the card shows the money with no percentage
+      rather than dividing by zero. These figures are owned by
       `traderCapital.ts` and deliberately **not** part of
       `DeskSettings`/`updateDeskSettings` — they have a second, broker-driven
       writer, and two write paths into one number is how the two disagree.
@@ -799,8 +839,13 @@ workspaces list** (see `theme/nav.ts` order).
       the Net Worth rule, since a total quietly missing an account looks
       complete while understating.
     - The funding read is audited as its own `credential_audit` purpose
-      (`funding`, individual rows — a person asked for it); the NAV read rides
-      the existing hourly-aggregated `capital` purpose.
+      (`funding`, individual rows — a person asked for it, and the row is
+      written **after** the broker answers so it carries the real outcome); the
+      NAV read rides the existing hourly-aggregated `capital` purpose.
+    - `npm run db:check-capital` walks all of it through the real services
+      against a scratch database — the per-account isolation and the carry-over
+      above all. Like `db:check-sharing` it **writes**, so it refuses any
+      database that already holds a user. In `verify:db`, so CI runs it.
   - **A narrowed figure SAYS it is narrowed** (`ExcludedTrades` on the
     `/trades` and `/history` payloads; `workspaces/trading/excludedNote.ts` is
     the one place it is phrased). Two settings quietly shrink what the desk
@@ -4987,7 +5032,19 @@ existing parts are left alone. Same writing guard, same scratch-file rule:
     DATABASE_URL="file:/tmp/x.db" npm run db:migrate
     DATABASE_URL="file:/tmp/x.db" npm run db:check-package-add
 
-Both are in `verify:db`, so `npm run verify` and CI run them without being asked.
+**Capital:** `npm run db:check-capital` walks the per-account capital rows
+through the real service, and exists for one invariant above all — **typing over
+one account's figure must leave every other account exactly as it was, sync
+included**, which is what lets a trader hold their own deposit by hand while a
+partner's account beside it keeps syncing. It also covers the boot carry-over
+that splits the old single figure across the accounts it was summing. Same
+writing guard, same scratch-file rule:
+
+    DATABASE_URL="file:/tmp/x.db" npm run db:migrate
+    DATABASE_URL="file:/tmp/x.db" npm run db:check-capital
+
+All three are in `verify:db`, so `npm run verify` and CI run them without being
+asked.
 
 ## Deployment workflow (owner preference)
 

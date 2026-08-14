@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.19';
+export const APP_VERSION = 'Beta V 7.20';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.20',
+    date: 'August 14, 2026',
+    notes: [
+      'Deposited and Withdrawn Capital are now kept per broker account instead of one figure per person. If you hold more than one account, the card shows the total and Manage opens the breakdown — each account set on its own.',
+      'Each account syncs on its own too, so you can type your own deposit in by hand while another account beside it keeps itself in step with the broker.',
+      'A group leader can set a member’s capital from the same panel, and each member’s accounts sync from their own broker.',
+      'Whatever you had before is carried over: a figure that was syncing keeps syncing, now split across the accounts it was adding together.',
+    ],
+  },
   {
     version: 'Beta V 7.19',
     date: 'August 14, 2026',

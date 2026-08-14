@@ -16,6 +16,7 @@
     "db:check-sharing": "tsx src/studies/checkSharing.ts",
     "db:check-alerts": "tsx src/notifications/checkAlerts.ts",
     "db:check-package-add": "tsx src/studies/checkPackageAdd.ts",
+    "db:check-capital": "tsx src/trading/checkCapital.ts",
     "verify:market-macro": "tsx src/trading/verifyMarketMacro.ts",
     "verify:investments": "tsx src/investments/verifyInvestments.ts",
     "verify:migrations": "tsx src/db/verifyMigrations.ts",

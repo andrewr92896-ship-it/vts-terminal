@@ -689,17 +689,25 @@ export const api = {
   saveTicketPresets(patch: Partial<TicketPresets>): Promise<TicketPresets> {
     return request('/api/trading/ticket-presets', { method: 'PUT', body: JSON.stringify(patch) });
   },
-  // The viewer's own capital: deposited, withdrawn, and what their connected
-  // accounts hold right now. Self-only — there is no userId parameter.
-  traderCapital(): Promise<TraderCapital> {
-    return request('/api/trading/capital');
+  // Capital: what was put into each broker account and taken back out, plus
+  // what those accounts hold right now. `userId` reads a group member's, which
+  // only a desk lead may do; omitted, it is the caller's own.
+  traderCapital(userId?: string): Promise<TraderCapital> {
+    return request(`/api/trading/capital${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`);
   },
   updateTraderCapital(patch: CapitalPatch): Promise<TraderCapital> {
     return request('/api/trading/capital', { method: 'PATCH', body: JSON.stringify(patch) });
   },
-  // Turn syncing on for one figure and pull it from the broker now.
-  syncTraderCapital(figure: 'deposited' | 'withdrawn'): Promise<TraderCapital> {
-    return request('/api/trading/capital/sync', { method: 'POST', body: JSON.stringify({ figure }) });
+  // Turn syncing on for one account's figure and pull it from the broker now.
+  syncTraderCapital(
+    account: string,
+    figure: 'deposited' | 'withdrawn',
+    userId?: string,
+  ): Promise<TraderCapital> {
+    return request('/api/trading/capital/sync', {
+      method: 'POST',
+      body: JSON.stringify({ account, figure, userId }),
+    });
   },
   tradingSessions(): Promise<{ sessions: StrategySession[] }> {
     return request('/api/trading/sessions');

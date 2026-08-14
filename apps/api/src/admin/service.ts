@@ -15,6 +15,7 @@ import {
   tradingChallenges,
   tradingDeskSettings,
   tradingBeOverrides,
+  tradingCapitalAccounts,
   tradingNews,
   tradingCalendar,
   aiUsage,
@@ -546,6 +547,8 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // shared 'desk' default row is keyed 'desk', never a userId, so it survives).
     await tx.delete(tradingDeskSettings).where(eq(tradingDeskSettings.id, targetId));
     await tx.delete(tradingBeOverrides).where(eq(tradingBeOverrides.ownerId, targetId));
+    // What they put into each of their accounts and took back out.
+    await tx.delete(tradingCapitalAccounts).where(eq(tradingCapitalAccounts.userId, targetId));
     // Their order ticket's quick-size buttons.
     await tx.delete(ticketPresets).where(eq(ticketPresets.userId, targetId));
     // Notification prefs reference the user on both sides (recipient and the
