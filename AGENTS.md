@@ -1912,6 +1912,30 @@ workspaces list** (see `theme/nav.ts` order).
           with their stored ids and weights. So the handoff asks the creator's
           AI for exactly what fits, and the importer checks the answer against
           the same thing. **Zero VTS AI calls**, like the rest of this path.
+        - **"I ALREADY HAVE THE FILE" IS A SECOND ROUTE, AND IT IS PERMISSIVE**
+          (`finishBlueprint(…, permissive)`). Somebody whose AI has already
+          written the content does not need a prompt composed for them — and
+          the strict blueprint then **refused their file**, because it locks the
+          categories to the package's own and demands an exact question total,
+          neither of which a file written against a different plan can satisfy.
+          A package carrying one category met a file carrying four and was told
+          the categories did not match. So this route sets `categoryAuthor: 'ai'`
+          (unlocks the categories, and drops the per-category targets with it)
+          and `questionCountMode: 'ai_recommend'` (drops the exact total).
+          - **It drops the plan-CONFORMANCE half only.** Every limit, every
+            structural rule and the schema version still block, and a part the
+            package already has is still refused — the checks that keep the
+            package sound are untouched. What goes is the set of demands that
+            could only ever be true of a file written against this very plan.
+          - **`addToPackage` is what makes it land correctly**: a category the
+            package already has is reused by name, and the file's own are
+            appended. The file's structure survives intact rather than being
+            merged into whatever the package happened to carry.
+          - Verified end to end — the web's `finishBlueprint` and
+            `toImportBlueprint` against the server's `validateDocuments`, on a
+            one-category package meeting a four-category file, with the strict
+            blueprint asserted to refuse the same file. The paired service-side
+            case is in `db:check-package-add`.
         - **One importer, not two.** `PackageImport` takes an optional
           `addToPackageId` and changes only where the confirmed content is
           written; the reading, checking and editing are identical. A second

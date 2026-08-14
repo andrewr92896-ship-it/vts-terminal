@@ -251,6 +251,64 @@ async function main() {
   ok('the existing one kept its id', grown.categories.find((c) => c.name === 'Alpha')?.id === pkg2.categories[0].id);
   ok('and the new one was given the next seq', grown.categories.find((c) => c.name === 'Beta')?.seq === 2);
 
+  // The owner's real shape: a package carrying one unrelated category, given a
+  // file their AI wrote against its own four. The file's structure has to
+  // survive intact — this is what the permissive blueprint on the web exists to
+  // let through, and it would be pointless if the service then merged them.
+  section('a file that brings its own categories');
+  const pkg3 = await commitPackage({
+    ownerUserId: ownerId,
+    createdBy: ownerId,
+    name: 'Series 65 again',
+    subject: 'Series 65',
+    description: null,
+    audience: null,
+    depth: null,
+    explanationMode: null,
+    categoryWeightMode: null,
+    categories: [{ importId: 'g', name: 'General', weight: 100 }],
+    questions: [],
+    flashcards: [{ categoryImportId: 'g', term: 'T', definition: 'D' }],
+    presentation: null,
+    lessons: [],
+    source: 'package_import',
+  });
+  const generalId = pkg3.categories[0].id;
+  const withOwn = await addToPackage({
+    packageId: pkg3.id,
+    createdBy: ownerId,
+    categoryWeightMode: 'draw_and_score',
+    categories: [
+      { importId: 'e', name: 'Ethics and Fiduciary Obligations', weight: 30 },
+      { importId: 'r', name: 'Laws, Regulations and Guidelines', weight: 30 },
+      { importId: 'i', name: 'Investment Vehicle Characteristics', weight: 25 },
+      { importId: 'c', name: 'Economic Factors', weight: 15 },
+    ],
+    questions: [q(1, 'e'), q(2, 'r'), q(3, 'i'), q(4, 'c')],
+    flashcards: [],
+    presentation: null,
+    lessons: [],
+    source: 'package_import',
+  });
+  ok('all four are appended alongside the one already there', withOwn.categories.length === 5, `${withOwn.categories.length}`);
+  ok('the existing category kept its id', withOwn.categories.find((c) => c.name === 'General')?.id === generalId);
+  ok(
+    'the new ones were given sequential seqs after it',
+    withOwn.categories
+      .filter((c) => c.name !== 'General')
+      .every((c) => c.seq >= 2 && c.seq <= 5),
+  );
+  ok('and their weights came through', withOwn.categories.find((c) => c.name === 'Ethics and Fiduciary Obligations')?.weight === 30);
+  const linked = await db
+    .select({ categoryId: studyDeckQuestions.categoryId })
+    .from(studyDeckQuestions)
+    .where(eq(studyDeckQuestions.deckId, withOwn.deckId!));
+  ok('every question is linked to one of the new rows', linked.length === 4 && linked.every((x) => !!x.categoryId));
+  ok(
+    'and none of them to the unrelated category the package had',
+    linked.every((x) => x.categoryId !== generalId),
+  );
+
   section('a package that does not exist');
   let missing: string | null = null;
   try {
