@@ -4,6 +4,7 @@ import {
   brokerConnections,
   tradingCapitalAccounts,
   tradingDeskSettings,
+  users,
   type BrokerConnectionKind,
   type TradingCapitalAccountRow,
 } from '../db/schema.js';
@@ -58,6 +59,10 @@ export interface CapitalAccount {
   // A broker_connections id, or OTHER_ACCOUNT.
   key: string;
   label: string;
+  // Whose account it is. Carried so the desk's breakdown can say who each
+  // figure belongs to; a single trader's card has no need to repeat it.
+  ownerId: string;
+  owner: string;
   broker: BrokerConnectionKind | null;
   summary: string | null;
   // False for a paused/removed connection: its figures still count (the money
@@ -93,8 +98,12 @@ export interface CapitalTotal {
 }
 
 export interface TraderCapital {
-  // Whose these are — the caller's own unless a desk lead asked for a member's.
-  userId: string;
+  // Whose these are: one trader's id, or **null for the whole visible desk**.
+  // The cards follow the KPI row's trader filter like every other figure on it,
+  // so this says which scope was answered.
+  userId: string | null;
+  // How many traders the figures cover. One for a person, more for the desk.
+  traders: number;
   deposited: CapitalTotal;
   withdrawn: CapitalTotal;
   // One entry per account that can hold capital, plus the 'other' bucket.
@@ -262,12 +271,16 @@ function oandaCfg(creds: unknown) {
 // the same reason Net Worth refuses an incomplete figure outright. Mixed
 // currencies refuse the total the same way (Kraken's reading is a USD
 // valuation, so it only ever joins a USD desk).
-async function liveTotal(userId: string, actor: AuditActor | undefined): Promise<TotalCache> {
-  const cached = totalCache.get(userId);
+async function liveTotal(traderIds: string[], actor: AuditActor | undefined): Promise<TotalCache> {
+  // Keyed on the whole scope, so a person's card and the desk's are cached
+  // apart rather than one answering for the other.
+  const cacheKey = [...traderIds].sort().join(',');
+  const cached = totalCache.get(cacheKey);
   if (cached && Date.now() - cached.at < TOTAL_TTL_MS) return cached;
 
-  const conns = (await getAllActiveDecrypted(new Set([userId]), { purpose: 'capital', actor })).filter(
-    (c) => c.ownerId === userId && (c.broker === 'oanda' || c.broker === 'kraken'),
+  const scope = new Set(traderIds);
+  const conns = (await getAllActiveDecrypted(scope, { purpose: 'capital', actor })).filter(
+    (c) => scope.has(c.ownerId) && (c.broker === 'oanda' || c.broker === 'kraken'),
   );
   const read = await Promise.all(
     conns.map(async (c): Promise<{ value: number; currency: string } | null | 'failed'> => {
@@ -301,7 +314,7 @@ async function liveTotal(userId: string, actor: AuditActor | undefined): Promise
     currency: currencies.size === 1 ? [...currencies][0] : null,
     hasOanda: conns.some((c) => c.broker === 'oanda'),
   };
-  totalCache.set(userId, next);
+  totalCache.set(cacheKey, next);
   return next;
 }
 
@@ -375,12 +388,22 @@ async function refreshAccounts(
 
 export interface CapitalOptions {
   actor?: AuditActor;
+  // Whether the viewer may change what comes back. The route decides it, since
+  // only the route knows who is asking.
+  canEdit?: boolean;
   // Account keys to refresh now, whatever the age of the stored reading. This is
   // the Sync button; an ordinary read refreshes only what has gone stale.
   refresh?: string[];
 }
 
-export async function getTraderCapital(userId: string, opts: CapitalOptions = {}): Promise<TraderCapital> {
+// One trader's accounts, refreshed where a sync has gone stale. The unit both
+// scopes are built from — a person's card is one of these, the desk's is
+// several concatenated — so the two can never score an account differently.
+async function accountsForTrader(
+  userId: string,
+  owner: string,
+  opts: CapitalOptions,
+): Promise<{ accounts: CapitalAccount[]; otherTransfers: number }> {
   let rows = await capitalRows(userId);
   const slots = await slotsFor(userId, rows);
   const forced = new Set(opts.refresh ?? []);
@@ -403,7 +426,7 @@ export async function getTraderCapital(userId: string, opts: CapitalOptions = {}
   let otherTransfers = 0;
   for (const r of refreshed.values()) if (r) otherTransfers += r.otherTransfers;
 
-  const breakdown: CapitalAccount[] = slots.map((s) => {
+  const accounts: CapitalAccount[] = slots.map((s) => {
     const row = rows.get(s.key);
     const result = refreshed.get(s.key);
     const syncing = !!row?.depositedSync || !!row?.withdrawnSync;
@@ -416,6 +439,8 @@ export async function getTraderCapital(userId: string, opts: CapitalOptions = {}
     return {
       key: s.key,
       label: s.label,
+      ownerId: userId,
+      owner,
       broker: s.broker,
       summary: s.summary,
       active: s.active,
@@ -428,19 +453,39 @@ export async function getTraderCapital(userId: string, opts: CapitalOptions = {}
     };
   });
 
-  const total = await liveTotal(userId, opts.actor);
-  const syncedAt = breakdown.reduce<number | null>(
+  return { accounts, otherTransfers };
+}
+
+async function displayNames(ids: string[]): Promise<Map<string, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({ id: users.id, name: users.displayName })
+    .from(users)
+    .where(inArray(users.id, ids));
+  return new Map(rows.map((r) => [r.id, r.name]));
+}
+
+// Assemble a card from accounts that are already read.
+function assemble(
+  userId: string | null,
+  traders: number,
+  accounts: CapitalAccount[],
+  total: TotalCache,
+  otherTransfers: number,
+  canEdit: boolean,
+): TraderCapital {
+  const syncedAt = accounts.reduce<number | null>(
     (latest, a) => (a.syncedAt != null && (latest == null || a.syncedAt > latest) ? a.syncedAt : latest),
     null,
   );
-  const stale = breakdown.filter((a) => a.note === STALE_NOTE).length;
-  const truncated = breakdown.some((a) => a.note === TRUNCATED_NOTE);
-
+  const stale = accounts.some((a) => a.note === STALE_NOTE);
+  const truncated = accounts.some((a) => a.note === TRUNCATED_NOTE);
   return {
     userId,
-    deposited: rollUp(breakdown, 'deposited'),
-    withdrawn: rollUp(breakdown, 'withdrawn'),
-    breakdown,
+    traders,
+    deposited: rollUp(accounts, 'deposited'),
+    withdrawn: rollUp(accounts, 'withdrawn'),
+    breakdown: accounts,
     total: total.total,
     accounts: total.accounts,
     unreadable: total.unreadable,
@@ -448,9 +493,45 @@ export async function getTraderCapital(userId: string, opts: CapitalOptions = {}
     canSync: total.hasOanda,
     syncedAt,
     otherTransfers,
-    note: stale > 0 ? STALE_NOTE : truncated ? TRUNCATED_NOTE : null,
-    canEdit: true,
+    note: stale ? STALE_NOTE : truncated ? TRUNCATED_NOTE : null,
+    canEdit,
   };
+}
+
+export async function getTraderCapital(userId: string, opts: CapitalOptions = {}): Promise<TraderCapital> {
+  const [{ accounts, otherTransfers }, total] = await Promise.all([
+    displayNames([userId]).then((names) => accountsForTrader(userId, names.get(userId) ?? '', opts)),
+    liveTotal([userId], opts.actor),
+  ]);
+  return assemble(userId, 1, accounts, total, otherTransfers, opts.canEdit ?? true);
+}
+
+// THE WHOLE VISIBLE DESK — what several traders put in between them.
+//
+// The KPI row's trader filter governs these cards like every other figure on it,
+// so "Whole desk" has to mean the desk here too. Showing one person's deposit
+// beside the desk's combined P/L was the fault this replaced: the return it
+// computed was the desk's profit over one member's money, which is nobody's
+// return.
+//
+// Read-only, and that is not a UI decision: a total belonging to several people
+// has no single owner to write it back to, so a figure is set on the person
+// whose account it is.
+export async function getDeskCapital(traderIds: string[], opts: CapitalOptions = {}): Promise<TraderCapital> {
+  const ids = [...new Set(traderIds)];
+  const names = await displayNames(ids);
+  const [perTrader, total] = await Promise.all([
+    Promise.all(ids.map((id) => accountsForTrader(id, names.get(id) ?? '', opts))),
+    liveTotal(ids, opts.actor),
+  ]);
+  return assemble(
+    null,
+    ids.length,
+    perTrader.flatMap((r) => r.accounts),
+    total,
+    perTrader.reduce((sum, r) => sum + r.otherTransfers, 0),
+    false,
+  );
 }
 
 // The Sync button on one account: turn syncing on for one figure and pull it

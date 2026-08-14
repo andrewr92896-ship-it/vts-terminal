@@ -1,4 +1,4 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { useResponsive } from '../../hooks/useMediaQuery';
@@ -17,11 +17,18 @@ import type { CapitalAccount, CapitalFigure, CapitalTotal, TraderCapital } from 
 // the card states the total and says how it was arrived at, and Manage opens the
 // breakdown.
 //
-// **THE CARDS ARE ALWAYS THE VIEWER'S OWN.** Unlike the rest of the KPI row they
-// do not follow the trader filter, and a desk lead reading a member's capital in
-// the Manage panel does not change them — the return beside the Deposited figure
-// is measured over the viewer's own closed trades, so showing somebody else's
-// deposit here would be a return nobody earned.
+// **THE CARDS FOLLOW THE TRADER FILTER**, like every other figure on the KPI row
+// (owner instruction, 2026-08). They used to be the viewer's own whatever the
+// filter said, which put one person's deposit beside another person's results:
+// on "Individual stats — @dale" the card read the viewer's $1,900, and on
+// "Whole desk" it read that same $1,900 as though it were what the desk had put
+// in. The return was then the desk's profit over one member's money, which is
+// nobody's return.
+//
+// So the scope is passed in, and BOTH SIDES OF THE RETURN MOVE TOGETHER: the
+// realized P/L handed to this component is the same selection the card's deposit
+// covers. Whole desk sums the deposits of everyone the viewer can see — which
+// for a trader in no group is just themselves, unchanged.
 
 const GOLD = '#EBCB74';
 const GREEN = '#35c47b';
@@ -39,10 +46,16 @@ const BORDER2 = '#1c3a7a';
 const usd = (n: number) => `${n < 0 ? '-' : ''}$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export function CapitalCards({
+  scope,
   realizedPl,
   showMoney,
   readOnly,
 }: {
+  // Whose figures to show: a trader's id, or '' for the whole visible desk —
+  // the same value the KPI row's trader filter holds.
+  scope: string;
+  // The realized P/L of that same selection. Both sides of the return have to
+  // describe the same people, or the percentage is one nobody earned.
   realizedPl: number;
   showMoney: boolean;
   readOnly: boolean;
@@ -51,16 +64,26 @@ export function CapitalCards({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [manage, setManage] = useState(false);
 
+  const load = useCallback(async () => {
+    const c = await api.traderCapital(scope || 'desk');
+    setCap(c);
+    return c;
+  }, [scope]);
+
   useEffect(() => {
     let alive = true;
+    // Clear on the way out: leaving a stale trader's figures on screen while the
+    // new ones load reads as the filter having done nothing.
+    setCap(null);
+    setLoadError(null);
     api
-      .traderCapital()
+      .traderCapital(scope || 'desk')
       .then((c) => alive && setCap(c))
       .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Could not load capital'));
     return () => {
       alive = false;
     };
-  }, []);
+  }, [scope]);
 
   // One card errored the whole block: these three share a payload, so a load
   // failure is reported once, on the first card, rather than three times.
@@ -75,7 +98,11 @@ export function CapitalCards({
 
   const pct =
     cap?.deposited.value != null && cap.deposited.value > 0 ? (realizedPl / cap.deposited.value) * 100 : null;
-  const canManage = !readOnly && cap != null && cap.canEdit;
+  // Manage is always reachable for somebody who can set anything at all — on the
+  // desk's combined card it opens on the viewer's own, since a total belonging
+  // to several people has no single owner to write back to.
+  const canManage = !readOnly && cap != null;
+  const traders = cap?.traders ?? 1;
 
   return (
     <>
@@ -95,7 +122,7 @@ export function CapitalCards({
           ) : null
         }
         emptySub="not set"
-        setSub="your own closed trades"
+        traders={traders}
       />
       <CapitalFlowCard
         label="Withdrawn Capital"
@@ -107,7 +134,7 @@ export function CapitalCards({
         note={cap?.note ?? null}
         extra={null}
         emptySub="not set"
-        setSub="taken out of your accounts"
+        traders={traders}
       />
       <div style={card}>
         <div style={cardLabel}>{"Total Capital"}</div>
@@ -116,12 +143,12 @@ export function CapitalCards({
         </div>
         <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>
           {cap == null
-            ? 'reading your accounts'
+            ? 'reading the accounts'
             : cap.total == null
               ? cap.accounts > 1
                 ? 'accounts use different currencies'
                 : cap.unreadable > 0
-                  ? 'your broker did not answer'
+                  ? 'the broker did not answer'
                   : 'no broker account connected'
               : `held now · ${cap.accounts} account${cap.accounts === 1 ? '' : 's'}`}
         </div>
@@ -136,9 +163,9 @@ export function CapitalCards({
 
       {manage && cap && (
         <CapitalManager
-          own={cap}
+          card={cap}
           showMoney={showMoney}
-          onOwnChange={setCap}
+          onEdited={() => void load().catch(() => undefined)}
           onClose={() => setManage(false)}
         />
       )}
@@ -151,18 +178,16 @@ export function CapitalCards({
 // answer. Exported because the Live Wall's Desk Metrics tile restates these
 // figures, and one phrasing is what keeps the two from describing the same
 // total differently.
-export function capitalSub(total: CapitalTotal, setSub: string, emptySub: string): string {
+export function capitalSub(total: CapitalTotal, traders: number, emptySub: string): string {
   if (total.mixedCurrency) return 'accounts use different currencies';
   if (total.value == null) return emptySub;
-  const accounts = `${total.stated} account${total.stated === 1 ? '' : 's'}`;
-  const made =
-    total.mode === 'synced'
-      ? `auto · ${accounts}`
-      : total.mode === 'mixed'
-        ? `${accounts}, some auto`
-        : accounts;
-  const left = total.unstated > 0 ? ` · ${total.unstated} not set` : '';
-  return total.stated === 1 && total.unstated === 0 ? setSub : `${made}${left}`;
+  const parts = [
+    traders > 1 ? `${traders} traders` : null,
+    `${total.stated} account${total.stated === 1 ? '' : 's'}`,
+    total.mode === 'synced' ? 'auto' : total.mode === 'mixed' ? 'some auto' : null,
+    total.unstated > 0 ? `${total.unstated} not set` : null,
+  ].filter(Boolean);
+  return parts.join(' · ');
 }
 
 // One of the two flow cards (deposited / withdrawn): the total across the
@@ -177,7 +202,7 @@ function CapitalFlowCard({
   note,
   extra,
   emptySub,
-  setSub,
+  traders,
 }: {
   label: string;
   total: CapitalTotal | null;
@@ -188,7 +213,7 @@ function CapitalFlowCard({
   note: string | null;
   extra: ReactNode;
   emptySub: string;
-  setSub: string;
+  traders: number;
 }) {
   return (
     <div style={card}>
@@ -205,7 +230,7 @@ function CapitalFlowCard({
       </div>
       {extra}
       <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>
-        {!loaded || !total ? 'reading' : capitalSub(total, setSub, emptySub)}
+        {!loaded || !total ? 'reading' : capitalSub(total, traders, emptySub)}
       </div>
       {loaded && total && total.mode !== 'manual' && total.mode !== 'none' && (
         <div style={{ marginTop: 8 }}>
@@ -224,45 +249,65 @@ function CapitalFlowCard({
 // the viewer's. It is the same reach that already governs whose desk settings
 // somebody may change, and the server checks it on every request.
 function CapitalManager({
-  own,
+  card,
   showMoney,
-  onOwnChange,
+  onEdited,
   onClose,
 }: {
-  own: TraderCapital;
+  // The payload the cards are showing. Used as the panel's starting point only
+  // when it is one person's — the desk's combined card belongs to several
+  // people, so there the panel opens on the viewer's own.
+  card: TraderCapital;
   showMoney: boolean;
-  onOwnChange: (cap: TraderCapital) => void;
+  onEdited: () => void;
   onClose: () => void;
 }) {
   const { user } = useAuth();
   const { isPhone } = useResponsive();
-  const [target, setTarget] = useState(own.userId);
-  const [cap, setCap] = useState<TraderCapital>(own);
-  const [loading, setLoading] = useState(false);
+  const selfId = user?.id ?? '';
+  // A member's card the viewer cannot set opens on their own too, rather than
+  // on a panel of controls that would only ever be refused.
+  const opensOn = card.userId && card.canEdit ? card.userId : selfId;
+  const [target, setTarget] = useState(opensOn);
+  const [cap, setCap] = useState<TraderCapital | null>(card.userId === opensOn ? card : null);
+  const [loading, setLoading] = useState(card.userId !== opensOn);
   const [error, setError] = useState<string | null>(null);
 
-  const members = cap.editableMembers ?? own.editableMembers ?? [];
-  const editingSelf = target === own.userId;
+  const members = cap?.editableMembers ?? card.editableMembers ?? [];
+  const editingSelf = target === selfId;
 
   // Whatever comes back is the whole truth about that person's capital, so it
-  // replaces the panel's copy — and the cards behind it too when it is the
-  // viewer's own, which is what keeps the two from disagreeing.
-  function apply(next: TraderCapital) {
+  // replaces the panel's copy; the cards behind re-read their own scope, since
+  // a member's figure moves the desk's total as well as their own.
+  const apply = useCallback((next: TraderCapital) => {
     setCap(next);
-    if (next.userId === own.userId) onOwnChange(next);
-  }
+    onEdited();
+  }, [onEdited]);
 
-  async function switchTarget(id: string) {
+  const loadTarget = useCallback(
+    async (id: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        setCap(await api.traderCapital(id));
+      } catch (e) {
+        setError(e instanceof ApiError ? e.message : 'Could not load that person’s capital');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    // Only when the panel did not open on the card it was given.
+    if (cap == null) void loadTarget(opensOn);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function switchTarget(id: string) {
     setTarget(id);
-    setLoading(true);
-    setError(null);
-    try {
-      apply(await api.traderCapital(id === own.userId ? undefined : id));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Could not load that person’s capital');
-    } finally {
-      setLoading(false);
-    }
+    void loadTarget(id);
   }
 
   async function run(action: () => Promise<TraderCapital>) {
@@ -276,6 +321,7 @@ function CapitalManager({
   }
 
   const whose = editingSelf ? undefined : target;
+  const canEdit = cap?.canEdit ?? false;
 
   return (
     <>
@@ -333,13 +379,13 @@ function CapitalManager({
               <select
                 id="capital-whose"
                 value={target}
-                onChange={(e) => void switchTarget(e.target.value)}
+                onChange={(e) => switchTarget(e.target.value)}
                 disabled={loading}
                 style={{ ...inputBase, fontSize: 13, width: '100%', cursor: loading ? 'default' : 'pointer' }}
               >
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.id === user?.id ? `${m.name} (you)` : m.name}
+                    {m.id === selfId ? `${m.name} (you)` : m.name}
                   </option>
                 ))}
               </select>
@@ -354,7 +400,7 @@ function CapitalManager({
 
           {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginBottom: 12 }}>{error}</div>}
 
-          {loading ? (
+          {loading || !cap ? (
             <div style={{ color: MUTED, fontSize: 13 }}>{"Loading…"}</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -363,6 +409,7 @@ function CapitalManager({
                   key={a.key}
                   account={a}
                   showMoney={showMoney}
+                  canEdit={canEdit}
                   onSave={(which, value) =>
                     run(() =>
                       api.updateTraderCapital({
@@ -403,12 +450,14 @@ function CapitalManager({
 function AccountBlock({
   account,
   showMoney,
+  canEdit,
   onSave,
   onSync,
   onUnsync,
 }: {
   account: CapitalAccount;
   showMoney: boolean;
+  canEdit: boolean;
   onSave: (which: 'deposited' | 'withdrawn', value: number | null) => Promise<void>;
   onSync: (which: 'deposited' | 'withdrawn') => Promise<void>;
   onUnsync: (which: 'deposited' | 'withdrawn') => Promise<void>;
@@ -427,6 +476,7 @@ function AccountBlock({
           label="Deposited"
           figure={account.deposited}
           canSync={account.canSync}
+          canEdit={canEdit}
           showMoney={showMoney}
           onSave={(v) => onSave('deposited', v)}
           onSync={() => onSync('deposited')}
@@ -436,6 +486,7 @@ function AccountBlock({
           label="Withdrawn"
           figure={account.withdrawn}
           canSync={account.canSync}
+          canEdit={canEdit}
           showMoney={showMoney}
           onSave={(v) => onSave('withdrawn', v)}
           onSync={() => onSync('withdrawn')}
@@ -453,6 +504,7 @@ function FigureRow({
   label,
   figure,
   canSync,
+  canEdit,
   showMoney,
   onSave,
   onSync,
@@ -461,6 +513,7 @@ function FigureRow({
   label: string;
   figure: CapitalFigure;
   canSync: boolean;
+  canEdit: boolean;
   showMoney: boolean;
   onSave: (value: number | null) => Promise<void>;
   onSync: () => Promise<void>;
@@ -556,10 +609,12 @@ function FigureRow({
         </span>
         {synced && <span style={syncedPill}>{"Auto"}</span>}
         <div style={{ flex: 1 }} />
-        <button onClick={open} disabled={busy} style={miniGhost}>
-          {figure.value == null && !synced ? 'Set' : 'Edit'}
-        </button>
-        {synced ? (
+        {canEdit && (
+          <button onClick={open} disabled={busy} style={miniGhost}>
+            {figure.value == null && !synced ? 'Set' : 'Edit'}
+          </button>
+        )}
+        {!canEdit ? null : synced ? (
           <button onClick={() => void run(onUnsync)} disabled={busy} style={miniGhost}>{"Turn off"}</button>
         ) : canSync ? (
           <button onClick={confirmSync} disabled={busy} style={miniGhost} title="Keep this figure in step with this account's deposit history">

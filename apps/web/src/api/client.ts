@@ -690,8 +690,9 @@ export const api = {
     return request('/api/trading/ticket-presets', { method: 'PUT', body: JSON.stringify(patch) });
   },
   // Capital: what was put into each broker account and taken back out, plus
-  // what those accounts hold right now. `userId` reads a group member's, which
-  // only a desk lead may do; omitted, it is the caller's own.
+  // what those accounts hold right now. `userId` follows the trader filter — a
+  // person's id, or the literal 'desk' for everyone the caller can see;
+  // omitted, it is the caller's own.
   traderCapital(userId?: string): Promise<TraderCapital> {
     return request(`/api/trading/capital${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`);
   },

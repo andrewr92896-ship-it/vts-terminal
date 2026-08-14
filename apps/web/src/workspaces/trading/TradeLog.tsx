@@ -464,15 +464,13 @@ export function TradeLog() {
     { label: 'Avg Slippage', val: s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage), sub: 'entry vs. plan' },
   ];
 
-  // What the viewer put in, and what their own closed trades have made on it.
-  //
-  // Measured over the viewer's OWN rows within whatever is on screen
-  // (`t.isMine`), never the desk's: on a team the log carries teammates' trades
-  // too, and dividing the desk's P/L by one person's deposit would be a return
-  // nobody earned. The day/month filters still apply, so the reading always
-  // describes the selection in front of you.
-  const myClosedPl = shownTrades
-    .filter((t) => t.isMine && t.status === 'closed' && t.realizedPl != null)
+  // The realized P/L the Deposited card divides by, over the SAME selection the
+  // card's deposit covers — one trader when the filter names one, the whole desk
+  // otherwise. The two used to disagree: the deposit was always the viewer's own
+  // while this filtered to their rows, so reading a teammate's stats showed the
+  // viewer's deposit against no P/L at all. The day/month filters apply to both.
+  const scopeClosedPl = shownTrades
+    .filter((t) => t.status === 'closed' && t.realizedPl != null)
     .reduce((sum, t) => sum + (t.realizedPl as number), 0);
 
   return (
@@ -602,7 +600,7 @@ export function TradeLog() {
             <div style={{ fontSize: 10.5, color: FAINT, marginTop: 4 }}>{k.sub}</div>
           </div>
         ))}
-        <CapitalCards realizedPl={myClosedPl} showMoney={showMoney} readOnly={readOnly} />
+        <CapitalCards scope={trader} realizedPl={scopeClosedPl} showMoney={showMoney} readOnly={readOnly} />
       </div>
 
       {/* Per-strategy / per-instrument breakdown, folded in from History. Only

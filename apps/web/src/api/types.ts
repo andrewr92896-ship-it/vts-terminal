@@ -1694,6 +1694,8 @@ export const OTHER_ACCOUNT = 'other';
 export interface CapitalAccount {
   key: string; // a broker connection id, or OTHER_ACCOUNT
   label: string;
+  ownerId: string; // whose account it is — the desk's breakdown says who
+  owner: string;
   broker: string | null;
   summary: string | null;
   active: boolean; // false for a paused or removed connection
@@ -1712,7 +1714,10 @@ export interface CapitalTotal {
   mixedCurrency: boolean; // accounts in different currencies refuse to be added
 }
 export interface TraderCapital {
-  userId: string; // whose these are
+  // Whose these are: one trader's id, or null for the whole visible desk. The
+  // cards follow the KPI row's trader filter like every other figure on it.
+  userId: string | null;
+  traders: number; // how many people the figures cover
   deposited: CapitalTotal;
   withdrawn: CapitalTotal;
   breakdown: CapitalAccount[];

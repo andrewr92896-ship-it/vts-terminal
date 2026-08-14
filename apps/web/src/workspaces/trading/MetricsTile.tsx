@@ -33,9 +33,9 @@ function fmtPrice(n: number | null): string {
 // the trader's own capital. Every figure is computed by the shared functions the
 // Trade Log calls, so the two screens can never disagree about a number.
 //
-// Team-scoped like the Trade Log for the trade figures; the capital cards are
-// always the VIEWER'S own (see below). Polls on its own interval and keeps the
-// last snapshot on a failed refresh.
+// Team-scoped like the Trade Log, and the capital cells follow this tile's own
+// trader picker with everything else (see below). Polls on its own interval and
+// keeps the last snapshot on a failed refresh.
 export function MetricsTile({
   tile,
   editing,
@@ -190,7 +190,7 @@ export function MetricsTile({
               sub="if closed now"
             />
             <Stat label="Avg Slippage" value={s.avgSlippage == null ? '—' : fmtPrice(s.avgSlippage)} sub="entry vs. plan" />
-            <CapitalStats trades={data.trades} showMoney={showMoney} />
+            <CapitalStats trades={shownTrades} trader={activeTrader} showMoney={showMoney} />
           </div>
         )}
       </div>
@@ -201,14 +201,14 @@ export function MetricsTile({
 // The trader's own money — Deposited, Withdrawn and Total Capital — as three
 // more cells on the same grid.
 //
-// ALWAYS THE VIEWER'S OWN, and deliberately unaffected by the tile's trader
-// picker: this reads with no `userId`, so it is the caller's own capital even
-// though a desk lead may set a member's from the screen. The return on the
-// Deposited card is likewise measured over the viewer's OWN closed rows
-// (`t.isMine`) — dividing the desk's P/L by one person's deposit is a return
-// nobody earned.
+// THEY FOLLOW THE TILE'S TRADER PICKER, like the screen's cards follow its
+// filter and like every other figure in this tile: pinning the tile to one
+// trader shows that trader's deposit against that trader's results, and the
+// whole desk shows what everyone the viewer can see put in between them. Both
+// sides of the return move together — a deposit read beside somebody else's P/L
+// is a percentage nobody earned, which is what this used to draw.
 //
-// Deposited and Withdrawn are each a total across the viewer's broker accounts,
+// Deposited and Withdrawn are each a total across that scope's broker accounts,
 // which is why the sub-line says how many accounts it covers and how many state
 // nothing: a figure that leaves an account out must say so rather than reading
 // as complete. `capitalSub` is shared with the screen so the two cannot phrase
@@ -216,13 +216,29 @@ export function MetricsTile({
 //
 // Read-only here. The figures are typed or synced from Closed Trades & Metrics,
 // which is the one screen that owns them; a board tile states what they are.
-function CapitalStats({ trades, showMoney }: { trades: TradeLogData['trades']; showMoney: boolean }) {
-  const { data: cap, error } = useTileData('trading:trader-capital', () => api.traderCapital(), CAPITAL_MS);
+function CapitalStats({
+  trades,
+  trader,
+  showMoney,
+}: {
+  // Already narrowed to the tile's scope, so the P/L below covers exactly the
+  // people the capital does.
+  trades: TradeLogData['trades'];
+  trader: string;
+  showMoney: boolean;
+}) {
+  // The key names the scope, or every tile on a board would show the first
+  // one's figures — the shared-fetch rule for useTileData.
+  const { data: cap, error } = useTileData(
+    `trading:trader-capital:${trader || 'desk'}`,
+    () => api.traderCapital(trader || 'desk'),
+    CAPITAL_MS,
+  );
 
-  const myClosedPl = trades
-    .filter((t) => t.isMine && t.status === 'closed' && t.realizedPl != null)
+  const scopeClosedPl = trades
+    .filter((t) => t.status === 'closed' && t.realizedPl != null)
     .reduce((sum, t) => sum + (t.realizedPl as number), 0);
-  const pct = cap?.deposited.value != null && cap.deposited.value > 0 ? (myClosedPl / cap.deposited.value) * 100 : null;
+  const pct = cap?.deposited.value != null && cap.deposited.value > 0 ? (scopeClosedPl / cap.deposited.value) * 100 : null;
 
   // These three share one payload, so a load failure is reported once rather
   // than three times over.
@@ -238,24 +254,24 @@ function CapitalStats({ trades, showMoney }: { trades: TradeLogData['trades']; s
         value={flow(cap?.deposited.value)}
         pips={pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% return` : undefined}
         pipsColor={pct != null && pct < 0 ? RED : GREEN}
-        sub={cap == null ? 'reading' : capitalSub(cap.deposited, 'your own closed trades', 'not set')}
+        sub={cap == null ? 'reading' : capitalSub(cap.deposited, cap.traders, 'not set')}
       />
       <Stat
         label="Withdrawn Capital"
         value={flow(cap?.withdrawn.value)}
-        sub={cap == null ? 'reading' : capitalSub(cap.withdrawn, 'taken out of the account', 'not set')}
+        sub={cap == null ? 'reading' : capitalSub(cap.withdrawn, cap.traders, 'not set')}
       />
       <Stat
         label="Total Capital"
         value={flow(cap?.total)}
         sub={
           cap == null
-            ? 'reading your accounts'
+            ? 'reading the accounts'
             : cap.total == null
               ? cap.accounts > 1
                 ? 'accounts use different currencies'
                 : cap.unreadable > 0
-                  ? 'your broker did not answer'
+                  ? 'the broker did not answer'
                   : 'no broker account connected'
               : `held now · ${cap.accounts} account${cap.accounts === 1 ? '' : 's'}`
         }

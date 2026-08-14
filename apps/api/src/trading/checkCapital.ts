@@ -30,6 +30,7 @@ import { brokerConnections, tradingCapitalAccounts, tradingDeskSettings, users }
 import { encryptSecret } from '../security/secretbox.js';
 import {
   backfillCapitalAccounts,
+  getDeskCapital,
   getTraderCapital,
   updateTraderCapital,
   OTHER_ACCOUNT,
@@ -190,6 +191,21 @@ async function main() {
     refused = true;
   }
   ok('a stranger’s account cannot be written to', refused);
+
+  section('the whole desk is the traders added together');
+  // The card follows the KPI row's trader filter, so "Whole desk" has to mean
+  // the desk here too — one person's deposit standing in for everybody's was
+  // the fault this replaced.
+  await updateTraderCapital(dale, { account: dalesOwn, deposited: 40000 });
+  const desk = await getDeskCapital([andrew, dale]);
+  ok('it covers both traders', desk.traders === 2);
+  ok('and adds their deposits', desk.deposited.value === 15000 + 40000);
+  ok('the breakdown says whose each account is', desk.breakdown.some((a) => a.ownerId === dale && a.owner === 'dale'));
+  ok('it belongs to no single trader', desk.userId === null);
+  // A total belonging to several people has no one owner to write it back to.
+  ok('and is read-only', !desk.canEdit);
+  const solo = await getDeskCapital([andrew]);
+  ok('a desk of one reads as one trader', solo.traders === 1 && solo.deposited.value === 15000);
 
   section('two traders never combine');
   await updateTraderCapital(dale, { account: dalesOwn, deposited: 250000 });

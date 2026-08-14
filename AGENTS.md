@@ -782,26 +782,41 @@ workspaces list** (see `theme/nav.ts` order).
         never the summed figure attributed to one of them, which is a number
         that account never held — and each row then reads its own. Idempotent:
         a trader who already has per-account rows is left alone.
-    - **The CARDS are always the VIEWER'S own; WHOSE capital can be set is a
-      parameter.** The cards do not follow the trader filter, and the return
-      beside the Deposited figure is measured over the viewer's **own** closed
-      rows within the current filters (`t.isMine`): dividing the desk's P/L by
-      one person's deposit is a return nobody earned. What is new is the Manage
-      panel's "whose capital" picker — a **desk lead** (group leader holding the
-      Trading Teams grant, or an admin) may read and set a member's, gated by
-      the same `canEditDeskSettingsFor` that already governs how a teammate's
-      results are scored, checked on **every** request. It is what lets a lead
-      keep their own deposit typed by hand while a partner's account beside it
-      syncs itself. Everybody else resolves to their own id, so a public signup
-      is unaffected by construction rather than by a filter somebody has to
-      remember. Reading a member's capital does **not** change the cards behind
-      the panel.
-      The Live Wall's **Desk Metrics** tile restates all three and takes every
-      rule with it — no `userId`, so always the viewer's own; the figures do not
-      follow that tile's trader picker; the return is over the viewer's own
-      rows. They are **read-only** there: the Trade Log is the one screen that
-      writes them, so a board tile cannot become a second writer of a number two
-      surfaces already have to agree on.
+    - **THE CARDS FOLLOW THE TRADER FILTER**, like every other figure on the KPI
+      row (owner instruction, 2026-08). They were the viewer's own whatever the
+      filter said, which put one person's deposit beside another person's
+      results: on "Individual stats — @dale" the card read the viewer's $1,900,
+      and on "Whole desk" that same $1,900 stood in for what the desk had put
+      in. **`?userId=` is the scope** — a trader's id, or **`desk`** for the
+      whole visible desk (`getDeskCapital`, the traders' accounts concatenated
+      and rolled up, `userId: null`, `traders: n`).
+      - **BOTH SIDES OF THE RETURN MOVE TOGETHER**, which is the rule that
+        replaces the old one. The screen hands the card the realized P/L of the
+        **same selection** the deposit covers, so a percentage always describes
+        one set of people. The old pairing was the reverse of safe: the
+        viewer's deposit under a teammate's P/L, or the desk's P/L over one
+        member's money.
+      - **Reading is bounded by `visibleTraderIds`; writing stays on
+        `canEditDeskSettingsFor`.** Reading follows the boundary that already
+        decides whose trades are on the screen these figures sit on — so a
+        deposit is never shown to somebody who cannot see the trades it
+        explains, and a trader in no group resolves to themselves by
+        construction. Setting a member's is narrower: a **desk lead** (group
+        leader holding the Trading Teams grant, or an admin), the same gate
+        that governs how a teammate's results are scored, checked on **every**
+        request. That is what lets a lead keep their own deposit typed by hand
+        while a partner's account beside it syncs itself.
+      - **The desk's combined card is READ-ONLY**, and not as a UI choice: a
+        total belonging to several people has no single owner to write it back
+        to. Manage there opens on the **viewer's own**, with the "whose
+        capital" picker for a lead — a figure is always set on the person whose
+        account it is.
+      The Live Wall's **Desk Metrics** tile follows its own trader picker the
+      same way, with the same paired P/L, and keys its fetch on the scope (two
+      tiles pinned to different traders otherwise share one answer — the
+      `useTileData` rule). They stay **read-only** there: the Trade Log is the
+      one screen that writes them, so a board tile cannot become a second writer
+      of a number two surfaces already have to agree on.
     - **Deposited and Withdrawn are each TYPED or SYNCED, per figure and per
       account** (`deposited_sync` / `withdrawn_sync`). Synced reads **one**
       account's funding history — `fetchOandaFunding` in `brokers/oanda.ts`

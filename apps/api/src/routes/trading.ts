@@ -31,7 +31,7 @@ import { getTicketPresets, setTicketPresets } from '../trading/ticketPresets.js'
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { visibleTraderIds } from '../trading/scope.js';
-import { getTraderCapital, syncCapital, updateTraderCapital } from '../trading/traderCapital.js';
+import { getDeskCapital, getTraderCapital, syncCapital, updateTraderCapital } from '../trading/traderCapital.js';
 import {
   addChallenge,
   getOwnChallenge,
@@ -353,14 +353,32 @@ export async function tradingRoutes(app: FastifyInstance) {
   //
   // On the `write` guard for the same reason the desk-wide capital below is — it
   // reports balances, and that is the floor the desk asked for.
+  // `?userId=` names whose capital to answer with, and follows the KPI row's
+  // trader filter: a trader's id, or **`desk`** for everyone the caller can
+  // already see. READING is bounded by `visibleTraderIds` — the same boundary
+  // that decides whose trades are on the screen these figures sit on, so the
+  // deposit and the P/L it is divided by always describe the same people.
+  // WRITING stays on `canEditDeskSettingsFor`, which is narrower.
   app.get('/api/trading/capital', write, async (request, reply) => {
     const me = request.currentUser!;
     const target = (request.query as { userId?: string }).userId?.trim() || me.id;
-    if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
+    const actor = auditActorFor(request);
+
+    if (target === 'desk') {
+      const ids = await visibleTraderIds(me);
+      const [capital, editableMembers] = await Promise.all([
+        getDeskCapital([...ids], { actor }),
+        editableDeskMembers(me),
+      ]);
+      return { ...capital, editableMembers };
+    }
+
+    if (target !== me.id && !(await visibleTraderIds(me)).has(target)) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
+    const canEdit = target === me.id || (await canEditDeskSettingsFor(me, target));
     const [capital, editableMembers] = await Promise.all([
-      getTraderCapital(target, { actor: auditActorFor(request) }),
+      getTraderCapital(target, { actor, canEdit }),
       editableDeskMembers(me),
     ]);
     return { ...capital, editableMembers };
