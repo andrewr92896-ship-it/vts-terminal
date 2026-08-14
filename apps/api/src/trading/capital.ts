@@ -2,6 +2,7 @@ import { getAllActiveDecrypted, type OandaCreds } from './connections.js';
 import { fetchOandaAccountSummary, fetchOandaClosedTrades } from './brokers/oanda.js';
 import { pnlWindows, type PnlWindows } from './pnl.js';
 import { visibleTraderIds, type Viewer } from './scope.js';
+import { capitalByConnection } from './traderCapital.js';
 
 // Re-export under the legacy name so existing imports keep working.
 export type OandaPnl = PnlWindows;
@@ -23,6 +24,11 @@ export interface OandaCapitalAccount {
   marginUsed: number | null;
   marginAvailable: number | null;
   openTradeCount: number | null;
+  // What was put into this account and taken back out — the figures the capital
+  // cards keep, read here so a panel saying what an account is worth can also
+  // say what went into it. Null when nothing has been stated for it.
+  deposited: number | null;
+  withdrawn: number | null;
   pnl: OandaPnl | null; // capital gained from trades; null if history couldn't be read
   ok: boolean;
   error: string | null;
@@ -37,6 +43,9 @@ export interface OandaCapital {
   balance: number | null;
   nav: number | null;
   unrealizedPl: number | null;
+  // Deposited across the accounts, on the same single-currency rule as the rest
+  // of these totals. Null when nothing was stated anywhere.
+  deposited: number | null;
   pnl: OandaPnl | null; // combined capital gained from trades (single-currency only)
   generatedAt: number;
 }
@@ -55,8 +64,23 @@ export async function getOandaCapital(viewer: Viewer): Promise<OandaCapital> {
   );
   const generatedAt = Date.now();
   if (conns.length === 0) {
-    return { configured: false, accounts: [], currency: null, balance: null, nav: null, unrealizedPl: null, pnl: null, generatedAt };
+    return {
+      configured: false,
+      accounts: [],
+      currency: null,
+      balance: null,
+      nav: null,
+      unrealizedPl: null,
+      deposited: null,
+      pnl: null,
+      generatedAt,
+    };
   }
+
+  // Read once for the whole scope: what was put into each of these accounts.
+  // Stored figures only — a NAV panel must never be what triggers a funding
+  // sync at the broker.
+  const paidIn = await capitalByConnection(conns.map((c) => c.id));
 
   const accounts: OandaCapitalAccount[] = await Promise.all(
     conns.map(async (c) => {
@@ -80,6 +104,8 @@ export async function getOandaCapital(viewer: Viewer): Promise<OandaCapital> {
           marginUsed: cap.marginUsed,
           marginAvailable: cap.marginAvailable,
           openTradeCount: cap.openTradeCount,
+          deposited: paidIn.get(c.id)?.deposited ?? null,
+          withdrawn: paidIn.get(c.id)?.withdrawn ?? null,
           pnl: trades ? pnlWindows(trades.map((t) => ({ ms: t.closeTimeMs, pl: t.realizedPl })), generatedAt) : null,
           ok: true,
           error: null,
@@ -96,6 +122,10 @@ export async function getOandaCapital(viewer: Viewer): Promise<OandaCapital> {
           marginUsed: null,
           marginAvailable: null,
           openTradeCount: null,
+          // An account that would not answer still knows what was paid into it:
+          // that figure is stored here, not read from the broker.
+          deposited: paidIn.get(c.id)?.deposited ?? null,
+          withdrawn: paidIn.get(c.id)?.withdrawn ?? null,
           pnl: null,
           ok: false,
           error: err instanceof Error ? err.message : 'Fetch failed',
@@ -131,6 +161,15 @@ export async function getOandaCapital(viewer: Viewer): Promise<OandaCapital> {
     balance: sameCcy ? sum((a) => a.balance) : null,
     nav: sameCcy ? sum((a) => a.nav) : null,
     unrealizedPl: sameCcy ? sum((a) => a.unrealizedPl) : null,
+    // Summed over EVERY account, not only the ones that answered: a deposit is
+    // stored here, so an account the broker would not read still knows what
+    // went into it and belongs in the total.
+    deposited: sameCcy
+      ? (() => {
+          const vals = accounts.map((a) => a.deposited).filter((v): v is number => v != null);
+          return vals.length ? Number(vals.reduce((s, v) => s + v, 0).toFixed(2)) : null;
+        })()
+      : null,
     pnl: combinedPnl,
     generatedAt,
   };

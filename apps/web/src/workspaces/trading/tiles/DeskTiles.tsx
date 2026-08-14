@@ -437,7 +437,23 @@ export function CapitalTile({ tile, editing, onRemove }: TileProps) {
         <TileStat
           label="Total capital"
           value={privacy ? HIDDEN : money(data.nav, data.currency ?? 'USD')}
-          sub={data.pnl ? <span style={{ color: plColor(data.pnl.daily) }}>{signedMoney(privacy ? null : data.pnl.daily)} today</span> : null}
+          sub={
+            <>
+              {/* What went in, beside what it is worth now — the pair the tile
+                  could not state before. */}
+              {data.deposited != null && (
+                <span style={{ color: FAINT }}>
+                  {privacy ? HIDDEN : money(data.deposited, data.currency ?? 'USD')} in
+                </span>
+              )}
+              {data.deposited != null && data.pnl && <span style={{ color: FAINT }}>{' · '}</span>}
+              {data.pnl && (
+                <span style={{ color: plColor(data.pnl.daily) }}>
+                  {signedMoney(privacy ? null : data.pnl.daily)} today
+                </span>
+              )}
+            </>
+          }
         />
       )}
       {accounts.map((a) => (
@@ -454,9 +470,19 @@ export function CapitalTile({ tile, editing, onRemove }: TileProps) {
           {/* A connection that would not answer says so rather than reading as
               an account worth nothing. */}
           {!a.ok && a.error ? (
-            <div style={{ fontSize: 10, color: '#ffb4ab', lineHeight: 1.45 }}>{a.error}</div>
+            <>
+              <div style={{ fontSize: 10, color: '#ffb4ab', lineHeight: 1.45 }}>{a.error}</div>
+              {a.deposited != null && (
+                <div style={{ fontSize: 9.5, color: FAINT, fontFamily: MONO }}>
+                  {privacy ? HIDDEN : money(a.deposited, a.currency)} in
+                </div>
+              )}
+            </>
           ) : (
             <div style={{ display: 'flex', gap: 10, fontSize: 9.5, color: FAINT, fontFamily: MONO }}>
+              {/* Deposited leads the row: it is what the figure above is a
+                  return ON, and it is stated per account now. */}
+              {a.deposited != null && <span>{privacy ? HIDDEN : money(a.deposited, a.currency)} in</span>}
               {a.pnl && <span style={{ color: plColor(a.pnl.daily) }}>{signedMoney(privacy ? null : a.pnl.daily)} today</span>}
               {a.unrealizedPl != null && (
                 <span style={{ color: plColor(a.unrealizedPl) }}>{signedMoney(privacy ? null : a.unrealizedPl)} open</span>

@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.21';
+export const APP_VERSION = 'Beta V 7.22';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.22',
+    date: 'August 14, 2026',
+    notes: [
+      'The Live Wall’s Broker Capital tile now shows what was deposited into each account beside what it is worth now, with the total at the top. Live Brokers shows the same.',
+      'An account your broker will not answer for still shows its deposit — that figure is kept here, not read from the broker.',
+    ],
+  },
   {
     version: 'Beta V 7.21',
     date: 'August 14, 2026',

@@ -108,9 +108,13 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
         <span style={{ fontSize: 10.5, color: FAINT }}>{"From the OANDA API — updates as trades are placed"}</span>
       </div>
 
-      {/* Headline NAV / balance / open P/L (combined when one currency) */}
-      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(3,1fr)', gap: 14 }}>
+      {/* Headline NAV / balance / open P/L (combined when one currency), plus
+          what was paid in — the figure the capital cards keep, read here so the
+          panel that says what an account is worth also says what went into it.
+          Set from Closed Trades & Metrics; this only reports it. */}
+      <div style={{ display: 'grid', gridTemplateColumns: isPhone ? '1fr' : 'repeat(4,1fr)', gap: 14 }}>
         <Stat label="Capital (NAV)" value={m(oanda.nav)} big />
+        <Stat label="Deposited" value={m(oanda.deposited)} />
         <Stat label="Balance" value={m(oanda.balance)} />
         <Stat label="Open P/L" value={m(oanda.unrealizedPl)} color={oanda.unrealizedPl == null ? undefined : upPl ? GREEN : RED} />
       </div>
@@ -139,8 +143,9 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
               {a.ok ? (
                 <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', fontFamily: "'IBM Plex Mono', monospace" }}>
                   <span style={{ fontSize: 12, color: MUTED }}>
-                    NAV <b style={{ color: '#fff' }}>{m(a.nav, a.currency)}</b> · Bal {m(a.balance, a.currency)} · Open P/L{' '}
-                    <b style={{ color: (a.unrealizedPl ?? 0) >= 0 ? GREEN : RED }}>{m(a.unrealizedPl, a.currency)}</b>
+                    NAV <b style={{ color: '#fff' }}>{m(a.nav, a.currency)}</b>
+                    {a.deposited != null && <> · In {m(a.deposited, a.currency)}</>} · Bal {m(a.balance, a.currency)} ·
+                    Open P/L <b style={{ color: (a.unrealizedPl ?? 0) >= 0 ? GREEN : RED }}>{m(a.unrealizedPl, a.currency)}</b>
                   </span>
                   {a.pnl && (
                     <span style={{ fontSize: 11, color: FAINT }}>
@@ -151,7 +156,16 @@ function OandaCapitalCard({ oanda, showMoney, isPhone }: { oanda: OandaCapital; 
                   )}
                 </span>
               ) : (
-                <span style={{ fontSize: 11.5, color: RED }}>Couldn’t reach: {a.error}</span>
+                <span style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
+                  <span style={{ fontSize: 11.5, color: RED }}>Couldn’t reach: {a.error}</span>
+                  {/* The deposit is stored here, so an account the broker would
+                      not answer for still knows what went into it. */}
+                  {a.deposited != null && (
+                    <span style={{ fontSize: 11, color: FAINT, fontFamily: "'IBM Plex Mono', monospace" }}>
+                      In {m(a.deposited, a.currency)}
+                    </span>
+                  )}
+                </span>
               )}
             </div>
           ))}

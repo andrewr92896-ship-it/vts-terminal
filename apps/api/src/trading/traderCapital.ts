@@ -505,6 +505,34 @@ function assemble(
   };
 }
 
+// What was put into (and taken out of) each of the named broker accounts, for a
+// surface that is already listing those accounts — Live Brokers and its Live
+// Wall tile, which say what each account is worth right now and had nothing to
+// say about what went into it.
+//
+// It reads the stored rows and nothing else: no broker call, no refresh. The
+// figures are kept current by the capital cards, and a NAV panel must not
+// become a second thing that triggers a funding sync.
+export async function capitalByConnection(
+  connectionIds: string[],
+): Promise<Map<string, { deposited: number | null; withdrawn: number | null }>> {
+  const out = new Map<string, { deposited: number | null; withdrawn: number | null }>();
+  if (connectionIds.length === 0) return out;
+  const rows = await db
+    .select()
+    .from(tradingCapitalAccounts)
+    .where(inArray(tradingCapitalAccounts.accountKey, connectionIds));
+  for (const row of rows) {
+    // The same typed-or-synced rule the cards read, so the two surfaces cannot
+    // disagree about which figure is the live one.
+    out.set(row.accountKey, {
+      deposited: figure(row, 'deposited').value,
+      withdrawn: figure(row, 'withdrawn').value,
+    });
+  }
+  return out;
+}
+
 export async function getTraderCapital(userId: string, opts: CapitalOptions = {}): Promise<TraderCapital> {
   const [{ accounts, otherTransfers }, total] = await Promise.all([
     displayNames([userId]).then((names) => accountsForTrader(userId, names.get(userId) ?? '', opts)),

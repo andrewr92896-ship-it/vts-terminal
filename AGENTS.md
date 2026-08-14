@@ -866,6 +866,17 @@ workspaces list** (see `theme/nav.ts` order).
       answer is **left out and counted** (`unreadable`, named on the card) —
       the Net Worth rule, since a total quietly missing an account looks
       complete while understating.
+    - **Live Brokers and its Live Wall tile state what was PAID IN beside what
+      each account is worth** (`capitalByConnection`, read into
+      `getOandaCapital`). That panel could say an account holds $2,416 and
+      nothing about the money that went into it, which is half the question a
+      capital screen is being asked. It reads the **stored rows only** — no
+      broker call, no refresh — because the capital cards own that refreshing
+      and a NAV panel must not become a second thing that triggers a funding
+      sync. It applies the same typed-or-synced rule the cards do, so the two
+      cannot disagree about which figure is the live one, and an account the
+      broker would **not** answer for still reports its deposit (that figure is
+      stored here, not read from the broker) rather than showing only an error.
     - The funding read is audited as its own `credential_audit` purpose
       (`funding`, individual rows — a person asked for it, and the row is
       written **after** the broker answers so it carries the real outcome); the
