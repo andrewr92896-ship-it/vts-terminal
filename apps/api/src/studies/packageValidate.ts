@@ -259,8 +259,9 @@ function assemble(docs: unknown[], blueprint: ImportBlueprint, ctx: Ctx): RawPac
   }
   if (ctx.errors.length) return null;
 
-  // Every document must belong to THIS plan. Combining two plans would produce
-  // a package with one plan's categories and another's questions.
+  // Every document must belong to ONE plan. Combining two would produce a
+  // package with one plan's categories and another's questions, which nothing
+  // downstream could untangle — so this stays an error.
   const ids = docs.map((d) => trimmed(obj(d)?.blueprintId));
   const distinct = [...new Set(ids)];
   if (distinct.length > 1) {
@@ -271,13 +272,29 @@ function assemble(docs: unknown[], blueprint: ImportBlueprint, ctx: Ctx): RawPac
     );
     return null;
   }
+  // A plan id that does not match the one being imported into is a WARNING, not
+  // a refusal, and the difference is the whole point of it.
+  //
+  // The id is import identity — it is never stored, and nothing downstream
+  // reads it. All it establishes is that these parts came from one handoff,
+  // which the check above has already settled. What it cannot establish is
+  // whether the CONTENT belongs here, and every check that can — the
+  // categories, the per-category counts, the limits, the structure — still runs
+  // below and still blocks. So a genuinely wrong file is refused on its
+  // content, exactly as it was.
+  //
+  // Refusing on the id alone had one real victim and no beneficiary: a creator
+  // whose saved plan was gone (a cleared browser, a second device, a package
+  // created since) could not re-enter an equivalent plan and import the file
+  // their AI had already built, because re-answering the questions mints a new
+  // id. A day's work in somebody else's model, unusable, over a value the
+  // terminal throws away on commit.
   if (distinct[0] !== blueprint.blueprintId) {
-    err(
+    warn(
       ctx,
       'wrong_blueprint',
-      'This package was built from a different handoff than the plan you are importing into. Copy the handoff from this plan and try again.',
+      'This package was built from a different handoff than the plan you are importing into. It will be checked against this plan instead — make sure it is the package you meant.',
     );
-    return null;
   }
 
   if (anyWhole && anyPart) {

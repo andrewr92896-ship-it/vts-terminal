@@ -10,7 +10,8 @@ import { PackageWizard, type WizardResult } from './wizard/PackageWizard';
 import { PackageHandoff } from './wizard/PackageHandoff';
 import { ManualEntry } from './wizard/ManualEntry';
 import { PackageDone } from './wizard/PackageDone';
-import { clearDraft } from './wizard/draft';
+import { clearDraft, loadDraft, setDraftStage } from './wizard/draft';
+import { needsExternalAi } from './wizard/blueprint';
 
 // The "Study Creation" section — the one place a team builds its own study
 // content. Three makers: study games (quizzes), flashcard sets (term/definition
@@ -30,6 +31,30 @@ import { clearDraft } from './wizard/draft';
 // they stay directly reachable for anyone who would rather skip the questions.
 type Maker = 'games' | 'flashcards' | 'guides';
 
+/**
+ * The ending the creator was standing on, if they left one.
+ *
+ * The AI handoff is a screen somebody is MEANT to walk away from — they take
+ * the prompt to their own AI and come back, sometimes the next day — and its
+ * paste box was React state, so leaving lost it with no way back to it from
+ * anywhere. Reopening the wizard was not the way back either: it restored the
+ * questions, and finishing them again minted a new draft id, which the importer
+ * refuses a file built against the old one for.
+ *
+ * The route is DERIVED rather than stored, from the same `needsExternalAi` the
+ * wizard's own finish button reads, so a resumed ending can never be a
+ * different ending than the one that was left.
+ */
+function resumeEnding(userId: string): WizardResult | null {
+  const saved = loadDraft(userId);
+  if (!saved || saved.stage !== 'ending') return null;
+  return {
+    draftId: saved.draftId,
+    blueprint: saved.blueprint,
+    route: needsExternalAi(saved.blueprint) ? 'ai_handoff' : 'manual',
+  };
+}
+
 export function StudyCreation({
   theme,
   onNavigate,
@@ -40,9 +65,12 @@ export function StudyCreation({
   const { isPhone } = useResponsive();
   const { user } = useAuth();
   const readOnly = !!user?.isDemo;
+  const userId = user?.id ?? 'anon';
   const [maker, setMaker] = useState<Maker | null>(null);
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [pending, setPending] = useState<WizardResult | null>(null);
+  // Resolved once, in a lazy initializer: this is where the creator is picked
+  // up from, not something to yank the screen back to on every re-render.
+  const [pending, setPending] = useState<WizardResult | null>(() => resumeEnding(userId));
   const [created, setCreated] = useState<{ id: string; name: string } | null>(null);
 
   // The blueprint is finished. Which ending it lands on is the route the wizard
@@ -53,9 +81,18 @@ export function StudyCreation({
     setPending(result);
   };
 
+  // Backing out of an ending returns the draft to the questions, so Study
+  // Creation opens on the makers again rather than trapping the creator on a
+  // handoff they have finished with. The draft itself is untouched — the
+  // answers, and the draft id an imported file is checked against, both stay.
+  const leaveEnding = () => {
+    setDraftStage(userId, 'wizard');
+    setPending(null);
+  };
+
   // The package exists now, so the draft that described it has done its job.
   const onCreated = (pkg: { id: string; name: string }) => {
-    clearDraft(user?.id ?? 'anon');
+    clearDraft(userId);
     setPending(null);
     setCreated(pkg);
   };
@@ -66,9 +103,9 @@ export function StudyCreation({
 
   if (pending) {
     return pending.route === 'manual' ? (
-      <ManualEntry theme={theme} result={pending} onBack={() => setPending(null)} onCreated={onCreated} />
+      <ManualEntry theme={theme} result={pending} onBack={leaveEnding} onCreated={onCreated} />
     ) : (
-      <PackageHandoff theme={theme} result={pending} onBack={() => setPending(null)} onImported={onCreated} />
+      <PackageHandoff theme={theme} result={pending} onBack={leaveEnding} onImported={onCreated} />
     );
   }
 

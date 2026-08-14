@@ -26,6 +26,7 @@ import {
   saveAiOnboarded,
   saveDraft,
   saveProvider,
+  setDraftStage,
 } from './draft';
 import { StepCard } from './steps';
 import { WizardDevPanel } from './WizardDevPanel';
@@ -116,7 +117,7 @@ export function PackageWizard({
     }
     const p = pending.current;
     if (p) {
-      saveDraft(userId, { draftId, stepId: p.stepId, blueprint: p.blueprint });
+      saveDraft(userId, { draftId, stepId: p.stepId, blueprint: p.blueprint, stage: 'wizard' });
       pending.current = null;
     }
   }, [userId, draftId]);
@@ -192,6 +193,11 @@ export function PackageWizard({
   const finish = () => {
     if (readOnly) return;
     flush();
+    // Record that the draft is now standing on its ending, AFTER the flush that
+    // writes it as 'wizard'. This is what lets Study Creation reopen on the
+    // handoff — and on the same draft id, so the file the creator's AI built
+    // against it is still accepted.
+    setDraftStage(userId, 'ending');
     onComplete({ draftId, blueprint: bp, route: usesAi ? 'ai_handoff' : 'manual' });
   };
 
