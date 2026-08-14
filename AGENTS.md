@@ -1784,6 +1784,32 @@ workspaces list** (see `theme/nav.ts` order).
         draft carries its schema version and is DISCARDED rather than repaired
         when that version moves — replaying half-understood answers into a
         changed set of questions produces a package nobody described.
+      - **THE DRAFT ALSO RECORDS WHICH SCREEN THE CREATOR IS ON**
+        (`DraftStage` = `wizard | ending`, `setDraftStage`; `resumeEnding` in
+        `StudyCreation.tsx`). **The AI handoff is the one screen in the terminal
+        somebody is MEANT to walk away from** — they take the prompt to their
+        own AI and come back, sometimes the next day — and its paste box lived
+        only in `StudyCreation`'s React state, so leaving took it with it and
+        **nothing anywhere else in the terminal can paste a package in**.
+        Reopening the wizard was not the way back either: it restored the
+        questions, and finishing them again minted a **new draft id**, which the
+        importer then refused the creator's file for. A day's work in somebody
+        else's model, unusable, with nothing on screen explaining why. Reported
+        by the owner, 2026-08.
+        - `pending` is resolved **in a lazy initializer**, like `resolveHome` —
+          a starting point, not something that yanks the screen back on every
+          re-render.
+        - **The route is DERIVED, never stored**, from the same
+          `needsExternalAi(bp)` the wizard's finish button reads, so a resumed
+          ending can never be a different ending than the one that was left.
+        - **Backing out returns the stage to `wizard` and touches nothing else**
+          — the answers and the draft id both stay, so the creator is not
+          trapped on a handoff they have finished with and has not lost the id
+          their file is stamped with.
+        - **An absent or unrecognised stage reads as `wizard`.** A draft written
+          before this existed resumes to the questions, which costs a few
+          clicks; resuming it to a paste box would offer one for a plan that was
+          never finished.
       - **A category gets its stable id the moment it is added**, so renaming it
         in the editor is a rename. Same rule as the stored package categories,
         for the same reason.
@@ -1824,8 +1850,22 @@ workspaces list** (see `theme/nav.ts` order).
       - **A package too large for one reply arrives as PARTS**
         (`vts-study-package-part`, a `manifest` part plus component parts).
         Every part must carry the same `blueprintId`; a set mixing two is
-        **refused rather than combined**, and a set missing one says how many
-        are still needed instead of importing what it has.
+        **refused rather than combined** (`mixed_blueprints`, still an error —
+        one plan's categories with another's questions is a package nothing
+        downstream could untangle), and a set missing one says how many are
+        still needed instead of importing what it has.
+      - **A `blueprintId` that does not match the plan being imported into is a
+        WARNING, not a refusal** (`wrong_blueprint`). The id is **import
+        identity — never stored, never read after the commit**, and all it
+        establishes is that the parts came from one handoff, which the check
+        above has already settled. Everything that can establish the CONTENT
+        belongs here — the categories, the per-category counts, the limits, the
+        structure — still runs and still blocks, so a genuinely wrong file is
+        refused on what is in it. Refusing on the id alone had one victim and no
+        beneficiary: a creator whose saved plan was gone (cleared browser,
+        second device, a package created since) could re-enter an equivalent
+        plan and still never import the file their AI had already built, because
+        re-answering mints a new id. **Do not put it back to an error.**
       - **Nothing is created by validating.** Validate reads and reports;
         confirm writes. That is what lets a creator paste, read the errors, have
         their AI fix them and paste again with nothing left behind.

@@ -129,8 +129,22 @@ console.log('\n[envelope]');
   check('and does not just say "invalid JSON"', r.errors[0].message.length > 30, r.errors[0].message);
 }
 {
+  // A plan id that does not match WARNS and imports. The id is never stored and
+  // nothing downstream reads it, so refusing on it alone only ever stranded a
+  // creator whose saved plan was gone — re-answering the questions mints a new
+  // id, so their AI's file could never be imported again. Everything that can
+  // establish the content belongs here still blocks; see the two checks below.
   const r = validateDocuments([J(pkg({ blueprintId: 'someone_elses_plan' }))], blueprint());
-  check('a package built from another plan is refused', !r.ok && codes(r).includes('wrong_blueprint'));
+  check('a package built from another plan still imports', r.ok);
+  check('and says so', r.warnings.some((w) => w.code === 'wrong_blueprint'));
+  // The guard that actually matters is unchanged: the content is still checked
+  // against the plan being imported into, so a genuinely wrong file is refused
+  // on what is in it rather than on a value the terminal throws away.
+  const r2 = validateDocuments(
+    [J(pkg({ blueprintId: 'someone_elses_plan', categories: [{ id: 'cat_99', name: 'Nothing to do with it', weight: 100 }] }))],
+    blueprint(),
+  );
+  check('but content that does not match the plan is still refused', !r2.ok);
 }
 
 console.log('\n[questions]');

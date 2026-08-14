@@ -11,9 +11,17 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.15';
+export const APP_VERSION = 'Beta V 7.16';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.16',
+    date: 'August 14, 2026',
+    notes: [
+      'The study package handoff now waits for you. Take the prompt to your AI, close the tab, come back a week later — Study Creation opens straight back on the same screen with the paste box on it. It used to vanish the moment you left, and nothing anywhere offered another way to paste a package in.',
+      'Pasting in a package built from an earlier plan no longer refuses it outright. It says so and checks it against the plan you are importing into, so work already done in your AI is not lost because the saved plan went with a cleared browser or a second device.',
+    ],
+  },
   {
     version: 'Beta V 7.15',
     date: 'August 14, 2026',
