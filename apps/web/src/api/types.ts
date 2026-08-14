@@ -1042,6 +1042,11 @@ export interface OandaCapitalAccount {
   marginUsed: number | null;
   marginAvailable: number | null;
   openTradeCount: number | null;
+  // What was put into this account and taken back out — the same figures the
+  // capital cards keep, so a panel saying what an account is worth can also say
+  // what went into it. Null when nothing has been stated for it.
+  deposited: number | null;
+  withdrawn: number | null;
   pnl: OandaPnl | null;
   ok: boolean;
   error: string | null;
@@ -1053,6 +1058,7 @@ export interface OandaCapital {
   balance: number | null;
   nav: number | null;
   unrealizedPl: number | null;
+  deposited: number | null; // across the accounts, single-currency only
   pnl: OandaPnl | null;
   generatedAt: number;
 }
