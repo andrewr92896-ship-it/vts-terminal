@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey, unique, index } from 'drizzle-orm/sqlite-core';
 
 // The four roles match the prototype's access matrix exactly.
 export const ROLES = ['Admin', 'Trader', 'Sales', 'Viewer'] as const;
@@ -63,6 +63,15 @@ export const users = sqliteTable('users', {
   // Null = never chosen, which resolves to Eastern — the clock every stamp was
   // on before the setting existed. See DEFAULT_DISPLAY_TIMEZONE in auth/rbac.ts.
   displayTimezone: text('display_timezone'),
+  // The screen the terminal opens on (My Terminal ▸ Settings). Raw workspace and
+  // section KEYS — which is why every rename in this codebase changes a label
+  // and never a key. Both null = no choice made, which falls through to the
+  // existing behaviour (pickInitialWorkspace, then that workspace's
+  // DEFAULT_SCREEN). Deliberately not validated in the database: what an account
+  // can reach depends on roles, opt-ins and membership, all of which move after
+  // this is written, so the check happens on every read (migration 0122).
+  homeWorkspace: text('home_workspace'),
+  homeScreen: text('home_screen'),
   // Brokerage balances are hidden by default. This flag is the dedicated
   // grant required to view balances and account detail (Stage 2 onward).
   viewBrokerage: integer('view_brokerage', { mode: 'boolean' })
@@ -94,6 +103,12 @@ export const sessions = sqliteTable('sessions', {
   expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
   lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }).notNull(),
   userAgent: text('user_agent'),
+  // Developer preview (migration 0119). What a founder-level account has asked
+  // to be treated AS for this session — see dev/preview.ts. Null is the normal
+  // case. On the session because a preview is a lens rather than a grant: it
+  // ends with the sign-in, leaves the account untouched, and cannot be left
+  // behind.
+  previewAs: text('preview_as'),
 });
 
 export type UserRow = typeof users.$inferSelect;
@@ -572,6 +587,12 @@ export const tradingBoards = sqliteTable('trading_boards', {
   // JSON: { tiles: BoardTile[] }. Opaque to the DB; validated in the route.
   layout: text('layout').notNull().default('{"tiles":[]}'),
   isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
+  // The board a PHONE opens on (migration 0112). Separate from `is_default`
+  // because a board is arranged against a screen — a dense desktop wall is
+  // unreadable flattened into one phone column, and a phone glance board wastes
+  // a desk. Unset falls back to `is_default`, so a desk that never picks one
+  // behaves exactly as it did before the column existed.
+  isDefaultPhone: integer('is_default_phone', { mode: 'boolean' }).notNull().default(false),
   // Null = private (the default). A team id publishes this layout to that team,
   // who can open it from their own picker. Only the ARRANGEMENT travels — every
   // tile fetches as the signed-in reader, so a teammate sees their own figures
@@ -967,12 +988,90 @@ export const notificationPrefs = sqliteTable(
     notifyMoveSl: integer('notify_move_sl', { mode: 'boolean' }).notNull().default(true),
     notifyPlaceTp: integer('notify_place_tp', { mode: 'boolean' }).notNull().default(true),
     notifyMoveTp: integer('notify_move_tp', { mode: 'boolean' }).notNull().default(true),
+    // How loud each event is — 'silent' | 'normal' | 'alert' | 'repeating',
+    // mapping to Pushover priorities -1 / 0 / 1 / 2. The booleans above still
+    // decide WHETHER you hear about the event; these decide what the phone does
+    // when you do. Default 'alert' is exactly what every notification sent
+    // before this existed, so nothing stored changed meaning (migration 0121).
+    levelOpen: text('level_open').notNull().default('alert'),
+    levelClose: text('level_close').notNull().default('alert'),
+    levelPlaceSl: text('level_place_sl').notNull().default('alert'),
+    levelMoveSl: text('level_move_sl').notNull().default('alert'),
+    levelPlaceTp: text('level_place_tp').notNull().default('alert'),
+    levelMoveTp: text('level_move_tp').notNull().default('alert'),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
   },
   (t) => ({ userTarget: unique().on(t.userId, t.targetUserId) }),
 );
 export type NotificationPrefRow = typeof notificationPrefs.$inferSelect;
+
+// ---- Repeating-alert timing (one row per user) ----
+// How often a 'repeating' notification repeats, and for how long, before
+// Pushover gives up. One row per user rather than per watched trader: anything
+// worth waking somebody for wants the same urgency, and six copies of two
+// numbers is six things to keep in step. Bounds are Pushover's own — retry at
+// least 30s, expire at most 10800s — and are enforced in the service.
+export const alertPrefs = sqliteTable('alert_prefs', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  repeatEverySeconds: integer('repeat_every_seconds').notNull().default(30),
+  repeatForSeconds: integer('repeat_for_seconds').notNull().default(300),
+  // The MASTER switch for this account (migration 0123). Phone notifications are
+  // per device; this is per account, so off silences every channel on every
+  // device. It gates the existing notification paths too — a master switch that
+  // only governed new features would be a lie.
+  accountAlerts: integer('account_alerts', { mode: 'boolean' }).notNull().default(true),
+  // Whether somebody else in this user's private group may buzz their phone.
+  // A different question from the master switch: one is "do I want to be
+  // notified", the other is "may other people do it".
+  groupAlerts: integer('group_alerts', { mode: 'boolean' }).notNull().default(true),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type AlertPrefRow = typeof alertPrefs.$inferSelect;
+
+// ---- Live repeating alerts ----
+// Pushover returns a receipt id for every priority-2 message, and that receipt
+// is the ONLY way to stop the repeats from this side — so it is stored, or the
+// terminal would be drawing an Acknowledge button it could not honour.
+//
+// `callbackToken` is what makes the public callback route safe. Pushover signs
+// nothing, so the callback URL carries this unguessable value and the route
+// matches on it; without it, anybody who could guess a receipt could mark
+// somebody else's alert answered.
+//
+// Rows are KEPT after resolution rather than deleted — they are the record that
+// an alert fired and that somebody answered it, which is what "did I sleep
+// through one?" needs. A null `resolvedAt` is what makes an alert live.
+export const pushoverReceipts = sqliteTable(
+  'pushover_receipts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    receipt: text('receipt').notNull(),
+    callbackToken: text('callback_token').notNull().unique(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    // What produced it: a trade event key ('open', 'moveSl', …) or 'test'.
+    kind: text('kind').notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    // When Pushover stops retrying on its own, so a row that nobody answered
+    // can stop being reported as live without a second call to Pushover.
+    expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+    resolvedAt: integer('resolved_at', { mode: 'timestamp_ms' }),
+    // 'terminal' (acknowledged here), 'pushover' (acknowledged on the phone,
+    // via the callback), or 'expired'.
+    resolvedBy: text('resolved_by'),
+  },
+  (t) => ({ live: index('pushover_receipts_live_idx').on(t.userId, t.resolvedAt) }),
+);
+export type PushoverReceiptRow = typeof pushoverReceipts.$inferSelect;
 
 // One row per user holding their Strategy Session notification preferences: buzz
 // me when one of my sessions opens, when it closes, and/or a configurable number
@@ -1037,6 +1136,50 @@ export const userFeatures = sqliteTable('user_features', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type UserFeatureRow = typeof userFeatures.$inferSelect;
+
+// ---- Trading — order ticket size presets ----
+// One row per trader holding the quick-size buttons under the order ticket's
+// size box: which values they are, what they mean (a size in units, or an amount
+// of money per pip/point), and when the margin reading on one turns red.
+//
+// The trader's OWN ticket, deliberately — unlike trading_desk_settings, which a
+// desk lead can edit for a teammate, nothing here is reachable by anyone else:
+// the service takes the caller's id and there is no parameter that could widen
+// it. A trader with no row gets the built-in ladders, which is what every ticket
+// showed before this table existed.
+//
+// The four ladders are JSON arrays of numbers and every one is NULLABLE, where
+// null means "the built-in ladder" rather than "no buttons" — so a default that
+// changes in code still reaches anybody who never customised that ladder. They
+// are kept apart because a ladder means a different thing in each: 1,000 is a
+// sensible FX size and a ruinous bitcoin one.
+export const ticketPresets = sqliteTable('ticket_presets', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .unique()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  // 'units' | 'per_step' | 'cost'. Null = whatever suits the account (cost on a
+  // spot account, units everywhere else), which is what the chips did before.
+  mode: text('mode'),
+  unitsPresets: text('units_presets'), // whole-unit instruments (FX, indices)
+  fractionalPresets: text('fractional_presets'), // instruments sized in fractions
+  stepPresets: text('step_presets'), // money per pip / per point
+  costPresets: text('cost_presets'), // money spent, on a spot account
+  showMargin: integer('show_margin', { mode: 'boolean' }).notNull().default(true),
+  // Which reading carries the colour: 'free' (what is left to commit) or 'value'
+  // (the whole account, regardless of what is open). Both are always shown; this
+  // says which one turns a preset red. Null = 'free', as it always was.
+  marginBasis: text('margin_basis'),
+  // At or above this share a preset reads red — one threshold per basis, because
+  // 100% means the point of refusal against free margin and something else
+  // entirely against the account's whole value.
+  marginWarnPct: integer('margin_warn_pct').notNull().default(100),
+  valueWarnPct: integer('value_warn_pct').notNull().default(100),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type TicketPresetRow = typeof ticketPresets.$inferSelect;
 
 // ---- Trading — Market Data board layout ----
 // One row per trader holding how they have arranged the Market Data screen:
@@ -1497,6 +1640,17 @@ export const studyGameRuns = sqliteTable('study_game_runs', {
 });
 export type StudyGameRunRow = typeof studyGameRuns.$inferSelect;
 
+// What a package-backed game's category weights govern. See
+// `study_decks.category_weight_mode`, which is where this is stored and where
+// the null (legacy) reading is explained.
+//
+//   tracking_only  — report per-category accuracy; weight neither draw nor score
+//   draw_only      — compose the sitting to the blueprint, score plainly
+//   score_only     — draw however the deck falls, score to the blueprint
+//   draw_and_score — both (what any weighted legacy game already does)
+export const CATEGORY_WEIGHT_MODES = ['tracking_only', 'draw_only', 'score_only', 'draw_and_score'] as const;
+export type CategoryWeightMode = (typeof CATEGORY_WEIGHT_MODES)[number];
+
 // ---- Team-authored study games (decks) ----
 // Any team can
 // build its own study game: questions AI-generated from a topic, or parsed by
@@ -1518,6 +1672,18 @@ export const studyDecks = sqliteTable('study_decks', {
   // normalized on read. NULL = no weights set (every game before this existed),
   // which is deliberately different from every weight being zero.
   categoryWeights: text('category_weights'),
+  // The Study Package this game belongs to, or null for legacy content. Null is
+  // the case that decides which access model applies — see studyPackages.
+  packageId: text('package_id').references(() => studyPackages.id, { onDelete: 'set null' }),
+  // What the category weights are FOR, stated rather than inferred.
+  //
+  // The legacy rule reads the weights themselves as the setting: null weights
+  // means unweighted, and any weights at all means weight both the draw and the
+  // score. That conflates two independent choices, and an author who wants
+  // per-category tracking without the draw changing has no way to say so. Null
+  // here keeps the legacy reading exactly (every game that exists today), so
+  // nothing already stored changes meaning.
+  categoryWeightMode: text('category_weight_mode', { enum: CATEGORY_WEIGHT_MODES }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -1531,6 +1697,13 @@ export const studyDeckQuestions = sqliteTable('study_deck_questions', {
   teamId: text('team_id').notNull(), // denormalized for team-scoped guards
   seq: integer('seq').notNull(), // stable question number within the deck
   topic: text('topic').notNull(), // one of the deck's categories
+  // The stable category this question belongs to, for a package-backed deck.
+  //
+  // `topic` above is kept in step with this row's current name and stays the
+  // compatibility field every existing player, editor and test path reads, so
+  // none of them had to change. Where both are present THIS is the identity:
+  // renaming a category rewrites the topic strings and leaves the id alone.
+  categoryId: text('category_id').references(() => studyPackageCategories.id, { onDelete: 'set null' }),
   stem: text('stem').notNull(),
   options: text('options').notNull(), // JSON [{label,text} x4]
   answer: text('answer').notNull(), // 'A' | 'B' | 'C' | 'D'
@@ -1591,6 +1764,8 @@ export const studyFlashcardSets = sqliteTable('study_flashcard_sets', {
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
   source: text('source').notNull(), // 'manual' | 'ai_topic' | 'upload' | 'sample'
   topics: text('topics').notNull(), // JSON string[] of this set's topic names
+  // The Study Package this set belongs to, or null for legacy content.
+  packageId: text('package_id').references(() => studyPackages.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -1626,10 +1801,215 @@ export const studyGuides = sqliteTable('study_guides', {
   createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
   slides: text('slides').notNull(), // JSON [{ title, body, image? } ...]
   slideCount: integer('slide_count').notNull().default(0),
+  // The Study Package this presentation belongs to, or null for legacy content.
+  packageId: text('package_id').references(() => studyPackages.id, { onDelete: 'set null' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type StudyGuideRow = typeof studyGuides.$inferSelect;
+
+// ---- Study Packages ----
+// The owner-facing unit for newly created Study content: a container that may
+// hold a study game, a flashcard set, a presentation, lesson plans, and the
+// category blueprint they are all scored against.
+//
+// A package is USER-OWNED, and that is the whole point of the layer. Everything
+// above this line is scoped by `team_id` through `contentScopeId(viewer)` — the
+// shared-library model, where content belongs to a group and is reached by
+// being in that group. A package belongs to a person, and is reached by being
+// its owner, by having been shared with it, or (later) by it being public. That
+// makes Study sharing independent of trading/private groups, which is what the
+// public product needs: a stranger who signs up has no group to be in.
+//
+// Both models run side by side. Content with `package_id = null` is legacy and
+// keeps the scope rules exactly as they were; package-backed content resolves
+// through `studies/packageAccess.ts` instead. Do not scatter that choice across
+// route handlers — that module is the one place it is made.
+export const PACKAGE_DEPTHS = ['quick_review', 'standard', 'comprehensive', 'exam_prep'] as const;
+export type PackageDepth = (typeof PACKAGE_DEPTHS)[number];
+
+// Only `private` is reachable in this stage — `createPackage` refuses the rest
+// and there is no route that sets them. The other three are named here so the
+// sharing and publication handoffs add behavior without a schema change:
+// drizzle's `enum` is a TypeScript type, not a DB constraint (the same reason
+// `trading_news.category` needed no migration to widen), so listing them now
+// costs nothing at the database.
+export const PACKAGE_VISIBILITIES = ['private', 'shared', 'submitted', 'public'] as const;
+export type PackageVisibility = (typeof PACKAGE_VISIBILITIES)[number];
+
+// What the player does with explanations. Null = not stated, which is how every
+// package created before the setting existed reads.
+export const EXPLANATION_MODES = ['always', 'on_incorrect', 'none'] as const;
+export type ExplanationMode = (typeof EXPLANATION_MODES)[number];
+
+export const studyPackages = sqliteTable('study_packages', {
+  id: text('id').primaryKey(),
+  // Who the package belongs to. Distinct from `createdBy`: this is the account
+  // whose access decides everybody else's, and it survives an author leaving.
+  ownerUserId: text('owner_user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  description: text('description'),
+  subject: text('subject'),
+  audience: text('audience'),
+  depth: text('depth', { enum: PACKAGE_DEPTHS }),
+  // The structure version of the package itself, for the import parser a later
+  // handoff adds — an uploaded package states which shape it was written to.
+  formatVersion: integer('format_version').notNull().default(1),
+  visibility: text('visibility', { enum: PACKAGE_VISIBILITIES }).notNull().default('private'),
+  // What the player does with explanations: show one after every question, only
+  // after a wrong answer, or never. A package setting rather than a property of
+  // any one question — the questions either carry an explanation or they do not.
+  explanationMode: text('explanation_mode', { enum: EXPLANATION_MODES }),
+  // The member who built it; null if that account is later deleted.
+  createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+  // When the owner archived it; null = active. Archiving is the ORDINARY way a
+  // package is removed, and it changes nothing but this column — the content,
+  // the learners' progress, the stable category ids and every future sharing
+  // relationship stay exactly as they are, so unarchiving is lossless. What it
+  // governs is listing: an archived package and its content drop out of the
+  // ordinary Study Library and creation views.
+  archivedAt: integer('archived_at', { mode: 'timestamp_ms' }),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyPackageRow = typeof studyPackages.$inferSelect;
+
+// A package's category blueprint, with STABLE IDs.
+//
+// This is the architectural correction the package layer exists to make. Every
+// category in the legacy model is identified by its NAME — on the deck, on each
+// question's `topic`, in the stored weights map, and in each learner's own
+// per-category statistics. So renaming a category silently resets everybody's
+// history for it: the new name matches nothing, and the old name's record is
+// stranded under a label that no longer exists. Here the row id is the
+// identity, and the name is just what it is currently called.
+export const studyPackageCategories = sqliteTable('study_package_categories', {
+  id: text('id').primaryKey(),
+  packageId: text('package_id')
+    .notNull()
+    .references(() => studyPackages.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  name: text('name').notNull(),
+  // This category's share of the paper when weighting is on. Null = this
+  // category carries no stated weight, which is not the same as a weight of
+  // zero (a category the author deliberately excluded).
+  weight: real('weight'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyPackageCategoryRow = typeof studyPackageCategories.$inferSelect;
+
+// Lesson plans belonging to a package: structured teaching content, ordered.
+// Deliberately its own table rather than another blob inside the deck's state —
+// a lesson is content, and the game state is one learner's progress. A lesson
+// has no scoring engine of its own in V1.
+export const studyPackageLessons = sqliteTable('study_package_lessons', {
+  id: text('id').primaryKey(),
+  packageId: text('package_id')
+    .notNull()
+    .references(() => studyPackages.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  title: text('title').notNull(),
+  objective: text('objective'),
+  body: text('body'),
+  // JSON string[] of the STORED slide ids this lesson covers. Each slide in a
+  // guide carries its own server-assigned id inside the slides blob, so a
+  // lesson keeps pointing at the same slides when the presentation is reordered
+  // or a slide's text is edited. Never positions — see migration 0117.
+  slideIds: text('slide_ids'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+});
+export type StudyPackageLessonRow = typeof studyPackageLessons.$inferSelect;
+
+// ---- Study sharing, and the public library ----
+//
+// Study sharing is INDEPENDENT of trading/private groups, which is the whole
+// point of the package layer: one person hands a package to another person by
+// username, and neither of them joins anything. There is no chat, no feed, no
+// follow — a share is permission to study somebody's content, and nothing else.
+
+export const SHARE_STATUSES = ['pending', 'accepted', 'declined'] as const;
+export type ShareStatus = (typeof SHARE_STATUSES)[number];
+
+export const studyPackageShares = sqliteTable(
+  'study_package_shares',
+  {
+    id: text('id').primaryKey(),
+    packageId: text('package_id')
+      .notNull()
+      .references(() => studyPackages.id, { onDelete: 'cascade' }),
+    recipientUserId: text('recipient_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // Who offered it. Null if that account is later deleted — the share itself
+    // belongs to the package and the recipient, not to whoever pressed the
+    // button.
+    sharedByUserId: text('shared_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    status: text('status', { enum: SHARE_STATUSES }).notNull().default('pending'),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    respondedAt: integer('responded_at', { mode: 'timestamp_ms' }),
+  },
+  // One share relationship per person per package. Offering the same package to
+  // the same person twice is the same offer, not a second one.
+  (t) => ({ oneEach: unique().on(t.packageId, t.recipientUserId) }),
+);
+export type StudyPackageShareRow = typeof studyPackageShares.$inferSelect;
+
+export const SUBMISSION_STATUSES = ['pending', 'approved', 'rejected', 'changes_requested', 'withdrawn'] as const;
+export type SubmissionStatus = (typeof SUBMISSION_STATUSES)[number];
+
+// A creator asking VTS to publish their package. Submitting is NOT publishing:
+// an administrator reads it and decides, and only an approval makes it public.
+export const studyPackageSubmissions = sqliteTable('study_package_submissions', {
+  id: text('id').primaryKey(),
+  packageId: text('package_id')
+    .notNull()
+    .references(() => studyPackages.id, { onDelete: 'cascade' }),
+  submittedByUserId: text('submitted_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  status: text('status', { enum: SUBMISSION_STATUSES }).notNull().default('pending'),
+  submittedAt: integer('submitted_at', { mode: 'timestamp_ms' }).notNull(),
+  reviewedAt: integer('reviewed_at', { mode: 'timestamp_ms' }),
+  reviewedByUserId: text('reviewed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  // The reviewer's note back to the creator — why it was rejected, or what to
+  // change. Shown to the submitter, so it is not an internal-only field.
+  adminNote: text('admin_note'),
+  // WHICH wording the submitter agreed to, and when. A blanket boolean would
+  // not survive the wording changing: this records what was actually shown.
+  attestationVersion: text('attestation_version').notNull(),
+  attestedAt: integer('attested_at', { mode: 'timestamp_ms' }).notNull(),
+  // When this publication ENDED, and who ended it (migration 0120). Null while
+  // it is still published, and null forever on a submission that was never
+  // approved. `status` stays 'approved' — the decision and the attestation it
+  // was made against are the record, and rewriting them to say "withdrawn"
+  // would destroy exactly what an audit needs.
+  withdrawnAt: integer('withdrawn_at', { mode: 'timestamp_ms' }),
+  withdrawnByUserId: text('withdrawn_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+});
+export type StudyPackageSubmissionRow = typeof studyPackageSubmissions.$inferSelect;
+
+// A learner adding a published package to their own library.
+//
+// Deliberately not a share row: a share is something offered TO somebody, and
+// this is somebody helping themselves to public content. It is also what makes
+// them a participant on that package's leaderboard — reading a public package is
+// open to anyone, but appearing on its board means having chosen to study it.
+export const studyPackageAdds = sqliteTable(
+  'study_package_adds',
+  {
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    packageId: text('package_id')
+      .notNull()
+      .references(() => studyPackages.id, { onDelete: 'cascade' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.packageId] }) }),
+);
+export type StudyPackageAddRow = typeof studyPackageAdds.$inferSelect;
 
 // ---- Studies: completed mock tests (per user) ----
 // One row per finished mock test (a graded exam drawn to
@@ -1742,6 +2122,12 @@ export const userTeams = sqliteTable('user_teams', {
   leaderId: text('leader_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
+  // Trade tile colours for the two kinds of position that belong to nobody in
+  // particular: funded (prop-firm) and hand-kept manual. Palette keys, never
+  // hexes — see trading/tileColors.ts. Null = the default appearance, which for
+  // funded is the neutral gray those tiles have always carried.
+  fundedTileColor: text('funded_tile_color'),
+  manualTileColor: text('manual_tile_color'),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
@@ -1762,6 +2148,10 @@ export const userTeamMembers = sqliteTable('user_team_members', {
     .unique()
     .references(() => users.id, { onDelete: 'cascade' }),
   badge: text('badge'), // cosmetic title, e.g. "Lead Trader"; null for none
+  // The colour this person's open positions are washed in on every trade tile,
+  // set by the group leader. A palette key, never a hex — see
+  // trading/tileColors.ts. Null = no wash, exactly as before this existed.
+  tileColor: text('tile_color'),
   canCreateStudyGuides: integer('can_create_study_guides', { mode: 'boolean' }).notNull().default(false),
   canInvite: integer('can_invite', { mode: 'boolean' }).notNull().default(false),
   canManageBadges: integer('can_manage_badges', { mode: 'boolean' }).notNull().default(false),

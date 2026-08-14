@@ -41,6 +41,13 @@ export interface LiveTrade {
   // Forex pip math (pips of open P/L, money per pip, risk/reward), present only
   // for genuine currency pairs. Money fields are gated like unrealizedPl.
   forex?: import('./forex.js').ForexMetrics | null;
+  // The colour this tile is washed in — whose position it is, or that it is a
+  // funded / manual one. Stamped at the boundary by trading/tileColors.ts rather
+  // than at any of the eight places a position is built, because it is a fact
+  // about the group looking at the tile, not about the trade. Optional for that
+  // reason: absent means nobody has chosen, which every screen renders as the
+  // appearance it had before this existed.
+  tileColor?: string | null;
 }
 
 // Per-broker outcome of a Live Wall refresh: was it configured, did the fetch
@@ -88,4 +95,29 @@ export interface LiveWall {
   breakEvenMode: 'percent' | 'dollars' | 'pips';
   breakEvenAmount: number;
   breakEvenOverrides: import('./outcome.js').BreakEvenOverride[];
+}
+
+// What a trade view LEFT OUT, and why.
+//
+// The Trade Log and its metrics are a narrowed view of the desk's real trades:
+// a connection's "count trades since" cutoff hides an earlier phase, and the
+// "ignore test trades" floor hides connection-test fills. Both are deliberate,
+// and both were silent — an export headed "2026-06-01 to 2026-08-09" listed no
+// June trades at all while nine real ones sat behind a July cutoff, which reads
+// as "there were no June trades" rather than "June is not being counted". On a
+// figure somebody may present as a track record that is the difference between
+// a narrowed number and a wrong one.
+//
+// Same family of rule as the Live Wall's `source` union, Market Data's
+// `sample: true` and the portfolio's `unpricedCount`: state what could not be
+// counted rather than letting the total imply it was never there.
+export interface ExcludedTrades {
+  // Trades dropped because they opened before their connection's cutoff.
+  beforeCutoff: number;
+  // Broker fills dropped for being under the desk's "test trade" floor.
+  belowFloor: number;
+  // The cutoff instant (ms) when every excluded trade shares one, so the screen
+  // can name a date. Null when several connections cut off on different dates —
+  // naming one of them would be false for the trades the others excluded.
+  cutoffFrom: number | null;
 }

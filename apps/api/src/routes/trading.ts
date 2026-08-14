@@ -27,6 +27,7 @@ import { analyzeAlert, dismissAlert, getAlerts, getAlertSignal } from '../tradin
 import { getHistory, removePosition, updateClosedPosition } from '../trading/history.js';
 import { listDeletedTrades, restoreDeleted } from '../trading/deleted.js';
 import { getDeskSettings, updateDeskSettings, getDeskInstruments } from '../trading/settings.js';
+import { getTicketPresets, setTicketPresets } from '../trading/ticketPresets.js';
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { visibleTraderIds } from '../trading/scope.js';
@@ -97,11 +98,13 @@ import { NEWS_IMPACTS, NEWS_BIASES, NEWS_CATEGORIES } from '../db/schema.js';
 import {
   addConnection,
   adminUpdateConnection,
+  adminRemoveConnection,
   listAllConnections,
   listConnections,
   removeConnection,
   updateConnection,
 } from '../trading/connections.js';
+import { recordAdminAction } from '../admin/adminLog.js';
 import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { featuresForUser } from '../features/service.js';
 import { isDemoUser } from '../demo/identity.js';
@@ -321,6 +324,23 @@ export async function tradingRoutes(app: FastifyInstance) {
       editableDeskMembers(me),
     ]);
     return { ...settings, instruments, userId: target, editableMembers };
+  });
+
+  // ---- The order ticket's quick-size buttons -------------------------------
+  //
+  // Always the caller's own — no `userId` parameter, deliberately unlike the
+  // desk settings above: a desk lead may change how a teammate's results are
+  // scored, but the shortcuts on the ticket belong to whoever sends the order.
+  app.get('/api/trading/ticket-presets', read, async (request) =>
+    getTicketPresets(request.currentUser!.id),
+  );
+
+  app.put('/api/trading/ticket-presets', write, async (request, reply) => {
+    const parsed = ticketPresetsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'Check the preset sizes and try again' });
+    }
+    return setTicketPresets(request.currentUser!.id, parsed.data);
   });
 
   // ---- The trader's own capital: put in, taken out, held now ----------------
@@ -1055,6 +1075,35 @@ export async function tradingRoutes(app: FastifyInstance) {
     return { connections: await listAllConnections() };
   });
 
+  // Admin-only: remove any connection regardless of owner — a stranded one, a
+  // dead account replaced after a credential reset. The service refuses an
+  // active connection and a hand-kept book that still holds positions; see
+  // `adminRemoveConnection` for why each would be a loss the admin cannot see.
+  //
+  // Recorded in the Administrator Log: this is an admin acting on somebody
+  // else's account and it cannot be undone, which is exactly what that log is
+  // for. Best-effort by design, so logging can never be why the removal fails.
+  app.delete('/api/trading/connections/:id/admin', write, async (request, reply) => {
+    if (!isAdmin(parseRoles(request.currentUser!))) {
+      return reply.code(403).send({ error: 'Admins only' });
+    }
+    const id = (request.params as { id: string }).id;
+    try {
+      const removed = await adminRemoveConnection(id);
+      await recordAdminAction({
+        kind: 'connection.removed',
+        state: 'info',
+        title: 'Removed a broker connection',
+        detail: `${removed.label} · ${removed.broker}${removed.summary ? ` · ${removed.summary}` : ''}`,
+        actor: { id: request.currentUser!.id, name: request.currentUser!.username },
+        target: { id: removed.ownerId, name: removed.owner },
+      });
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not remove connection' });
+    }
+    return { connections: await listAllConnections() };
+  });
+
   app.post('/api/trading/connections', connectionWrite, async (request, reply) => {
     const parsed = addConnSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -1494,6 +1543,29 @@ const deskSettingsSchema = z
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 
+// The order ticket's quick-size buttons. A ladder sent as null asks for the
+// built-in one back, which is why every field is nullable rather than merely
+// optional — and an omitted field leaves what is stored alone, so saving the
+// warning threshold never rewrites somebody's sizes. The service normalizes and
+// clamps whatever arrives (trading/ticketPresets.ts); this is the outer bound.
+const presetLadder = z.array(z.number().finite().positive().max(1_000_000_000)).max(15).nullable();
+const ticketPresetsSchema = z
+  .object({
+    mode: z.enum(['units', 'per_step', 'cost']).nullable().optional(),
+    units: presetLadder.optional(),
+    fractional: presetLadder.optional(),
+    step: presetLadder.optional(),
+    cost: presetLadder.optional(),
+    showMargin: z.boolean().optional(),
+    // Which reading colours a preset, and the threshold for each — one per
+    // basis, since 100% of free margin and 100% of the account are different
+    // statements and switching must not re-interpret a figure somebody chose.
+    marginBasis: z.enum(['free', 'value']).nullable().optional(),
+    marginWarnPct: z.number().finite().min(1).max(100).optional(),
+    valueWarnPct: z.number().finite().min(1).max(100).optional(),
+  })
+  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+
 // Deposited / withdrawn capital and the sync switches. Deliberately its OWN
 // route rather than more fields on the desk-settings patch: those figures have a
 // second, broker-driven writer (the sync), and two write paths into one number
@@ -1690,6 +1762,15 @@ const boardTileSchema = z.object({
   limit: z.number().int().min(1).max(50).optional(),
   todoSectionId: z.string().trim().max(64).optional(),
   range: z.enum(['7d', '30d', '90d', 'all']).optional(),
+  // Order ticket tiles — which instrument the ticket is set to, in display
+  // form. Never trusted: the desk validates the instrument against the
+  // account's own tradeable list on every order.
+  instrument: z.string().trim().max(40).optional(),
+  // Desk Metrics — whose figures the tile reports (a trader's ownerId, or
+  // absent for the whole desk). Never trusted as a permission: the tile filters
+  // rows the desk already returned, so an id the reader cannot see simply
+  // matches nothing.
+  trader: z.string().trim().max(64).optional(),
   // How large the tile's contents are drawn. Bounded rather than free so a
   // hand-rolled board cannot save a tile at 40x and paint over the screen.
   zoom: z.number().min(0.5).max(2).optional(),
@@ -1738,6 +1819,9 @@ const editBoardSchema = z
     name: z.string().trim().min(1).max(80).optional(),
     layout: boardLayoutSchema.optional(),
     isDefault: z.boolean().optional(),
+    // The board a phone opens on. Its own flag rather than a widened
+    // `isDefault`, so setting one never disturbs the other.
+    isDefaultPhone: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
 

@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
-import type { NotificationItem, RoleKey, User } from '../api/types';
+import type { NotificationItem, PreviewMode, RoleKey, User } from '../api/types';
+import { PREVIEW_LABELS } from '../api/types';
 import { C, GOLD_GRADIENT, tint } from '../theme/tokens';
 import {
   canZoomIn,
@@ -32,6 +33,8 @@ interface TopBarProps {
   effectiveRoles: RoleKey[];
   actingRole: RoleKey | null;
   onSetActingRole: (r: RoleKey | null) => void;
+  /** Enter, change or leave the server-side tier preview. Null leaves it. */
+  onSetPreview: (mode: PreviewMode | null) => void | Promise<void>;
   workspaceLabel: string;
   sectionLabel: string;
   accent: string;
@@ -282,12 +285,79 @@ function ViewAsRole({
   );
 }
 
+/**
+ * Preview as a tier — see the real product as a free, Premium, Max or public
+ * account, without a second login and without touching the real membership.
+ *
+ * It is SERVER-SIDE (see api/dev/preview): the terminal answers every request
+ * for the previewed account, so the locks a previewer meets are the locks that
+ * really exist rather than a client-side costume drawn over a working API. Every
+ * mode only ever gives privilege up.
+ */
+function PreviewAsTier({
+  current,
+  onPick,
+}: {
+  current: PreviewMode | null;
+  onPick: (mode: PreviewMode | null) => void;
+}) {
+  const row = (active: boolean, label: string, title: string, onClick: () => void) => (
+    <button
+      key={label}
+      type="button"
+      onClick={onClick}
+      title={title}
+      style={{
+        ...menuItem,
+        gap: 9,
+        fontSize: 12,
+        padding: '6px 9px',
+        color: active ? C.gold : C.text,
+        fontWeight: active ? 700 : 500,
+      }}
+    >
+      <span
+        style={{
+          width: 11,
+          height: 11,
+          flex: 'none',
+          borderRadius: '50%',
+          border: `2px solid ${active ? C.gold : '#5e7098'}`,
+          background: active ? C.gold : 'transparent',
+        }}
+      />
+      {label}
+    </button>
+  );
+
+  return (
+    <div style={{ borderTop: `1px solid ${C.line2}`, paddingTop: 6, marginTop: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '2px 9px 4px' }}>
+        <Icon name="eye" size={14} color={C.faint} />
+        <span style={{ fontSize: 12.5, fontWeight: 500, color: C.text }}>{'Preview as'}</span>
+      </div>
+      {row(!current, 'My account', 'Your own membership and roles', () => onPick(null))}
+      {(Object.keys(PREVIEW_LABELS) as PreviewMode[]).map((m) =>
+        row(current === m, PREVIEW_LABELS[m], PREVIEW_DESCRIPTIONS[m], () => onPick(current === m ? null : m)),
+      )}
+    </div>
+  );
+}
+
+const PREVIEW_DESCRIPTIONS: Record<PreviewMode, string> = {
+  free: 'Everything a free account reaches, with your own roles kept',
+  premium: 'What a Premium membership reaches',
+  max: 'What a Max membership reaches',
+  public: 'An ordinary signup: free, and none of your roles',
+};
+
 export function TopBar(props: TopBarProps) {
   const {
     user,
     effectiveRoles,
     actingRole,
     onSetActingRole,
+    onSetPreview,
     workspaceLabel,
     sectionLabel,
     accent,
@@ -601,6 +671,22 @@ export function TopBar(props: TopBarProps) {
                 onPick={(r) => {
                   setMenuOpen(false);
                   onSetActingRole(r);
+                }}
+              />
+            )}
+
+            {/* The tier preview, beside the role preview because they are the
+                same gesture on a different axis — one changes what you are
+                trusted with, the other what you have paid for. Gated on
+                `canPreview`, which the SERVER computes from the real roles: a
+                preview narrows `user.roles` to a plain member, so a role check
+                here would take away the way out. */}
+            {user.canPreview && (
+              <PreviewAsTier
+                current={user.preview}
+                onPick={(mode) => {
+                  setMenuOpen(false);
+                  void onSetPreview(mode);
                 }}
               />
             )}

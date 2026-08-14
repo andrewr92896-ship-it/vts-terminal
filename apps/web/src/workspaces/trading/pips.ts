@@ -172,6 +172,53 @@ export function fmtSteps(n: number, m: Movement): string {
   return `${n.toLocaleString('en-US', { maximumFractionDigits: 1 })} ${m.plural}`;
 }
 
+// ---- how big the position is, in the unit the instrument is sized in ----
+
+// One standard forex lot, in units of the base currency. The same constant the
+// server scales an FTP screenshot's lot count by (trading/service.ts), so a
+// funded position read as "0.50" is shown back as 0.50 lots rather than as the
+// 50,000 units it was stored as.
+export const LOT_UNITS = 100_000;
+
+// A position's size the way a trader reads it. A genuine currency pair is sized
+// in LOTS — the figure the order was placed at and the one a prop firm reports —
+// while everything else keeps its units, because there is no lot convention for
+// a coin, an index or an ounce and inventing one would misstate the size.
+//
+// Same `forexPair` switch as the pip/point split above, so a position's size and
+// what its movement is worth are always described in one another's terms:
+// "1.00 lots · $10.00 / pip", never lots beside a per-point figure.
+export function fmtSize(instrument: string, units: number): string {
+  if (!Number.isFinite(units)) return '—';
+  if (!forexPair(instrument)) return `${fmtUnitCount(units)} units`;
+  const lots = units / LOT_UNITS;
+  // A standard lot reads "1.00"; a connection-test size of a few units would
+  // round to "0.00" at two decimals, so a tiny position keeps enough decimals to
+  // read as tiny rather than as nothing.
+  const digits = Math.abs(lots) >= 0.01 ? 2 : 5;
+  const n = lots.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+  // Always plural. The count is written to two decimals, so a standard lot is
+  // "1.00", and "1.00 lot" beside it reads as a typo rather than as grammar.
+  return `${n} lots`;
+}
+
+// The raw size behind a lot count, for the hover on a size that was converted.
+// Nothing to add on an instrument already shown in its own units.
+export function sizeTitle(instrument: string, units: number): string | undefined {
+  if (!forexPair(instrument) || !Number.isFinite(units)) return undefined;
+  return `${fmtUnitCount(units)} units`;
+}
+
+// Sizes span 100,000 units of EUR/USD down to 0.00042 of a bitcoin, and the
+// default locale format prints that second one as "0" — so the smaller the size,
+// the more decimals it keeps. Mirrors `fmtUnits` in tradeFormat.ts, kept here so
+// this module stays free of that import cycle.
+function fmtUnitCount(n: number): string {
+  const abs = Math.abs(n);
+  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
+  return Number(n.toFixed(digits)).toLocaleString('en-US', { maximumFractionDigits: digits });
+}
+
 // Money per unit of movement spans a much wider range than the desk's other
 // figures: a standard lot is $10.00 a pip while a 1-unit connection test is
 // $0.0001, which the shared two-decimal formatter renders as "$0.00". Small

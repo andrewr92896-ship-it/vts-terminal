@@ -9,9 +9,12 @@ import { isDemoUser } from '../demo/identity.js';
 import { visibleTraderIds } from '../trading/scope.js';
 import {
   DEFAULT_PREF_FLAGS,
+  DEFAULT_PREF_LEVELS,
+  NOTIF_LEVELS,
   getPrefsFor,
   setPref,
   type NotifPrefFlags,
+  type NotifPrefLevels,
 } from '../notifications/prefs.js';
 
 // Per-user notification preferences. A trader picks which teammate they want
@@ -26,6 +29,26 @@ const flagsSchema = z.object({
   placeTp: z.boolean(),
   moveTp: z.boolean(),
 });
+
+// How loud each event is. OPTIONAL as a whole, so a client that only knows how
+// to send the on/off flags — a browser still running a service-worker-cached
+// bundle from before levels existed — leaves the stored levels alone rather
+// than resetting somebody's repeating alert back to a plain one.
+const levelEnum = z.enum(NOTIF_LEVELS);
+const levelsSchema = z.object({
+  open: levelEnum,
+  close: levelEnum,
+  placeSl: levelEnum,
+  moveSl: levelEnum,
+  placeTp: levelEnum,
+  moveTp: levelEnum,
+});
+const prefBodySchema = z.union([
+  // The current shape: flags and levels together.
+  z.object({ flags: flagsSchema, levels: levelsSchema.optional() }),
+  // The old shape: bare flags. Kept so a stale bundle keeps working.
+  flagsSchema.transform((flags) => ({ flags, levels: undefined })),
+]);
 
 export async function notificationPrefsRoutes(app: FastifyInstance) {
   const trading = { preHandler: requireWorkspace('trading') };
@@ -59,9 +82,13 @@ export async function notificationPrefsRoutes(app: FastifyInstance) {
 
     const stored = await getPrefsFor(me.id);
     const prefs: Record<string, NotifPrefFlags> = {};
-    for (const t of targets) prefs[t.id] = stored[t.id] ?? { ...DEFAULT_PREF_FLAGS };
+    const levels: Record<string, NotifPrefLevels> = {};
+    for (const t of targets) {
+      prefs[t.id] = stored[t.id]?.flags ?? { ...DEFAULT_PREF_FLAGS };
+      levels[t.id] = stored[t.id]?.levels ?? { ...DEFAULT_PREF_LEVELS };
+    }
 
-    return { targets, prefs };
+    return { targets, prefs, levels };
   });
 
   // Save the caller's prefs for one teammate. The target must be in the caller's
@@ -69,7 +96,7 @@ export async function notificationPrefsRoutes(app: FastifyInstance) {
   app.put('/api/notification-prefs/:targetUserId', trading, async (request, reply) => {
     const me = request.currentUser!;
     const targetUserId = (request.params as { targetUserId: string }).targetUserId;
-    const parsed = flagsSchema.safeParse(request.body);
+    const parsed = prefBodySchema.safeParse(request.body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid notification preferences' });
 
     const scopeIds = await visibleTraderIds({ id: me.id, teamId: me.teamId });
@@ -77,7 +104,7 @@ export async function notificationPrefsRoutes(app: FastifyInstance) {
       return reply.code(404).send({ error: 'That user is not on your desk' });
     }
 
-    await setPref(me.id, targetUserId, parsed.data);
+    await setPref(me.id, targetUserId, parsed.data.flags, parsed.data.levels);
     return { ok: true };
   });
 }

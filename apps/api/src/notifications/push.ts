@@ -7,6 +7,7 @@ import { canAccessWorkspace, parseRoles } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
 import { config } from '../config.js';
 import { recipientsWantingEvent, type NotifEvent } from './prefs.js';
+import { filterAccountAlerts } from './alertPrefs.js';
 
 // Web Push (VAPID) delivery for phone notifications. Everything is best-effort:
 // a failed send never throws into the caller (an alert or a trade event must
@@ -83,12 +84,21 @@ export async function hasSubscription(userId: string): Promise<boolean> {
 // Send a payload to every device of the given users. No-op when push is not
 // configured or no users are given. Prunes subscriptions the push service has
 // expired (HTTP 404/410).
-export async function sendToUsers(userIds: string[], payload: PushPayload): Promise<void> {
+export async function sendToUsers(
+  userIds: string[],
+  payload: PushPayload,
+  opts: { ignoreAccountSwitch?: boolean } = {},
+): Promise<void> {
   if (!configured || userIds.length === 0) return;
+  // The account-level master switch. Applied here, at the one place every web
+  // push leaves the server, so a caller cannot forget it. `ignoreAccountSwitch`
+  // exists for the test button alone — see sendTest.
+  const ids = opts.ignoreAccountSwitch ? userIds : await filterAccountAlerts(userIds);
+  if (ids.length === 0) return;
   const subs = await db
     .select()
     .from(pushSubscriptions)
-    .where(inArray(pushSubscriptions.userId, [...new Set(userIds)]));
+    .where(inArray(pushSubscriptions.userId, [...new Set(ids)]));
   if (subs.length === 0) return;
 
   const body = JSON.stringify(payload);
@@ -157,10 +167,22 @@ export async function sendToTradingDesk(payload: PushPayload, opts: DeskSendOpts
 
 // Used by tests / a manual "send test" so a user can confirm a device works.
 export async function sendTest(userId: string): Promise<void> {
-  await sendToUsers([userId], {
-    title: 'VTS Terminal',
-    body: 'Phone alerts are on. You’ll get a buzz when trades and alerts fire.',
-    url: '/',
-    tag: 'vts-test',
-  });
+  // Says TEST in the title, before anything else. A lock-screen glance shows the
+  // first line and little more — if that line reads like a real fill, somebody
+  // acts on a trade that never happened.
+  //
+  // Deliberately ignores the account master switch: a test is a direct request
+  // made in the moment, and a test that silently does nothing is
+  // indistinguishable from a broken setup — which is the exact failure the test
+  // exists to detect.
+  await sendToUsers(
+    [userId],
+    {
+      title: 'TEST · VTS Terminal',
+      body: 'This is a test alert. Nothing has happened on your desk — phone alerts are working.',
+      url: '/',
+      tag: 'vts-test',
+    },
+    { ignoreAccountSwitch: true },
+  );
 }

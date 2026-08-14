@@ -1,4 +1,16 @@
 import type {
+  ImportBlueprintPayload,
+  ManualPackagePayload,
+  PackageValidation,
+  PreviewMode,
+  StudyLibraryEntry,
+  StudyPackage,
+  StudyPackageDetail,
+  StudyPackageState,
+  StudyBugContext,
+  StudyShare,
+  StudySubmission,
+  StudySubmissionStatus,
   BudgetMonth,
   PublishedWallTemplate,
   TemplateTile,
@@ -70,6 +82,7 @@ import type {
   DeskQuote,
   DeskWorkingOrder,
   DeskOrderRecord,
+  TicketPresets,
   PlaceOrderInput,
   PlaceOrderResult,
   CloseOrderInput,
@@ -110,6 +123,7 @@ import type {
   MyPortalData,
   MyTeam,
   TeamMemberPermissions,
+  TileColorOption,
   InvestmentPortfolio,
   InvestmentAccountInput,
   InvestmentHoldingInput,
@@ -150,6 +164,38 @@ export interface NotifPrefFlags {
   placeTp: boolean;
   moveTp: boolean;
 }
+
+// How a Pushover test is sent. Mirrors the server's PushoverTestKind.
+export type PushoverTestKind = 'standard' | 'repeating';
+
+// How loud one trade event is. Mirrors the server's NotifLevel, and the order
+// here is the order the picker draws — quietest first.
+export const NOTIF_LEVELS = ['silent', 'normal', 'alert', 'repeating'] as const;
+export type NotifLevel = (typeof NOTIF_LEVELS)[number];
+export type NotifPrefLevels = Record<keyof NotifPrefFlags, NotifLevel>;
+
+// A repeating alert still sounding on this user's phone.
+export interface LiveAlert {
+  id: string;
+  title: string;
+  body: string;
+  kind: string;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface AlertRepeatPrefs {
+  repeatEverySeconds: number;
+  repeatForSeconds: number;
+  // The master switch for this ACCOUNT (phone alerts are per device), and
+  // whether somebody else in your private group may buzz your phone.
+  accountAlerts: boolean;
+  groupAlerts: boolean;
+}
+
+// How loud a group nudge is sent. No message ever travels — the notification
+// says who sent it and nothing more.
+export type GroupAlertKind = 'standard' | 'repeating';
 
 
 // Status of the caller's home-screen widget token (never the token itself,
@@ -275,6 +321,10 @@ export const api = {
     avatar?: string;
     // 'auto', or an IANA zone name. The server refuses a name it cannot format.
     displayTimezone?: string;
+    // The screen the terminal opens on. Nullable together — clearing the home
+    // page means going back to the default, which is both set to null.
+    homeWorkspace?: string | null;
+    homeScreen?: string | null;
     hideFromLeaderboards?: boolean;
   }): Promise<{ user: User }> {
     return request('/api/auth/profile', {
@@ -286,7 +336,7 @@ export const api = {
   myPortal(): Promise<MyPortalData> {
     return request('/api/my-portal/team');
   },
-  myPortalConfig(): Promise<{ badgePresets: string[]; maxMembers: number }> {
+  myPortalConfig(): Promise<{ badgePresets: string[]; maxMembers: number; tileColors: TileColorOption[] }> {
     return request('/api/my-portal/config');
   },
   createMyTeam(name: string): Promise<{ team: MyTeam }> {
@@ -321,6 +371,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ badge }),
     });
+  },
+  // The colour one person's open positions are washed in on every trade tile.
+  // Leader-only, enforced server-side. `null` clears it back to no wash.
+  setMyTeamMemberTileColor(userId: string, color: string | null): Promise<{ team: MyTeam }> {
+    return request(`/api/my-portal/team/members/${encodeURIComponent(userId)}/tile-color`, {
+      method: 'POST',
+      body: JSON.stringify({ color }),
+    });
+  },
+  // The funded and manual tile colours — group-wide, not tied to a person. An
+  // omitted key is left alone, so setting one never blanks the other.
+  setMyTeamTileColors(patch: { funded?: string | null; manual?: string | null }): Promise<{ team: MyTeam }> {
+    return request('/api/my-portal/team/tile-colors', { method: 'POST', body: JSON.stringify(patch) });
   },
   setMyTeamMemberPermissions(
     userId: string,
@@ -618,6 +681,14 @@ export const api = {
     const body = userId ? { ...patch, userId } : patch;
     return request('/api/trading/desk-settings', { method: 'PATCH', body: JSON.stringify(body) });
   },
+  // The order ticket's quick-size buttons. Always the caller's own — there is no
+  // `userId` here and no route that would take one.
+  ticketPresets(): Promise<TicketPresets> {
+    return request('/api/trading/ticket-presets');
+  },
+  saveTicketPresets(patch: Partial<TicketPresets>): Promise<TicketPresets> {
+    return request('/api/trading/ticket-presets', { method: 'PUT', body: JSON.stringify(patch) });
+  },
   // The viewer's own capital: deposited, withdrawn, and what their connected
   // accounts hold right now. Self-only — there is no userId parameter.
   traderCapital(): Promise<TraderCapital> {
@@ -866,6 +937,11 @@ export const api = {
   },
   adminUpdateConnection(id: string, patch: { label?: string; active?: boolean; historyStartAt?: number | null }): Promise<{ connections: OwnedBrokerConnection[] }> {
     return request(`/api/trading/connections/${id}/admin`, { method: 'PATCH', body: JSON.stringify(patch) });
+  },
+  // Removes the connection only — closed trades survive it. The server refuses
+  // an active connection and a hand-kept book that still holds positions.
+  adminRemoveConnection(id: string): Promise<{ connections: OwnedBrokerConnection[] }> {
+    return request(`/api/trading/connections/${id}/admin`, { method: 'DELETE' });
   },
   addTrade(trade: TradeInput): Promise<TradeLogData> {
     return request('/api/trading/trades', { method: 'POST', body: JSON.stringify(trade) });
@@ -1176,8 +1252,14 @@ export const api = {
   supportMessage(
     kind: SupportKind,
     messages: { role: 'user' | 'ai'; body: string }[],
+    // Machine context, on a BUG only. The server whitelists it and ignores it
+    // on any other kind — see api/support/studyContext.
+    context?: StudyBugContext,
   ): Promise<{ needMore: boolean; reply: string; submitted: boolean }> {
-    return request('/api/support/message', { method: 'POST', body: JSON.stringify({ kind, messages }) });
+    return request('/api/support/message', {
+      method: 'POST',
+      body: JSON.stringify({ kind, messages, context }),
+    });
   },
   adminSupportRequests(): Promise<{ requests: SupportRequest[] }> {
     return request('/api/admin/support');
@@ -1592,17 +1674,61 @@ export const api = {
   pushoverDisconnect(): Promise<{ ok: true }> {
     return request('/api/pushover/connect', { method: 'DELETE' });
   },
-  pushoverTest(): Promise<{ ok: true }> {
-    return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({}) });
+  // 'standard' goes out exactly the way a real trade notification does;
+  // 'emergency' repeats until acknowledged in the Pushover app, which is the
+  // only level iOS lets through silent mode and Focus.
+  pushoverTest(kind: PushoverTestKind = 'standard'): Promise<{ ok: true }> {
+    return request('/api/pushover/test', { method: 'POST', body: JSON.stringify({ kind }) });
   },
   // ---- Per-user notification preferences ----
-  notificationPrefs(): Promise<{ targets: NotifTarget[]; prefs: Record<string, NotifPrefFlags> }> {
+  notificationPrefs(): Promise<{
+    targets: NotifTarget[];
+    prefs: Record<string, NotifPrefFlags>;
+    levels: Record<string, NotifPrefLevels>;
+  }> {
     return request('/api/notification-prefs');
   },
-  setNotificationPref(targetUserId: string, flags: NotifPrefFlags): Promise<{ ok: true }> {
+  // Flags and levels are saved together — the panel holds both, and sending only
+  // half would leave the server guessing at the other.
+  setNotificationPref(
+    targetUserId: string,
+    flags: NotifPrefFlags,
+    levels: NotifPrefLevels,
+  ): Promise<{ ok: true }> {
     return request(`/api/notification-prefs/${targetUserId}`, {
       method: 'PUT',
-      body: JSON.stringify(flags),
+      body: JSON.stringify({ flags, levels }),
+    });
+  },
+  // ---- Repeating alerts ----
+  alertRepeatPrefs(): Promise<{ prefs: AlertRepeatPrefs }> {
+    return request('/api/pushover/repeat-prefs');
+  },
+  saveAlertRepeatPrefs(prefs: Partial<AlertRepeatPrefs>): Promise<{ prefs: AlertRepeatPrefs }> {
+    return request('/api/pushover/repeat-prefs', { method: 'PUT', body: JSON.stringify(prefs) });
+  },
+  // Nudge people in your private group — everybody, or the ones you pick.
+  // An empty `userIds` means everybody, which is also what an older bundle
+  // sends by omitting it entirely.
+  //
+  // Answers with how many people it actually reached, so the sender is told the
+  // truth rather than a cheerful "sent" when the recipients have group alerts
+  // switched off.
+  sendGroupAlert(kind: GroupAlertKind, userIds: string[] = []): Promise<{ recipients: number }> {
+    return request('/api/notifications/group-alert', {
+      method: 'POST',
+      body: JSON.stringify({ kind, userIds }),
+    });
+  },
+  liveAlerts(): Promise<{ alerts: LiveAlert[] }> {
+    return request('/api/pushover/live-alerts');
+  },
+  // No id clears everything still repeating — what "I have opened the terminal"
+  // means.
+  acknowledgeAlerts(id?: string): Promise<{ cleared: number }> {
+    return request('/api/pushover/acknowledge', {
+      method: 'POST',
+      body: JSON.stringify(id ? { id } : {}),
     });
   },
   getTodo(): Promise<{ sections: TodoSection[] }> {
@@ -1657,5 +1783,174 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(item),
     });
+  },
+
+  // ---- Study Packages ----
+  // Validate reads and reports; commit writes. Nothing is created by validating,
+  // so a creator can paste, read the errors, fix them with their AI and paste
+  // again without leaving anything behind. Neither call touches VTS AI.
+  validateStudyPackage(
+    documents: string[],
+    blueprint: ImportBlueprintPayload,
+  ): Promise<{ result: PackageValidation }> {
+    return request('/api/studies/packages/import/validate', {
+      method: 'POST',
+      body: JSON.stringify({ documents, blueprint }),
+    });
+  },
+  commitStudyPackage(
+    documents: string[],
+    blueprint: ImportBlueprintPayload,
+    // Only for the hybrid where the AI wrote the extras and the creator typed
+    // the questions. They are created in the same transaction as the import.
+    manualQuestions?: ManualPackagePayload['questions'],
+  ): Promise<{ package: { id: string; name: string } }> {
+    return request('/api/studies/packages/import/commit', {
+      method: 'POST',
+      body: JSON.stringify({ documents, blueprint, manualQuestions }),
+    });
+  },
+  // The wizard's manual ending: the same transactional creator, given questions
+  // that were typed in rather than imported.
+  createManualStudyPackage(payload: ManualPackagePayload): Promise<{ package: { id: string; name: string } }> {
+    return request('/api/studies/packages/manual', { method: 'POST', body: JSON.stringify(payload) });
+  },
+
+  // The library: a person's own packages, the ones handed to them, and the ones
+  // they took from the VTS Study Library. Archived ones are asked for
+  // separately, which is how an owner finds one to restore.
+  listStudyPackages(archived = false): Promise<{ packages: StudyPackage[]; archived: boolean }> {
+    return request(`/api/studies/packages${archived ? '?archived=true' : ''}`);
+  },
+  getStudyPackage(id: string): Promise<{ package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}`);
+  },
+  archiveStudyPackage(id: string): Promise<{ package: StudyPackageDetail; packages: StudyPackage[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/archive`, { method: 'POST' });
+  },
+  unarchiveStudyPackage(id: string): Promise<{ package: StudyPackageDetail; packages: StudyPackage[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/unarchive`, { method: 'POST' });
+  },
+
+  // ---- Sharing ----
+  // By username. The server resolves it against the real user table, so a typo
+  // finds nobody and says so rather than handing the package to somebody else.
+  shareStudyPackage(
+    id: string,
+    handle: string,
+  ): Promise<{ share: StudyShare; alreadyShared: boolean; shares: StudyShare[]; package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ handle }),
+    });
+  },
+  listStudyPackageShares(id: string): Promise<{ shares: StudyShare[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/shares`);
+  },
+  // Taking access back. The recipient's progress is deliberately untouched.
+  revokeStudyPackageShare(
+    id: string,
+    shareId: string,
+  ): Promise<{ shares: StudyShare[]; package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/shares/${encodeURIComponent(shareId)}`, {
+      method: 'DELETE',
+    });
+  },
+  sharedStudyPackages(): Promise<{ pending: StudyShare[]; accepted: StudyShare[] }> {
+    return request('/api/studies/shared-with-me');
+  },
+  respondToStudyShare(
+    shareId: string,
+    accept: boolean,
+  ): Promise<{ pending: StudyShare[]; accepted: StudyShare[]; packages: StudyPackage[] }> {
+    return request(`/api/studies/shares/${encodeURIComponent(shareId)}/respond`, {
+      method: 'POST',
+      body: JSON.stringify({ accept }),
+    });
+  },
+
+  // ---- The VTS Study Library ----
+  // Submitting is not publishing: an administrator reads it and decides.
+  studyLibraryAttestations(): Promise<{ version: string; statements: string[] }> {
+    return request('/api/studies/library/attestations');
+  },
+  submitStudyPackage(id: string): Promise<{ submission: StudySubmission; package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/submit`, {
+      method: 'POST',
+      body: JSON.stringify({ attested: true }),
+    });
+  },
+  withdrawStudyPackage(id: string): Promise<{ package: StudyPackageDetail; submissions: StudySubmission[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/withdraw`, { method: 'POST' });
+  },
+  // Stop distributing your own published package. Deliberately distinct from
+  // `withdrawStudyPackage`, which takes back a request nobody has reviewed yet:
+  // this one is about something already in the library.
+  withdrawStudyPackageFromLibrary(
+    id: string,
+  ): Promise<{ package: StudyPackageDetail; submissions: StudySubmission[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/withdraw-from-library`, { method: 'POST' });
+  },
+  studyPackageSubmissions(id: string): Promise<{ submissions: StudySubmission[] }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/submissions`);
+  },
+  browseStudyLibrary(): Promise<{ entries: StudyLibraryEntry[] }> {
+    return request('/api/studies/library');
+  },
+  // No copy is made — the learner studies the same package everybody else does.
+  addStudyLibraryPackage(id: string): Promise<{ entries: StudyLibraryEntry[]; packages: StudyPackage[] }> {
+    return request(`/api/studies/library/${encodeURIComponent(id)}/add`, { method: 'POST' });
+  },
+  removeStudyLibraryPackage(id: string): Promise<{ entries: StudyLibraryEntry[]; packages: StudyPackage[] }> {
+    return request(`/api/studies/library/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  },
+
+  // ---- Moderation (admins) ----
+  adminStudySubmissions(status?: StudySubmissionStatus): Promise<{ submissions: StudySubmission[] }> {
+    return request(`/api/studies/admin/submissions${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+  },
+  reviewStudySubmission(
+    id: string,
+    decision: 'approved' | 'rejected' | 'changes_requested',
+    note?: string | null,
+  ): Promise<{ submission: StudySubmission; submissions: StudySubmission[] }> {
+    return request(`/api/studies/admin/submissions/${encodeURIComponent(id)}/review`, {
+      method: 'POST',
+      body: JSON.stringify({ decision, note: note ?? null }),
+    });
+  },
+  unpublishStudyPackage(id: string): Promise<{ ok: true }> {
+    return request(`/api/studies/admin/packages/${encodeURIComponent(id)}/unpublish`, { method: 'POST' });
+  },
+
+  // ---- Developer capabilities ----
+  // The same production terminal, seen as somebody else. The preview is stored
+  // on the SESSION server-side, so the API answers as that account too — the
+  // guards refuse, the payloads narrow, the 402s fire. Nothing about the real
+  // account is written, and leaving is one call.
+  setPreview(mode: PreviewMode): Promise<{ preview: PreviewMode }> {
+    return request('/api/dev/preview', { method: 'POST', body: JSON.stringify({ mode }) });
+  },
+  exitPreview(): Promise<{ preview: null }> {
+    return request('/api/dev/preview', { method: 'DELETE' });
+  },
+  studyFixtures(): Promise<{ schemaVersion: number; fixtures: { kind: string; label: string }[] }> {
+    return request('/api/dev/study/fixtures');
+  },
+  // Returns the documents a creator would have pasted — the fixture then goes
+  // through the ordinary validate-then-confirm path with no shortcut around it.
+  buildStudyFixture(
+    kind: string,
+    name: string,
+    subject: string,
+    blueprint: ImportBlueprintPayload,
+  ): Promise<{ kind: string; label: string; documents: string[] }> {
+    return request('/api/dev/study/fixtures', {
+      method: 'POST',
+      body: JSON.stringify({ kind, name, subject, blueprint }),
+    });
+  },
+  studyPackageState(id: string): Promise<{ state: StudyPackageState }> {
+    return request(`/api/dev/study/packages/${encodeURIComponent(id)}/state`);
   },
 };

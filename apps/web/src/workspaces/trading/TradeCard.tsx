@@ -3,6 +3,15 @@ import { api, ApiError } from '../../api/client';
 import { readClipboardImage } from '../../lib/clipboard';
 import { classifyOutcome, type BreakEvenConfig } from './outcome';
 import { TradeTimes, etSince } from './tradeTime';
+import { fmtMoney, fmtPips, fmtPrice, usd } from './tradeFormat';
+import { fmtPerStep, fmtSize, sizeTitle } from './pips';
+import {
+  PositionActions,
+  ProtectionEditor,
+  usePositionEditKind,
+  usePositionEditor,
+  wallMovement,
+} from './positionEdit';
 import type { ForexMetrics, LiveTrade } from '../../api/types';
 
 // The full "trading card" for one open position — the rich card shown on the
@@ -19,47 +28,24 @@ const TEXT = '#eef3ff';
 const MUTED = '#9fb0d6';
 const FAINT = '#6f84b0';
 // Neutral gray used to mute off-book (funded/FTP) positions — they sit last on
-// the wall and read as separate from the desk's on-book book.
-const GRAY = '#8892a6';
+// the wall and read as separate from the desk's on-book book. It is also the
+// palette's `slate`, which is what the server falls back to when a group has not
+// chosen a funded colour, so a desk that never touches tile colours sees the
+// wall it always saw. Exported so the other position surfaces fall back to the
+// same gray rather than each carrying the literal.
+export const OFF_BOOK_GRAY = '#8892a6';
+const GRAY = OFF_BOOK_GRAY;
 const CARD = 'rgba(13,31,68,.5)';
 const PANEL = 'rgba(11,26,58,.5)';
 const BORDER = '#16294f';
 const BORDER2 = '#1c3a7a';
 const MONO = "'IBM Plex Mono', monospace";
 
-export const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US');
-
-// Money in the account currency. USD shows as "$"; other currencies append the
-// code so the number is never mistaken for dollars.
-export function fmtMoney(n: number, ccy: string): string {
-  const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const sign = n < 0 ? '-' : '';
-  return ccy === 'USD' ? `${sign}$${abs}` : `${sign}${abs} ${ccy}`;
-}
-
-// Pips with one decimal and an optional sign (for signed open-P/L distances).
-export function fmtPips(n: number, signed = false): string {
-  const s = n.toLocaleString('en-US', { maximumFractionDigits: 1 });
-  return `${signed && n > 0 ? '+' : ''}${s} pip${Math.abs(n) === 1 ? '' : 's'}`;
-}
-
-// A position size, at whatever precision it actually needs. Sizes span
-// 100,000 units of EUR/USD down to 0.00042 of a bitcoin, and the default
-// three-decimal locale format prints that second one as "0" — so the smaller
-// the size, the more decimals it keeps.
-export function fmtUnits(n: number): string {
-  const abs = Math.abs(n);
-  const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
-  return Number(n.toFixed(digits)).toLocaleString('en-US', { maximumFractionDigits: digits });
-}
-
-// Prices span forex (1.08425), indices (38,958), and crypto (64,255). Show
-// thousands with separators and few decimals; sub-1000 prices keep precision.
-export function fmtPrice(n: number | null): string {
-  if (n == null) return '—';
-  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  return String(Number(n.toFixed(5)));
-}
+// The desk's number formatters live in `tradeFormat.ts` — this card imports the
+// shared position editor, and the editor needs them, so keeping them here would
+// have the two files importing each other. Re-exported so every existing
+// `import { fmtMoney } from './TradeCard'` keeps working.
+export { usd, fmtMoney, fmtPips, fmtUnits, fmtPrice } from './tradeFormat';
 
 // Fixed to Eastern, deliberately: its remaining callers are Market Data's Fed
 // bar and economic calendar, and a 2:00 PM statement is a fact about the market
@@ -99,30 +85,42 @@ export function TradeCard({
   config,
   mine,
   readOnly,
+  sample,
   showMoney,
   showFxMoney,
   canSeeBalances,
-  onClosed,
+  onChanged,
 }: {
   t: LiveTrade;
   config: BreakEvenConfig;
   mine: boolean; // the position is on the viewer's own broker account
   readOnly: boolean;
+  // The wall previews itself with representative trades when no broker has ever
+  // been connected. Nothing on one is actionable — there is no real position
+  // behind it to close or amend.
+  sample: boolean;
   showMoney: boolean;
   // Forex pip money is shown to every trader (not balance-gated), but still
   // hidden by the privacy and Hide-$ toggles.
   showFxMoney: boolean;
   canSeeBalances: boolean;
-  onClosed: () => void;
+  // Reload the wall — this position was closed, or its stop/target changed.
+  onChanged: () => void;
 }) {
   const long = t.side === 'long';
   const sideColor = long ? GREEN : RED;
-  // Off-book (funded/FTP) positions are muted gray and always sorted last on the
-  // wall, regardless of who placed them. On-book positions take no accent: a
-  // position is not coloured by whose it is (the Chief Strategist / Chief Analyst
-  // tints were removed — owner decision, 2026-08).
+  // The tile's wash: whose position it is, or that it is a funded / manual one.
+  // The colour is resolved server-side from the group's palette (the leader sets
+  // it in My Terminal ▸ My Group), so this card never maps a person to a colour
+  // and cannot disagree with the compact list, the desk book or the funded
+  // screen about whose trade is whose.
+  //
+  // The fallback keeps the long-standing behaviour for anything the server did
+  // not paint: an off-book (funded) position reads muted gray, and everything
+  // else takes no accent. Off-book positions are also always sorted last on the
+  // wall, which is separate from the colour and unchanged.
   const offBook = t.broker === 'ftp';
-  const accent = offBook ? GRAY : null;
+  const accent = t.tileColor ?? (offBook ? GRAY : null);
   const fav = slippageFavorable(t);
   const slipColor = fav == null ? MUTED : fav ? GREEN : AMBER;
   // While open, a position sitting inside the desk's break-even band (its move
@@ -131,11 +129,19 @@ export function TradeCard({
     t.currentPrice != null &&
     classifyOutcome(t.side, t.entryPrice, t.currentPrice, t.unrealizedPl, t.instrument, config) === 'breakeven';
 
+  // Acting on the position: the same stop/target editing and closing the Live
+  // Trades desk book offers, on the same positions, through the same shared save
+  // paths — so a trade can be managed from the board it is being watched on
+  // rather than only from the screen that placed it.
+  const editKind = usePositionEditKind(t, { own: mine, readOnly, sample });
+  const editor = usePositionEditor(t, editKind, onChanged);
+  const move = wallMovement(t);
+
   // A funded (FTP off-book) position the viewer owns can be closed right here on
   // the wall: its id is `funded:<tradeId>`. Closing reads a trade-result
   // screenshot to stamp the exit/P-L and drop it off the wall.
   const fundedTradeId = t.broker === 'ftp' && t.id.startsWith('funded:') ? t.id.slice('funded:'.length) : null;
-  const canClose = mine && !readOnly && fundedTradeId != null;
+  const canClose = mine && !readOnly && !sample && fundedTradeId != null;
   const [closing, setClosing] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
   const [closeErr, setCloseErr] = useState<string | null>(null);
@@ -150,7 +156,7 @@ export function TradeCard({
       try {
         await api.closeFundedTrade(fundedTradeId, { imageBase64: reader.result as string, mediaType: file.type });
         setClosing(false);
-        onClosed(); // reload the wall — the position drops off once it's closed
+        onChanged(); // reload the wall — the position drops off once it's closed
       } catch (e) {
         setCloseErr(e instanceof ApiError ? e.message : 'Could not read that trade-result screenshot');
       } finally {
@@ -182,9 +188,10 @@ export function TradeCard({
         padding: 0,
         overflow: 'hidden',
         borderTop: `2px solid ${sideColor}`,
-        // Gray wash + left accent on an off-book (funded) position, so it reads
-        // as separate from the desk's on-book positions.
-        ...(accent ? { borderLeft: `3px solid ${accent}`, background: tileTint(accent, CARD) } : {}),
+        // The tile colour: a wash across the whole card and a bar down its left
+        // edge. The bar is 5px rather than 3 — at 3 it was invisible against the
+        // card's own border on a real wall.
+        ...(accent ? { borderLeft: `5px solid ${accent}`, background: tileTint(accent, CARD) } : {}),
       }}
     >
       {/* Header row */}
@@ -199,11 +206,22 @@ export function TradeCard({
               the owner tag is dropped. On teammates' cards show their handle
               (the part of the email before the domain) so it's clear whose it
               is. */}
-          {!mine && <span style={ownerTag(false)} title={t.owner}>@{ownerHandle(t.owner)}</span>}
+          {/* The identity chip carries the tile colour at full strength. On a
+              teammate's card that is the @handle; on the viewer's own there is
+              no handle (the broker name already identifies it), so the broker
+              chip takes it instead — every card gets one coloured chip in its
+              header rather than the viewer's own being the one that does not.
+              The off-book chip keeps its gold: "off-book" is a fact about the
+              account that the colour is not allowed to overwrite. */}
+          {!mine && (
+            <span style={{ ...ownerTag(false), ...(accent ? tileChip(accent) : {}) }} title={t.owner}>
+              @{ownerHandle(t.owner)}
+            </span>
+          )}
           {t.broker === 'ftp' ? (
             <span style={ftpTag} title="Hand-tracked position — priced off OANDA, and kept off the Trade Log & Live Brokers capital">{t.brokerName} · off-book</span>
           ) : (
-            <span style={brokerTag}>{t.brokerName}</span>
+            <span style={{ ...brokerTag, ...(accent && mine ? tileChip(accent) : {}) }}>{t.brokerName}</span>
           )}
         </div>
       </div>
@@ -229,7 +247,17 @@ export function TradeCard({
         <Field label="SL" value={fmtPrice(t.stopLoss)} color={RED} />
         {t.trailingStopLoss != null && <Field label="Trail SL" value={fmtPrice(t.trailingStopLoss)} color={AMBER} />}
         {t.currentPrice != null && <Field label="Mark" value={fmtPrice(t.currentPrice)} />}
-        <Field label="Size" value={String(t.units)} />
+        {/* How big the position is, and what one unit of movement is worth on
+            it — side by side, because neither answers "how much am I risking"
+            on its own. A currency pair is sized in lots (with the raw units on
+            the hover) and moves in pips; everything else keeps its units and
+            moves in points. `wallMovement` is the same reading the stop/target
+            editor prices a level with, so the card and the editor cannot
+            disagree about what a pip is worth here. */}
+        <Field label="Size" value={fmtSize(t.instrument, t.units)} title={sizeTitle(t.instrument, t.units)} />
+        {showFxMoney && move.perStep != null && (
+          <Field label={`Per ${move.unit}`} value={fmtPerStep(move.perStep, move.currency)} />
+        )}
       </div>
 
       {/* Forex pip math: per-pip value, risk/reward to SL/TP, and R:R */}
@@ -265,12 +293,38 @@ export function TradeCard({
         </div>
       </div>
 
-      {/* Close trade — funded (off-book) positions the viewer owns */}
-      {canClose && (
-        <div style={{ borderTop: `1px solid ${BORDER}`, padding: '10px 14px', background: PANEL }}>
-          {!closing ? (
-            <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}>{"Close trade"}</button>
-          ) : (
+      {/* Managing the position — ONE footer, however many things this particular
+          position can have done to it. A funded card carries both the
+          stop/target note and the screenshot close, and two bordered strips
+          stacked under one card read as two cards.
+
+          What appears is the trader's own position, and only where there is
+          something a save could reach: an OANDA trade's stop and target are
+          instructions to the broker and the whole position can be closed here,
+          while a funded or hand-kept one records what the account is holding.
+          A teammate's card, a Kraken margin row and the sample book carry
+          nothing, which is the same rule the desk book draws. */}
+      {(editKind || canClose) && (
+        <div style={{ borderTop: `1px solid ${BORDER}`, padding: '9px 14px', background: PANEL }}>
+          {/* One flow at a time: opening the stop/target editor puts the
+              screenshot close away and vice versa, so the card never asks for
+              two different things at once. */}
+          {!closing && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              {editKind && <PositionActions trade={t} kind={editKind} editor={editor} />}
+              {canClose && !editor.editing && (
+                <button onClick={() => { setCloseErr(null); setClosing(true); }} style={closeTradeBtn}>{"Close trade"}</button>
+              )}
+            </div>
+          )}
+          {editKind && editor.editing && (
+            <ProtectionEditor kind={editKind} editor={editor} move={move} hideMoney={!showMoney} />
+          )}
+          {editor.error && <div style={{ fontSize: 11, color: RED, marginTop: 6 }}>{editor.error}</div>}
+
+          {/* Closing a funded trade reads the result off a screenshot: it has no
+              broker to ask, so the exit price and P/L come from the picture. */}
+          {closing && (
             <div>
               <div style={{ fontSize: 11, color: MUTED, marginBottom: 9, lineHeight: 1.45 }}>
                 Paste or upload a screenshot of the <b>closed</b> trade — VTS AI reads the exit price and P/L to finalize it, and
@@ -303,32 +357,45 @@ export function TradeCard({
   );
 }
 
-function Field({ label, value, strong, color }: { label: string; value: string; strong?: boolean; color?: string }) {
+function Field({
+  label,
+  value,
+  strong,
+  color,
+  title,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+  color?: string;
+  title?: string;
+}) {
   return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+    <span title={title} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
       <span style={{ fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{label}</span>
       <span style={{ fontSize: strong ? 14 : 12.5, fontWeight: strong ? 700 : 500, color: color ?? TEXT, fontFamily: MONO }}>{value}</span>
     </span>
   );
 }
 
-// Forex-only detail block: the money value of one pip, the risk and reward to
-// the stop loss and take profit (in pips and account-currency money), and the
-// resulting reward-to-risk ratio. Money is shown only when balances are visible;
-// pips and R:R always show because they are price facts, not balances.
+// Forex-only detail block: the risk and reward to the stop loss and take profit
+// (in pips and account-currency money), and the resulting reward-to-risk ratio.
+// Money is shown only when balances are visible; pips and R:R always show
+// because they are price facts, not balances.
+//
+// What one pip is worth used to be here too, and is now on the size row above —
+// next to the size it is derived from, which is the pairing a trader reads. Do
+// not restate it here: one card stating the same figure twice invites the two to
+// drift when one of them is edited.
 function ForexDetails({ f, showMoney }: { f: ForexMetrics; showMoney: boolean }) {
   const ccy = f.accountCurrency;
-  const showPerPip = showMoney && f.moneyPerPip != null;
   const hasRR = !!(f.risk || f.reward || f.rr != null);
-  if (!showPerPip && !hasRR) return null;
+  if (!hasRR) return null;
   return (
     <div style={{ padding: '0 14px 10px' }}>
       <div style={{ borderTop: `1px solid ${BORDER}`, paddingTop: 9, display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={fxTag}>FOREX</span>
-          {showPerPip && (
-            <span style={{ fontSize: 11, color: MUTED, fontFamily: MONO }}>{fmtMoney(f.moneyPerPip!, ccy)} / pip</span>
-          )}
         </div>
         {hasRR && (
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -361,10 +428,32 @@ function RRBox({ label, pips, money, ccy, color }: { label: string; pips: number
 
 const card: CSSProperties = { background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12 };
 
-// A subtle wash of an accent colour blended into the card's base background, so
-// the whole tile reads in that colour. Only off-book (funded) positions use it.
-function tileTint(accent: string, base: string): string {
-  return `color-mix(in srgb, ${accent} 13%, ${base})`;
+// A wash of an accent colour blended into a tile's base background, so the whole
+// tile reads in that colour. Exported because four surfaces draw the same
+// position — the full card, the board tile's compact list, the Trade Desk's book
+// and the funded screen — and a group's colour has to look like one colour
+// across all of them. `pct` lets a dense row carry a stronger wash than a large
+// card, where the same blend over a much bigger area reads heavier.
+//
+// The default was 13% and was raised to 24% (owner instruction, 2026-08): at 13%
+// four people's cards were nearly indistinguishable on a real wall, which is the
+// whole job. Do not quietly lower it again — if a colour looks too strong, the
+// answer is a different colour, not a wash nobody can see.
+export function tileTint(accent: string, base: string, pct = 24): string {
+  return `color-mix(in srgb, ${accent} ${pct}%, ${base})`;
+}
+
+// The identity chip — the owner or broker label in a card's header, drawn in
+// that position's colour. This is what actually makes a tile "pop": the wash
+// tells you two cards differ, and a saturated chip beside the name tells you
+// whose it is without decoding anything. Kept off every figure on the card, so
+// the money and the side keep their own green/red meaning.
+export function tileChip(accent: string): CSSProperties {
+  return {
+    color: accent,
+    background: `color-mix(in srgb, ${accent} 22%, transparent)`,
+    border: `1px solid ${accent}`,
+  };
 }
 const fxLabel: CSSProperties = { fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT };
 const fxTag: CSSProperties = {

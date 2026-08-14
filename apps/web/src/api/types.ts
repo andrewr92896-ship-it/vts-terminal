@@ -104,6 +104,13 @@ export interface User {
   // IANA zone name. Stored on the account, so it follows them between devices.
   // Never null: an account that has never chosen gets the Eastern default.
   displayTimezone: string;
+  // The screen the terminal opens on (My Terminal ▸ Settings), as raw
+  // workspace/section keys. Null = never chosen, which keeps the original
+  // behaviour. Resolved at launch rather than trusted: what this account can
+  // reach depends on roles, opt-ins and membership, all of which can move after
+  // the choice was stored, so an unreachable home falls back.
+  homeWorkspace: string | null;
+  homeScreen: string | null;
   // The trading team the user belongs to (or null). Scopes the Studies
   // leaderboards to teammates; the Trading workspace itself stays shared.
   teamId: string | null;
@@ -115,6 +122,18 @@ export interface User {
   // renders. Never true for the read-only demo.
   mustAcceptTerms: boolean;
   isDemo: boolean; // the public, read-only demo account
+  // The developer preview this SESSION is in ('free' | 'premium' | 'max' |
+  // 'public'), or null. Set server-side, so everything above already reports the
+  // previewed account: the roles, the workspaces and the membership are all what
+  // that tier really gets, which is what makes a preview the production
+  // experience rather than a costume.
+  //
+  // Its presence is the authority to change or leave one, because previewing as
+  // the public narrows `roles` to a plain member and a role check would take the
+  // way out with it.
+  preview: PreviewMode | null;
+  /** Whether this account may enter a preview — decided from its REAL roles. */
+  canPreview: boolean;
   access: {
     label: string;
     workspaces: WorkspaceKey[];
@@ -168,6 +187,12 @@ export interface UserTeamMember {
   avatarUrl: string | null;
   isLeader: boolean;
   badge: string | null;
+  // The colour this person's open positions are washed in on every trade tile.
+  // The key says which swatch is selected; the hex is what the tiles are drawn
+  // in. Both come from the server — the palette lives there and nowhere else, so
+  // a swatch can never be a colour the wall does not paint.
+  tileColor: string | null;
+  tileColorHex: string | null;
   permissions: TeamMemberPermissions;
   joinedAt: number;
 }
@@ -187,7 +212,20 @@ export interface MyTeam {
   myPermissions: TeamMemberPermissions;
   members: UserTeamMember[];
   invites: UserTeamInvite[];
+  // Tile colours for the positions that belong to nobody in particular. Funded
+  // always resolves to a hex (the gray those tiles have always carried); manual
+  // is null until somebody chooses one.
+  fundedTileColor: string | null;
+  fundedTileColorHex: string;
+  manualTileColor: string | null;
+  manualTileColorHex: string | null;
   createdAt: number;
+}
+// One choice in the trade tile palette, exactly as the server sends it.
+export interface TileColorOption {
+  key: string;
+  label: string;
+  hex: string;
 }
 export interface IncomingInvite {
   id: string;
@@ -402,6 +440,11 @@ export interface TeamDeck {
   // same as every weight being zero, which is a game with nothing on the paper.
   categoryWeights: Record<string, number> | null;
   questionCount: number;
+  // Whether this game has a leaderboard at all: built-in games (ranked across
+  // every copy on the install) and package-backed ones (ranked among the
+  // package's own audience) do; a legacy user-made game does not, and its
+  // endpoint answers 404 so the tab can be hidden rather than opened empty.
+  hasLeaderboard: boolean;
   createdBy: string | null;
   createdByName: string | null;
   createdAt: number;
@@ -451,6 +494,11 @@ export interface FlashcardInput {
 // a body, and an optional screenshot. Built through a back-and-forth chat with
 // VTS AI (which drafts the slide text) plus screenshots the author attaches.
 export interface GuideSlide {
+  // The slide's stable stored identity, assigned by the server. Round-trip it
+  // on save: a lesson refers to slides by this, so dropping it would leave the
+  // lesson describing slides that no longer exist. Absent on legacy slides
+  // written before ids existed, and on a slide just added in the editor.
+  id?: string | null;
   title: string;
   body: string;
   // A base64 data URL of a screenshot the author attached, or null/absent.
@@ -507,7 +555,11 @@ export interface BrokerStatus {
 
 // ---- Trading — Live Wall (mirror of apps/api/src/trading/types.ts) ----
 export type TradeSide = 'long' | 'short';
-export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation';
+// 'manual' is a hand-kept position on a manual connection — the server has sent
+// it since manual books existed (trading/manual.ts) and this mirror simply
+// omitted it, so a screen comparing against it got a type error for a value that
+// genuinely arrives.
+export type BrokerKey = 'ftp' | 'oanda' | 'kraken' | 'tradestation' | 'manual';
 
 // Forex pip math attached to currency-pair positions (mirror of
 // apps/api/src/trading/forex.ts). Money fields are null when balances are hidden.
@@ -547,6 +599,12 @@ export interface LiveTrade {
   timeframe: string | null;
   openedAt: number | null;
   forex?: ForexMetrics | null; // present only for genuine currency pairs
+  // The colour this tile is washed in — whose position it is, or that it is a
+  // funded / manual one. Resolved server-side from the group's palette, so no
+  // screen maps a person to a colour and two surfaces cannot disagree about
+  // whose trade is whose. Absent/null = no wash, the appearance every tile had
+  // before the group set any colours.
+  tileColor?: string | null;
 }
 
 export interface BrokerLiveResult {
@@ -697,6 +755,35 @@ export interface DeskQuote {
   // Quote currency → account currency, so a stop can be priced in real money on
   // any instrument (not just the ones quoted in the account's own currency).
   quoteHomeFactor: number | null;
+}
+
+// The order ticket's quick-size buttons, as this trader has set them up (mirror
+// of apps/api/src/trading/ticketPresets.ts). A null ladder means "the built-in
+// one" — the defaults live in the web (workspaces/trading/ticketPresets.ts),
+// because that is where they are rendered from before this ever loads.
+export type TicketPresetMode = 'units' | 'per_step' | 'cost';
+
+// Which of a preset's two readings carries its colour. Both are always shown —
+// 'free' is what is left to commit right now (the figure the broker refuses
+// against), 'value' is the share of the whole account regardless of what is
+// already open (the figure that still means something on a desk holding
+// positions).
+export type MarginBasis = 'free' | 'value';
+
+export interface TicketPresets {
+  mode: TicketPresetMode | null;
+  units: number[] | null;
+  fractional: number[] | null;
+  step: number[] | null;
+  cost: number[] | null;
+  showMargin: boolean;
+  /** Null = 'free', which is what every ticket read before the second basis. */
+  marginBasis: MarginBasis | null;
+  /** At or above this share of free margin (cash, on spot) a preset reads red. */
+  marginWarnPct: number;
+  /** The same, against the whole account value. Separate: one number cannot mean
+   *  the right thing on both bases. */
+  valueWarnPct: number;
 }
 
 export interface DeskWorkingOrder {
@@ -1014,6 +1101,10 @@ export interface FundedAccount {
 }
 export interface FundedData {
   accounts: FundedAccount[];
+  // The colour funded tiles carry, so the live positions on this screen read the
+  // same as the ones on the Live Wall. Every position here is funded, so it is
+  // one colour for the screen rather than one per row.
+  fundedTileColor: string | null;
 }
 export interface FundedAccountInput {
   platform?: string;
@@ -1141,6 +1232,7 @@ export type BoardTileKind =
   | 'streams'
   | 'clock'
   // The desk — behind the Advanced Trading opt-in.
+  | 'ticket'
   | 'positions'
   | 'metrics'
   | 'alerts'
@@ -1222,6 +1314,16 @@ export interface BoardTile {
   todoSectionId?: string;
   // Trade History / closed-trade tiles — the window they score.
   range?: '7d' | '30d' | '90d' | 'all';
+  // Order ticket tiles — the instrument the ticket is set to, in display form
+  // ("EUR/USD"). Per tile, so a board can carry a forex ticket beside a crypto
+  // one. Deliberately not `symbol`, which is a TradingView symbol elsewhere.
+  instrument?: string;
+  // Desk Metrics — whose figures this tile reports. A trader's ownerId, or
+  // absent/'' for the whole desk. Stored on the tile so a board can carry
+  // several of them, each pinned to a different trader, and each stays where it
+  // was left. Emptied when a board is shared: a teammate's id means nothing on
+  // somebody else's screen.
+  trader?: string;
   // How large this tile's contents are drawn, 0.5–2 (absent = 1). Below 1 the
   // tile lays out in a bigger box and is painted down to fit, so it carries
   // more; above 1 it carries less, larger.
@@ -1243,6 +1345,11 @@ export interface TradingBoard {
   name: string;
   layout: BoardLayout;
   isDefault: boolean;
+  // The board a PHONE opens on, kept separately from the desktop default: a
+  // board is arranged against a screen, and a dense desktop wall flattened into
+  // one phone column is not the board anybody wants in their hand. No board
+  // carrying it falls back to `isDefault`.
+  isDefaultPhone: boolean;
   updatedAt: number;
   /** Published to this team, or null when private. */
   sharedTeamId: string | null;
@@ -1264,6 +1371,7 @@ export interface BoardInput {
   name?: string;
   layout?: BoardLayout;
   isDefault?: boolean;
+  isDefaultPhone?: boolean;
 }
 
 // ---- Trading — Market News (mirror of apps/api/src/trading/news.ts) ----
@@ -1534,6 +1642,22 @@ export interface TradeSummary {
   avgSlippage: number | null;
 }
 
+// What a trade view LEFT OUT, and why. Mirrors the server's ExcludedTrades.
+//
+// The Trade Log and its metrics are a narrowed view of the desk's real trades: a
+// connection's "count trades since" cutoff hides an earlier phase, and the
+// "ignore test trades" floor hides connection-test fills. Both are deliberate,
+// and both were silent — an export headed "2026-06-01 to 2026-08-09" listed no
+// June trades while nine real ones sat behind a July cutoff, which reads as
+// "there were no June trades" rather than "June is not being counted".
+export interface ExcludedTrades {
+  beforeCutoff: number; // opened before their connection's "count trades since"
+  belowFloor: number; // under the desk's "test trade" floor
+  // The cutoff instant when every exclusion shares one, so a screen can name a
+  // date. Null when several connections cut off on different dates.
+  cutoffFrom: number | null;
+}
+
 export interface TradeLogData {
   trades: TradeRecord[];
   summary: TradeSummary;
@@ -1542,6 +1666,7 @@ export interface TradeLogData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  excluded: ExcludedTrades; // what this view left out, and why
   // The viewer may remove a teammate's trade, not just their own (team leader,
   // a member granted "Delete trades", or an admin).
   canDeleteAny: boolean;
@@ -1897,6 +2022,7 @@ export interface HistoryData {
   breakEvenAmount: number;
   breakEvenOverrides: BreakEvenOverride[];
   minTradeUnits: number; // "test trade" floor; sub-floor broker fills already excluded
+  excluded: ExcludedTrades; // what this view left out, and why
   // The viewer may remove a teammate's closed trade, not just their own.
   canDeleteAny: boolean;
 }
@@ -2300,6 +2426,7 @@ export const PREMIUM_FEATURES = [
   'presetStreams',
   'suggestions',
   'supportChat',
+  'alertSettings',
 ] as const;
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
@@ -2488,4 +2615,255 @@ export interface WallTemplate {
   hidden: boolean;
   sortOrder: number;
   updatedAt: number;
+}
+
+// ---- Study Packages: import ----
+// Mirrors apps/api/src/studies/packageFormat.ts. The server is the authority —
+// it re-validates before it writes, and assigns every stored id and sequence.
+
+export interface PackageIssue {
+  code: string;
+  message: string;
+  ids?: string[];
+}
+
+export interface PackagePreview {
+  name: string;
+  subject: string;
+  questionCount: number;
+  categories: { id: string; name: string; weight: number | null; target: number | null; found: number }[];
+  categoryWeightMode: string | null;
+  explanationMode: string | null;
+  flashcardCount: number;
+  slideCount: number;
+  lessonCount: number;
+}
+
+export interface ImportedQuestionView {
+  id: string;
+  categoryId: string | null;
+  stem: string;
+  options: { label: string; text: string }[];
+  answer: string;
+  explanation: string | null;
+}
+
+export interface PackageValidation {
+  ok: boolean;
+  /** Named checks that came back clean, for the "what passed" half of the report. */
+  passed: string[];
+  errors: PackageIssue[];
+  warnings: PackageIssue[];
+  preview: PackagePreview | null;
+  questions: ImportedQuestionView[];
+  /**
+   * What the validator SAW, as opposed to what it decided — versions, ids,
+   * counts and part indices, and no package content at all.
+   *
+   * Two uses, both of which need it present on every run including a failed
+   * one: the founder-only diagnostics panel, and the machine context a bug
+   * report carries so the reporter does not have to find any of this by hand.
+   */
+  diagnostics: PackageDiagnostics;
+}
+
+export interface PackageDiagnostics {
+  documents: { index: number; format: string | null; schemaVersion: number | null; blueprintId: string | null; bytes: number }[];
+  multipart: { parts: number; expected: number | null; received: number[]; missing: number[] } | null;
+  expectedBlueprintId: string;
+  expectedSchemaVersion: number;
+  categoryTargets: { id: string; name: string; target: number | null; found: number }[];
+}
+
+/** The plan a package is checked against — the wizard's blueprint, flattened. */
+export interface ImportBlueprintPayload {
+  blueprintId: string;
+  categoriesLocked: boolean;
+  categories: { id: string; name: string; weight: number | null }[];
+  questionTargets: Record<string, number> | null;
+  totalQuestions: number | null;
+  explanationsRequired: boolean;
+  wantQuestions: boolean;
+  wantFlashcards: boolean;
+  wantPresentation: boolean;
+  wantLessons: boolean;
+  name: string;
+  subject?: string;
+  audience?: string | null;
+  depth?: string | null;
+  categoryWeightMode?: string | null;
+  explanationMode?: string | null;
+}
+
+export interface ManualPackagePayload {
+  name: string;
+  subject?: string;
+  depth?: string | null;
+  categoryWeightMode?: string | null;
+  explanationMode?: string | null;
+  categories: { id: string; name: string; weight: number | null }[];
+  questions: {
+    categoryId?: string | null;
+    stem: string;
+    options: { label: string; text: string }[];
+    answer: string;
+    explanation?: string | null;
+  }[];
+  presentation?: { title: string; slides: { title: string; body: string }[] } | null;
+}
+
+/**
+ * Machine context attached to a bug report from Studies.
+ *
+ * Mirrors the server's whitelist (api/support/studyContext.ts), which is the
+ * enforcer: anything not on this list is stripped there. Ids, versions, counts
+ * and codes only — never study content. `sample` is the one exception and is
+ * filled solely by an explicit press of "include a small sample".
+ */
+export interface StudyBugContext {
+  screen?: string;
+  step?: string;
+  component?: string;
+  blueprintVersion?: number;
+  formatVersion?: number;
+  draftId?: string;
+  packageId?: string;
+  source?: 'upload' | 'paste' | 'fixture';
+  parts?: number;
+  expectedParts?: number;
+  missingParts?: number[];
+  errorCodes?: string[];
+  errorMessages?: string[];
+  errorId?: string;
+  apiStatus?: number;
+  appVersion?: string;
+  tier?: string;
+  isDemo?: boolean;
+  previewAs?: string;
+  flags?: string[];
+  sample?: string;
+  sampleLabel?: string;
+}
+
+/** What a founder-level account can ask to be treated as, for testing. */
+export type PreviewMode = 'free' | 'premium' | 'max' | 'public';
+
+export const PREVIEW_LABELS: Record<PreviewMode, string> = {
+  free: 'Free account',
+  premium: 'Premium member',
+  max: 'Max member',
+  public: 'Member of the public',
+};
+
+/** A package's sharing and publication state, for developer diagnostics. */
+export interface StudyPackageState {
+  id: string;
+  name: string;
+  ownerUserId: string;
+  visibility: string;
+  archivedAt: number | null;
+  formatVersion: number;
+  shares: { id: string; recipientUserId: string; status: string; createdAt: number }[];
+  submissions: {
+    id: string;
+    status: string;
+    submittedAt: number;
+    reviewedAt: number | null;
+    attestationVersion: string;
+  }[];
+  libraryAdds: string[];
+  /** Who the package leaderboard ranks — the answer package access actually gives. */
+  leaderboardAudience: string[];
+}
+
+export interface StudyPackageSummary {
+  id: string;
+  name: string;
+  subject: string | null;
+  questionCount?: number;
+}
+
+// ---- Study Packages: the owner's library, sharing, and the VTS Study Library ----
+
+/** private → shared → submitted → public. Four distinct states, never merged. */
+export type StudyPackageVisibility = 'private' | 'shared' | 'submitted' | 'public';
+
+export interface StudyPackage {
+  id: string;
+  name: string;
+  description: string | null;
+  subject: string | null;
+  audience: string | null;
+  depth: string | null;
+  formatVersion: number;
+  visibility: StudyPackageVisibility;
+  archived: boolean;
+  archivedAt: number | null;
+  ownerUserId: string;
+  ownerName: string | null;
+  createdBy: string | null;
+  createdAt: number;
+  updatedAt: number;
+  hasDeck: boolean;
+  hasFlashcards: boolean;
+  hasGuide: boolean;
+  lessonCount: number;
+  /** Whether the viewer owns it — only an owner can share, submit or archive. */
+  mine: boolean;
+  sharedWith: number;
+}
+
+export interface StudyPackageDetail extends StudyPackage {
+  categories: { id: string; seq: number; name: string; weight: number | null }[];
+  lessons: { id: string; seq: number; title: string; objective: string | null; body: string | null }[];
+  deckId: string | null;
+  flashcardSetId: string | null;
+  guideId: string | null;
+}
+
+export type StudyShareStatus = 'pending' | 'accepted' | 'declined';
+
+export interface StudyShare {
+  id: string;
+  packageId: string;
+  packageName: string;
+  packageSubject: string | null;
+  status: StudyShareStatus;
+  /** Who it is with, or who it came from, depending on which list this is. */
+  personName: string;
+  personUsername: string;
+  createdAt: number;
+  respondedAt: number | null;
+}
+
+export type StudySubmissionStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'withdrawn';
+
+export interface StudySubmission {
+  id: string;
+  packageId: string;
+  packageName: string;
+  packageSubject: string | null;
+  status: StudySubmissionStatus;
+  submittedAt: number;
+  reviewedAt: number | null;
+  adminNote: string | null;
+  attestationVersion: string;
+  submitterName: string | null;
+  /** When this publication ended, if it has. `status` stays 'approved'. */
+  withdrawnAt: number | null;
+  withdrawnByName: string | null;
+  /** Whether the creator withdrew it, rather than an administrator. */
+  withdrawnByOwner: boolean;
+}
+
+export interface StudyLibraryEntry {
+  packageId: string;
+  name: string;
+  subject: string | null;
+  description: string | null;
+  depth: string | null;
+  ownerName: string | null;
+  questionCount: number;
+  added: boolean;
+  publishedAt: number;
 }

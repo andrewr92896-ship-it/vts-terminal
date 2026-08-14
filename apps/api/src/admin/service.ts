@@ -20,6 +20,8 @@ import {
   aiUsage,
   notificationPrefs,
   sessionAlertPrefs,
+  alertPrefs,
+  pushoverReceipts,
   userFeatures,
   aiViolations,
   budgetCategories,
@@ -27,6 +29,7 @@ import {
   userMemberships,
   marketDataLayout,
   marketNewsStreams,
+  ticketPresets,
   priceAlerts,
   investmentAccounts,
   investmentHoldings,
@@ -68,8 +71,16 @@ import {
   studyTests,
   studyTestProgress,
   studyDecks,
+  studyDeckQuestions,
+  studyFlashcardCards,
   studyFlashcardSets,
   studyGuides,
+  studyPackages,
+  studyPackageAdds,
+  studyPackageCategories,
+  studyPackageLessons,
+  studyPackageShares,
+  studyPackageSubmissions,
 } from '../db/schema.js';
 import { hashPassword } from '../auth/passwords.js';
 import { destroyUserSessions } from '../auth/sessions.js';
@@ -331,6 +342,10 @@ export async function createUser(actingUserId: string, input: CreateUserInput): 
     displayTimezone: null,
     // On the public study leaderboards by default; switched off in Preferences.
     hideFromLeaderboards: false,
+    // No home page chosen — the terminal opens where it always did until they
+    // pick one in My Terminal ▸ Settings.
+    homeWorkspace: null,
+    homeScreen: null,
     teamId,
     viewBrokerage: input.viewBrokerage ?? false,
     active: true,
@@ -531,6 +546,8 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // shared 'desk' default row is keyed 'desk', never a userId, so it survives).
     await tx.delete(tradingDeskSettings).where(eq(tradingDeskSettings.id, targetId));
     await tx.delete(tradingBeOverrides).where(eq(tradingBeOverrides.ownerId, targetId));
+    // Their order ticket's quick-size buttons.
+    await tx.delete(ticketPresets).where(eq(ticketPresets.userId, targetId));
     // Notification prefs reference the user on both sides (recipient and the
     // watched trader), so clear rows pointing either way.
     await tx
@@ -573,6 +590,12 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     // Pushover user key behind after the account is gone).
     await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, targetId));
     await tx.delete(pushoverUsers).where(eq(pushoverUsers.userId, targetId));
+    // How long their repeating alerts repeated for, and the record of which ones
+    // fired and were answered. The receipts are NOT an access audit — nothing
+    // here records a credential being used, only that this person's own phone
+    // was buzzed — so unlike credential_audit they go with the account.
+    await tx.delete(alertPrefs).where(eq(alertPrefs.userId, targetId));
+    await tx.delete(pushoverReceipts).where(eq(pushoverReceipts.userId, targetId));
     // Per-user Studies progress (learned terms, custom vocab, starred questions,
     // custom subsections, game/test state and banked leaderboard runs).
     await tx.delete(studyLearned).where(eq(studyLearned.userId, targetId));
@@ -585,6 +608,82 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(studyDeckRuns).where(eq(studyDeckRuns.userId, targetId));
     await tx.delete(studyTests).where(eq(studyTests.userId, targetId));
     await tx.delete(studyTestProgress).where(eq(studyTestProgress.userId, targetId));
+    // Study Packages this account OWNS, and everything inside them.
+    //
+    // Unlike the team-shared content below, a package belongs to one person, so
+    // it goes with them the way their Investments and Net Worth rows do. It is
+    // deleted WHOLE — the game, its questions, everybody's state and banked runs
+    // on it, the flashcard set and its cards, the presentation, the categories
+    // and the lessons.
+    //
+    // Detaching the content instead was the first cut and is worse: it would
+    // leave games and sets in a scope keyed to a user who no longer exists —
+    // unreachable content carrying a package id that resolves to nothing. The
+    // ordinary way a creator removes a package is to ARCHIVE it, which destroys
+    // nothing; this path only runs when the account itself is being erased.
+    //
+    // Every child write is spelled out because this database never turns the
+    // foreign key pragma on, so a declared ON DELETE action does not fire and
+    // anything unnamed here is what gets left behind.
+    const ownedPackageIds = (
+      await tx.select({ id: studyPackages.id }).from(studyPackages).where(eq(studyPackages.ownerUserId, targetId))
+    ).map((p) => p.id);
+    if (ownedPackageIds.length) {
+      const packageDeckIds = (
+        await tx.select({ id: studyDecks.id }).from(studyDecks).where(inArray(studyDecks.packageId, ownedPackageIds))
+      ).map((d) => d.id);
+      const packageSetIds = (
+        await tx
+          .select({ id: studyFlashcardSets.id })
+          .from(studyFlashcardSets)
+          .where(inArray(studyFlashcardSets.packageId, ownedPackageIds))
+      ).map((s) => s.id);
+      if (packageDeckIds.length) {
+        await tx.delete(studyDeckQuestions).where(inArray(studyDeckQuestions.deckId, packageDeckIds));
+        await tx.delete(studyDeckGame).where(inArray(studyDeckGame.deckId, packageDeckIds));
+        await tx.delete(studyDeckRuns).where(inArray(studyDeckRuns.deckId, packageDeckIds));
+        await tx.delete(studyDecks).where(inArray(studyDecks.id, packageDeckIds));
+      }
+      if (packageSetIds.length) {
+        await tx.delete(studyFlashcardCards).where(inArray(studyFlashcardCards.setId, packageSetIds));
+        await tx.delete(studyFlashcardSets).where(inArray(studyFlashcardSets.id, packageSetIds));
+      }
+      await tx.delete(studyGuides).where(inArray(studyGuides.packageId, ownedPackageIds));
+      await tx
+        .delete(studyPackageCategories)
+        .where(inArray(studyPackageCategories.packageId, ownedPackageIds));
+      await tx.delete(studyPackageLessons).where(inArray(studyPackageLessons.packageId, ownedPackageIds));
+      // Everything hanging off the package this account owned goes with it: the
+      // shares it handed out, its library submissions, and the rows recording
+      // that other people had taken it up. Leaving any of them would leave a row
+      // pointing at a package id that resolves to nothing, since the foreign key
+      // pragma is never on.
+      await tx.delete(studyPackageShares).where(inArray(studyPackageShares.packageId, ownedPackageIds));
+      await tx.delete(studyPackageSubmissions).where(inArray(studyPackageSubmissions.packageId, ownedPackageIds));
+      await tx.delete(studyPackageAdds).where(inArray(studyPackageAdds.packageId, ownedPackageIds));
+      await tx.delete(studyPackages).where(inArray(studyPackages.id, ownedPackageIds));
+    }
+    // A package somebody else owns that this account merely authored keeps its
+    // authorship link dropped, like the team content below.
+    await tx.update(studyPackages).set({ createdBy: null }).where(eq(studyPackages.createdBy, targetId));
+    // This account's own side of OTHER people's packages: shares they were given
+    // or handed out, submissions they made or reviewed, and library adds. The
+    // package itself belongs to somebody else and is untouched — only this
+    // person's relationship to it goes.
+    await tx.delete(studyPackageShares).where(eq(studyPackageShares.recipientUserId, targetId));
+    await tx
+      .update(studyPackageShares)
+      .set({ sharedByUserId: null })
+      .where(eq(studyPackageShares.sharedByUserId, targetId));
+    await tx.delete(studyPackageAdds).where(eq(studyPackageAdds.userId, targetId));
+    await tx
+      .update(studyPackageSubmissions)
+      .set({ submittedByUserId: null })
+      .where(eq(studyPackageSubmissions.submittedByUserId, targetId));
+    await tx
+      .update(studyPackageSubmissions)
+      .set({ reviewedByUserId: null })
+      .where(eq(studyPackageSubmissions.reviewedByUserId, targetId));
     // Team-SHARED study content (decks, flashcard sets, guides) survives the
     // author — just drop the authorship link, mirroring the news feed above.
     await tx.update(studyDecks).set({ createdBy: null }).where(eq(studyDecks.createdBy, targetId));

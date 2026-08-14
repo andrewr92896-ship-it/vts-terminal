@@ -1,5 +1,7 @@
 import { useRegisterSW } from 'virtual:pwa-register/react';
+import { useEffect } from 'react';
 import type { CSSProperties } from 'react';
+import { playUpdateChime } from '../sound/updateChime';
 
 // A global "Update available" popup. When a new build is deployed, the service
 // worker for it is fetched and waits; this surfaces that as a prompt on whatever
@@ -29,6 +31,14 @@ export function UpdatePrompt() {
       }, UPDATE_CHECK_INTERVAL_MS);
     },
   });
+
+  // Chime when the prompt appears — the card can arrive on a screen nobody is
+  // looking at. Keyed on the flag turning true, so it sounds once per prompt
+  // rather than on every re-render; dismissing and a later update chimes again,
+  // which is a second prompt. Off from My Terminal ▸ Settings.
+  useEffect(() => {
+    if (needRefresh) playUpdateChime();
+  }, [needRefresh]);
 
   if (!needRefresh) return null;
 

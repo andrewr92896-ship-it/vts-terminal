@@ -6,8 +6,8 @@ sections. It is an installable PWA with web push. There is no public sign-up;
 the login screen offers a single read-only **demo** account and a public
 **Early Access** request form.
 
-> **Source of truth:** `CLAUDE.md` documents how the terminal is actually built
-> and how it behaves. When README and `CLAUDE.md` disagree, trust `CLAUDE.md`
+> **Source of truth:** `AGENTS.md` documents how the terminal is actually built
+> and how it behaves. When README and `AGENTS.md` disagree, trust `AGENTS.md`
 > and the code.
 
 ## Workspaces

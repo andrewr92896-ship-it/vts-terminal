@@ -17,13 +17,15 @@ import {
   filterSelect,
   groupTrades,
 } from './tradeBreakdown';
-import { tradePips, fmtPips, netPips, hasAnyPips, pipsParenthetical } from './pips';
+import { tradePips, fmtPips, fmtSize, netPips, hasAnyPips, pipsParenthetical, sizeTitle } from './pips';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { getTradeLayout, type Layout } from './preferences';
 import { ScreenTitle } from './ScreenTitle';
 import { TradeTimes, TradeTimesCell, ageLabel } from './tradeTime';
+import { excludedNote } from './excludedNote';
 import type {
   CapitalFigure,
+  ExcludedTrades,
   RemovedTrade,
   TradeInput,
   TradeLogData,
@@ -119,8 +121,9 @@ function buildExportCsv(opts: {
   scopeLabel: string;
   rangeLabel: string;
   generatedAt: string;
+  excluded?: ExcludedTrades;
 }): string {
-  const { trades, config, scopeLabel, rangeLabel, generatedAt } = opts;
+  const { trades, config, scopeLabel, rangeLabel, generatedAt, excluded } = opts;
   const s = summarizeTrades(trades, config);
   const pf = profitFactorStats(trades, config);
   const money = (n: number) => n.toFixed(2);
@@ -134,6 +137,21 @@ function buildExportCsv(opts: {
   row('Break-even buffer (default)', bandLabel(config.base));
   for (const [key, b] of Object.entries(config.overrides)) {
     row(`Break-even buffer (${key})`, bandLabel(b));
+  }
+  // Immediately under the date range, because that is the line these qualify: a
+  // range starting Jun 1 with every June trade behind a cutoff otherwise reads
+  // as "there were no June trades". Written whenever anything was left out, so
+  // no row here means everything in the range is counted.
+  if (excluded && excluded.beforeCutoff > 0) {
+    row(
+      'Excluded — before connection cutoff',
+      excluded.cutoffFrom != null
+        ? `${excluded.beforeCutoff} (opened before ${msToDateInput(excluded.cutoffFrom)})`
+        : String(excluded.beforeCutoff),
+    );
+  }
+  if (excluded && excluded.belowFloor > 0) {
+    row('Excluded — under the test-trade floor', excluded.belowFloor);
   }
   row();
   row('Metric', 'Value');
@@ -334,14 +352,29 @@ export function TradeLog() {
       )
     : traderTrades;
 
+  // The open book — every position this scope is currently in, and NEVER
+  // narrowed by the day/month filter. Those filters select on the CLOSE day, so
+  // an open position has nothing for them to match and drops out of
+  // `shownTrades` the moment one is on. That is right for the closed-trade
+  // metrics and wrong for the open ones: with a month picked, "Unrealized P/L
+  // $0 · 0 open" was a flat statement that the desk held nothing, made while
+  // the wall beside it showed live positions. Same rule the Live Wall's
+  // `source` union follows — a figure that was not measured must never be
+  // reported as a measured one, and here it can be measured, so it is.
+  const openBook = traderTrades.filter((t) => t.status === 'open');
+  const openPl = openBook.reduce((sum, t) => sum + (t.unrealizedPl ?? 0), 0);
+
   // The server's summary only describes the whole desk unfiltered, so any
   // narrowing recomputes it here — the same rule History followed, so a filtered
   // selection scores exactly the way the unfiltered one does.
   const s = trader || filterActive ? summarizeTrades(shownTrades, config) : data.summary;
   const pf = profitFactorStats(shownTrades, config);
   // "If I closed everything right now" — realized closed trades with each open
-  // position's live P/L folded in as though it were just realized.
-  const ppf = projectedProfitFactorStats(shownTrades, config);
+  // position's live P/L folded in as though it were just realized. The open leg
+  // comes from the open book rather than the selection, so the reading keeps
+  // meaning what it says while a filter is on; unfiltered, `shownTrades`
+  // already carries those rows and adding them again would double-count.
+  const ppf = projectedProfitFactorStats(filterActive ? [...shownTrades, ...openBook] : shownTrades, config);
   // Pips are the desk's preferred unit — show them next to every $ metric, but
   // only when the desk actually trades forex (otherwise there's no pip to show).
   const showPips = hasAnyPips(shownTrades);
@@ -365,7 +398,15 @@ export function TradeLog() {
   // forex trades. Realized P/L is signed (direction matters); the gross cards
   // carry the sign of the bucket they total.
   const kpis: { label: string; val: string; sub: string; pips?: string }[] = [
-    { label: 'Trades', val: String(s.total), sub: `${s.open} open · ${s.closed} closed` },
+    {
+      label: 'Trades',
+      val: String(s.total),
+      // A filtered selection is closed rows only, so "0 open" beside them is a
+      // claim about the book rather than about the selection — and a false one
+      // whenever a position is running. The count of what is open is on the
+      // Unrealized card, which is measured over the whole book.
+      sub: filterActive ? `${s.closed} closed in this selection` : `${s.open} open · ${s.closed} closed`,
+    },
     { label: 'Win Rate', val: s.wins + s.losses > 0 ? `${Math.round(s.winRate * 100)}%` : '—', sub: wlSub },
     {
       label: 'Realized P/L',
@@ -376,13 +417,11 @@ export function TradeLog() {
     {
       // The live open P/L across currently-open positions — the leg realized P/L
       // leaves out. Signed so a green open book reads as a gain at a glance.
+      // Always the whole open book (see `openBook` above), so a day/month filter
+      // narrows the closed record without ever reading as a flat desk.
       label: 'Unrealized P/L',
-      val: !canSeeBalances
-        ? 'hidden'
-        : showMoney
-          ? `${(s.totalUnrealizedPl ?? 0) > 0 ? '+' : ''}${usd(s.totalUnrealizedPl ?? 0)}`
-          : '•••••',
-      sub: `${s.open} open`,
+      val: !canSeeBalances ? 'hidden' : showMoney ? `${openPl > 0 ? '+' : ''}${usd(openPl)}` : '•••••',
+      sub: filterActive ? `${openBook.length} open · whole book` : `${openBook.length} open`,
     },
     {
       label: 'Gross Profit',
@@ -471,6 +510,7 @@ export function TradeLog() {
           config={config}
           scopeLabel={scopeLabel}
           scopeSlug={scopeSlug}
+          excluded={data?.excluded}
           onClose={() => setExporting(false)}
         />
       )}
@@ -525,12 +565,21 @@ export function TradeLog() {
         {selectedTraderName ? `Individual stats — @${selectedTraderName}` : 'Whole desk — combined stats'}
         {filterActive ? ' · closed trades only, for the selected day/month' : ''}
       </div>
-      {data.minTradeUnits > 0 && (
+      {/* What these figures leave out. Replaces a note that said the test-trade
+          floor was on without saying whether it had actually caught anything,
+          and said nothing at all about a connection cutoff — which is the one
+          that hides whole months. Drawn only when something really was
+          excluded, so no line here means everything on the desk is counted. */}
+      {excludedNote(data.excluded) && (
         <div
           style={{ fontSize: 10.5, color: FAINT, marginBottom: 8 }}
-          title={`Broker fills under ${data.minTradeUnits.toLocaleString('en-US')} units are excluded`}
+          title={
+            data.minTradeUnits > 0
+              ? `Broker fills under ${data.minTradeUnits.toLocaleString('en-US')} units are excluded, as are trades opened before a connection's "count trades since" date.`
+              : `Trades opened before a connection's "count trades since" date are excluded.`
+          }
         >
-          {"Small broker test trades are excluded from these stats."}
+          {excludedNote(data.excluded)}
         </div>
       )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 16 }}>
@@ -738,7 +787,11 @@ function DeckCard({
       <div style={{ display: 'flex', gap: 14, padding: '0 14px 9px', flexWrap: 'wrap' }}>
         <Field label="TP" value={fmtPrice(t.takeProfit)} color={GREEN} />
         <Field label="SL" value={fmtPrice(t.stopLoss)} color={RED} />
-        <Field label="Size" value={String(t.units)} />
+        {/* Lots on a currency pair, units on anything else, with the raw units
+            on the hover — the same reading every other position surface gives
+            (`fmtSize`). It printed the units unformatted, so a standard lot read
+            "100000". */}
+        <Field label="Size" value={fmtSize(t.instrument, t.units)} title={sizeTitle(t.instrument, t.units)} />
       </div>
 
       {(t.strategy || t.timeframe) && (
@@ -1013,9 +1066,9 @@ function NumInput({ v, set, ph }: { v: string; set: (s: string) => void; ph: str
   );
 }
 
-function Field({ label, value, strong, color }: { label: string; value: string; strong?: boolean; color?: string }) {
+function Field({ label, value, strong, color, title }: { label: string; value: string; strong?: boolean; color?: string; title?: string }) {
   return (
-    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
+    <span title={title} style={{ display: 'inline-flex', flexDirection: 'column', gap: 2 }}>
       <span style={{ fontSize: 8.5, letterSpacing: '0.5px', textTransform: 'uppercase', color: FAINT }}>{label}</span>
       <span style={{ fontSize: strong ? 14 : 12.5, fontWeight: strong ? 700 : 500, color: color ?? TEXT, fontFamily: "'IBM Plex Mono', monospace" }}>{value}</span>
     </span>
@@ -1123,12 +1176,17 @@ function ExportPanel({
   config,
   scopeLabel,
   scopeSlug,
+  excluded,
   onClose,
 }: {
   trades: TradeRecord[];
   config: BreakEvenConfig;
   scopeLabel: string;
   scopeSlug: string;
+  // What the desk already filtered out before these trades reached the screen.
+  // Narrowing the range below cannot re-include any of it, so it qualifies every
+  // export whatever dates are picked.
+  excluded?: ExcludedTrades;
   onClose: () => void;
 }) {
   const [from, setFrom] = useState('');
@@ -1148,7 +1206,7 @@ function ExportPanel({
   function doExport() {
     if (filtered.length === 0) return;
     const generatedAt = msToDateInput(Date.now());
-    const csv = buildExportCsv({ trades: filtered, config, scopeLabel, rangeLabel, generatedAt });
+    const csv = buildExportCsv({ trades: filtered, config, scopeLabel, rangeLabel, generatedAt, excluded });
     const range = `${from ? `_${from}` : ''}${to ? `_${to}` : ''}`;
     downloadCsv(`trade-metrics_${scopeSlug}${range || '_all'}.csv`, csv);
     onClose();

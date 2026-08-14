@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import { api } from '../api/client';
-import type { RoleKey } from '../api/types';
+import type { PreviewMode, RoleKey } from '../api/types';
+import { PREVIEW_LABELS } from '../api/types';
 import {
   THEMES,
   DEFAULT_SCREEN,
@@ -10,6 +11,7 @@ import {
   type Theme,
 } from '../theme/themes';
 import { NAV, navFor, accentFor, OPT_IN_WORKSPACES, TEAM_ONLY_SECTIONS } from '../theme/nav';
+import { homeOptions, pickInitialWorkspace, resolveHome } from '../theme/homeScreen';
 import { C } from '../theme/tokens';
 import {
   canAccessEmployeePortal,
@@ -19,6 +21,7 @@ import {
 } from '../auth/access';
 import { useResponsive } from '../hooks/useMediaQuery';
 import { AlertSoundProvider } from '../sound/alertSound';
+import { LiveAlertBanner } from './LiveAlertBanner';
 import { AlertSoundWatcher } from '../sound/AlertSoundWatcher';
 import { DemoTour } from './DemoTour';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -49,6 +52,7 @@ import { AdminGuidelines } from '../workspaces/admin/AdminGuidelines';
 import { AdminRuleBreaking } from '../workspaces/admin/AdminRuleBreaking';
 import { AdminWallTemplates } from '../workspaces/admin/AdminWallTemplates';
 import { AdminReviewList } from '../workspaces/admin/AdminReviewList';
+import { AdminStudyLibrary } from '../workspaces/admin/AdminStudyLibrary';
 import { DevBlog } from '../workspaces/admin/DevBlog';
 import {
   HelpHowTo,
@@ -64,6 +68,7 @@ import { TradeHistory } from '../workspaces/trading/TradeHistory';
 import { FundedScreen } from '../workspaces/trading/FundedScreen';
 import { FundedChallengeScreen } from '../workspaces/trading/FundedChallenge';
 import { StrategySessions } from '../workspaces/trading/StrategySessions';
+import { AlertSettings } from '../workspaces/trading/AlertSettings';
 import { TradingTodo } from '../workspaces/trading/TradingTodo';
 import { MarketData } from '../workspaces/trading/MarketData';
 import { MarketNews } from '../workspaces/trading/MarketNews';
@@ -85,6 +90,9 @@ const StudyCreation = lazy(() =>
 );
 const StudyGuidesLibrary = lazy(() =>
   import('../workspaces/studies/StudyGuides').then((m) => ({ default: m.StudyGuidesLibrary })),
+);
+const StudyLibrary = lazy(() =>
+  import('../workspaces/studies/StudyLibrary').then((m) => ({ default: m.StudyLibrary })),
 );
 const TradingTeam = lazy(() =>
   import('../workspaces/myportal/TradingTeam').then((m) => ({ default: m.TradingTeam })),
@@ -134,10 +142,12 @@ function renderScreen(
   switch (screen) {
     case 'live':
       return <LiveWall onOpenMembership={() => onNavigate('my_access')} />;
-    // (`alerts` — Trading Alerts — was removed outright, owner instruction
-    // 2026-08. The key routes nowhere and falls through to the placeholder,
-    // which is correct: the screen is gone rather than moved, so there is
-    // nothing for a stale link to land on.)
+    // `alerts` is Alert Settings — every control for what the terminal buzzes
+    // you about, in one place (owner instruction, 2026-08). The key is the one
+    // the removed Trading Alerts screen used; the alert FEED is still gone, so
+    // a stale link lands on the settings rather than nowhere.
+    case 'alerts':
+      return <AlertSettings />;
     // Placing trades (Live Trades) and reviewing them (Closed Trades & Metrics)
     // are two screens. `desk` stays on the review screen, which is what that key
     // has always routed to.
@@ -178,6 +188,8 @@ function renderScreen(
       return <StudyCreation theme={theme} onNavigate={onNavigate} />;
     case 'st_guides':
       return <StudyGuidesLibrary theme={theme} onNavigate={onNavigate} />;
+    case 'st_packages':
+      return <StudyLibrary theme={theme} onNavigate={onNavigate} />;
     // Admin workspace sections. Access is gated by the sidebar/workspace filter
     // (admins only) and enforced server-side on every admin endpoint.
     case 'ad_users':
@@ -188,6 +200,8 @@ function renderScreen(
       return <AdminGuidelines theme={theme} />;
     case 'ad_rules':
       return <AdminRuleBreaking theme={theme} />;
+    case 'ad_studies':
+      return <AdminStudyLibrary theme={theme} />;
     case 'ad_walls':
       return <AdminWallTemplates theme={theme} />;
     case 'ad_review':
@@ -235,12 +249,13 @@ const RULES_DOT_SECTION = 'ad_rules';
 // board that draws on every workspace, so it is the most useful thing to open on
 // whatever the account has turned on. Every account reaches My Terminal, so the
 // fallback below is a safety net rather than a real path.
-function pickInitialWorkspace(allowed: WorkspaceKey[]): WorkspaceKey {
-  if (allowed.includes('myportal')) return 'myportal';
-  if (allowed.includes('trading')) return 'trading';
-  return allowed[0] ?? 'studies';
-}
-
+// Where a sign-in lands.
+//
+// Advanced Trading FIRST, because the Live Wall lives there now (owner
+// instruction, 2026-08) and the wall is what a sign-in has always opened on.
+// Preferring My Terminal here would land a trader on Premium Features instead
+// of their board. An account without the desk opt-in has no `trading` in its
+// allowed list, so it falls through to My Terminal exactly as before.
 // The breadcrumb label for the current section (uses the nav config).
 function sectionLabelFor(workspace: WorkspaceKey, screen: string): string {
   const nav = navFor(workspace);
@@ -250,7 +265,7 @@ function sectionLabelFor(workspace: WorkspaceKey, screen: string): string {
 }
 
 export function Portal() {
-  const { user, logout } = useAuth();
+  const { user, logout, refreshUser } = useAuth();
   const { isPhone } = useResponsive();
 
   // Admin-only "view as role" preview: emulate someone who holds only the one
@@ -277,10 +292,23 @@ export function Portal() {
     [allowed],
   );
 
-  const [workspace, setWorkspace] = useState<WorkspaceKey>(() =>
-    pickInitialWorkspace(workspacesForRoles(user!.roles, user!.access.features)),
-  );
-  const [screen, setScreen] = useState<string>(() => DEFAULT_SCREEN[workspace]);
+  // Where this launch lands: the home page the user chose in My Terminal ▸
+  // Settings, or — with no choice, or one that is now out of reach — exactly
+  // where the terminal opened before the setting existed. Computed once, in a
+  // lazy initializer, so it is a starting point rather than something that
+  // yanks the screen back whenever the user record refreshes.
+  const initialHome = useMemo(() => {
+    const ws = workspacesForRoles(user!.roles, user!.access.features);
+    const options = homeOptions(ws, {
+      canFunded: !user!.isDemo && canAccessFunded(user!.access.features),
+      canTeams: !!user!.access.features.tradingTeams,
+    });
+    return resolveHome(user!, options, pickInitialWorkspace(ws));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [workspace, setWorkspace] = useState<WorkspaceKey>(initialHome.workspace);
+  const [screen, setScreen] = useState<string>(initialHome.screen);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
@@ -443,12 +471,23 @@ export function Portal() {
 
   const selectScreen = useCallback(
     (scr: string) => {
+      // Resolve the workspace the key belongs to as well as the screen.
+      //
+      // Setting the screen alone is not enough for a key from another
+      // workspace: the effect that keeps the two consistent bounces it straight
+      // back to the current workspace's default. That is not hypothetical — the
+      // Live Wall's upgrade links point at My Terminal ▸ Premium Features, and
+      // the wall now lives in Advanced Trading, so without this they land
+      // nowhere. From the sidebar, where the key always belongs to the
+      // workspace already open, this is a no-op.
+      const owner = NAV.find((w) => w.sections.some((sec) => sec.key === scr));
+      if (owner && owner.key !== workspace) setWorkspace(owner.key);
       setScreen(scr);
       setNavOpen(false);
       if (scr in SECTION_ACTIVITY) markAdminSectionSeen(scr);
       resetScroll();
     },
-    [resetScroll, markAdminSectionSeen],
+    [workspace, resetScroll, markAdminSectionSeen],
   );
 
   // Demo mode: a one-click, read-only showcase with a guided tour.
@@ -497,6 +536,29 @@ export function Portal() {
       setWorkspace(ws);
       setScreen(DEFAULT_SCREEN[ws]);
     }
+  }
+
+  /**
+   * Enter, change or leave the developer tier preview.
+   *
+   * The preview itself is SERVER-SIDE — this call only asks — so the answer
+   * comes back through `refreshUser()`, which re-reads the whole user payload:
+   * the roles, the workspaces and the membership all arrive already narrowed to
+   * the previewed account, and the sidebar, the locks and the routing follow
+   * from that with no separate client state to keep in step.
+   */
+  async function changePreview(mode: PreviewMode | null) {
+    try {
+      if (mode) await api.setPreview(mode);
+      else await api.exitPreview();
+    } catch {
+      // A failed preview change leaves the session exactly as it was; the
+      // refresh below re-reads the truth either way.
+    }
+    // A preview narrows the roles, so the acting-role preview on top of it would
+    // be a preview of a preview. Cleared, so what is on screen has one cause.
+    setActingRole(null);
+    await refreshUser();
   }
 
   // The nested Funded Account opt-in. Never revealed to the demo.
@@ -616,6 +678,7 @@ export function Portal() {
       effectiveRoles={effectiveRoles}
       actingRole={actingRole}
       onSetActingRole={changeActingRole}
+      onSetPreview={changePreview}
       workspaceLabel={WORKSPACE_LABELS[workspace]}
       sectionLabel={sectionLabelFor(workspace, screen)}
       accent={accent}
@@ -638,6 +701,10 @@ export function Portal() {
   const main = (
     <div key="app-main" style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: 'var(--app-h)' }}>
       {isDemo && <DemoBanner accent={accent} onTour={() => setTourOpen(true)} onExit={logout} />}
+      {/* Above everything, and drawn on `user.preview` alone — never on a role
+          check, because previewing as the public is exactly when every role
+          check says member and the way out must still be on screen. */}
+      {user!.preview && <PreviewBanner mode={user!.preview} onExit={() => void changePreview(null)} />}
       {topBar}
       <PrivacyBanner />
       <InstallPrompt theme={theme} />
@@ -652,6 +719,13 @@ export function Portal() {
           transition: 'background 0.5s ease',
         }}
       >
+        {/* Sits above whatever screen is open, and outside the ErrorBoundary
+            and Suspense on purpose: a repeating alert that has already been
+            silenced still needs to SAY so, even if the screen underneath is
+            still loading or has thrown. */}
+        <div style={{ padding: isPhone ? '12px 14px 0' : '16px 32px 0' }}>
+          <LiveAlertBanner />
+        </div>
         <ErrorBoundary resetKey={screen}>
           <Suspense fallback={<div style={{ padding: 24, color: C.muted, fontSize: 13 }}>Loading…</div>}>
             {renderExtra(screen) ?? renderScreen(screen, theme, selectScreen, canFunded) ?? <Screen screen={screen} theme={theme} />}
@@ -804,6 +878,57 @@ function PrivacyBanner() {
     >
       <Icon name="eye-off" size={14} />
       Privacy mode on — names and dollar amounts are hidden.
+    </div>
+  );
+}
+
+/**
+ * "You are previewing" — and, more importantly, the way out.
+ *
+ * Amber rather than the workspace accent, because this is a state the terminal
+ * is in rather than a feature of it, and it must not be mistaken for part of
+ * whatever screen is underneath. It sits above the top bar so it is present on
+ * every screen including the ones a previewed account can still reach when the
+ * account menu is not open.
+ */
+function PreviewBanner({ mode, onExit }: { mode: PreviewMode; onExit: () => void }) {
+  return (
+    <div
+      style={{
+        flex: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+        gap: 12,
+        padding: '8px 16px',
+        background: 'rgba(255,159,69,.10)',
+        borderBottom: '1px solid rgba(255,159,69,.35)',
+        fontSize: 12,
+      }}
+    >
+      <span style={{ color: C.text, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <Icon name="eye" size={14} color="#FF9F45" />
+        <span>
+          <strong style={{ color: '#FF9F45' }}>Previewing as {PREVIEW_LABELS[mode].toLowerCase()}</strong>
+          <span style={{ color: C.muted }}> · this is the real experience for that account. Your own is unchanged.</span>
+        </span>
+      </span>
+      <button
+        onClick={onExit}
+        style={{
+          fontSize: 11.5,
+          fontWeight: 700,
+          color: '#1b1206',
+          background: '#FF9F45',
+          border: 'none',
+          padding: '6px 12px',
+          borderRadius: 6,
+          cursor: 'pointer',
+        }}
+      >
+        Stop previewing
+      </button>
     </div>
   );
 }

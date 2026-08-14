@@ -14,8 +14,8 @@ import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
 import { notifyTraderIds, visibleTraderIds, type Viewer } from './scope.js';
 import { backfillClosedTrades } from './backfill.js';
 import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
-import { beforeCutoff, connectionCutoffs } from './connections.js';
-import type { LiveTrade } from './types.js';
+import { connectionCutoffs, cutoffFor } from './connections.js';
+import type { ExcludedTrades, LiveTrade } from './types.js';
 
 // A position opened within this window is treated as a fresh fill worth a push;
 // older "new to us" positions (e.g. on the first sync after a deploy) are not,
@@ -62,6 +62,42 @@ export async function reconcile(
   const byKey = new Map(openRows.map((r) => [r.key, r]));
   const currentKeys = new Set(liveTrades.map((t) => t.id));
 
+  // Positions we already recorded as CLOSED that the broker is showing as open
+  // again. A broker trade id is never reused, so the key is the trade: if it is
+  // back in the feed it was not really closed, and the row we have is a bad
+  // close — the reconciler's estimate written when the position went missing
+  // from a connection that had answered (an unexpected 200, an account that
+  // briefly reported nothing).
+  //
+  // These have to be REOPENED rather than inserted alongside, or the same trade
+  // ends up stored twice under one key: the phantom-closed row keeps its
+  // estimated exit and its P/L, the new row closes properly later, and both then
+  // count toward the trade count, win rate and P/L. The insert path below cannot
+  // see the problem on its own — it looks the trade up among OPEN rows, where a
+  // wrongly-closed one is not.
+  //
+  // Soft-deleted rows are deliberately excluded: a trade the trader removed by
+  // hand must not be resurrected by the broker still carrying it, which is the
+  // same rule the closed-trade backfill follows.
+  const reopenable =
+    liveTrades.length > 0
+      ? await db
+          .select()
+          .from(tradingPositions)
+          .where(
+            and(
+              eq(tradingPositions.userId, userId),
+              inArray(
+                tradingPositions.key,
+                liveTrades.map((t) => t.id),
+              ),
+              eq(tradingPositions.status, 'closed'),
+              isNull(tradingPositions.deletedAt),
+            ),
+          )
+      : [];
+  const closedByKey = new Map(reopenable.map((r) => [r.key, r]));
+
   // Trade events to notify on after the DB work: genuinely fresh fills and
   // positions that just closed (TP/SL/manual exit). Collected here, pushed once.
   const opened: LiveTrade[] = [];
@@ -101,6 +137,29 @@ export async function reconcile(
           lastSeenAt: now,
         })
         .where(eq(tradingPositions.id, existing.id));
+    } else if (closedByKey.has(t.id)) {
+      // Put the trade back the way the broker has it. The exit and realized P/L
+      // are cleared because they were never real — they were the last mark and
+      // last open P/L polled before the position went missing. No push fires: it
+      // never opened, it only stopped being visible, and a "trade opened" buzz
+      // for a position the trader has held for days is noise.
+      const stale = closedByKey.get(t.id)!;
+      await db
+        .update(tradingPositions)
+        .set({
+          status: 'open',
+          closedAt: null,
+          exitPrice: null,
+          realizedPl: null,
+          currentPrice: t.currentPrice,
+          unrealizedPl: t.unrealizedPl,
+          takeProfit: t.takeProfit,
+          stopLoss: t.stopLoss,
+          trailingStopLoss: t.trailingStopLoss,
+          units: t.units,
+          lastSeenAt: now,
+        })
+        .where(eq(tradingPositions.id, stale.id));
     } else {
       await db.insert(tradingPositions).values({
         id: crypto.randomUUID(),
@@ -288,6 +347,9 @@ export interface HistoryData {
   // The desk's "test trade" floor (units); sub-floor broker fills are already
   // excluded from `trades` + `summary`. 0 = keep everything.
   minTradeUnits: number;
+  // What this view left out, and why — see ExcludedTrades. Counted as the rows
+  // are filtered, so it cannot disagree with what `trades` actually holds.
+  excluded: ExcludedTrades;
 }
 
 function slippageOf(planned: number | null, entry: number): number | null {
@@ -480,6 +542,8 @@ export async function getHistory(
       trades: [],
       summary: { closed: 0, wins: 0, losses: 0, breakeven: 0, winRate: 0, totalRealizedPl: canSeeBalances ? 0 : null, byStrategy: [], byInstrument: [] },
       ...beFields,
+      // The demo reads no broker, so nothing was filtered out of its empty book.
+      excluded: { beforeCutoff: 0, belowFloor: 0, cutoffFrom: null },
     };
   }
 
@@ -503,17 +567,31 @@ export async function getHistory(
   // before its connection's cutoff is an earlier phase the trader excluded, so it
   // never counts toward History or its summary.
   const cutoffs = await connectionCutoffs();
-  const visible = joined.filter(
-    (r) =>
-      scopeIds.has(r.pos.userId) && // only the viewer's team
-      // Drop the demo account: it's a sandbox, so its positions never surface as
-      // "demo"-tagged rows in a real trader's history.
-      r.username !== DEMO_USERNAME &&
-      canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading') &&
-      !beforeCutoff(cutoffs, r.pos.connectionId, (r.pos.openedAt ?? r.pos.firstSeenAt).getTime()) &&
-      // Drop sub-floor broker fills (1-unit connection tests) from History too.
-      !isSmallTrade(r.pos.units, settings.minTradeUnits),
-  );
+  // Tallied as the rows are filtered rather than recomputed after, so the count
+  // and the filter are one pass over one rule.
+  const excluded: ExcludedTrades = { beforeCutoff: 0, belowFloor: 0, cutoffFrom: null };
+  const cutoffDates = new Set<number>();
+  const visible = joined.filter((r) => {
+    if (!scopeIds.has(r.pos.userId)) return false; // only the viewer's team
+    // Drop the demo account: it's a sandbox, so its positions never surface as
+    // "demo"-tagged rows in a real trader's history.
+    if (r.username === DEMO_USERNAME) return false;
+    if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) return false;
+    const cut = cutoffFor(cutoffs, r.pos.connectionId, (r.pos.openedAt ?? r.pos.firstSeenAt).getTime());
+    if (cut != null) {
+      excluded.beforeCutoff += 1;
+      cutoffDates.add(cut);
+      return false;
+    }
+    // Drop sub-floor broker fills (1-unit connection tests) from History too.
+    if (isSmallTrade(r.pos.units, settings.minTradeUnits)) {
+      excluded.belowFloor += 1;
+      return false;
+    }
+    return true;
+  });
+  // One date only when every exclusion agrees on it; see ExcludedTrades.
+  if (cutoffDates.size === 1) excluded.cutoffFrom = [...cutoffDates][0];
   const rows = visible.map((r) => r.pos);
   const ownerOf = new Map(visible.map((r) => [r.pos.id, r.username]));
 
@@ -552,5 +630,6 @@ export async function getHistory(
       byInstrument: groupBy(rows, (r) => r.instrument, canSeeBalances, config),
     },
     ...beFields,
+    excluded,
   };
 }

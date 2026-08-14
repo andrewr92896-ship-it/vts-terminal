@@ -67,6 +67,7 @@ export const PREMIUM_FEATURES = [
   'presetStreams',
   'suggestions',
   'supportChat',
+  'alertSettings',
 ] as const;
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
@@ -148,6 +149,16 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // about the bug.
   suggestions: 'premium',
   supportChat: 'premium',
+  // Advanced Trading ▸ Alert Settings: tuning which of your trade actions buzz
+  // you, the session open/close alerts, the alert sound, and the test tools.
+  //
+  // Two things on that screen are deliberately OUTSIDE this feature and render
+  // for any account that reaches it — turning phone alerts on, and price alerts.
+  // Both are included with every account (web push takes no credential, and a
+  // price alert nobody can be told about is not an alert), so gating the screen
+  // wholesale would take away a notification the terminal already promises.
+  // Same split Market Data makes with its free calendar.
+  alertSettings: 'premium',
 };
 
 // What the upgrade prompt calls each one. Plain statements of what the feature
@@ -171,6 +182,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   presetStreams: 'Live stream wall',
   suggestions: 'Suggestions',
   supportChat: 'General support',
+  alertSettings: 'Alert settings',
 };
 
 // A one-line description of what each buys, for the tier boxes on the Premium
@@ -194,6 +206,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   presetStreams: 'Bloomberg, Reuters and the Fed alongside Yahoo Finance, and up to four playing at once.',
   suggestions: 'Send ideas straight to the developers.',
   supportChat: 'Talk to a person about anything that is not a bug.',
+  alertSettings: 'Tune which trade events buzz you, and send yourself a test alert.',
 };
 
 export interface Membership {
@@ -202,9 +215,11 @@ export interface Membership {
   expiresAt: number | null;
   /**
    * Why this account holds the tier. 'role' means it comes from being an admin
-   * or a developer, with no stored grant involved at all.
+   * or a developer, with no stored grant involved at all; 'preview' means a
+   * founder-level account is deliberately looking at the product as this tier
+   * and their real membership is untouched (see dev/preview.ts).
    */
-  source: 'role' | 'demo' | 'manual' | 'grandfather' | 'billing' | 'none';
+  source: 'role' | 'demo' | 'preview' | 'manual' | 'grandfather' | 'billing' | 'none';
   note: string | null;
   grantedByName: string | null;
   grantedAt: number | null;

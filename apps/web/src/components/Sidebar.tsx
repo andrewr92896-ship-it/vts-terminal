@@ -4,7 +4,7 @@ import type { MembershipTier } from '../api/types';
 import { NAV, navFor, FUNDED_ONLY_SECTIONS, TEAM_ONLY_SECTIONS, type NavWorkspace } from '../theme/nav';
 import { C, tint } from '../theme/tokens';
 import { SECTION_FEATURE, WORKSPACE_FEATURE, tierForKey } from '../auth/access';
-import { SECTION_REVIEW, type ReviewKey } from '../auth/reviewMarks';
+import { SECTION_REVIEW, WORKSPACE_REVIEW, type ReviewKey } from '../auth/reviewMarks';
 import { ReviewMark } from './ReviewMark';
 import { useAuth } from '../auth/AuthContext';
 import { APP_VERSION } from '../meta/version';
@@ -166,6 +166,10 @@ export function Sidebar(props: SidebarProps) {
             label={w.label}
             accent={w.accent}
             tier={tierForKey(w.key, WORKSPACE_FEATURE, membership)}
+            // A whole workspace can be unfinished even though none is entirely
+            // paid, which is why this map has entries where WORKSPACE_FEATURE
+            // does not.
+            review={WORKSPACE_REVIEW[w.key]}
             locked={lockedWorkspaces?.has(w.key)}
             dot={workspaceDots?.has(w.key)}
             onClick={() => onSelectWorkspace(w.key)}

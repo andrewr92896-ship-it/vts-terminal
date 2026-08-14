@@ -11,14 +11,237 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 6.89';
+export const APP_VERSION = 'Beta V 7.15';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.15',
+    date: 'August 14, 2026',
+    notes: [
+      'Fixed the category weight boxes in the study game editor: clearing one put a 0 straight back in, so typing a new number landed after it and 30 came out as 030. A cleared box now stays empty until you type. The number of questions and pass line boxes on a practice test behaved the same way and are fixed too.',
+    ],
+  },
+  {
+    version: 'Beta V 7.14',
+    date: 'August 13, 2026',
+    notes: [
+      'The Live Wall’s Open Positions tile now shows everything Live Trades shows for a position: the size, what one pip is worth on it, and the stop and target with what each is worth from here. It renders the Live Trades row itself, so the two can’t drift apart.',
+      'Position sizes read in lots on a currency pair — 1.00 lots rather than 100000 — everywhere a position is shown. Anything without a lot convention (crypto, indices, metals) keeps its units, and the raw units are on the hover either way.',
+    ],
+  },
+  {
+    version: 'Beta V 7.13',
+    date: 'August 13, 2026',
+    notes: [
+      'Unrealized P/L on Closed Trades & Metrics now always reads your open positions, even with a day or month picked. Those filters select on the day a trade closed, so an open trade has no day to match and the card used to read $0 while positions were running.',
+      'Projected PF folds the same open positions in, so "if closed now" still means that under a filter. The Trades card no longer claims "0 open" for a filtered selection.',
+    ],
+  },
+  {
+    version: 'Beta V 7.12',
+    date: 'August 12, 2026',
+    notes: [
+      'A size ladder can now hold up to fifteen preset buttons instead of six. The row wraps, and the list inside the cog scrolls once it gets long.',
+    ],
+  },
+  {
+    version: 'Beta V 7.11',
+    date: 'August 12, 2026',
+    notes: [
+      'Open trades can now be managed from the Live Wall. Your own positions carry the same Stop / target and Close controls Live Trades has, on the cards and in the compact list alike.',
+      'A stop or target typed here is priced as you type it — the money and the pips it sits from your fill — and closing asks first.',
+      'Only your own positions are editable, and only where there is something to reach: an OANDA trade goes to your broker, while a funded or hand-kept one records what your account is holding and sends nothing anywhere. Teammates’ trades stay watch-only.',
+    ],
+  },
+  {
+    version: 'Beta V 7.10',
+    date: 'August 12, 2026',
+    notes: [
+      'Every size preset now shows two readings: what it would use of your free margin, and what it would use of your whole account value regardless of what is already open.',
+      'The cog picks which one carries the colour — green under your limit, red at or above it. The other stays beside it in grey.',
+      'The red limit is kept per reading. 100% of free margin is the point your broker refuses; the account-value limit is yours to set, and switching between them never rewrites the other.',
+    ],
+  },
+  {
+    version: 'Beta V 7.09',
+    date: 'August 11, 2026',
+    notes: [
+      'The quick-size buttons on the order ticket are now yours to set. The cog at the end of the row is where you choose what they are.',
+      'They can be sizes as before, or amounts of money per pip — a button marked $5 works out the size that makes the trade worth $5 a pip. On anything that is not a currency pair it reads per point instead, and on a crypto spot account you can keep sizing in money spent.',
+      'Each button shows how much of your free margin that size would use, and turns red past a limit you set — 100% by default, which is the point your broker would refuse it.',
+      'Funded and hand-kept positions can now have their stop and target set straight from Live Trades, the same way the Funded Trades screen does it. Nothing is sent to a broker — it records what your account is holding.',
+    ],
+  },
+  {
+    version: 'Beta V 7.08',
+    date: 'August 11, 2026',
+    notes: [
+      'The "Update available" prompt now plays a short chime, so a new build does not sit unnoticed on a screen you are not looking at.',
+      'It can be switched off from My Terminal ▸ Settings, under App. On by default, and set per device.',
+    ],
+  },
+  {
+    version: 'Beta V 7.07',
+    date: 'August 11, 2026',
+    notes: [
+      'You can now send a group notification to specific people instead of the whole group. Tap the names you want; leave it on Everyone to buzz them all, as before. Available from both My Group and Alert Settings.',
+      'Picking somebody still respects their own settings — if they have group notifications switched off, naming them individually does not override it.',
+    ],
+  },
+  {
+    version: 'Beta V 7.06',
+    date: 'August 11, 2026',
+    notes: [
+      'Trade tile colours are much stronger, and there are fifteen of them — red, orange, amber, yellow, lime, green, teal, cyan, sky, indigo, violet, plum, magenta, pink and slate. The first set was too faint to tell people apart at a glance.',
+      'The colour now also fills the name chip on each card, so whose trade it is reads instantly instead of having to be picked out of a faint background.',
+      'Your P/L, the long/short marker and the break-even chip keep their own green, red and gold — the tile colour never touches a figure, so a red tile still shows green money when it is up.',
+    ],
+  },
+  {
+    version: 'Beta V 7.05',
+    date: 'August 11, 2026',
+    notes: [
+      'Open trades can now be colour-coded by whose they are. The group leader picks a colour per person in My Terminal ▸ My Group, and that person’s positions carry it everywhere they show — the Live Wall cards, the Open Positions tile, the Trade Desk book and the iPhone widget.',
+      'Funded and manual trades have their own two colours, set separately from anybody’s, because those positions belong to no one person.',
+      'Nothing changes until a colour is chosen, and funded trades keep the gray they have always had. Green, red and gold are deliberately not offered — they already mean winning, losing and break-even on a trade tile.',
+    ],
+  },
+  {
+    version: 'Beta V 7.04',
+    date: 'August 11, 2026',
+    notes: [
+      'You can now send everybody in your group a notification, from either My Terminal ▸ My Group or Alert Settings. Choose a normal alert or a repeating one. There is no message box — the notification says who sent it and nothing else — and it is limited to one a minute.',
+      'Two new switches sit under Phone notifications. Account notifications is a master switch for your whole account, on every device. Group notifications controls whether people in your group can buzz you, and is included with Max.',
+    ],
+  },
+  {
+    version: 'Beta V 7.03',
+    date: 'August 11, 2026',
+    notes: [
+      'Each trade notification now has its own volume. Pick Silent (shows on your phone, no sound), Normal, Alert, or Repeating for placing a trade, closing one, and each stop or target change — so a stop being moved can be a quiet note while a fill wakes you.',
+      'Repeating alerts keep going until you acknowledge them, and you set how often they buzz and for how long on the same screen. "Emergency" is now called "Repeating" throughout.',
+      'You no longer have to acknowledge in the Pushover app. Opening the terminal silences anything still repeating, and a card tells you what it was so nothing is ever silenced without a trace. Acknowledging on your phone still works and clears the terminal too.',
+      'You can choose which screen the terminal opens on, in My Terminal ▸ Settings — any workspace and section your account can reach. If that screen later becomes unavailable, the terminal falls back instead of landing you somewhere you cannot use.',
+    ],
+  },
+  {
+    version: 'Beta V 7.02',
+    date: 'August 11, 2026',
+    notes: [
+      'Everything the terminal can buzz you about now lives on one screen — Advanced Trading ▸ Alert Settings. Phone alerts, Pushover, which trade events reach you, the alert sound, session alerts and price alerts were spread across My Terminal ▸ Settings and Strategy Sessions; they are all in one place now, and nothing about how alerts work has changed.',
+      'You can send yourself a test alert from there, so you can check one actually reaches you without waiting for a real trade. Every test says TEST in its title, so it can never be mistaken for a live fill.',
+      'The Pushover test can also be sent as an emergency alert — it repeats until you acknowledge it in the Pushover app, and it is the only kind that sounds through silent mode and Focus on iPhone. Use it to prove the setup that has to wake you actually works.',
+    ],
+  },
+  {
+    version: 'Beta V 7.01',
+    date: 'August 10, 2026',
+    notes: [
+      'You can now take your own study package back out of the VTS Study Library yourself, without waiting on an administrator. It leaves the library straight away. Nothing is deleted — your content, everyone’s progress and anyone you shared it with by username all stay exactly as they are, and people who had already added it keep it. Putting it back in the library goes through review again.',
+    ],
+  },
+  {
+    version: 'Beta V 7.00',
+    date: 'August 10, 2026',
+    notes: [
+      'The handoff you give your own AI now spells out the rules it has to work to: write original questions, do not copy a question bank or a book, only use material you have the right to use, and keep finance content educational rather than telling anyone what to buy. A short line about rights sits beside the copy button, and the leaderboard says plainly that a study score is not a measure of investment skill.',
+      'When the wizard or the import checker refuses something, there is now a Report a problem button beside the error. It opens the usual bug chat with the technical details already attached — the step you were on, the versions, the exact checks that failed — so you do not have to describe any of it. Your questions, uploads, slides and lesson text are never sent; if a sample would help, you are asked first and shown exactly what would go.',
+      'You can now look at the terminal as a free, Premium, Max or ordinary public account from the account menu, without a second login. It is the real thing rather than a mock-up: the locks you meet are the locks that exist. A bar across the top says you are previewing and gets you back out in one press, and your own account is untouched throughout.',
+    ],
+  },
+  {
+    version: 'Beta V 6.99',
+    date: 'August 10, 2026',
+    notes: [
+      'Studies ▸ Study Packages is new. It holds the packages you have made, the ones people have shared with you, and the VTS Study Library.',
+      'You can now share a study package with someone by their username. They get an invitation, and once they accept it the game, cards and slides appear in their own Studies — the same package, not a copy, so you both keep your own progress. You can take the access back whenever you like; their progress is theirs and is never touched.',
+      'You can also ask VTS to publish a package to the Study Library. Submitting is a request, not a publication — an administrator reads it and either publishes it, asks for changes, or declines, and you get the reply. Anything published is browsable by everyone, and adding it puts it in your own Studies.',
+      'Study games inside a package now have a leaderboard, between the people who actually have the package.',
+    ],
+  },
+  {
+    version: 'Beta V 6.98',
+    date: 'August 10, 2026',
+    notes: [
+      'The study package wizard now finishes the job. At the end you get a handoff to copy into your own ChatGPT or Claude — it tells them to ask you one question at a time, and exactly what to build, down to how many questions each category gets. Bring back the file it makes, or paste it, and the terminal checks it.',
+      'Checking is thorough and tells you what is actually wrong — "Question 47 is missing option D", "Expected 15 questions in Regulations; found 14" — with a set of repair instructions you can hand straight back to your AI. You see everything, including the questions themselves, before anything is created. If your AI runs out of room, ask it for one part at a time and add the parts as they come.',
+      'Choosing to type the questions in yourself now builds a proper study package too, rather than a loose game off to one side. Either way, nothing is saved until you say so.',
+    ],
+  },
+  {
+    version: 'Beta V 6.97',
+    date: 'August 10, 2026',
+    notes: [
+      'Studies ▸ Study Creation now opens with “Create a study package” — a short set of questions, one at a time, about what you need: how many questions, whether to track categories, whether to include flashcards or a presentation. It only asks what follows from your answers, so a simple package is a handful of taps.',
+      'It writes nothing itself. At the end you either take a handoff to your own ChatGPT or Claude, which does the writing, or go straight to typing the questions in. Your answers are kept if you leave the screen or reload, and the three existing makers are still there underneath for building one piece at a time.',
+    ],
+  },
+  {
+    version: 'Beta V 6.96',
+    date: 'August 10, 2026',
+    notes: [
+      'Groundwork for the new way of building study content. Nothing looks different yet — study games, flashcard sets and presentations all work exactly as before.',
+      'What changed underneath: study content can now belong to a person rather than to a group, which is what lets it be shared with someone who is not in your group. Categories also gained a permanent identity, so renaming one no longer resets what it had recorded about how you were doing in it.',
+    ],
+  },
+  {
+    version: 'Beta V 6.95',
+    date: 'August 10, 2026',
+    notes: [
+      'Your metrics now say what they are leaving out. Two settings quietly narrow them — a broker connection’s “count trades since” date, and the test-trade floor — and neither said so, which meant an export covering June could list no June trades and read as though there had been none.',
+      'The Trade Log, the CSV export and the Live Wall’s Trade History tile all now name how many trades were left out and from what date. Nothing appears when nothing was excluded.',
+    ],
+  },
+  {
+    version: 'Beta V 6.94',
+    date: 'August 10, 2026',
+    notes: [
+      'Admins can now remove a trader’s broker connection from Trade History ▸ Live Brokers, not just rename or pause it — so a dead account somebody left behind can be tidied up by whoever is looking at it. The trader’s closed trades stay on the desk.',
+      'It only offers to remove a paused connection, and refuses a hand-kept book that still holds positions, since those trades exist nowhere else. Removals are recorded in the Administrator Log.',
+    ],
+  },
+  {
+    version: 'Beta V 6.93',
+    date: 'August 10, 2026',
+    notes: [
+      'A broker account that answers but sends back something the terminal cannot read no longer looks like an account with nothing open. It used to mark every open position closed at the last price seen, and buzz a “trade closed” for each — the connection now reports as unhealthy instead, which closes nothing.',
+      'A position wrongly marked closed is put back the way the broker has it when it reappears, instead of being stored a second time alongside the bad copy.',
+    ],
+  },
+  {
+    version: 'Beta V 6.92',
+    date: 'August 10, 2026',
+    notes: [
+      'Fixed closed trades being counted twice. Reconnecting a broker account as a new connection made the desk re-import that account’s whole closed-trade history, so trades captured before the reconnect were held twice and both copies counted toward the trade count, win rate and P/L. The duplicates are removed and the surviving copy now carries the broker’s own fill.',
+      'A trade left showing as open because its connection went dark mid-trade is now closed off the broker’s record.',
+      'An account that is already connected can no longer be added a second time — update the key on the connection you have instead.',
+    ],
+  },
+  {
+    version: 'Beta V 6.91',
+    date: 'August 9, 2026',
+    notes: [
+      'The Live Wall moved to the top of Advanced Trading. Sign-in still opens on it, and every link to it still works — but it now sits behind the Advanced Trading switch, so an account without the desk turned on lands on Premium Features instead.',
+      'A new Order Ticket tile puts the Live Trades ticket on the wall itself — the same ticket, with the same review-and-confirm step — with its own account and instrument per tile.',
+      'Boards now have a phone default and a desktop default, set separately from Preset Settings, so each device opens on the layout arranged for it.',
+      'A Desk Metrics tile remembers whose figures it is showing, so a board can carry one per trader alongside the whole desk.',
+      'Finances, Investments and the World and Politics news sections are now marked as still being built.',
+    ],
+  },
+  {
+    version: 'Beta V 6.90',
+    date: 'August 9, 2026',
+    notes: [
+      'The Live Wall’s layout dropdown ends with “Create New Layout” — name it and you get an empty board, already in edit mode, ready for the first tile.',
+      'It is saved from the moment you name it, so it appears in your boards straight away and nothing you had unsaved on the layout you were looking at is touched.',
+    ],
+  },
   {
     version: 'Beta V 6.89',
     date: 'August 9, 2026',
     notes: [
-      'Fixed the category weight boxes in the study game editor: clearing one put a 0 straight back in, so typing a new number landed after it and 30 came out as 030. A cleared box now stays empty until you type. The number of questions and pass line boxes on a practice test behaved the same way and are fixed too.',
+      'The Live Wall’s Desk Metrics tile now carries the full figure set from Closed Trades & Metrics: gross profit and gross loss, average slippage, break-even trades in the win-rate line, pip figures under each money card, and your deposited, withdrawn and total capital.',
+      'The capital figures are always your own and do not follow the tile’s trader picker. They are read-only on the wall — set or sync them from Closed Trades & Metrics.',
     ],
   },
   {

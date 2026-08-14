@@ -211,12 +211,15 @@ export function FlashcardsTile({ tile, editing, onChange, onRemove }: TileProps)
 // same endpoint; the tile shows them in score order the way the game's own
 // leaderboard does, with the reader's row marked.
 //
-// The picker lists ONLY built-in games (owner decision, 2026-08): a game somebody
-// made has no leaderboard at all, and offering one in the dropdown would put an
-// endpoint that answers 404 behind every selection.
+// The picker lists only games that HAVE a board — built-in ones, ranked across
+// every copy on the install, and package-backed ones, ranked among the package's
+// own audience. A legacy user-made game has none, and offering one would put an
+// endpoint that answers 404 behind that selection. The server states the rule on
+// each deck (`hasLeaderboard`), so the picker cannot drift from what the
+// leaderboard route will actually serve.
 export function LeaderboardTile({ tile, editing, onChange, onRemove }: TileProps) {
   const { data: deckList } = useTileData('studies:decks', () => api.studyDecks(), SLOW);
-  const decks = (deckList?.decks ?? []).filter((d) => d.isSample);
+  const decks = (deckList?.decks ?? []).filter((d) => d.hasLeaderboard);
   const deck = decks.find((d) => d.id === tile.deckId) ?? decks[0];
 
   // The key names the deck, not just the endpoint: two leaderboard tiles set to

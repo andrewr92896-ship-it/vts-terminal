@@ -1,0 +1,25 @@
+-- Two account-level notification switches, and the group nudge they govern.
+--
+-- `account_alerts` — the MASTER switch for this account. Phone notifications are
+-- per DEVICE (a web push subscription belongs to one browser); this is per
+-- ACCOUNT, so switching it off silences every channel on every device at once.
+-- It has to gate the existing notification paths as well as the new one, or it
+-- would be a switch that does not do what it says.
+--
+-- `group_alerts` — whether somebody else in your private group may buzz your
+-- phone. Separate from the master switch because they answer different
+-- questions: one is "do I want to be notified at all", the other is "may other
+-- people do it". Max-tier, and carries a compliance review mark.
+--
+-- BOTH DEFAULT ON, which is the same convention notification_prefs follows: an
+-- account with no stored row hears about everything, so nothing already working
+-- goes quiet on deploy. `group_alerts` is reachable only by an account holding
+-- the Trading Teams grant, so defaulting it on cannot expose anybody who was
+-- not deliberately put in a group.
+--
+-- They live on `alert_prefs` — already one row per user, already in the per-user
+-- delete list — rather than in a table of their own. Adding two booleans to the
+-- row that already holds this user's alert settings is cheaper than a second
+-- table and a second read on the notification hot path.
+ALTER TABLE `alert_prefs` ADD `account_alerts` integer DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE `alert_prefs` ADD `group_alerts` integer DEFAULT true NOT NULL;

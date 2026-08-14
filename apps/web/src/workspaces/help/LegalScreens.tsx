@@ -13,7 +13,7 @@ import {
 
 // The Site Help legal screens: Rules & Conduct,
 // Terms of Service, and Privacy Policy. These render long-form legal copy from
-// legal/content.ts. Per CLAUDE.md, legal paragraphs are intentionally NOT
+// legal/content.ts. Per AGENTS.md, legal paragraphs are intentionally NOT
 // wrapped in <EditableText> — they are edited in the content module, not inline.
 
 function page(children: React.ReactNode) {

@@ -12,7 +12,10 @@ import { accentGradient } from '../../theme/themes';
 const muted = '#a99ff0';
 
 interface EditSlide {
+  /** React key only — local to this editing session. */
   uid: number;
+  /** The slide's stored identity, or null for a slide just added here. */
+  id: string | null;
   title: string;
   body: string;
   image: string | null;
@@ -43,7 +46,19 @@ export function GuideEditor({
       .then((r) => {
         if (!alive) return;
         setName(r.guide.name);
-        setSlides(r.guide.slides.map((s) => ({ uid: _uid++, title: s.title, body: s.body, image: s.image ?? null })));
+        // `id` is the slide's stable identity and is carried straight back on
+        // save. Dropping it here would make every save look like a deck of brand
+        // new slides, and any lesson pointing at them would be left describing
+        // slides that no longer exist. `uid` is only for React keys.
+        setSlides(
+          r.guide.slides.map((s) => ({
+            uid: _uid++,
+            id: s.id ?? null,
+            title: s.title,
+            body: s.body,
+            image: s.image ?? null,
+          })),
+        );
         setLoading(false);
       })
       .catch(() => alive && (setLoadError(true), setLoading(false)));
@@ -63,7 +78,8 @@ export function GuideEditor({
       [next[i], next[j]] = [next[j], next[i]];
       return next;
     });
-  const addSlide = () => setSlides((prev) => [...prev, { uid: _uid++, title: '', body: '', image: null }]);
+  // A new slide has no stored identity yet; the server mints one when it saves.
+  const addSlide = () => setSlides((prev) => [...prev, { uid: _uid++, id: null, title: '', body: '', image: null }]);
 
   async function save() {
     if (saving) return;
@@ -72,7 +88,7 @@ export function GuideEditor({
       return;
     }
     const kept: GuideSlide[] = slides
-      .map((s) => ({ title: s.title.trim(), body: s.body.trim(), image: s.image }))
+      .map((s) => ({ id: s.id, title: s.title.trim(), body: s.body.trim(), image: s.image }))
       .filter((s) => s.title || s.body || s.image);
     if (kept.length === 0) {
       setError('A presentation needs at least one slide with text or an image.');

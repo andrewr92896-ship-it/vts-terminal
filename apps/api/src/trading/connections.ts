@@ -3,6 +3,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import {
   brokerConnections,
+  manualPositions,
   users,
   BROKER_CONNECTION_KINDS,
   type BrokerConnectionKind,
@@ -159,6 +160,53 @@ function summaryOf(broker: BrokerConnectionKind, creds: BrokerCreds): string {
   }
   const c = creds as KrakenCreds;
   return `Key ••${c.apiKey.slice(-4)}`;
+}
+
+// Refuse a second connection to an account this owner already has connected.
+//
+// Two rows naming one OANDA account are two views of ONE book: the same trades
+// arrive under both, numbered with the same broker trade ids. That is how the
+// desk's July trades came to be counted twice — a connection deactivated by the
+// 2026-08-02 credential reset was replaced by a NEW connection rather than
+// re-keyed, so the closed-trade backfill saw an account it had no history for
+// and re-imported all of it. The backfill dedupes on the account now rather than
+// the connection row, so it can no longer double-import; this stops the pair
+// being created at all, which also keeps the live poll from reporting one open
+// position twice.
+//
+// Compared on `summary` because it is derived from the credentials by
+// `summaryOf` and stored in plaintext — so this establishes identity without
+// decrypting anything, and without an audit row for a credential nobody used.
+// For OANDA that string IS the account (environment + account id); for Kraken it
+// is the last four of the API key, which catches the same key added twice but
+// not two different keys cut against one Kraken account. `manual` is exempt: it
+// carries no credential and a trader legitimately keeps several hand-kept books.
+async function assertAccountNotAlreadyConnected(
+  userId: string,
+  broker: BrokerConnectionKind,
+  summary: string,
+  exceptId?: string,
+): Promise<void> {
+  if (broker === 'manual') return;
+  const clash = (
+    await db
+      .select({ id: brokerConnections.id, label: brokerConnections.label })
+      .from(brokerConnections)
+      .where(
+        and(
+          eq(brokerConnections.userId, userId),
+          eq(brokerConnections.broker, broker),
+          eq(brokerConnections.summary, summary),
+        ),
+      )
+  ).find((r) => r.id !== exceptId);
+  if (!clash) return;
+  // Name the row they already have, because the fix is almost always to re-enter
+  // the key on it — a connection that stopped reading is the reason somebody
+  // reaches for a second one.
+  throw new Error(
+    `That account is already connected as "${clash.label}". Update the key on that connection instead of adding a second one.`,
+  );
 }
 
 function toPublic(row: BrokerConnectionRow): BrokerConnection {
@@ -442,6 +490,8 @@ export async function addConnection(
   // calling this directly — comes out naming its venue.
   const label = venueLabel(str(input.label) || defaultConnectionLabel('', input.broker), input.broker);
   const creds = normalizeCreds(input.broker, input.creds);
+  const summary = summaryOf(input.broker, creds);
+  await assertAccountNotAlreadyConnected(userId, input.broker, summary);
   const now = new Date();
   // The id is minted before the secret is sealed, because the ciphertext is
   // bound to the row it belongs to (id + owner) as authenticated data — a blob
@@ -453,7 +503,7 @@ export async function addConnection(
     broker: input.broker,
     label: label.slice(0, 80),
     secretEnc: encryptSecret(JSON.stringify(creds), { userId, connectionId: id }),
-    summary: summaryOf(input.broker, creds),
+    summary,
     active: true,
     lastStatus: 'unknown',
     lastError: null,
@@ -491,8 +541,12 @@ export async function updateConnection(
   }
   if (input.creds !== undefined) {
     const creds = normalizeCreds(row.broker, input.creds);
+    const summary = summaryOf(row.broker, creds);
+    // Re-pointing an existing connection at an account already connected here
+    // makes the same pair as adding one, so it is refused on the same terms.
+    await assertAccountNotAlreadyConnected(userId, row.broker, summary, id);
     patch.secretEnc = encryptSecret(JSON.stringify(creds), { userId, connectionId: id });
-    patch.summary = summaryOf(row.broker, creds);
+    patch.summary = summary;
     // New credentials → reset health until the next refresh proves them.
     patch.lastStatus = 'unknown';
     patch.lastError = null;
@@ -507,6 +561,60 @@ export async function removeConnection(userId: string, id: string): Promise<void
   await db
     .delete(brokerConnections)
     .where(and(eq(brokerConnections.id, id), eq(brokerConnections.userId, userId)));
+}
+
+// Admin-only: remove any connection regardless of owner, so a stranded one — a
+// dead account replaced after a credential reset, say — can be tidied up by
+// somebody other than the person who left it there. Returns the row it removed
+// so the caller can record who did what to whom.
+//
+// **The desk's trade history is NOT affected.** `trading_positions.connection_id`
+// carries no foreign key, deliberately, so closed trades outlive the connection
+// they arrived through: an orphaned row still shows on the Trade Log, and still
+// dedupes the closed-trade backfill (an account it cannot attribute is unknown,
+// and unknown dedupes). Removing a connection is tidying the list, not deleting
+// anybody's trades.
+//
+// Two refusals, each covering a loss the admin cannot see coming:
+//
+//   • **An ACTIVE connection.** Removing one stops that trader's Live Wall with
+//     nothing on screen to say why, and the credential is gone, so putting it
+//     back means asking them for a key they may no longer have. Pause is the
+//     reversible stop and already exists; this is the cleanup afterwards. Two
+//     deliberate steps is the point, not an obstacle.
+//   • **A MANUAL connection still holding positions.** `manual_positions`
+//     cascades on this row, so deleting it destroys hand-typed trades that exist
+//     nowhere else and cannot be re-imported from any broker. The owner can
+//     still delete their own book — they can see what is in it.
+export async function adminRemoveConnection(id: string): Promise<OwnedBrokerConnection> {
+  const row = (
+    await db
+      .select({ conn: brokerConnections, username: users.username })
+      .from(brokerConnections)
+      .innerJoin(users, eq(users.id, brokerConnections.userId))
+      .where(eq(brokerConnections.id, id))
+      .limit(1)
+  )[0];
+  if (!row) throw new Error('Connection not found');
+
+  if (row.conn.active) {
+    throw new Error('Pause this connection first, then remove it.');
+  }
+
+  if (row.conn.broker === 'manual') {
+    const held = await db
+      .select({ id: manualPositions.id })
+      .from(manualPositions)
+      .where(eq(manualPositions.connectionId, id));
+    if (held.length > 0) {
+      throw new Error(
+        `This hand-kept book still holds ${held.length} position${held.length === 1 ? '' : 's'}, which would be deleted with it. Only ${row.username} can remove it.`,
+      );
+    }
+  }
+
+  await db.delete(brokerConnections).where(eq(brokerConnections.id, id));
+  return { ...toPublic(row.conn), ownerId: row.conn.userId, owner: row.username };
 }
 
 // Record the outcome of a live fetch against a connection (drives the UI dots).
@@ -535,6 +643,20 @@ export async function connectionCutoffs(): Promise<Map<string, number>> {
   return out;
 }
 
+// The cutoff that excludes this position, or null when nothing does. Returning
+// the cutoff rather than a boolean is what lets a caller both drop the trade and
+// say WHICH date dropped it — counting exclusions off a second, parallel test is
+// how a count and a filter come to disagree about the same trade.
+export function cutoffFor(
+  cutoffs: Map<string, number>,
+  connectionId: string | null,
+  openedAtMs: number,
+): number | null {
+  if (!connectionId) return null;
+  const cutoff = cutoffs.get(connectionId);
+  return cutoff != null && openedAtMs < cutoff ? cutoff : null;
+}
+
 // Whether a broker position falls before its connection's cutoff (and so should
 // be hidden from the desk stats). A position with no connection, or whose
 // connection has no cutoff, is always kept.
@@ -543,9 +665,7 @@ export function beforeCutoff(
   connectionId: string | null,
   openedAtMs: number,
 ): boolean {
-  if (!connectionId) return false;
-  const cutoff = cutoffs.get(connectionId);
-  return cutoff != null && openedAtMs < cutoff;
+  return cutoffFor(cutoffs, connectionId, openedAtMs) != null;
 }
 
 // Has this user set up any connection at all?

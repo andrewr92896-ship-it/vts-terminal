@@ -2,20 +2,21 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { api, ApiError } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import { usePrivacy } from '../../privacy/privacy';
-import type { BoardTile, LiveTrade, LiveWall } from '../../api/types';
+import type { BoardTile, LiveWall } from '../../api/types';
 import { configFrom } from './outcome';
 import { TradeCard } from './TradeCard';
-import { etSince, etStamp, etStampFull } from './tradeTime';
-import { BORDER, BORDER2, FAINT, GOLD, GREEN, MONO, MUTED, PANEL, RED, TEXT } from './tvChart';
+import { DeskPositionRow } from './DeskPositionRow';
+import { BORDER, BORDER2, FAINT, GOLD, GREEN, MUTED, PANEL, RED, TEXT } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
 
 const REFRESH_MS = 12_000;
 
 // A live "Open Positions" tile for the chart board — the same desk-wide open
 // positions as the Positions view. Two layouts, chosen per tile and saved with
-// the preset: a compact, scrollable list ('list', the default) that fits a
-// small grid cell, or the full Live Wall trading cards ('cards') for the whole
-// entry/fill/slippage/TP-SL/forex breakdown. Each layout also has an "expand"
+// the preset: a scrollable list ('list', the default) rendering Live Trades' own
+// position row — size, what a pip is worth here, the stop and target with what
+// each costs, and the controls to move them — or the full Live Wall trading
+// cards ('cards'), which add the planned entry, the slippage and the R:R. Each layout also has an "expand"
 // variant ('list-expand' / 'cards-expand') that grows the tile vertically to fit
 // every open trade instead of scrolling inside a fixed cell — the parent board
 // resizes the grid cell to the height we report via onMeasure. Polls the Live
@@ -176,72 +177,40 @@ export function PositionsTile({
                 config={configFrom(data)}
                 mine={t.ownerId === user?.id}
                 readOnly={readOnly}
+                sample={data.source === 'sample'}
                 showMoney={showMoney}
                 showFxMoney={!privacy}
                 canSeeBalances={data.canSeeBalances}
-                onClosed={() => void load()}
+                onChanged={() => void load()}
               />
             ))}
           </div>
         )}
-        {data && data.trades.length > 0 && layoutMode === 'list' &&
-          data.trades.map((t) => (
-            <PositionRow key={t.id} t={t} mine={t.ownerId === user?.id} showMoney={showMoney} canSeeBalances={data.canSeeBalances} />
-          ))}
-      </div>
-    </div>
-  );
-}
-
-function PositionRow({ t, mine, showMoney, canSeeBalances }: { t: LiveTrade; mine: boolean; showMoney: boolean; canSeeBalances: boolean }) {
-  const long = t.side === 'long';
-  const sideColor = long ? GREEN : RED;
-  const up = (t.unrealizedPl ?? 0) >= 0;
-  const plColor = up ? GREEN : RED;
-  const owner = t.owner.split('@')[0] || t.owner;
-
-  return (
-    <div style={row}>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{t.instrument}</span>
-          <span style={{ ...sideBadge, color: sideColor, border: `1px solid ${sideColor}` }}>{long ? 'L' : 'S'}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-          {!mine && <span style={{ fontSize: 9.5, color: '#9fb3e0', fontFamily: MONO }}>@{owner}</span>}
-          <span style={{ fontSize: 9.5, color: FAINT }}>{t.brokerName}</span>
-          {t.currentPrice != null && <span style={{ fontSize: 9.5, color: MUTED, fontFamily: MONO }}>@ {fmtPrice(t.currentPrice)}</span>}
-        </div>
-      </div>
-      <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-        {!canSeeBalances ? (
-          <span style={{ fontSize: 10, color: FAINT }}>P/L hidden</span>
-        ) : t.unrealizedPl == null ? (
-          <span style={{ fontSize: 12, color: MUTED, fontFamily: MONO }}>—</span>
-        ) : (
-          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: MONO, color: plColor }}>
-            {showMoney ? `${up ? '+' : ''}${usd(t.unrealizedPl)}` : '•••'}
-          </span>
-        )}
-        {t.forex?.pipsOpen != null && (
-          <div style={{ fontSize: 10, fontWeight: 600, fontFamily: MONO, color: t.forex.pipsOpen >= 0 ? GREEN : RED, marginTop: 1 }}>
-            {t.forex.pipsOpen > 0 ? '+' : ''}
-            {t.forex.pipsOpen.toLocaleString('en-US', { maximumFractionDigits: 1 })} pips
+        {/* The list layout renders Live Trades' own position row (owner request,
+            2026-08). It used to have a thinner row of its own, so the same
+            position read as two different amounts of information depending on
+            which screen it was being watched on — and the half a trader acts on
+            (what a pip is worth here, where the stop sits, what that stop costs)
+            was on the screen they were not looking at. Sharing the component is
+            what stops the two drifting apart again. */}
+        {data && data.trades.length > 0 && layoutMode === 'list' && (
+          <div style={{ padding: '6px 8px 0' }}>
+            {data.trades.map((t) => (
+              <DeskPositionRow
+                key={t.id}
+                trade={t}
+                own={t.ownerId === user?.id}
+                sample={data.source === 'sample'}
+                hideMoney={!showMoney}
+                readOnly={readOnly}
+                onChanged={() => void load()}
+              />
+            ))}
           </div>
         )}
-        {/* When the position opened, and how long ago that was. */}
-        <div style={{ fontSize: 9, fontFamily: MONO, color: FAINT, marginTop: 2 }} title={etStampFull(t.openedAt)}>
-          {etStamp(t.openedAt)} · {etSince(t.openedAt)}
-        </div>
       </div>
     </div>
   );
-}
-
-const usd = (n: number) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US');
-function fmtPrice(n: number): string {
-  if (Math.abs(n) >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  return String(Number(n.toFixed(5)));
 }
 
 const tileWrap: CSSProperties = {
@@ -265,16 +234,7 @@ const header: CSSProperties = {
   flex: '0 0 auto',
 };
 const body: CSSProperties = { flex: 1, minHeight: 0, overflowY: 'auto' };
-const row: CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 8,
-  padding: '7px 11px',
-  borderBottom: `1px solid rgba(22,41,79,.6)`,
-};
 const hint: CSSProperties = { padding: '18px 14px', fontSize: 11.5, color: MUTED, textAlign: 'center', lineHeight: 1.5 };
-const sideBadge: CSSProperties = { fontSize: 8.5, fontWeight: 800, letterSpacing: '0.4px', borderRadius: 4, padding: '1px 4px' };
 const countChip: CSSProperties = {
   fontSize: 9.5,
   fontWeight: 700,

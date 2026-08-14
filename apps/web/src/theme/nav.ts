@@ -33,17 +33,13 @@ export const NAV: NavWorkspace[] = [
     accent: '#34D399',
     group: 'My Terminal',
     sections: [
-      // THE LIVE WALL IS PINNED TO THE TOP, above the paid rows (owner
-      // instruction, 2026-08). It is the single exception to the Max → Premium →
-      // free stacking every other workspace follows, and it is deliberate: this
-      // is the terminal's biggest feature and what a sign-in opens on, so
-      // burying it beneath rows a free account cannot use read as though the
-      // product led with its paywall. `zap` rather than `layout-dashboard` so
-      // the row carries some weight against the paid marks beside it.
-      //
-      // The key stays `live`, so the howto wording and every in-app link keep
-      // working — the same reason `desk` stayed `desk`.
-      { key: 'live', label: 'Live Wall', icon: 'zap' },
+      // (The Live Wall moved to the TOP of Advanced Trading — owner
+      // instruction, 2026-08. Its key is still `live`, so `howto.live` and
+      // every in-app link keep working; what changed is the workspace around
+      // it. Consequence worth knowing: Advanced Trading is an OPT-IN, so the
+      // wall is now behind that switch — an account that has not turned the
+      // desk on cannot reach it, where before it was the screen every sign-in
+      // opened on.)
       // Max.
       { key: 'my_team', label: 'My Group', icon: 'users' },
       // Premium — the series board. The economic calendar and the FOMC
@@ -91,6 +87,16 @@ export const NAV: NavWorkspace[] = [
     accent: C.gold,
     group: 'Advanced Trading',
     sections: [
+      // THE LIVE WALL LEADS THIS WORKSPACE (owner instruction, 2026-08 — it was
+      // the top of My Terminal until then). It is the terminal's one
+      // centralized board, and every desk-reading tile on it belongs to this
+      // workspace, so it sits above the screens it summarises: the board first,
+      // then the trade's own life beneath it.
+      //
+      // `layout-dashboard` rather than `zap` — Live Trades below it already
+      // carries the bolt, and two identical glyphs at the top of one list is
+      // the fastest way to click the wrong row.
+      { key: 'live', label: 'Live Wall', icon: 'layout-dashboard' },
       // Placing an order and watching what is open. Renamed from "Trade Desk"
       // (owner, 2026-08); the key stays `tradedesk`, as `desk` below stayed
       // `desk` through its own two renames — rename a label, never a key.
@@ -109,16 +115,24 @@ export const NAV: NavWorkspace[] = [
       // plenty of traders keep a manual book without ever running a challenge.
       { key: 'funded', label: 'Manual Trades', icon: 'pencil' },
       { key: 'deleted', label: 'Deleted Trades', icon: 'trash-2' },
-      // Premium. Last because it is the one row here that is not a record of
-      // trades.
+      // Premium. Second-to-last because it is not a record of trades — it is a
+      // plan for making them.
       { key: 'sessions', label: 'Strategy Sessions', icon: 'calendar-clock' },
-      // (Trading Alerts was removed outright — owner instruction, 2026-08. The
-      // two settings that lived on it and had no other home moved rather than
-      // going with it: the session open/close/pre-open alerts are on Strategy
-      // Sessions, and price alerts are in My Terminal ▸ Settings beside the
-      // other notification controls. The TradingView alert feed, its screen and
-      // its how-to entry are gone; the webhook, the `trading_alerts` table and
-      // the Live Wall's Alerts tile are untouched.)
+      // Premium. LAST, because it is the only row here that is not about trades
+      // at all: it is how the terminal reaches you.
+      //
+      // The `alerts` key is the one the removed Trading Alerts screen used
+      // (owner instruction, 2026-08 — the TradingView alert FEED is gone and is
+      // not coming back). Reusing it is deliberate: nothing linked to that
+      // screen, and a stale link now lands on the alert settings rather than
+      // nowhere. The feed's webhook, the `trading_alerts` table and the Live
+      // Wall's Alerts tile were always untouched by that removal.
+      //
+      // This is now the ONE home for every alert control — phone notifications,
+      // Pushover, which trade events buzz you, the alert sound, the session
+      // open/close alerts, price alerts, and the test tools. They were spread
+      // across My Terminal ▸ Settings and Strategy Sessions before.
+      { key: 'alerts', label: 'Alert Settings', icon: 'bell' },
     ],
   },
   // Finances (green) — personal money for an ordinary person: what you are worth
@@ -196,6 +210,10 @@ export const NAV: NavWorkspace[] = [
       // which is why the rest of this list is not marked.
       { key: 'st_decks', label: 'Study Creation', icon: 'library' },
       // Free.
+      // Study Packages: what this account owns, what has been shared with it by
+      // username, and the published VTS Study Library. Free throughout —
+      // browsing and studying have never been paid, and only the making is.
+      { key: 'st_packages', label: 'Study Packages', icon: 'package' },
       { key: 'st_game', label: 'Study Game', icon: 'gamepad-2' },
       { key: 'st_cards', label: 'Flashcards', icon: 'copy' },
       { key: 'st_test', label: 'Practice Tests', icon: 'file-check-2' },
@@ -224,6 +242,9 @@ export const NAV: NavWorkspace[] = [
       // Sits beside the log and the guidelines because it is the same job:
       // what has happened, and what is waiting on somebody.
       { key: 'ad_rules', label: 'Rule Breaking', icon: 'shield' },
+      // The moderation queue for the public Study Library. Same job again:
+      // something a creator has asked for that is waiting on an administrator.
+      { key: 'ad_studies', label: 'Study Library', icon: 'package-check' },
       { key: 'ad_teams', label: 'Groups', icon: 'building-2' },
       { key: 'ad_badges', label: 'Badges', icon: 'star' },
       { key: 'ad_templates', label: 'Message Templates', icon: 'message-square' },

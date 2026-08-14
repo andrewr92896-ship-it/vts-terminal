@@ -205,6 +205,13 @@ export interface PublicUser {
   // Eastern default, so the client has one value to format with and no
   // "unset" state to reason about.
   displayTimezone: string;
+  // The screen the terminal opens on, as raw workspace/section keys, or null
+  // when the user has never chosen. Null is not a gap to fill in here: what an
+  // account can actually reach depends on roles, opt-ins and membership, all of
+  // which move after this is stored, so the CLIENT resolves it on every launch
+  // and falls back when the stored screen is out of reach.
+  homeWorkspace: string | null;
+  homeScreen: string | null;
   // Off the public study leaderboards. The board still shows them their own
   // row — opting out hides you from other people, not from yourself.
   hideFromLeaderboards: boolean;
@@ -248,6 +255,19 @@ export interface PublicUser {
     // endpoint; this copy only drives locks and upgrade prompts in the UI.
     membership: MembershipView;
   };
+  /**
+   * The developer preview this SESSION is in, or null.
+   *
+   * Its presence is itself the authority to change it: only a founder-level
+   * account can hold one (the server refuses to set one otherwise), so the
+   * client can offer the preview controls on this alone rather than on a role
+   * check that the preview has deliberately narrowed away. It is also what draws
+   * the banner and the way out — both of which have to survive previewing as a
+   * member of the public, when every role check says member.
+   */
+  preview: string | null;
+  /** Whether this account may enter a preview at all — its REAL roles decide. */
+  canPreview: boolean;
 }
 
 // A tier's badge is earned, not assigned: it is appended on read rather than
@@ -262,12 +282,16 @@ function withMembershipBadge(assigned: string[], tier: string): string[] {
 // `teamName`, `features` and `membership` are resolved by the caller (routes),
 // since this module stays free of database access.
 export function toPublicUser(
-  u: UserRow,
+  u: UserRow & { preview?: { mode: string } | null; realRoles?: string | null },
   teamName?: string | null,
   features: UserFeatures = DEFAULT_FEATURES,
   membership: MembershipView = FREE_MEMBERSHIP_VIEW,
 ): PublicUser {
   const roles = parseRoles(u);
+  // The REAL roles, which only differ while previewing as a member of the
+  // public. Everything else on this payload deliberately reports the effective
+  // ones, because the whole point is that the terminal behaves as that account.
+  const realRoles = parseRoles({ roles: u.realRoles ?? u.roles });
   const workspaces = workspacesForRoles(roles);
   const isDemo = u.username === DEMO_USERNAME;
   return {
@@ -284,6 +308,8 @@ export function toPublicUser(
     // come off the same payload.
     badges: withMembershipBadge(parseBadges(u), membership.tier),
     displayTimezone: u.displayTimezone ?? DEFAULT_DISPLAY_TIMEZONE,
+    homeWorkspace: u.homeWorkspace ?? null,
+    homeScreen: u.homeScreen ?? null,
     hideFromLeaderboards: u.hideFromLeaderboards,
     teamId: u.teamId ?? null,
     teamName: teamName ?? null,
@@ -293,6 +319,8 @@ export function toPublicUser(
     // demo guard blocks the accept write anyway), so it is never gated.
     mustAcceptTerms: !isDemo && u.termsAcceptedVersion !== LEGAL_VERSION,
     isDemo,
+    preview: u.preview?.mode ?? null,
+    canPreview: !isDemo && isFounder(realRoles),
     access: {
       label: accessLabel(roles),
       workspaces,

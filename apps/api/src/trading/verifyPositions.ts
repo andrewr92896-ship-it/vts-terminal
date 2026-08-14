@@ -117,12 +117,27 @@ export async function verifyPositions(fromMs: number, toMs: number, label: strin
   report(legacy.length === 0, `rows on the legacy 'oanda:<id>' key: ${legacy.length} (want 0)`);
   for (const r of legacy.slice(0, 10)) console.log(`         ${r.username} · ${r.pos.key}`);
 
-  // The duplicate itself: one broker trade held twice on one connection.
+  // The duplicate itself: one broker trade held more than once.
+  //
+  // Grouped on the TRADE's own identity — owner, OANDA trade id, instrument,
+  // side, entry price and open time — not on the connection row it arrived
+  // through. This check used to key on `connectionId|tradeId`, which cannot see
+  // the fault it exists to catch: a trade duplicated across TWO connections to
+  // one account landed in two different groups and read as clean. That is how
+  // the desk's July trades stayed doubled after the 2026-08-02 credential reset
+  // until somebody noticed the metrics by eye (migration 0113).
   const byTrade = new Map<string, typeof live>();
   for (const r of live) {
     const tradeId = oandaTradeId(r.pos.key);
     if (!tradeId) continue;
-    const k = `${r.pos.connectionId ?? '—'}|${tradeId}`;
+    const k = [
+      r.pos.userId,
+      tradeId,
+      r.pos.instrument,
+      r.pos.side,
+      r.pos.entryPrice,
+      r.pos.openedAt?.getTime() ?? '—',
+    ].join('|');
     const group = byTrade.get(k) ?? [];
     group.push(r);
     byTrade.set(k, group);
@@ -171,6 +186,28 @@ export async function verifyPositions(fromMs: number, toMs: number, label: strin
     .from(brokerConnections)
     .innerJoin(users, eq(users.id, brokerConnections.userId));
   const oandaConns = conns.filter((r) => r.conn.broker === 'oanda');
+
+  // Two connection rows naming ONE OANDA account, which is what produced the
+  // duplicates above: trade ids are numbered per account, so both rows carry the
+  // same trades. `summary` is the account (environment + account id), stored in
+  // plaintext, so this reads it without decrypting anything. Adding a second one
+  // is refused now, but a pair created before that still wants finding — and an
+  // inactive row counts, since it is the history the live one gets compared
+  // against.
+  const byAccount = new Map<string, typeof oandaConns>();
+  for (const r of oandaConns) {
+    const k = `${r.conn.userId}|${r.conn.summary ?? '—'}`;
+    const group = byAccount.get(k) ?? [];
+    group.push(r);
+    byAccount.set(k, group);
+  }
+  const shared = [...byAccount.values()].filter((g) => g.length > 1);
+  report(shared.length === 0, `OANDA accounts connected more than once: ${shared.length} (want 0)`);
+  for (const g of shared.slice(0, 10)) {
+    const legs = g.map((r) => `${r.conn.label}${r.conn.active ? '' : ' (inactive)'}`).join(' + ');
+    console.log(`         ${g[0].username} · ${g[0].conn.summary} · ${legs}`);
+  }
+
   if (oandaConns.length === 0) console.log('  (no OANDA connections)');
   for (const r of oandaConns.sort((a, b) => a.username.localeCompare(b.username))) {
     const since = r.conn.historyStartAt

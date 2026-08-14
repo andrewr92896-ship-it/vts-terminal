@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, ApiError } from '../../api/client';
-import type { MyPortalData, MyTeam, TeamMemberPermissions, UserTeamMember, User } from '../../api/types';
+import type {
+  MyPortalData,
+  MyTeam,
+  TeamMemberPermissions,
+  TileColorOption,
+  UserTeamMember,
+  User,
+} from '../../api/types';
 import type { Theme } from '../../theme/themes';
 import { accentGradient } from '../../theme/themes';
 import { useAuth } from '../../auth/AuthContext';
@@ -9,6 +16,7 @@ import { Icon } from '../../components/Icon';
 import { TierMark } from '../../components/TierMark';
 import { ReviewMark } from '../../components/ReviewMark';
 import { tierOfFeature } from '../../auth/access';
+import { GroupAlertSender } from '../../components/NotificationSettings';
 import {
   SectionHeader,
   dangerSolidBtn,
@@ -53,6 +61,9 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
   const [data, setData] = useState<MyPortalData | null>(null);
   const [maxMembers, setMaxMembers] = useState(5);
   const [presets, setPresets] = useState<string[]>([]);
+  // The trade tile palette comes from the server — the hexes live there and
+  // nowhere else, so a swatch here is always a colour the wall actually paints.
+  const [tileColors, setTileColors] = useState<TileColorOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +85,7 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
         setData(d);
         setMaxMembers(cfg.maxMembers);
         setPresets(cfg.badgePresets);
+        setTileColors(cfg.tileColors ?? []);
       })
       .catch((e) => alive && setError(e instanceof ApiError ? e.message : 'Failed to load your group'))
       .finally(() => alive && setLoading(false));
@@ -146,6 +158,16 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
   const saveBadge = (userId: string, badge: string | null) =>
     run(async () => {
       const r = await api.setMyTeamMemberBadge(userId, badge);
+      setTeam(r.team);
+    });
+  const saveTileColor = (userId: string, color: string | null) =>
+    run(async () => {
+      const r = await api.setMyTeamMemberTileColor(userId, color);
+      setTeam(r.team);
+    });
+  const saveGroupTileColors = (patch: { funded?: string | null; manual?: string | null }) =>
+    run(async () => {
+      const r = await api.setMyTeamTileColors(patch);
       setTeam(r.team);
     });
   const togglePerm = (userId: string, key: keyof TeamMemberPermissions, value: boolean) =>
@@ -324,6 +346,16 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
         </div>
       )}
 
+      {/* Nudge the group. The same component Alert Settings renders, so the two
+          places can never offer different things — and it is here as well as
+          there because this is the screen you are on when you are thinking
+          about the people in your group. */}
+      <div style={{ ...panel(theme), marginBottom: 16 }}>
+        {/* The roster is already loaded here, so it is handed over rather than
+            fetched a second time. */}
+        <GroupAlertSender accent={grad} accentText={theme.accentText} members={team.members} />
+      </div>
+
       {/* Roster */}
       <div style={{ ...panel(theme), marginBottom: 16 }}>
         <div style={panelLabel}>
@@ -344,6 +376,8 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
               draft={badgeDraft[m.userId] ?? ''}
               onDraft={(v) => setBadgeDraft((d) => ({ ...d, [m.userId]: v }))}
               onSaveBadge={(b) => saveBadge(m.userId, b)}
+              tileColors={tileColors}
+              onSaveTileColor={(c) => saveTileColor(m.userId, c)}
               onTogglePerm={(k, v) => togglePerm(m.userId, k, v)}
               onTransfer={() => transfer(m.userId)}
               confirmRemove={confirmRemove === m.userId}
@@ -356,6 +390,19 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
           ))}
         </div>
       </div>
+
+      {/* Trade tile colours that belong to no one person. Leader only, like the
+          per-person colours above — the whole group reads one board. */}
+      {isLeader && tileColors.length > 0 && (
+        <div style={{ ...panel(theme), marginBottom: 16 }}>
+          <div style={panelLabel}>{"Trade tile colours"}</div>
+          <p style={{ margin: '0 0 14px', fontSize: 12.5, color: '#8ea3cc', lineHeight: 1.5 }}>
+            Set separately from anybody's own colour, because these positions belong to no one person.
+            Leaving funded unset keeps the gray those tiles have always had.
+          </p>
+          <GroupTileColors team={team} options={tileColors} busy={busy} onSave={saveGroupTileColors} />
+        </div>
+      )}
 
       {/* Invite */}
       {canInvite && (
@@ -421,6 +468,107 @@ export function TradingTeam({ theme, user }: { theme: Theme; user: User }) {
 // database, so a shared desk could bring this back against data that never went
 // away.)
 
+// A row of colour swatches, plus a "None" option that clears back to no wash.
+// The palette comes from the server, so this component never decides what a
+// colour is — it only shows which one is picked.
+function TileColorPicker({
+  options,
+  value,
+  busy,
+  onPick,
+}: {
+  options: TileColorOption[];
+  value: string | null;
+  busy: boolean;
+  onPick: (key: string | null) => void;
+}) {
+  const swatch = (key: string | null, hex: string | null, label: string) => {
+    const on = value === key;
+    return (
+      <button
+        key={key ?? '__none__'}
+        title={label}
+        aria-label={label}
+        aria-pressed={on}
+        disabled={busy}
+        onClick={() => onPick(key)}
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 7,
+          cursor: busy ? 'default' : 'pointer',
+          padding: 0,
+          background: hex ?? 'rgba(255,255,255,.04)',
+          // The chosen swatch is ringed rather than ticked: a check mark drawn
+          // over a colour is unreadable on the lighter half of the palette.
+          border: on ? '2px solid #eef3ff' : '1px solid #2a4170',
+          boxShadow: on ? '0 0 0 2px rgba(0,0,0,.45)' : 'none',
+          // "None" reads as an empty slot, with a slash so it is not mistaken
+          // for a dark colour.
+          backgroundImage: hex
+            ? undefined
+            : 'linear-gradient(135deg, transparent 44%, #6f84b0 44%, #6f84b0 56%, transparent 56%)',
+        }}
+      />
+    );
+  };
+  return (
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+      {swatch(null, null, 'No colour')}
+      {options.map((o) => swatch(o.key, o.hex, o.label))}
+    </div>
+  );
+}
+
+// The two tile colours that belong to no one person: funded (prop-firm)
+// positions and hand-kept manual ones. Leader-only, like the per-person colours.
+function GroupTileColors({
+  team,
+  options,
+  busy,
+  onSave,
+}: {
+  team: MyTeam;
+  options: TileColorOption[];
+  busy: boolean;
+  onSave: (patch: { funded?: string | null; manual?: string | null }) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <div style={{ ...fieldLabel, marginBottom: 6 }}>
+          Funded trades
+          <span style={{ color: '#8ea3cc', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+            {' '}
+            · prop-firm positions, whoever placed them
+          </span>
+        </div>
+        <TileColorPicker
+          options={options}
+          value={team.fundedTileColor}
+          busy={busy}
+          onPick={(funded) => onSave({ funded })}
+        />
+      </div>
+      <div>
+        <div style={{ ...fieldLabel, marginBottom: 6 }}>
+          Manual trades
+          <span style={{ color: '#8ea3cc', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>
+            {' '}
+            · hand-entered positions with no broker behind them
+          </span>
+        </div>
+        <TileColorPicker
+          options={options}
+          value={team.manualTileColor}
+          busy={busy}
+          onPick={(manual) => onSave({ manual })}
+        />
+      </div>
+    </div>
+  );
+}
+
 // One member row: avatar, name, badge, and (for the leader / permitted members)
 // the badge editor, permission toggles, transfer, and remove controls.
 function MemberRow({
@@ -435,6 +583,8 @@ function MemberRow({
   draft,
   onDraft,
   onSaveBadge,
+  tileColors,
+  onSaveTileColor,
   onTogglePerm,
   onTransfer,
   confirmRemove,
@@ -455,6 +605,8 @@ function MemberRow({
   draft: string;
   onDraft: (v: string) => void;
   onSaveBadge: (b: string | null) => void;
+  tileColors: TileColorOption[];
+  onSaveTileColor: (c: string | null) => void;
   onTogglePerm: (k: keyof TeamMemberPermissions, v: boolean) => void;
   onTransfer: () => void;
   confirmRemove: boolean;
@@ -469,6 +621,12 @@ function MemberRow({
   const [editingBadge, setEditingBadge] = useState(false);
   const badgeTier = tierOfFeature('premiumBadges', viewer?.access.membership);
   const canEditBadge = canManageBadges && !m.isLeader;
+  // Owner instruction: the colour choices are the LEADER'S. Deliberately not
+  // tied to `canManageBadges` — a badge is a title on one person's row, while a
+  // colour is how the whole group reads the board, so two people handing them
+  // out is how two members end up sharing one. The leader can colour their own
+  // tiles too: their positions sit on the same wall as everybody else's.
+  const canEditTileColor = viewerIsLeader && tileColors.length > 0;
   const showPerms = viewerIsLeader && !m.isLeader;
   const showTransfer = viewerIsLeader && !m.isLeader;
   const showRemove = canRemove && !m.isLeader && !isMe;
@@ -544,6 +702,14 @@ function MemberRow({
         </div>
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13.5, color: '#eef3ff', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            {/* Shown to everyone in the group, not only the leader — knowing
+                which colour is yours is the point of the whole feature. */}
+            {m.tileColorHex && (
+              <span
+                title="This person's trade tile colour"
+                style={{ width: 10, height: 10, borderRadius: 3, background: m.tileColorHex, flexShrink: 0 }}
+              />
+            )}
             {m.displayName}
             {m.isLeader && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10.5, fontWeight: 700, color: accent, border: `1px solid ${accent}`, borderRadius: 4, padding: '1px 7px' }}>
@@ -598,6 +764,14 @@ function MemberRow({
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Tile colour (leader only) */}
+      {canEditTileColor && (
+        <div style={{ marginTop: 11, paddingTop: 11, borderTop: '1px solid #16294f' }}>
+          <div style={{ ...fieldLabel, marginBottom: 6 }}>Trade tile colour</div>
+          <TileColorPicker options={tileColors} value={m.tileColor} busy={busy} onPick={onSaveTileColor} />
         </div>
       )}
 

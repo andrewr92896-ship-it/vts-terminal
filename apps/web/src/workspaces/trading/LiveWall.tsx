@@ -239,10 +239,11 @@ export function LiveWall({ onOpenMembership }: { onOpenMembership?: () => void }
                     config={configFrom(data)}
                     mine={t.ownerId === user?.id}
                     readOnly={readOnly}
+                    sample={data.source === 'sample'}
                     showMoney={data.canSeeBalances && !privacy && !hideMoney}
                     showFxMoney={!privacy && !hideMoney}
                     canSeeBalances={data.canSeeBalances}
-                    onClosed={() => void load()}
+                    onChanged={() => void load()}
                   />
                 ))}
               </div>

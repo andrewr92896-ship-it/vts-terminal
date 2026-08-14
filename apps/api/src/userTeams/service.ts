@@ -4,6 +4,7 @@ import { db } from '../db/index.js';
 import { users, tradingTeams, userTeams, userTeamMembers, userTeamInvites } from '../db/schema.js';
 import { isAdmin, isFounder, parseRoles, type RoleKey } from '../auth/rbac.js';
 import { isDemoUser } from '../demo/identity.js';
+import { FUNDED_TILE_DEFAULT, hexForTileColor, isTileColorKey, type TileColorKey } from '../trading/tileColors.js';
 
 // My Terminal — Trading Teams.
 //
@@ -70,6 +71,12 @@ export interface TeamMemberView {
   avatarUrl: string | null;
   isLeader: boolean;
   badge: string | null;
+  // The palette key this person's open positions are washed in on every trade
+  // tile, and the hex it resolves to. Both are sent so the picker can show which
+  // swatch is chosen without the web holding a copy of the palette — the server
+  // is the only place a key becomes a colour.
+  tileColor: TileColorKey | null;
+  tileColorHex: string | null;
   permissions: MemberPermissions;
   joinedAt: number;
 }
@@ -91,6 +98,13 @@ export interface MyTeamView {
   myPermissions: MemberPermissions;
   members: TeamMemberView[];
   invites: TeamInviteView[];
+  // Trade tile colours for the two kinds of position that belong to nobody in
+  // particular — funded (prop-firm) and hand-kept manual. Group-wide, set by the
+  // leader, deliberately separate from any one person's colour.
+  fundedTileColor: TileColorKey | null;
+  fundedTileColorHex: string; // never null — falls back to the long-standing gray
+  manualTileColor: TileColorKey | null;
+  manualTileColorHex: string | null;
   createdAt: number;
 }
 
@@ -162,7 +176,14 @@ function pickLeader(members: UserRow[]): string | null {
 // admin). Returns null only when the team has no real members.
 async function ensureTeamMeta(
   teamId: string,
-): Promise<{ leaderId: string; name: string; createdAt: Date; members: UserRow[] } | null> {
+): Promise<{
+  leaderId: string;
+  name: string;
+  createdAt: Date;
+  members: UserRow[];
+  fundedTileColor: string | null;
+  manualTileColor: string | null;
+} | null> {
   const members = await teamMembers(teamId);
   if (members.length === 0) return null;
   const memberIds = new Set(members.map((m) => m.id));
@@ -186,7 +207,14 @@ async function ensureTeamMeta(
     await db.update(userTeams).set({ leaderId: nextLeader, name, updatedAt: now }).where(eq(userTeams.id, teamId));
     row = { ...row, leaderId: nextLeader, name };
   }
-  return { leaderId: row.leaderId, name, createdAt: row.createdAt, members };
+  return {
+    leaderId: row.leaderId,
+    name,
+    createdAt: row.createdAt,
+    members,
+    fundedTileColor: row.fundedTileColor,
+    manualTileColor: row.manualTileColor,
+  };
 }
 
 // Per-user metadata (badge + permissions) for the given team, keyed by userId.
@@ -215,6 +243,11 @@ async function buildTeamView(teamId: string, viewerId: string): Promise<MyTeamVi
     .map((u) => {
       const mr = metaMap.get(u.id);
       const isLeader = u.id === meta.leaderId;
+      // A stored key the palette no longer carries reads as "no colour", the
+      // same way the wall renders it — the picker must not show a swatch that
+      // the tiles are not actually drawn in.
+      const rawTile = mr?.tileColor ?? null;
+      const tileColor = isTileColorKey(rawTile) ? rawTile : null;
       return {
         userId: u.id,
         username: u.username,
@@ -222,6 +255,8 @@ async function buildTeamView(teamId: string, viewerId: string): Promise<MyTeamVi
         avatarUrl: u.avatar ?? null,
         isLeader,
         badge: mr?.badge ?? null,
+        tileColor,
+        tileColorHex: hexForTileColor(tileColor),
         permissions: isLeader ? ALL_PERMS : mr ? permsFromRow(mr) : NO_PERMS,
         joinedAt: (mr?.joinedAt ?? u.createdAt).getTime(),
       };
@@ -249,6 +284,9 @@ async function buildTeamView(teamId: string, viewerId: string): Promise<MyTeamVi
     };
   });
 
+  const fundedTileColor = isTileColorKey(meta.fundedTileColor) ? meta.fundedTileColor : null;
+  const manualTileColor = isTileColorKey(meta.manualTileColor) ? meta.manualTileColor : null;
+
   return {
     id: teamId,
     name: meta.name,
@@ -257,6 +295,13 @@ async function buildTeamView(teamId: string, viewerId: string): Promise<MyTeamVi
     myPermissions,
     members,
     invites,
+    fundedTileColor,
+    // What a funded tile is actually drawn in right now — the group's choice, or
+    // the gray those tiles have always carried. Resolved here rather than in the
+    // picker so the swatch and the wall cannot disagree.
+    fundedTileColorHex: hexForTileColor(fundedTileColor) ?? FUNDED_TILE_DEFAULT,
+    manualTileColor,
+    manualTileColorHex: hexForTileColor(manualTileColor),
     createdAt: meta.createdAt.getTime(),
   };
 }
@@ -561,6 +606,60 @@ export async function setMemberBadge(
   const view = await buildTeamView(teamId, actingUserId);
   if (!view) throw new UserTeamError('That group no longer exists');
   return view;
+}
+
+// The colour one person's open positions are washed in on every trade tile.
+//
+// LEADER ONLY, and deliberately not folded into `canManageBadges` (owner
+// instruction). A badge is a title on one person's row; a colour is how the
+// whole group reads the board, so two people handing out colours is how two
+// members end up sharing one and the board stops meaning anything. There is no
+// permission flag for it for the same reason — a flag would be a second way in.
+export async function setMemberTileColor(
+  actingUserId: string,
+  memberUserId: string,
+  rawColor: string | null,
+): Promise<MyTeamView> {
+  const teamId = await teamIdOf(actingUserId);
+  if (!teamId) throw new UserTeamError('You are not in a group');
+  await requireLeader(teamId, actingUserId);
+  if ((await teamIdOf(memberUserId)) !== teamId) throw new UserTeamError('That person is not in your group');
+  const tileColor = normalizeTileColor(rawColor);
+  await writeMemberMeta(teamId, memberUserId, { tileColor });
+  const view = await buildTeamView(teamId, actingUserId);
+  if (!view) throw new UserTeamError('That group no longer exists');
+  return view;
+}
+
+// The colours for the two kinds of position that belong to nobody in particular.
+// Both are optional in the patch and an omitted one is LEFT ALONE — saving the
+// funded colour must never blank the manual one by omission, the same rule the
+// funded stop/target patch follows.
+export async function setTeamTileColors(
+  actingUserId: string,
+  patch: { funded?: string | null; manual?: string | null },
+): Promise<MyTeamView> {
+  const teamId = await teamIdOf(actingUserId);
+  if (!teamId) throw new UserTeamError('You are not in a group');
+  await requireLeader(teamId, actingUserId);
+  const changes: { fundedTileColor?: string | null; manualTileColor?: string | null } = {};
+  if (patch.funded !== undefined) changes.fundedTileColor = normalizeTileColor(patch.funded);
+  if (patch.manual !== undefined) changes.manualTileColor = normalizeTileColor(patch.manual);
+  if (Object.keys(changes).length) {
+    await db.update(userTeams).set({ ...changes, updatedAt: new Date() }).where(eq(userTeams.id, teamId));
+  }
+  const view = await buildTeamView(teamId, actingUserId);
+  if (!view) throw new UserTeamError('That group no longer exists');
+  return view;
+}
+
+// A colour is stored as a palette KEY and refused otherwise. Storing a raw hex
+// would let a tile be painted green or red, which on a trade card already mean
+// winning and losing — see trading/tileColors.ts.
+function normalizeTileColor(raw: string | null): string | null {
+  if (raw == null || raw === '') return null;
+  if (!isTileColorKey(raw)) throw new UserTeamError('That is not one of the tile colours');
+  return raw;
 }
 
 export async function setMemberPermissions(

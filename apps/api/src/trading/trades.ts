@@ -20,7 +20,8 @@ import { getDeskSettings, configOf, isSmallTrade } from './settings.js';
 import { visibleTraderIds, type Viewer } from './scope.js';
 import { ownTradesOnly, type TradeDeleteScope } from './deleteAccess.js';
 import { backfillClosedTrades } from './backfill.js';
-import { beforeCutoff, connectionCutoffs } from './connections.js';
+import { connectionCutoffs, cutoffFor } from './connections.js';
+import type { ExcludedTrades } from './types.js';
 
 // The Trade Log is a shared trading-desk view: every user with trading access
 // (full or view-only) sees every other trading user's trades in full — capital
@@ -93,6 +94,9 @@ export interface TradeLogData {
   // The desk's "test trade" floor (units). Broker fills under it are already
   // excluded from `trades` + `summary`; sent so the client can note it. 0 = off.
   minTradeUnits: number;
+  // What this view left out, and why — see ExcludedTrades. Counted as the rows
+  // are filtered, so it cannot disagree with what `trades` actually holds.
+  excluded: ExcludedTrades;
 }
 
 export interface TradeInput {
@@ -275,6 +279,10 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
   // Each trader scores their own view of the desk, so use the viewer's settings.
   const settings = await getDeskSettings(viewer.id);
 
+  // Tallied as the broker rows are filtered below, never recomputed afterwards,
+  // so the count and the filter are one pass over one rule.
+  const excluded: ExcludedTrades = { beforeCutoff: 0, belowFloor: 0, cutoffFrom: null };
+
   // Pull every trade alongside its owner's username and roles, then keep only
   // those on the viewer's team whose owner currently has trading access (full or
   // view-only). Joining live keeps the view correct as people's roles change.
@@ -309,6 +317,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     // before its connection's cutoff is an earlier phase the trader excluded, so
     // it's dropped from the log and its KPIs.
     const cutoffs = await connectionCutoffs();
+    const cutoffDates = new Set<number>();
     const posRows = await db
       .select({ pos: tradingPositions, username: users.username, displayName: users.displayName, roles: users.roles })
       .from(tradingPositions)
@@ -319,11 +328,21 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
       if (r.username === DEMO_USERNAME) continue;
       if (!canAccessWorkspace(parseRoles({ roles: r.roles }), 'trading')) continue;
       const opened = (r.pos.openedAt ?? r.pos.firstSeenAt).getTime();
-      if (beforeCutoff(cutoffs, r.pos.connectionId, opened)) continue;
+      const cut = cutoffFor(cutoffs, r.pos.connectionId, opened);
+      if (cut != null) {
+        excluded.beforeCutoff += 1;
+        cutoffDates.add(cut);
+        continue;
+      }
       // Drop sub-floor broker fills (1-unit connection tests) from the log + KPIs.
-      if (isSmallTrade(r.pos.units, settings.minTradeUnits)) continue;
+      if (isSmallTrade(r.pos.units, settings.minTradeUnits)) {
+        excluded.belowFloor += 1;
+        continue;
+      }
       records.push(positionToRecord(r.pos, r.username, r.displayName, viewerId));
     }
+    // One date only when every exclusion agrees on it; see ExcludedTrades.
+    if (cutoffDates.size === 1) excluded.cutoffFrom = [...cutoffDates][0];
   }
 
   // Open trades first, then newest by open time — the order a trader scans in.
@@ -347,6 +366,7 @@ export async function getTrades(viewer: Viewer, viewerIsDemo = false): Promise<T
     breakEvenAmount: settings.breakEvenAmount,
     breakEvenOverrides: settings.breakEvenOverrides,
     minTradeUnits: settings.minTradeUnits,
+    excluded,
   };
 }
 

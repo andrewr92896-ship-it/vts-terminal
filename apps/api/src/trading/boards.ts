@@ -59,6 +59,14 @@ export interface BoardTile {
   todoSectionId?: string;
   // Trade History / closed-trade tiles — the window scored.
   range?: '7d' | '30d' | '90d' | 'all';
+  // Order ticket tiles — the instrument the ticket is set to, in display form
+  // ("EUR/USD"). Per tile, so a board can carry a forex ticket beside a crypto
+  // one. Not `symbol`, which is a TradingView symbol elsewhere.
+  instrument?: string;
+  // Desk Metrics tiles — whose figures the tile reports (a trader's ownerId,
+  // absent for the whole desk). A board can carry several, each pinned to a
+  // different trader. Emptied on share — see shareableLayout.
+  trader?: string;
   // How large this tile's contents are drawn, 0.5–2 (absent = 1). Below 1 the
   // tile lays out in a bigger box and is painted down to fit, so it carries
   // more; above 1 it carries less, larger. A display property of the tile, so
@@ -83,6 +91,8 @@ export interface TradingBoard {
   name: string;
   layout: BoardLayout;
   isDefault: boolean;
+  /** The board a PHONE opens on. Unset on every board falls back to isDefault. */
+  isDefaultPhone: boolean;
   updatedAt: number;
   /** Published to this team, or null when private. */
   sharedTeamId: string | null;
@@ -94,6 +104,7 @@ export interface BoardInput {
   name?: string;
   layout?: BoardLayout;
   isDefault?: boolean;
+  isDefaultPhone?: boolean;
 }
 
 const EMPTY_LAYOUT: BoardLayout = { tiles: [] };
@@ -123,6 +134,7 @@ function toBoard(row: TradingBoardRow): TradingBoard {
     name: row.name,
     layout: parseLayout(row.layout),
     isDefault: row.isDefault,
+    isDefaultPhone: row.isDefaultPhone,
     updatedAt: row.updatedAt.getTime(),
     sharedTeamId: row.sharedTeamId ?? null,
   };
@@ -139,10 +151,21 @@ function toBoard(row: TradingBoardRow): TradingBoard {
 // lives in the layout blob rather than in a table of its own, so publishing a
 // board verbatim would publish the author's scratchpad along with it. The tile
 // is kept (the arrangement is the point) and emptied.
+//
+// A Desk Metrics tile pinned to one trader is emptied for a different reason —
+// not privacy (nothing about that trader travels, only their id) but meaning: a
+// tile pinned to somebody's id shows the reader nothing at all, since the tile
+// narrows rows the READER'S own desk returned. Handing a teammate a board of
+// tiles reading zero is worse than handing them the whole-desk view, which is
+// what an absent trader means.
 function shareableLayout(layout: BoardLayout): BoardLayout {
   return {
     ...layout, // the workspace width travels with the arrangement
-    tiles: layout.tiles.map((t) => (t.kind === 'notes' ? { ...t, noteText: '' } : t)),
+    tiles: layout.tiles.map((t) => {
+      if (t.kind === 'notes') return { ...t, noteText: '' };
+      if (t.kind === 'metrics' && t.trader) return { ...t, trader: undefined };
+      return t;
+    }),
   };
 }
 
@@ -155,15 +178,27 @@ export async function listBoards(userId: string): Promise<TradingBoard[]> {
   return rows.map(toBoard);
 }
 
-// Ensure only `keepId` carries the default flag for this user.
-async function clearOtherDefaults(userId: string, keepId: string): Promise<void> {
+// Ensure only `keepId` carries the given default flag for this user.
+//
+// The two defaults are cleared INDEPENDENTLY, which is the whole point of there
+// being two: one board can be the desktop default and another the phone one, and
+// setting either must leave the other alone. The same board may hold both.
+async function clearOtherDefaults(
+  userId: string,
+  keepId: string,
+  which: 'desktop' | 'phone',
+): Promise<void> {
+  const col = which === 'phone' ? tradingBoards.isDefaultPhone : tradingBoards.isDefault;
   const rows = await db
     .select({ id: tradingBoards.id })
     .from(tradingBoards)
-    .where(and(eq(tradingBoards.userId, userId), eq(tradingBoards.isDefault, true)));
+    .where(and(eq(tradingBoards.userId, userId), eq(col, true)));
   for (const r of rows) {
     if (r.id !== keepId) {
-      await db.update(tradingBoards).set({ isDefault: false }).where(eq(tradingBoards.id, r.id));
+      await db
+        .update(tradingBoards)
+        .set(which === 'phone' ? { isDefaultPhone: false } : { isDefault: false })
+        .where(eq(tradingBoards.id, r.id));
     }
   }
 }
@@ -185,7 +220,7 @@ export async function createBoard(userId: string, input: BoardInput): Promise<Tr
     createdAt: now,
     updatedAt: now,
   });
-  if (makeDefault) await clearOtherDefaults(userId, id);
+  if (makeDefault) await clearOtherDefaults(userId, id, 'desktop');
   const [row] = await db.select().from(tradingBoards).where(eq(tradingBoards.id, id));
   return toBoard(row);
 }
@@ -199,8 +234,10 @@ export async function updateBoard(userId: string, id: string, input: BoardInput)
   }
   if (input.layout !== undefined) patch.layout = JSON.stringify(input.layout);
   if (input.isDefault !== undefined) patch.isDefault = input.isDefault;
+  if (input.isDefaultPhone !== undefined) patch.isDefaultPhone = input.isDefaultPhone;
   await db.update(tradingBoards).set(patch).where(and(eq(tradingBoards.id, id), eq(tradingBoards.userId, userId)));
-  if (input.isDefault === true) await clearOtherDefaults(userId, id);
+  if (input.isDefault === true) await clearOtherDefaults(userId, id, 'desktop');
+  if (input.isDefaultPhone === true) await clearOtherDefaults(userId, id, 'phone');
   const [row] = await db
     .select()
     .from(tradingBoards)
@@ -224,9 +261,10 @@ export async function listTeamBoards(userId: string, teamId: string | null): Pro
     .orderBy(asc(tradingBoards.name));
   return rows.map((r) => ({
     ...toBoard(r.board),
-    // A shared board is never the reader's default — that flag belongs to the
-    // author's own list and means nothing here.
+    // A shared board is never the reader's default — those flags belong to the
+    // author's own list and mean nothing here.
     isDefault: false,
+    isDefaultPhone: false,
     sharedBy: r.author || r.username,
   }));
 }
@@ -296,15 +334,25 @@ export async function removeBoard(userId: string, id: string): Promise<void> {
     .where(and(eq(tradingBoards.id, id), eq(tradingBoards.userId, userId)));
   if (!row) return;
   await db.delete(tradingBoards).where(and(eq(tradingBoards.id, id), eq(tradingBoards.userId, userId)));
-  // If we removed the default, promote the oldest remaining board so the user
-  // always lands on a board next time.
-  if (row.isDefault) {
+  // If we removed a default, promote the oldest remaining board so the user
+  // always lands on a board next time. The phone default is promoted only when
+  // it was the deleted board's — a desk that never set one keeps not having
+  // one, and falls back to the desktop default as it always did.
+  if (row.isDefault || row.isDefaultPhone) {
     const [next] = await db
       .select({ id: tradingBoards.id })
       .from(tradingBoards)
       .where(eq(tradingBoards.userId, userId))
       .orderBy(asc(tradingBoards.createdAt))
       .limit(1);
-    if (next) await db.update(tradingBoards).set({ isDefault: true }).where(eq(tradingBoards.id, next.id));
+    if (next) {
+      await db
+        .update(tradingBoards)
+        .set({
+          ...(row.isDefault ? { isDefault: true } : null),
+          ...(row.isDefaultPhone ? { isDefaultPhone: true } : null),
+        })
+        .where(eq(tradingBoards.id, next.id));
+    }
   }
 }

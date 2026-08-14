@@ -1,0 +1,20 @@
+-- Archiving a Study Package — the ordinary way a creator removes one.
+--
+-- The first cut had one removal path and it detached the package's content:
+-- the game, set and presentation survived with `package_id` cleared, turning
+-- package-owned content into unrelated standalone content. That is destructive
+-- in a way that does not look destructive. It severs the stable category links,
+-- strands the lesson plans, and breaks the relationships that sharing and
+-- versioning will need — none of it recoverable, because nothing records what
+-- the package used to hold.
+--
+-- Archiving instead changes ONE COLUMN and nothing else. The package, its
+-- components, every learner's progress, the stable category ids and every
+-- future sharing relationship are all left exactly as they are, so unarchiving
+-- is instant and lossless. What the flag governs is LISTING: an archived
+-- package and its content drop out of the ordinary Study Library and creation
+-- views.
+--
+-- NULL means active, which is every package that exists. A timestamp records
+-- when it was archived, which a bare boolean could not say.
+ALTER TABLE `study_packages` ADD `archived_at` integer;

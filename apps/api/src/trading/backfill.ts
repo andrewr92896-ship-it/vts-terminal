@@ -37,8 +37,13 @@ function oandaBase(env: OandaCreds['env']): string {
 // loader namespaces that id by connection so two accounts on the same broker can
 // never collide: `loadConnection` (service.ts) re-keys the `oanda:<tradeId>` that
 // mapOandaTrades produced into `<connectionId>:oanda:<tradeId>`. The backfill
-// writes that SAME key, which is what lets the two writers dedupe against each
-// other.
+// writes that SAME key, so reconcile can match a backfilled row against the live
+// feed, and so the trade id can be read back out of either writer's rows.
+//
+// The key is not by itself what dedupes the two writers: a trade id only means
+// something against the OANDA ACCOUNT that issued it, and one account can sit
+// behind more than one connection row. `differentAccount` below is the dedupe
+// boundary; this is the storage shape.
 //
 // This used to build the un-namespaced `oanda:<tradeId>` — reading mapOandaTrades
 // and missing the re-key one layer up — so it never matched a reconcile row and
@@ -47,6 +52,42 @@ function oandaBase(env: OandaCreds['env']): string {
 // if the Live Wall's keying changes, this must change with it.
 function keyFor(connectionId: string, tradeId: string): string {
   return `${connectionId}:oanda:${tradeId}`;
+}
+
+// Which OANDA ACCOUNT a connection points at — the thing trade ids are actually
+// numbered against. Two connection rows can name the same account (the usual way
+// is reconnecting after a credential reset by ADDING a connection instead of
+// editing the dead one), and when they do they carry the same trades under the
+// same ids.
+function accountKey(cr: OandaCreds): string {
+  return `${cr.env}:${cr.accountId}`;
+}
+
+// Can we say, positively, that this stored row belongs to a DIFFERENT OANDA
+// account than the one being imported?
+//
+// Only a row on a connection whose credentials we hold this pass can be
+// attributed at all; an inactive, deleted or out-of-scope connection resolves to
+// nothing. Unattributed means UNKNOWN, and unknown must dedupe — the alternative
+// is importing a trade the desk already holds, which double-counts it in the
+// trade count and the P/L.
+//
+// This used to compare the connection ROW id, which reads as the same test and
+// is not: it treats every connection as its own account, so a second connection
+// to one account re-imported that account's entire closed-trade page. That is
+// what duplicated the desk's July trades after the 2026-08-02 credential reset,
+// and migration 0113 cleaned them up. Erring the other way costs a backfilled
+// row only when an owner runs two accounts whose trade ids collide AND one of
+// those connections is no longer readable — a missing row, which the trader can
+// see, rather than a phantom one, which scores.
+function differentAccount(
+  accounts: Map<string, string>,
+  connectionId: string | null,
+  account: string,
+): boolean {
+  if (!connectionId) return false;
+  const other = accounts.get(connectionId);
+  return other != null && other !== account;
 }
 
 const OANDA_KEY_PART = 'oanda:';
@@ -93,6 +134,15 @@ export async function backfillClosedTrades(scope: ConnectionScope): Promise<numb
   );
   if (conns.length === 0) return 0;
 
+  // Every OANDA account we can attribute this pass, by connection row. Built
+  // once, from the credentials already decrypted above, so establishing account
+  // identity costs no extra decryption and no extra audit rows.
+  const accounts = new Map<string, string>();
+  for (const c of conns) {
+    const cr = c.creds as OandaCreds;
+    if (cr?.accountId) accounts.set(c.id, accountKey(cr));
+  }
+
   const now = Date.now();
   let inserted = 0;
   let corrected = 0;
@@ -102,6 +152,7 @@ export async function backfillClosedTrades(scope: ConnectionScope): Promise<numb
     lastRunByConn.set(c.id, now);
     try {
       const cr = c.creds as OandaCreds;
+      const account = accountKey(cr);
       const cfg = { token: cr.token, accountId: cr.accountId, base: oandaBase(cr.env) };
       const rows = await fetchOandaClosedTradeRows(cfg);
       if (rows.length === 0) continue;
@@ -114,11 +165,8 @@ export async function backfillClosedTrades(scope: ConnectionScope): Promise<numb
         cutoff == null ? rows : rows.filter((r) => (r.openedAtMs ?? r.closeTimeMs) >= cutoff);
       if (eligible.length === 0) continue;
 
-      // Every row we already hold on THIS connection (any status), indexed by
-      // OANDA trade id, so we never insert a trade reconcile captured live.
-      // Scoped to the connection because OANDA numbers trades per account — two
-      // accounts under one owner routinely carry the same trade ids, and a
-      // connection-blind index would silently swallow the second account's.
+      // Every row we already hold for this OANDA ACCOUNT (any status), indexed
+      // by trade id, so we never insert a trade reconcile captured live.
       // Soft-deleted rows are indexed too: they must still block a re-import (a
       // trade the trader deleted never comes back), though they are never
       // corrected below.
@@ -139,7 +187,7 @@ export async function backfillClosedTrades(scope: ConnectionScope): Promise<numb
         .where(eq(tradingPositions.userId, c.ownerId));
       const known = new Map<string, (typeof existing)[number]>();
       for (const r of existing) {
-        if (r.connectionId !== c.id) continue;
+        if (differentAccount(accounts, r.connectionId, account)) continue;
         const tradeId = oandaTradeId(r.key);
         if (tradeId) known.set(tradeId, r);
       }
