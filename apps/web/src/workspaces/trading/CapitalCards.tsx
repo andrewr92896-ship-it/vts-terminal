@@ -65,9 +65,7 @@ export function CapitalCards({
   const [manage, setManage] = useState(false);
 
   const load = useCallback(async () => {
-    const c = await api.traderCapital(scope || 'desk');
-    setCap(c);
-    return c;
+    setCap(await api.traderCapital(scope || 'desk'));
   }, [scope]);
 
   useEffect(() => {
@@ -98,10 +96,10 @@ export function CapitalCards({
 
   const pct =
     cap?.deposited.value != null && cap.deposited.value > 0 ? (realizedPl / cap.deposited.value) * 100 : null;
-  // Manage is always reachable for somebody who can set anything at all — on the
-  // desk's combined card it opens on the viewer's own, since a total belonging
-  // to several people has no single owner to write back to.
-  const canManage = !readOnly && cap != null;
+  // Offered wherever there is something to set: your own accounts always, and
+  // a group member's for a founder, an admin or the group's leader. The panel
+  // lists whoever the card covers.
+  const canManage = !readOnly && cap != null && cap.canEdit;
   const traders = cap?.traders ?? 1;
 
   return (
@@ -163,9 +161,9 @@ export function CapitalCards({
 
       {manage && cap && (
         <CapitalManager
-          card={cap}
+          cap={cap}
           showMoney={showMoney}
-          onEdited={() => void load().catch(() => undefined)}
+          reload={load}
           onClose={() => setManage(false)}
         />
       )}
@@ -248,80 +246,63 @@ function CapitalFlowCard({
 // this reads and writes that member's rows, and the cards behind the panel stay
 // the viewer's. It is the same reach that already governs whose desk settings
 // somebody may change, and the server checks it on every request.
+// The breakdown: one block per account, each set on its own — and on the desk's
+// card, EVERY VISIBLE TRADER'S accounts, grouped under the person they belong
+// to.
+//
+// That grouping is what "edit my group's capital" means here (owner request,
+// 2026-08). A founder or admin reaches everyone, a group leader their own
+// group, and each row carries its own `canEdit`, so a person the viewer cannot
+// set is shown and not editable rather than hidden. There is deliberately NO
+// group-owned total to type into: a figure belonging to several people has no
+// single owner, and a second number for the sum to disagree with is exactly
+// what the per-account rows exist to avoid.
+//
+// It mirrors the card's scope rather than holding a scope of its own, so the
+// two can never be showing different people.
 function CapitalManager({
-  card,
+  cap,
   showMoney,
-  onEdited,
+  reload,
   onClose,
 }: {
-  // The payload the cards are showing. Used as the panel's starting point only
-  // when it is one person's — the desk's combined card belongs to several
-  // people, so there the panel opens on the viewer's own.
-  card: TraderCapital;
+  cap: TraderCapital;
   showMoney: boolean;
-  onEdited: () => void;
+  reload: () => Promise<void>;
   onClose: () => void;
 }) {
   const { user } = useAuth();
   const { isPhone } = useResponsive();
-  const selfId = user?.id ?? '';
-  // A member's card the viewer cannot set opens on their own too, rather than
-  // on a panel of controls that would only ever be refused.
-  const opensOn = card.userId && card.canEdit ? card.userId : selfId;
-  const [target, setTarget] = useState(opensOn);
-  const [cap, setCap] = useState<TraderCapital | null>(card.userId === opensOn ? card : null);
-  const [loading, setLoading] = useState(card.userId !== opensOn);
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const members = cap?.editableMembers ?? card.editableMembers ?? [];
-  const editingSelf = target === selfId;
-
-  // Whatever comes back is the whole truth about that person's capital, so it
-  // replaces the panel's copy; the cards behind re-read their own scope, since
-  // a member's figure moves the desk's total as well as their own.
-  const apply = useCallback((next: TraderCapital) => {
-    setCap(next);
-    onEdited();
-  }, [onEdited]);
-
-  const loadTarget = useCallback(
-    async (id: string) => {
-      setLoading(true);
-      setError(null);
-      try {
-        setCap(await api.traderCapital(id));
-      } catch (e) {
-        setError(e instanceof ApiError ? e.message : 'Could not load that person’s capital');
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
-  );
-
-  useEffect(() => {
-    // Only when the panel did not open on the card it was given.
-    if (cap == null) void loadTarget(opensOn);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function switchTarget(id: string) {
-    setTarget(id);
-    void loadTarget(id);
-  }
-
-  async function run(action: () => Promise<TraderCapital>) {
+  // A write answers with the one trader it touched, so the panel re-reads its
+  // own scope instead — on the desk's card that is several people, and half of
+  // them would otherwise vanish behind the one that was just edited.
+  async function run(action: () => Promise<unknown>) {
     setError(null);
+    setBusy(true);
     try {
-      apply(await action());
+      await action();
+      await reload();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Could not save');
       throw e;
+    } finally {
+      setBusy(false);
     }
   }
 
-  const whose = editingSelf ? undefined : target;
-  const canEdit = cap?.canEdit ?? false;
+  // Grouped by owner, in the order the server listed them. Only labelled when
+  // there is more than one person on the card — a solo trader does not need
+  // their own name over their own accounts.
+  const groups: { ownerId: string; owner: string; accounts: CapitalAccount[] }[] = [];
+  for (const a of cap.breakdown) {
+    const last = groups[groups.length - 1];
+    if (last && last.ownerId === a.ownerId) last.accounts.push(a);
+    else groups.push({ ownerId: a.ownerId, owner: a.owner, accounts: [a] });
+  }
+  const named = groups.length > 1;
 
   return (
     <>
@@ -361,78 +342,59 @@ function CapitalManager({
             zIndex: 1,
           }}
         >
-          <strong style={{ fontSize: 15, color: '#fff' }}>Deposited &amp; withdrawn capital</strong>
+          <strong style={{ fontSize: 15, color: '#fff' }}>
+            {named ? 'Capital — your group' : 'Deposited & withdrawn capital'}
+          </strong>
           <button onClick={onClose} aria-label="Close" style={{ background: 'none', border: 'none', color: MUTED, fontSize: 22, lineHeight: 1, cursor: 'pointer' }}>
             ×
           </button>
         </div>
 
         <div style={{ padding: 18 }}>
-          {/* Whose capital — a desk lead (group leader / admin) can pick a
-              person in the group and set theirs. Hidden for everyone else, who
-              only ever see their own. */}
-          {members.length > 1 && (
-            <div style={{ marginBottom: 16 }}>
-              <label htmlFor="capital-whose" style={{ ...cardLabel, display: 'block', marginBottom: 6 }}>
-                {"Whose capital"}
-              </label>
-              <select
-                id="capital-whose"
-                value={target}
-                onChange={(e) => switchTarget(e.target.value)}
-                disabled={loading}
-                style={{ ...inputBase, fontSize: 13, width: '100%', cursor: loading ? 'default' : 'pointer' }}
-              >
-                {members.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.id === selfId ? `${m.name} (you)` : m.name}
-                  </option>
-                ))}
-              </select>
-              {!editingSelf && (
-                <div style={{ fontSize: 11.5, color: GOLD, marginTop: 6 }}>
-                  Setting {members.find((m) => m.id === target)?.name ?? 'somebody else'}’s capital. Their
-                  accounts sync from their own broker.
-                </div>
-              )}
-            </div>
-          )}
-
           {error && <div style={{ fontSize: 12, color: '#ffb4ab', marginBottom: 12 }}>{error}</div>}
 
-          {loading || !cap ? (
-            <div style={{ color: MUTED, fontSize: 13 }}>{"Loading…"}</div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {cap.breakdown.map((a) => (
-                <AccountBlock
-                  key={a.key}
-                  account={a}
-                  showMoney={showMoney}
-                  canEdit={canEdit}
-                  onSave={(which, value) =>
-                    run(() =>
-                      api.updateTraderCapital({
-                        userId: whose,
-                        account: a.key,
-                        ...(which === 'deposited' ? { deposited: value } : { withdrawn: value }),
-                      }),
-                    )
-                  }
-                  onSync={(which) => run(() => api.syncTraderCapital(a.key, which, whose))}
-                  onUnsync={(which) =>
-                    run(() =>
-                      api.updateTraderCapital({
-                        userId: whose,
-                        account: a.key,
-                        ...(which === 'deposited' ? { depositedSync: false } : { withdrawnSync: false }),
-                      }),
-                    )
-                  }
-                />
-              ))}
-            </div>
-          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: busy ? 0.7 : 1 }}>
+            {groups.map((g) => (
+              <div key={g.ownerId} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {named && (
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: GOLD }}>
+                      {g.ownerId === user?.id ? `${g.owner} (you)` : g.owner}
+                    </span>
+                    {!g.accounts.some((a) => a.canEdit) && (
+                      <span style={{ fontSize: 10.5, color: FAINT }}>{"view only"}</span>
+                    )}
+                  </div>
+                )}
+                {g.accounts.map((a) => (
+                  <AccountBlock
+                    key={`${a.ownerId}:${a.key}`}
+                    account={a}
+                    showMoney={showMoney}
+                    onSave={(which, value) =>
+                      run(() =>
+                        api.updateTraderCapital({
+                          userId: a.ownerId,
+                          account: a.key,
+                          ...(which === 'deposited' ? { deposited: value } : { withdrawn: value }),
+                        }),
+                      )
+                    }
+                    onSync={(which) => run(() => api.syncTraderCapital(a.key, which, a.ownerId))}
+                    onUnsync={(which) =>
+                      run(() =>
+                        api.updateTraderCapital({
+                          userId: a.ownerId,
+                          account: a.key,
+                          ...(which === 'deposited' ? { depositedSync: false } : { withdrawnSync: false }),
+                        }),
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
 
           {/* Not a tip: which broker the terminal can actually read a funding
               history from is not discoverable from the screen. */}
@@ -450,14 +412,12 @@ function CapitalManager({
 function AccountBlock({
   account,
   showMoney,
-  canEdit,
   onSave,
   onSync,
   onUnsync,
 }: {
   account: CapitalAccount;
   showMoney: boolean;
-  canEdit: boolean;
   onSave: (which: 'deposited' | 'withdrawn', value: number | null) => Promise<void>;
   onSync: (which: 'deposited' | 'withdrawn') => Promise<void>;
   onUnsync: (which: 'deposited' | 'withdrawn') => Promise<void>;
@@ -476,7 +436,7 @@ function AccountBlock({
           label="Deposited"
           figure={account.deposited}
           canSync={account.canSync}
-          canEdit={canEdit}
+          canEdit={account.canEdit}
           showMoney={showMoney}
           onSave={(v) => onSave('deposited', v)}
           onSync={() => onSync('deposited')}
@@ -486,7 +446,7 @@ function AccountBlock({
           label="Withdrawn"
           figure={account.withdrawn}
           canSync={account.canSync}
-          canEdit={canEdit}
+          canEdit={account.canEdit}
           showMoney={showMoney}
           onSave={(v) => onSave('withdrawn', v)}
           onSync={() => onSync('withdrawn')}

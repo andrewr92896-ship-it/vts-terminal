@@ -68,6 +68,10 @@ export interface CapitalAccount {
   // False for a paused/removed connection: its figures still count (the money
   // was paid in) but nothing can be read from it.
   active: boolean;
+  // Whether the viewer may set this account's figures. Per account rather than
+  // per payload, because the desk's card lists several people's accounts at
+  // once and a desk lead may reach some of them and not others.
+  canEdit: boolean;
   // Whether this one account can be kept in step with its broker. OANDA only —
   // Kraken's ledger records "0.5 BTC in", which needs the price on the day it
   // landed to become capital in dollars, a figure the terminal does not have.
@@ -388,9 +392,10 @@ async function refreshAccounts(
 
 export interface CapitalOptions {
   actor?: AuditActor;
-  // Whether the viewer may change what comes back. The route decides it, since
-  // only the route knows who is asking.
-  canEdit?: boolean;
+  // Whose figures the viewer may SET. The route decides it — only the route
+  // knows who is asking — and it is a set rather than a boolean because the
+  // desk's card carries several people's accounts at once.
+  editableOwners?: Set<string>;
   // Account keys to refresh now, whatever the age of the stored reading. This is
   // the Sync button; an ordinary read refreshes only what has gone stale.
   refresh?: string[];
@@ -404,6 +409,7 @@ async function accountsForTrader(
   owner: string,
   opts: CapitalOptions,
 ): Promise<{ accounts: CapitalAccount[]; otherTransfers: number }> {
+  const canEdit = opts.editableOwners ? opts.editableOwners.has(userId) : true;
   let rows = await capitalRows(userId);
   const slots = await slotsFor(userId, rows);
   const forced = new Set(opts.refresh ?? []);
@@ -441,6 +447,7 @@ async function accountsForTrader(
       label: s.label,
       ownerId: userId,
       owner,
+      canEdit,
       broker: s.broker,
       summary: s.summary,
       active: s.active,
@@ -472,7 +479,6 @@ function assemble(
   accounts: CapitalAccount[],
   total: TotalCache,
   otherTransfers: number,
-  canEdit: boolean,
 ): TraderCapital {
   const syncedAt = accounts.reduce<number | null>(
     (latest, a) => (a.syncedAt != null && (latest == null || a.syncedAt > latest) ? a.syncedAt : latest),
@@ -494,7 +500,8 @@ function assemble(
     syncedAt,
     otherTransfers,
     note: stale ? STALE_NOTE : truncated ? TRUNCATED_NOTE : null,
-    canEdit,
+    // The button on the card: whether there is anything here to set at all.
+    canEdit: accounts.some((a) => a.canEdit),
   };
 }
 
@@ -503,7 +510,7 @@ export async function getTraderCapital(userId: string, opts: CapitalOptions = {}
     displayNames([userId]).then((names) => accountsForTrader(userId, names.get(userId) ?? '', opts)),
     liveTotal([userId], opts.actor),
   ]);
-  return assemble(userId, 1, accounts, total, otherTransfers, opts.canEdit ?? true);
+  return assemble(userId, 1, accounts, total, otherTransfers);
 }
 
 // THE WHOLE VISIBLE DESK — what several traders put in between them.
@@ -514,9 +521,11 @@ export async function getTraderCapital(userId: string, opts: CapitalOptions = {}
 // computed was the desk's profit over one member's money, which is nobody's
 // return.
 //
-// Read-only, and that is not a UI decision: a total belonging to several people
-// has no single owner to write it back to, so a figure is set on the person
-// whose account it is.
+// The TOTAL is read-only, and that is not a UI decision: a figure belonging to
+// several people has no single owner to write it back to. The accounts under it
+// are not — a desk lead sets each person's on the person's own row, which is
+// what "edit my group's capital" means without inventing a second, group-owned
+// number for the sum to disagree with.
 export async function getDeskCapital(traderIds: string[], opts: CapitalOptions = {}): Promise<TraderCapital> {
   const ids = [...new Set(traderIds)];
   const names = await displayNames(ids);
@@ -530,7 +539,6 @@ export async function getDeskCapital(traderIds: string[], opts: CapitalOptions =
     perTrader.flatMap((r) => r.accounts),
     total,
     perTrader.reduce((sum, r) => sum + r.otherTransfers, 0),
-    false,
   );
 }
 
@@ -551,7 +559,11 @@ export async function syncCapital(
   }
   const patch: CapitalPatch =
     which === 'deposited' ? { account, depositedSync: true } : { account, withdrawnSync: true };
-  return updateTraderCapital(userId, patch, { actor, refresh: [account] });
+  return updateTraderCapital(userId, patch, {
+    actor,
+    refresh: [account],
+    editableOwners: new Set([userId]),
+  });
 }
 
 export interface CapitalPatch {

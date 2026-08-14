@@ -806,11 +806,24 @@ workspaces list** (see `theme/nav.ts` order).
         that governs how a teammate's results are scored, checked on **every**
         request. That is what lets a lead keep their own deposit typed by hand
         while a partner's account beside it syncs itself.
-      - **The desk's combined card is READ-ONLY**, and not as a UI choice: a
-        total belonging to several people has no single owner to write it back
-        to. Manage there opens on the **viewer's own**, with the "whose
-        capital" picker for a lead — a figure is always set on the person whose
-        account it is.
+      - **THE DESK'S PANEL LISTS EVERY VISIBLE TRADER'S ACCOUNTS, GROUPED BY
+        PERSON** (owner request, 2026-08), and each row carries its own
+        `canEdit` — a founder or admin reaches everyone, a group leader their
+        own group, everybody else only themselves. A person the viewer cannot
+        set is **shown and not editable**, never hidden. That is what "edit my
+        group's capital" means: each member's figures set in one place, on the
+        member's own row.
+        - **There is deliberately NO group-owned figure to type into.** A total
+          belonging to several people has no single owner to write it back to,
+          and a stored group number would be a second writer for the sum to
+          disagree with — the fault this whole area was rebuilt to remove. The
+          card's total stays derived.
+        - The panel **mirrors the card's scope** rather than holding one of its
+          own, so the two can never be showing different people. A write
+          answers with the one trader it touched, so the panel re-reads its own
+          scope afterwards instead of taking that answer — on the desk's card
+          the rest of the group would otherwise vanish behind the person just
+          edited.
       The Live Wall's **Desk Metrics** tile follows its own trader picker the
       same way, with the same paired P/L, and keys its fetch on the scope (two
       tiles pinned to different traders otherwise share one answer — the

@@ -365,23 +365,24 @@ export async function tradingRoutes(app: FastifyInstance) {
     const actor = auditActorFor(request);
 
     if (target === 'desk') {
-      const ids = await visibleTraderIds(me);
-      const [capital, editableMembers] = await Promise.all([
-        getDeskCapital([...ids], { actor }),
-        editableDeskMembers(me),
-      ]);
-      return { ...capital, editableMembers };
+      const ids = [...(await visibleTraderIds(me))];
+      // Which of them the caller may SET, asked per person rather than assumed
+      // from the roster: a founder or admin reaches everyone, a group leader
+      // their own group, and everybody else only themselves. The desk's card
+      // lists all of their accounts, each editable or not on its own row.
+      const editableOwners = new Set(
+        (await Promise.all(ids.map(async (id) => ((await canEditDeskSettingsFor(me, id)) ? id : null)))).filter(
+          (id): id is string => id !== null,
+        ),
+      );
+      return getDeskCapital(ids, { actor, editableOwners });
     }
 
     if (target !== me.id && !(await visibleTraderIds(me)).has(target)) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
-    const canEdit = target === me.id || (await canEditDeskSettingsFor(me, target));
-    const [capital, editableMembers] = await Promise.all([
-      getTraderCapital(target, { actor, canEdit }),
-      editableDeskMembers(me),
-    ]);
-    return { ...capital, editableMembers };
+    const editableOwners = (await canEditDeskSettingsFor(me, target)) ? new Set([target]) : new Set<string>();
+    return getTraderCapital(target, { actor, editableOwners });
   });
 
   app.patch('/api/trading/capital', write, async (request, reply) => {
@@ -394,11 +395,10 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'You cannot change that member’s capital' });
     }
     try {
-      const [capital, editableMembers] = await Promise.all([
-        updateTraderCapital(target, patch, { actor: auditActorFor(request) }),
-        editableDeskMembers(me),
-      ]);
-      return { ...capital, editableMembers };
+      return await updateTraderCapital(target, patch, {
+        actor: auditActorFor(request),
+        editableOwners: new Set([target]),
+      });
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save' });
     }
@@ -415,11 +415,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'You cannot change that member’s capital' });
     }
     try {
-      const [capital, editableMembers] = await Promise.all([
-        syncCapital(target, parsed.data.account, parsed.data.figure, auditActorFor(request)),
-        editableDeskMembers(me),
-      ]);
-      return { ...capital, editableMembers };
+      return await syncCapital(target, parsed.data.account, parsed.data.figure, auditActorFor(request));
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not sync' });
     }

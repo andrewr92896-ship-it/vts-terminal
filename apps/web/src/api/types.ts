@@ -1696,6 +1696,7 @@ export interface CapitalAccount {
   label: string;
   ownerId: string; // whose account it is — the desk's breakdown says who
   owner: string;
+  canEdit: boolean; // whether the viewer may set THIS account's figures
   broker: string | null;
   summary: string | null;
   active: boolean; // false for a paused or removed connection
@@ -1731,9 +1732,7 @@ export interface TraderCapital {
   syncedAt: number | null;
   otherTransfers: number; // funding events that were not client deposits/withdrawals
   note: string | null; // why a synced figure is stale or partial
-  canEdit: boolean;
-  // The people whose capital the caller may switch between (themselves first).
-  editableMembers: DeskMember[];
+  canEdit: boolean; // whether anything here can be set at all
 }
 export interface CapitalPatch {
   userId?: string; // a member's, for a desk lead; omitted means the caller's own

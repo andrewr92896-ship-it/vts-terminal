@@ -201,11 +201,26 @@ async function main() {
   ok('it covers both traders', desk.traders === 2);
   ok('and adds their deposits', desk.deposited.value === 15000 + 40000);
   ok('the breakdown says whose each account is', desk.breakdown.some((a) => a.ownerId === dale && a.owner === 'dale'));
+  // No single owner to write the TOTAL back to — which is why there is no
+  // group-level figure at all: it is set on each person's own accounts, listed
+  // under them in the panel.
   ok('it belongs to no single trader', desk.userId === null);
-  // A total belonging to several people has no one owner to write it back to.
-  ok('and is read-only', !desk.canEdit);
+  ok('every account still names its own owner', desk.breakdown.every((a) => !!a.ownerId));
   const solo = await getDeskCapital([andrew]);
   ok('a desk of one reads as one trader', solo.traders === 1 && solo.deposited.value === 15000);
+
+  section('who may SET each account, on the desk’s own card');
+  // A founder or admin reaches everyone, a group leader their own group. The
+  // row says so per account, so a person the viewer cannot set is shown and not
+  // editable rather than hidden.
+  const asLead = await getDeskCapital([andrew, dale], { editableOwners: new Set([andrew, dale]) });
+  ok('a lead may set every account', asLead.breakdown.every((a) => a.canEdit) && asLead.canEdit);
+  const asMember = await getDeskCapital([andrew, dale], { editableOwners: new Set([andrew]) });
+  ok('a member may set their own', asMember.breakdown.filter((a) => a.ownerId === andrew).every((a) => a.canEdit));
+  ok('and not a teammate’s', asMember.breakdown.filter((a) => a.ownerId === dale).every((a) => !a.canEdit));
+  ok('the card still offers the panel', asMember.canEdit);
+  const asWatcher = await getDeskCapital([andrew, dale], { editableOwners: new Set<string>() });
+  ok('with nothing to set, the card says so', !asWatcher.canEdit);
 
   section('two traders never combine');
   await updateTraderCapital(dale, { account: dalesOwn, deposited: 250000 });

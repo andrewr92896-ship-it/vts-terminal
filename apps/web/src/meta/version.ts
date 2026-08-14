@@ -21,6 +21,7 @@ export const PATCH_NOTES: PatchNote[] = [
       'The capital cards now follow the trader filter, like every other figure on the row. Picking a person shows their deposited and withdrawn capital and what their accounts hold; Whole desk shows everyone’s added together.',
       'The return percentage is measured over the same selection, so it is no longer one person’s profit divided by another person’s deposit.',
       'The Live Wall’s Desk Metrics tile follows its own trader picker the same way.',
+      'Manage on the whole-desk card now lists everyone in your group, their accounts grouped under each person, so you can set or sync any of them from one place. Anyone you cannot set is shown but not editable.',
     ],
   },
   {
