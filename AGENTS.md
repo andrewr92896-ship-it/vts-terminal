@@ -2907,8 +2907,26 @@ usually not the one they want on a desktop.
   1.00 lots, not 100000 — and units on anything else, with the raw units on the
   hover. It splits on the same `forexPair` test the pip/point reading does, so a
   size in lots is never quoted beside a per-point figure. Drawn on the full
-  card, the shared row above and the Trade Log's card. **The order ticket stays
-  in units** deliberately: that is the number sent to the broker.
+  card and the shared row above. **The order ticket stays in units**
+  deliberately: that is the number sent to the broker.
+  - **CLOSED TRADES & METRICS READS IN UNITS, NOT LOTS** (owner instruction,
+    2026-08; `fmtUnitSize` / `lotsTitle`, the mirror pair). The log is read
+    against the order that was placed and the ticket that placed it, so it
+    states the same number those do; the lot count moves to the hover. Beside
+    it sits **what one pip was worth at that size** — `perPipForSize`, the
+    figure that makes a size mean something without doing the arithmetic.
+    - **That per-pip is derived from the SIZE, never from the trade's realized
+      P/L.** Dividing the P/L by the pips would carry commission and financing
+      into it, inflating the number on exactly the trades a trader is checking
+      it against.
+    - **It is null unless the pair is quoted in the desk's own money.** 90,000
+      units of USD/JPY is ¥900 a pip, not $900, and the log carries no rate to
+      convert with, so nothing is drawn rather than a figure wrong by two
+      orders of magnitude. (The Live Wall's per-pip comes from the server,
+      `trading/forex.ts`, which does have the rates.)
+    - The tape's Size column is too narrow for it, so there it rides the hover
+      with the lot count — **and the money half of that hover is dropped while
+      balances are hidden**: a tooltip is not an exception to Hide $.
 - **`workspaces/trading/tiles/`** — one renderer per kind, over the shared
   `TileFrame` (header, drag handle, per-tile settings, scrolling body) and
   `useTileData` (poll, keep the last good data on a failed refresh, write nothing
