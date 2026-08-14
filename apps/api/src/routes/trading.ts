@@ -343,28 +343,65 @@ export async function tradingRoutes(app: FastifyInstance) {
     return setTicketPresets(request.currentUser!.id, parsed.data);
   });
 
-  // ---- The trader's own capital: put in, taken out, held now ----------------
+  // ---- Capital: put in, taken out, held now — PER PERSON AND PER ACCOUNT ----
   //
-  // Self-only, unlike the desk-wide OANDA capital below: this is one person's
-  // money by definition. On the `write` guard for the same reason that one is —
-  // it reports balances, and that is the floor the desk asked for.
-  app.get('/api/trading/capital', write, async (request) =>
-    getTraderCapital(request.currentUser!.id, { actor: auditActorFor(request) }),
-  );
-
-  app.patch('/api/trading/capital', write, async (request, reply) => {
-    const parsed = capitalSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Enter an amount of 0 or more' });
-    return updateTraderCapital(request.currentUser!.id, parsed.data, { actor: auditActorFor(request) });
+  // A `?userId=` targets a member's capital, which only a desk lead (group
+  // leader holding the Trading Teams grant, or an admin) may read or set — the
+  // same gate that already governs whose desk settings somebody may change. It
+  // is what lets a lead keep their own deposit typed by hand while a partner's
+  // account beside it syncs itself. Everybody else resolves to their own id.
+  //
+  // On the `write` guard for the same reason the desk-wide capital below is — it
+  // reports balances, and that is the floor the desk asked for.
+  app.get('/api/trading/capital', write, async (request, reply) => {
+    const me = request.currentUser!;
+    const target = (request.query as { userId?: string }).userId?.trim() || me.id;
+    if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    const [capital, editableMembers] = await Promise.all([
+      getTraderCapital(target, { actor: auditActorFor(request) }),
+      editableDeskMembers(me),
+    ]);
+    return { ...capital, editableMembers };
   });
 
-  // The Sync button: turn syncing on for one figure and pull it now, so the
-  // trader's one press does the whole thing.
-  app.post('/api/trading/capital/sync', write, async (request, reply) => {
-    const parsed = capitalSyncSchema.safeParse(request.body);
-    if (!parsed.success) return reply.code(400).send({ error: 'Pick a figure to sync' });
+  app.patch('/api/trading/capital', write, async (request, reply) => {
+    const me = request.currentUser!;
+    const parsed = capitalSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Enter an amount of 0 or more' });
+    const { userId, ...patch } = parsed.data;
+    const target = userId?.trim() || me.id;
+    if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
+      return reply.code(403).send({ error: 'You cannot change that member’s capital' });
+    }
     try {
-      return await syncCapital(request.currentUser!.id, parsed.data.figure, auditActorFor(request));
+      const [capital, editableMembers] = await Promise.all([
+        updateTraderCapital(target, patch, { actor: auditActorFor(request) }),
+        editableDeskMembers(me),
+      ]);
+      return { ...capital, editableMembers };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save' });
+    }
+  });
+
+  // The Sync button on one account: turn syncing on for one figure and pull it
+  // now, so the trader's one press does the whole thing.
+  app.post('/api/trading/capital/sync', write, async (request, reply) => {
+    const me = request.currentUser!;
+    const parsed = capitalSyncSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'Pick an account and a figure to sync' });
+    const target = parsed.data.userId?.trim() || me.id;
+    if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
+      return reply.code(403).send({ error: 'You cannot change that member’s capital' });
+    }
+    try {
+      const [capital, editableMembers] = await Promise.all([
+        syncCapital(target, parsed.data.account, parsed.data.figure, auditActorFor(request)),
+        editableDeskMembers(me),
+      ]);
+      return { ...capital, editableMembers };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not sync' });
     }
@@ -1570,17 +1607,33 @@ const ticketPresetsSchema = z
 // route rather than more fields on the desk-settings patch: those figures have a
 // second, broker-driven writer (the sync), and two write paths into one number
 // is how the two come to disagree. `null` clears a figure back to "not stated".
+// `account` is required: capital belongs to one broker account, not to a trader
+// as a whole, so a patch that did not say which account it meant could only be
+// applied to a guess.
 const capitalSchema = z
   .object({
+    userId: z.string().trim().min(1).optional(),
+    account: z.string().trim().min(1).max(80),
     deposited: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
     withdrawn: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
     depositedSync: z.boolean().optional(),
     withdrawnSync: z.boolean().optional(),
   })
-  .refine((v) => Object.values(v).some((x) => x !== undefined), { message: 'Nothing to update' });
+  .refine(
+    (v) =>
+      v.deposited !== undefined ||
+      v.withdrawn !== undefined ||
+      v.depositedSync !== undefined ||
+      v.withdrawnSync !== undefined,
+    { message: 'Nothing to update' },
+  );
 
-// Which figure the Sync button was pressed on.
-const capitalSyncSchema = z.object({ figure: z.enum(['deposited', 'withdrawn']) });
+// Which account the Sync button was pressed on, and which of its two figures.
+const capitalSyncSchema = z.object({
+  userId: z.string().trim().min(1).optional(),
+  account: z.string().trim().min(1).max(80),
+  figure: z.enum(['deposited', 'withdrawn']),
+});
 
 // Editing a closed trade in History: the same shape as a hand-logged trade minus
 // the fields History doesn't own (broker/status/notes are managed elsewhere).

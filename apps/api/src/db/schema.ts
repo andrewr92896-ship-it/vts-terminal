@@ -426,29 +426,75 @@ export const tradingDeskSettings = sqliteTable('trading_desk_settings', {
   // (stats and list) — the desk's "these are test trades" floor, so 1-unit
   // connection tests don't skew win rate, profit factor, or pips. 0 = keep all.
   minTradeUnits: real('min_trade_units').notNull().default(0),
-  // What this trader has put into their trading account out of their own pocket
-  // (migration 0109). NULL = not stated, which is not the same as 0 — the Trade
-  // History card shows no return rather than one measured against a deposit
-  // nobody entered. Read from the trader's OWN row only: the shared 'desk'
-  // default row must never answer this, since one trader's deposit is not
-  // another trader's.
+  // ---- SUPERSEDED capital columns (migrations 0109/0110) --------------------
+  // These held ONE deposited and ONE withdrawn figure per trader, with one sync
+  // switch each. That could not describe a desk where several broker accounts
+  // sit under one login: the sync summed every account's funding into a single
+  // number, so a trader holding their own account beside a partner's saw the two
+  // added together with no way to separate them. Capital is per ACCOUNT now —
+  // see `tradingCapitalAccounts` below.
+  //
+  // Nothing reads them any more. They are kept rather than dropped so the
+  // figures a trader typed before the move are still recoverable;
+  // `backfillCapitalAccounts()` carries them across on boot and skips any trader
+  // who already has per-account rows.
   depositedCapital: real('deposited_capital'),
-  // The other side of it: money the trader has taken back out (migration 0110).
   withdrawnCapital: real('withdrawn_capital'),
-  // Whether each figure is TYPED or SYNCED from the broker's funding history.
-  // Per figure rather than one switch, so syncing one card never quietly
-  // changes what the other is doing.
   depositedSync: integer('deposited_sync', { mode: 'boolean' }).notNull().default(false),
   withdrawnSync: integer('withdrawn_sync', { mode: 'boolean' }).notNull().default(false),
-  // The last GOOD broker reading, kept apart from the typed figures above so
-  // turning sync off restores the trader's own number, and a failed refresh
-  // leaves the last one standing rather than blanking it to zero.
   syncedDeposited: real('synced_deposited'),
   syncedWithdrawn: real('synced_withdrawn'),
   capitalSyncedAt: integer('capital_synced_at', { mode: 'timestamp_ms' }),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 });
 export type TradingDeskSettingsRow = typeof tradingDeskSettings.$inferSelect;
+
+// ---- Trading — capital, per person AND per broker account (migration 0127) --
+// What a trader put into an account out of their own pocket, and what they took
+// back out. ONE ROW PER (trader, account), because a single figure per trader
+// could not describe the two shapes a real desk takes: partners who sign in
+// themselves and hold their own accounts, and partners whose account is
+// connected under somebody else's login. Summing them gave one combined number
+// that belonged to nobody.
+//
+// `accountKey` is a `broker_connections.id`, or the constant 'other' for capital
+// that is not behind a connected account (a hand-kept book, or a trader with no
+// broker connected at all). There is deliberately NO foreign key: a removed
+// connection must not silently delete the record of money that was paid in — the
+// row survives, labelled, and the trader clears it themselves.
+//
+// Each figure is independently TYPED or SYNCED from that one account's funding
+// history, which is the whole point: a trader can hold their own deposit manual
+// while a partner's account beside it keeps itself in step with the broker.
+export const tradingCapitalAccounts = sqliteTable(
+  'trading_capital_accounts',
+  {
+    userId: text('user_id').notNull(),
+    accountKey: text('account_key').notNull(),
+    // NULL = not stated, which is not the same as 0: the card shows no return
+    // rather than one measured against a deposit nobody entered.
+    depositedCapital: real('deposited_capital'),
+    withdrawnCapital: real('withdrawn_capital'),
+    // Per figure rather than one switch, so syncing one card never quietly
+    // changes what the other is doing.
+    depositedSync: integer('deposited_sync', { mode: 'boolean' }).notNull().default(false),
+    withdrawnSync: integer('withdrawn_sync', { mode: 'boolean' }).notNull().default(false),
+    // The last GOOD broker reading, kept apart from the typed figures above so
+    // turning sync off restores the trader's own number, and a failed refresh
+    // leaves the last one standing rather than blanking it to zero.
+    syncedDeposited: real('synced_deposited'),
+    syncedWithdrawn: real('synced_withdrawn'),
+    // What the synced figures are denominated in, as the broker reported it.
+    // Null on a typed figure — nobody was asked. Two accounts kept in different
+    // currencies refuse to be added rather than producing a plausible-looking
+    // number that is simply wrong, the same rule the live total follows.
+    currency: text('currency'),
+    capitalSyncedAt: integer('capital_synced_at', { mode: 'timestamp_ms' }),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+  },
+  (t) => ({ pk: primaryKey({ columns: [t.userId, t.accountKey] }) }),
+);
+export type TradingCapitalAccountRow = typeof tradingCapitalAccounts.$inferSelect;
 
 // Per-instrument break-even buffers: an override that governs a single
 // instrument (e.g. EUR/USD gets a 2-pip buffer while the default is 0.05%).

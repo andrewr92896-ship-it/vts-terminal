@@ -1672,9 +1672,16 @@ export interface TradeLogData {
   canDeleteAny: boolean;
 }
 
-// ---- Trading — the viewer's own capital (mirror of apps/api/src/trading/traderCapital.ts) ----
-// Deposited, withdrawn, and what their connected accounts hold right now. Always
-// the CALLER'S own — a teammate's deposits are their business.
+// ---- Trading — capital (mirror of apps/api/src/trading/traderCapital.ts) ----
+// What was put into each broker account and taken back out, plus what those
+// accounts hold right now.
+//
+// PER ACCOUNT, NOT PER TRADER: one figure per person could not describe a desk
+// where several accounts sit under one login, so each account carries its own
+// figures and its own sync switches. The card shows the total across them.
+//
+// The caller's own unless a desk lead named a member with `userId` — the same
+// reach that already governs whose desk settings somebody may change.
 export type CapitalMode = 'manual' | 'synced';
 export interface CapitalFigure {
   value: number | null; // what to show; null = not stated
@@ -1682,11 +1689,35 @@ export interface CapitalFigure {
   manual: number | null; // the typed figure, kept while synced
   synced: number | null; // the last good broker reading
 }
-export interface TraderCapital {
+// The account-less bucket: capital not behind a connected broker account.
+export const OTHER_ACCOUNT = 'other';
+export interface CapitalAccount {
+  key: string; // a broker connection id, or OTHER_ACCOUNT
+  label: string;
+  broker: string | null;
+  summary: string | null;
+  active: boolean; // false for a paused or removed connection
+  canSync: boolean; // an active OANDA account — the only kind that can be read
   deposited: CapitalFigure;
   withdrawn: CapitalFigure;
-  // NAV summed across the viewer's own connected accounts. Null when nothing is
-  // connected, nothing answered, or the accounts are kept in mixed currencies.
+  currency: string | null; // what the broker said, once something has synced
+  syncedAt: number | null;
+  note: string | null; // why this account's synced figure is stale or partial
+}
+export interface CapitalTotal {
+  value: number | null; // summed across the accounts stating a figure
+  mode: 'manual' | 'synced' | 'mixed' | 'none';
+  stated: number;
+  unstated: number; // accounts with nothing stated — counted, never read as zero
+  mixedCurrency: boolean; // accounts in different currencies refuse to be added
+}
+export interface TraderCapital {
+  userId: string; // whose these are
+  deposited: CapitalTotal;
+  withdrawn: CapitalTotal;
+  breakdown: CapitalAccount[];
+  // NAV summed across the connected accounts. Null when nothing is connected,
+  // nothing answered, or the accounts are kept in mixed currencies.
   total: number | null;
   accounts: number;
   unreadable: number; // connected accounts that did not answer, left out of the total
@@ -1695,8 +1726,13 @@ export interface TraderCapital {
   syncedAt: number | null;
   otherTransfers: number; // funding events that were not client deposits/withdrawals
   note: string | null; // why a synced figure is stale or partial
+  canEdit: boolean;
+  // The people whose capital the caller may switch between (themselves first).
+  editableMembers: DeskMember[];
 }
 export interface CapitalPatch {
+  userId?: string; // a member's, for a desk lead; omitted means the caller's own
+  account: string; // which account this is about
   deposited?: number | null; // a number also returns the figure to manual mode
   withdrawn?: number | null;
   depositedSync?: boolean;

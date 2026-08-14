@@ -7,6 +7,7 @@ import { configActive, configFrom } from './outcome';
 import { fmtPips, hasAnyPips, netPips } from './pips';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { useTileData } from './tiles/TileFrame';
+import { capitalSub } from './CapitalCards';
 import { BORDER, BORDER2, FAINT, GREEN, MONO, MUTED, PANEL, RED } from './tvChart';
 import { ScrollLockButton } from './scrollLock';
 import { Icon } from '../../components/Icon';
@@ -201,10 +202,17 @@ export function MetricsTile({
 // more cells on the same grid.
 //
 // ALWAYS THE VIEWER'S OWN, and deliberately unaffected by the tile's trader
-// picker: a teammate's deposits are their business, and the payload behind this
-// takes no "whose" parameter. The return on the Deposited card is likewise
-// measured over the viewer's OWN closed rows (`t.isMine`) — dividing the desk's
-// P/L by one person's deposit is a return nobody earned.
+// picker: this reads with no `userId`, so it is the caller's own capital even
+// though a desk lead may set a member's from the screen. The return on the
+// Deposited card is likewise measured over the viewer's OWN closed rows
+// (`t.isMine`) — dividing the desk's P/L by one person's deposit is a return
+// nobody earned.
+//
+// Deposited and Withdrawn are each a total across the viewer's broker accounts,
+// which is why the sub-line says how many accounts it covers and how many state
+// nothing: a figure that leaves an account out must say so rather than reading
+// as complete. `capitalSub` is shared with the screen so the two cannot phrase
+// the same total differently.
 //
 // Read-only here. The figures are typed or synced from Closed Trades & Metrics,
 // which is the one screen that owns them; a board tile states what they are.
@@ -230,12 +238,12 @@ function CapitalStats({ trades, showMoney }: { trades: TradeLogData['trades']; s
         value={flow(cap?.deposited.value)}
         pips={pct != null ? `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% return` : undefined}
         pipsColor={pct != null && pct < 0 ? RED : GREEN}
-        sub={cap == null ? 'reading' : cap.deposited.value == null ? 'not set' : 'your own closed trades'}
+        sub={cap == null ? 'reading' : capitalSub(cap.deposited, 'your own closed trades', 'not set')}
       />
       <Stat
         label="Withdrawn Capital"
         value={flow(cap?.withdrawn.value)}
-        sub={cap == null ? 'reading' : cap.withdrawn.value == null ? 'not set' : 'taken out of the account'}
+        sub={cap == null ? 'reading' : capitalSub(cap.withdrawn, 'taken out of the account', 'not set')}
       />
       <Stat
         label="Total Capital"

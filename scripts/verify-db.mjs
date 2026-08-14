@@ -28,7 +28,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const CHECKS = ['db:check-sharing', 'db:check-alerts', 'db:check-package-add'];
+const CHECKS = ['db:check-sharing', 'db:check-alerts', 'db:check-package-add', 'db:check-capital'];
 const DIR = '.tmp-verify';
 
 const base = { ...process.env };
