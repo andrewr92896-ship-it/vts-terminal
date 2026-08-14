@@ -209,11 +209,43 @@ export function sizeTitle(instrument: string, units: number): string | undefined
   return `${fmtUnitCount(units)} units`;
 }
 
+// The size in units, formatted — the figure the order was actually placed in,
+// which is what the Trade Log reads sizes in.
+export function fmtUnitSize(units: number): string {
+  return Number.isFinite(units) ? `${fmtUnitCount(units)} units` : '—';
+}
+
+// The lot count behind a size in units, for the hover — the mirror of
+// `sizeTitle`, for a surface reading in units rather than in lots.
+export function lotsTitle(instrument: string, units: number): string | undefined {
+  if (!forexPair(instrument) || !Number.isFinite(units)) return undefined;
+  return fmtSize(instrument, units);
+}
+
+// What one pip is worth at this size, in the QUOTE currency — 90,000 units of
+// EUR/USD is $9.00 a pip. Derived from the size alone, deliberately not from the
+// trade's realized P/L: that figure carries commission and financing, which
+// would quietly inflate the per-pip value on exactly the trades a trader is
+// checking it against.
+//
+// **Null unless the pair is quoted in `currency`.** 90,000 units of USD/JPY is
+// ¥900 a pip, not $900, and the closed-trade log carries no rate to convert one
+// into the other — so it says nothing there rather than printing a figure that
+// is wrong by two orders of magnitude. The Live Wall's per-pip figure comes from
+// the server (trading/forex.ts), which does have the rates; this is the reading
+// available to a screen that only has the trade.
+export function perPipForSize(instrument: string, units: number, currency = 'USD'): number | null {
+  const pair = forexPair(instrument);
+  if (!pair || !Number.isFinite(units) || units <= 0) return null;
+  if (pair[1] !== currency.trim().toUpperCase()) return null;
+  return units * pipSizeFor(pair[1]);
+}
+
 // Sizes span 100,000 units of EUR/USD down to 0.00042 of a bitcoin, and the
 // default locale format prints that second one as "0" — so the smaller the size,
 // the more decimals it keeps. Mirrors `fmtUnits` in tradeFormat.ts, kept here so
 // this module stays free of that import cycle.
-function fmtUnitCount(n: number): string {
+export function fmtUnitCount(n: number): string {
   const abs = Math.abs(n);
   const digits = abs >= 1000 ? 2 : abs >= 1 ? 4 : 8;
   return Number(n.toFixed(digits)).toLocaleString('en-US', { maximumFractionDigits: digits });
