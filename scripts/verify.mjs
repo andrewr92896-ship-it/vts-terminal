@@ -36,7 +36,7 @@ const STEPS = [
   ['market data macro', 'verify:market-macro'],
   ['investments math', 'verify:investments'],
   ['study packages', 'verify:study-packages'],
-  ['study sharing and alerts', 'verify:db'],
+  ['study sharing, alerts and package edits', 'verify:db'],
   ['build', 'build'],
 ];
 

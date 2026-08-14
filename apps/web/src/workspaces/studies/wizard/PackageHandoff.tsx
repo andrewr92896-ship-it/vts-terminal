@@ -22,11 +22,16 @@ export function PackageHandoff({
   result,
   onBack,
   onImported,
+  /** Set when this handoff is finishing a package that already exists. */
+  addToPackageId,
+  backLabel = '← Study Creation',
 }: {
   theme: Theme;
   result: WizardResult;
   onBack: () => void;
   onImported: (pkg: { id: string; name: string }) => void;
+  addToPackageId?: string;
+  backLabel?: string;
 }) {
   const bp = result.blueprint;
   const [copied, setCopied] = useState(false);
@@ -61,7 +66,7 @@ export function PackageHandoff({
     <div style={{ maxWidth: 900, margin: '0 auto', color: TEXT, animation: 'fadeIn .25s ease' }}>
       <div style={{ marginBottom: 14 }}>
         <button onClick={onBack} style={secondaryBtn(theme)}>
-          {'← Study Creation'}
+          {backLabel}
         </button>
       </div>
 
@@ -134,7 +139,13 @@ export function PackageHandoff({
       </div>
 
       <div style={{ border: `1px solid ${BORDER}`, borderRadius: 12, padding: 18, background: 'rgba(255,255,255,.02)' }}>
-        <PackageImport theme={theme} blueprint={bp} draftId={result.draftId} onImported={onImported} />
+        <PackageImport
+          theme={theme}
+          blueprint={bp}
+          draftId={result.draftId}
+          onImported={onImported}
+          addToPackageId={addToPackageId}
+        />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The two checks that WRITE to a database, run against throwaway scratch files.
+// The checks that WRITE to a database, run against throwaway scratch files.
 //
 // Each of them deliberately refuses any database that already holds a user —
 // that guard is what stops them ever being pointed at production — so each needs
@@ -28,7 +28,7 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const CHECKS = ['db:check-sharing', 'db:check-alerts'];
+const CHECKS = ['db:check-sharing', 'db:check-alerts', 'db:check-package-add'];
 const DIR = '.tmp-verify';
 
 const base = { ...process.env };

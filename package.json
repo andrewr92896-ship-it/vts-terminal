@@ -23,6 +23,7 @@
     "db:verify-positions": "npm --workspace @vts/api run db:verify-positions --",
     "db:check-sharing": "npm --workspace @vts/api run db:check-sharing",
     "db:check-alerts": "npm --workspace @vts/api run db:check-alerts",
+    "db:check-package-add": "npm --workspace @vts/api run db:check-package-add",
     "verify:market-macro": "npm --workspace @vts/api run verify:market-macro",
     "verify:investments": "npm --workspace @vts/api run verify:investments",
     "verify:migrations": "npm --workspace @vts/api run verify:migrations",

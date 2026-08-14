@@ -1810,10 +1810,35 @@ export const api = {
       body: JSON.stringify({ documents, blueprint, manualQuestions }),
     });
   },
+  // Finishing a package: adding a part it was created without. Same payload as
+  // the import above, aimed at a package that already exists — it ADDS and
+  // never replaces, so a part that is already there is refused by name.
+  addToStudyPackage(
+    id: string,
+    documents: string[],
+    blueprint: ImportBlueprintPayload,
+    manualQuestions?: ManualPackagePayload['questions'],
+  ): Promise<{ package: { id: string; name: string } }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}/add`, {
+      method: 'POST',
+      body: JSON.stringify({ documents, blueprint, manualQuestions }),
+    });
+  },
   // The wizard's manual ending: the same transactional creator, given questions
   // that were typed in rather than imported.
   createManualStudyPackage(payload: ManualPackagePayload): Promise<{ package: { id: string; name: string } }> {
     return request('/api/studies/packages/manual', { method: 'POST', body: JSON.stringify(payload) });
+  },
+  // Renaming a package, or changing what it says it is about. Its CONTENT is
+  // edited through the ordinary makers, which list package-backed rows.
+  updateStudyPackage(
+    id: string,
+    patch: { name?: string; subject?: string | null; description?: string | null },
+  ): Promise<{ package: StudyPackageDetail }> {
+    return request(`/api/studies/packages/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
   },
 
   // The library: a person's own packages, the ones handed to them, and the ones
