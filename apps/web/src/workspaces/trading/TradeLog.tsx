@@ -17,7 +17,17 @@ import {
   filterSelect,
   groupTrades,
 } from './tradeBreakdown';
-import { tradePips, fmtPips, fmtSize, netPips, hasAnyPips, pipsParenthetical, sizeTitle } from './pips';
+import {
+  tradePips,
+  fmtPips,
+  fmtUnitCount,
+  fmtUnitSize,
+  lotsTitle,
+  netPips,
+  hasAnyPips,
+  perPipForSize,
+  pipsParenthetical,
+} from './pips';
 import { profitFactorStats, profitFactorText, projectedProfitFactorStats, scaledProfitFactorText, summarizeTrades } from './tradeStats';
 import { getTradeLayout, type Layout } from './preferences';
 import { ScreenTitle } from './ScreenTitle';
@@ -736,6 +746,9 @@ function DeckCard({
   const plColor = isBreakeven ? GOLD : plUp ? GREEN : RED;
   // The trade's move in pips, shown beside its realized P/L (closed forex only).
   const plPips = t.status === 'closed' ? pipsParenthetical(t.side, t.entryPrice, t.exitPrice, t.instrument, true) : '';
+  // What one pip was worth at this size. Null on anything not quoted in the
+  // desk's own money, where the log has no rate to convert with.
+  const perPip = perPipForSize(t.instrument, t.units);
 
   return (
     <div
@@ -787,11 +800,16 @@ function DeckCard({
       <div style={{ display: 'flex', gap: 14, padding: '0 14px 9px', flexWrap: 'wrap' }}>
         <Field label="TP" value={fmtPrice(t.takeProfit)} color={GREEN} />
         <Field label="SL" value={fmtPrice(t.stopLoss)} color={RED} />
-        {/* Lots on a currency pair, units on anything else, with the raw units
-            on the hover — the same reading every other position surface gives
-            (`fmtSize`). It printed the units unformatted, so a standard lot read
-            "100000". */}
-        <Field label="Size" value={fmtSize(t.instrument, t.units)} title={sizeTitle(t.instrument, t.units)} />
+        {/* UNITS here, not lots (owner instruction, 2026-08) — the log is read
+            against the order that was placed, and the ticket sizes in units. The
+            lot count is on the hover, and what one pip was worth at that size
+            sits beside it, which is the figure that makes a size mean something
+            without doing the arithmetic. The Live Wall keeps reading in lots;
+            that is the surface the owner reads that way. */}
+        <Field label="Size" value={fmtUnitSize(t.units)} title={lotsTitle(t.instrument, t.units)} />
+        {perPip != null && (
+          <Field label="Per pip" value={showMoney ? usd(perPip) : '•••'} />
+        )}
       </div>
 
       {(t.strategy || t.timeframe) && (
@@ -916,7 +934,10 @@ function Tape({
             <span style={col}>{fmtPrice(t.entryPrice)}</span>
             <span style={col}>{fmtPrice(t.exitPrice)}</span>
             <span style={{ ...col, color: slipColor }}>{t.slippage == null ? '—' : `${t.slippage > 0 ? '+' : ''}${fmtPrice(t.slippage)}`}</span>
-            <span style={col}>{t.units}</span>
+            {/* Units, like the card above — the raw number printed a standard
+                lot as "100000". The column is too narrow for the per-pip figure,
+                so it rides the hover with the lot count. */}
+            <span style={col} title={sizeHover(t.instrument, t.units, showMoney)}>{fmtUnitCount(t.units)}</span>
             <span style={{ flex: '1 1 80px', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.strategy ?? '—'}</span>
             <span style={{ ...plCol, textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
               <span style={{ fontWeight: 700, color: plColor }}>
@@ -1038,7 +1059,7 @@ function TradeForm({
         <NumInput v={exit} set={setExit} ph="Exit price" />
         <NumInput v={tp} set={setTp} ph="Take profit" />
         <NumInput v={sl} set={setSl} ph="Stop loss" />
-        <NumInput v={units} set={setUnits} ph="Size / lots" />
+        <NumInput v={units} set={setUnits} ph="Size / units" />
         <NumInput v={pl} set={setPl} ph="Realized P/L $" />
         <input value={timeframe} onChange={(e) => setTimeframe(e.target.value)} placeholder="Timeframe (M15)" style={{ ...inputBase, flex: '0 0 120px' }} />
         <input value={strategy} onChange={(e) => setStrategy(e.target.value)} placeholder="Strategy" style={{ ...inputBase, flex: '1 1 150px' }} />
@@ -1064,6 +1085,15 @@ function NumInput({ v, set, ph }: { v: string; set: (s: string) => void; ph: str
       style={{ ...inputBase, flex: '0 0 130px' }}
     />
   );
+}
+
+// The hover on a size in the tape: the lot count it works out to, and what a pip
+// was worth at it. The money half is dropped while balances are hidden — a
+// tooltip is not an exception to Hide $.
+function sizeHover(instrument: string, units: number, showMoney: boolean): string | undefined {
+  const perPip = showMoney ? perPipForSize(instrument, units) : null;
+  const parts = [lotsTitle(instrument, units), perPip == null ? null : `${usd(perPip)} / pip`];
+  return parts.filter(Boolean).join(' · ') || undefined;
 }
 
 function Field({ label, value, strong, color, title }: { label: string; value: string; strong?: boolean; color?: string; title?: string }) {
@@ -1605,7 +1635,7 @@ function ClosedTradeEditModal({ t, busy, onSave, onClose }: { t: TradeRecord; bu
             </select>
             <input value={entry} onChange={(e) => setEntry(e.target.value)} type="number" step="any" placeholder="Entry price *" style={{ ...inputBase, flex: '0 0 130px' }} />
             <input value={exit} onChange={(e) => setExit(e.target.value)} type="number" step="any" placeholder="Exit price" style={{ ...inputBase, flex: '0 0 130px' }} />
-            <input value={units} onChange={(e) => setUnits(e.target.value)} type="number" step="any" placeholder="Size / lots" style={{ ...inputBase, flex: '0 0 130px' }} />
+            <input value={units} onChange={(e) => setUnits(e.target.value)} type="number" step="any" placeholder="Size / units" style={{ ...inputBase, flex: '0 0 130px' }} />
             <input value={pl} onChange={(e) => setPl(e.target.value)} type="number" step="any" placeholder="Realized P/L $" style={{ ...inputBase, flex: '0 0 130px' }} />
             <input value={timeframe} onChange={(e) => setTimeframe(e.target.value)} placeholder="Timeframe (M15)" style={{ ...inputBase, flex: '0 0 120px' }} />
             <input value={strategy} onChange={(e) => setStrategy(e.target.value)} placeholder="Strategy" style={{ ...inputBase, flex: '1 1 150px' }} />

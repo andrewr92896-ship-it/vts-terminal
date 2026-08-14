@@ -11,9 +11,16 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.17';
+export const APP_VERSION = 'Beta V 7.18';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.18',
+    date: 'August 14, 2026',
+    notes: [
+      'Closed Trades & Metrics reads sizes in units again — 90,000, the number the order was placed in — with what one pip was worth at that size beside it. The lot count is on the hover. The Live Wall still reads in lots.',
+    ],
+  },
   {
     version: 'Beta V 7.17',
     date: 'August 14, 2026',
