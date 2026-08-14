@@ -5038,6 +5038,33 @@ tile, so the floor could only pad it with two thirds of a tile of nothing. A
 watchlist in **static** mode is the quote list, which does fill, and is floored
 like everything else.
 
+### A number input must be able to be EMPTY (`studies/NumberField.tsx`)
+
+The obvious controlled spelling is wrong and looks right:
+
+```tsx
+<input type="number" value={n} onChange={(e) => set(Number(e.target.value) || 0)} />
+```
+
+It **cannot represent an empty box**. Clearing it makes `Number('')` fall through
+to the fallback, which is painted straight back into the field — so the box reads
+`0` the instant it is emptied and the next digit typed lands *after* that zero.
+Clearing a category weight and typing 30 produced **`030`**, reported from the
+study game editor. The fault belongs to the spelling, not the field: any input
+written this way has it, whatever its fallback (the practice test's length and
+pass-line boxes had the identical bug with a fallback of 1).
+
+`NumberField` is the fix and what new numeric inputs should use: it keeps the raw
+text while the field has focus and falls back to the committed, clamped number on
+blur, so the parent still receives a number on every keystroke (`emptyValue`
+while blank) and nothing downstream sees a half-typed string.
+
+**A typecheck cannot see this, and neither can reading the code** — it is React's
+controlled-input behaviour, so it only shows up when something types into it.
+Verified by driving Chromium against a bundled harness: clear, type, blur, check
+both the field and the model. Worth re-running that way rather than by eye if the
+component changes.
+
 ### Mobile input zoom (iOS)
 
 iOS Safari auto-zooms the viewport whenever a focused text field has a
