@@ -1884,6 +1884,52 @@ workspaces list** (see `theme/nav.ts` order).
         path remembering to set it. It deliberately does **not** route into the
         standalone maker. The standalone makers stay reachable on their own for
         building one piece outside the wizard.
+      - **FINISHING A PACKAGE — adding a part it was created without**
+        (`addToPackage` in `packageImport.ts`, `POST /api/studies/packages/:id/add`;
+        `wizard/PackageFinish.tsx` and `YourPackages.tsx` on Study Creation).
+        `commitPackage` only builds a deck **if questions came with it**, so a
+        blueprint asking for none produces a package with no study game — and
+        until this existed there was **no route back**: nothing could attach a
+        component to a package that already existed. A creator whose AI had
+        already written the questions had nowhere to put them, and the package
+        could never be finished. Reported by the owner three times before it was
+        understood; the first two diagnoses (the vanishing paste box, the plan-id
+        refusal) were real bugs and neither was this one.
+        - **It ADDS and never REPLACES.** A part that is already there is
+          refused **by name** ("This package already has a study game"), because
+          replacing is a different act with a different risk — people may
+          already have studied the component being thrown away.
+        - **A CATEGORY THE PACKAGE ALREADY HAS KEEPS ITS ROW AND ITS ID.**
+          Incoming categories are matched on the trimmed, lowercased name — the
+          same comparison `syncPackageCategories` makes — and the existing row
+          wins, name and weight included. That id is what every learner's
+          per-category history hangs off and what the stored weights (the exam
+          blueprint) are attached to, so minting a new row for the same name
+          would silently reset both. A genuinely new name is **appended** at the
+          next `seq`. This is the invariant `db:check-package-add` exists for.
+        - **The blueprint is built from the package, not from a saved draft**
+          (`finishBlueprint`): its name, subject and above all its categories
+          with their stored ids and weights. So the handoff asks the creator's
+          AI for exactly what fits, and the importer checks the answer against
+          the same thing. **Zero VTS AI calls**, like the rest of this path.
+        - **One importer, not two.** `PackageImport` takes an optional
+          `addToPackageId` and changes only where the confirmed content is
+          written; the reading, checking and editing are identical. A second
+          importer for the same job is how the two come to validate differently.
+        - Guarded by `create` **and** `canEditPackage`, which is what makes a
+          **published** package refuse — its content is locked while it is in
+          the library. The row says so instead of drawing a button the server
+          would reject.
+        - `npm run db:check-package-add` walks it through the real service
+          against a scratch database (in `verify:db`, so CI runs it). Like the
+          other writing checks it refuses any database that already holds a user.
+      - **Package CONTENT is edited in the ordinary makers**, which list
+        package-backed rows alongside standalone ones — every list route passes
+        `readablePackageIds`, and `listDecks`/`listFlashcardSets`/`listGuides`
+        widen on it. That was true and completely undiscoverable, so the Update
+        panel on Study Creation now says it and opens the right maker. **The
+        package layer itself** — its name and subject — is the `PATCH` route,
+        which had existed with no client method at all.
       - **A SLIDE HAS ITS OWN IDENTITY, and a lesson points at that** — never at
         a position (`studies/slideIdentity.ts`, migration `0117`). A guide keeps
         its slides as one JSON blob, which is a fine way to hold a presentation
@@ -4901,6 +4947,20 @@ empty scratch file the only thing it can be pointed at:
 
 Run it after touching `packageAccess.ts`, `packageSharing.ts`,
 `packageLibrary.ts` or the leaderboard.
+
+**Finishing a package:** `npm run db:check-package-add` walks `addToPackage`
+through the real service the same way, and exists for one invariant above all —
+**a category the package already has keeps its row and its id** when content is
+added against it. That id is what every learner's per-category history hangs off
+and what the stored weights are attached to, so a version that mints a fresh row
+for the same name passes a typecheck and silently resets both. It also covers
+the refusals (a part that is already there, a package that is not) and that the
+existing parts are left alone. Same writing guard, same scratch-file rule:
+
+    DATABASE_URL="file:/tmp/x.db" npm run db:migrate
+    DATABASE_URL="file:/tmp/x.db" npm run db:check-package-add
+
+Both are in `verify:db`, so `npm run verify` and CI run them without being asked.
 
 ## Deployment workflow (owner preference)
 

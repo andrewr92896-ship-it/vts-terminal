@@ -31,11 +31,21 @@ export function PackageImport({
   blueprint,
   draftId,
   onImported,
+  /**
+   * Finishing an existing package rather than creating a new one.
+   *
+   * The reading, checking and editing are identical either way — the same file
+   * from the same handoff — so this changes only where the confirmed content is
+   * written, and the wording on the button. A second importer for the same job
+   * is how the two come to validate differently.
+   */
+  addToPackageId,
 }: {
   theme: Theme;
   blueprint: StudyPackageBlueprint;
   draftId: string;
   onImported: (pkg: { id: string; name: string }) => void;
+  addToPackageId?: string;
 }) {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [paste, setPaste] = useState('');
@@ -93,23 +103,28 @@ export function PackageImport({
   const confirm = async () => {
     setBusy(true);
     setError(null);
+    const texts = docs.map((d) => d.text);
+    const questions = owesQuestions
+      ? manual.map((q) => ({
+          categoryId: q.categoryId,
+          stem: q.stem,
+          options: q.options,
+          answer: q.answer,
+          explanation: q.explanation || null,
+        }))
+      : undefined;
     try {
-      const { package: pkg } = await api.commitStudyPackage(
-        docs.map((d) => d.text),
-        payload,
-        owesQuestions
-          ? manual.map((q) => ({
-              categoryId: q.categoryId,
-              stem: q.stem,
-              options: q.options,
-              answer: q.answer,
-              explanation: q.explanation || null,
-            }))
-          : undefined,
-      );
+      const { package: pkg } = addToPackageId
+        ? await api.addToStudyPackage(addToPackageId, texts, payload, questions)
+        : await api.commitStudyPackage(texts, payload, questions);
       onImported(pkg);
     } catch (e) {
-      setError(e instanceof ApiError ? `Could not create that package (${e.status}).` : 'Could not create that package.');
+      // A 409 here is the server naming what it refused — a part the package
+      // already has, or a package that is locked in the library — and that
+      // sentence is far more use than "could not". Show it.
+      const said = e instanceof ApiError && e.message && e.status === 409 ? e.message : null;
+      const verb = addToPackageId ? 'add that to the package' : 'create that package';
+      setError(said ?? (e instanceof ApiError ? `Could not ${verb} (${e.status}).` : `Could not ${verb}.`));
     } finally {
       setBusy(false);
     }
@@ -406,7 +421,13 @@ export function PackageImport({
             </button>
             {result.ok && (
               <button type="button" onClick={() => void confirm()} disabled={!canConfirm} style={primaryBtn(theme, !canConfirm)}>
-                {busy ? 'Creating…' : 'Confirm import'}
+                {addToPackageId
+                  ? busy
+                    ? 'Adding…'
+                    : 'Add to this package'
+                  : busy
+                    ? 'Creating…'
+                    : 'Confirm import'}
               </button>
             )}
           </div>

@@ -9,7 +9,7 @@ import {
   type SubmissionStatus,
 } from '../db/schema.js';
 import { validateDocuments, parseForCommit } from '../studies/packageValidate.js';
-import { commitPackage } from '../studies/packageImport.js';
+import { addToPackage, commitPackage } from '../studies/packageImport.js';
 import {
   canEditPackage,
   canManagePackage,
@@ -449,6 +449,79 @@ export async function studyPackageRoutes(app: FastifyInstance) {
         source: 'package_import',
       });
       return { package: created };
+    } catch (err) {
+      if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  // FINISHING a package — adding a part it was created without.
+  //
+  // The same validate-then-write shape as the import above, aimed at a package
+  // that already exists. Until this route existed there was no way to attach a
+  // component to one, so a package created without its study game could never
+  // get one and a creator who had already had their AI write the questions had
+  // nowhere to put them.
+  //
+  // On `create` AND `canEditPackage`, which is what makes a PUBLISHED package
+  // refuse: its content is locked while it is in the library, so what people
+  // study stays what was reviewed. Withdrawing unlocks it.
+  app.post('/api/studies/packages/:id/add', { ...create, bodyLimit: 32 * 1024 * 1024 }, async (request, reply) => {
+    const me = request.currentUser!;
+    const id = (request.params as { id: string }).id;
+    const parsed = importSchema.safeParse(request.body);
+    if (!parsed.success) return reply.code(400).send({ error: 'A package and its plan are required' });
+    if (!(await canEditPackage(viewerOf(me), id))) return reply.code(404).send(NOT_FOUND);
+    const { documents, blueprint } = parsed.data;
+
+    const result = validateDocuments(documents, blueprint);
+    if (!result.ok) return reply.code(422).send({ error: 'That package did not pass validation', result });
+
+    const pkg = parseForCommit(documents, blueprint);
+    if (!pkg) return reply.code(422).send({ error: 'That package could not be read' });
+
+    try {
+      const updated = await addToPackage({
+        packageId: id,
+        createdBy: me.id,
+        categoryWeightMode: blueprint.categoryWeightMode ?? null,
+        categories: pkg.categories.map((c) => ({ importId: c.id, name: c.name, weight: c.weight })),
+        questions: blueprint.wantQuestions
+          ? pkg.questions.map((q) => ({
+              categoryImportId: q.categoryId,
+              stem: q.stem,
+              options: q.options,
+              answer: q.answer,
+              explanation: q.explanation,
+            }))
+          : (parsed.data.manualQuestions ?? []).map((q) => ({
+              categoryImportId: q.categoryId ?? null,
+              stem: q.stem,
+              options: q.options,
+              answer: q.answer,
+              explanation: q.explanation ?? null,
+            })),
+        flashcards: blueprint.wantFlashcards
+          ? pkg.flashcards.map((f) => ({ categoryImportId: f.categoryId, term: f.term, definition: f.definition }))
+          : [],
+        presentation:
+          blueprint.wantPresentation && pkg.presentation
+            ? {
+                title: pkg.presentation.title,
+                slides: pkg.presentation.slides.map((s) => ({ importId: s.id, title: s.title, body: s.body })),
+              }
+            : null,
+        lessons: blueprint.wantLessons
+          ? pkg.lessons.map((l) => ({
+              title: l.title,
+              objective: l.objective,
+              body: l.body,
+              slideImportIds: l.slideIds,
+            }))
+          : [],
+        source: 'package_import',
+      });
+      return { package: updated };
     } catch (err) {
       if (err instanceof PackageError) return reply.code(409).send({ error: err.message });
       throw err;
