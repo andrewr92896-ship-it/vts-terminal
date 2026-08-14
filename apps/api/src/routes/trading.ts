@@ -31,7 +31,7 @@ import { getTicketPresets, setTicketPresets } from '../trading/ticketPresets.js'
 import { canEditDeskSettingsFor, editableDeskMembers } from '../trading/deskAccess.js';
 import { tradeDeleteScope } from '../trading/deleteAccess.js';
 import { visibleTraderIds } from '../trading/scope.js';
-import { getTraderCapital, syncCapital, updateTraderCapital } from '../trading/traderCapital.js';
+import { getDeskCapital, getTraderCapital, syncCapital, updateTraderCapital } from '../trading/traderCapital.js';
 import {
   addChallenge,
   getOwnChallenge,
@@ -353,17 +353,36 @@ export async function tradingRoutes(app: FastifyInstance) {
   //
   // On the `write` guard for the same reason the desk-wide capital below is — it
   // reports balances, and that is the floor the desk asked for.
+  // `?userId=` names whose capital to answer with, and follows the KPI row's
+  // trader filter: a trader's id, or **`desk`** for everyone the caller can
+  // already see. READING is bounded by `visibleTraderIds` — the same boundary
+  // that decides whose trades are on the screen these figures sit on, so the
+  // deposit and the P/L it is divided by always describe the same people.
+  // WRITING stays on `canEditDeskSettingsFor`, which is narrower.
   app.get('/api/trading/capital', write, async (request, reply) => {
     const me = request.currentUser!;
     const target = (request.query as { userId?: string }).userId?.trim() || me.id;
-    if (target !== me.id && !(await canEditDeskSettingsFor(me, target))) {
+    const actor = auditActorFor(request);
+
+    if (target === 'desk') {
+      const ids = [...(await visibleTraderIds(me))];
+      // Which of them the caller may SET, asked per person rather than assumed
+      // from the roster: a founder or admin reaches everyone, a group leader
+      // their own group, and everybody else only themselves. The desk's card
+      // lists all of their accounts, each editable or not on its own row.
+      const editableOwners = new Set(
+        (await Promise.all(ids.map(async (id) => ((await canEditDeskSettingsFor(me, id)) ? id : null)))).filter(
+          (id): id is string => id !== null,
+        ),
+      );
+      return getDeskCapital(ids, { actor, editableOwners });
+    }
+
+    if (target !== me.id && !(await visibleTraderIds(me)).has(target)) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
-    const [capital, editableMembers] = await Promise.all([
-      getTraderCapital(target, { actor: auditActorFor(request) }),
-      editableDeskMembers(me),
-    ]);
-    return { ...capital, editableMembers };
+    const editableOwners = (await canEditDeskSettingsFor(me, target)) ? new Set([target]) : new Set<string>();
+    return getTraderCapital(target, { actor, editableOwners });
   });
 
   app.patch('/api/trading/capital', write, async (request, reply) => {
@@ -376,11 +395,10 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'You cannot change that member’s capital' });
     }
     try {
-      const [capital, editableMembers] = await Promise.all([
-        updateTraderCapital(target, patch, { actor: auditActorFor(request) }),
-        editableDeskMembers(me),
-      ]);
-      return { ...capital, editableMembers };
+      return await updateTraderCapital(target, patch, {
+        actor: auditActorFor(request),
+        editableOwners: new Set([target]),
+      });
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not save' });
     }
@@ -397,11 +415,7 @@ export async function tradingRoutes(app: FastifyInstance) {
       return reply.code(403).send({ error: 'You cannot change that member’s capital' });
     }
     try {
-      const [capital, editableMembers] = await Promise.all([
-        syncCapital(target, parsed.data.account, parsed.data.figure, auditActorFor(request)),
-        editableDeskMembers(me),
-      ]);
-      return { ...capital, editableMembers };
+      return await syncCapital(target, parsed.data.account, parsed.data.figure, auditActorFor(request));
     } catch (err) {
       return reply.code(400).send({ error: err instanceof Error ? err.message : 'Could not sync' });
     }

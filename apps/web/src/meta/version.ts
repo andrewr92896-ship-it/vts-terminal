@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.20';
+export const APP_VERSION = 'Beta V 7.21';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.21',
+    date: 'August 14, 2026',
+    notes: [
+      'The capital cards now follow the trader filter, like every other figure on the row. Picking a person shows their deposited and withdrawn capital and what their accounts hold; Whole desk shows everyone’s added together.',
+      'The return percentage is measured over the same selection, so it is no longer one person’s profit divided by another person’s deposit.',
+      'The Live Wall’s Desk Metrics tile follows its own trader picker the same way.',
+      'Manage on the whole-desk card now lists everyone in your group, their accounts grouped under each person, so you can set or sync any of them from one place. Anyone you cannot set is shown but not editable.',
+    ],
+  },
   {
     version: 'Beta V 7.20',
     date: 'August 14, 2026',
@@ -434,7 +444,7 @@ export const PATCH_NOTES: PatchNote[] = [
       'The terms screen now says up front that you need to scroll to the bottom before you can accept — previously the only explanation sat beside the checkbox, which you could not see until you got there.',
       'Fixed that same screen on a phone: scrolling the page did not enable the checkbox, only scrolling inside the document box did.',
       'Reworded the rules page so it reads like a policy document rather than a summary of one.',
-      'Trading teams can see each other\u2019s trades again. This applies only to accounts granted trading teams — every other account, and anyone signing up publicly, still sees their own trading and nobody else\u2019s.',
+      'Trading teams can see each other’s trades again. This applies only to accounts granted trading teams — every other account, and anyone signing up publicly, still sees their own trading and nobody else’s.',
     ],
   },
   {
@@ -442,7 +452,7 @@ export const PATCH_NOTES: PatchNote[] = [
     date: 'August 4, 2026',
     notes: [
       'The Terms of Service and Privacy Policy have been rewritten to match how the terminal now works: your trading information is private to you, what public study leaderboards show, what budgeting data is, and exactly what is and is not kept from AI conversations. Everyone will be asked to accept them once on next sign-in.',
-      'Closed a gap where a team leader could still adjust a teammate\u2019s Trade Analysis settings without being granted trading teams.',
+      'Closed a gap where a team leader could still adjust a teammate’s Trade Analysis settings without being granted trading teams.',
       'The World and Politics feeds now try several addresses per source, so one retired feed no longer leaves a topic empty.',
     ],
   },
@@ -468,7 +478,7 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 6.67',
     date: 'August 4, 2026',
     notes: [
-      'The terminal\u2019s built-in study games now have public leaderboards — every player on the platform ranked together on one board, rather than only the people around you.',
+      'The terminal’s built-in study games now have public leaderboards — every player on the platform ranked together on one board, rather than only the people around you.',
       'Games you make yourself have no leaderboard for now. The tab simply does not appear on them.',
       'You can take yourself off the public boards from My Terminal \u25b8 Preferences. You still see your own rank; other players just will not see you.',
     ],
@@ -497,10 +507,10 @@ export const PATCH_NOTES: PatchNote[] = [
     version: 'Beta V 6.64',
     date: 'August 4, 2026',
     notes: [
-      'Your trading results are now yours alone. Positions, the trade log, history, deleted trades and broker capital are visible only to you — nobody else on the terminal sees another person\u2019s numbers, and trade notifications go only to the trader they are about.',
+      'Your trading results are now yours alone. Positions, the trade log, history, deleted trades and broker capital are visible only to you — nobody else on the terminal sees another person’s numbers, and trade notifications go only to the trader they are about.',
       'New accounts now start in their own private space. Study games, flashcard sets, presentations and your news channel list belong to you rather than to a shared group, so nothing you make is visible to, or editable by, anyone else.',
       'Trading Teams are hidden for now and handed out by a software developer. The Vitalis Trading Team and everyone already on it are unchanged.',
-      'Private mode has been retired from the Trading Team screen. It existed to keep your book off other people\u2019s screens, and that is now simply how the terminal works.',
+      'Private mode has been retired from the Trading Team screen. It existed to keep your book off other people’s screens, and that is now simply how the terminal works.',
     ],
   },
   {
