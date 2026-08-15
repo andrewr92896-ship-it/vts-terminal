@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.22';
+export const APP_VERSION = 'Beta V 7.23';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.23',
+    date: 'August 15, 2026',
+    notes: [
+      'Funded Trades no longer creates an account just because somebody opened the screen. That is why people in your group appeared to be running prop challenges they had never set up.',
+      'The accounts that were created that way have been cleared — an untouched 200,000 placeholder nobody had typed anything into. Any account with real settings or equity on it is left exactly as it was.',
+      'Admins can now remove a funded account belonging to anyone on the desk, not only their own. Editing one is still the owner’s alone, and the removal is recorded in the Administrator Log.',
+      'A desk with no funded account now says so, on the screen and on the Live Wall tile, instead of sitting on “Loading…”.',
+    ],
+  },
   {
     version: 'Beta V 7.22',
     date: 'August 14, 2026',

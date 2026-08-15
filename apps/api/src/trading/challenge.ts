@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { db } from '../db/index.js';
-import { tradingChallenges, tradingTrades, users, type TradingChallengeRow } from '../db/schema.js';
+import { tradingChallenges, tradingTrades, users, type TradingChallengeRow, type UserRow } from '../db/schema.js';
+import { isAdmin, parseRoles } from '../auth/rbac.js';
 import { etDayStamp } from './sessions.js';
 import { visibleTraderIds, type Viewer } from './scope.js';
 
@@ -15,6 +16,21 @@ import { visibleTraderIds, type Viewer } from './scope.js';
 // public signup sees exactly its own by construction rather than by a filter
 // somebody has to remember. Every write takes the challenge id AND the caller,
 // and matches on both, so there is no path that edits a teammate's account.
+//
+// **A FUNDED ACCOUNT EXISTS BECAUSE SOMEBODY ADDED ONE.** Opening the screen
+// used to mint one: `listChallenges` began with an `ensureOwnChallenge` that
+// inserted a default 200,000 FTP row for any trader who had none. On a solo desk
+// that read as a convenience; on a desk that shares its book it is a fabrication
+// — every teammate who so much as loaded the Funded screen, or carried the Live
+// Wall's Funded Account tile on a board, appeared on everybody else's screen
+// running a prop challenge they had never heard of. Reported by the owner with
+// two group members showing accounts they do not have.
+//
+// It is the same rule the Live Wall's `source` union and Market Data's
+// `sample: true` already follow: **a figure nobody supplied must never stand in
+// for one that exists.** So no read creates anything, and a trader with no
+// funded account reads as exactly that — an empty screen with an Add button.
+// Migration 0128 removes the rows the old behaviour minted.
 
 export interface ChallengeMetrics {
   profit: number | null;
@@ -58,6 +74,11 @@ export interface ChallengeData {
 // Every funded account the viewer may see, theirs first.
 export interface ChallengesData {
   challenges: ChallengeData[];
+  // Whether the viewer may remove an account they do not own. Only ever true for
+  // an admin, and the server is still the enforcer — this is what the screen
+  // needs to decide where to draw the control, the same way the trade payloads
+  // carry `canDeleteAny`.
+  canRemoveAny: boolean;
 }
 
 const DEFAULTS = {
@@ -144,17 +165,6 @@ function newRow(
     createdAt: now,
     updatedAt: now,
   };
-}
-
-// The caller's own account, created on first read the way it always has been —
-// opening the screen has never required setting one up first. Only ever creates
-// for the CALLER: reading a teammate's desk must not mint them an account they
-// never asked for.
-async function ensureOwnChallenge(userId: string): Promise<TradingChallengeRow[]> {
-  const existing = await ownedChallenges(userId);
-  if (existing.length > 0) return existing;
-  await db.insert(tradingChallenges).values(newRow(userId, new Date()));
-  return ownedChallenges(userId);
 }
 
 // The row a write is aimed at, refused unless the caller owns it. Both halves
@@ -249,11 +259,18 @@ async function ownerNames(ids: string[]): Promise<Map<string, string>> {
   return new Map(rows.map((r) => [r.id, r.displayName || r.username]));
 }
 
-// Every funded account the viewer may see: their own (created on first read),
-// then their teammates' — which resolves to nothing at all unless the viewer
-// holds the Trading Teams grant.
-export async function listChallenges(viewer: Viewer, canSeeBalances: boolean): Promise<ChallengesData> {
-  await ensureOwnChallenge(viewer.id);
+// A viewer of this screen: the trade-visibility boundary, plus the roles that
+// decide whether they may tidy up somebody else's account. Every call site
+// passes the signed-in `UserRow`, which satisfies both.
+export type ChallengeViewer = Viewer & Pick<UserRow, 'roles'>;
+
+// Every funded account the viewer may see: their own, then their teammates' —
+// which resolves to nothing at all unless the viewer holds the Trading Teams
+// grant. Creates nothing: a trader with no funded account gets an empty list.
+export async function listChallenges(
+  viewer: ChallengeViewer,
+  canSeeBalances: boolean,
+): Promise<ChallengesData> {
   const scope = await visibleTraderIds(viewer);
   const rows = await db
     .select()
@@ -268,13 +285,17 @@ export async function listChallenges(viewer: Viewer, canSeeBalances: boolean): P
       // The viewer's own first: it is the one they act on, and a desk of six
       // would otherwise bury it in creation order.
       .sort((a, b) => Number(b.isMine) - Number(a.isMine)),
+    canRemoveAny: isAdmin(parseRoles(viewer)),
   };
 }
 
 // The caller's own primary account — what a surface needing ONE challenge reads
-// (the AI coaching brief). Never a teammate's.
-export async function getOwnChallenge(userId: string, canSeeBalances: boolean): Promise<ChallengeData> {
-  const rows = await ensureOwnChallenge(userId);
+// (the AI coaching brief). Never a teammate's, and **null when they have none**:
+// the coach has nothing to read, which the caller has to handle rather than be
+// handed an invented 200,000 account.
+export async function getOwnChallenge(userId: string, canSeeBalances: boolean): Promise<ChallengeData | null> {
+  const rows = await ownedChallenges(userId);
+  if (rows.length === 0) return null;
   const row = await rollDayStart(rows[0]);
   const names = await ownerNames([userId]);
   return toData(row, userId, names.get(userId) ?? 'Trader', canSeeBalances);
@@ -301,7 +322,7 @@ const money = (v: number) => (Number.isFinite(v) ? v : 0);
 const MAX_PER_TRADER = 12;
 
 export async function addChallenge(
-  viewer: Viewer,
+  viewer: ChallengeViewer,
   input: ChallengeInput,
   canSeeBalances: boolean,
 ): Promise<ChallengesData> {
@@ -363,14 +384,55 @@ export async function updateChallenge(
   return toData(updated, userId, names.get(userId) ?? 'Trader', canSeeBalances);
 }
 
+// What was removed, so the route can say so in the Administrator Log when an
+// admin removed somebody else's.
+export interface RemovedChallenge {
+  id: string;
+  label: string;
+  ownerId: string;
+  owner: string;
+  // The caller was not the owner — an admin tidying up. Nothing else sets this.
+  byAdmin: boolean;
+}
+
+// Remove a funded account.
+//
+// A trader removes their own, matched on the id AND the caller, answering "not
+// found" for anything else so an id cannot be probed for. **An ADMIN may remove
+// any of them**, which is the same install-wide support reach they already have
+// over trades (`tradeDeleteScope`) and over a stranded broker connection
+// (`adminRemoveConnection`) — and for the same reason: an account somebody else
+// left on the desk otherwise has exactly one person who can tidy it, which is no
+// use when that person is not the one looking at it. The admin path is recorded
+// in the Administrator Log by the route.
+//
+// Nothing hangs off this row — a funded TRADE lives in the separate funded book
+// (`funded_accounts` / `funded_trades`), which this does not touch — so removing
+// an account deletes its settings and its equity and nothing else.
 export async function removeChallenge(
-  viewer: Viewer,
+  viewer: ChallengeViewer,
   id: string,
   canSeeBalances: boolean,
-): Promise<ChallengesData> {
-  await ownedRow(viewer.id, id); // refuses anything the caller does not own
+): Promise<{ data: ChallengesData; removed: RemovedChallenge }> {
+  const row = (
+    await db.select().from(tradingChallenges).where(eq(tradingChallenges.id, id)).limit(1)
+  )[0];
+  const mine = row?.userId === viewer.id;
+  // An id the caller neither owns nor has the reach for reads as missing.
+  if (!row || (!mine && !isAdmin(parseRoles(viewer)))) throw new Error('Funded account not found');
+
+  const names = await ownerNames([row.userId]);
   await db.delete(tradingChallenges).where(eq(tradingChallenges.id, id));
-  return listChallenges(viewer, canSeeBalances);
+  return {
+    data: await listChallenges(viewer, canSeeBalances),
+    removed: {
+      id: row.id,
+      label: row.label,
+      ownerId: row.userId,
+      owner: names.get(row.userId) ?? 'Trader',
+      byAdmin: !mine,
+    },
+  };
 }
 
 // Set equity to account size + realized P/L of closed Trade Log trades since the

@@ -442,10 +442,26 @@ export async function tradingRoutes(app: FastifyInstance) {
     }
   });
 
+  // Remove a funded account. A trader removes their own; an admin may remove any
+  // of them, which is their existing support reach over a desk somebody else
+  // left behind. An admin acting on somebody else's account is recorded in the
+  // Administrator Log — best-effort, so logging can never be why it fails.
   app.delete('/api/trading/challenge/:id', fundedWrite, async (request, reply) => {
     const id = (request.params as { id: string }).id;
+    const u = request.currentUser!;
     try {
-      return await removeChallenge(request.currentUser!, id, SEE_BALANCES);
+      const { data, removed } = await removeChallenge(u, id, SEE_BALANCES);
+      if (removed.byAdmin) {
+        await recordAdminAction({
+          kind: 'funded.removed',
+          state: 'info',
+          title: 'Removed a funded account',
+          detail: removed.label,
+          actor: { id: u.id, name: u.username },
+          target: { id: removed.ownerId, name: removed.owner },
+        });
+      }
+      return data;
     } catch (err) {
       return reply.code(404).send({ error: err instanceof Error ? err.message : 'Funded account not found' });
     }
@@ -458,6 +474,12 @@ export async function tradingRoutes(app: FastifyInstance) {
     // The coach reads the caller's OWN account. A brief about a teammate's
     // drawdown is coaching somebody else's trading, which is not what this is.
     const c = await getOwnChallenge(u.id, SEE_BALANCES);
+    // Nothing to coach on until the trader has actually added an account. This
+    // used to be impossible because the read minted one; now it is the ordinary
+    // state of a desk that does not run a prop challenge.
+    if (!c) {
+      return reply.code(400).send({ error: 'Add a funded account first — there is nothing to read yet.' });
+    }
     const m = c.metrics;
     const pctOrDash = (v: number) => `${v.toFixed(1)}%`;
     const data = [

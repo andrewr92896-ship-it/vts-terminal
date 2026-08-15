@@ -992,9 +992,15 @@ export interface ChallengeData {
   metrics: ChallengeMetrics;
 }
 
-// Every funded account the viewer may see, their own first.
+// Every funded account the viewer may see, their own first. The list can be
+// empty: a funded account exists because somebody added one, and nothing on this
+// screen creates one by being looked at.
 export interface ChallengesData {
   challenges: ChallengeData[];
+  // Whether this viewer may remove an account they do not own — an admin tidying
+  // up somebody else's. The server is still the enforcer; this only decides
+  // whether the control is drawn.
+  canRemoveAny: boolean;
 }
 
 export interface ChallengeInput {
