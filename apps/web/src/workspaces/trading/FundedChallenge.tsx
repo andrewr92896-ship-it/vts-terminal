@@ -10,7 +10,7 @@ import { FundedLiveTrades } from './FundedLiveTrades';
 import { FundedPastTrades } from './FundedPastTrades';
 import { FundedStats } from './FundedStats';
 import { useLivePrices } from './useLivePrices';
-import type { ChallengeData, ChallengeInput, FundedData } from '../../api/types';
+import type { ChallengeData, ChallengeInput, ChallengesData, FundedData } from '../../api/types';
 
 // The private Funded section: a prop-firm challenge dashboard (equity vs. target
 // + daily / max drawdown buffers). Revealed only to holders of the admin-assigned
@@ -57,7 +57,7 @@ export function FundedChallengeScreen() {
   const { privacy } = usePrivacy();
   const { user } = useAuth();
   const readOnly = !!user?.access.readOnlyWorkspaces.includes('trading');
-  const [challenges, setChallenges] = useState<ChallengeData[] | null>(null);
+  const [data, setData] = useState<ChallengesData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,7 +68,7 @@ export function FundedChallengeScreen() {
     let alive = true;
     api
       .tradingChallenges()
-      .then((d) => alive && setChallenges(d.challenges))
+      .then((d) => alive && setData(d))
       .catch((e) => alive && setLoadError(e instanceof ApiError ? e.message : 'Failed to load'));
     return () => { alive = false; };
   }, []);
@@ -76,19 +76,20 @@ export function FundedChallengeScreen() {
   // One card's save/sync/screenshot, folded back into the list by id so the
   // other accounts on screen are left exactly as they were.
   function replace(next: ChallengeData) {
-    setChallenges((list) => (list ?? []).map((c) => (c.id === next.id ? next : c)));
+    setData((d) => (d ? { ...d, challenges: d.challenges.map((c) => (c.id === next.id ? next : c)) } : d));
   }
 
-  async function runList(p: Promise<{ challenges: ChallengeData[] }>) {
+  async function runList(p: Promise<ChallengesData>) {
     setBusy(true);
-    try { setChallenges((await p).challenges); setActionError(null); return true; }
+    try { setData(await p); setActionError(null); return true; }
     catch (e) { setActionError(e instanceof ApiError ? e.message : 'Action failed'); return false; }
     finally { setBusy(false); }
   }
 
   if (loadError) return <div style={{ color: RED, padding: 20, fontSize: 13 }}>{loadError}</div>;
-  if (!challenges) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading funded accounts…"}</div>;
+  if (!data) return <div style={{ color: MUTED, padding: 20, fontSize: 13 }}>{"Loading funded accounts…"}</div>;
 
+  const challenges = data.challenges;
   // The brokerage-view gate is the same answer on every card, so the page-level
   // money toggle reads it off the first.
   const canSee = challenges[0]?.canSeeBalances ?? true;
@@ -129,6 +130,15 @@ export function FundedChallengeScreen() {
 
       {actionError && <div onClick={() => setActionError(null)} style={banner}>{actionError} — click to dismiss.</div>}
 
+      {/* An empty screen is the ordinary state of a desk that does not run a
+          prop challenge — nothing here creates an account by being looked at.
+          Naming the action is the screen's only content, so it is not a tip. */}
+      {challenges.length === 0 && (
+        <div style={{ ...card, textAlign: 'center', color: MUTED, fontSize: 13, padding: '30px 18px' }}>
+          {readOnly ? 'No funded accounts.' : 'No funded accounts yet. Add one to track equity against a prop-firm target.'}
+        </div>
+      )}
+
       <div style={{ display: 'grid', gap: 18 }}>
         {challenges.map((c) => (
           <ChallengeCard
@@ -136,6 +146,10 @@ export function FundedChallengeScreen() {
             data={c}
             showMoney={showMoney}
             readOnly={readOnly}
+            // Removing somebody else's is an admin tidying up a desk — the same
+            // reach they already have over a stranded broker connection. The
+            // server is the enforcer; this only decides where the button is drawn.
+            canRemoveAny={data.canRemoveAny}
             // Only the trader's own single account takes a window-wide paste:
             // with several on screen, a paste that silently lands on one of them
             // is a trap rather than a shortcut.
@@ -168,6 +182,7 @@ function ChallengeCard({
   data,
   showMoney,
   readOnly,
+  canRemoveAny,
   windowPaste,
   onChanged,
   onRemoved,
@@ -176,6 +191,7 @@ function ChallengeCard({
   data: ChallengeData;
   showMoney: boolean;
   readOnly: boolean;
+  canRemoveAny: boolean;
   windowPaste: boolean;
   onChanged: (c: ChallengeData) => void;
   onRemoved: () => void;
@@ -187,6 +203,9 @@ function ChallengeCard({
   const [shotBusy, setShotBusy] = useState(false);
   const [shotMsg, setShotMsg] = useState<string | null>(null);
   const canWrite = data.isMine && !readOnly;
+  // Editing stays the owner's; removing is wider, so the two are separate
+  // questions rather than one `canWrite`.
+  const canRemove = canWrite || (canRemoveAny && !readOnly);
 
   // Read the current balance off an account screenshot and set this account's
   // equity from it.
@@ -250,17 +269,24 @@ function ChallengeCard({
             {data.dailyDdPct}% daily / {data.maxDdPct}% {data.trailing ? 'trailing' : 'max'}
           </span>
         </div>
-        {canWrite && (
+        {(canWrite || canRemove) && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button onClick={() => setEditing((v) => !v)} style={ghostBtn}>{editing ? 'Close' : 'Edit'}</button>
-            <button
-              onClick={() => {
-                if (window.confirm(`Remove the “${data.label}” funded account? Its settings and equity go with it.`)) onRemoved();
-              }}
-              style={{ ...ghostBtn, color: '#cf6a78' }}
-            >
-              {"Remove"}
-            </button>
+            {canWrite && <button onClick={() => setEditing((v) => !v)} style={ghostBtn}>{editing ? 'Close' : 'Edit'}</button>}
+            {canRemove && (
+              <button
+                onClick={() => {
+                  // Removing somebody else's says whose, because that is the
+                  // thing worth checking before pressing it.
+                  const what = data.isMine
+                    ? `Remove the “${data.label}” funded account? Its settings and equity go with it.`
+                    : `Remove ${data.owner}’s “${data.label}” funded account? Its settings and equity go with it. Their funded trades are not touched.`;
+                  if (window.confirm(what)) onRemoved();
+                }}
+                style={{ ...ghostBtn, color: '#cf6a78' }}
+              >
+                {"Remove"}
+              </button>
+            )}
           </div>
         )}
       </div>

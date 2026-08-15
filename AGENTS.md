@@ -948,11 +948,51 @@ workspaces list** (see `theme/nav.ts` order).
       public signup resolves to itself by construction rather than by a filter
       somebody has to remember. `listChallenges` returns the caller's accounts
       first, then their teammates'; every write (`updateChallenge`,
-      `removeChallenge`, `syncEquityFromTradeLog`, the balance screenshot) takes
-      the account id **and** the caller and matches on both, answering **404
-      rather than 403** so an id the caller does not own cannot be probed for.
-      A teammate's card is watch-only because no write path can reach it, not
-      because the screen hides a button.
+      `syncEquityFromTradeLog`, the balance screenshot) takes the account id
+      **and** the caller and matches on both, answering **404 rather than 403**
+      so an id the caller does not own cannot be probed for. A teammate's card is
+      watch-only because no write path can reach it, not because the screen hides
+      a button.
+    - **REMOVAL is the one exception, and only for an ADMIN** (owner request,
+      2026-08). `removeChallenge` still refuses a non-owner outright — 404, so an
+      id cannot be probed for — **unless the caller is an admin**, which is the
+      same install-wide support reach they already hold over trades
+      (`tradeDeleteScope`) and over a stranded broker connection
+      (`adminRemoveConnection`), and it exists for the identical reason: an
+      account somebody else left on the desk otherwise has exactly one person who
+      can tidy it, which is no use when that person is not the one looking at it.
+      **Editing stays owner-only** — a desk lead does not get to restate somebody
+      else's target or equity. The admin path is recorded in the **Administrator
+      Log** (`funded.removed`), best-effort, and the payload carries
+      `canRemoveAny` so the screen knows where to draw the control — the server is
+      still the enforcer, the same shape as `canDeleteAny` on the trade payloads.
+      Nothing hangs off the row: the funded BOOK (`funded_accounts` /
+      `funded_trades`) is separate, so removing an account takes its settings and
+      its equity and nothing else.
+    - **A FUNDED ACCOUNT EXISTS BECAUSE SOMEBODY ADDED ONE. Reading this screen
+      creates nothing** (owner report, 2026-08). `listChallenges` used to open
+      with an `ensureOwnChallenge` that inserted a default 200,000 FTP row for any
+      trader who had none — so merely opening Funded Trades, or carrying the Live
+      Wall's Funded Account tile on a board, minted a prop challenge in that
+      trader's name. On a solo desk that read as a convenience; on a desk that
+      shares its funded book it is a fabrication, and it put two people in the
+      owner's group on everybody's screen running challenges they had never heard
+      of, with only they themselves able to remove them.
+      - It is the rule the Live Wall's `source` union and Market Data's
+        `sample: true` already state: **a figure nobody supplied must never stand
+        in for one that exists.** An empty list is now the ordinary state and the
+        screen says so; `getOwnChallenge` returns **null** rather than an invented
+        account, and the AI coaching brief answers 400 rather than reading one.
+      - **The Live Wall tile distinguishes "not loaded" from "none"** for the same
+        reason — a permanent "Loading…" on an account that does not exist reads as
+        a broken tile.
+      - Migration `0128` clears what the old behaviour left: a row still at every
+        seed default with `updated_at` still equal to `created_at`, which carries
+        no information at all. The daily roll rewrites `day_start_equity` but
+        deliberately leaves `updated_at` alone, which is what makes that column
+        trustworthy here. It cannot tell such a row from a first account somebody
+        added deliberately and never filled in — the same empty placeholder by
+        every measurable property — and that is the accepted cost.
     - **The funded BOOK is shared the same way** (`getFunded` over
       `visibleTraderIdsForUser`): a teammate's Manual Trades accounts and their
       trades appear, owner-tagged (`ownerId` / `owner` / `isMine`), and every

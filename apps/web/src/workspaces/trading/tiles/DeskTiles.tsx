@@ -355,7 +355,12 @@ export function ChallengeTile({ tile, editing, onRemove }: TileProps) {
       status={m ? <span style={{ ...stamp, color: STATUS_TINT[m.status] }}>{STATUS_WORD[m.status]}</span> : null}
       footer="Balances shown are the funding firm's capital, not your own."
     >
-      {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
+      {/* "Not loaded yet" and "loaded, and there is no funded account" are
+          different answers and want different tiles. Nothing mints an account on
+          read any more, so an empty payload is an ordinary state — reporting it
+          as a permanent "Loading…" reads as a broken tile. */}
+      {!all && !error && <TileMessage>{"Loading…"}</TileMessage>}
+      {all && !data && <TileMessage>{"No funded account yet — add one on Funded Trades."}</TileMessage>}
       {error && !data && <TileMessage tone="error">{error}</TileMessage>}
       {data && m && (
         <>
