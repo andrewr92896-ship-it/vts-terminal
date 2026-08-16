@@ -68,6 +68,7 @@ export const PREMIUM_FEATURES = [
   'suggestions',
   'supportChat',
   'alertSettings',
+  'tradingNotes',
 ] as const;
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 
@@ -159,6 +160,12 @@ export const FEATURE_TIER: Record<PremiumFeature, MembershipTier> = {
   // wholesale would take away a notification the terminal already promises.
   // Same split Market Data makes with its free calendar.
   alertSettings: 'premium',
+  // Trading Notes: writing down a call before the week runs, and what you make
+  // of it afterwards. Premium because it is authoring rather than reading — the
+  // same place Strategy Sessions sits, and for the same reason. Sharing a note
+  // with a private group needs the group, which is Max on its own; this buys the
+  // notes themselves.
+  tradingNotes: 'premium',
 };
 
 // What the upgrade prompt calls each one. Plain statements of what the feature
@@ -183,6 +190,7 @@ export const FEATURE_LABELS: Record<PremiumFeature, string> = {
   suggestions: 'Suggestions',
   supportChat: 'General support',
   alertSettings: 'Alert settings',
+  tradingNotes: 'Trading Notes',
 };
 
 // A one-line description of what each buys, for the tier boxes on the Premium
@@ -207,6 +215,7 @@ export const FEATURE_BLURBS: Record<PremiumFeature, string> = {
   suggestions: 'Send ideas straight to the developers.',
   supportChat: 'Talk to a person about anything that is not a bug.',
   alertSettings: 'Tune which trade events buzz you, and send yourself a test alert.',
+  tradingNotes: 'Write down a call before the week runs, and settle it against what happened.',
 };
 
 export interface Membership {

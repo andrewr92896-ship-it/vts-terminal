@@ -517,3 +517,109 @@ const sessionRow: CSSProperties = {
   borderBottom: `1px solid rgba(22,41,79,.5)`,
 };
 const dot: CSSProperties = { width: 7, height: 7, borderRadius: '50%', flex: 'none' };
+
+// ---- Trading Notes -------------------------------------------------------
+//
+// The Trading Notes screen in a smaller box: what is waiting on you, then this
+// week's calls. Both halves matter on a board — the queue is the one thing on
+// that screen that is genuinely open, and a call you made on Monday is worth
+// having in front of you for the rest of the week.
+//
+// It reads the same endpoint the screen does, so the two cannot disagree about
+// what is open or how a call settled.
+export function TradingNotesTile({ tile, editing, onRemove }: TileProps) {
+  const { data, error } = useTileData('trading:notes', () => api.tradingNotes(), MEDIUM);
+
+  const queue = data?.queue ?? [];
+  // Own calls first — a board tile is read at a glance, and the question it is
+  // being asked is "where am I", not "where is everyone".
+  const calls = useMemo(() => {
+    const notes = (data?.week.notes ?? []).filter((n) => n.kind === 'prediction');
+    return [...notes].sort((a, b) => Number(b.isMine) - Number(a.isMine));
+  }, [data]);
+
+  return (
+    <TileFrame
+      title={tile.title || 'Trading Notes'}
+      icon="notebook-pen"
+      count={data ? (queue.length > 0 ? `${queue.length} waiting` : `${calls.length} this week`) : null}
+      editing={editing}
+      onRemove={onRemove}
+      footer="A personal record, not a recommendation. Informational only, not investment advice."
+    >
+      {!data && !error && <TileMessage>{"Loading…"}</TileMessage>}
+      {error && !data && <TileMessage tone="error">{error}</TileMessage>}
+      {data && queue.length === 0 && calls.length === 0 && (
+        <TileMessage>{"No calls for this week yet."}</TileMessage>
+      )}
+
+      {queue.length > 0 && (
+        <div style={{ fontSize: 9.5, color: RED, fontWeight: 700, letterSpacing: '.04em', margin: '2px 0 4px' }}>
+          WAITING ON YOU
+        </div>
+      )}
+      {queue.map((n) => (
+        <div key={n.id} style={noteRow}>
+          <span style={{ ...dot, background: RED }} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={noteTitle}>{n.title}</div>
+            <div style={{ fontSize: 9.5, color: FAINT, marginTop: 2 }}>
+              {n.awaiting === 'settle' ? 'Needs settling' : 'Needs a reflection'}
+            </div>
+          </div>
+        </div>
+      ))}
+
+      {queue.length > 0 && calls.length > 0 && (
+        <div style={{ fontSize: 9.5, color: FAINT, fontWeight: 700, letterSpacing: '.04em', margin: '8px 0 4px' }}>
+          THIS WEEK
+        </div>
+      )}
+      {calls.map((n) => {
+        const out = n.outcome ? NOTE_OUTCOME[n.outcome] : null;
+        return (
+          <div key={n.id} style={noteRow}>
+            <span style={{ ...dot, background: out?.color ?? (n.direction === 'up' ? GREEN : n.direction === 'down' ? RED : FAINT) }} />
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={noteTitle}>{n.title}</div>
+              <div style={{ fontSize: 9.5, color: FAINT, marginTop: 2 }}>
+                {n.isMine ? 'You' : n.owner}
+                {n.instrument && n.direction ? ` · ${n.instrument} ${n.direction}` : ''}
+              </div>
+            </div>
+            <span style={{ fontSize: 10, color: out?.color ?? MUTED, fontFamily: MONO, flex: 'none' }}>
+              {out ? out.label : 'Running'}
+            </span>
+          </div>
+        );
+      })}
+    </TileFrame>
+  );
+}
+
+// Mirrors OUTCOME in notesFormat.tsx. Restated rather than imported so the desk
+// tiles keep their existing single import of the shared tile styles; `unsettleable`
+// stays NEUTRAL here for the same reason it does there — nothing was established,
+// so colouring it like a miss would report a wrong answer where there is none.
+const NOTE_OUTCOME: Record<string, { label: string; color: string }> = {
+  hit: { label: 'Came true', color: GREEN },
+  miss: { label: 'Did not', color: RED },
+  partial: { label: 'Partly', color: GOLD },
+  unsettleable: { label: 'Not settled', color: FAINT },
+};
+
+const noteRow: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '6px 0',
+  borderBottom: '1px solid rgba(22,41,79,.6)',
+};
+const noteTitle: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: TEXT,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+};

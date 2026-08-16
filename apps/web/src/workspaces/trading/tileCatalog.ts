@@ -236,6 +236,21 @@ export const TILE_CATALOG: TileDef[] = [
     minH: 5,
   },
   {
+    // Deliberately `tradingnotes` rather than `notes` — that kind is already the
+    // board's own scratchpad (group 'personal'), whose text rides in the layout
+    // blob. Two different things; two keys.
+    kind: 'tradingnotes',
+    label: 'Trading Notes',
+    group: 'desk',
+    icon: 'notebook-pen',
+    blurb: 'This week’s calls, and anything waiting on a reflection.',
+    feature: 'tradingNotes',
+    desk: true,
+    w: 4,
+    h: 10,
+    minH: 5,
+  },
+  {
     // The hand-kept book. Deliberately NOT behind the Funded opt-in: plenty of
     // traders keep a manual book without ever running a challenge, which is why
     // Manual Trades is a plain Advanced Trading section.

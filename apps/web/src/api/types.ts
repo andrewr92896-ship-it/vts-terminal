@@ -1207,6 +1207,121 @@ export interface SessionInput {
   active?: boolean;
 }
 
+// ---- Trading Notes (mirror of apps/api/src/trading/notes.ts) ----
+//
+// Predictions and observations. A PREDICTION carries a window, a deadline and an
+// outcome it still owes; an OBSERVATION leaves all of those null and is never
+// settled. The server is the enforcer for every rule below — these types only
+// let the screen draw the right thing.
+export type NoteKind = 'prediction' | 'observation';
+export type NoteVisibility = 'private' | 'group';
+export type NoteDirection = 'up' | 'down';
+// `unsettleable` is never scored — see NoteStats. `partial` only ever comes from
+// a person; an automatic settlement returns hit, miss or unsettleable.
+export type NoteOutcome = 'hit' | 'miss' | 'partial' | 'unsettleable';
+export type NoteSettler = 'auto' | 'self';
+export type NoteAwaiting = 'settle' | 'reflect';
+
+export interface TradingNote {
+  id: string;
+  ownerId: string;
+  owner: string;
+  isMine: boolean;
+  kind: NoteKind;
+  visibility: NoteVisibility;
+  title: string;
+  body: string | null;
+  instrument: string | null;
+  direction: NoteDirection | null;
+  targetPrice: number | null;
+  confidence: number | null;
+  weekKey: string;
+  windowOpensAt: number | null;
+  deadlineAt: number | null;
+  openPrice: number | null;
+  /** The call is frozen — shared, or its window has opened. Only the reflection can still be written. */
+  locked: boolean;
+  /** The window has opened, so the call is readable by the group. */
+  revealed: boolean;
+  /** Structured enough that the price feed settles it without being asked. */
+  autoSettles: boolean;
+  outcome: NoteOutcome | null;
+  settledAt: number | null;
+  settledBy: NoteSettler | null;
+  settlePrice: number | null;
+  settleNote: string | null;
+  reflection: string | null;
+  reflectedAt: number | null;
+  awaiting: NoteAwaiting | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface NoteWeek {
+  weekKey: string;
+  startsOn: string;
+  endsOn: string;
+  prevWeek: string;
+  nextWeek: string;
+  isCurrent: boolean;
+  notes: TradingNote[];
+}
+
+export interface CalibrationRow {
+  level: number;
+  /** The probability this confidence level asserts, so it can sit beside what happened. */
+  stated: number;
+  calls: number;
+  hits: number;
+}
+
+export interface NoteStats {
+  /** Hits plus misses — the calls that count, and nothing else. */
+  scored: number;
+  hits: number;
+  misses: number;
+  /** Reported on their own and NEVER folded into the hit rate. */
+  partial: number;
+  unsettleable: number;
+  open: number;
+  /** Null when nothing has been scored. Never 0, which would read as "all wrong". */
+  hitRate: number | null;
+  calibration: CalibrationRow[];
+}
+
+// What the trader actually did in the instrument they called, inside the window
+// they called it for. The viewer's own trades only.
+export interface NoteTradeLink {
+  noteId: string;
+  trades: number;
+  longs: number;
+  shorts: number;
+  realizedPl: number | null;
+  againstCall: boolean;
+}
+
+export interface NotesData {
+  week: NoteWeek;
+  queue: TradingNote[];
+  stats: NoteStats;
+  observations: TradingNote[];
+  tradeLinks: NoteTradeLink[];
+}
+
+export interface NoteInput {
+  kind?: NoteKind;
+  title?: string;
+  body?: string | null;
+  visibility?: NoteVisibility;
+  instrument?: string | null;
+  direction?: NoteDirection | null;
+  targetPrice?: number | null;
+  confidence?: number | null;
+  weekKey?: string;
+  windowOpensAt?: number | null;
+  deadlineAt?: number | null;
+}
+
 // Market-hours lookup result (per weekday ET window) for filling a session.
 export interface MarketHoursDay {
   day: Weekday;
@@ -1251,6 +1366,9 @@ export type BoardTileKind =
   | 'tradelog'
   | 'closed'
   | 'sessions'
+  // Trading Notes. Deliberately NOT 'notes' below, which is the board's own
+  // scratchpad — two different things, two keys.
+  | 'tradingnotes'
   | 'funded'
   | 'challenge'
   | 'capital'
@@ -2479,6 +2597,7 @@ export const PREMIUM_FEATURES = [
   'suggestions',
   'supportChat',
   'alertSettings',
+  'tradingNotes',
 ] as const;
 export type PremiumFeature = (typeof PREMIUM_FEATURES)[number];
 

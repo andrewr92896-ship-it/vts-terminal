@@ -11,9 +11,21 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.23';
+export const APP_VERSION = 'Beta V 7.24';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.24',
+    date: 'August 16, 2026',
+    notes: [
+      'New: Trading Notes, in Advanced Trading. Write down what you think the market does next before it does, then settle it against what actually happened.',
+      'Give a call an instrument and a direction and the terminal settles it for you at the end of the week. A call it could not price says so and is left out of your record rather than counted as wrong.',
+      'A call is fixed once you share it or once its week opens \u2014 only the reflection underneath can change after that. Nobody in your group sees anyone\u2019s call until the window opens.',
+      'Where a call names an instrument, the screen shows what you actually traded in it that week, and says so when you traded against your own call.',
+      'Your record is yours alone, and shows calibration \u2014 what you said, against how often you were right at that level \u2014 rather than ranking anyone.',
+      'A matching Live Wall tile carries this week\u2019s calls and anything waiting on a reflection.',
+    ],
+  },
   {
     version: 'Beta V 7.23',
     date: 'August 15, 2026',

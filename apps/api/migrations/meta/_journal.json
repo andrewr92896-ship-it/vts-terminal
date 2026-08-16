@@ -897,6 +897,13 @@
       "when": 1783208936908,
       "tag": "0128_drop_phantom_funded",
       "breakpoints": true
+    },
+    {
+      "idx": 128,
+      "version": "6",
+      "when": 1783295336908,
+      "tag": "0129_trading_notes",
+      "breakpoints": true
     }
   ]
 }

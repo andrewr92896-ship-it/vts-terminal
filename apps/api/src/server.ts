@@ -15,6 +15,7 @@ import { healthRoutes } from './routes/health.js';
 import { todoRoutes } from './routes/todo.js';
 import { tradingRoutes } from './routes/trading.js';
 import { tradeDeskRoutes } from './routes/tradeDesk.js';
+import { tradingNotesRoutes } from './routes/tradingNotes.js';
 import { webhookRoutes } from './routes/webhooks.js';
 import { aiRoutes } from './routes/ai.js';
 import { chatRoutes } from './routes/chat.js';
@@ -59,6 +60,7 @@ import { warmMarketMacro } from './trading/marketMacro.js';
 import { startSessionWatch } from './trading/sessionWatch.js';
 import { startYoutubeWatch } from './trading/youtubeWatch.js';
 import { startPriceAlertWatch } from './trading/priceAlertWatch.js';
+import { startNoteSettleWatch } from './trading/noteSettle.js';
 
 // In production the backend also serves the built React app (apps/web/dist),
 // so the whole terminal runs as one service.
@@ -111,6 +113,7 @@ export async function buildServer() {
   await app.register(brokerRoutes);
   await app.register(tradingRoutes);
   await app.register(tradeDeskRoutes);
+  await app.register(tradingNotesRoutes);
   await app.register(webhookRoutes);
   await app.register(todoRoutes);
   await app.register(aiRoutes);
@@ -264,6 +267,10 @@ async function main() {
     // Watch user-authored price alerts against live OANDA prices, firing each
     // trader's own level-cross notifications (production + push/Pushover only).
     startPriceAlertWatch();
+    // Settle Trading Notes predictions whose deadline has passed, and stamp the
+    // mark a call was made against when its window opens (production only). It
+    // needs no delivery channel: settling is the work, the buzz is a courtesy.
+    startNoteSettleWatch();
     // Refresh YouTube live status for the Market News stream wall and buzz
     // whoever armed a channel's bell (production + YOUTUBE_API_KEY only).
     startYoutubeWatch();

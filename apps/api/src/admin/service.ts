@@ -11,6 +11,7 @@ import {
   tradingPositions,
   tradingOrders,
   tradingSessions,
+  tradingNotes,
   brokerConnections,
   tradingChallenges,
   tradingDeskSettings,
@@ -502,6 +503,13 @@ export async function deleteUser(actingUserId: string, targetId: string): Promis
     await tx.delete(tradingOrders).where(eq(tradingOrders.userId, targetId));
     await tx.delete(tradingSessions).where(eq(tradingSessions.userId, targetId));
     await tx.delete(sessionAlertPrefs).where(eq(sessionAlertPrefs.userId, targetId));
+    // Trading Notes — their predictions, observations and reflections. Personal
+    // writing, so it goes with the person: unlike credential_audit and the
+    // employee audit log, nothing here records access to money or to a hardened
+    // surface, and a deleted customer's stored notes are the harder thing to
+    // defend keeping. A note shared with a group goes too — the group read it
+    // through its author, and the author is leaving.
+    await tx.delete(tradingNotes).where(eq(tradingNotes.userId, targetId));
     // Which optional features they had turned on (Premium Features), plus their
     // Trading Teams grant, which rides the same row.
     await tx.delete(userFeatures).where(eq(userFeatures.userId, targetId));
