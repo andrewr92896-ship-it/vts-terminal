@@ -176,6 +176,84 @@ export function levelAtStep(step: number): OverallLevel {
   return overallLevel(correctToReachStep(Math.max(0, Math.min(MAX_STEP, Math.floor(step)))));
 }
 
+// ---- The level bar ----
+// Progress through the CURRENT MAIN LEVEL: a full bar is what it takes to leave
+// this level for the next one (all five of its sub-levels), with a tick where
+// each sub-level lands.
+//
+// The ticks are deliberately NOT evenly spaced. Each sub-level costs one more
+// correct answer than the last (10, 11, 12, … continuously up the ladder), so
+// the fifth star of a level is always further off than the second — a bar with
+// five equal fifths would say the opposite, and would have the learner reading
+// their remaining work as smaller than it is. Every boundary here is measured in
+// correct answers and then converted to a percentage, so the drawing follows
+// whatever `subLevelCost` says rather than restating it.
+export interface SubLevelSegment {
+  sub: number; // 1..SUBLEVELS
+  cost: number; // correct answers this sub-level costs to clear
+  startPct: number; // where it begins along the bar (0..100)
+  endPct: number; // where it ends (100 on the last)
+  reached: boolean; // this sub-level has been reached
+}
+
+export interface MainLevelProgress {
+  mainIndex: number;
+  main: MainLevelDef;
+  sub: number; // 1..5, the sub-level within this main level
+  startCorrect: number; // cumulative correct answers at the start of this main level
+  span: number; // correct answers this whole main level costs
+  into: number; // correct answers into this main level (0..span)
+  toNextMain: number; // correct answers left before the next main level (0 at max)
+  pct: number; // into / span × 100
+  isMax: boolean; // nothing further up the ladder
+  segments: SubLevelSegment[];
+  nextMain: MainLevelDef | null; // the level this bar fills toward
+}
+
+export function mainLevelProgress(totalCorrect: number): MainLevelProgress {
+  const ov = overallLevel(totalCorrect);
+  const firstStep = ov.mainIndex * SUBLEVELS;
+  const startCorrect = correctToReachStep(firstStep);
+
+  // Built from the per-sub-level costs rather than a start/end subtraction, so
+  // the segment boundaries and the span they are measured against cannot drift
+  // apart — the last segment ends at exactly 100%.
+  const costs: number[] = [];
+  for (let i = 0; i < SUBLEVELS; i++) costs.push(subLevelCost(firstStep + i));
+  const span = costs.reduce((a, b) => a + b, 0);
+
+  // At the top of the ladder there is no sixth sub-level to clear, so the bar
+  // reads full rather than stalling at the fourth tick forever.
+  const into = ov.isMax ? span : Math.max(0, Math.min(span, ov.correct - startCorrect));
+
+  const segments: SubLevelSegment[] = [];
+  let acc = 0;
+  for (let i = 0; i < SUBLEVELS; i++) {
+    segments.push({
+      sub: i + 1,
+      cost: costs[i],
+      startPct: (100 * acc) / span,
+      endPct: (100 * (acc + costs[i])) / span,
+      reached: ov.isMax || i + 1 <= ov.sub,
+    });
+    acc += costs[i];
+  }
+
+  return {
+    mainIndex: ov.mainIndex,
+    main: ov.main,
+    sub: ov.sub,
+    startCorrect,
+    span,
+    into,
+    toNextMain: span - into,
+    pct: (100 * into) / span,
+    isMax: ov.isMax,
+    segments,
+    nextMain: ov.mainIndex + 1 < MAIN_LEVELS.length ? MAIN_LEVELS[ov.mainIndex + 1] : null,
+  };
+}
+
 // A summary of a level-up caused by finishing a mock test, so the test screen
 // can celebrate it. Null-ish (no summary) means the test didn't cross a level.
 export interface TestLevelUp {

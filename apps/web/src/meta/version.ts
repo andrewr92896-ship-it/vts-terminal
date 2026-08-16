@@ -11,9 +11,19 @@ export interface PatchNote {
   notes: string[];
 }
 
-export const APP_VERSION = 'Beta V 7.23';
+export const APP_VERSION = 'Beta V 7.24';
 
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: 'Beta V 7.24',
+    date: 'August 16, 2026',
+    notes: [
+      'Study games now show a level bar. A full bar is the whole level you are on — on Orange it fills across all five of Orange’s stars and completes as Corn begins.',
+      'The bar is ticked at each sub-level, and the ticks are spaced by what each one actually costs. Sub-levels get longer as you climb, so the last star of a level sits further along the bar than the first.',
+      'It shows on the game screen, on Progress, and on the Live Wall’s Study Progress tile. Nothing about your progress, level or streak changed — this only draws what was already there.',
+      'The Study Progress tile was reading a lower level than the game screen for the same play. Both now read the same.',
+    ],
+  },
   {
     version: 'Beta V 7.23',
     date: 'August 15, 2026',
