@@ -650,12 +650,15 @@ workspaces list** (see `theme/nav.ts` order).
       else's call landing would be the terminal pushing one person's market view
       at another, which is a different feature with a different set of questions
       behind it.
-    - **Compliance note, unresolved:** sharing predictions inside a group is one
-      person telling others where the market is going — the closest thing in the
-      terminal to advice. The screen carries a "personal record, not a
-      recommendation" line and there is no cross-member notification, but this
-      is a candidate for a `risk` review mark and for the attorney pass. Flagged
-      for the owner rather than marked, since the `risk` list is theirs.
+    - **Carries a `risk` review mark** (owner instruction, 2026-08 — founder-level
+      only, like every `risk` entry). Sharing a prediction with a group is one
+      customer telling others where the market is going *before* it goes there,
+      which is more advice-shaped than the session bias beside it: directional,
+      forward-looking and aimed at named people. Marked on the nav row and on
+      the Live Wall tile. The screen already says "a personal record, not a
+      recommendation" and no notification ever pushes one member's call at
+      another; what awaits the attorney pass is whether that is enough once the
+      group half is public.
   - **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` over
     `components/NotificationSettings.tsx` + `workspaces/trading/alertPanels.tsx`)
     is the **ONE home for everything the terminal can buzz you about** (owner
@@ -3505,7 +3508,8 @@ nothing else. Adding a key can never change what an account may do.
 
 **The flagged list is the owner's compliance judgment, not a guess to extend.**
 Do not add or remove a `risk` entry without being asked — say so in the report
-instead. The twelve entries and their notes came from the compliance handoff.
+instead. The entries and their notes came from the compliance handoff, plus
+`tradingNotes` added on the owner's instruction (2026-08).
 
 - Colours: risk `#FF9F45` (amber), wip `#8FA0C9` (quiet slate). Deliberately none
   of the three already carrying meaning — Premium gold `#EBCB74`, Max gem
