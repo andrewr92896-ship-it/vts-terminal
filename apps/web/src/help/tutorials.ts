@@ -70,6 +70,42 @@ export const TUTORIALS: Record<string, Tutorial> = {
   },
 
 
+  notes: {
+    title: 'Trading Notes',
+    intro:
+      'What you think the market does next, written down before it does — and what you make of it afterwards. Two kinds of entry: a prediction, which owes a verdict, and an observation, which does not.',
+    steps: [
+      {
+        title: 'Make a call',
+        body: '“+ Prediction” takes what you think will happen and why. Add an instrument and a direction and the terminal settles it against the market for you on Friday; leave them off and you settle it yourself. A target price is optional — without one, the call is measured against the price when the week opened.',
+      },
+      {
+        title: 'A shared call is fixed',
+        body: 'The moment you share a prediction with your group — or the moment its window opens — the call itself can no longer be edited. That is the point of it: a record you can rewrite afterwards is not a record. You can always add or change the reflection underneath.',
+      },
+      {
+        title: 'Nobody sees your call early',
+        body: 'A prediction shared with your group stays sealed until its window opens on Monday. Everyone writes without knowing what anyone else said, which is the only way the week means anything.',
+      },
+      {
+        title: 'How sure you are',
+        body: 'The 1–5 confidence feeds the calibration table on your record: what you said, against how often you were actually right at that level. The gap between the two is the useful part, and it is a better thing to know than a win percentage.',
+      },
+      {
+        title: 'Calls that could not be settled',
+        body: 'If the market could not be priced at the deadline, the call settles as “not settled” with the reason on it, and it is left out of your hit rate entirely. It is never counted as a call you got wrong.',
+      },
+      {
+        title: 'Did you trade it',
+        body: 'When a call names an instrument, the screen shows what you actually traded in it that week — and says so plainly if you traded against your own call. Your own trades only; nobody else sees them.',
+      },
+      {
+        title: 'Waiting on you',
+        body: 'A prediction past its deadline with no verdict, or a settled one with no reflection, sits in a red panel at the top until you answer it. Your record is yours alone — nobody in your group sees your hit rate.',
+      },
+    ],
+  },
+
   sessions: {
     title: 'Strategy Sessions',
     intro: 'Your trading windows in Eastern Time — each with a bias and bull/bear playbooks per instrument. Cards regroup themselves as sessions open and close.',
@@ -411,6 +447,7 @@ export const HOWTO_TOPICS: { key: string; label: string }[] = [
   { key: 'live', label: 'Live Wall' },
   { key: 'tradedesk', label: 'Live Trades' },
   { key: 'desk', label: 'Closed Trades & Metrics' },
+  { key: 'notes', label: 'Trading Notes' },
   { key: 'sessions', label: 'Strategy Sessions' },
   { key: 'funded', label: 'Manual Trades' },
   { key: 'news', label: 'Market News' },

@@ -178,7 +178,7 @@ Tech:
 
 - **DB:** SQLite via **Drizzle ORM** on the **libsql** driver (`@libsql/client`);
   file at `DATABASE_URL` (default `file:./data/vts.db`; prod uses a Railway
-  volume). Schema in `apps/api/src/db/schema.ts`; ~108 SQL migrations in
+  volume). Schema in `apps/api/src/db/schema.ts`; ~129 SQL migrations in
   `apps/api/migrations` (`db:migrate`), seed with `db:seed`. Per-user deletes
   are **explicit** in `admin/service.ts` (no `ON DELETE CASCADE`) — when you add
   a per-user table, add it to that delete list too.
@@ -318,16 +318,19 @@ workspaces list** (see `theme/nav.ts` order).
   (`prop` key — the nested opt-in; the desk's prop-firm accounts, see below.
   Labelled "Funded Account" until 2026-08; the key, the opt-in and the paid
   feature are all still `funded`/`prop`).
+  **Trading Notes** (`notes` — predictions and observations, see its own section
+  below).
   **The sidebar order here follows the TRADE'S LIFE, not the tier stacking**
   (owner instruction, 2026-08): Live Wall → Live Trades → Closed Trades &
-  Metrics → Funded Trades → Manual Trades → Deleted Trades → Strategy Sessions →
-  Alert Settings.
+  Metrics → Funded Trades → Manual Trades → Deleted Trades → Trading Notes →
+  Strategy Sessions → Alert Settings.
   The wall leads because it is the board the rest of the workspace is summarised
   onto; the rows after it are the trade's own sequence. It is the one
   workspace that does not stack Max → Premium → free, because a trader reads
-  these rows as a sequence rather than as a price list. The last two rows are
-  the ones that are not records of trades: Strategy Sessions is a plan for
-  making them, and Alert Settings is how the terminal reaches you.
+  these rows as a sequence rather than as a price list. The last three rows are
+  the ones that are not records of trades: Trading Notes is what you thought,
+  Strategy Sessions is a plan for making them, and Alert Settings is how the
+  terminal reaches you.
   **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` — see its
   own section below).
   **The Trading Alerts FEED was REMOVED outright** (owner instruction, 2026-08)
@@ -575,6 +578,87 @@ workspaces list** (see `theme/nav.ts` order).
     - No notification is fired here on purpose: the desk watch reconciles within
       ~10s and sends the existing "trade opened/closed" push, so firing one at
       placement would double every buzz.
+  - **Trading Notes** (`notes`, `workspaces/trading/TradingNotes.tsx` +
+    `notesFormat.tsx` over `trading/notes.ts` and `trading/noteSettle.ts`, routes
+    `/api/trading/notes/*`; `trading_notes`, migration `0129`). A trader writes
+    down what they think the market does next **before** it does, and settles it
+    against what happened. Two kinds in one table: a **prediction** carries a
+    window, a deadline and an outcome it still owes; an **observation** leaves
+    all of those null and is never settled. **Premium** (`tradingNotes`); sharing
+    with a private group rides the existing Trading Teams grant on top.
+    - **THREE RULES CARRY THE FEATURE, and without them it is a notes app.**
+      - **A PUBLISHED CALL IS FROZEN.** Sharing a prediction stamps `locked_at`,
+        and a window that has opened locks the call whether or not it was ever
+        shared; afterwards only the reflection may be written. A track record
+        that can be edited after the fact is not a track record — the same rule
+        a published study package follows. Un-sharing does **not** unlock: you
+        can stop showing a call, not un-make one other people read.
+      - **NOBODY SEES A CALL BEFORE ITS WINDOW OPENS.** One `or(...)` clause in
+        the read query, and it is what separates a weekly ritual from a comment
+        thread — whoever writes second would otherwise be anchoring on whoever
+        wrote first, and the week would measure nothing. Your own is always
+        readable; hiding it from its author would make the composer unusable.
+      - **A CALL THAT COULD NOT BE SETTLED IS NEVER SCORED AS WRONG.**
+        `unsettleable` is a real outcome, excluded from the hit rate and
+        reported on its own, drawn **neutral rather than red**. Same family as
+        the Live Wall's `unavailable` source, Investments' `unpricedCount` and
+        Market Data's `sample: true`: a thing that could not be measured must
+        never be reported as a measured one. **Do not fold it into the misses.**
+    - **`week_key` is an ET week stamp ('YYYY-Www', Monday-based), STORED not
+      derived.** A trading week is an Eastern concept, like History's day
+      buckets — derived per reader, a call would move between weeks when
+      somebody changed their display zone, and two people in one group would be
+      reading different boards. `etInstant` composes the window's absolute
+      instants from ET wall-clock time rather than `now + offset`, which drifts
+      across DST (the trap `etClock.ts` closes on the web side).
+    - **`open_price` is the mark the call was made against**, stamped by the
+      watch when the window opens, and it is what an outcome is measured from
+      when no explicit target was named. It has to be read **at the time** —
+      last Monday's price cannot be recovered later, the same reason the
+      Investments performance curve is built forward and never back-filled. A
+      call that never got one is not settled automatically.
+    - **`noteSettle.ts` is the watch** (production-only, 5 min): stamp open
+      prices, then settle what is past its deadline, off the same install-owned
+      price feed the price alerts read (`priceSource.ts` — never a customer's
+      credential). **It deliberately does NOT require a delivery channel**,
+      unlike the price-alert watch: settling is the work and the buzz is a
+      courtesy, so a terminal with no push must still settle its calls. A call
+      the feed **cannot** grade — freeform, or one with no open price — is left
+      alone rather than closed out, because it belongs to its author and is
+      already sitting in their queue.
+    - **Directions are only `up`/`down`, deliberately.** Those are the two a
+      price feed can settle without being told what "flat" means for this
+      instrument. A rangebound call is written freeform and settled by the
+      person who made it, which is honest; grading it against a band nobody
+      chose is not. `partial` likewise only ever comes from a person.
+    - **Calibration, not a leaderboard** (owner decision, 2026-08). Confidence
+      is 1–5, mapped to a stated probability (`CONFIDENCE_STATED`), and the
+      record shows **what you said against how often you were right at that
+      level**. `getStats` is the viewer's **own** and nobody else's: a
+      forward-looking accuracy figure attached to a named person is the raw
+      material for an implied track record. The group board shows what everyone
+      **called** and how it settled, and ranks nobody. Do not add a ranking.
+    - **"Did you trade your own call"** (`getTradeLinks`) reads the viewer's own
+      `trading_positions` in the called instrument inside the called window, and
+      says outright when they traded **against** it. **Self-only** — widening it
+      to teammates would put one person's trade data on another's screen through
+      a route that is not the Live Wall's, so it stays closed until it is asked
+      for.
+    - The **Live Wall tile is `tradingnotes`, NOT `notes`** — that kind is
+      already the board's own scratchpad. Two different things, two keys.
+    - Notifications go **only to the call's author**. A push about somebody
+      else's call landing would be the terminal pushing one person's market view
+      at another, which is a different feature with a different set of questions
+      behind it.
+    - **Carries a `risk` review mark** (owner instruction, 2026-08 — founder-level
+      only, like every `risk` entry). Sharing a prediction with a group is one
+      customer telling others where the market is going *before* it goes there,
+      which is more advice-shaped than the session bias beside it: directional,
+      forward-looking and aimed at named people. Marked on the nav row and on
+      the Live Wall tile. The screen already says "a personal record, not a
+      recommendation" and no notification ever pushes one member's call at
+      another; what awaits the attorney pass is whether that is enough once the
+      group half is public.
   - **Alert Settings** (`alerts`, `workspaces/trading/AlertSettings.tsx` over
     `components/NotificationSettings.tsx` + `workspaces/trading/alertPanels.tsx`)
     is the **ONE home for everything the terminal can buzz you about** (owner
@@ -2439,13 +2523,13 @@ They are split because `service.ts` asks `rbac.ts` who is an admin and `rbac.ts`
 needs the membership *type* for the public user — importing each other would be a
 cycle.
 
-- **`FEATURE_TIER` is the entire paywall, in one object.** Nineteen paid features
+- **`FEATURE_TIER` is the entire paywall, in one object.** Twenty paid features
   (owner decisions, 2026-08). **Max:** `ai`, `studyAsk`, `tradeDesk`, `teams`,
   `teamChat`, `customStreams`, `brokerConnections` (**Trade History ▸ Live
   Brokers carries its diamond**), `pushover`. **Premium:** `funded`,
   `studyExplain`, `studyCreation`, `customBoards`, `premiumBadges`,
   `strategySessions`, `marketData`, `presetStreams`, `suggestions`,
-  `supportChat`, `alertSettings`. Everything absent
+  `supportChat`, `alertSettings`, `tradingNotes`. Everything absent
   from that map is included with every account. **Moving a feature between tiers
   is a one-word edit there** and every guard, lock icon and upgrade prompt
   follows — that is the whole reason features ask `hasEntitlement(user, 'ai')` and
@@ -2583,7 +2667,7 @@ cycle.
       what the reader already has.
   - **Only wholly-gated sections are marked** in the sidebar. Several paid
     features have no section of their own, and each is marked **at its own
-    control** instead (audited 2026-08 — every one of the eighteen paid features
+    control** instead (audited 2026-08 — every one of the paid features
     now carries its mark somewhere a user can see before they hit the paywall):
     | feature | where it is marked |
     | --- | --- |
@@ -2599,8 +2683,8 @@ cycle.
     | `studyAsk` | beside the tutor's send button, on the field you type into |
     | `presetStreams`, `customStreams` | the Market News channel rail |
     Everything else is a nav row (`tradeDesk`, `teams`, `marketData`,
-    `strategySessions`, `funded`, `studyCreation`, `alertSettings`) and marked
-    there.
+    `strategySessions`, `funded`, `studyCreation`, `alertSettings`,
+    `tradingNotes`) and marked there.
     `customBoards` is deliberately **not** in `SECTION_FEATURE`: the Live Wall
     section itself is free — a free account gets the three built-in layouts, a
     working screen — and only *saving your own* arrangement is paid, so marking
@@ -3424,7 +3508,8 @@ nothing else. Adding a key can never change what an account may do.
 
 **The flagged list is the owner's compliance judgment, not a guess to extend.**
 Do not add or remove a `risk` entry without being asked — say so in the report
-instead. The twelve entries and their notes came from the compliance handoff.
+instead. The entries and their notes came from the compliance handoff, plus
+`tradingNotes` added on the owner's instruction (2026-08).
 
 - Colours: risk `#FF9F45` (amber), wip `#8FA0C9` (quiet slate). Deliberately none
   of the three already carrying meaning — Premium gold `#EBCB74`, Max gem
@@ -5122,7 +5207,19 @@ writing guard, same scratch-file rule:
     DATABASE_URL="file:/tmp/x.db" npm run db:migrate
     DATABASE_URL="file:/tmp/x.db" npm run db:check-capital
 
-All three are in `verify:db`, so `npm run verify` and CI run them without being
+**Trading Notes:** `npm run db:check-notes` walks the notes services through a
+scratch database, and exists for the three rules that make the feature a record
+rather than a diary — a published call is frozen (and un-sharing does not
+unlock it), nobody sees a call before its window opens, and a call that could
+not be settled is never scored as wrong. It also pins the Eastern week boundary
+(00:30 UTC Monday is still the previous trading week) and `gradeCall`'s edge
+cases, including that an unchanged price is a MISS on an "up" call. Same writing
+guard, same scratch-file rule:
+
+    DATABASE_URL="file:/tmp/x.db" npm run db:migrate
+    DATABASE_URL="file:/tmp/x.db" npm run db:check-notes
+
+All four are in `verify:db`, so `npm run verify` and CI run them without being
 asked.
 
 ## Deployment workflow (owner preference)

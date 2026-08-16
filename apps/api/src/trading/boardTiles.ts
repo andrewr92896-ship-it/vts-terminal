@@ -33,6 +33,9 @@ export const BOARD_TILE_KINDS = [
   'tradelog',
   'closed',
   'sessions',
+  // Trading Notes. NOT the same as 'notes' below, which is the board's own
+  // scratchpad — two different things, two keys.
+  'tradingnotes',
   'funded',
   'challenge',
   'capital',
@@ -85,6 +88,7 @@ export const TILE_GATES: Partial<Record<BoardTileKind, TileGate>> = {
   tradelog: { desk: true },
   closed: { desk: true },
   sessions: { desk: true, feature: 'strategySessions' },
+  tradingnotes: { desk: true, feature: 'tradingNotes' },
   // `funded` is the hand-kept MANUAL book (`/api/trading/funded`), a plain
   // Advanced Trading section — deliberately independent of the Funded opt-in,
   // since plenty of traders keep a manual book without running a challenge.
