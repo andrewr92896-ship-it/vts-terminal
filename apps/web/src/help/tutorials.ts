@@ -372,6 +372,10 @@ export const TUTORIALS: Record<string, Tutorial> = {
         body: 'Choose a game, then set how many questions to draw and the pass line (default 72%). Choose “feedback as you go” to see each answer, or leave it off for a silent exam graded at the end.',
       },
       {
+        title: 'Leaving part-way through',
+        body: 'A test you leave part-way through is kept. Come back to Practice Tests and you are offered “Continue where I left off”, which picks up the same paper on the same question with your answers intact — or discard it and start a fresh one. The one case it cannot be resumed is when the game’s questions have changed since you started, which would make it a different test; it says so.',
+      },
+      {
         title: 'Your result',
         body: 'At the end you get a score, a pass/fail against your pass line, and a per-topic breakdown so you can see which areas need more work. Take another anytime.',
       },

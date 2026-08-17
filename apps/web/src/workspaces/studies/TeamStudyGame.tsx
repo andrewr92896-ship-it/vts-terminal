@@ -768,8 +768,19 @@ export function TeamStudyGame({ theme, deckId, onBack }: { theme: Theme; deckId:
         </div>
       ) : (
         <div style={card(theme)}>
-          <div style={{ fontSize: 10.5, color: muted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            {current.topic}
+          {/* The topic, and — since the toggle itself now lives behind the
+              Settings cog — whether rapid fire is on. Without it the only sign
+              before answering is the confirm button being absent, which says
+              nothing on its own. */}
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+            <div style={{ fontSize: 10.5, color: muted, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              {current.topic}
+            </div>
+            {rapidFire && (
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: RED, textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+                {"Rapid fire mode enabled"}
+              </div>
+            )}
           </div>
           <div style={{ fontSize: isPhone ? 15 : 16, lineHeight: 1.55, color: '#fff', fontWeight: 600, marginBottom: 16 }}>
             {current.stem}

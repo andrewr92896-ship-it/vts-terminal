@@ -23,6 +23,9 @@ export const PATCH_NOTES: PatchNote[] = [
       'There is no clock on choosing your answer. The timer only covers how long the result stays up.',
       'It stops on its own if you open the tutor, start fixing the question, or leave the tab, so nothing is taken off the screen while you are reading it. “Stay on this” stops it by hand.',
       'The “Adjust” button on the Progress card is now “Settings”, and it is where a study game is set up: Practice mode, Rapid fire and Reset have moved in there alongside the progress-bar settings, instead of sitting in a row of buttons above.',
+      'With rapid fire on, the question box says so in red in its top corner.',
+      'Practice tests no longer start over when you leave. Come back and you are offered “Continue where I left off” — the same paper, the same question, your answers still there — or you can discard it and start fresh.',
+      'The one time it cannot be resumed is when the game’s questions have changed since you started, because that would be grading you on a different test. It says so rather than quietly starting over.',
     ],
   },
   {

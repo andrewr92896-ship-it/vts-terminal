@@ -13,6 +13,14 @@ import {
   type WeightedResult,
 } from './examWeights';
 import { NumberField } from './NumberField';
+import { useAuth } from '../../auth/AuthContext';
+import {
+  clearTestSession,
+  loadTestSession,
+  restoreQuestions,
+  saveTestSession,
+  type TestSessionState,
+} from './testSession';
 
 // A configurable, graded test over a team-built study game's questions. This is
 // the generic mock test over any study game: pick how many questions and the
@@ -59,6 +67,7 @@ interface Breakdown {
 
 export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: string; onBack: () => void }) {
   const { isPhone } = useResponsive();
+  const { user } = useAuth();
   const accentGrad = accentGradient(theme);
 
   const [deck, setDeck] = useState<TeamDeckDetail | null>(null);
@@ -88,6 +97,13 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
   const [revealed, setRevealed] = useState(false); // feedback mode: current answer submitted
   const startedAt = useRef<number>(0);
 
+  // A sitting left part-way through, offered back on the intro screen. Held as
+  // the stored blob plus the paper resolved against the deck as it stands now;
+  // `stale` is a saved sitting whose questions no longer all exist, which cannot
+  // be restored faithfully and is dropped (see restoreQuestions).
+  const [resume, setResume] = useState<{ saved: TestSessionState; questions: DeckQuestion[] } | null>(null);
+  const [resumeStale, setResumeStale] = useState(false);
+
   useEffect(() => {
     let alive = true;
     api
@@ -96,12 +112,74 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
         if (!alive) return;
         setDeck(r.deck);
         setSize(Math.min(MAX_TEST, Math.max(1, r.deck.questionCount)));
+        const saved = loadTestSession(user?.id, deckId);
+        if (!saved) return;
+        const questions = restoreQuestions(saved.seqs, r.deck);
+        if (questions) setResume({ saved, questions });
+        else {
+          // The paper changed underneath it, so there is nothing honest to
+          // resume. Drop it rather than leaving a Continue button that would
+          // grade a different test.
+          clearTestSession(user?.id, deckId);
+          setResumeStale(true);
+        }
       })
       .catch(() => alive && setLoadError(true));
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deckId]);
+
+  // Keep the running sitting saved on every answer and every move between
+  // questions, so leaving the screen at any point can be picked back up.
+  useEffect(() => {
+    if (phase !== 'running' || questions.length === 0) return;
+    saveTestSession(user?.id, deckId, {
+      seqs: questions.map((q) => q.seq),
+      answers,
+      index,
+      selected,
+      revealed,
+      passLine,
+      feedback,
+      weighted: weightedSitting,
+      allocations,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, questions, answers, index, selected, revealed, passLine, feedback, weightedSitting, allocations]);
+
+  // A finished test has nothing left to resume, and its answers must not come
+  // back as a part-done sitting the next time the screen opens.
+  useEffect(() => {
+    if (phase === 'done') clearTestSession(user?.id, deckId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
+
+  // Pick the saved sitting back up exactly as it was left — same paper, same
+  // order, same answers, and the terms it was started under rather than whatever
+  // the intro controls now read.
+  function resumeTest() {
+    if (!resume) return;
+    const { saved, questions: qs } = resume;
+    setQuestions(qs);
+    setAnswers(saved.answers);
+    setIndex(saved.index);
+    setSelected(saved.selected);
+    setRevealed(saved.revealed);
+    setPassLine(saved.passLine);
+    setFeedback(saved.feedback);
+    setWeightedSitting(saved.weighted);
+    setAllocations(saved.allocations);
+    setStartError(null);
+    startedAt.current = Date.now();
+    setPhase('running');
+  }
+
+  function discardResume() {
+    clearTestSession(user?.id, deckId);
+    setResume(null);
+  }
 
   const maxSize = deck ? Math.min(MAX_TEST, deck.questionCount) : MAX_TEST;
   // Whether this game can be sat weighted at all — weights set, and at least one
@@ -133,6 +211,10 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
       return;
     }
     setStartError(null);
+    // Starting a fresh sitting replaces whatever was left part-way through; the
+    // save effect below overwrites the stored blob on the first answer.
+    setResume(null);
+    setResumeStale(false);
     setAllocations(alloc);
     setWeightedSitting(weighting);
     setQuestions(drawn);
@@ -258,6 +340,41 @@ export function DeckTestMode({ theme, deckId, onBack }: { theme: Theme; deckId: 
     return (
       <div style={{ maxWidth: 820, margin: '0 auto', color: '#eef3ff', animation: 'fadeIn .25s ease' }}>
         {header}
+
+        {/* A sitting left part-way through. Offered rather than resumed on its
+            own, so starting a fresh test is still one press away. */}
+        {resume && (
+          <div style={{ ...card(theme), marginBottom: 14, borderColor: theme.accent }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', marginBottom: 5 }}>
+              {"You have a test in progress"}
+            </div>
+            <div style={{ fontSize: 12.5, color: muted, marginBottom: 14 }}>
+              {`Question ${resume.saved.index + 1} of ${resume.saved.seqs.length}`}
+              {` · ${resume.saved.answers.filter((a) => a != null).length} answered`}
+              {resume.saved.weighted ? ' · weighted scoring' : ''}
+              {` · pass line ${resume.saved.passLine}%`}
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button onClick={resumeTest} style={primaryBtn(theme, accentGrad)}>
+                {"Continue where I left off"}
+              </button>
+              <button onClick={discardResume} style={ghostBtn(theme)}>
+                {"Discard it"}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Only drawn when a saved sitting was actually thrown away, so the
+            Continue button going missing is never unexplained. */}
+        {resumeStale && (
+          <div style={{ ...card(theme), marginBottom: 14, borderColor: AMBER }}>
+            <div style={{ fontSize: 12.5, color: '#f0dcb4', lineHeight: 1.55 }}>
+              {"The test you had in progress can’t be picked back up — its questions have changed since you started it. Start a new one below."}
+            </div>
+          </div>
+        )}
+
         {deck.questionCount === 0 ? (
           <div style={{ ...card(theme), color: muted, fontSize: 13 }}>
             {"This study game has no questions yet."}
